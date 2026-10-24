@@ -3,7 +3,7 @@
 import { scalarCost } from './cost.mjs';
 export const ARMS = Object.freeze(['P-top', 'P-top-s1', 'P-cover', 'P-cover-s1', 'P-top+tail']);
 
-export function assemble(items, ranking, { arm, budget, overhead, cost }) {
+export function assemble(items, ranking, { arm, budget, overhead, cost, diagnostics = false }) {
   if (!ARMS.includes(arm)) throw new Error('invalid_assembly_arm');
   if (!Number.isSafeInteger(budget) || budget < 0) throw new Error('invalid_assembly_budget');
   cost ??= scalarCost(overhead);
@@ -60,5 +60,5 @@ export function assemble(items, ranking, { arm, budget, overhead, cost }) {
       for (const item of ordered) deepen(item);
     } else for (const item of ordered) { admit(item.body, item); deepen(item); }
   }
-  return { admitted, used, ...(cost.id === 'host-v2' ? { budgetRejected, bodyEqualSpanCount } : {}) };
+  return { admitted, used, ...(cost.id === 'host-v2' || diagnostics ? { budgetRejected, bodyEqualSpanCount } : {}) };
 }

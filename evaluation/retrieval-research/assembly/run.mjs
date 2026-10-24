@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs';
+import { profileForDirectory } from './hr2b-profile.mjs';
+import { runHR2bAssembly } from './hr2b-run.mjs';
 import { mkdir, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import os from 'node:os';
@@ -31,6 +34,7 @@ export async function emptyOutput(dir, { create = true } = {}) {
   if (entries.length) fail('output_directory_not_empty');
 }
 export async function runAssembly(options) {
+  if (options['fixture-dir'] && existsSync(join(options['fixture-dir'], 'hr1-corpus.json')) && await profileForDirectory(options['fixture-dir'])) return runHR2bAssembly(options);
   const model = options['overhead-model'] === 'host-v2' ? authenticateHostV2() : null;
   if (options['overhead-model'] != null && !model) fail('invalid_overhead_model');
   if (model && options.overheads != null) fail('mutually_exclusive_overhead_options');

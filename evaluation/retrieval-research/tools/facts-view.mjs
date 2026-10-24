@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { VERSION, unique, compareIds, loadFixture, writeJson, cliMain, requiredOption } from '../lib/fixture.mjs';
+import { fixtureProfile, HR2B_VERSION, unique, compareIds, loadFixture, writeJson, cliMain, requiredOption } from '../lib/fixture.mjs';
 
 export function factsView(fixture) {
   const families = fixture.facts.families.filter(family => ['target', 'foreign'].includes(family.role));
@@ -15,7 +15,7 @@ export function factsView(fixture) {
       actualCoverage: memories.length ? body ? 'body' : 'span-only' : 'absent',
       memoryCount: memories.length, memoryStates: unique(memories.map(memory => memory.state)) };
   });
-  return { version: VERSION, families: families.map(({ id, role, domain, summary }) => ({ id, role, domain, summary })), facts };
+  return { version: fixtureProfile(fixture).version, families: families.map(({ id, role, domain, summary }) => ({ id, role, domain, summary })), facts };
 }
 
 await cliMain(import.meta.url, async options => {

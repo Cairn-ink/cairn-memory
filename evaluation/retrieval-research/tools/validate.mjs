@@ -1,8 +1,10 @@
+import { checkHR2bWorld } from '../lib/hr2b-world.mjs';
+import { placementQuotas } from '../lib/placement.mjs';
 import { isDeepStrictEqual } from 'node:util';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { openMemoryCore } from '../../../core/contract.mjs';
-import { VERSION, CATEGORIES, unique, eligibleMemory, armDocuments, loadFixture, readJson, cliMain, requiredOption } from '../lib/fixture.mjs';
+import { HR2B_VERSION, fixtureProfile, CATEGORIES, unique, eligibleMemory, armDocuments, loadFixture, readJson, cliMain, requiredOption } from '../lib/fixture.mjs';
 import { factsView } from './facts-view.mjs';
 import { buildLabels, loadTokenizers } from './labels.mjs';
 import { applyAudit } from './apply-audit.mjs';
@@ -56,7 +58,9 @@ export function validateFixture(fixture, tokenizers, options) {
   catch (error) { return { ok: false, errors: [{ code: 'schema:malformed_input', detail: error.message }], statistics: {}, policy: options?.policy ?? DISTRIBUTION_POLICY }; }
 }
 
-function validate(fixture, tokenizers, { policy = DISTRIBUTION_POLICY, view } = {}) {
+function validate(fixture, tokenizers, { policy, view } = {}) {
+  const profile = fixtureProfile(fixture), hr2b = profile.version === HR2B_VERSION;
+  policy ??= hr2b ? { ...DISTRIBUTION_POLICY, counts: profile.counts } : DISTRIBUTION_POLICY;
   const errors = [], statistics = {};
   const check = (condition, code, detail) => { if (!condition) errors.push({ code, ...(detail === undefined ? {} : { detail }) }); };
   const array = (value, code) => { check(Array.isArray(value), code); return Array.isArray(value) ? value : []; };
@@ -73,7 +77,7 @@ function validate(fixture, tokenizers, { policy = DISTRIBUTION_POLICY, view } = 
     }
     return map;
   };
-  for (const key of ['facts', 'corpus', 'queries', 'labels']) check(fixture[key]?.version === VERSION, `${key}:version`);
+  for (const key of ['facts', 'corpus', 'queries', 'labels']) check(fixture[key]?.version === profile.version, `${key}:version`);
   check(fixture.split && typeof fixture.split === 'object' && !Array.isArray(fixture.split), 'split:object');
   check(fixture.audit && Array.isArray(fixture.audit.overrides), 'audit:overrides');
   const families = array(fixture.facts?.families, 'families:array'), facts = array(fixture.facts?.facts, 'facts:array');
@@ -120,7 +124,7 @@ function validate(fixture, tokenizers, { policy = DISTRIBUTION_POLICY, view } = 
     check(DOMAINS.includes(memory.domain) && ['hand', 'template'].includes(memory.authoring) && time(memory.eventTime), 'memory:metadata', memory.id);
     check(nonempty(memory.content) && memory.content.length <= 4000, 'memory:content', memory.id);
     const spans = array(memory.spans, `memory:${memory.id}:spans`), expressions = array(memory.expresses, `memory:${memory.id}:expresses`);
-    check(spans.length >= 1 && spans.length <= 3, 'memory:span_count', memory.id);
+    check(spans.length >= 1 && spans.length <= profile.maxSpans, 'memory:span_count', memory.id);
     spans.forEach((span, i) => {
       check(span.id === `${memory.id}#s${i + 1}` && !allSpans.has(span.id), 'span:id', span.id);
       allSpans.add(span.id);
@@ -130,7 +134,7 @@ function validate(fixture, tokenizers, { policy = DISTRIBUTION_POLICY, view } = 
     for (const expression of expressions) {
       const fact = factMap.get(expression.fact), family = familyMap.get(fact?.family);
       check(Boolean(fact) && fact.rendered, 'expression:fact', memory.id);
-      check(['body', 'span'].includes(expression.where) && spans.some(span => span.id === expression.span), 'expression:location', memory.id);
+      check(['body', 'span'].includes(expression.where) && (spans.some(span => span.id === expression.span) || (hr2b && expression.where === 'body' && expression.span === null)), 'expression:location', memory.id);
       const key = `${expression.fact}:${expression.where}:${expression.span}`;
       check(!seen.has(key), 'expression:duplicate', memory.id); seen.add(key);
       check(memory.namespace === 'foreign' ? family?.role === 'foreign' : memory.scale === 'S300' ? family?.role === 'target' : family?.role === 'distractor', 'expression:family_role', memory.id);
@@ -170,7 +174,7 @@ function validate(fixture, tokenizers, { policy = DISTRIBUTION_POLICY, view } = 
     check(['dev', 'test'].includes(fixture.split?.[query.family]), 'query:split', query.id);
     check(labelMap.has(query.id), 'query:missing_label', query.id);
   }
-  for (const [family, split] of Object.entries(fixture.split ?? {})) check(familyMap.has(family) && ['dev', 'test'].includes(split), 'split:entry', family);
+  for (const [family, split] of Object.entries(fixture.split ?? {}).filter(([key]) => key !== 'version')) check(familyMap.has(family) && ['dev', 'test'].includes(split), 'split:entry', family);
   for (const label of labels) check(queryMap.has(label.id), 'label:unknown_query', label.id);
 
   // Deep checking after schema validation prevents malformed JSON from crashing
@@ -228,18 +232,24 @@ function validate(fixture, tokenizers, { policy = DISTRIBUTION_POLICY, view } = 
   const scored = active.filter(label => CATEGORIES.includes(label.category));
   const groups = scored.flatMap(label => label.groups ?? []).map(group => group.members.filter(member => member.scale === 'S300' && member.namespace === 'target'));
   statistics.spanOnlyGroupShare = groups.length ? groups.filter(members => members.length && members.every(member => member.where === 'span')).length / groups.length : null;
-  check(statistics.spanOnlyGroupShare >= 0.35 && statistics.spanOnlyGroupShare <= 0.45, 'groups:span_only_band');
+  if (!hr2b) check(statistics.spanOnlyGroupShare >= 0.35 && statistics.spanOnlyGroupShare <= 0.45, 'groups:span_only_band');
   const supportingIds = new Set(groups.flat().map(member => member.memory));
   const targets = buckets.S300.filter(memory => supportingIds.has(memory.id)), distractors = buckets.S300.filter(memory => !supportingIds.has(memory.id));
   statistics.spanCountMatch = { targets: distribution(targets, memory => memory.spans.length, [1, 2, 3]), distractors: distribution(distractors, memory => memory.spans.length, [1, 2, 3]) };
-  for (const count of [1, 2, 3]) check(near(statistics.spanCountMatch.targets[count], statistics.spanCountMatch.distractors[count], policy.distributionTolerance), 'spans:distribution_match', count);
+  if (!hr2b) for (const count of [1, 2, 3]) check(near(statistics.spanCountMatch.targets[count], statistics.spanCountMatch.distractors[count], policy.distributionTolerance), 'spans:distribution_match', count);
   const ordinary = activeQueries.filter(query => CATEGORIES.includes(query.category) && !['C2', 'C4'].includes(query.category));
   statistics.queryLanguages = distribution(ordinary, query => query.lang, LANGS);
   for (const lang of LANGS) check(near(statistics.queryLanguages[lang], policy.languages[lang], policy.distributionTolerance), 'queries:language_distribution', lang);
   const cross = activeQueries.filter(query => query.category === 'C4');
   check(cross.every(query => query.lang === 'zh' || query.lang === 'en') && Math.abs(cross.filter(query => query.lang === 'zh').length - cross.filter(query => query.lang === 'en').length) <= 1, 'queries:C4_balanced_directions');
   check(facts.some(fact => fact.nearDuplicateOf && memories.some(memory => memory.namespace === 'foreign' && memory.expresses?.some(expression => expression.fact === fact.id))), 'foreign:no_rendered_near_duplicate');
-  return { ok: errors.length === 0, errors, statistics, policy };
+  if (hr2b) {
+    const world = checkHR2bWorld(fixture), quotas = placementQuotas(fixture.labels);
+    errors.push(...world.errors, ...quotas.errors.map(detail => ({ code: 'hr2b:placement_quota', detail })));
+    statistics.hr2b = world.statistics; statistics.placement = quotas;
+    check(isDeepStrictEqual(fixture.labels.placement, quotas), 'hr2b:placement_metadata');
+  }
+  return { ok: errors.length === 0, errors, statistics, policy, ...(hr2b ? { version: profile.version } : {}) };
 }
 
 await cliMain(import.meta.url, async options => {

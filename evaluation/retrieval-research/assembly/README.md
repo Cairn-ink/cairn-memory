@@ -239,3 +239,165 @@ paired contrast.
   model names, numeric cells carrying host metadata, and host cells missing
   host metadata refuse explicitly. The §5 ranking/fixture authentication is
   unchanged. No new dependency, model, network call or API key is used.
+
+## HR-2b v1 (freeze `c546bfc1`)
+
+HR-2b selects a separate protocol profile from `hr2b-fixture-v1`. HR-2's
+identities, fixed hashes, ranking paths, eight budgets, bootstrap seed, numeric
+O=0 primary selector and saturation grid retain their original branch.
+HR-2b test ranking runs explicitly select `--fixture-version hr2b-fixture-v1`
+before any fixture read; the loaded version must match. Legacy ranking callers
+retain their selection gate before fixture loading. HR-2b uses S1000, the existing target/foreign namespaces, body-only A1 and
+bge-m3+A3 rankings, budgets 1000/1500/2000/4000 and seed
+`hr2b-bootstrap-v1`. Default HR-2b assembly writes both O=0 and host-v2 (80
+cells); `--overheads 0` or `--overhead-model host-v2` restricts the model.
+Only test/A3--bge-m3/host-v2/B1500/P-top-s1 versus P-top is confirmatory.
+Later-receipt is the guard; quota failure, either invalid/underpopulated
+bootstrap, or zero guard ranking ceiling makes the decision Inconclusive.
+
+The field-schema filenames retain `hr1-*.json` in the new fixture directory.
+All version-bearing roots must agree, including optional audit versions. The HR-2b split CLI adds its authenticated
+version and defaults to seed `hr2b-split-v1`; HR-1 bytes/seed are preserved.
+The facts view remains text-free about memories and never includes placement
+or receipt positions. HR-2b body expressions contribute body support only,
+even when their legacy `span` field names a receipt; use `span:null` for
+body-only expressions and explicit span expressions for receipt evidence.
+Placement is recomputed after every audit from eligible members: any body,
+then any first receipt, then later only. Labels record `placement` per group
+and top-level `placement:{ok,errors,guardCategories,splits}`. The represented
+guard categories are the union across both splits, and are checked in both
+splits without trimming. Dropped queries do not count toward quotas.
+
+Structural conventions where §3 leaves encoding/tolerances unspecified:
+
+- Counts allow ±10% around 160/320/60, as the HR-1 “about” convention.
+  Length and receipt-count distribution shares allow ±5 percentage points.
+  Length bands are lower-inclusive, upper-exclusive except the last upper
+  endpoint (400/200), which is inclusive. Means are matched within 15%.
+  The reused field schema retains its 4000/800 UTF-16 body/receipt caps;
+  W1 must meet token bands and these caps together. Body sentence counts use `. ! ? 。！？` terminators and one or two paragraphs.
+  Target families have exactly seven rendered facts plus one absent fact.
+- `facts.forbiddenLexicon` maps every rendered fact id to a nonempty array of
+  forbidden terms. W1 supplies entity/alias/translation/numeric/date and
+  distinctive forms; tools cannot infer semantic completeness of that list.
+  `corpus.filler.sentences` holds `{id,text}` sentence-bank entries;
+  `corpus.filler.ranges` holds `{sentence,memory,where,span,start,end}`.
+  Offsets are UTF-16 `[start,end)` in the named unit (`span:null` for body),
+  equal the sentence text, and are nonoverlapping in unit order. Every target
+  and distractor unit discloses filler. Every bank sentence is scanned
+  against every fact's NFKC/lowercase/whitespace-normalized lexicon terms.
+  W3 separately audits semantic entailment; mechanical acceptance never
+  claims that semantic audit passed.
+- Equal fusion weights retain the existing A3 constants `[0.45,0.45]`;
+  no score, indexing, tokenizer, horizon or fusion algorithm is changed.
+  `configuration.json` freezes these exact constants and fixture hashes.
+- Fixture FROZEN.md lists at least the seven schema files and may list builder,
+  lexicon and bank files too; every listed member is authenticated. Rankings
+  FROZEN.md lists configuration, calibration and both arms for each split:
+  `dev/A1.json`, `dev/A3--bge-m3.json`, `test/A1.json`,
+  `test/A3--bge-m3.json`. Use the same two-column backtick table as HR-1.
+- Existing `fixtures-hr2b/`, `results/hr2b-rankings/` and
+  `results/hr2b-final/` are protected assembly destinations. Stage assembly,
+  scores and report in fresh scratch, then promote the completed directory.
+  Calibration/configuration/ranking authoring tools create new files before
+  their freeze; they never overwrite an existing configuration or calibration.
+  Output guards resolve physical ancestors/symlinks on every check.
+
+The dependency-free research serializer transcribes the payload rules at
+`b18dabe0`, including defaults, metadata ordering, sourcesComplete,
+sameAsBody and backward sameAs. Calibration serializes 120/220/400-token
+bodies, 40/120/200-token receipts, 1–6 receipts, 1/2 items, all delivered
+prefix lengths and both completeness states. Probe strings are deterministic,
+synthetic and fact-free; errors are modelled minus measured o200k tokens.
+The pinned overhead JSON is read and authenticated, never retuned.
+
+The new host-v2 archive regression replays 120 cells in scratch, removing only
+current scorer identity, then compares regenerated report content except its
+current report identity. The unchanged legacy regression does the same for
+240 cells. HR-1 tooling regression compares regenerated facts view, split and
+audited labels to committed files. No validation-result file exists in
+`fixtures/`; it compares current validation bytes to the validator and its
+lib/tools at `c546bfc1`, reconstructed in owned scratch.
+
+### Coordinator steps 3–5 (never worker commands)
+
+Run from a clean reviewed checkout, offline, on Node 22.16.0. W1/W2/W3 remain
+separate authors; stop on any failure and retain candidate-seed diagnostics.
+The following zsh helper logs the exact command and actual exit code. Keep the
+coordinator session supervised; these commands do not establish a monitor.
+
+```zsh
+set -e
+set -o pipefail
+hr2b_root=evaluation/retrieval-research
+hr2b_fixture="$hr2b_root/fixtures-hr2b"
+hr2b_rankings="$hr2b_root/results/hr2b-rankings"
+hr2b_final="$hr2b_root/results/hr2b-final"
+hr2b_checkout="$(git --no-optional-locks status --porcelain --untracked-files=all)"
+[[ -z "$hr2b_checkout" ]]
+hr2b_commit="$(git rev-parse HEAD)"
+[[ "$(node --version)" == v22.16.0 ]]
+hr2b_stage_root="$(mktemp -d "$hr2b_root/assembly/.hr2-hr2b-coordinator-XXXXXX")"
+print -r -- "checkoutCommit=$hr2b_commit" "checkoutStatus=$hr2b_checkout" 'protocolCommit=c546bfc1' > "$hr2b_stage_root/preflight.log"
+hr2b_stage() {
+  local hr2b_name="$1"
+  shift
+  print -r -- "${(q)@}" > "$hr2b_stage_root/$hr2b_name.command"
+  local hr2b_rc=0
+  "$@" > "$hr2b_stage_root/$hr2b_name.log" 2>&1 || hr2b_rc=$?
+  print -r -- "$hr2b_rc" > "$hr2b_stage_root/$hr2b_name.exit"
+  cat "$hr2b_stage_root/$hr2b_name.log"
+  return "$hr2b_rc"
+}
+
+# Step 3: after W1 authors facts, corpus, filler and its frozen builder/checker.
+hr2b_stage world node "$hr2b_fixture/build/check-world.mjs"
+hr2b_stage facts node "$hr2b_root/tools/facts-view.mjs" --fixture "$hr2b_fixture"
+# W2 authors hr1-queries.json from hr1-facts-view.json only.
+hr2b_stage split node "$hr2b_root/tools/split.mjs" --fixture "$hr2b_fixture" --seed hr2b-split-v1
+hr2b_stage labels node "$hr2b_root/tools/labels.mjs" --fixture "$hr2b_fixture"
+hr2b_stage init-audit node --input-type=module -e 'import {writeFile} from "node:fs/promises"; await writeFile(process.argv[1],JSON.stringify({version:"hr2b-fixture-v1",overrides:[]},null,2)+"\n",{flag:"wx"})' "$hr2b_fixture/hr1-label-audit.json"
+hr2b_stage validate-before-audit node "$hr2b_root/tools/validate.mjs" --fixture "$hr2b_fixture"
+# W3 replaces the empty audit with overrides and a semantic filler audit record.
+hr2b_stage audit node "$hr2b_root/tools/apply-audit.mjs" --fixture "$hr2b_fixture"
+hr2b_stage validate node "$hr2b_root/tools/validate.mjs" --fixture "$hr2b_fixture"
+hr2b_stage freeze-fixture node "$hr2b_root/tools/freeze-hr2b.mjs" --dir "$hr2b_fixture"
+# The freezer reconciles a filesystem walk against git cached+untracked names,
+# prints the count and actual git exit code, then writes hashes exclusively.
+# Coordinator commits fixture freeze before executing step 4.
+
+# Step 4: configuration precedes calibration, which precedes any ranking.
+[[ ! -e "$hr2b_rankings" ]]
+hr2b_stage configuration node "$hr2b_root/tools/hr2b-configuration.mjs" --fixture "$hr2b_fixture" --out "$hr2b_stage_root/configuration.json"
+hr2b_stage calibration node "$hr2b_root/assembly/calibrate-host-v2.mjs" --out "$hr2b_stage_root/host-v2-calibration.json"
+mkdir -p "$hr2b_rankings"
+cp "$hr2b_stage_root/configuration.json" "$hr2b_stage_root/host-v2-calibration.json" "$hr2b_rankings/"
+hr2b_stage rank-dev ~/.local/bin/cairn-heavy node "$hr2b_root/run.mjs" --fixture-dir "$hr2b_fixture" --fixture-version hr2b-fixture-v1 --split dev --scale S1000 --arms A1,A3 --models bge-m3 --isolation-variant with-foreign --out "$hr2b_rankings/dev"
+hr2b_stage rank-test ~/.local/bin/cairn-heavy node "$hr2b_root/run.mjs" --fixture-dir "$hr2b_fixture" --fixture-version hr2b-fixture-v1 --split test --scale S1000 --arms A1,A3 --models bge-m3 --isolation-variant with-foreign --out "$hr2b_rankings/test"
+# Retain ledger (no hosted dispatches), truncation metadata and all logs.
+hr2b_stage freeze-rankings node "$hr2b_root/tools/freeze-hr2b.mjs" --dir "$hr2b_rankings"
+# Coordinator commits ranking freeze before executing the optional dev check.
+# One optional dev assembly/score/report uses the next three commands with
+# --split dev and separate fresh paths; record it in protocol §9. Never repeat.
+
+# Step 5: exactly one test assembly after reviews and owned-runner acceptance.
+[[ ! -e "$hr2b_final" ]]
+hr2b_test_checkout="$(git --no-optional-locks status --porcelain --untracked-files=all -- . ':(exclude,glob)evaluation/retrieval-research/assembly/.hr2-*/**')"
+[[ -z "$hr2b_test_checkout" ]]
+{
+  print -r -- "checkoutCommit=$(git rev-parse HEAD)" "checkoutStatus=$hr2b_test_checkout" 'protocolCommit=c546bfc1'
+  node --version
+  sha256sum "$hr2b_fixture/FROZEN.md" "$hr2b_rankings/FROZEN.md" "$hr2b_root/assembly/overhead-host-v2.json"
+} > "$hr2b_stage_root/test-preflight.log" 2>&1
+hr2b_stage run ~/.local/bin/cairn-heavy node "$hr2b_root/assembly/run.mjs" --fixture-dir "$hr2b_fixture" --rankings "$hr2b_rankings" --split test --scale S1000 --arms P-top,P-top-s1,P-cover,P-cover-s1,P-top+tail --rankings-select A1,A3--bge-m3 --budgets 1000,1500,2000,4000 --out "$hr2b_stage_root/cells"
+hr2b_stage score ~/.local/bin/cairn-heavy node "$hr2b_root/assembly/score.mjs" --fixture-dir "$hr2b_fixture" --cells "$hr2b_stage_root/cells" --out "$hr2b_stage_root/scores.json"
+hr2b_stage report ~/.local/bin/cairn-heavy node "$hr2b_root/assembly/report.mjs" --scores "$hr2b_stage_root/scores.json" --out "$hr2b_stage_root/report.json" --markdown "$hr2b_stage_root/report.md"
+hr2b_stage hashes zsh -c 'cd "$1"; sha256sum cells/*.json scores.json report.json report.md > SHA256SUMS.uncompressed' hr2b-hashes "$hr2b_stage_root"
+hr2b_stage archive-cells tar -cJf "$hr2b_stage_root/cells.tar.xz" -C "$hr2b_stage_root" cells
+hr2b_stage archive-scores xz -k "$hr2b_stage_root/scores.json"
+hr2b_stage archive-report xz -k "$hr2b_stage_root/report.json"
+hr2b_stage archive-hashes zsh -c 'cd "$1"; sha256sum cells.tar.xz scores.json.xz report.json.xz > archive.sha256' hr2b-archive-hashes "$hr2b_stage_root"
+mv "$hr2b_stage_root" "$hr2b_final"
+# Require cells=expectedCells=80. Retain failed stages, commands, actual exits,
+# provenance and archives. Force-add .log artifacts when the coordinator commits.
+```

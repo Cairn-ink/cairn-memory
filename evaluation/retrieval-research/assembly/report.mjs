@@ -1,3 +1,5 @@
+import { isHR2b } from './hr2b-profile.mjs';
+import { buildHR2bReport, compareHR2bCells, hr2bMarkdown } from './hr2b-report.mjs';
 import { CATEGORIES, cliMain, readJson, requiredOption } from '../lib/fixture.mjs';
 import { clusterBootstrap, exactMcNemar, pairedQueries } from '../lib/stats.mjs';
 import { PROTOCOL, fail } from './auth.mjs';
@@ -37,6 +39,7 @@ function comparisonRows(baseline, candidate) {
 }
 
 export function compareCells(baseline, candidate) {
+  if (isHR2b(baseline?.run) || isHR2b(candidate?.run)) return compareHR2bCells(baseline, candidate);
   try {
     const { before, after } = comparisonRows(baseline, candidate);
     const bootstrap = clusterBootstrap(before, after, { seed: 'hr2-bootstrap-v1', resamples: 10000,
@@ -62,6 +65,7 @@ export function decision(comparison) {
 
 export function buildReport(scores) {
   if (scores?.format !== 'hr2-scores-v1' || !Array.isArray(scores.cells)) fail('invalid_scores_format');
+  if (scores.cells.some(cell => isHR2b(cell?.run))) return buildHR2bReport(scores, REPORT_IMPLEMENTATION);
   const cells = scores.cells, seen = new Set();
   try {
     if (scores.ok !== true || !cells.length) fail('invalid_scores_status');
@@ -131,6 +135,7 @@ function hostV2Outputs(cells, comparisons) {
 
 const number = value => value == null ? 'NA' : value.toFixed(4);
 export function reportMarkdown(report) {
+  if (report.format === 'hr2b-report-v1') return hr2bMarkdown(report);
   const lines = ['# HR-2 budgeted assembly', '', `Protocol: ${report.protocol}. Primary decision: **${report.outcome}**. Reason: ${report.outcomeReason ?? 'decision rule §4'}.`, '',
     'The sole confirmatory contrast is P-cover − P-top on test / S1000 / A3--bge-m3 / O=0 / B=512. Every other contrast and all dev output are exploratory. The shared statistics library receives exploratory:true solely to select the preregistered 95% endpoints.', '',
     'This is a short, single-fact synthetic fixture with bodies at most 82 UTF-16 units and about 40% span-only required groups. These results do not establish behavior on long items, generated summaries, hosted applicability or production reliability. The initial policy must be revisited with a long-item fixture. McNemar is underpowered by design.', ''];

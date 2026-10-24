@@ -1,5 +1,6 @@
+import { placementOf, finalizePlacement } from '../lib/placement.mjs';
 import { join } from 'node:path';
-import { VERSION, compareIds, unique, eligibleMemory, loadFixture, writeJson, cliMain, requiredOption } from '../lib/fixture.mjs';
+import { fixtureProfile, HR2B_VERSION, compareIds, unique, eligibleMemory, loadFixture, writeJson, cliMain, requiredOption } from '../lib/fixture.mjs';
 
 export function memberTexts(memory, member) {
   return [...(member.where === 'body' ? [{ where: 'body', text: memory.content }] : []),
@@ -7,10 +8,10 @@ export function memberTexts(memory, member) {
 }
 export function memberText(memory, member) { return memberTexts(memory, member).map(source => source.text).join('\n'); }
 export function groupFidelity(members) { return members.some(member => member.where === 'body') ? 'body-covered' : 'span-only'; }
-export function makeMember(memory, expressions) {
+export function makeMember(memory, expressions, version) {
   const sources = Array.isArray(expressions) ? expressions : [expressions];
   return { memory: memory.id, where: sources.some(source => source.where === 'body') ? 'body' : 'span',
-    spans: unique(sources.flatMap(source => source.spans ?? (source.span ? [source.span] : []))),
+    spans: unique(sources.filter(source => version !== HR2B_VERSION || source.where === 'span').flatMap(source => source.spans ?? (source.span ? [source.span] : []))),
     scale: memory.scale, namespace: memory.namespace, lang: memory.lang, spanCount: memory.spans.length };
 }
 
@@ -80,7 +81,8 @@ export function refreshLabel(fixture, query, label, tokenizers) {
   const { tokenizeT1, tokenizeT1Plus } = tokenizers;
   if (typeof tokenizeT1 !== 'function' || typeof tokenizeT1Plus !== 'function') throw new Error('tokenizers_required');
   const memories = new Map(fixture.corpus.memories.map(memory => [memory.id, memory]));
-  label.groups = label.groups.map(group => ({ ...group, fidelity: groupFidelity(group.members) }));
+  label.groups = label.groups.map(group => ({ ...group, fidelity: groupFidelity(group.members),
+    ...(fixtureProfile(fixture).version === HR2B_VERSION ? { placement: placementOf(fixture, group.members, query.intent) } : {}) }));
   label.overlap = label.groups.flatMap(group => group.members.map(member => {
     const memory = memories.get(member.memory);
     if (!memory) throw new Error(`unknown_member:${member.memory}`);
@@ -98,14 +100,14 @@ export function buildLabels(fixture, tokenizers) {
       const members = [...fixture.corpus.memories].sort((a, b) => compareIds(a.id, b.id)).flatMap(memory => {
         if (!eligibleMemory(memory, query.intent)) return [];
         const expressions = memory.expresses.filter(expression => expression.fact === fact);
-        return expressions.length ? [makeMember(memory, expressions)] : [];
+        return expressions.length ? [makeMember(memory, expressions, fixtureProfile(fixture).version)] : [];
       });
       return { fact, members, fidelity: groupFidelity(members) };
     });
     return refreshLabel(fixture, query, { id: query.id, family: query.family, category: query.category, lang: query.lang,
       intent: query.intent, split: fixture.split?.[query.family], groups, hardNegatives: hardNegativesFor(fixture, query) }, tokenizers);
   });
-  return { version: VERSION, queries };
+  return finalizePlacement(fixture, { version: fixtureProfile(fixture).version, queries });
 }
 
 export async function loadTokenizers() {

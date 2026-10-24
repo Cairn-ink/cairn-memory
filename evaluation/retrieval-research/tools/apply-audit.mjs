@@ -1,11 +1,13 @@
+import { finalizePlacement } from '../lib/placement.mjs';
 import { join } from 'node:path';
-import { VERSION, compareIds, eligibleMemory, loadFixture, writeJson, cliMain, requiredOption } from '../lib/fixture.mjs';
+import { fixtureProfile, HR2B_VERSION, compareIds, eligibleMemory, loadFixture, writeJson, cliMain, requiredOption } from '../lib/fixture.mjs';
 import { makeMember, refreshLabel, loadTokenizers, hardNegativesFor } from './labels.mjs';
 
 // Detail shapes: {fact,memory,where,spans?} for members; {category} for
 // recategorize; {memory} for hard negatives; {} for drop-query. Originals and
 // ordered reasons remain embedded so the audit does not destroy its input.
 export function applyAudit(fixture, audit, tokenizers) {
+  fixtureProfile({ ...fixture, audit });
   if (!Array.isArray(audit?.overrides)) throw new Error('audit_overrides_required');
   if (fixture.labels.original) throw new Error('audit_already_applied');
   const original = structuredClone(fixture.labels);
@@ -25,11 +27,11 @@ export function applyAudit(fixture, audit, tokenizers) {
       if (!group || !memory) throw new Error(`audit_unknown_member_or_group:${id}`);
       const exists = group.members.some(member => member.memory === detail.memory);
       if (action === 'add-member') {
-        const spans = detail.spans ?? [...new Set(memory.expresses.filter(expression => expression.fact === detail.fact).map(expression => expression.span))];
+        const spans = detail.spans ?? [...new Set(memory.expresses.filter(expression => expression.fact === detail.fact).filter(expression => fixtureProfile(fixture).version !== HR2B_VERSION || expression.where === 'span').map(expression => expression.span))];
         if (exists || !eligibleMemory(memory, query.intent) || !['body', 'span'].includes(detail.where) ||
           !Array.isArray(spans) || new Set(spans).size !== spans.length || spans.some(id => !memory.spans.some(span => span.id === id)) ||
           (detail.where === 'span' && !spans.length)) throw new Error(`audit_invalid_add_member:${id}`);
-        group.members.push(makeMember(memory, { where: detail.where, spans }));
+        group.members.push(makeMember(memory, [{ where: detail.where, spans: [] }, ...(spans.length ? [{ where: 'span', spans }] : [])], fixtureProfile(fixture).version));
         group.members.sort((a, b) => compareIds(a.memory, b.memory));
         label.hardNegatives = label.hardNegatives.filter(member => member !== memory.id);
       } else {
@@ -53,7 +55,7 @@ export function applyAudit(fixture, audit, tokenizers) {
     label.audit.push(structuredClone(override));
   }
   for (const label of result.queries) refreshLabel(fixture, queries.get(label.id), label, tokenizers);
-  return { ...result, version: VERSION, original, audit: structuredClone(audit) };
+  return finalizePlacement(fixture, { ...result, version: fixtureProfile(fixture).version, original, audit: structuredClone(audit) });
 }
 
 await cliMain(import.meta.url, async options => {

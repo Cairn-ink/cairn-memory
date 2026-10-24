@@ -1,3 +1,5 @@
+import { isHR2b } from './hr2b-profile.mjs';
+import { validateHR2bScoredCell } from './hr2b-provenance.mjs';
 import { readFileSync } from 'node:fs';
 import { PROTOCOL, PROTOCOL_COMMIT, RANKINGS, FILES, fail } from './auth.mjs';
 import { COUNTER_ID, countTokens } from './counter.mjs';
@@ -11,6 +13,7 @@ export const FROZEN_INPUTS = JSON.parse(readFileSync(new URL('./INPUTS.md', impo
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const entries = object => Object.entries(object ?? {}).sort(([a], [b]) => compareIds(a, b));
 export function validateScoredCell(cell) {
+  if (isHR2b(cell?.run)) return validateHR2bScoredCell(cell, validateHostReplay);
   const run = cell?.run, ranking = RANKINGS[run?.ranking];
   const host = run?.overhead === 'host-v2';
   const cost = host ? authenticateHostRun(run, { scored: true }) : null;

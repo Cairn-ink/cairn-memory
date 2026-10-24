@@ -1,3 +1,5 @@
+import { VERSION, HR2B_VERSION } from './lib/fixture.mjs';
+import { hr2bConfiguration, checkHR2bOptions, checkHR2bConfiguration } from './lib/hr2b-configuration.mjs';
 import { parseArgs } from 'node:util';
 import { cpus, totalmem, platform, release, availableParallelism } from 'node:os';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -18,7 +20,7 @@ export function environment() {
 }
 export function parseCLI(args = process.argv.slice(2)) {
   const { values } = parseArgs({ args, options: Object.fromEntries([
-    'fixture-dir', 'split', 'scale', 'arms', 'models', 'out', 'ledger', 'selection', 'lexical', 'threads', 'cache-dir', 'store-dir', 'isolation-variant',
+    'fixture-dir', 'fixture-version', 'split', 'scale', 'arms', 'models', 'out', 'ledger', 'selection', 'lexical', 'threads', 'cache-dir', 'store-dir', 'isolation-variant',
   ].map(key => [key, { type: 'string' }])) });
   for (const key of ['fixture-dir', 'split', 'scale', 'arms', 'out']) if (!values[key]) throw new Error(`missing_--${key}`);
   if (!['dev', 'test'].includes(values.split) || !['S300', 'S1000'].includes(values.scale)) throw new Error('invalid_split_or_scale');
@@ -32,7 +34,8 @@ export function parseCLI(args = process.argv.slice(2)) {
   if (!Number.isSafeInteger(threads) || threads < 1) throw new Error('invalid_threads');
   const isolationVariant = values['isolation-variant'] ?? 'with-foreign';
   if (!['with-foreign', 'without-foreign'].includes(isolationVariant)) throw new Error('invalid_isolation_variant');
-  return { fixtureDir: resolve(values['fixture-dir']), split: values.split, scale: values.scale, arms: [...new Set(arms)],
+  if (values['fixture-version'] !== undefined && ![VERSION, HR2B_VERSION].includes(values['fixture-version'])) throw new Error('unsupported_fixture_version');
+  return { ...(values['fixture-version'] ? { fixtureVersion: values['fixture-version'] } : {}), fixtureDir: resolve(values['fixture-dir']), split: values.split, scale: values.scale, arms: [...new Set(arms)],
     models: [...new Set(models)], out: resolve(values.out), ledgerPath: values.ledger ? resolve(values.ledger) : undefined,
     selectionPath: values.selection, lexical: values.lexical, threads, isolationVariant,
     cacheDir: values['cache-dir'] ?? MODEL_CACHE, storeDir: values['store-dir'] ?? join(MODEL_CACHE, 'hr1-a0-stores') };
@@ -98,11 +101,31 @@ export async function defaultEmbedder(model, options, ledger) {
 // The orchestrator alone sees fixture objects. Arms only see the projections.
 // Dependency injection lets ordinary tests construct projections without W4a.
 export async function runRankings(options, { fixtureAPI, embedderFactory = defaultEmbedder } = {}) {
-  const { selection, lexical } = await loadSelection(options);
+  // Select HR-2b explicitly before reading a fixture; every legacy caller keeps
+  // the original selection/configuration gates ahead of all fixture reads.
+  const selectedHR2b = options.fixtureVersion === HR2B_VERSION;
+  if (selectedHR2b) checkHR2bOptions(options);
+  const { selection, lexical } = selectedHR2b ? { selection: null, lexical: 'A1' } : await loadSelection(options);
   const configs = configurations(options, selection);
   const api = fixtureAPI ?? await import('./lib/fixture.mjs');
+  const loaded = await api.loadFixture(options.fixtureDir);
+  if (options.fixtureVersion !== undefined && options.fixtureVersion !== loaded.corpus?.version) throw new Error('fixture_version_mismatch');
+  const hr2b = loaded.corpus?.version === HR2B_VERSION;
+  if (hr2b) checkHR2bOptions(options);
   const isolationVariant = options.isolationVariant ?? 'with-foreign';
-  const fixture = isolationFixture(await api.loadFixture(options.fixtureDir), isolationVariant);
+  const fixture = isolationFixture(loaded, isolationVariant);
+  const fixedConfiguration = hr2b ? hr2bConfiguration(fixture.hashes) : null;
+  if (hr2b) {
+    // Both fixed arms always produce a directory. Record configuration before
+    // any indexing/model load; a second split must match the same bytes.
+    await mkdir(dirname(options.out), { recursive: true });
+    const path = join(dirname(options.out), 'configuration.json');
+    try { checkHR2bConfiguration(JSON.parse(await readFile(path, 'utf8')), fixture.hashes); }
+    catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      await writeFile(path, JSON.stringify(fixedConfiguration, null, 2) + '\n', { flag: 'wx' });
+    }
+  }
   checkSelectionHashes(selection, fixture.hashes);
   const queries = api.armQueries(fixture, { split: options.split });
   if (!queries.length) throw new Error('no_projected_queries');
@@ -140,7 +163,8 @@ export async function runRankings(options, { fixtureAPI, embedderFactory = defau
             const output = { format: 'hr1-rankings-v1', run: { arm: config.arm,
               config: configurationName(config),
               lexical: isFused(config.arm) ? lexical : null, model: config.model, modelMetadata: embedder?.metadata ?? null,
-              scale: options.scale, split: options.split, fixtureHashes: fixture.hashes, env: environment(), startedAt,
+              scale: options.scale, split: options.split, fixtureHashes: fixture.hashes,
+              ...(hr2b ? { fixtureVersion: HR2B_VERSION, configuration: fixedConfiguration } : {}), env: environment(), startedAt,
               finishedAt: new Date().toISOString(), store: variant.index, isolationVariant, status: 'complete',
               ...(variant.store ? { snapshot: variant.store.snapshot, seeding: A0_SEEDING } : {}) }, queries: results, costs };
             outputs.push(output);
@@ -148,7 +172,8 @@ export async function runRankings(options, { fixtureAPI, embedderFactory = defau
         }
       } catch (error) {
         outputs.push({ format: 'hr1-rankings-v1', run: { arm: config.arm, config: config.fusion ?? config.arm,
-          model: config.model, scale: options.scale, split: options.split, fixtureHashes: fixture.hashes, env: environment(),
+          model: config.model, scale: options.scale, split: options.split, fixtureHashes: fixture.hashes,
+              ...(hr2b ? { fixtureVersion: HR2B_VERSION, configuration: fixedConfiguration } : {}), env: environment(),
           startedAt, finishedAt: new Date().toISOString(), store: null, isolationVariant, status: 'unavailable', error: publicErrorCode(error) },
           queries: {}, costs: ledger ? { ...ledger.summary() } : {} });
       }

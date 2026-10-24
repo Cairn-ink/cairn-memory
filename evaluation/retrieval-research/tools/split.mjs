@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { CATEGORIES, compareIds, loadFixture, writeJson, cliMain, requiredOption } from '../lib/fixture.mjs';
+import { CATEGORIES, fixtureProfile, HR2B_VERSION, compareIds, loadFixture, writeJson, cliMain, requiredOption } from '../lib/fixture.mjs';
 
 // FNV-1a seed + mulberry32: stable across supported Node versions.
 export function seededRandom(seed) {
@@ -101,7 +101,9 @@ export function assignSplit(queries, { seed = 'hr1-split-v2', maxNodes = 2_000_0
 
 await cliMain(import.meta.url, async options => {
   const dir = requiredOption(options, 'fixture'), fixture = await loadFixture(dir);
-  const split = assignSplit(fixture.queries.queries, { seed: options.seed });
-  await writeJson(options.out ?? join(dir, 'hr1-split.json'), split);
-  console.log(JSON.stringify({ ok: true, seed: options.seed ?? 'hr1-split-v2', ...splitSummary(fixture.queries.queries, split) }));
+  const profile = fixtureProfile(fixture), hr2b = profile.version === HR2B_VERSION;
+  const seed = options.seed ?? (hr2b ? 'hr2b-split-v1' : 'hr1-split-v2');
+  const split = assignSplit(fixture.queries.queries, { seed });
+  await writeJson(options.out ?? join(dir, 'hr1-split.json'), hr2b ? { version: profile.version, ...split } : split);
+  console.log(JSON.stringify({ ok: true, seed, ...(hr2b ? { version: profile.version } : {}), ...splitSummary(fixture.queries.queries, split) }));
 });

@@ -4,6 +4,23 @@ import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export const VERSION = 'hr1-fixture-v2';
+export const HR2B_VERSION = 'hr2b-fixture-v1';
+export const FIXTURE_PROFILES = Object.freeze({
+  [VERSION]: Object.freeze({ version: VERSION, counts: { S300: 300, extras: 700, foreign: 100 }, maxSpans: 3 }),
+  [HR2B_VERSION]: Object.freeze({ version: HR2B_VERSION, counts: { S300: 160, extras: 320, foreign: 60 }, maxSpans: 6 }),
+});
+// A version is authenticated across every present version-bearing product.
+// HR-1 split/audit roots historically carry no version; preserve those bytes.
+export function fixtureProfile(fixture) {
+  const version = fixture.facts?.version ?? fixture.corpus?.version;
+  if (!Object.hasOwn(FIXTURE_PROFILES, version)) throw new Error('unsupported_fixture_version');
+  for (const key of ['facts', 'corpus', 'queries', 'labels', 'view', 'audit', 'split']) {
+    const value = fixture[key];
+    if (value && (['facts', 'corpus', 'queries', 'labels', 'view'].includes(key) || value.version !== undefined) && value.version !== version)
+      throw new Error(`mixed_fixture_profiles:${key}`);
+  }
+  return FIXTURE_PROFILES[version];
+}
 export const CATEGORIES = Object.freeze(['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7']);
 export const compareIds = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 export const unique = values => [...new Set(values)].sort(compareIds);
@@ -29,10 +46,16 @@ export async function loadFixture(dir) {
       fixture[key] = null;
     }
   }
+  const version = fixture.facts?.version ?? fixture.corpus?.version;
+  const hr2b = Object.values(fixture).some(value => value?.version === HR2B_VERSION);
   try {
     const bytes = await readFile(join(dir, 'hr1-facts-view.json'));
+    if (hr2b) fixture.view = JSON.parse(bytes.toString('utf8'));
     fixture.hashes['hr1-facts-view.json'] = createHash('sha256').update(bytes).digest('hex');
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  // The legacy loader accepted versionless synthetic projections and only
+  // hashed facts-view bytes. Strict product authentication belongs to HR-2b.
+  if (hr2b || (version !== undefined && version !== VERSION)) fixture.version = fixtureProfile(fixture).version;
   return fixture;
 }
 

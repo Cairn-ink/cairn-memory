@@ -7,6 +7,7 @@ import { fail } from './auth.mjs';
 const repositoryRoot = realpathSync(new URL('../../../', import.meta.url));
 const researchRoot = join(repositoryRoot, 'evaluation/retrieval-research');
 const constantsPath = resolvedOutputPath(join(researchRoot, 'assembly/overhead-host-v2.json'));
+const hr2bRoots = ['fixtures-hr2b', 'results/hr2b-rankings', 'results/hr2b-final'];
 const protectedRoots = ['results/hr2-final', 'results/test-final', 'fixtures'].map(path => resolvedOutputPath(join(researchRoot, path)));
 const within = (path, root) => {
   const suffix = relative(root, path);
@@ -40,10 +41,18 @@ export function resolvedOutputPath(path) {
 
 export function validateOutputPath(path) {
   const destination = resolvedOutputPath(path);
-  if (destination === constantsPath || protectedRoots.some(root => within(destination, root))) fail('protected_output_path');
+  const dynamicRoots = protectedHR2bRoots();
+  if (destination === constantsPath || [...protectedRoots, ...dynamicRoots].some(root => within(destination, root))) fail('protected_output_path');
   try { if (lstatSync(destination).isFile()) fail('protected_output_path'); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   return destination;
+}
+
+export function protectedHR2bRoots(root = researchRoot) {
+  return hr2bRoots.filter(path => {
+    try { lstatSync(join(root, path)); return true; }
+    catch (error) { if (error.code !== 'ENOENT') throw error; return false; }
+  }).map(path => resolvedOutputPath(join(root, path)));
 }
 
 // Validate a stage's complete file set before its first write. File outputs

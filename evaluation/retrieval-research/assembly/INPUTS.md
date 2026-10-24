@@ -37,3 +37,31 @@ model payload exactly. This is an approximate default-Memory calibration,
 not shipped-host token counts; later completeness transitions, cross-item
 deduplication, non-default metadata, sourceAccess, Cards and UUID/text variation
 are not modelled faithfully.
+
+## HR-2b runtime input profile
+
+HR-2b v1 is frozen at `c546bfc1`. No HR-2b fixture or ranking hash is
+invented here: they do not exist at tooling time. At run time,
+`fixtures-hr2b/FROZEN.md` authenticates its complete listed manifest (including
+at least the seven `hr1-*.json` schema files). The corpus version selects
+`hr2b-fixture-v1`, and all version-bearing products must agree.
+`results/hr2b-rankings/FROZEN.md` authenticates `configuration.json`,
+`host-v2-calibration.json`, `dev/A1.json`, `dev/A3--bge-m3.json`,
+`test/A1.json` and `test/A3--bge-m3.json`. Both freezes use backtick filename /
+SHA-256 tables. Cells embed these manifests, configuration, placement quotas,
+represented guard categories, paths and hashes; scoring/reporting re-read and
+authenticate them. Keep frozen fixture/ranking paths available throughout.
+The HR-2 JSON manifest above remains authoritative only for HR-2.
+
+HR-2b ranking commands explicitly select `--fixture-version hr2b-fixture-v1`
+before fixture loading; this bypasses only the HR-1 selection branch and is
+checked against the authenticated fixture version. Legacy callers retain their
+selection-first refusal order.
+
+The exact coordinator commands for protocol §9 steps 3–5 are in
+[README.md, Coordinator steps 3–5](README.md#coordinator-steps-35-never-worker-commands).
+Execute that complete block, including stage logging, fixed configuration
+before calibration, both ranking splits and freeze, scratch assembly output,
+compression and final promotion. It records the reviewed checkout before any
+output. Only the coordinator runs its ranking/test commands through
+`~/.local/bin/cairn-heavy`; workers run individual touched test files only.

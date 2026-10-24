@@ -20,6 +20,14 @@ export async function sourceIdentity(dir = sourceDir) {
     }
   }
   await visit('');
+  if (dir === sourceDir) {
+    const research = fileURLToPath(new URL('../', import.meta.url));
+    for (const folder of ['lib', 'tools']) for (const entry of (await readdir(join(research, folder))).filter(name => name.endsWith('.mjs')).sort(compareIds)) {
+      const path = `../${folder}/${entry}`;
+      entries.push([path, createHash('sha256').update(await readFile(join(research, folder, entry))).digest('hex')]);
+    }
+    entries.push(['../run.mjs', createHash('sha256').update(await readFile(join(research, 'run.mjs'))).digest('hex')]);
+  }
   entries.sort(([a], [b]) => compareIds(a, b));
   if (!entries.length) fail('implementation_sources_missing');
   return { sourceHash: createHash('sha256').update(JSON.stringify(entries)).digest('hex'), sourceFiles: entries.map(([path]) => path) };

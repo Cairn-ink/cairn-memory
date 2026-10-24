@@ -1,3 +1,6 @@
+import { HR2B, isHR2b, profileForDirectory, authenticateHR2bFixture, authenticateHR2bRanking } from './hr2b-profile.mjs';
+import { validateHR2bRun } from './hr2b-provenance.mjs';
+import { placementOf, PLACEMENTS } from '../lib/placement.mjs';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CATEGORIES, compareIds, loadFixture, labelEntries, cliMain, requiredOption } from '../lib/fixture.mjs';
@@ -39,11 +42,16 @@ export function summarize(rows, { requireAllCategories = false } = {}) {
 
 export function scoreCell(fixture, cell) {
   const run = cell?.run;
+  const hr2b = isHR2b(run);
+  if (hr2b) {
+    if (cell?.format !== 'hr2-cell-v1' || fixture.corpus?.version !== HR2B.version || fixture.facts?.version !== HR2B.version) fail('mixed_fixture_profiles');
+    validateHR2bRun(run);
+  } else if (fixture.corpus?.version === HR2B.version) fail('mixed_fixture_profiles');
   const host = run?.overhead === 'host-v2';
   const cost = host ? authenticateHostRun(run) : null;
-  if (cell?.format !== 'hr2-cell-v1' || !run || run.status !== 'complete' || run.protocol !== PROTOCOL || run.protocolCommit !== PROTOCOL_COMMIT || run.counter !== COUNTER_ID ||
+  if (!hr2b && (cell?.format !== 'hr2-cell-v1' || !run || run.status !== 'complete' || run.protocol !== PROTOCOL || run.protocolCommit !== PROTOCOL_COMMIT || run.counter !== COUNTER_ID ||
       !ARMS.includes(run.arm) || !RANKINGS[run.ranking] || !BUDGETS.includes(run.budget) || (!host && ![0, 8].includes(run.overhead)) || run.scale !== 'S1000' || !['test', 'dev'].includes(run.split) ||
-      (!host && ['overheadModel', 'overheadModelDigest', 'extensionCommit'].some(key => Object.hasOwn(run, key)))) fail('invalid_cell_run');
+      (!host && ['overheadModel', 'overheadModelDigest', 'extensionCommit'].some(key => Object.hasOwn(run, key))))) fail('invalid_cell_run');
   if (!same(Object.keys(run.fixtureHashes ?? {}).sort(compareIds), Object.keys(fixture.hashes).sort(compareIds)) ||
       Object.entries(fixture.hashes).some(([name, hash]) => run.fixtureHashes[name] !== hash)) fail('cell_fixture_hash_mismatch');
   validateImplementation(run.implementation?.assembly);
@@ -53,7 +61,8 @@ export function scoreCell(fixture, cell) {
   const labels = new Map(labelEntries(fixture.labels).filter(label => !label.dropped && label.split === run.split && CATEGORIES.includes(label.category)).map(label => [label.id, label]));
   if (!same([...labels.keys()].sort(compareIds), expected)) fail('label_query_set');
   const items = new Map(prepareItems(fixture.corpus.memories).map(item => [item.id, item]));
-  const strataRows = { 'fidelity:body-covered': [], 'fidelity:span-only': [] };
+  const strataRows = { 'fidelity:body-covered': [], 'fidelity:span-only': [],
+    ...(hr2b ? Object.fromEntries(PLACEMENTS.map(value => [`placement:${value}`, []])) : {}) };
   const queries = cell.queries.map(row => {
     const label = labels.get(row.id);
     const query = fixture.queries.queries.find(query => query.id === row.id);
@@ -80,12 +89,13 @@ export function scoreCell(fixture, cell) {
       if (item.spans.some(span => have.has(span.id)) && !have.has(item.body.id)) fail('cell_detached_span');
     }
     if (used !== row.used || used > run.budget) fail('cell_total_cost');
-    const replay = assemble([...items.values()], row.ranked, { arm: run.arm, budget: run.budget, overhead: run.overhead, ...(host ? { cost } : {}) });
+    const replay = assemble([...items.values()], row.ranked, { arm: run.arm, budget: run.budget, overhead: run.overhead, ...(hr2b ? { diagnostics: true } : {}), ...(host ? { cost } : {}) });
     if (replay.used !== row.used || !same(replay.admitted, row.admitted) ||
-        (host && (replay.budgetRejected !== row.budgetRejected || replay.bodyEqualSpanCount !== row.bodyEqualSpanCount))) fail(`cell_assembly_replay_mismatch:${row.id}`);
+        ((host || hr2b) && (replay.budgetRejected !== row.budgetRejected || replay.bodyEqualSpanCount !== row.bodyEqualSpanCount))) fail(`cell_assembly_replay_mismatch:${row.id}`);
     const groups = label.groups.map(group => {
       const members = group.members.filter(member => member.namespace === 'target' && ['S300', 'S1000-extra'].includes(member.scale));
       if (!members.length || members.some(member => !['body', 'span'].includes(member.where))) fail('invalid_required_group');
+      if (hr2b && group.placement !== placementOf(fixture, members, label.intent)) fail('hr2b_stale_placement');
       return { ...group, members, fidelity: members.some(member => member.where === 'body') ? 'body-covered' : 'span-only' };
     });
     const result = { ...row, family: label.family, category: label.category, lang: label.lang, ...metrics(groups, have, row.ranked), tokenUse: used / run.budget };
@@ -93,6 +103,7 @@ export function scoreCell(fixture, cell) {
       if (selected.length) (strataRows[key] ??= []).push({ ...result, ...metrics(selected, have, row.ranked) });
     };
     for (const fidelity of ['body-covered', 'span-only']) stratum(`fidelity:${fidelity}`, groups.filter(group => group.fidelity === fidelity));
+    if (hr2b) for (const placement of PLACEMENTS) stratum(`placement:${placement}`, groups.filter(group => group.placement === placement));
     stratum(`language:${label.lang}`, groups); stratum(`category:${label.category}`, groups);
     return result;
   });
@@ -100,15 +111,17 @@ export function scoreCell(fixture, cell) {
   return { format: 'hr2-scored-cell-v1', ok: true, run: { ...run, implementation: { ...run.implementation, scorer: SCORER_IMPLEMENTATION }, expectedQueryIds: expected,
     ...(host ? { overheadModelDigest: run.overheadModel.sha256 } : {}) }, queries,
     summary: summarize(queries, { requireAllCategories: true }),
-    strata: Object.fromEntries(Object.entries(strataRows).map(([key, rows]) => [key, { ...summarize(rows), queries: rows }])),
-    ...(host ? { assemblyItems: [...items.values()].filter(item => rankedIds.has(item.id)),
+    strata: Object.fromEntries(Object.entries(strataRows).map(([key, rows]) => [key, { ...summarize(rows), ...(hr2b ? { families: new Set(rows.map(row => row.family)).size,
+      familyCounts: Object.fromEntries(CATEGORIES.map(category => [category, new Set(rows.filter(row => row.category === category).map(row => row.family)).size])) } : {}), queries: rows }])),
+    ...(host || hr2b ? { assemblyItems: [...items.values()].filter(item => rankedIds.has(item.id)),
       bodyEqualSpanCount: queries.reduce((sum, row) => sum + row.bodyEqualSpanCount, 0),
       rankedBodyEqualSpanCount: queries.reduce((sum, row) => sum + row.ranked.reduce((n, id) => n + items.get(id).spans.filter(span => span.text === items.get(id).body.text).length, 0), 0),
       budgetRejectedQueryCount: queries.filter(row => row.budgetRejected).length } : {}) };
 }
 
 export async function scoreDirectory(fixtureDir, dir) {
-  const authenticated = await authenticateFixture(fixtureDir), fixture = await loadFixture(fixtureDir);
+  const hr2b = await profileForDirectory(fixtureDir);
+  const authenticated = hr2b ? await authenticateHR2bFixture(fixtureDir) : await authenticateFixture(fixtureDir), fixture = await loadFixture(fixtureDir);
   for (const [name, hash] of Object.entries(authenticated.hashes)) if (fixture.hashes[name] !== hash) fail('fixture_changed_during_read');
   const filenames = (await readdir(dir)).filter(name => name.endsWith('.json')).sort(compareIds);
   if (!filenames.length) fail('no_cells');
@@ -118,12 +131,12 @@ export async function scoreDirectory(fixtureDir, dir) {
     if (!run) fail('invalid_cell_run');
     const bytes = await readFile(run.rankingPath);
     if (sha256(bytes) !== run.rankingHash) fail('cell_ranking_hash');
-    if (run.split === 'test') {
+    if (!hr2b && run.split === 'test') {
       const manifest = await inputManifest();
       if (run.rankingHash !== manifest.members[RANKINGS[run.ranking]?.member]) fail('cell_frozen_ranking_hash');
     }
     const ranking = JSON.parse(bytes);
-    authenticateRanking(authenticated, ranking, { selection: run.ranking, split: run.split, scale: run.scale });
+    (hr2b ? authenticateHR2bRanking : authenticateRanking)(authenticated, ranking, { selection: run.ranking, split: run.split, scale: run.scale });
     if (!same(run.rankingRun, ranking.run)) fail('cell_ranking_metadata');
     for (const query of cell.queries) if (!same(query.ranked, ranking.queries[query.id]?.ranked)) fail('cell_ranking_changed');
     const identity = JSON.stringify([run.split, run.scale, run.ranking, run.arm, run.overhead, run.budget]);
