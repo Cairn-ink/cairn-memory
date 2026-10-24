@@ -296,3 +296,7 @@
   飽和門檻與被拒單元計數。P2：`B<E` 先拒、「第一筆」跨 pass 定義、P-top+tail 試探性 bundle；檔名加 `@42627f60`、記
   `extensionCommit`。稽核者獨立驗證 sha256、C=22（加在 body-only 上）、C−15=7、A=10、h1=58、hN=57 皆正確。
 - **協定 v1.2.1 提交 `598d6c53`**（六項全套用，只動 §11 與標頭註記），已推送；派複查（resume）。負載 0.1。
+- **§11 複查：六項全 resolved，無新 P0／P1，「can be frozen: yes」**。**凍結 commit `4fb90832`**（只改狀態行；即
+  `run.extensionCommit`），已推送。派 harness worker `hr2_ext_harness`（workspace-write，worktree
+  `/home/chichieh/cairn-memory-u5b-hr2`，派工單：成本模型抽象＋host-v2、兩條嚴格驗證分支、report 排除與 48 對比／飽和／
+  被拒計數、README／INPUTS、240 個封存 cell 的回歸測試、只跑改到的測試檔、不得跑 test split、TRAPS）。
