@@ -62,10 +62,10 @@ the per-category guard quota is infeasible under 20 queries per category with
 a 30% later share (about 4–7 later-receipt test families per category, where
 ≥10 would need about 70 such families), and the receipt cap is a product
 limit, not a property of this world. No coverage, Δ, ranking or ceiling of any
-arm was computed or seen. The rebuilt fixture keeps the same families and
-facts (W2's queries stay valid) and changes only the receipt counts under the
-cap and the next candidate seed in the frozen sequence; its validator output is
-recorded in §9.
+arm was computed or seen. The rebuilt fixture keeps the same families, facts
+and placement allocation (W2's queries stay valid) and changes only the receipt
+counts under the cap: the frozen candidate sequence restarts at candidate 0
+under the amended rule (§9), and its validator output is recorded in §9.
 
 ## 1. Question and what HR-2 could not answer
 
@@ -463,12 +463,21 @@ ranking configuration and rankings freeze → one test run.
    with the diagnostics, never forward. **v1.1 path**: the first candidate
    (seed `1924440465`) was rejected at stage 2 for the two structural defects
    recorded in the provenance declaration; its diagnostics stay in the build
-   record. W1 rebuilds under the ≤4 receipt cap with the next candidate seed
-   in the frozen sequence, keeping families and facts unchanged so W2's
-   queries remain valid; W2 revises only the 18 queries W3 recategorized and
-   any coverage gap the validator names; labels are re-derived; W3 re-audits
-   the rebuilt corpus and labels; apply-audit and the validator must pass
-   before the fixture freeze.
+   record. Because the acceptance rule and the receipt distribution changed,
+   the frozen candidate sequence **restarts at candidate 0 (seed
+   `1924440465`)** under v1.1; the seed is not advanced on account of anything
+   seen, since no ranking or assembly output exists. W1 re-renders candidate 0
+   under the ≤4 receipt cap with the builder otherwise unchanged. The builder
+   draws the fact-to-memory plan and the placement allocation **before** the
+   receipt counts, so the facts, the fact coverage (`body` / `span-only` /
+   `absent`) and the placement allocation are unchanged by construction; the
+   coordinator verifies this mechanically (`hr1-facts.json` fact ids, texts
+   and coverage, and the regenerated facts view, byte-identical to the W2
+   input) and, if the check fails, advances to the next candidate seed and
+   W2 re-authors from the new facts view. W2 then revises only the 18
+   queries W3 recategorized and any coverage gap the validator names; labels
+   are re-derived; W3 re-audits the rebuilt corpus and labels; apply-audit
+   and the validator must pass before the fixture freeze.
 4. **Rankings**: the coordinator records the fixed configuration (§5), runs
    the host-v2 calibration check, then runs A1 and bge-m3 + A3 on dev and test
    through `cairn-heavy` (bge-m3 is CPU-heavy: about 540 documents and 160
