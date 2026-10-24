@@ -1,8 +1,10 @@
-# HR-2b: long-item budgeted assembly, offline protocol (v0.3 draft)
+# HR-2b: long-item budgeted assembly, offline protocol (v1, frozen)
 
-Status: **draft v0.3, 2026-10-24, awaiting the auditor's second re-check;
-frozen before any fixture tool is built, any fixture is authored or any cell
-is scored.** Written by the U5b coordinator at the primary's request (charter
+Status: **v1, frozen 2026-10-24 before any fixture tool, fixture, ranking or
+cell exists; the commit carrying this line is the protocol freeze.** v0.3
+(`58425923`) was confirmed by the auditor's second re-check ("can be frozen:
+yes, no blocking items"); v1 changes only this status line. Written by the
+U5b coordinator at the primary's request (charter
 §6 "next step: a long-item fixture"). v0.1 (`9b3095cb`) was audited by an
 independent, non-author, read-only Codex (`hr2b_protocol_audit`,
 gpt-6.1-sol/xhigh): four P0, six P1, one P2; v0.2 (`b4c31dd3`) applied all
