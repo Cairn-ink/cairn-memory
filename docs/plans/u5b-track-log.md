@@ -499,3 +499,7 @@
   add-member（foreign body 時間蘊涵）；193 計分群／266 成員；20 題／類別、dev 32.86%；placement：test first 56／25、later 49／22，
   dev 19／9、29／10（q-110 的 dev 群轉 body）；「Fixture can be frozen: yes」。協調者提交稽核檔，跑第三階段腳本
   （apply-audit → validate → freeze-hr2b）。
+- **fixture `hr2b-fixture-v1` 凍結**（候選 3、seed 3023009795、協定 v1.1）：apply-audit（1 覆寫）／validate／freeze-hr2b 皆 0；
+  FROZEN.md 31 檔（檔案系統清點＝git cached+others，git exit 0）；階段命令／log／exit 在 `results/hr2b-stage-logs/step3`，無 `/home`
+  路徑。候選歷程：v1 候選 0（配額＋receipt 上限）→ v1.1 候選 0（身分門＋重複本文）→ 候選 1（test first 20 群）→ 候選 2（重複本文）
+  → **候選 3 通過**。接著跑第四階段（configuration → calibrate-host-v2 → A1／bge-m3＋A3 dev／test 排名，`cairn-heavy` → 凍結排名）。
