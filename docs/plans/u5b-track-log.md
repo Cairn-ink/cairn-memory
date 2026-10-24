@@ -309,3 +309,5 @@
   README 前段仍留著指向凍結結果的可執行舊指令。其餘（2,003 個受保護檔不變、常數 hash 一致、舊數值分支未放寬、回歸測試
   方法正確、測試品質）皆確認。派 fix1：共用輸出路徑守衛（realpath、拒常數檔／`hr2-final`／`test-final`／fixtures／既有檔）、
   README 舊指令標為歷史紀錄、每類拒絕測試含位元不變斷言。
+- **fix1 完成**（共用 `output-paths.mjs` 實體路徑守衛；三個 stage 寫入前預檢；README 舊指令標歷史；33 個拒絕／位元不變測試）。
+  協調者沙箱外全套 assembly 測試兩版本 exit 0。**提交 `14fdacb5`**（已推送），審查 worktree 移到 `14fdacb5`，派 Spec／Standards 複查。
