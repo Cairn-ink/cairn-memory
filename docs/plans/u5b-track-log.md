@@ -365,3 +365,6 @@
   Standards P1：guard 層成員未經標籤認證（可修剪家族）；host 重播信任 cell 自帶的 `assemblyItems` 文字；receipt 排序比字串
   非時間點（時區偏移）。P2：固定配置淺凍結可被改、profile 常數多處重複。其餘（HR-1 位元不變、序列化 32 個 probe 與
   `b18dabe0` 一致、兩個回歸、選擇 gate）確認。派 fix2（八項，重跑 28 檔）。
+- **hr2b_tools fix2 完成**（八項全修：審後題目投影、全事實詞典、混合支持拒絕、guard 層由認證標籤推導、host 重播綁定認證
+  語料、時間點排序、深凍結、單一約束來源）。協調者沙箱外 28 檔兩版本 **399 過、0 敗、1 skip**。**提交 `025fe2ca`**（19 檔），
+  已推送；審查 worktree 移到 `025fe2ca`，派 Spec／Standards 複查。
