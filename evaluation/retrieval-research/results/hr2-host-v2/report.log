@@ -1,0 +1,3 @@
+[cairn-heavy] 09:54:15 waiting for lock /home/chichieh/.cache/cairn-heavy-tests.lock (pid 6099)
+[cairn-heavy] 09:54:15 lock acquired
+{"ok":true,"outcome":"inconclusive","comparisons":48}

@@ -2500,7 +2500,6 @@ available policy. A first-receipt-only deepening variant looked slightly
 better at tight budgets and needs its own contract clause before adoption.
 No budget number is a recommendation.
 
-The host-v2 curves (results §7, protocol §11) replay a fixed additive
-default-Memory calibration; they do not measure shipped-host token counts or
+The host-v2 curves replay a fixed additive default-Memory calibration; they do not measure shipped-host token counts or
 establish behaviour for non-default metadata, Cards or general receipt
 serialization.

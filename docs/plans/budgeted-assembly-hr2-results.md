@@ -194,8 +194,8 @@ non-default metadata or `sourceAccess`, or Cards (protocol §11.2).
 
 Provenance: constants `assembly/overhead-host-v2.json` (sha256
 `5eba1bd4…`, implementation commit `42627f60`), fixture and rankings as §1,
-clean checkout `14fdacb5`, Node 22.16.0, every stage through `cairn-heavy`
-with its command, log and exit code retained under
+clean checkout `14fdacb5`, Node 22.16.0, the run, score and report stages
+through `cairn-heavy`, every stage's command, log and exit code retained under
 [`results/hr2-host-v2/`](../../evaluation/retrieval-research/results/hr2-host-v2/)
 (`preflight.log`, `*.command`, `*.exit`, `*.log`; `cells.tar.xz`,
 `scores.json.xz`, `report.json.xz`, `report.md`, `SHA256SUMS.uncompressed`,
@@ -204,7 +204,7 @@ with its command, log and exit code retained under
 report must. Body-equal spans in the fixture: 0 admitted, 0 ranked, so no
 alias charge occurred.
 
-### 7.1 Macro group coverage under host-v2 (test split, 160 queries)
+### 7.1 Macro group coverage under host-v2 (test split, 94 queries)
 
 Ceilings are unchanged (A1 0.873, bge-m3 0.987, 3-small 0.978). Compare with
 the `O = 0` rows of §2.
@@ -227,8 +227,8 @@ the `O = 0` rows of §2.
 | 3-small + F-RRF10 | P-cover | 0.360 | 0.419 | 0.590 | 0.661 | 0.682 | 0.652 | 0.694 | 0.695 |
 | 3-small + F-RRF10 | P-cover-s1 | 0.360 | 0.419 | 0.596 | 0.678 | 0.682 | 0.658 | 0.706 | 0.715 |
 
-Token use p50 is 0.91–1.00 of the budget in every cell (P-cover 0.97–1.00
-from 192 up); at 128 tokens a single item (43 + 58 + body + receipts) is all
+Token use p50 is 0.74–1.00 of the budget across cells (the minimum is A1
+P-top-s1 at 192; P-cover is 0.97–1.00 from 192 up); at 128 tokens a single item (43 + 58 + body + receipts) is all
 that fits on every arm, so all arms coincide there.
 
 ### 7.2 The 48 paired contrasts (pointwise, unadjusted, exploratory 95% CIs)
@@ -257,15 +257,16 @@ on A1 and bge-m3, and at 1,536 on 3-small, each 6 baseline-only vs 0).
   costs about `43 + 58 + 23·57 + bodies + receipts`, well above 1,536, so the
   budget binds everywhere in the grid; at `O = 0` every arm reached its
   ceiling at 1,536 (§2).
-- In every cell, 89–94 of the 160 test queries have at least one
-  budget-rejected scheduled unit (`budgetRejectedQueryCount`); the count is
-  94 at every budget on bge-m3 and 3-small except P-top-s1/P-cover-s1 at
-  1,536 (92), and falls only to 89–90 on A1 at 1,536.
+- In every cell, 89–94 of the 94 test queries have at least one
+  budget-rejected scheduled unit (`budgetRejectedQueryCount`): 94 in every
+  3-small cell; 94 in every bge-m3 cell except P-top-s1 and P-cover-s1 at
+  1,536 (92); and 89–94 on A1, falling to 89–90 only at 1,536.
 - Where strategy matters moves up with the overhead: at `O = 0`
   coverage-first trailed by 16–29 points at 128–384 and coincided at 768+;
   under host-v2 it trails by 4–15 points at 192–512 and by **12–27 points at
-  768–1,536**, because the per-item overhead keeps the bodies-first pass from
-  ever leaving room for the receipts that carry 40% of the required groups.
+  768–1,536**, because the per-item overhead leaves the bodies-first pass insufficient
+  room for the required receipts, which carry 40% of the required groups
+  (P-cover still admits receipts, up to 22 spans per query at 1,536).
 
 ### 7.4 What this does and does not change
 
