@@ -1,5 +1,21 @@
 # Known limitations
 
+## Local role profiles (U5c-1)
+
+[Role profiles](role-profiles-local.md) require explicit matching method/context
+read scopes and migrate ordinary writers to v32. Direct agent publication uses
+role-specific write grants; attribution labels and retained instructions grant
+no execution authority. Caller-held receipts preserve identities across adoption
+changes, while every read rechecks scope, availability and applicability. A lost
+receipt cannot be recovered. Deletion and source fences prevent recovery of
+purged content, without erasing backups or caller copies.
+
+The exact single text budget includes the escaped receipt, defaults to 4000
+local tokens and may reject legal maximum Unicode or many-package profiles.
+Diagnostics require client handling of namespaced `_meta`. No live cross-agent,
+answer-quality, authoring-UI, relations/MOC, receipt-lookup or current-dependent
+Card invalidation claim is made. Stop older writers before v32 migration.
+
 ## Budgeted context assembly (U5b)
 
 The [assembly tool](context-read-local.md#budgeted-context-assembly-u5b) bounds

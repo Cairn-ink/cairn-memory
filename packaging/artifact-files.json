@@ -231,5 +231,19 @@
   "docs/context-read-local.md",
   "docs/method-packages-local.md",
   "docs/assets-local.md",
-  "docs/v1-preview-integration.md"
+  "docs/v1-preview-integration.md",
+  "core/role-context-evidence.mjs",
+  "core/role-context-facade.mjs",
+  "core/role-context-input.mjs",
+  "core/role-context-wire.mjs",
+  "core/role-profile-facade.mjs",
+  "core/role-profile-input.mjs",
+  "core/role-profile-schema.mjs",
+  "core/role-profile-storage.mjs",
+  "core/task-receipt.mjs",
+  "adapters/mcp/role-profile-access.mjs",
+  "adapters/mcp/role-profile-configuration.mjs",
+  "adapters/mcp/role-profile-tools.mjs",
+  "adapters/mcp/role-profile-transport.mjs",
+  "docs/role-profiles-local.md"
 ]

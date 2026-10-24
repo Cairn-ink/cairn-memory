@@ -6,7 +6,7 @@ import { roleContextInput } from './role-context-input.mjs';
 import { roleTaskMeteredText as wire, roleTaskByteCounts } from './role-context-wire.mjs';
 import { roleAccess } from './role-profile-facade.mjs';
 import { roleEvidence } from './role-context-evidence.mjs';
-import { parseTaskReceipt, encodeTaskReceipt, canonicalJSON } from './task-receipt.mjs';
+import { parseTaskReceipt, encodeTaskReceipt, canonicalJSON, authenticatedMAC } from './task-receipt.mjs';
 import { contextOptions } from './context-read-input.mjs';
 import { ASSEMBLY_FRAMING } from './context-read-assembly.mjs';
 import { countTokens } from './model-budget.mjs';
@@ -33,7 +33,7 @@ export function createRoleContextReader(storage,options,config) {
   function cursor(payload) {const body=Buffer.from(canonicalJSON(payload)).toString('base64url');return body+'.'+bind('role-context-cursor-v1',body);}
   function offset(token,binding,gens) {
     if(token===undefined)return 0;
-    const [body,mac,extra]=token.split('.');if(!body||extra!==undefined||mac!==bind('role-context-cursor-v1',body))fail('invalid_cursor');
+    const [body,mac,extra]=token.split('.');if(!body||extra!==undefined||!authenticatedMAC(bind('role-context-cursor-v1',body),mac))fail('invalid_cursor');
     let p;try{p=JSON.parse(Buffer.from(body,'base64url').toString('utf8'));}catch{fail('invalid_cursor');}
     if(!same(p.binding,binding)||!Number.isSafeInteger(p.after)||p.after<0)fail('invalid_cursor');if(!same(p.generations,gens))fail('cursor_stale');return p.after;
   }
@@ -69,6 +69,7 @@ export function createRoleContextReader(storage,options,config) {
     const f=target.files.find(f=>f.path===input.path);if(!f)fail('method_not_found');
     if(f.kind==='binary') {
       if(!config.assets)fail('unsupported_media');
+      methods.verifyBinaryMetadata(version.namespace,target,f);
       return {version,path:f.path,kind:'binary',mediaType:f.media_type,contentIdentity:f.content_identity,totalBytes:f.byte_count,totalUnits:null,parts:[],nextRange:null};
     }
     const row=db.prepare('SELECT text FROM method_files WHERE version_id=? AND path=?').get(version.versionId,input.path);
@@ -169,7 +170,7 @@ export function createRoleContextReader(storage,options,config) {
       if(input.mode==='then')refs=saved.evidence.map((e,i)=>({ref:{namespace:input.readSet[e[0][0]],type:e[0][1]===0?'memory':'card',[e[0][1]===0?'memoryId':'cardId']:e[0][2],revision:e[0][3],...(e[0][1]===1?{bodyRevision:e[0][4]}:{})},rank:i+1,saved:e}));
       const prepared=readTransaction(db,()=>{
         const base=prepare(input,saved,receiptId,access.access),items=[];let unavailable=0;
-        for(const candidate of refs)try{const item=evidence.item(candidate.ref,input.readSet,candidate.rank,input.mode==='then'?'history':'current');if(candidate.saved){if(item.fence!==candidate.saved[1]){unavailable++;continue;}const originalSources=item.sources;item.sources=originalSources.filter(source=>candidate.saved[2].some(s=>s[0]===source.index&&s[1]===source.ref.receiptId&&s[2]===source.ref.contentIdentity));item.sourcesComplete&&=item.sources.length===originalSources.length;}items.push(item);}catch(error){if(!['evidence_unavailable','revision_conflict','source_unavailable','source_excluded'].includes(error.code))throw error;unavailable++;}
+        for(const candidate of refs)try{const item=evidence.item(candidate.ref,input.readSet,candidate.rank,input.mode==='then'?'history':'current');if(candidate.saved){if(item.fence!==candidate.saved[1]){unavailable++;continue;}item.sources=item.sources.filter(source=>candidate.saved[2].some(s=>s[0]===source.index&&s[1]===source.ref.receiptId&&s[2]===source.ref.contentIdentity));}items.push(item);}catch(error){if(!['evidence_unavailable','revision_conflict','source_unavailable','source_excluded'].includes(error.code))throw error;unavailable++;}
         return {...base,items,unavailable};
       });
       if(searchGenerations&&!same(searchGenerations,prepared.observation.generations))fail('snapshot_stale');
@@ -202,7 +203,7 @@ export function createRoleContextReader(storage,options,config) {
         return {version:'context-read-v1',representation:'representation-v2',policy:{id:'rank-first-whole-v1'},counter:{id:counter?.id},
           items:evidence.details(items,tokenCounts),budget:{...input.budget,used},candidates,
           omitted:{items:prepared.items.length-items.length,bodies:prepared.items.length-items.length,
-            sources:prepared.items.reduce((n,i)=>n+i.sources.length,0)-items.reduce((n,i)=>n+i.sources.length,0),unavailable:prepared.unavailable,oversized},
+            sources:prepared.items.reduce((n,i)=>n+i.canonicalSourceCount,0)-items.reduce((n,i)=>n+i.sources.length,0),unavailable:prepared.unavailable,oversized},
           dedup:{sources:metered.evidence.reduce((n,i)=>n+i.sources.filter(s=>s.sameAs).length,0),body:metered.evidence.reduce((n,i)=>n+i.sources.filter(s=>s.sameAsBody).length,0)},
           stops:{budget:budgetStop,items:items.length>=input.budget.maxItems,deadline:performance.now()>=deadlineAt},trace:{timings:{assemblyMs:performance.now()-started},counterCalls:calls}};
       }

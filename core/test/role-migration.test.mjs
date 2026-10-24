@@ -58,3 +58,11 @@ test('C05 local preflight, permission and setup recognize v32 without migration'
  const setup=await setupFixture(t);openMemoryCore({path:setup.request.databasePath,roleProfiles:h.options}).close();assert.equal((await setup.setup()).status,'prepared');
  const db=new DatabaseSync(setup.request.databasePath);assert.equal(db.prepare('PRAGMA user_version').get().user_version,32);db.close();
 });
+
+for(const stage of ['CREATE TABLE method_packages','CREATE TABLE assets','CREATE TABLE role_profiles','PRAGMA user_version=32'])test('C04 fresh-store failure rolls back identity/DDL/version at '+stage,t=>{
+ const {path}=workspace(t),original=DatabaseSync.prototype.exec;
+ DatabaseSync.prototype.exec=function(sql){const result=original.call(this,sql);if(sql.includes(stage))throw Error('fresh rollback injection');return result;};
+ try{assert.throws(()=>openMemoryCore({path,roleProfiles:host().options}),/fresh rollback injection/);}finally{DatabaseSync.prototype.exec=original;}
+ const db=new DatabaseSync(path);try{assert.equal(db.prepare('PRAGMA user_version').get().user_version,0);assert.equal(db.prepare('PRAGMA application_id').get().application_id,0);assert.deepEqual(db.prepare('SELECT name FROM sqlite_master').all(),[]);}finally{db.close();}
+ openMemoryCore({path,roleProfiles:host().options}).close();const retry=new DatabaseSync(path);assert.equal(retry.prepare('PRAGMA user_version').get().user_version,32);retry.close();
+});

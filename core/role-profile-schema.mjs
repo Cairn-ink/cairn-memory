@@ -1,6 +1,7 @@
 import { roleFields } from './role-profile-input.mjs';
 import { canonicalJSON, canonicalObject } from './task-receipt.mjs';
-import { keyed } from './private-card-input.mjs';
+import { keyed, cardText } from './private-card-input.mjs';
+import { methodReasons } from './method-package-input.mjs';
 import { fail } from './validation.mjs';
 
 export const ROLE_PROFILE_SCHEMA_VERSION = 32;
@@ -39,10 +40,13 @@ CREATE TABLE role_profile_changes (
  payload TEXT, byte_count INTEGER NOT NULL CHECK(byte_count BETWEEN 0 AND 32768),
  UNIQUE(profile_id,to_id,to_identity),
  CHECK((from_id IS NULL)=(from_identity IS NULL)),
- CHECK((payload IS NULL AND byte_count=0) OR (payload IS NOT NULL AND json_valid(payload) AND json_type(payload)='object' AND byte_count=length(CAST(payload AS BLOB)))),
+ CHECK((payload IS NULL AND byte_count=0) OR (payload IS NOT NULL AND json_valid(payload) AND json_type(payload)='object' AND byte_count=length(CAST(payload AS BLOB))
+ AND json_type(payload,'$.text') IS 'text' AND length(json_extract(payload,'$.text')) BETWEEN 1 AND 500
+ AND json_type(payload,'$.reasonRefs') IS 'array' AND json_array_length(payload,'$.reasonRefs')<=16)),
  FOREIGN KEY(profile_id,to_id,to_identity) REFERENCES role_profile_releases(profile_id,id,content_identity),
  FOREIGN KEY(profile_id,from_id,from_identity) REFERENCES role_profile_releases(profile_id,id,content_identity)
 ) STRICT;
+CREATE INDEX role_profile_change_from ON role_profile_changes(from_id);
 CREATE TABLE role_profile_operations (
  ${ns}, action_id TEXT NOT NULL, method TEXT NOT NULL CHECK(method IN ('publishRoleProfileRelease','disableRoleProfile','deleteRoleProfileRelease')),
  payload_binding TEXT NOT NULL, target_id TEXT NOT NULL, result TEXT NOT NULL CHECK(json_valid(result)), created_at TEXT NOT NULL,
@@ -119,6 +123,11 @@ export function validateRoleProfiles(db) {
         if(Object.keys(payload).sort().join()!=='actorId,agentId,createdAt,fields'||canonicalJSON(payload)!==release.payload||canonicalJSON(roleFields(Object.fromEntries(Object.entries(payload.fields).filter(([key,value])=>key!=='appliesTo'||value!==null)),namespace))!==canonicalJSON(payload.fields))fail('unsupported_database');
         for(const label of [payload.actorId,payload.agentId])if(typeof label!=='string'||!label.trim()||!label.isWellFormed()||label.includes('\0')||label.length>200)fail('unsupported_database');
         if(keyed(identity.cursor_secret,'role-profile-release-v1',[identity.store_id,canonicalObject([profile,release.ordinal,payload])])!==release.content_identity)fail('unsupported_database');
+      }
+      for(const change of db.prepare('SELECT payload,byte_count FROM role_profile_changes WHERE profile_id=? AND payload IS NOT NULL').iterate(row.id)) {
+        const payload=JSON.parse(change.payload);
+        if(Object.keys(payload).sort().join()!=='reasonRefs,text'||canonicalJSON(payload)!==change.payload||Buffer.byteLength(change.payload)!==change.byte_count||
+          canonicalJSON({text:cardText(payload.text,500),reasonRefs:methodReasons(payload.reasonRefs,namespace)})!==change.payload)fail('unsupported_database');
       }
     }
   } catch(error) {

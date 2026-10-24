@@ -28,7 +28,8 @@ export function roleEvidence(storage,config) {
     return {type,ref,ns:readSet.findIndex(ns=>JSON.stringify(ns)===JSON.stringify(ref.namespace)),rank,
       metadata:type==='memory'?{state,reviewState:canonical.reviewState,filing:canonical.filing,kind:canonical.kind,origin,confidence:canonical.confidence}:{state,support:canonical.support,origin},
       text:type==='memory'?canonical.content:canonical.title+'\n'+canonical.body,sources,
-      sourceAccess:type==='memory'?canonical.provenance.sourceAccess:'unsupported',sourcesComplete:type==='memory'&&canonical.provenance.coverage.status==='complete',fence:fence(canonical)};
+      sourceAccess:type==='memory'?canonical.provenance.sourceAccess:'unsupported',canonicalSourceCount:sources.length,
+      canonicalSourcesComplete:type==='memory'&&canonical.provenance.coverage.status==='complete',fence:fence(canonical)};
   }
   function search(input,access,deadlineAt) {
     const projection={readSet:input.readSet,types:['memory','card'],intent:'current',accessGenerations:access.access.map(g=>g.accessGeneration)};
@@ -43,7 +44,8 @@ export function roleEvidence(storage,config) {
     }finally{side.close();}
   }
   function assembled(items,tokenCounts=new Map()) {
-    return assembleContext({prepared:items,counter:{id:'internal-projection',countTokens:text=>tokenCounts.get(text)??0},policy:{id:'rank-first-whole-v1'},
+    const prepared=items.map(item=>({...item,sourcesComplete:item.canonicalSourcesComplete&&item.sources.length===item.canonicalSourceCount}));
+    return assembleContext({prepared,counter:{id:'internal-projection',countTokens:text=>tokenCounts.get(text)??0},policy:{id:'rank-first-whole-v1'},
       budget:{maxTokens:Number.MAX_SAFE_INTEGER,maxItems:24},deadlineAt:Infinity,snapshotOf:()=>null});
   }
   return {item,search,project:items=>assembled(items).metered.items,details:(items,tokens)=>assembled(items,tokens).diagnostics.items};

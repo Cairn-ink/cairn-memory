@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — local role profiles (U5c-1)
+
+- Add opt-in direct agent role publication with dual CAS and v32 guards, matching
+  method/context scopes, and one budgeted MCP role/task read with caller-held
+  receipts, historical labels and exact-version file continuation. See the
+  [role guide](docs/role-profiles-local.md) for configuration and limitations.
+
 ## Unreleased — context representation v2 (U5b-2)
 
 - Replace the experimental preview.2 assembly shape with `representation-v2`:

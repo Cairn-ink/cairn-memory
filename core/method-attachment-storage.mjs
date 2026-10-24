@@ -57,12 +57,21 @@ export function createMethodAttachmentStorage({db,identity,contentIdentity,enabl
       fail('method_version_unavailable');
     return entries;
   }
-  function chunk(ns,found,file,index) {
+  // Metadata-only verification is synchronous and shared by U4 chunk delivery
+  // and the role reader's preparation/final transactions. It never loads bytes.
+  function verifyBinaryMetadata(ns,found,file) {
+    const entry=db.prepare('SELECT * FROM method_mixed_entries WHERE version_id=? AND position=?').get(found.row.id,file.position);
     const object=db.prepare('SELECT * FROM binary_objects WHERE id=?').get(file.binary_object_id);
-    if(!object||object.method_version_id!==found.row.id||object.position!==file.position||object.asset_version_id!==null||
+    if(file.kind!=='binary'||file.version_id!==found.row.id||!entry||entry.kind!=='binary'||
+      ['version_id','position','path','media_type','content_identity','byte_count','binary_object_id'].some(key=>entry[key]!==file[key])||
+      !object||object.method_version_id!==found.row.id||object.position!==file.position||object.asset_version_id!==null||
       object.owner_id!==ns.ownerId||object.scope!==ns.scope||object.project_id!==(ns.projectId??'')||object.content_identity!==file.content_identity||
       object.media_type!==file.media_type||object.byte_count!==file.byte_count||!Number.isSafeInteger(object.byte_count)||object.byte_count<1||object.byte_count>ASSET_LIMITS.versionBytes)
       fail('method_version_unavailable');
+    return object;
+  }
+  function chunk(ns,found,file,index) {
+    const object=verifyBinaryMetadata(ns,found,file);
     const count=Math.ceil(object.byte_count/32768);
     if(!Number.isSafeInteger(index)||index<0||index>=count)fail('invalid_cursor');
     const row=db.prepare('SELECT chunk_mac,bytes FROM binary_chunks WHERE object_id=? AND chunk_index=?').get(object.id,index),length=Math.min(32768,object.byte_count-index*32768);
@@ -82,6 +91,6 @@ export function createMethodAttachmentStorage({db,identity,contentIdentity,enabl
       ![saved.packageRevision,saved.versionRevision].every(value=>Number.isSafeInteger(value)&&value>0))fail('invalid_cursor');
     return saved;
   }
-  return {mixed,prepare,reserve,insert,metadata,chunk,encode,decode,
+  return {mixed,prepare,reserve,insert,metadata,verifyBinaryMetadata,chunk,encode,decode,
     streamBinding:(input,access)=>mac('method-attachment-stream-v1',[input,access])};
 }

@@ -6,6 +6,9 @@ import { contextCommand } from './context-read-command.mjs';
 import { CONTEXT_FLAGS, contextHostConfiguration } from './context-read-configuration.mjs';
 import { createContextEmbedding } from './context-read-provider.mjs';
 import { ContextStdioServerTransport } from './context-read-transport.mjs';
+// U5c-1 host boundary: SQLite-free static modules.
+import { roleProfileHostConfiguration, roleProfileCheckConfiguration } from './role-profile-configuration.mjs';
+import { RoleProfileStdioServerTransport } from './role-profile-transport.mjs';
 import { createContextCounter } from '../openai/context-counter.mjs';
 import { identifier } from '../../core/validation.mjs';
 import { DEFAULT_MODEL } from '../openai/profiles.mjs';
@@ -163,7 +166,7 @@ export function parseConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
     '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
     '--classification-recovery', '--capture-deadline-ms', '--session-episodes-access',
-    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--private-cards', '--retained-raw-profile', '--method-packages', '--assets', ...CONTEXT_FLAGS]);
+    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--private-cards', '--retained-raw-profile', '--method-packages', '--assets', '--role-profiles', ...CONTEXT_FLAGS]);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
     if(args[i]==='--method-read-personal'||args[i]==='--context-read-personal'){
@@ -186,6 +189,9 @@ export function parseConfiguration(args) {
   if(values.has('--method-packages')&&values.get('--method-packages')!=='local-v1'||values.has('--method-read-personal')&&(!values.has('--method-packages')||!values.has('--project')))throw Error('invalid_mcp_configuration');
   if(values.has('--assets')&&values.get('--assets')!=='local-v1')throw Error('invalid_mcp_configuration');
   const context = contextHostConfiguration(values);
+  // U5c-1: never union independently configured read grants.
+  if (values.has('--role-profiles')) roleProfileHostConfiguration({ roleProfiles: values.get('--role-profiles'),
+    methodPackages: values.get('--method-packages'), methodReadPersonal: values.has('--method-read-personal'), ...context });
   if (values.has('--private-cards') && values.get('--private-cards') !== 'local-v1') throw new Error('invalid_mcp_configuration');
   if (values.has('--capture-qualification')
     && !['source-bound-v1', 'source-bound-v2'].includes(values.get('--capture-qualification'))) {
@@ -234,6 +240,7 @@ export function parseConfiguration(args) {
   return { path: values.get('--db'), namespace: { ownerId: values.get('--owner'),
     scope: values.has('--project') ? 'project' : 'personal', projectId: values.get('--project') ?? null },
     ...context,
+    ...(values.has('--role-profiles') ? { roleProfiles: values.get('--role-profiles') } : {}),
     ...(values.has('--assets')?{assets:'local-v1'}:{}),
     ...(values.has('--method-packages')?{methodPackages:'local-v1'}:{}),
     ...(values.has('--method-read-personal')?{methodReadPersonal:true}:{}),
@@ -288,7 +295,8 @@ export async function start(args = process.argv.slice(2), env = process.env) {
   }
   if (check && config.contextRead) {
     console.log(JSON.stringify({ ok: true, mode: 'configuration-check', contextRead: config.contextRead,
-      contextReadPersonal: config.contextReadPersonal ?? false, scope: config.namespace.scope,
+      contextReadPersonal: config.contextReadPersonal ?? false,
+      ...(config.roleProfiles ? roleProfileCheckConfiguration(config) : {}), scope: config.namespace.scope,
       provider: config.contextProvider ?? null, preset: config.contextProvider ? 'rrf-k10' : 'rrf-k60-d12',
       modelKeyInspected: false, databaseOpened: false, providerContacted: false, automaticCapture: false }));
     return;
@@ -353,7 +361,7 @@ export async function start(args = process.argv.slice(2), env = process.env) {
   }
   const { contextProvider, ...serverConfiguration } = config;
   const contextEmbedding = createContextEmbedding(contextProvider,env);
-  const Transport=config.contextRead?ContextStdioServerTransport:(config.methodPackages||config.assets)?MethodStdioServerTransport:StdioServerTransport;
+  const Transport=config.roleProfiles?RoleProfileStdioServerTransport:config.contextRead?ContextStdioServerTransport:(config.methodPackages||config.assets)?MethodStdioServerTransport:StdioServerTransport;
   return startStdio(() => createCairnServer({ ...serverConfiguration, model, ...(contextCounter ? { contextCounter } : {}), ...(contextEmbedding?{contextEmbedding}:{}) }),
     { serveStdio, StdioServerTransport:Transport },config.methodPackages||config.assets||config.contextRead?262144:65536);
 }

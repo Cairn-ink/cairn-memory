@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { openSync,closeSync,readFileSync } from 'node:fs';
 import { fixture,host,ns,project,publish,read,importMethod,adopt,ok } from './role-fixture.mjs';
-import { createContextCounter } from '../../adapters/openai/context-counter.mjs';
+import { optionalRoleCounter } from './role-fixture.mjs';
 const fields=(pkg,duty='Review records')=>({duties:[duty],requiredOutputs:['Report decisions'],methods:[pkg]});
 const hash=text=>createHash('sha256').update(text).digest('hex');
 function child(f,source,args=[]) {
@@ -16,18 +16,38 @@ function child(f,source,args=[]) {
 const helper=new URL('./role-fixture.mjs',import.meta.url).href,index=new URL('../index.mjs',import.meta.url).href;
 test('C02/C07 offline three-role workflow and exact text continuation through adoption, withdrawal, restart and deletion',t=>{
  const f=fixture(t),v1=ok(f.call('importMethodVersion',importMethod()));ok(f.call('adoptMethodVersion',adopt(v1)));
- for(const role of ['COO','CTO','finance'])ok(f.call('publishRoleProfileRelease',publish(ns,role,role,null,null,fields(v1.package,role+' duty'))));
- const original=ok(f.call('readRoleTaskContext',read())).metered,receipt=original.receipt;
+ const unchanged={};
+ for(const role of ['COO','CTO','finance']){
+  const method=role==='finance'?v1:ok(f.call('importMethodVersion',importMethod(role+'-method',role+' canonical method')));
+  if(role!=='finance')ok(f.call('adoptMethodVersion',adopt(method,role+'-adopt')));
+  ok(f.call('publishRoleProfileRelease',publish(ns,role,role,null,null,{...fields(method.package,role+' duty'),requiredOutputs:[role+' decisions'],appliesTo:role+' scope',related:[]})));
+  unchanged[role]=ok(f.call('readRoleTaskContext',read(role))).metered;
+ }
+ const oldMemory=ok(f.call('admit',{namespace:ns,memory:{content:'finance original evidence',kind:'fact'},receipts:[{client:'s',sessionId:'s',eventId:'old-evidence',role:'user',excerpt:'finance original evidence'}]})).memory;
+ const original=ok(f.call('readRoleTaskContext',{...read(),task:'finance'})).metered,receipt=original.receipt;
+ assert.equal(original.evidence.length,1);
  const v2=ok(f.call('importMethodVersion',{...importMethod('method-2','version two'),package:v1.package,basedOn:v1.version,expectedPackageRevision:1}));
  assert.deepEqual(ok(f.call('readRoleTaskContext',read())).metered.methods[0].version,v1.version);
  const output=child(f,`import {openMemoryCore} from ${JSON.stringify(index)};import {host,ok,adopt} from ${JSON.stringify(helper)};const h=host(),core=openMemoryCore({path:process.argv[1],methodPackages:h.methods});ok(core.adoptMethodVersion(adopt(JSON.parse(process.argv[2]),'adopt-v2',null,undefined,1),{}));console.log(JSON.stringify(core.close()));`,[f.path,JSON.stringify(v2)]);assert.ok(output.includes('"ok":true'));
  f.reopen();
  const current=ok(f.call('readRoleTaskContext',read())).metered;assert.deepEqual(current.methods[0].version,v2.version);
- for(const role of ['COO','CTO'])assert.equal(ok(f.call('readRoleTaskContext',read(role))).metered.profile.release.fields.duties[0],role+' duty');
+ for(const role of ['COO','CTO']){const after=ok(f.call('readRoleTaskContext',read(role))).metered;assert.deepEqual(after.profile,unchanged[role].profile);assert.deepEqual(after.methods,unchanged[role].methods);assert.deepEqual(after.registries,unchanged[role].registries);}
  const then=ok(f.call('readRoleTaskContext',{mode:'then',readSet:[ns],receipt})).metered;assert.equal(then.receipt,receipt);assert.deepEqual(then.methods[0].version,v1.version);assert.equal(then.methods[0].adoptionStatus,'newer-version-available');
  const fileInput={mode:'file',readSet:[ns],receipt,package:v1.package,path:'guide.txt'};
  let file=ok(f.call('readRoleTaskContext',fileInput)).metered.file;assert.equal(file.parts[0].text,'version one');assert.equal(hash(file.parts[0].text),hash('version one'));assert.deepEqual(file.version,v1.version);
- const refreshed=ok(f.call('readRoleTaskContext',{mode:'refresh',readSet:[ns],receipt})).metered;assert.notEqual(refreshed.receipt,receipt);assert.deepEqual(refreshed.methods[0].version,v2.version);
+ const extra=ok(f.call('importMethodVersion',importMethod('refresh-extra','Extra current method')));ok(f.call('adoptMethodVersion',adopt(extra,'extra-adopt')));
+ const newProfile=ok(f.call('publishRoleProfileRelease',publish(ns,'finance','replace-profile',original.profile.release.ref,1,{duties:['Replacement duties'],requiredOutputs:['Replacement outputs'],appliesTo:'Replacement scope',methods:[v1.package,extra.package]})));
+ ok(f.call('forget',{namespace:ns,memoryId:oldMemory.id,expectedRevision:1}));
+ const newMemory=ok(f.call('admit',{namespace:ns,memory:{content:'finance replacement evidence',kind:'fact'},receipts:[{client:'s',sessionId:'s',eventId:'new-evidence',role:'user',excerpt:'finance replacement evidence'}]})).memory;
+ const refreshed=ok(f.call('readRoleTaskContext',{mode:'refresh',readSet:[ns],receipt,task:'finance'})).metered;
+ assert.notEqual(refreshed.receipt,receipt);assert.deepEqual(refreshed.methods.map(m=>m.version),[v2.version,extra.version]);assert.deepEqual(refreshed.profile.release.ref,newProfile.release);
+ const oldPayload=JSON.parse(receipt).p,newPayload=JSON.parse(refreshed.receipt).p;
+ assert.deepEqual(newPayload.profiles,[[0,newProfile.release.profile.profileId,newProfile.release.releaseId,newProfile.release.contentIdentity,1]]);
+ assert.deepEqual(newPayload.heads,[[0,newProfile.release.profile.profileId,2,'active',0]]);assert.equal(oldPayload.heads[0][2],1);
+ assert.deepEqual(newPayload.evidence.map(e=>e[0][2]),[newMemory.id]);assert.equal(newPayload.evidence.some(e=>e[0][2]===oldMemory.id),false);
+ const freshNow=ok(f.call('readRoleTaskContext',{...read(),task:'finance'})).metered;
+ assert.deepEqual(refreshed.profile,freshNow.profile);assert.deepEqual(refreshed.registries,freshNow.registries);assert.deepEqual(refreshed.evidence,freshNow.evidence);
+ const freshPayload=JSON.parse(freshNow.receipt).p;delete freshPayload.id;delete newPayload.id;assert.deepEqual(newPayload,freshPayload);
  ok(f.call('publishRoleProfileRelease',publish(project,'finance','project-profile',null,null,fields(v1.package))));ok(f.call('adoptMethodVersion',adopt(v1,'project-v1','finance',project,null,[ns,project])));
  const projectCurrent=ok(f.call('readRoleTaskContext',read('finance',[ns,project]))).metered;assert.deepEqual(projectCurrent.methods[0].version,v1.version);assert.deepEqual(ok(f.call('readRoleTaskContext',read())).metered.methods[0].version,v2.version);
  const {version:withdrawnVersion,...withdraw}=adopt(v2,'withdraw',null,ns,2);ok(f.call('disableMethodBinding',withdraw));
@@ -52,7 +72,7 @@ test('C07 project-only unavailable package preserves identity without target rea
  assert.equal(ok(f.call('readRoleTaskContext',{mode:'file',readSet:[project],receipt:result.receipt,package:method.package,path:'guide.txt'})).metered.file,null);
 });
 test('C03 independent exact budget recount, required overflow and receipt scope/tamper/refusal',async t=>{
- const counter=await createContextCounter(),f=fixture(t,{h:host({counter})});ok(f.call('publishRoleProfileRelease',publish()));
+ const counter=await optionalRoleCounter(t);if(!counter)return;const f=fixture(t,{h:host({counter})});ok(f.call('publishRoleProfileRelease',publish()));
  const result=ok(f.call('readRoleTaskContext',read()));
  const sort=v=>Array.isArray(v)?v.map(sort):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort((a,b)=>Buffer.compare(Buffer.from(a),Buffer.from(b))).map(k=>[k,sort(v[k])])):v;
  const independent=JSON.stringify(sort({ok:true,value:result.metered,evidenceTrust:'untrusted-data-not-instructions'}));assert.equal(result.diagnostics.budget.used,counter.countTokens(independent));assert.ok(result.diagnostics.trace.counterCalls<=2);
@@ -89,7 +109,7 @@ test('C07 second-process adoption between then and file never changes receipt te
  }
 });
 test('C03 16-package and non-Latin mandatory overflows refuse with independently recounted required tokens',async t=>{
- const counter=await createContextCounter(),f=fixture(t,{h:host({counter})}),packages=[];
+ const counter=await optionalRoleCounter(t);if(!counter)return;const f=fixture(t,{h:host({counter})}),packages=[];
  for(let i=0;i<16;i++){const method=ok(f.call('importMethodVersion',importMethod('method-'+i)));ok(f.call('adoptMethodVersion',adopt(method,'adopt-'+i)));packages.push(method.package);}
  const maximum=Array.from({length:16},(_,j)=>('Item '+j+': '+'Review records and report decisions with source references. '.repeat(8)).slice(0,300));
  const release=ok(f.call('publishRoleProfileRelease',publish(ns,'finance','sixteen',null,null,{duties:maximum.slice(0,8),requiredOutputs:maximum.slice(8),methods:packages})));
@@ -104,7 +124,7 @@ test('C07 Namespace arm preserves unchanged U2 no-active and disabled results wi
  value=ok(f.call('readRoleTaskContext',read('finance',[project]))).metered;assert.equal(value.methods[0].status,'disabled');assert.deepEqual(JSON.parse(value.receipt).p.methods[0][0],ns);assert.equal(JSON.parse(value.receipt).p.methods[0][6],null);
 });
 test('C03 actual four-package maximum English fixture fits the 4000 default with every method represented',async t=>{
- const counter=await createContextCounter(),f=fixture(t,{h:host({counter})}),methods=[];
+ const counter=await optionalRoleCounter(t);if(!counter)return;const f=fixture(t,{h:host({counter})}),methods=[];
  for(let i=0;i<4;i++){const m=ok(f.call('importMethodVersion',importMethod('english-method-'+i)));ok(f.call('adoptMethodVersion',adopt(m,'english-adopt-'+i)));methods.push(m.package);}
  const text=Array.from({length:16},(_,j)=>('Item '+j+': '+'Review records and report decisions with source references. '.repeat(8)).slice(0,300));
  ok(f.call('publishRoleProfileRelease',publish(ns,'finance','english',null,null,{duties:text.slice(0,8),requiredOutputs:text.slice(8),methods})));

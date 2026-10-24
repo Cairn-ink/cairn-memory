@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { performance, monitorEventLoopDelay } from 'node:perf_hooks';
-import { createContextCounter } from '../../adapters/openai/context-counter.mjs';
+import { optionalRoleCounter } from './role-fixture.mjs';
 import { fixture,host,ns,publish,read,ok } from './role-fixture.mjs';
 test('C03 observed now/then latency, exact counter calls, receipt size and event-loop delay (real local o200k_base)',async t=>{
- const counter=await createContextCounter(),f=fixture(t,{h:host({counter})});ok(f.call('publishRoleProfileRelease',publish()));
+ const counter=await optionalRoleCounter(t);if(!counter)return;const f=fixture(t,{h:host({counter})});ok(f.call('publishRoleProfileRelease',publish()));
  const receipt=ok(f.call('readRoleTaskContext',read())).metered.receipt,delay=monitorEventLoopDelay({resolution:10});delay.enable();await new Promise(resolve=>setTimeout(resolve,20));
  const measurements={};for(const mode of ['now','then']){
   const samples=[],calls=[];

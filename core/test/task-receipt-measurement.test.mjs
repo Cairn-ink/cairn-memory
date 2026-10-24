@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { createContextCounter } from '../../adapters/openai/context-counter.mjs';
+import { optionalRoleCounter } from './role-fixture.mjs';
 import { encodeTaskReceipt } from '../task-receipt.mjs';
 // Independent serializer: deliberately shares no production canonicalization.
 const order=value=>Array.isArray(value)?value.map(order):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>Buffer.compare(Buffer.from(a),Buffer.from(b))).map(([k,v])=>[k,order(v)])):value;
@@ -9,7 +9,7 @@ const C=value=>JSON.stringify(order(value));
 const H=n=>createHash('sha256').update(String(n)).digest('base64url');
 const I=n=>{const h=createHash('sha256').update(String(n)).digest('hex');return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-8${h.slice(17,20)}-${h.slice(20,32)}`;};
 test('C03 §18.7 frozen 1/4/16-package o200k_base measurement table',async t=>{
- const counter=await createContextCounter(),table=[];
+ const counter=await optionalRoleCounter(t);if(!counter)return;const table=[];
  for(const n of [1,4,16]){
   const personal={ownerId:'owner',scope:'personal',projectId:null},project={ownerId:'owner',scope:'project',projectId:'project'},readSet=[personal,project];
   const profile={type:'role-profile',namespace:personal,profileId:I(1),roleKey:'finance'},release={type:'role-profile-release',profile,releaseId:I(2),contentIdentity:H(2)};

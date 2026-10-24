@@ -7,6 +7,14 @@ export const TASK_RECEIPT_VERSION = 'task-receipt-v1';
 export const canonicalObject = value => Array.isArray(value) ? value.map(canonicalObject) : value && typeof value === 'object' ?
   Object.fromEntries(Object.keys(value).sort((a,b) => Buffer.compare(Buffer.from(a),Buffer.from(b))).map(key => [key,canonicalObject(value[key])])) : value;
 export const canonicalJSON = value => JSON.stringify(canonicalObject(value));
+// Compare only well-formed full MAC strings, with a fixed-width byte comparison.
+// Receipt and role-cursor callers choose their own closed failure code.
+export function authenticatedMAC(expected,supplied) {
+  if(typeof expected!=='string'||typeof supplied!=='string'||
+    !/^[A-Za-z0-9_-]{43}$/.test(expected)||!/^[A-Za-z0-9_-]{43}$/.test(supplied))return false;
+  const a=Buffer.from(expected),b=Buffer.from(supplied);
+  return a.length===b.length&&timingSafeEqual(a,b);
+}
 const bad = () => fail('invalid_receipt');
 const isId = value => { try { identifier(value); } catch { bad(); } };
 const mac = value => { if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(value)) bad(); };
@@ -125,9 +133,8 @@ export function parseTaskReceipt(identity,text) {
     preflight(text); const envelope=JSON.parse(text); closed(envelope,'v p mac');
     if (envelope.v !== TASK_RECEIPT_VERSION) bad(); mac(envelope.mac); validateTaskReceiptPayload(envelope.p);
     if (canonicalJSON(envelope) !== text) bad();
-    const expected=Buffer.from(keyed(identity.cursorSecret,TASK_RECEIPT_VERSION,[identity.storeId,canonicalObject(envelope.p)]));
-    const supplied=Buffer.from(envelope.mac);
-    if (expected.length !== supplied.length || !timingSafeEqual(expected,supplied)) bad();
+    const expected=keyed(identity.cursorSecret,TASK_RECEIPT_VERSION,[identity.storeId,canonicalObject(envelope.p)]);
+    if (!authenticatedMAC(expected,envelope.mac)) bad();
     return envelope.p;
   } catch { bad(); }
 }

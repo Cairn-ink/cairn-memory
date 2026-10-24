@@ -25,7 +25,7 @@ export function profileRef(value) {
 }
 export function releaseRef(value) {
   object(value,['type','profile','releaseId','contentIdentity']);
-  if (value.type !== 'role-profile-release' || !/^[A-Za-z0-9_-]{43}$/.test(value.contentIdentity)) fail('invalid_input');
+  if (value.type !== 'role-profile-release' || typeof value.contentIdentity !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(value.contentIdentity)) fail('invalid_input');
   return {type:value.type,profile:profileRef(value.profile),releaseId:identifier(value.releaseId),contentIdentity:value.contentIdentity};
 }
 export function roleFields(value,ns) {

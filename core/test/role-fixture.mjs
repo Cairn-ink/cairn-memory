@@ -25,3 +25,15 @@ export const publish=(namespace=ns,roleKey='finance',actionId='publish',head=nul
 export const read=(roleKey='finance',readSet=[ns])=>({mode:'now',roleKey,readSet});
 export const importMethod=(actionId='method-1',text='version one',namespace=ns)=>({namespace,actionId,title:'Synthetic method',files:[{path:'guide.txt',text,mediaType:'text/plain'}]});
 export const adopt=(value,actionId='adopt',roleId=null,bindingNamespace=ns,expectedRevision=null,readSet=[ns])=>({bindingNamespace,package:value.package,version:value.version,readSet,roleId,expectedRevision,actionId});
+
+// Core CI intentionally installs no adapter dependencies. The MCP matrix reruns
+// these exact tests with the tokenizer required, after installing both adapters.
+export async function optionalRoleCounter(t) {
+  const { createContextCounter }=await import('../../adapters/openai/context-counter.mjs');
+  try { return await createContextCounter(); }
+  catch(error) {
+    if(error.code!=='context_tokenizer_unavailable'||process.env.CAIRN_REQUIRE_ROLE_TOKENIZER==='1')throw error;
+    t.skip('o200k_base tokenizer is not installed; required coverage runs in the dependency-installed MCP matrix');
+    return null;
+  }
+}

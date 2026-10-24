@@ -308,6 +308,7 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
     // Internal synchronous seam: caller owns the one shared read transaction.
     roleRead: Object.freeze({ stateFor: bindings.stateFor, adoption: bindings.adoption,
       packageRow, targetMetadata, targetLifecycle, verifyFile, reasonAvailable,
+      verifyBinaryMetadata: attachments.verifyBinaryMetadata,
       readInside: (method,ns,input,access) => read(method,ns,input,1,access,null) }),
     payloadBinding: value => binding('method-action-v1',value),
     prepareMixed:(ns,input)=>attachments.prepare(ns,input),
