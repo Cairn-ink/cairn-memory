@@ -222,3 +222,11 @@ against the current errata hash, preserving the prior harness freeze as history.
 `reports/a1-fake-pilot.json` and `reports/REVISION-ff192c6b.md` are preserved
 historical artifacts from the preceding implementation. Current finding/fix/test
 mapping and the fixture-rebalancing disclosure are in `REVISION-REPORT.md`.
+
+## Provider-schema correction before the paid pilot (2026-10-25)
+
+The first paid pilot attempt (run `pilot-15b8f1a7`) stopped at its first request. OpenAI rejected the structured-output schema with HTTP 400 `invalid_json_schema`: "schema must have a 'type' key" for `const`-only nodes. The ledger stopped as designed, with one unsettled reservation of US$0.0117. Rejected requests are not billed.
+
+`providerSchema()` now adds the JSON type implied by a `const` value to such nodes. This changes only the provider-facing schema encoding. The answer and extraction schemas, validators, prompts, caps and scorer are unchanged.
+
+Two out-of-ledger diagnostic probes confirmed that both schemas are accepted. They used `max_output_tokens: 16` and cost about US$0.0007 in total, which is recorded here and counted toward the HR-3 authorization.

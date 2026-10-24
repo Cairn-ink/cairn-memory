@@ -16,7 +16,7 @@ export const extractionSchema={type:'object',properties:{events:arr(obj({
 // Responses strict JSON schema uses anyOf rather than the algebraic oneOf.
 export function providerSchema(schema) {
   const out=JSON.parse(JSON.stringify(schema, (key,value)=>key==='$schema'||key==='title'?undefined:value));
-  function visit(v) {if(!v||typeof v!=='object')return;if(v.oneOf){v.anyOf=v.oneOf;delete v.oneOf;}if(v.enum&&!v.type)v.type=typeof v.enum[0];for(const child of Object.values(v))visit(child);}
+  function visit(v) {if(!v||typeof v!=='object')return;if(v.oneOf){v.anyOf=v.oneOf;delete v.oneOf;}if(v.enum&&!v.type)v.type=typeof v.enum[0];if(Object.hasOwn(v,'const')&&!v.type)v.type=v.const===null?'null':Number.isInteger(v.const)?'integer':typeof v.const;for(const child of Object.values(v))visit(child);}
   visit(out);
   const used=new Set();function refs(v){if(!v||typeof v!=='object')return;if(v.$ref){const name=v.$ref.split('/').at(-1);if(!used.has(name)){used.add(name);refs(out.$defs[name]);}}for(const [k,child]of Object.entries(v))if(k!=='$defs')refs(child);}
   refs(out);if(out.$defs)out.$defs=Object.fromEntries(Object.entries(out.$defs).filter(([k])=>used.has(k)));return out;
