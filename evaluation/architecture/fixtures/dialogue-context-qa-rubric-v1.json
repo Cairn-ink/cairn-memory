@@ -1,0 +1,198 @@
+{
+  "version": "dialogue-context-qa-rubric-v1",
+  "fixtureVersion": "dialogue-context-qa-v1",
+  "cases": [
+    {
+      "id": "7b6e201a9c43", "group": "consideration",
+      "expectedAnswer": "You are considering a Sunday pottery class, possibly the evening session, but have not checked the bus timetable or signed up.",
+      "claims": [
+        {"id": "c1", "text": "The Sunday pottery class is under consideration, with the evening session only a possibility.", "decision": true, "evidence": [{"messageIndex": 0, "quote": "I'm considering taking a pottery class on Sundays. The evening class might fit"}]},
+        {"id": "c2", "text": "The bus timetable has not been checked and registration has not happened.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "I haven't checked the bus timetable or signed up."}]}
+      ],
+      "forbiddenAssertions": [{"text": "You have enrolled in the evening pottery class.", "severe": true}]
+    },
+    {
+      "id": "a2d97308fb61", "group": "consideration",
+      "expectedAnswer": "Friday afternoon leave needs approval; the train trip to your cousin is still an option, not a settled trip.",
+      "claims": [
+        {"id": "c1", "text": "Friday afternoon leave still needs approval for the visit to go ahead.", "decision": true, "evidence": [{"messageIndex": 0, "quote": "if I can get Friday afternoon off."}, {"messageIndex": 2, "quote": "leave hasn't been approved yet"}]}
+      ],
+      "forbiddenAssertions": [{"text": "Your leave is approved and the train visit is confirmed.", "severe": true}]
+    },
+    {
+      "id": "e04b7c926d15", "group": "consideration",
+      "expectedAnswer": "You have not committed to regular membership. You were considering trying a guest evening.",
+      "claims": [
+        {"id": "c1", "text": "A guest evening is a tentative possibility.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "Maybe. I could try a guest evening"}]},
+        {"id": "c2", "text": "The user has not agreed to regular membership.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "I haven't agreed to a regular membership."}]}
+      ],
+      "forbiddenAssertions": [{"text": "You joined the mystery book club as a regular member.", "severe": true}]
+    },
+    {
+      "id": "19f82a5c40de", "group": "consideration",
+      "expectedAnswer": "You may replace the curtains with blinds, but want to see a fabric sample first; the change is tentative.",
+      "claims": [{"id": "c1", "text": "Replacing curtains with blinds is conditional on first seeing a fabric sample, not a completed choice or installation.", "decision": true, "evidence": [{"messageIndex": 0, "quote": "I may replace the curtains with blinds, but I want to see a fabric sample first."}]}],
+      "forbiddenAssertions": [{"text": "You have installed blinds.", "severe": true}]
+    },
+    {
+      "id": "c85a1603e7bd", "group": "explicit-adoption",
+      "expectedAnswer": "You chose dark green yarn and plan to buy two skeins after payday; you have not bought them yet.",
+      "claims": [
+        {"id": "c1", "text": "Dark green yarn is the user's explicit choice for the scarf.", "decision": true, "evidence": [{"messageIndex": 0, "quote": "I've chosen the dark green yarn for the scarf."}]},
+        {"id": "c2", "text": "The yarn has not yet been purchased.", "decision": true, "evidence": [{"messageIndex": 0, "quote": "I haven't bought any yet."}]}
+      ],
+      "forbiddenAssertions": [{"text": "You already bought two skeins.", "severe": true}]
+    },
+    {
+      "id": "4d9b20af8673", "group": "explicit-adoption",
+      "expectedAnswer": "You decided to make rice salad and pack the dressing separately.",
+      "claims": [
+        {"id": "c1", "text": "The user adopted rice salad for the picnic.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "yes, I'll make the rice salad"}]},
+        {"id": "c2", "text": "The user plans to pack the dressing separately.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "pack the dressing separately."}]}
+      ],
+      "forbiddenAssertions": [{"text": "You chose sandwiches.", "severe": true}]
+    },
+    {
+      "id": "86ce35b149a0", "group": "explicit-adoption",
+      "expectedAnswer": "You settled on copying holiday photos to an external drive on the first Sunday of each month. The first copy has not happened; the drive arrives tomorrow.",
+      "claims": [
+        {"id": "c1", "text": "The adopted routine is an external-drive copy on each month's first Sunday.", "decision": true, "evidence": [{"messageIndex": 1, "quote": "copy them to an external drive every month"}, {"messageIndex": 2, "quote": "I'll do that on the first Sunday of each month."}]},
+        {"id": "c2", "text": "The first backup copy has not happened.", "decision": false, "evidence": [{"messageIndex": 2, "quote": "The first copy is still waiting"}]}
+      ],
+      "forbiddenAssertions": [{"text": "The first photo backup is complete.", "severe": true}]
+    },
+    {
+      "id": "d71a6fb2308c", "group": "explicit-adoption",
+      "expectedAnswer": "You chose the animal shelter and already dropped off all three blankets there this morning.",
+      "claims": [
+        {"id": "c1", "text": "The user chose the animal shelter and completed the drop-off there.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "I chose the animal shelter and dropped off"}]},
+        {"id": "c2", "text": "Three blankets were donated.", "decision": false, "evidence": [{"messageIndex": 2, "quote": "all three blankets"}]}
+      ],
+      "forbiddenAssertions": [{"text": "You donated the blankets to the community cupboard.", "severe": true}]
+    },
+    {
+      "id": "2ea5419cd670", "group": "rejection",
+      "expectedAnswer": "You ruled out lavender detergent and will finish your current unscented bottle before buying anything else.",
+      "claims": [
+        {"id": "c1", "text": "Lavender detergent was rejected.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "No lavender for me."}]},
+        {"id": "c2", "text": "The immediate plan is to use up the current unscented bottle before another purchase.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "I'll use up my current unscented bottle before buying anything else."}]}
+      ],
+      "forbiddenAssertions": [{"text": "You decided to try the lavender detergent.", "severe": true}]
+    },
+    {
+      "id": "b9037e14a5cf", "group": "rejection",
+      "expectedAnswer": "You intend to take the paper map from the visitor center and do not want to navigate with your phone.",
+      "claims": [
+        {"id": "c1", "text": "The user plans to navigate with a paper map.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "I'll take the paper map"}]}
+      ],
+      "forbiddenAssertions": [{"text": "You will follow the trail app on your phone.", "severe": true}]
+    },
+    {
+      "id": "5f8d69a207bc", "group": "rejection",
+      "expectedAnswer": "No. You explicitly passed on both the weekend and weekday evening courses this month.",
+      "claims": [{"id": "c1", "text": "Neither offered cooking course is being taken this month; the refusal is time-bounded.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "I'm passing on both courses this month."}]}],
+      "forbiddenAssertions": [{"text": "You enrolled in the weekday evening course.", "severe": true}, {"text": "You will never take a cooking course.", "severe": false}]
+    },
+    {
+      "id": "f24c0b8e916d", "group": "rejection",
+      "expectedAnswer": "You rejected a plastic cover and have not chosen an alternative. A desk mat was only the assistant's suggestion.",
+      "claims": [
+        {"id": "c1", "text": "No desk protection method has been chosen.", "decision": true, "evidence": [{"messageIndex": 0, "quote": "I haven't picked another way to protect it."}]}
+      ],
+      "forbiddenAssertions": [{"text": "You chose a desk mat.", "severe": true}]
+    },
+    {
+      "id": "a6e3107fd258", "group": "factual-correction",
+      "expectedAnswer": "The reading is on Thursday at the east branch library.",
+      "claims": [
+        {"id": "c1", "text": "Thursday supersedes Tuesday as the day of the reading.", "decision": false, "evidence": [{"messageIndex": 2, "quote": "it's Thursday, not Tuesday."}]},
+        {"id": "c2", "text": "The east branch library remains the location.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "at the east branch library"}, {"messageIndex": 2, "quote": "The east branch is still right."}]}
+      ],
+      "forbiddenAssertions": [{"text": "The reading is on Tuesday.", "severe": true}]
+    },
+    {
+      "id": "08b5d92e46ac", "group": "factual-correction",
+      "expectedAnswer": "Milo is male and three years old.",
+      "claims": [
+        {"id": "c1", "text": "The corrected sex is male.", "decision": false, "evidence": [{"messageIndex": 2, "quote": "Milo is male."}]},
+        {"id": "c2", "text": "Milo's age remains three years.", "decision": false, "evidence": [{"messageIndex": 2, "quote": "He's still three years old."}]}
+      ],
+      "forbiddenAssertions": [{"text": "Milo is female.", "severe": true}]
+    },
+    {
+      "id": "63dc1a70be95", "group": "factual-correction",
+      "expectedAnswer": "Your appointment is with the optician at 11:15 tomorrow.",
+      "claims": [
+        {"id": "c1", "text": "The appointment remains with the optician.", "decision": false, "evidence": [{"messageIndex": 2, "quote": "with the same optician."}]},
+        {"id": "c2", "text": "The corrected time is 11:15 tomorrow.", "decision": false, "evidence": [{"messageIndex": 2, "quote": "it's 11:15 tomorrow"}]}
+      ],
+      "forbiddenAssertions": [{"text": "The appointment is at 10:30 tomorrow.", "severe": true}]
+    },
+    {
+      "id": "eb7294f108da", "group": "factual-correction",
+      "expectedAnswer": "The fee is 54 dollars and is still due on the 8th.",
+      "claims": [
+        {"id": "c1", "text": "The corrected workshop fee is 54 dollars.", "decision": false, "evidence": [{"messageIndex": 2, "quote": "The fee is 54 dollars."}]},
+        {"id": "c2", "text": "The due date remains the 8th.", "decision": false, "evidence": [{"messageIndex": 2, "quote": "The due date is still the 8th."}]}
+      ],
+      "forbiddenAssertions": [{"text": "The workshop costs 45 dollars.", "severe": true}]
+    },
+    {
+      "id": "94ac820e7f36", "group": "observation",
+      "expectedAnswer": "You saw two herons beside the canal. Before you got your camera, one flew away while the other stayed on the railing.",
+      "claims": [
+        {"id": "c1", "text": "The user observed two herons beside the canal.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "I saw two herons beside the canal."}]},
+        {"id": "c2", "text": "One flew away before the camera was retrieved and the other remained on the railing.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "One flew away before I got my camera, and the other stayed on the railing."}]}
+      ],
+      "forbiddenAssertions": [{"text": "You photographed both herons.", "severe": true}]
+    },
+    {
+      "id": "3c1f75a9d082", "group": "observation",
+      "expectedAnswer": "The loaf's middle was dense although its crust looked brown. You have not decided what to change; a longer bake was the assistant's suggestion.",
+      "claims": [
+        {"id": "c1", "text": "The observed loaf had a dense middle and a brown-looking crust.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "Yesterday's loaf had a dense middle even though the crust looked brown."}]},
+        {"id": "c2", "text": "No baking change has been adopted.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "I haven't decided what to change for the next loaf."}]}
+      ],
+      "forbiddenAssertions": [{"text": "You decided to bake the next loaf longer.", "severe": true}]
+    },
+    {
+      "id": "6a08de4b137f", "group": "observation",
+      "expectedAnswer": "The spare-room lamp flickered twice; the hallway lamp stayed steady. You do not know the cause, and the rain was only a simultaneous observation.",
+      "claims": [
+        {"id": "c1", "text": "The spare-room lamp flickered.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "The lamp in the spare room flickered"}]},
+        {"id": "c2", "text": "The cause of the flicker is unknown.", "decision": false, "evidence": [{"messageIndex": 2, "quote": "I don't know what caused the flicker."}]}
+      ],
+      "forbiddenAssertions": [{"text": "The rain caused the flickering.", "severe": true}]
+    },
+    {
+      "id": "fd2649a08c71", "group": "observation",
+      "expectedAnswer": "You noticed the ache after sitting down at home, after the short walk; your knees felt fine during the walk.",
+      "claims": [{"id": "c1", "text": "The ache was noticed after sitting down at home following the walk.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "they ached after I sat down at home."}]}],
+      "forbiddenAssertions": [{"text": "Your knees hurt throughout the walk.", "severe": true}]
+    },
+    {
+      "id": "15d8f02bc6a9", "group": "insufficient-information",
+      "expectedAnswer": "The kitten's name was not given in this conversation.",
+      "claims": [{"id": "c1", "text": "The kitten's name is not given in the conversation.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "I met my neighbor's new kitten today. It was hiding under a chair, so we mostly talked about how shy it seemed."}]}],
+      "forbiddenAssertions": [{"text": "The kitten is named Shy.", "severe": true}, {"text": "The kitten has no name.", "severe": true}]
+    },
+    {
+      "id": "c0b7a3149ed2", "group": "insufficient-information",
+      "expectedAnswer": "Your future flat is not established. You had not chosen between Oak Street and River Road and wanted to view both again.",
+      "claims": [{"id": "c1", "text": "The future flat is unknown because no flat has been chosen.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "I still haven't chosen a flat; I need to see both again."}]}],
+      "forbiddenAssertions": [{"text": "You are moving into the Oak Street flat.", "severe": true}, {"text": "You have ruled out moving into either flat.", "severe": true}]
+    },
+    {
+      "id": "7ed65a209bf4", "group": "insufficient-information",
+      "expectedAnswer": "A confirmed reservation is not established. You planned to book the early Monday ferry and said you would look after dinner, but no booking result was reported.",
+      "claims": [{"id": "c1", "text": "Whether the ferry reservation is confirmed is not established.", "decision": true, "evidence": [{"messageIndex": 0, "quote": "I plan to book a seat on the early ferry for Monday."}, {"messageIndex": 2, "quote": "I'll look after dinner."}]}],
+      "forbiddenAssertions": [{"text": "Your early Monday ferry reservation is confirmed.", "severe": true}, {"text": "You definitely have no reservation now.", "severe": true}]
+    },
+    {
+      "id": "ba418f630d97", "group": "insufficient-information",
+      "expectedAnswer": "The conversation does not say which soup you ate, or even establish that you ate soup.",
+      "claims": [{"id": "c1", "text": "Which soup the user ate, or whether soup was eaten, is not established.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "The cafe has lentil soup and tomato soup today."}, {"messageIndex": 2, "quote": "It was pouring outside when I got there."}]}],
+      "forbiddenAssertions": [{"text": "You ate lentil soup.", "severe": true}, {"text": "You definitely did not eat soup.", "severe": true}]
+    }
+  ]
+}
