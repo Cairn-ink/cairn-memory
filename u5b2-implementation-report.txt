@@ -111,3 +111,17 @@ N=/home/chichieh/.nvm/versions/node/v24.15.0/bin/node: C=20/0/0; M=43/0/0.
 No skips.
 Inventory: git status --porcelain=v1 --untracked-files=all versus find -newer /tmp/u5b2-fix2-start-marker (diffed):5/5,zero differences; C,M,T,docs/context-read-local.md,u5b2-implementation-report.txt.
 Sandbox-only failures:none. No commit.
+
+Fix 3
+
+T=adapters/mcp/context-read-tools.mjs; M=adapters/mcp/test/context-read-assembly.test.mjs.
+- Spec hybrid finding: T:23–26 checks Reflect.ownKeys only after legacy success; every reserved compact own key, enumerable or not, refuses invalid_input. M:498–512 asserts SDK refusal with zero core calls; legitimate non-enumerable full-ref fields remain accepted.
+- Spec trap finding: T:22–38 catches every parser/trap exception. M:424–436 verifies safeParse refusal, SDK invalid_input, zero core calls, and no HAS_TRAP_SECRET/GET_TRAP_SECRET/KEYS_TRAP_SECRET leakage. Deliberate legacy deviation: inputs whose throwing traps previously crashed requests now refuse cleanly instead of exposing their error text.
+- Standards ordering finding: T:23 runs the original unchanged legacy union's safeParse first, without prior inspection. M:514–537 uses fresh get-enables-has Proxies and type-getter-defines-memoryId refs through both SDK handlers, asserting identical acceptance, responses and core input bytes. T:28–29 documents that legacy-key getters may be read by the original parser; compact-only getters never execute. Existing inherited/accessor/hybrid/malformed-id refusals remain covered.
+
+Only M ran, directly and sequentially:
+/home/chichieh/.nvm/versions/node/v22.16.0/bin/node adapters/mcp/test/context-read-assembly.test.mjs — actual exit 0; 43 passed, 0 failed, 0 skipped.
+/home/chichieh/.nvm/versions/node/v24.15.0/bin/node adapters/mcp/test/context-read-assembly.test.mjs — actual exit 0; 43 passed, 0 failed, 0 skipped.
+
+Changed-file inventory: git status --porcelain=v1 --untracked-files=all versus independent whole-worktree find -newer /tmp/u5b2-fix3-start-marker, pruning .git/node_modules/.research-private: 3/3 files, diff exit 0, zero differences. Files: T, M, u5b2-implementation-report.txt. Tracked/untracked whitespace checks pass. overhead-host-v2.json bytes and mtime remain unchanged.
+Sandbox-only failures: none. No commit; HEAD remains bd6e3880.

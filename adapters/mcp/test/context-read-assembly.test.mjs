@@ -397,7 +397,7 @@ test('A15 raw compact descriptors, SDK schema, mixed expansion and caller prefix
   assert.equal((await tool.action(parsed)).error.code, 'authority_required'); assert.equal(calls.length, 1);
 });
 
-test('Fix 2 A15 compact raw descriptors and malformed ids refuse through the SDK without getters or core calls', async t => {
+test('A15 compact raw descriptors and malformed ids refuse through the SDK without compact getters or core calls', async t => {
   const workspace = createTestWorkspace(t, { prefix: 'compact-descriptor-sdk-' }), calls = [];
   const access = createContextReadAccess(ns), server = new McpServer({ name: 'compact-refs', version: '1' });
   registerContextReadTools((name, description, inputSchema, action) => server.registerTool(name, { description, inputSchema },
@@ -418,7 +418,21 @@ test('Fix 2 A15 compact raw descriptors and malformed ids refuse through the SDK
     assert.equal(response.isError, true);
     assert.match(response.content[0].text, /Input validation error.*invalid_input/s);
     assert.equal(calls.length, 0, 'malformed compact ref never reaches core');
-    assert.equal(inheritedGetters, 0); assert.equal(ownGetters, 0); assert.equal(typeGetters, 0);
+    assert.equal(inheritedGetters, 0); assert.equal(ownGetters, 0);
+  }
+  assert.ok(typeGetters > 0, 'the unchanged legacy parser may read a legacy-key getter');
+  const traps = [
+    ['HAS_TRAP_SECRET', new Proxy(ref, { has() { throw Error('HAS_TRAP_SECRET'); } })],
+    ['GET_TRAP_SECRET', new Proxy(ref, { get() { throw Error('GET_TRAP_SECRET'); } })],
+    ['KEYS_TRAP_SECRET', new Proxy({ type: 'memory', namespace: ns, memoryId: 'memory', revision: 1 },
+      { ownKeys() { throw Error('KEYS_TRAP_SECRET'); } })],
+  ];
+  for (const [secret, bad] of traps) {
+    assert.equal(assemblyTools({ fetchCandidateEvidence() { assert.fail('core reached'); } }, access)
+      .get('fetch_memory_candidate_evidence').schema.safeParse({ refs: [bad], intent: 'current' }).success, false);
+    const response = await client.callTool({ name: 'fetch_memory_candidate_evidence', arguments: { refs: [bad], intent: 'current' } });
+    assert.equal(response.isError, true); assert.match(response.content[0].text, /invalid_input/);
+    assert.equal(JSON.stringify(response).includes(secret), false); assert.equal(calls.length, 0);
   }
   const valid = await client.callTool({ name: 'fetch_memory_candidate_evidence', arguments: { refs: [ref], intent: 'current' } });
   assert.equal(valid.isError, false); assert.equal(calls.length, 1);
@@ -448,11 +462,13 @@ test('Fix 2 A15 legacy differential schema and SDK compatibility preserve normal
   });
   const client = await connect(f.workspace, server);
   const hiddenId = { ...full }; Object.defineProperty(hiddenId, 'memoryId', { value: memory.id, enumerable: false });
+  const hiddenFields = Object.defineProperties({}, Object.fromEntries(Object.entries(full).map(([key, value]) =>
+    [key, { value, enumerable: false }])));
   const hiddenExtra = { ...full }; Object.defineProperty(hiddenExtra, 'ns', { value: 0, enumerable: false });
   let hiddenGetters = 0;
   const hiddenAccessor = { ...full }; Object.defineProperty(hiddenAccessor, 'f', { get() { hiddenGetters++; return 'abcdefgh'; } });
   const inputs = [
-    ...[full, fullCard, new Proxy(full, {}), new Proxy(fullCard, {}), hiddenId, hiddenExtra, hiddenAccessor,
+    ...[full, fullCard, new Proxy(full, {}), new Proxy(fullCard, {}), hiddenId, hiddenFields,
       Object.create(full), { ...full, memoryId: ' legacy whitespace' }, { ...full, memoryId: 'legacy\0nul' },
       { ...full, memoryId: 'legacy\ud800surrogate' }, { ...full, namespace: { ...scope, ownerId: 'foreign' } }]
       .map(ref => ({ refs: [ref], intent: 'current' })),
@@ -479,7 +495,47 @@ test('Fix 2 A15 legacy differential schema and SDK compatibility preserve normal
     if (refusal(previous) !== 'SDK invalid_input') assert.deepEqual(result, previous);
     else assert.equal(calls.length, 0);
   }
-  assert.equal(hiddenGetters, 0, 'ignored non-enumerable legacy accessors remain unread');
+  // Reserved compact names are hybrids even when the legacy parser ignores them.
+  const hiddenHybrid = Object.defineProperties({ ...full }, Object.fromEntries(Object.entries({ ns: 0, id: memory.id,
+    rev: memory.revision, f: 'abcdefgh' }).map(([key, value]) => [key, { value, enumerable: false }])));
+  const hybrids = [hiddenExtra, hiddenAccessor, hiddenHybrid, ...['ns', 'id', 'rev', 'bodyRev', 'f'].map(key =>
+    Object.defineProperty({ ...full }, key, { value: 'reserved', enumerable: false }))];
+  for (const value of hybrids) {
+    const input = { refs: [value], intent: 'current' };
+    assert.equal(legacy.safeParse(input).success, true, 'original parser ignores non-enumerable compact keys');
+    assert.equal(current.schema.safeParse(input).success, false, 'reserved own keys are rejected after legacy success');
+    calls.length = 0;
+    const result = await client.callTool({ name: 'fetch_current', arguments: input });
+    assert.equal(refusal(result), 'SDK invalid_input'); assert.match(result.content[0].text, /invalid_input/);
+    assert.equal(calls.length, 0);
+  }
+  assert.equal(hiddenGetters, 0, 'hybrid inspection reads keys without executing compact getters');
+  // Fresh objects per SDK call prevent the original parse from priming the new one.
+  const factories = [
+    () => {
+      let typeRead = false;
+      return new Proxy({ ...full }, {
+        get(target, key, receiver) { if (key === 'type') typeRead = true; return Reflect.get(target, key, receiver); },
+        has(target, key) { if (key === 'type' && !typeRead) throw Error('HAS_BEFORE_TYPE_SECRET'); return Reflect.has(target, key); },
+      });
+    },
+    () => {
+      const value = { namespace: scope, revision: memory.revision };
+      Object.defineProperty(value, 'type', { enumerable: true, get() {
+        Object.defineProperty(value, 'memoryId', { value: memory.id, enumerable: true, configurable: true });
+        return 'memory';
+      } });
+      return value;
+    },
+  ];
+  for (const makeRef of factories) {
+    calls.length = 0;
+    const previous = await client.callTool({ name: 'fetch_legacy', arguments: { refs: [makeRef()], intent: 'current' } });
+    assert.equal(refusal(previous), 'accepted'); assert.equal(calls.length, 1);
+    const oldCalls = [...calls]; calls.length = 0;
+    const result = await client.callTool({ name: 'fetch_current', arguments: { refs: [makeRef()], intent: 'current' } });
+    assert.equal(refusal(result), 'accepted'); assert.deepEqual(calls, oldCalls); assert.deepEqual(result, previous);
+  }
 });
 
 function assemblyTools(core, access) {
