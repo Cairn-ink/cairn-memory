@@ -331,8 +331,10 @@ and reports discordant counts; it is underpowered by design. §8 is frozen with
 
 ## 11. Exploratory extension (v1.2): the `host-v2` overhead model
 
-Status: **v1.2.1, audited (no P0; the P1/P2 findings are applied); frozen before any
-host-v2 cell is scored.** Motivation: contract §15.8.1 measured that the shipped v1
+Status: **v1.2.1, frozen.** Audited by `hr2_ext_audit` (no P0; four P1 and two P2
+applied in `598d6c53`); the re-check confirmed it with no blocking items. The commit
+that carries this status line is the §11 freeze commit (`run.extensionCommit`); no
+host-v2 cell was constructed before it. Motivation: contract §15.8.1 measured that the shipped v1
 representation cost about 250 tokens per item on top of a 15-token body, so
 the `O = 0` curves of the results document do not describe the host. U5b-2
 packet A (`representation-v2`, integration `b18dabe0`, `v1-preview.3`)
