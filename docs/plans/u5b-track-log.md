@@ -350,3 +350,9 @@
 - **HR-2b v0.3 第二次複查：全部 resolved，無新 P0／P1，「can be frozen: yes」。協定 v1 凍結 commit `c546bfc1`**（只改狀態行），
   已推送。派 §8 工具／harness worker `hr2b_tools`（版本化驗證 profile、排名 harness 接受新 fixture 並寫固定配置、認證的
   assembly protocol profile 與 §4 決策選擇器、host-v2 校準工具、240＋120 兩個回歸、HR-1 輸出位元不變測試）。
+- **hr2b_tools worker 完成（未提交）**：33 檔；worker 自測 31／31＋240／240＋120／120。協調者沙箱外跑**整個研究測試目錄**
+  （28 檔）兩版本：365 過 **19 敗**，全在 worker 沒跑的 HR-1 harness 測試：`arms-contracts`（13 敗：`frozen_selection_required`
+  必須在讀 fixture 之前拋出，worker 的 `run.mjs` 先讀了 fixture）、`arms-isolation`（2 敗：`unsupported_fixture_version` 拒了
+  HR-1 的 toy fixture）、`arms-runner`／`arms-security`（CLI 不再寫出 artifact）、`assembly-output-paths`（2 個正向 scratch 案例
+  被新守衛誤拒）。乾淨凍結 commit 上同檔全過 → 確認是回歸。派 fix1（最小修正、HR-2b 行為放在既有 gate 之後、這輪必跑全部
+  28 個研究測試檔）。
