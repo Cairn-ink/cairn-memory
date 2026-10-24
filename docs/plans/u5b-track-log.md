@@ -449,3 +449,11 @@
   18,297 詞 0 命中；生成器七檔與 HEAD 逐位元相同，只改候選索引；歷史（v1 候選 0 stage-2 否決、v1.1 候選 0 重複本文＋身分失敗）
   保留在 world-stats。協調者獨立重跑 `--candidate 1 --check` 與 `check-world --candidate 1` 皆 0；重生 facts view
   （coverage 126 body／154 span-only／100 無＝40 absent＋60 foreign，與候選 0 的分布相同）。
+- **提交候選 1 世界＋重生 facts view**，派 W2 修題（resume，high＋fast）：事實不變但 `actualCoverage`／`memoryLangs`／`memoryCount` 變，
+  全部 160 題對新 view 重過；並把 W3 的 18 個機械失敗化成規則（C1 `keyTerm` 必須是 `entities` 原字串；C2 嵌入詞為 Han entity；
+  C3 題目語言＝每個必要事實的全部 `memoryLangs`；C5 選不同生命週期角色的事實對）；每類別維持 20 題、≥14 家族、span-only ≥40%／≥16 家族。
+- **工具修訂 `91d24a40` 的審查**：協調者以 `cairn-heavy` 在兩版 Node 跑五個測試檔全 exit 0（tooling 28、assembly-hr2b 19、arms 4、
+  兩個回歸各 1）。**Spec：零發現**（pooled 統計、決策整合、profile／配額、pin 皆符合；獨立 12 家族 10,000 抽樣參考區間與實作一致；
+  不需修）。**Standards：無 P0／P1、三個 P2 要修**：`ceilingGroups` 的 1e-9 絕對容忍會接受 1e-10 這種非整群比率；聚合（總和、家族、
+  逐抽累加）未檢查安全整數；`invalid_bootstrap_draw` 分支在合法輸入下不可達、無測試。兩位審查者沙箱 `/tmp` EROFS 無法跑測試，
+  以 worker 與協調者的測試為證據。派 `hr2b_tools` fix1（high＋fast）。
