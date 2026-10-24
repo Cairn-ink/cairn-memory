@@ -327,3 +327,5 @@
   1536 的 s1 例外只在 bge-m3；preflight 與九個 stage log 被 `.log` ignore 規則擋掉未進 commit，且只有 run／score／report
   經 cairn-heavy。兩個 P2：機制措辭、limitations 句子要與 §11.4 字面相同。全部修正，log 以 `git add -f` 補進，
   **results v1.1 最終 commit `8ed4dadb`**，已推送。
+- **B 包完成並交接**：results v1.1 `8ed4dadb` 連同歷程、結論摘要與章程 §6 建議句送給主控；審查／CI worktree 保留待主控
+  驗證後移除。U5b-2 A、B 兩包在協調者這邊全部結束。
