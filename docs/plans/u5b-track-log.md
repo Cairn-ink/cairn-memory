@@ -394,3 +394,21 @@
   4 筆 receipt（已重現：同一筆 1–4 筆 ok、5 筆 `invalid_input`）。凍結的 receipt 分布 {…5:10%, 6:5%} 不可存。提案 v1.1 第 4 項：
   receipt 分布改 {1:20, 2:25, 3:25, 4:30}%，later＝2–4；其餘不變。已併入給主控的決定請求。W3 稽核檔提交（未套用、未凍結）。
   後續：v1.1 → 稽核 → 凍結 → W1 以下一個候選 seed 重建（家族與事實不變，W2 題目可沿用、只補 18 題）→ labels → W3 複審 → 凍結。
+- **主控批准 v1.1**（2026-10-24）：採 pooled guard（選項 1）與 receipt ≤4（第 4 項），不採替代方案；附四個條件：(a) provenance 段落
+  （修訂在看過 W1／W2／W3 計數與驗證器輸出之後、任何排名／校準／組裝之前；列出看過的每個數字；門檻 +3／−5、零天花板門、
+  Adopt／Keep／Inconclusive 語意、主要 C1–C7 macro 對比不變）；(b) §4 limits 揭露 pooled guard 被 later-receipt 家族多的類別主導
+  （C3 有 11）、不再約束逐類別損失，並逐類別描述性報告 later-receipt Δ（無 CI 決定）；(c) 揭露 ≤4 來自 core.admit 的單次上限、
+  long-item 主張僅限 ≤4 receipt；(d) 凍結前照常非作者稽核。凍結 commit 與結果 commit 都要送主控。
+- **v1.1 草稿提交** `c49756ef` → `9d34f911`（只改 `docs/plans/budgeted-assembly-hr2b.md`）：狀態行與歷史；provenance 段落含精確數字
+  （驗證器 1：dev first 23 groups／10 families、dev later 21／8、test first 43／23、test later 57／20，guard 逐類別 test 6／7／11／8／7／8／3、
+  dev 3／1／2／3／2／5／2；驗證器 2：81 筆 5–6 receipt 被 admission 預檢拒絕；W3 19 覆寫、0 洩漏、78 群確認）；§3.1 receipt 1–4、
+  `{1:20,2:25,3:25,4:30}`、`#s1…#s4`、later＝2–4、揭露 core.admit 上限；§3.2 配額改 test ≥30 groups／≥12 families、dev ≥4 families、
+  刪逐類別 ≥10；§4 guard 改 pooled（Σ covered／Σ groups，家族 cluster bootstrap，minimumFamilies 10 對層內家族）、逐類別描述表、
+  主導揭露；§7 統計定義；§8 加「v1.1 tooling amendment」項（四格直方圖、新配額、pooled bootstrap、描述表、pin v1.1 commit）；
+  §9 step 3「v1.1 path」：候選序列在修訂規則下**從 candidate 0（seed 1924440465）重新開始**，不因看過任何東西前進 seed；
+  builder 先抽 fact-to-memory plan 與 placement 再抽 receipt 數，所以 facts／coverage／placement 不變，協調者機械驗證 facts view
+  逐位元相同（失敗才前進 seed、W2 重寫）；§10 加 pooled guard 與 ≤4 兩條限制。第一版草稿寫「換下一個 seed」，發現會讓
+  placement 重抽、W2 題目失效，停掉已啟動的稽核改成 seed 0 重渲染後重派。
+- 派 `hr2b_protocol_audit` 第三次複查（resume，read-only，xhigh＋fast；rollout 確認 `service_tier:priority`、`xhigh`），審查
+  worktree `cairn-memory-review-hr2` 移到 `9d34f911`。凍結後並行派：`hr2b_tools` 修訂（high＋fast，改 `lib/`、`assembly/`、`test/`）
+  與 W1 重建（high＋fast，只改 `fixtures-hr2b/`，不跑任何測試、不讀 W2／W3 產物）；派工單範本已寫好待填凍結哈希。
