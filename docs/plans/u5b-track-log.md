@@ -495,3 +495,7 @@
   span-only 仍 138/140。協調者重跑 labels（0），**無稽核檔的驗證器只剩預期的 `audit:overrides`**（機械類別檢查、split 配額、
   語言分布、placement 配額全過：test first 56／25、later 49／22；dev 19／9、30／11）；有舊稽核檔則 `labels:join_or_audit_mismatch`
   （10 個重分類已過時）。提交修補＋labels `864536de`。派 W3 增量複審（xhigh＋fast）：撤 10 個過時覆寫、重審 20 個改動題、保留 q-110。
+- **W3 增量複審完成**（xhigh＋fast，exit 0）：20 個改動題全部 pass（每題附渲染區域見證）；撤 10 個過時重分類；最終覆寫只剩 q-110
+  add-member（foreign body 時間蘊涵）；193 計分群／266 成員；20 題／類別、dev 32.86%；placement：test first 56／25、later 49／22，
+  dev 19／9、29／10（q-110 的 dev 群轉 body）；「Fixture can be frozen: yes」。協調者提交稽核檔，跑第三階段腳本
+  （apply-audit → validate → freeze-hr2b）。
