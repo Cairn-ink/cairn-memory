@@ -55,9 +55,9 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     card.support.status === 'eligible' && card.support.applicability === 'current' && (!card.support.currentDependency || card.support.currentDependency.status === 'current'));
   const memoryEligible = (row, intent) => row && !row.deleted &&
     (intent === 'history' || row.currentness === 'current' && row.review_state !== 'awaiting');
-  function item(ns, ref, intent, readSet) {
+  function item(ns, ref, intent, readSet, options) {
     if (ref.type === 'card') {
-      const card = cardDetailInside(ns, ref.cardId, readSet);
+      const card = cardDetailInside(ns, ref.cardId, readSet, options);
       if (!cardEligible(card, intent)) fail('evidence_unavailable');
       if (card.revision !== ref.revision || card.bodyRevision !== ref.bodyRevision) fail('revision_conflict');
       const sources = card.bindings.map(binding => binding.source);
@@ -173,7 +173,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
   return Object.freeze({
     // Internal U5 read seam: authorization and the deferred transaction belong
     // to the caller. Reuses the exact current/history canonical predicate/DTO.
-    itemsInside(ns, refs, intent, readSet) { return refs.map(ref => item(ns, ref, intent, readSet)); },
+    itemsInside(ns, refs, intent, readSet, options) { return refs.map(ref => item(ns, ref, intent, readSet, options)); },
     call(method, ns, original, accessGeneration) {
     const input = evidenceInput(method, original, ns);
     if (method === 'selectEvidence') return select(ns, input, original, accessGeneration);

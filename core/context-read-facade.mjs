@@ -524,7 +524,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   const receipt = memoryOnly ? null : createCardReceiptSources(db, (purpose, value) =>
     createHmac('sha256', info.cursorSecret).update(JSON.stringify([purpose, [info.storeId, value]])).digest('base64url'));
   const evidence = memoryOnly ? null : createPrivateEvidenceStorage({ db, identity,
-    cardDetailInside: (ns, id, readSet) => cards.cardDetailInside(ns, id, readSet), receiptRefInside: (ns, memory, row) => receipt.refInside(ns, memory, row) });
+    cardDetailInside: (ns, id, readSet, options) => cards.cardDetailInside(ns, id, readSet, options), receiptRefInside: (ns, memory, row) => receipt.refInside(ns, memory, row) });
   async function contextRead(original, token) {
     let candidates;
     try {
@@ -544,12 +544,15 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       let deadline = performance.now() >= deadlineAt;
       access.check();
       deadline ||= performance.now() >= deadlineAt;
-      const prepared = read(() => {
+      const prepared = deadline ? { generations: [], items: [], unavailable: candidates.items.length } : read(() => {
         const generations = canonicalFence(input.readSet, input.types), items = [];
         if (searched.sourceState) assertSourcesInside(input, searched.sourceState, 'snapshot_stale');
         let unavailable = 0;
-        const witnessBudget = searched.sourceState ? sourceBudget(Infinity) : null;
-        for (const candidate of candidates.items) {
+        const witnessBudget = searched.sourceState ? sourceBudget(deadlineAt) : null;
+        for (const [position, candidate] of candidates.items.entries()) {
+          if (performance.now() >= deadlineAt) {
+            deadline = true; unavailable += candidates.items.length - position; break;
+          }
           let item;
           try {
             if (candidate.via) {
@@ -557,7 +560,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
               try { witnessInside(input, path, 'evidence_unavailable', witnessBudget); }
               catch (error) { if (error.code === 'evidence_unavailable') { unavailable++; continue; } throw error; }
             }
-            item = evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet)[0];
+            if (performance.now() >= deadlineAt) { deadline = true; unavailable++; continue; }
+            item = evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet, { deadlineAt })[0];
+            if (performance.now() >= deadlineAt) { deadline = true; unavailable++; continue; }
           }
           catch (error) {
             if (!['evidence_unavailable', 'revision_conflict'].includes(error.code)) throw error;
@@ -577,7 +582,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             text: type === 'memory' ? item.content : item.title + '\n' + item.body,
             sources, sourceAccess: type === 'memory' ? item.provenance.sourceAccess : 'unsupported',
             sourcesComplete: type === 'memory' && item.provenance.coverage.status === 'complete',
-            fence: bind('snapshot-item', item) });
+            fence: bind('snapshot-item', item),
+            dependencyCount: item.support?.currentDependency ? item.support.currentDependency.versions?.length ?? 0 : null });
         }
         return { generations, items, unavailable };
       });
@@ -591,6 +597,14 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           generations: generationsFor(items), access: access.accessGenerations, fences: items.map(item => item.fence) }, 16384) });
       const diagnostics = assembled.diagnostics;
       diagnostics.omitted.unavailable = prepared.unavailable;
+      // Reserve one complete final pass for admitted declarations. These are
+      // upper bounds; source/lifecycle/ownership work keeps its existing charge.
+      const declared = delivered.filter(item => item.dependencyCount !== null);
+      if (declared.length) {
+        const resolutions = declared.reduce((n, item) => n + item.dependencyCount, 0);
+        diagnostics.trace.finalDependencyValidationReserve = { records: declared.length,
+          resolutions, bindingProbes: 4 * resolutions, manifestRows: 256 * resolutions };
+      }
       diagnostics.candidates = { count: candidates.items.length, channels: candidates.channels, coverage: candidates.coverage, trace: candidates.trace };
       diagnostics.stops.deadline ||= deadline;
       access.check();

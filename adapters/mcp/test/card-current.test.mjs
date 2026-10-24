@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, writeFileSync, openSync, closeSync } from 'node:fs';
+import fs, { existsSync, readFileSync, writeFileSync, openSync, closeSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+import { reviewCard } from '../review-card.mjs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parseConfiguration, start } from '../cli.mjs';
@@ -10,6 +12,7 @@ import { fixture, ns, ok } from '../../../core/test/card-current-fixture.mjs';
 const flags=['--private-cards','local-v1','--method-packages','local-v1','--private-card-current-dependencies','local-v1'];
 const cli=new URL('../cli.mjs',import.meta.url).pathname;
 test('C26 closed host-fixed configuration and approval-only MCP schemas; check-config opens nothing',async t=>{
+ const scripts=JSON.parse(readFileSync(new URL('../../../package.json',import.meta.url))).scripts;assert.equal(Object.hasOwn(scripts,'measure:card-dependencies'),false);assert.ok(scripts['measure:card-current-dependencies']);
  const base=['--db','/synthetic/card-current.sqlite','--owner','owner'];assert.equal(parseConfiguration([...base,...flags]).privateCardCurrentDependencies,'local-v1');
  for(const tail of [flags.slice(4),flags.slice(2),[...flags,'--private-card-current-dependencies','local-v1'],[...flags.slice(0,-1),'bad']])assert.throws(()=>parseConfiguration([...base,...tail]));
  const logs=[];t.mock.method(console,'log',text=>logs.push(JSON.parse(text)));await start(['--check-config',...base,...flags],Object.defineProperty({},'OPENAI_API_KEY',{get(){assert.fail('key read');}}));
@@ -46,4 +49,23 @@ test('C12 new binary U3 terminal adoption and disable with dependency authoring 
   const card=ok(f.call('getCard',{namespace:ns,cardId:ref.cardId})).card;assert.equal(card.support.currentDependency.status,'needs-review');if(operation==='disable')assert.ok(card.support.currentDependency.reasons.includes('binding_disabled'));
   console.log(JSON.stringify({C12:{operation,exit:done.code}}));
  }
+});
+
+
+test('review-card bounds dependency-file descriptor reads and rejects oversized and non-regular files',t=>{
+ const f=fixture(t),path=join(f.dir,'oversized.json');writeFileSync(path,' '.repeat(1024*1024));
+ const args=file=>['--db',f.path,'--owner','owner','--card','synthetic','--revision','2','--dependencies',file,'--dependency-revision','null'];
+ const originalRead=fs.readSync,originalOpen=fs.openSync,originalClose=fs.closeSync;
+ let selected,requested=0,read=0,closed=0;
+ t.mock.method(fs,'openSync',function(file,...rest){const fd=originalOpen.call(this,file,...rest);if(file===path)selected=fd;return fd;});
+ t.mock.method(fs,'readSync',function(fd,buffer,offset,length,...rest){if(fd===selected)requested+=length;const n=originalRead.call(this,fd,buffer,offset,length,...rest);if(fd===selected)read+=n;return n;});
+ t.mock.method(fs,'closeSync',function(fd){if(fd===selected)closed++;return originalClose.call(this,fd);});
+ syncBuiltinESMExports();
+ try {
+  assert.throws(()=>reviewCard(args(path)),/invalid_review_configuration/);assert.equal(requested,32769);assert.equal(read,32769);assert.equal(closed,1);assert.throws(()=>fs.fstatSync(selected),{code:'EBADF'});
+  const fifo=join(f.dir,'dependencies.fifo'),made=spawnSync('mkfifo',[fifo],{stdio:'ignore'});
+  const special=made.status===0?fifo:'/dev/zero';assert.equal(fs.lstatSync(special).isFile(),false);
+  assert.throws(()=>reviewCard(args(special)),/invalid_review_configuration/);assert.equal(requested,32769);assert.equal(closed,1);
+  assert.throws(()=>reviewCard(args(f.dir)),/invalid_review_configuration/);
+ } finally {fs.readSync=originalRead;fs.openSync=originalOpen;fs.closeSync=originalClose;syncBuiltinESMExports();}
 });

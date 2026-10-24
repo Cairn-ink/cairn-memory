@@ -115,8 +115,8 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     return { status: available ? 'eligible' : 'unavailable', applicability: 'unknown',
       reasons: [available ? 'unassessed' : values.some(ref => ref.type === 'receipt') ? 'memory_changed' : 'source_deleted'] };
   }
-  function metadata(ns, row, readSet = [ns], { historicalReason = false } = {}) {
-    const review = cardApplicabilityInside(db, row), currentDependency = historicalReason ? null : dependencies.compare(ns, row, readSet);
+  function metadata(ns, row, readSet = [ns], { historicalReason = false, deadlineAt = Infinity } = {}) {
+    const review = cardApplicabilityInside(db, row), currentDependency = historicalReason ? null : dependencies.compare(ns, row, readSet, { deadlineAt });
     return { id: row.id, namespace: ns, revision: row.revision, state: row.state,
       bodyRevision: row.body_revision, origin: 'authored', support: { ...support(ns, getRefs(row.id)),
         applicability: review.applicability,

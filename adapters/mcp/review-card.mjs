@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { closeSync, openSync, readSync, writeSync, readFileSync } from 'node:fs';
+import { closeSync, openSync, readSync, writeSync, lstatSync, fstatSync, constants } from 'node:fs';
 import { isatty } from 'node:tty';
 import { isDeepStrictEqual } from 'node:util';
 import { openMemoryCore } from '../../core/contract.mjs';
@@ -15,6 +15,26 @@ export function terminalJson(value) {
   return JSON.stringify(value, null, 2).replace(/[^\x20-\x7e\n]/gu, character =>
     Array.from({ length: character.length }, (_, index) =>
       `\\u${character.charCodeAt(index).toString(16).padStart(4, '0')}`).join(''));
+}
+
+// Inspect before open so a FIFO cannot block, then verify the opened descriptor
+// against replacement races. The extra byte detects overflow without reading
+// the remainder of an oversized file.
+function dependencyFile(path) {
+  if (!lstatSync(path).isFile()) throw Error('invalid_review_configuration');
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK);
+  try {
+    if (!fstatSync(fd).isFile()) throw Error('invalid_review_configuration');
+    const bytes = Buffer.alloc(32769);
+    let used = 0;
+    while (used < bytes.length) {
+      const count = readSync(fd, bytes, used, bytes.length - used, null);
+      if (count === 0) break;
+      used += count;
+    }
+    if (used > 32768) throw Error('invalid_review_configuration');
+    return bytes.subarray(0, used);
+  } finally { closeSync(fd); }
 }
 
 function configuration(args) {
@@ -41,8 +61,7 @@ function configuration(args) {
     const expectedDependencyRevision = values.get('--dependency-revision') === 'null' ? null : Number(values.get('--dependency-revision'));
     if (expectedDependencyRevision !== null && !Number.isSafeInteger(expectedDependencyRevision)) throw Error('invalid_review_configuration');
     if (values.has('--method-read-personal') && (values.get('--method-read-personal') !== 'true' || !values.has('--project'))) throw Error('invalid_review_configuration');
-    const bytes = readFileSync(values.get('--dependencies'));
-    if (bytes.length > 32768) throw Error('invalid_review_configuration');
+    const bytes = dependencyFile(values.get('--dependencies'));
     const packages = JSON.parse(bytes.toString('utf8'));
     if (!Array.isArray(packages) || !packages.length || packages.length > 16) throw Error('invalid_review_configuration');
     dependencyReview = { packages: packages.map(methodPackageRef), roleId: values.get('--role') ?? null, expectedDependencyRevision, operation: values.get('--dependency-operation') ?? 'declare', personal: values.has('--method-read-personal') };

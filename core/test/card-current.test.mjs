@@ -56,6 +56,8 @@ test('C12/C15/C21 feature-off child/managed adoption invalidates warm pages and 
  assert.equal(ok(await reader.findCandidates(query(),{})).items.length,0);
  f.reopen(false);assert.equal(f.core.revalidateCardCurrentDependencies,undefined);assert.equal(ok(await f.call('findCandidates',query())).items.length,0);
  unlinkSync(f.path+'.context-read-v1.sqlite');assert.equal(ok(await f.call('findCandidates',query())).items.length,0);
+ child(f,{method:'disableMethodBinding',existingStore:{version:'schema33-existing-v1',storeId},input:{bindingNamespace:ns,package:f.v1.package,roleId:null,readSet:[ns],expectedRevision:2,actionId:'managed-disable'}});
+ const disabled=ok(managed.getCard({namespace:ns,cardId:frozenRef.cardId},{})).card.support.currentDependency;assert.equal(disabled.status,'needs-review');assert.ok(disabled.reasons.includes('binding_disabled'));
 });
 
 test('C12 absence-aware project override, same-version adoption, rollback and disabled barriers require review',t=>{
@@ -94,6 +96,7 @@ test('C17 deadline expiry still completes final dependency validation without a 
  let now=0,calls=0;t.mock.method(performance,'now',()=>now);
  const h=host({counter:{id:'deadline',countTokens(){calls++;if(calls===4)now=6000;return 1;}}}),f=fixture(t,{h});f.card();
  const result=ok(await f.call('contextRead',query()));assert.equal(result.diagnostics.stops.deadline,true);assert.equal(result.metered.items.length,1);
+ assert.deepEqual(result.diagnostics.trace.finalDependencyValidationReserve,{records:1,resolutions:1,bindingProbes:4,manifestRows:256});
  assert.equal(detail(f,{cardId:f.db.prepare('SELECT id FROM private_cards').get().id}).support.currentDependency.status,'current');
 });
 
@@ -103,8 +106,8 @@ for(const enabled of [true,false])test(`C21 scope_changed after preparation/coun
 });
 
 test('C22 authored bodies survive required source deletion; undeclared history remains unaffected by adoption and deleted versions cannot be reconstructed',t=>{
- const f=fixture(t),ref=f.card(),historical=f.card({declare:false,body:'Historical finance v1 fact'}),old=detail(f,ref);
- f.change();assert.equal(detail(f,historical).support.currentDependency,undefined);assert.equal(ok(f.call('fetchEvidence',{namespace:ns,refs:[historical],intent:'current'})).items.length,1);
+ const f=fixture(t),ref=f.card(),historical=f.card({declare:false,applicability:'historical',body:'Historical finance v1 fact'}),old=detail(f,ref);
+ f.change();assert.equal(detail(f,historical).support.currentDependency,undefined);const retainedHistory=ok(f.call('fetchEvidence',{namespace:ns,refs:[historical],intent:'history'})).items[0];assert.equal(retainedHistory.body,'Historical finance v1 fact');assert.equal(retainedHistory.qualification.applicability,'historical');denied(f.call('fetchEvidence',{namespace:ns,refs:[historical],intent:'current'}),'evidence_unavailable');
  ok(f.call('deleteSourceNote',{namespace:ns,sourceId:old.bindings[0].source.sourceId,expectedRevision:1,actionId:'delete-source'}));
  const retained=detail(f,ref);assert.equal(retained.body,old.body);assert.equal(retained.support.status,'unavailable');
  const latest={...ref,revision:retained.revision};assert.equal(ok(f.call('fetchEvidence',{namespace:ns,refs:[latest],intent:'history'})).items[0].body,old.body);
@@ -179,4 +182,15 @@ test('C23 revalidation requires the exact package set and preserves declaration 
  const input={namespace:ns,cardId:ref.cardId,expectedRevision:2,expectedDependencyRevision:1,actionId:'permuted',currentDependencies:f.declaration(undefined,[other.package,f.v1.package])};
  ok(f.call('revalidateCardCurrentDependencies',input));assert.deepEqual(detail(f,ref).support.currentDependency.versions,before);
  denied(f.call('revalidateCardCurrentDependencies',{...input,actionId:'incomplete',expectedDependencyRevision:2,currentDependencies:f.declaration(undefined,[f.v1.package])}),'revision_conflict');
+});
+
+test('C15 the affected continuation page would be empty after adoption, and the frozen cursor still refuses', async t => {
+ const f=fixture(t),ref=f.card({title:'Endpoint',body:'finance'});
+ const memory=ok(f.core.admit({namespace:ns,memory:{content:'finance finance finance finance',kind:'fact'},receipts:[{client:'s',sessionId:'s',eventId:'first',role:'user',excerpt:'finance'}]})).memory;
+ const request=query({types:['memory','card'],limit:1});
+ const first=ok(await f.call('findCandidates',request));assert.equal(first.items[0].ref.memoryId,memory.id);assert.ok(first.nextCursor);
+ const second=ok(await f.call('findCandidates',{...request,cursor:first.nextCursor}));assert.deepEqual(second.items.map(item=>item.ref.cardId),[ref.cardId]);assert.equal(second.nextCursor,null);
+ f.change();
+ const fresh=ok(await f.call('findCandidates',{...request,limit:24}));assert.deepEqual(fresh.items.map(item=>item.ref.memoryId),[memory.id]);assert.deepEqual(fresh.items.slice(first.items.length),[]);
+ denied(await f.call('findCandidates',{...request,cursor:first.nextCursor}),'cursor_stale');
 });

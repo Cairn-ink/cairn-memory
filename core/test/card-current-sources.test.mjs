@@ -27,3 +27,33 @@ for(const undelivered of [false,true])test(`C18/C19 adoption during counting inv
  f=fixture(t,{h,sources:all});graph(f);armed=true;
  const result=await f.call('contextRead',query({types:['memory','card'],budget:{maxItems:1,maxTokens:4000}}));assert.equal(result.error?.code,'snapshot_stale');
 });
+
+for (const source of all) test(`C18/C19 isolated ${source} contributes a Card before adoption and removes it afterwards`, async t => {
+  const f = fixture(t, { sources: [source] }), { m, ref } = graph(f);
+  const request = query({ types: ['memory', 'card'] });
+  const before = ok(await f.call('findCandidates', request));
+  const contributed = before.items.find(item => item.ref.cardId === ref.cardId);
+  assert.ok(contributed, 'the isolated channel must actually contribute the Card');
+  assert.equal(contributed.channels.lexical, null);
+  assert.equal(contributed.channels.semantic, null);
+  if (source === 'relations-one-hop-v1') {
+    assert.ok(contributed.via);
+    assert.ok(before.trace.sources[source].additions.some(item => item.ref.cardId === ref.cardId));
+  } else {
+    assert.ok(contributed.channels.moc?.rank > 0);
+    assert.ok(before.trace.sources[source].membersRanked > 0);
+    assert.equal(contributed.via, undefined);
+  }
+  const direct = ok(await f.call('findCandidates', { ...request, sources: [] }));
+  assert.equal(direct.items.some(item => item.ref.cardId === ref.cardId), false);
+  assert.ok(direct.items.some(item => item.ref.memoryId === m.id));
+  const first = ok(await f.call('findCandidates', { ...request, limit: 1 }));
+  assert.ok(first.nextCursor);
+  f.change();
+  assert.equal((await f.call('findCandidates', { ...request, limit: 1, cursor: first.nextCursor })).error.code, 'cursor_stale');
+  const after = ok(await f.call('findCandidates', request));
+  assert.equal(after.items.some(item => item.ref.cardId === ref.cardId), false);
+  assert.ok(after.items.some(item => item.ref.memoryId === m.id));
+  if (source === 'relations-one-hop-v1') assert.equal(after.trace.sources[source].additions.some(item => item.ref.cardId === ref.cardId), false);
+  else assert.equal(after.trace.sources[source].membersRanked, 0);
+});

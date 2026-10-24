@@ -16,11 +16,11 @@ export function fixture(t,{h=host(),enabled=true,sources,...extra}={}) {
   const db=new DatabaseSync(path);db.exec('PRAGMA busy_timeout=5000;PRAGMA foreign_keys=ON');
   const f={path,dir,h,db,get core(){return core;},call:(method,input)=>core[method](input,{}),
     reopen(enabled=true,extra={}) {core.close();core=openMemoryCore({path,privateCards:cardOptions(h.authority,enabled),methodPackages:h.methods,roleProfiles:h.options,contextRead:h.context,...extra});return core;},
-    card({declare=true,context={readSet:[ns],roleId:'finance'},packages=[f.v1.package],title='Finance report',body='finance monthly report uses v1',memoryRefs}={}) {
-      const action=String(++f.serial),draft=ok(f.call('createCardDraft',{namespace:ns,actionId:'draft-'+action,drafting:'authored',input:{title,body,...(memoryRefs?{memoryRefs,sourcePolicy:'retained-receipts-v1'}:{authoredInput:{text:'Synthetic finance source',occurredAt:null}})}}));
+    card({namespace=ns,declare=true,context={readSet:[namespace],roleId:'finance'},packages=[f.v1.package],title='Finance report',body='finance monthly report uses v1',applicability='current',memoryRefs}={}) {
+      const action=String(++f.serial),draft=ok(f.call('createCardDraft',{namespace,actionId:'draft-'+action,drafting:'authored',input:{title,body,...(memoryRefs?{memoryRefs,sourcePolicy:'retained-receipts-v1'}:{authoredInput:{text:'Synthetic finance source',occurredAt:null}})}}));
       const currentDependencies=f.declaration(context,packages);
-      const confirmed=ok(f.call('confirmCardDraft',{namespace:ns,cardId:draft.id,expectedRevision:1,actionId:'confirm-'+action,applicability:'current',...(declare?{currentDependencies}:{})}));
-      return {type:'card',namespace:ns,cardId:confirmed.id,revision:confirmed.revision,bodyRevision:confirmed.bodyRevision};
+      const confirmed=ok(f.call('confirmCardDraft',{namespace,cardId:draft.id,expectedRevision:1,actionId:'confirm-'+action,applicability,...(declare?{currentDependencies}:{})}));
+      return {type:'card',namespace,cardId:confirmed.id,revision:confirmed.revision,bodyRevision:confirmed.bodyRevision};
     },
     declaration(context={readSet:[ns],roleId:'finance'},packages=[f.v1.package]) {return {context,packages:packages.map(pkg=>({package:pkg,snapshot:ok(f.call('resolveMethod',{...context,package:pkg})).snapshot}))};},
     serial:0};

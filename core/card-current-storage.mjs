@@ -1,3 +1,4 @@
+import { performance } from 'node:perf_hooks';
 import { createMethodPackageStorage } from './method-package-storage.mjs';
 import { currentDeclaration, validateDependencyRecord } from './card-current-input.mjs';
 import { canonicalJSON } from './task-receipt.mjs';
@@ -23,7 +24,9 @@ export function createCardCurrentStorage({ db, identity }) {
     return { found, entry: { package: pkg, version: value.version, consulted: state.consulted,
       availability: { packageState: state.lifecycle.packageState, versionState: state.lifecycle.versionState, versionRevision: state.lifecycle.versionRevision } } };
   }
-  function compare(ns, card, readSet = [ns]) {
+  function compare(ns, card, readSet = [ns], { deadlineAt = Infinity } = {}) {
+    const withinDeadline = () => { if (deadlineAt !== Infinity && performance.now() >= deadlineAt) fail('evidence_unavailable'); };
+    withinDeadline();
     const saved = row(ns, card.id); if (!saved) return null;
     const local = { revision: saved.revision, status: 'needs-review', reasons: ['access_revoked'] };
     const { context, vector } = validateDependencyRecord(saved.context, saved.vector, ns);
@@ -32,7 +35,9 @@ export function createCardCurrentStorage({ db, identity }) {
     const reasons = new Set(), versions = [];
     if (card.revision !== saved.card_revision || (card.body_revision ?? card.bodyRevision) !== saved.body_revision) reasons.add('binding_changed');
     for (const old of vector) {
+      withinDeadline();
       const { found, entry } = observation(old.package, context);
+      withinDeadline();
       const status = found.value.status;
       // The winning target already received U2 metadata/ownership verification.
       // A different described target can only add lifecycle diagnostics; it
@@ -44,6 +49,7 @@ export function createCardCurrentStorage({ db, identity }) {
       if (canonicalJSON(entry) !== canonicalJSON(old)) reasons.add('binding_changed');
       versions.push({ described: old.version, current: status === 'current' ? found.value.version : null });
     }
+    withinDeadline();
     return { revision: saved.revision, context, status: reasons.size ? 'needs-review' : 'current',
       reasons: ['binding_changed','binding_absent_now','binding_disabled','version_deleted','access_revoked'].filter(reason => reasons.has(reason)), versions };
   }
