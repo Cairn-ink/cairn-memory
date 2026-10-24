@@ -2508,10 +2508,10 @@ serialization.
 
 The [HR-2b results](plans/budgeted-assembly-hr2b-results.md) report one frozen
 test-split run on a synthetic long-item fixture (target and distractor
-memories with bodies of 120–400 o200k tokens stating 2–4 facts each, 1–4
-receipts of 40–200 tokens, evidence placed in the body, the first receipt or a
-later receipt at 45/25/30 over distinct facts; foreign memories carry one fact
-each). The preregistered contrast (first-receipt-only deepening,
+memories expressing 2–4 facts each across their units, with bodies of 120–400
+o200k tokens and 1–4 receipts of 40–200 tokens; each fact placed in the body,
+the first receipt or a later receipt at 45/25/30 over distinct facts; foreign
+memories carry one fact each). The preregistered contrast (first-receipt-only deepening,
 `rank-first-first-source-v1`, against rank-first whole units, bge-m3 + A3,
 1,500 tokens, additive `host-v2` cost model) came out −11.5 points with a 95%
 family-bootstrap CI of [−23.8, −0.2], and the pooled later-receipt guard was

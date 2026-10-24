@@ -223,7 +223,9 @@ runs are the test evidence.
 - **Receipt-heavy query set.** 137 of 140 scored queries have at least one
   required group outside the body stratum after W3's audit (138 as W2 wrote
   them; W3's q-110 override moved one group to body). This was W2's choice,
-  made blind to placement, to secure the receipt-stratum quotas after a
+  made from the text-free facts view, which shows body versus span-only
+  coverage but neither first-versus-later receipt position nor any rendered
+  text, to secure the receipt-stratum quotas after a
   candidate failed them; the protocol sets placement shares over distinct
   facts and group/family quotas, not a query-level share (the ≥ 40% figure
   was the coordinator's brief to W2, not a protocol rule). The test split's
@@ -276,8 +278,11 @@ runs are the test evidence.
 
 ## 6. Reproduce
 
-From a clean checkout of `experiment/hr2-assembly` at `98e88b01` or later,
-Node 22.16.0, with `npm ci --offline --ignore-scripts --prefix evaluation/retrieval-research`
+From a clean checkout of `experiment/hr2-assembly` at the commit that carries
+this document and the restored manifest member (`5bd340c5`) or later (the run
+commit `98e88b01` predates `results/hr2b-final/` and lacks the force-added
+empty manifest member), Node 22.16.0, with
+`npm ci --offline --ignore-scripts --prefix evaluation/retrieval-research`
 (the bge-m3 model cache is only needed to regenerate the frozen rankings):
 
 ```sh
