@@ -1,0 +1,95 @@
+{
+  "version": "hr2b-fixture-v1",
+  "overrides": [
+    {
+      "query": "q-010",
+      "action": "recategorize",
+      "detail": {
+        "category": "C4"
+      },
+      "reason": "[C1-missing-term] C1 fails: keyTerm \"銅碼頭\" occurs in the query but not verbatim in any eligible required region. The en query differs from every eligible member language (zh), establishing C4. Smallest repair preserving original C1: set keyTerm to \"CopperQuay\"; it already occurs in the query, required facts stay fixed."
+    },
+    {
+      "query": "q-028",
+      "action": "recategorize",
+      "detail": {
+        "category": "C7"
+      },
+      "reason": "[C2-missing-term] C2 fails: the 2-character Han keyTerm \"燼簡\" is absent from every eligible required region. All supporting memories zh: no (languages: mixed, zh). Member language is diagnostic; C2 requires a zh query and at least one embedded witness per group, not all-zh member metadata. C7 witness m-211f11d68db0971d shares the project/person but states recruitment-cover wording and change context, not responsibility for dependency mapping. Smallest repair preserving original C2: set keyTerm to \"依賴\"; it already occurs in the query, required facts stay fixed."
+    },
+    {
+      "query": "q-032",
+      "action": "recategorize",
+      "detail": {
+        "category": "C7"
+      },
+      "reason": "[C2-missing-term] C2 fails: the 3-character Han keyTerm \"瓣鑄坊\" is absent from every eligible required region. All supporting memories zh: yes (languages: zh). Member language is diagnostic; C2 requires a zh query and at least one embedded witness per group, not all-zh member metadata. C7 witness m-d42bbd62e164de6b states Su Ran's lost-property bagging assignment, a different task from the table-card edge-trimming scope. Smallest repair preserving original C2: set keyTerm to \"桌牌\"; it already occurs in the query, required facts stay fixed."
+    },
+    {
+      "query": "q-192",
+      "action": "recategorize",
+      "detail": {
+        "category": "C4"
+      },
+      "reason": "[C2-missing-term] C2 fails: the 2-character Han keyTerm \"芍窗\" is absent from every eligible required region. All supporting memories zh: no (languages: en). Member language is diagnostic; C2 requires a zh query and at least one embedded witness per group, not all-zh member metadata. The zh query differs from every eligible member language (en), establishing C4. Smallest repair preserving original C2 and required fact: prefix the query with 當時 and set intent to history; keep keyTerm 芍窗. The existing historical support supplies its longer Han-run witness. No such witness exists for fixed current intent."
+    },
+    {
+      "query": "q-202",
+      "action": "recategorize",
+      "detail": {
+        "category": "C1"
+      },
+      "reason": "[C2-unembedded-term] C2 fails: the 3-character Han keyTerm \"犢紙弧\" occurs only in an isolated Han run, never a longer contiguous Han run. All supporting memories zh: no (languages: en, zh). Member language is diagnostic; C2 requires a zh query and at least one embedded witness per group, not all-zh member metadata. The exact family term occurs verbatim in required receipt m-e847956986e787d4#s2, establishing C1 even though it is isolated. Smallest repair preserving original C2: set keyTerm to \"簽收\"; it already occurs in the query, required facts stay fixed."
+    },
+    {
+      "query": "q-204",
+      "action": "recategorize",
+      "detail": {
+        "category": "C7"
+      },
+      "reason": "[C2-missing-term] C2 fails: the 3-character Han keyTerm \"寓線軸\" is absent from every eligible required region. All supporting memories zh: no (languages: mixed, zh). Member language is diagnostic; C2 requires a zh query and at least one embedded witness per group, not all-zh member metadata. C7 witness m-33cb8cb20882e4cf shares FableSpool but states the change reason, a separate assignment and an unapproved option; it does not supply the 157-hour cap. Smallest repair preserving original C2: set keyTerm to \"時間\"; it already occurs in the query, required facts stay fixed."
+    },
+    {
+      "query": "q-205",
+      "action": "recategorize",
+      "detail": {
+        "category": "C1"
+      },
+      "reason": "[C2-unembedded-term] C2 fails: the 3-character Han keyTerm \"層雲閂\" occurs only in an isolated Han run, never a longer contiguous Han run. All supporting memories zh: no (languages: en). Member language is diagnostic; C2 requires a zh query and at least one embedded witness per group, not all-zh member metadata. The exact family term occurs verbatim in required receipt m-2427af872c2c6179#s1, establishing C1 even though it is isolated. Smallest repair preserving original C2: set keyTerm to \"層雲\"; it already occurs in the query, required facts stay fixed."
+    },
+    {
+      "query": "q-206",
+      "action": "recategorize",
+      "detail": {
+        "category": "C3"
+      },
+      "reason": "[C2-missing-term] C2 fails: the 3-character Han keyTerm \"紫菀邊\" is absent from every eligible required region. All supporting memories zh: yes (languages: zh). Member language is diagnostic; C2 requires a zh query and at least one embedded witness per group, not all-zh member metadata. Every eligible member is zh, matching the query, and the question paraphrases the feedback-change reason without stating its distinctive causal wording; C3 is valid. Smallest repair preserving original C2: set keyTerm to \"作者\"; it already occurs in the query, required facts stay fixed."
+    },
+    {
+      "query": "q-210",
+      "action": "recategorize",
+      "detail": {
+        "category": "C7"
+      },
+      "reason": "[C2-missing-term] C2 fails: the 2-character Han keyTerm \"鈷匣\" is absent from every eligible required region. All supporting memories zh: yes (languages: zh). Member language is diagnostic; C2 requires a zh query and at least one embedded witness per group, not all-zh member metadata. C7 witness m-2a603f62a4a562ce states Wen Heng's deposit-return tracking assignment, not the lease-index divider-only role. Smallest repair preserving original C2: set keyTerm to \"租約\"; it already occurs in the query, required facts stay fixed."
+    },
+    {
+      "query": "q-211",
+      "action": "recategorize",
+      "detail": {
+        "category": "C7"
+      },
+      "reason": "[C2-missing-term] C2 fails: the 3-character Han keyTerm \"餘燼圖\" is absent from every eligible required region. All supporting memories zh: yes (languages: zh). Member language is diagnostic; C2 requires a zh query and at least one embedded witness per group, not all-zh member metadata. C7 witness m-81456fbd526aca36 gives Ye Ling's import-cover background-color role, not responsibility for sidebar interaction. Smallest repair preserving original C2: set keyTerm to \"側欄\"; it already occurs in the query, required facts stay fixed."
+    },
+    {
+      "query": "q-110",
+      "action": "add-member",
+      "detail": {
+        "fact": "B-hr2b-t19-02",
+        "memory": "m-3a8c9c3f1c47ccf6",
+        "where": "body"
+      },
+      "reason": "[alternative-foreign-temporal-support] The eligible current foreign body states that CopperQuay later labels loan equipment at reservation. Reservation is before lending, so the body entails canonical fact B-hr2b-t19-02, which does not specify immediately before handoff. The independent-workspace preface still explicitly attributes the behavior to CopperQuay. This is a fresh body-region finding for candidate 3: q-110's dev group changes from later-receipt to body. Other target members and required facts remain valid."
+    }
+  ]
+}
