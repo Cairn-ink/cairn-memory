@@ -27,7 +27,10 @@ export async function nextRepairId(root, baseId) {
   if (engineBaseId(baseId) !== baseId) throw failure('local_engine_install_failed');
   let entries;
   try { entries = await readdir(join(root, 'engine')); }
-  catch (error) { if (error.code !== 'ENOENT') throw error; entries = []; }
+  catch (error) {
+    if (error.code !== 'ENOENT') throw failure('local_engine_install_failed', { code: error.code });
+    entries = [];
+  }
   for (let generation = 2; ; generation++) {
     const candidate = `${baseId}-r${generation}`;
     if (!entries.some(name => name === candidate || name.startsWith(candidate + '.failed-'))) {
@@ -118,10 +121,14 @@ async function childEnvironment(root, node, env) {
 
 // Capture child diagnostics for the coordinator's verbose path only. Never
 // interpolate child text into a translated error or send it to the writer.
-function run(executable, args, cwd, env) {
+function run(executable, args, cwd, env, kind, onChild) {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true });
+    let ownership, hookFailed = false;
+    try { ownership = Promise.resolve(child.pid === undefined ? undefined : onChild?.({ kind, pid: child.pid })); }
+    catch { ownership = Promise.reject(); }
+    ownership = ownership.catch(() => { hookFailed = true; child.kill('SIGKILL'); });
     let stdout = '', stderr = '', spawnError, timedOut = false, overflow = false;
     const stop = () => child.kill('SIGKILL');
     const timer = setTimeout(() => { timedOut = true; stop(); }, 120000);
@@ -132,8 +139,10 @@ function run(executable, args, cwd, env) {
     child.stdout.on('data', collect('stdout'));
     child.stderr.on('data', collect('stderr'));
     child.on('error', error => { spawnError = error.code; });
-    child.on('close', (exitCode, signal) => {
+    child.on('close', async (exitCode, signal) => {
+      await ownership;
       clearTimeout(timer);
+      if (hookFailed) { reject(failure('local_engine_install_failed', { code: 'child_hook_failed' })); return; }
       const params = { exitCode, stdout, stderr, signal, timedOut, overflow, spawnError };
       if (exitCode !== 0 || spawnError || timedOut || overflow) {
         reject(failure('local_engine_install_failed', params));
@@ -142,10 +151,20 @@ function run(executable, args, cwd, env) {
   });
 }
 
+async function ownedDirectory(directory, { generation = false } = {}) {
+  const info = await lstat(directory);
+  if (!info.isDirectory()) {
+    throw failure('local_engine_install_failed', { code: generation ? 'symlink_generation' : 'insecure_directory' });
+  }
+  if (process.platform !== 'win32' && ((info.mode & 0o7777) !== 0o700 || info.uid !== process.getuid())) {
+    throw failure('local_engine_install_failed', { code: 'insecure_directory' });
+  }
+}
+
 // The caller holds the setup lock and supplies a canonical, private root. The
 // optional identity arguments let the coordinator check the registration vector;
 // defaults are safe for the non-opening configuration check in standalone use.
-async function install({ root, engineId, node, references, env = process.env, write = () => {},
+async function install({ root, engineId, node, references, onChild, env = process.env, write = () => {},
   t = key => key, databasePath = join(root, 'data', 'memory.sqlite'),
   ownerId = 'local-setup-check', projectId = null }) {
   if (!(references instanceof Set) && !Array.isArray(references)) {
@@ -166,7 +185,11 @@ async function install({ root, engineId, node, references, env = process.env, wr
   try { childEnv = await childEnvironment(root, node, env); }
   catch { throw failure('local_engine_install_failed'); }
   await mkdir(join(root, 'engine'), { recursive: true, mode: 0o700 });
-  if (!(await lstat(join(root, 'engine'))).isDirectory()) throw failure('local_engine_install_failed');
+  await ownedDirectory(join(root, 'engine'));
+  if (!env.CAIRN_SETUP_NPM_CACHE) {
+    try { await ownedDirectory(childEnv.npm_config_cache); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
 
   async function quarantine(directory, error) {
     let timestamp = Date.now();
@@ -178,6 +201,10 @@ async function install({ root, engineId, node, references, env = process.env, wr
       try { await lstat(retained); }
       catch (existingError) { if (existingError.code === 'ENOENT') break; throw existingError; }
     }
+    const source = await lstat(directory);
+    if (source.isSymbolicLink() || !source.isDirectory()) {
+      throw failure('local_engine_install_failed', { code: 'symlink_generation' });
+    }
     try { await rename(directory, retained); }
     catch (renameError) {
       throw failure('local_engine_install_failed', { ...error.params, renameCode: renameError.code });
@@ -187,7 +214,7 @@ async function install({ root, engineId, node, references, env = process.env, wr
     if (!(await lstat(directory)).isDirectory()) throw failure('local_engine_verification_failed');
     await verifyInstalledTree(app, manifest);
     const checked = await run(node, [executable, '--check-config', '--db', databasePath,
-      '--owner', ownerId, ...(projectId === null ? [] : ['--project', projectId])], app, childEnv);
+      '--owner', ownerId, ...(projectId === null ? [] : ['--project', projectId])], app, childEnv, 'check', onChild);
     let report;
     try { report = JSON.parse(checked.stdout); } catch { /* invalid check output */ }
     if (report?.ok !== true || report.databaseOpened !== false || report.providerContacted !== false ||
@@ -202,6 +229,9 @@ async function install({ root, engineId, node, references, env = process.env, wr
     try { await lstat(directory); exists = true; }
     catch (error) { if (error.code !== 'ENOENT') throw error; }
     if (exists) {
+      await ownedDirectory(directory, { generation: true });
+      try { await ownedDirectory(app); }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
       try { await verify(directory, app, executable); return result; }
       catch (error) {
         if (published.has(engineId)) {
@@ -219,13 +249,11 @@ async function install({ root, engineId, node, references, env = process.env, wr
         { mode: 0o600, flag: 'wx' });
       if (!env.CAIRN_SETUP_NPM_CACHE) {
         await mkdir(childEnv.npm_config_cache, { recursive: true, mode: 0o700 });
-        if (!(await lstat(childEnv.npm_config_cache)).isDirectory()) {
-          throw failure('local_engine_install_failed');
-        }
+        await ownedDirectory(childEnv.npm_config_cache);
       }
       write(t('local_engine_installing'));
       await run('npm', ['install', '--prefix', app, '--ignore-scripts', '--no-audit', '--no-fund',
-        ...(env.CAIRN_SETUP_NPM_OFFLINE === '1' ? ['--offline'] : []), archive], app, childEnv);
+        ...(env.CAIRN_SETUP_NPM_OFFLINE === '1' ? ['--offline'] : []), archive], app, childEnv, 'npm', onChild);
       await verify(directory, app, executable);
       return result;
     } catch (error) {

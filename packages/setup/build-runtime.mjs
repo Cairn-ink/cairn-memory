@@ -1,8 +1,8 @@
-import { readdir, readFile, mkdir, writeFile, mkdtemp, copyFile, rm } from 'node:fs/promises';
+import { readdir, readFile, mkdir, writeFile, mkdtemp, copyFile, rm, lstat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildArtifact, command } from '../../packaging/build.mjs';
 
@@ -37,14 +37,39 @@ console.log(`Codex runtime bundle ${check ? 'verified' : 'generated'}: ${paths.l
 // Keep the hosted inventory above unchanged. The engine has its own manifest.
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const bundle = fileURLToPath(new URL('./runtime/engine/', import.meta.url));
-const artifact = buildArtifact();
-const scratch = await mkdtemp(join(tmpdir(), 'cairn-engine-bundle-'));
+let buildDirectory, scratch;
 try {
+  // Own the builder's temporary parent even if it throws before returning its
+  // artifact path. Restore the caller's environment before doing other work.
+  buildDirectory = await mkdtemp(join(tmpdir(), 'cairn-engine-build-'));
+  const tempKeys = ['TMPDIR', 'TMP', 'TEMP'];
+  const previousTemp = tempKeys.map(key => process.env[key]);
+  let artifact;
+  try {
+    for (const key of tempKeys) process.env[key] = buildDirectory;
+    artifact = buildArtifact();
+  } finally {
+    tempKeys.forEach((key, index) => {
+      if (previousTemp[index] === undefined) delete process.env[key];
+      else process.env[key] = previousTemp[index];
+    });
+  }
+  scratch = await mkdtemp(join(tmpdir(), 'cairn-engine-bundle-'));
   async function extract(archive, name) {
     const directory = join(scratch, name);
     await mkdir(directory);
     command('tar', ['-xzf', archive, '-C', directory], scratch, artifact.userconfig);
     return join(directory, 'package');
+  }
+  async function entryMetadata(directory, prefix = '.') {
+    const info = await lstat(directory);
+    const entries = { [prefix]: { type: info.mode & 0o170000, mode: info.mode & 0o7777 } };
+    if (info.isDirectory()) {
+      for (const name of (await readdir(directory)).sort()) {
+        Object.assign(entries, await entryMetadata(join(directory, name), `${prefix}/${name}`));
+      }
+    }
+    return entries;
   }
   const rebuilt = await extract(artifact.artifactPath, 'rebuilt');
   const generatedHashes = {};
@@ -73,6 +98,9 @@ try {
         const inventory = command('tar', ['-tzf', archive], scratch, artifact.userconfig)
           .trim().split(/\r?\n/u).map(name => name.replace(/^package\//u, '')).sort();
         if (!isDeepStrictEqual(inventory, artifact.files)) throw new Error('inventory_mismatch');
+        if (!isDeepStrictEqual(await entryMetadata(previous), await entryMetadata(rebuilt))) {
+          throw new Error('entry_metadata_mismatch');
+        }
         for (const name of artifact.files) {
           if (hash(await readFile(join(previous, name))) !== hash(await readFile(join(rebuilt, name)))) {
             throw new Error('content_mismatch');
@@ -84,6 +112,6 @@ try {
   }
   console.log(`Engine bundle ${check ? 'verified' : 'generated'}: ${artifact.files.length} files.`);
 } finally {
-  await rm(scratch, { recursive: true, force: true });
-  await rm(dirname(artifact.artifactPath), { recursive: true, force: true });
+  try { if (scratch) await rm(scratch, { recursive: true, force: true }); }
+  finally { if (buildDirectory) await rm(buildDirectory, { recursive: true, force: true }); }
 }

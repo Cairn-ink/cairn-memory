@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHash } from 'node:crypto';
-import { accessSync, constants, cpSync, existsSync, lstatSync, mkdirSync, readFileSync,
+import { accessSync, chmodSync, constants, cpSync, existsSync, lstatSync, mkdirSync, readFileSync,
   readdirSync, realpathSync, rmSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { delimiter, dirname, join, relative } from 'node:path';
@@ -46,6 +46,7 @@ function countMatch(t, label, first, second) {
   t.diagnostic(message);
 }
 
+// Source-checkout case: needs packaging/ and the repository's source files.
 test('E02 engine inventory: archive/manifest and source allowlist/extracted tree', t => {
   const directory = workspace(t);
   command('tar', ['-xzf', archive, '-C', directory]);
@@ -73,11 +74,15 @@ test('E02 engine inventory: archive/manifest and source allowlist/extracted tree
   assert.equal(id, `${installerVersion}-${hash(bytes).slice(0, 12)}`);
 });
 
+// Source-checkout case: checks the package's files rules against its disk tree.
 test('E03 packed installer inventory: npm JSON, files rules/disk, and tar agree', t => {
   const directory = workspace(t);
+  const home = join(directory, 'home'); mkdirSync(home, { mode: 0o700 });
+  const userconfig = join(directory, 'empty.npmrc'); writeFileSync(userconfig, '', { mode: 0o600 });
   const result = JSON.parse(command('npm', ['pack', '--offline', '--ignore-scripts', '--json',
     '--pack-destination', directory], { cwd: setup,
-    env: { ...process.env, npm_config_cache: join(directory, 'cache') } }));
+    env: { PATH: process.env.PATH ?? '', HOME: home, npm_config_userconfig: userconfig,
+      npm_config_cache: join(directory, 'cache'), TMPDIR: directory } }));
   assert.equal(result.length, 1);
   const packed = result[0].files.map(entry => entry.path);
   const rules = json(join(setup, 'package.json')).files;
@@ -92,6 +97,7 @@ test('E03 packed installer inventory: npm JSON, files rules/disk, and tar agree'
     diskFiles(join(setup, 'runtime')).map(name => 'runtime/' + name));
 });
 
+// Source-checkout case: prepack imports the repository's packaging builder.
 test('E03 prepack check passes, permits archive drift, and rejects a stale manifest byte', t => {
   const directory = workspace(t);
   const copy = join(directory, 'packages/setup');
@@ -100,7 +106,13 @@ test('E03 prepack check passes, permits archive drift, and rejects a stale manif
   // Only the setup package is mutable. Build-time repository inputs are read
   // through these links; the build continues to use the actual packaging code.
   for (const name of ['packaging', 'integrations']) symlinkSync(join(repo, name), join(directory, name));
-  const check = () => run(process.execPath, [join(copy, 'build-runtime.mjs'), '--check']);
+  const check = () => {
+    const result = run(process.execPath, [join(copy, 'build-runtime.mjs'), '--check'],
+      { env: { ...process.env, TMPDIR: directory, TMP: directory, TEMP: directory } });
+    assert.deepEqual(readdirSync(directory).filter(name => /^cairn-engine-(?:build|bundle)-/u.test(name)),
+      [], 'build and scratch directories are cleaned on success and failure');
+    return result;
+  };
   let result = check();
   assert.equal(result.status, 0, `check exit ${result.status}: ${result.stderr}`);
   const manifestPath = join(copy, 'runtime/engine/manifest.json');
@@ -119,6 +131,51 @@ test('E03 prepack check passes, permits archive drift, and rejects a stale manif
   result = check();
   assert.equal(result.status, 1, `stale check exit ${result.status}`);
   assert.match(result.stderr, /engine_bundle_stale/u);
+
+  const baseline = JSON.parse(bytes);
+  writeFileSync(copiedArchive, readFileSync(archive));
+  for (const field of ['bytes', 'sourceHashes', 'generatedHashes']) {
+    const stale = structuredClone(baseline);
+    if (field === 'bytes') stale.bytes++;
+    else {
+      const name = Object.keys(stale[field])[0];
+      stale[field][name] = (stale[field][name][0] === 'a' ? 'b' : 'a') + stale[field][name].slice(1);
+    }
+    writeFileSync(manifestPath, JSON.stringify(stale, null, 2) + '\n');
+    result = check();
+    assert.equal(result.status, 1, `${field} mutation exit ${result.status}`);
+    assert.match(result.stderr, /engine_bundle_stale/u, field);
+  }
+
+  const repack = join(directory, 'repack'); mkdirSync(repack);
+  command('tar', ['-xzf', archive, '-C', repack]);
+  const executable = join(repack, 'package/bin/cairn-memory.mjs');
+  assert.equal(lstatSync(executable).mode & 0o777, 0o755);
+  chmodSync(executable, 0o644);
+  command('tar', ['-czf', copiedArchive, '-C', repack, ...baseline.files.map(name => 'package/' + name)]);
+  const changedModes = { ...baseline, sha256: hash(readFileSync(copiedArchive)), bytes: lstatSync(copiedArchive).size };
+  writeFileSync(manifestPath, JSON.stringify(changedModes, null, 2) + '\n');
+  result = check();
+  assert.equal(result.status, 1, `executable mode mutation exit ${result.status}`);
+  assert.match(result.stderr, /engine_bundle_stale/u);
+  assert.doesNotMatch(result.stderr, /engine_bundle_sha_drift/u);
+
+  // Simulate a builder that creates partial state and throws before returning
+  // an artifact path. Only this temporary source-checkout's link is replaced.
+  rmSync(join(directory, 'packaging')); mkdirSync(join(directory, 'packaging'));
+  writeFileSync(join(directory, 'packaging/build.mjs'), `
+    import {mkdtempSync} from 'node:fs';
+    import {tmpdir} from 'node:os';
+    import {join} from 'node:path';
+    export function buildArtifact() {
+      mkdtempSync(join(tmpdir(), 'partial-artifact-'));
+      throw new Error('synthetic_build_failure');
+    }
+    export function command() { throw new Error('unexpected_command'); }
+  `);
+  result = check();
+  assert.equal(result.status, 1, `early builder failure exit ${result.status}`);
+  assert.match(result.stderr, /synthetic_build_failure/u);
 });
 
 function fakeNpm(directory, body) {
@@ -155,6 +212,8 @@ test('nextRepairId skips existing and failed generations and chooses the smalles
   assert.equal(await nextRepairId(root, id), id + '-r10');
   rmSync(join(engines, id + '-r4'), { recursive: true });
   assert.equal(await nextRepairId(root, id), id + '-r4');
+  rmSync(engines, { recursive: true }); writeFileSync(engines, 'not a directory');
+  await assert.rejects(nextRepairId(root, id), { key: 'local_engine_install_failed', params: { code: 'ENOTDIR' } });
 });
 
 test('installEngine requires explicit references before creating an engine directory', async t => {
@@ -164,16 +223,54 @@ test('installEngine requires explicit references before creating an engine direc
   assert.equal(existsSync(join(root, 'engine')), false);
 });
 
+test('a symlinked unreferenced generation is refused without renaming or mutating it', async t => {
+  const directory = workspace(t), root = rootAt(directory);
+  const engines = join(root, 'engine'); mkdirSync(engines, { mode: 0o700 });
+  const target = join(directory, 'target'); mkdirSync(target, { mode: 0o700 });
+  writeFileSync(join(target, 'retained'), 'unchanged');
+  const generation = join(engines, id); symlinkSync(target, generation);
+  const before = lstatSync(generation);
+  await assert.rejects(installEngine({ root, engineId: id, node: process.execPath, references: [],
+    env: {}, onChild: () => assert.fail('must not start a child') }),
+  { key: 'local_engine_install_failed', params: { code: 'symlink_generation' } });
+  assert.equal(lstatSync(generation).isSymbolicLink(), true);
+  assert.equal(lstatSync(generation).ino, before.ino);
+  assert.equal(realpathSync(generation), target);
+  assert.deepEqual(readdirSync(engines), [id]);
+  assert.deepEqual(diskFiles(target), ['retained']);
+  assert.equal(readFileSync(join(target, 'retained'), 'utf8'), 'unchanged');
+});
+
+for (const owned of ['engine', 'generation', 'app', 'cache']) {
+  test(`a 0755 owned ${owned} directory is refused without quarantine`, async t => {
+    const directory = workspace(t), root = rootAt(directory);
+    const engines = join(root, 'engine'); mkdirSync(engines, { mode: 0o700 });
+    const generation = join(engines, id); mkdirSync(generation, { mode: 0o700 });
+    const app = join(generation, 'app'); mkdirSync(app, { mode: 0o700 });
+    const cache = join(engines, 'npm-cache'); mkdirSync(cache, { mode: 0o700 });
+    const target = { engine: engines, generation, app, cache }[owned]; chmodSync(target, 0o755);
+    const before = readdirSync(engines).sort();
+    await assert.rejects(installEngine({ root, engineId: id, node: process.execPath, references: [],
+      env: {}, onChild: () => assert.fail('must not start a child') }),
+    { key: 'local_engine_install_failed', params: { code: 'insecure_directory' } });
+    assert.equal(lstatSync(target).mode & 0o777, 0o755);
+    assert.deepEqual(readdirSync(engines).sort(), before);
+    assert.deepEqual(diskFiles(generation), []);
+  });
+}
+
 test('npm exit 1 quarantines all partial files, captures diagnostics, and prints none', async t => {
   const directory = workspace(t), root = rootAt(directory);
   const fake = fakeNpm(directory, `import {writeFileSync} from 'node:fs';
     writeFileSync('partial-marker', 'retained');
+    writeFileSync('npm-pid', String(process.pid));
     console.log('synthetic-private-output'); console.error('synthetic-private-error'); process.exit(1);`);
-  const output = [];
+  const output = [], children = [];
   await assert.rejects(installEngine({ root, engineId: id, node: fake.node, references: new Set(),
+    onChild: child => children.push(child),
     env: { PATH: fake.PATH, CAIRN_SETUP_NPM_OFFLINE: '1' }, write: line => output.push(line) }), error => {
     assert.equal(error.key, 'local_engine_install_failed'); assert.equal(error.code, 1);
-    assert.equal(error.params.exitCode, 1);
+    assert.equal(error.params.exitCode, 1, JSON.stringify(error.params));
     assert.match(error.params.stdout, /synthetic-private-output/u, JSON.stringify(error.params));
     assert.match(error.params.stderr, /synthetic-private-error/u);
     assert.doesNotMatch(error.message, /synthetic-private/u);
@@ -185,9 +282,12 @@ test('npm exit 1 quarantines all partial files, captures diagnostics, and prints
   assert.equal(failed.length, 1); assert.match(failed[0], /\.failed-\d+$/u);
   assert.equal(readFileSync(join(root, 'engine', failed[0], 'app/partial-marker'), 'utf8'), 'retained');
   assert.equal(json(join(root, 'engine', failed[0], 'app/package.json')).private, true);
+  assert.deepEqual(children, [{ kind: 'npm',
+    pid: Number(readFileSync(join(root, 'engine', failed[0], 'app/npm-pid'), 'utf8')) }]);
 });
 
 function extractedApp(app) {
+  mkdirSync(app, { recursive: true, mode: 0o700 });
   const modules = join(app, 'node_modules'); mkdirSync(modules, { recursive: true });
   command('tar', ['-xzf', archive, '-C', modules]);
   // An extracted engine plus synthetic dependency manifests isolates the tree
@@ -225,6 +325,9 @@ async function brokenInstall(directory, root, engineId) {
   const installed = join(root, 'engine', engineId);
   mkdirSync(installed, { recursive: true, mode: 0o700 });
   cpSync(template, join(installed, 'app'), { recursive: true });
+  // Node versions differ in copied-directory modes; this fixture models an
+  // installer-owned app, whose permissions are always explicitly private.
+  chmodSync(join(installed, 'app'), 0o700);
   rmSync(join(installed, 'app/node_modules', manifest.package.name, manifest.files[0]));
   return installed;
 }
@@ -241,7 +344,7 @@ test('unreferenced broken tree is quarantined before reinstalling the same id in
     process.exit(1);`);
   await assert.rejects(installEngine({ root, engineId: id, node: fake.node, references: [],
     env: { PATH: fake.PATH, CAIRN_SETUP_NPM_OFFLINE: '1' } }), error => {
-    assert.equal(error.key, 'local_engine_install_failed'); assert.equal(error.params.exitCode, 1);
+    assert.equal(error.key, 'local_engine_install_failed'); assert.equal(error.params.exitCode, 1, JSON.stringify(error.params));
     return true;
   });
   const observed = json(recording);
@@ -266,7 +369,7 @@ test('referenced broken tree remains untouched while a fresh repair generation f
     writeFileSync(${JSON.stringify(recording)},process.cwd()); process.exit(1);`);
   await assert.rejects(installEngine({ root, engineId: id, node: fake.node, references: new Set([id]),
     env: { PATH: fake.PATH, CAIRN_SETUP_NPM_OFFLINE: '1' } }), error => {
-    assert.equal(error.key, 'local_engine_install_failed'); assert.equal(error.params.exitCode, 1);
+    assert.equal(error.key, 'local_engine_install_failed'); assert.equal(error.params.exitCode, 1, JSON.stringify(error.params));
     return true;
   });
   assert.equal(readFileSync(recording, 'utf8'), join(root, 'engine', id + '-r2', 'app'));
@@ -281,6 +384,7 @@ test('referenced broken tree remains untouched while a fresh repair generation f
 });
 
 const skipReason = 'Set CAIRN_SETUP_TEST_NETWORK=1 for the network phase, or supply a complete CAIRN_SETUP_NPM_CACHE.';
+// Packed-runtime case: install and verify the engine shipped by the installer.
 test('offline install verifies the tree, exact child environment, check JSON, and npm-free repeat', async t => {
   const directory = workspace(t);
   const cache = process.env.CAIRN_SETUP_NPM_CACHE || join(directory, 'cache');
