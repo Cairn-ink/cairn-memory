@@ -1,6 +1,6 @@
 # Bounded topic member pages (E1-M)
 
-Status: implementation contract; no implementation or runtime acceptance is
+Status: **frozen implementation contract (v1), audited by a non-author reviewer in three rounds, 2026-10-25.** No implementation or runtime acceptance is
 claimed by this document. Product may develop against the shapes below.
 Base: `b2513501a6747a163ab1cefb7d37a16744c9621a` (main, #468).
 Branch: `feat/e1m-member-pages`. Contract date: 2026-10-25.
