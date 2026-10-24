@@ -368,3 +368,8 @@
 - **hr2b_tools fix2 完成**（八項全修：審後題目投影、全事實詞典、混合支持拒絕、guard 層由認證標籤推導、host 重播綁定認證
   語料、時間點排序、深凍結、單一約束來源）。協調者沙箱外 28 檔兩版本 **399 過、0 敗、1 skip**。**提交 `025fe2ca`**（19 檔），
   已推送；審查 worktree 移到 `025fe2ca`，派 Spec／Standards 複查。
+- **`025fe2ca` 複查：Spec yes、Standards yes**，無新 P0／P1（兩位都在記憶體重現原發現並確認修好；HR-1 位元不變、驗證輸出與
+  凍結 `c546bfc1` 相同、搬動的指標函式逐字相同、舊 HR-2 分支與兩個回歸未動）。**HR-2b §8 工具完成於 `025fe2ca`**。
+  §9 步驟 3 開始：派 **W1 `hr2b_world_author`**（workspace-write，只寫 `fixtures-hr2b/`；≥40 目標家族 7＋1 事實；長本文、1–6
+  receipt、placement 45／25／30；填充句庫與禁用詞典；候選 seed 序列；`build-world.mjs`／`check-world.mjs`）。W2／W3 派工單
+  已備（W2 只看 `body`／`span-only`／`absent`，不知 receipt 位置）。派出時負載 0.2。
