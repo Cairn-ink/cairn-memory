@@ -1542,3 +1542,25 @@ Limits:
   `.paused-tripwire` or `codex-tripwire.json` by hand while paused is outside it.
 - A foreign symlink at `paused` that does not resolve is left in place, and
   Codex reads as paused until it is removed.
+
+## Offline predecessor-source binding
+
+The [bounded source-binding experiment](plans/neighbor-source-binding.md)
+retains a selected source window's immediate predecessor when existing receipt
+and output budgets permit. Scripted real-core tests demonstrate that the added
+exact source and speaker survive ordinary capture, classification and a cold
+reopen without another generation call. This is mechanical source retention,
+not measured answer quality or a semantic relation between memories.
+
+The helper is evaluation-only and no production caller imports it. It does not
+change host retention, archive Raw inputs, improve MOC/vector retrieval, infer
+support/adoption, or recover a discarded passage from another batch. Provenance
+is an integrity-pinned experimental sidecar, not a persisted public schema or
+signed archive. Resolution validates each current entry but is not an atomic
+multi-memory snapshot. The caller must use the same synchronous deterministic
+token counter for the helper and core model.
+
+Capacity checks preserve original anchors and skip optional additions; invalid
+original output still fails. Corrected or forgotten records cannot be restored
+by the sidecar. Broader privacy/retention review and fresh independently judged
+write-to-answer evidence are prerequisites to considering product adoption.
