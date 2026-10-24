@@ -336,3 +336,10 @@
   namespace 填充；160 目標＋320 干擾＋60 foreign；W1／W2／W3 獨立）；排名只用免費的 A1 與本機 bge-m3＋A3；預註冊規則：
   P-top-s1 − P-top 在 bge-m3＋A3／1,500／host-v2 ≥ +3 且 CI 下界 > 0、且 later-receipt 層 CI 下界 ≥ −5 才 Adopt。
   派非作者稽核 `hr2b_protocol_audit`。
+- **HR-2b v0.1 稽核**：4 P0、6 P1、1 P2。P0：「schema 不變、一行改動」不成立（validator 寫死 300／700／100、1–3 spans、
+  35–45% span-only，版本常數要傳遍工具）；排名只索引本文（A1／A2／A3 的 `includeForArm`）、`S-long` 會被拒、需預註冊固定
+  配置；placement 要從 W3 審後的 eligible members 分類而非 builder 抽樣（`span:null`、receipt 依 eventTime 排序）；guard 層
+  配額要符合 bootstrap 的每類別 ≥10 families。P1：guard 的數學意義（strict later-only 群 P-top-s1 覆蓋恆為 0）、生成器凍結細節、
+  詞彙排除無法證明無事實（需凍結禁用詞典＋W3 語意審）、harness 耦合要以認證的 protocol profile 列舉、host-v2 常數對長
+  receipt 是外推要先校準並公布誤差、凍結順序衝突。P2：成本算術（最小 5,420／中點約 16,300）與 maxItems 說明。
+  **v0.2 提交 `b4c31dd3`**（全部套用），派複查（resume）。
