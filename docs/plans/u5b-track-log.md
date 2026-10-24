@@ -508,3 +508,9 @@
   （cairn-heavy 展開路徑、鎖檔、run.mjs 印的絕對輸出路徑）→ 階段輔助函式改為寫檔時 `$HOME`→`~`，step3／step4 檔案同樣替換並在
   `results/hr2b-stage-logs/README.md` 註明。提交排名凍結，啟動第五階段：唯一一次 80 格 test 組裝→score→report→雜湊→壓縮→升格
   `results/hr2b-final/`。
+- **第五階段完成、結果提交 `2acb5b1c`**：乾淨 checkout `98e88b01`、Node 22.16.0，run／score／report／hashes／四個壓縮階段全 0，
+  cells＝80；extract 階段驗證三個 .xz 還原後 83 檔雜湊全 OK，再移除未壓縮中間檔（約 400 MB）；階段檔無 `/home`。
+  **結論 Keep**：確認格（test／S1000／bge-m3＋A3／host-v2／1,500）P-top-s1 − P-top ＝ **−11.48 點**，95% 家族 bootstrap CI
+  **[−23.82, −0.15]**（28 家族、0 拒絕）；pooled guard：P-top-s1 0/49 群對 P-top 19/49（**−38.78 點**），pooled ceiling 0.735；
+  逐類別 later-receipt Δ 全負（C1 −42.9、C2 −50、C3 −57.1、C4 −40、C5 −22.2、C6 −33.3、C7 −33.3）。64 個對比、飽和度未達。
+  接著寫結果文件、limitations 條目、派轉錄檢查。
