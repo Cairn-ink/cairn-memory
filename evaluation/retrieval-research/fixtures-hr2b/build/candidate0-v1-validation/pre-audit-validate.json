@@ -1,0 +1,600 @@
+{
+  "ok": false,
+  "errors": [
+    {
+      "code": "audit:overrides"
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-002",
+        "category": "C1"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-003",
+        "category": "C1"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-007",
+        "category": "C1"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-013",
+        "category": "C1"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-016",
+        "category": "C1"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-020",
+        "category": "C1"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-025",
+        "category": "C2"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-047",
+        "category": "C3"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-048",
+        "category": "C3"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-053",
+        "category": "C3"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-054",
+        "category": "C3"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-055",
+        "category": "C3"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-059",
+        "category": "C3"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-060",
+        "category": "C3"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-091",
+        "category": "C5"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-098",
+        "category": "C5"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-099",
+        "category": "C5"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-100",
+        "category": "C5"
+      }
+    },
+    {
+      "code": "hr2b:placement_quota",
+      "detail": "dev:first-receipt:groups_minimum_30"
+    },
+    {
+      "code": "hr2b:placement_quota",
+      "detail": "dev:first-receipt:families_minimum_12"
+    },
+    {
+      "code": "hr2b:placement_quota",
+      "detail": "dev:later-receipt:groups_minimum_30"
+    },
+    {
+      "code": "hr2b:placement_quota",
+      "detail": "dev:later-receipt:families_minimum_12"
+    },
+    {
+      "code": "hr2b:placement_quota",
+      "detail": "dev:guard:C1:family_minimum"
+    },
+    {
+      "code": "hr2b:placement_quota",
+      "detail": "dev:guard:C2:family_minimum"
+    },
+    {
+      "code": "hr2b:placement_quota",
+      "detail": "dev:guard:C3:family_minimum"
+    },
+    {
+      "code": "hr2b:placement_quota",
+      "detail": "dev:guard:C4:family_minimum"
+    },
+    {
+      "code": "hr2b:placement_quota",
+      "detail": "dev:guard:C5:family_minimum"
+    },
+    {
+      "code": "hr2b:placement_quota",
+      "detail": "dev:guard:C7:family_minimum"
+    },
+    {
+      "code": "hr2b:placement_quota",
+      "detail": "test:guard:C1:family_minimum"
+    },
+    {
+      "code": "hr2b:placement_quota",
+      "detail": "test:guard:C2:family_minimum"
+    },
+    {
+      "code": "hr2b:placement_quota",
+      "detail": "test:guard:C4:family_minimum"
+    },
+    {
+      "code": "hr2b:placement_quota",
+      "detail": "test:guard:C5:family_minimum"
+    },
+    {
+      "code": "hr2b:placement_quota",
+      "detail": "test:guard:C6:family_minimum"
+    },
+    {
+      "code": "hr2b:placement_quota",
+      "detail": "test:guard:C7:family_minimum"
+    }
+  ],
+  "statistics": {
+    "split": {
+      "total": 140,
+      "dev": 46,
+      "devFraction": 0.32857142857142857,
+      "overallTotal": 160,
+      "overallDev": 51,
+      "overallDevFraction": 0.31875,
+      "categories": {
+        "C1": {
+          "total": 20,
+          "dev": 5,
+          "test": 15,
+          "devFamilies": 5,
+          "testFamilies": 15
+        },
+        "C2": {
+          "total": 20,
+          "dev": 6,
+          "test": 14,
+          "devFamilies": 6,
+          "testFamilies": 14
+        },
+        "C3": {
+          "total": 20,
+          "dev": 7,
+          "test": 13,
+          "devFamilies": 7,
+          "testFamilies": 13
+        },
+        "C4": {
+          "total": 20,
+          "dev": 8,
+          "test": 12,
+          "devFamilies": 8,
+          "testFamilies": 12
+        },
+        "C5": {
+          "total": 20,
+          "dev": 7,
+          "test": 13,
+          "devFamilies": 7,
+          "testFamilies": 13
+        },
+        "C6": {
+          "total": 20,
+          "dev": 6,
+          "test": 14,
+          "devFamilies": 6,
+          "testFamilies": 14
+        },
+        "C7": {
+          "total": 20,
+          "dev": 7,
+          "test": 13,
+          "devFamilies": 7,
+          "testFamilies": 13
+        }
+      }
+    },
+    "corpus": {
+      "S300": {
+        "count": 160,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "domains": {
+          "engineering": 0.25,
+          "work-preferences": 0.175,
+          "operations": 0.175,
+          "finance": 0.2,
+          "product": 0.15,
+          "everyday": 0.05
+        },
+        "bodyMeanLength": 629.26875,
+        "spanMeanLength": 229.51315789473685,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.15,
+          "5": 0.1,
+          "6": 0.05
+        }
+      },
+      "extras": {
+        "count": 320,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "domains": {
+          "engineering": 0.25,
+          "work-preferences": 0.175,
+          "operations": 0.175,
+          "finance": 0.2,
+          "product": 0.15,
+          "everyday": 0.05
+        },
+        "bodyMeanLength": 609.553125,
+        "spanMeanLength": 230.93859649122808,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.15,
+          "5": 0.1,
+          "6": 0.05
+        }
+      },
+      "foreign": {
+        "count": 60,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "domains": {
+          "engineering": 0.2,
+          "work-preferences": 0.2,
+          "operations": 0.2,
+          "finance": 0.2,
+          "product": 0.1,
+          "everyday": 0.1
+        },
+        "bodyMeanLength": 601.8333333333334,
+        "spanMeanLength": 258.6900584795322,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.15,
+          "5": 0.1,
+          "6": 0.05
+        }
+      }
+    },
+    "byNamespaceScale": {
+      "target:S300": {
+        "count": 160,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "bodyMeanLength": 629.26875,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.15,
+          "5": 0.1,
+          "6": 0.05
+        }
+      },
+      "foreign:S300": {
+        "count": 60,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "bodyMeanLength": 601.8333333333334,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.15,
+          "5": 0.1,
+          "6": 0.05
+        }
+      },
+      "target:S1000": {
+        "count": 480,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "bodyMeanLength": 616.125,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.15,
+          "5": 0.1,
+          "6": 0.05
+        }
+      },
+      "foreign:S1000": {
+        "count": 60,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "bodyMeanLength": 601.8333333333334,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.15,
+          "5": 0.1,
+          "6": 0.05
+        }
+      }
+    },
+    "templateShare": 0.5,
+    "spanOnlyGroupShare": 0.7578947368421053,
+    "spanCountMatch": {
+      "targets": {
+        "1": 0.19047619047619047,
+        "2": 0.2619047619047619,
+        "3": 0.23809523809523808,
+        "4": 0.15079365079365079,
+        "5": 0.09523809523809523,
+        "6": 0.06349206349206349
+      },
+      "distractors": {
+        "1": 0.23529411764705882,
+        "2": 0.20588235294117646,
+        "3": 0.29411764705882354,
+        "4": 0.14705882352941177,
+        "5": 0.11764705882352941,
+        "6": 0
+      }
+    },
+    "queryLanguages": {
+      "zh": 0.55,
+      "en": 0.3,
+      "mixed": 0.15
+    },
+    "hr2b": {
+      "S300": {
+        "bodyMean": 216.88125,
+        "receiptMean": 92.80263157894737,
+        "histogram": [
+          0.2,
+          0.25,
+          0.25,
+          0.15,
+          0.1,
+          0.05
+        ],
+        "bodyBands": [
+          0.3,
+          0.4,
+          0.3
+        ],
+        "receiptBands": [
+          0.3508771929824561,
+          0.3991228070175439,
+          0.25
+        ]
+      },
+      "S1000-extra": {
+        "bodyMean": 218.9375,
+        "receiptMean": 92.43859649122807,
+        "histogram": [
+          0.2,
+          0.25,
+          0.25,
+          0.15,
+          0.1,
+          0.05
+        ],
+        "bodyBands": [
+          0.3,
+          0.4,
+          0.3
+        ],
+        "receiptBands": [
+          0.34978070175438597,
+          0.40021929824561403,
+          0.25
+        ]
+      },
+      "placement": {
+        "target": {
+          "body": 0.45,
+          "first-receipt": 0.25,
+          "later-receipt": 0.3
+        },
+        "distractor": {
+          "body": 0.45,
+          "first-receipt": 0.25,
+          "later-receipt": 0.3
+        }
+      },
+      "filler": {
+        "sentences": 1080,
+        "ranges": 3840,
+        "semanticAudit": "W3-required"
+      }
+    },
+    "placement": {
+      "ok": false,
+      "errors": [
+        "dev:first-receipt:groups_minimum_30",
+        "dev:first-receipt:families_minimum_12",
+        "dev:later-receipt:groups_minimum_30",
+        "dev:later-receipt:families_minimum_12",
+        "dev:guard:C1:family_minimum",
+        "dev:guard:C2:family_minimum",
+        "dev:guard:C3:family_minimum",
+        "dev:guard:C4:family_minimum",
+        "dev:guard:C5:family_minimum",
+        "dev:guard:C7:family_minimum",
+        "test:guard:C1:family_minimum",
+        "test:guard:C2:family_minimum",
+        "test:guard:C4:family_minimum",
+        "test:guard:C5:family_minimum",
+        "test:guard:C6:family_minimum",
+        "test:guard:C7:family_minimum"
+      ],
+      "guardCategories": [
+        "C1",
+        "C2",
+        "C3",
+        "C4",
+        "C5",
+        "C6",
+        "C7"
+      ],
+      "splits": {
+        "dev": {
+          "first-receipt": {
+            "groups": 23,
+            "families": 10,
+            "categories": {
+              "C1": 2,
+              "C2": 5,
+              "C3": 2,
+              "C4": 4,
+              "C5": 2,
+              "C6": 4,
+              "C7": 3
+            }
+          },
+          "later-receipt": {
+            "groups": 21,
+            "families": 8,
+            "categories": {
+              "C1": 3,
+              "C2": 1,
+              "C3": 2,
+              "C4": 3,
+              "C5": 2,
+              "C6": 5,
+              "C7": 2
+            }
+          }
+        },
+        "test": {
+          "first-receipt": {
+            "groups": 43,
+            "families": 23,
+            "categories": {
+              "C1": 9,
+              "C2": 7,
+              "C3": 1,
+              "C4": 4,
+              "C5": 8,
+              "C6": 5,
+              "C7": 8
+            }
+          },
+          "later-receipt": {
+            "groups": 57,
+            "families": 20,
+            "categories": {
+              "C1": 6,
+              "C2": 7,
+              "C3": 11,
+              "C4": 8,
+              "C5": 7,
+              "C6": 8,
+              "C7": 3
+            }
+          }
+        }
+      }
+    }
+  },
+  "policy": {
+    "countTolerance": 0.1,
+    "distributionTolerance": 0.05,
+    "languages": {
+      "zh": 0.55,
+      "en": 0.3,
+      "mixed": 0.15
+    },
+    "counts": {
+      "S300": 160,
+      "extras": 320,
+      "foreign": 60
+    }
+  },
+  "version": "hr2b-fixture-v1"
+}
