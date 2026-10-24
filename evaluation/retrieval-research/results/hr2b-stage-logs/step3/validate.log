@@ -1,0 +1,374 @@
+(node:16977) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{
+  "ok": true,
+  "errors": [],
+  "statistics": {
+    "publicApi": {
+      "ok": true,
+      "checkedMemories": 540,
+      "incompatibilities": []
+    },
+    "split": {
+      "total": 140,
+      "dev": 46,
+      "devFraction": 0.32857142857142857,
+      "overallTotal": 160,
+      "overallDev": 51,
+      "overallDevFraction": 0.31875,
+      "categories": {
+        "C1": {
+          "total": 20,
+          "dev": 5,
+          "test": 15,
+          "devFamilies": 5,
+          "testFamilies": 15
+        },
+        "C2": {
+          "total": 20,
+          "dev": 6,
+          "test": 14,
+          "devFamilies": 6,
+          "testFamilies": 14
+        },
+        "C3": {
+          "total": 20,
+          "dev": 7,
+          "test": 13,
+          "devFamilies": 7,
+          "testFamilies": 13
+        },
+        "C4": {
+          "total": 20,
+          "dev": 8,
+          "test": 12,
+          "devFamilies": 8,
+          "testFamilies": 12
+        },
+        "C5": {
+          "total": 20,
+          "dev": 7,
+          "test": 13,
+          "devFamilies": 7,
+          "testFamilies": 13
+        },
+        "C6": {
+          "total": 20,
+          "dev": 6,
+          "test": 14,
+          "devFamilies": 6,
+          "testFamilies": 14
+        },
+        "C7": {
+          "total": 20,
+          "dev": 7,
+          "test": 13,
+          "devFamilies": 7,
+          "testFamilies": 13
+        }
+      }
+    },
+    "corpus": {
+      "S300": {
+        "count": 160,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "domains": {
+          "engineering": 0.25,
+          "work-preferences": 0.175,
+          "operations": 0.175,
+          "finance": 0.2,
+          "product": 0.15,
+          "everyday": 0.05
+        },
+        "bodyMeanLength": 607.81875,
+        "spanMeanLength": 241.20518867924528,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.3
+        }
+      },
+      "extras": {
+        "count": 320,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "domains": {
+          "engineering": 0.25,
+          "work-preferences": 0.175,
+          "operations": 0.175,
+          "finance": 0.2,
+          "product": 0.15,
+          "everyday": 0.05
+        },
+        "bodyMeanLength": 604.7125,
+        "spanMeanLength": 231.92099056603774,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.3
+        }
+      },
+      "foreign": {
+        "count": 60,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "domains": {
+          "engineering": 0.2,
+          "work-preferences": 0.2,
+          "operations": 0.2,
+          "finance": 0.2,
+          "product": 0.1,
+          "everyday": 0.1
+        },
+        "bodyMeanLength": 630.8833333333333,
+        "spanMeanLength": 224.73584905660377,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.3
+        }
+      }
+    },
+    "byNamespaceScale": {
+      "target:S300": {
+        "count": 160,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "bodyMeanLength": 607.81875,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.3
+        }
+      },
+      "foreign:S300": {
+        "count": 60,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "bodyMeanLength": 630.8833333333333,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.3
+        }
+      },
+      "target:S1000": {
+        "count": 480,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "bodyMeanLength": 605.7479166666667,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.3
+        }
+      },
+      "foreign:S1000": {
+        "count": 60,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "bodyMeanLength": 630.8833333333333,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.3
+        }
+      }
+    },
+    "templateShare": 0.5,
+    "spanOnlyGroupShare": 0.7979274611398963,
+    "spanCountMatch": {
+      "targets": {
+        "1": 0.16176470588235295,
+        "2": 0.2647058823529412,
+        "3": 0.25,
+        "4": 0.3235294117647059
+      },
+      "distractors": {
+        "1": 0.4166666666666667,
+        "2": 0.16666666666666666,
+        "3": 0.25,
+        "4": 0.16666666666666666
+      }
+    },
+    "queryLanguages": {
+      "zh": 0.5,
+      "en": 0.3,
+      "mixed": 0.2
+    },
+    "hr2b": {
+      "S300": {
+        "bodyMean": 216.78125,
+        "receiptMean": 92.86556603773585,
+        "histogram": [
+          0.2,
+          0.25,
+          0.25,
+          0.3
+        ],
+        "bodyBands": [
+          0.3,
+          0.4,
+          0.3
+        ],
+        "receiptBands": [
+          0.3490566037735849,
+          0.4009433962264151,
+          0.25
+        ]
+      },
+      "S1000-extra": {
+        "bodyMean": 218.603125,
+        "receiptMean": 92.46816037735849,
+        "histogram": [
+          0.2,
+          0.25,
+          0.25,
+          0.3
+        ],
+        "bodyBands": [
+          0.3,
+          0.4,
+          0.3
+        ],
+        "receiptBands": [
+          0.35023584905660377,
+          0.39976415094339623,
+          0.25
+        ]
+      },
+      "placement": {
+        "target": {
+          "body": 0.45,
+          "first-receipt": 0.25,
+          "later-receipt": 0.3
+        },
+        "distractor": {
+          "body": 0.45,
+          "first-receipt": 0.25,
+          "later-receipt": 0.3
+        }
+      },
+      "filler": {
+        "sentences": 1080,
+        "ranges": 3683,
+        "semanticAudit": "W3-required"
+      }
+    },
+    "placement": {
+      "ok": true,
+      "errors": [],
+      "guardCategories": [
+        "C1",
+        "C2",
+        "C3",
+        "C4",
+        "C5",
+        "C6",
+        "C7"
+      ],
+      "splits": {
+        "dev": {
+          "first-receipt": {
+            "groups": 19,
+            "families": 9,
+            "categories": {
+              "C1": 3,
+              "C2": 2,
+              "C3": 4,
+              "C4": 3,
+              "C5": 2,
+              "C6": 2,
+              "C7": 3
+            }
+          },
+          "later-receipt": {
+            "groups": 29,
+            "families": 10,
+            "categories": {
+              "C1": 2,
+              "C2": 4,
+              "C3": 3,
+              "C4": 5,
+              "C5": 6,
+              "C6": 3,
+              "C7": 4
+            }
+          }
+        },
+        "test": {
+          "first-receipt": {
+            "groups": 56,
+            "families": 25,
+            "categories": {
+              "C1": 8,
+              "C2": 8,
+              "C3": 5,
+              "C4": 7,
+              "C5": 9,
+              "C6": 10,
+              "C7": 7
+            }
+          },
+          "later-receipt": {
+            "groups": 49,
+            "families": 22,
+            "categories": {
+              "C1": 7,
+              "C2": 6,
+              "C3": 7,
+              "C4": 5,
+              "C5": 7,
+              "C6": 7,
+              "C7": 6
+            }
+          }
+        }
+      }
+    }
+  },
+  "policy": {
+    "countTolerance": 0.1,
+    "distributionTolerance": 0.05,
+    "languages": {
+      "zh": 0.55,
+      "en": 0.3,
+      "mixed": 0.15
+    },
+    "counts": {
+      "S300": 160,
+      "extras": 320,
+      "foreign": 60
+    }
+  },
+  "version": "hr2b-fixture-v1"
+}

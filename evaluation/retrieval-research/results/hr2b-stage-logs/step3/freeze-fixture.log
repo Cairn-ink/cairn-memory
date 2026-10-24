@@ -1,0 +1,1 @@
+{"ok":true,"files":31,"crossCheck":"filesystem-walk == git-ls-files-cached-and-others","gitExitCode":0}
