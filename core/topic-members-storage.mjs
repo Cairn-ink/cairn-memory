@@ -9,9 +9,10 @@ function validMetadata(row) {
 /** Each step makes one indexed physical visit and at most three point validations.
  * Only one candidate and its canonical attribution survive a step/call. */
 export function createTopicMembersStorage(db) {
-  const q = sql => db.prepare(sql);
+  const q = sql => db.prepare(sql.replace(/\b([a-z_]+)([>=]+)\?/g, '$1 COLLATE BINARY$2?')
+    .replace(/ORDER BY ([a-z_]+)/g, 'ORDER BY $1 COLLATE BINARY'));
   const moc = q('SELECT id,owner_id,scope,project_id,revision,level FROM mocs WHERE id=?');
-  const nextSQL = `SELECT id,revision,kind,deleted,currentness,review_state FROM memories INDEXED BY index_memory_keyset
+  const nextSQL = `SELECT id,owner_id,scope,project_id,revision,kind,deleted,currentness,review_state FROM memories INDEXED BY index_memory_keyset
     WHERE owner_id=? AND scope=? AND project_id=? AND id>? ORDER BY id LIMIT 1`;
   const next = q(nextSQL), first = q(nextSQL.replace('id>?', 'id>=?'));
   const ref = q(`SELECT moc_id,moc_revision,memory_revision FROM moc_memory_refs INDEXED BY memory_moc_refs
@@ -42,7 +43,7 @@ export function createTopicMembersStorage(db) {
       s.started = true;
       if (!row) { s.done = true; return; }
       s.after = row.id;
-      if (row.deleted || row.currentness !== 'current' || !['none', 'confirmed'].includes(row.review_state) ||
+      if (!same(row, n) || row.deleted || row.currentness !== 'current' || !['none', 'confirmed'].includes(row.review_state) ||
           !projected(pm, g, { revision: row.revision }, row.id)) return;
       validMetadata(row);
       if (!memberKinds.includes(row.kind)) fail('unsupported_database');

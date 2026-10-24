@@ -1,7 +1,7 @@
 import { parentPort, workerData } from 'node:worker_threads';
 import { lstatSync } from 'node:fs';
 import { createTopicTokens } from './topic-snapshot.mjs';
-import { createTopicMembersStorage } from './topic-members-storage.mjs';
+import { createTopicSession } from './topic-members-session.mjs';
 import { createTopicMemberReader } from './topic-members-reader.mjs';
 import { randomBytes } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
@@ -11,9 +11,10 @@ import { createTopicOverviewStorage } from './topic-overview-storage.mjs';
 import { safeReaderFailure } from './topic-overview-input.mjs';
 import { fail } from './validation.mjs';
 
-let connection, storage, traversal, memberReader, openedSchema;
-const connections = new Map();
+let connection, storage, traversal, openedSchema;
 const tokens = createTopicTokens();
+const topicSession = createTopicSession(workerData.path);
+const memberReader = createTopicMemberReader({ ...topicSession, tokens });
 function configuration(db) {
   return { version: db.prepare('PRAGMA user_version').get().user_version,
     cookie: db.prepare('PRAGMA schema_version').get().schema_version,
@@ -53,41 +54,14 @@ function transaction(work) {
   try { const value = work(); connection.db.exec('COMMIT'); return value; }
   catch (error) { connection.db.exec('ROLLBACK'); throw error; }
 }
-function open(topicMembers = false, continuation = false) {
-  let entry = connections.get(topicMembers);
-  if (entry && topicMembers) {
-    let changed = false;
-    try {
-      entry.connection.assertFile();
-      changed = JSON.stringify(configuration(entry.connection.db)) !== JSON.stringify(entry.schema);
-    } catch (error) {
-      if (!['cursor_stale', 'database_not_found', 'unsafe_database_file'].includes(error.code)) throw error;
-      changed = true;
-    }
-    if (changed) {
-      entry.connection.db.close(); connections.delete(true); entry = undefined; memberReader = undefined;
-      if (traversal?.originToken) traversal = undefined;
-      if (continuation) fail('cursor_stale');
-    }
-  }
-  if (!entry) {
-    const opened = openReadDatabase(workerData.path, { topicMembers });
-    try {
-      entry = { connection: opened, storage: createTopicOverviewStorage(opened.db),
-        schema: configuration(opened.db) };
-      connections.set(topicMembers, entry);
-    } catch (error) {
-      opened.db.close();
-      if (error?.code === 'ERR_SQLITE_ERROR' && [5, 6].includes(error.errcode & 255)) throw error;
-      fail('unsupported_database');
-    }
-  }
-  connection = entry.connection; storage = entry.storage; openedSchema = entry.schema;
-  if (topicMembers && !memberReader) memberReader = createTopicMemberReader({ storage: createTopicMembersStorage(connection.db),
-    snapshot: namespace => { connection.assertFile(); return storage.snapshot(namespace); }, transaction, tokens, originBinding });
+function open() {
+  if (connection) return;
+  const opened = openReadDatabase(workerData.path);
+  try { storage = createTopicOverviewStorage(opened.db); openedSchema = configuration(opened.db); connection = opened; }
+  catch (error) { opened.db.close(); throw error; }
 }
-async function read(request) {
-  open(Boolean(request.snapshotVersion), Boolean(request.cursor));
+async function readLegacy(request) {
+  open();
   const { cursor, ...bound } = request, binding = JSON.stringify(bound);
   if (cursor) {
     if (!traversal) fail('cursor_stale');
@@ -147,10 +121,78 @@ async function read(request) {
   state.lastInput = cursor; state.lastOutput = success(value); state.nextCursor = value.nextCursor;
   return state.lastOutput;
 }
+async function readOptin(request) {
+  let used = 0;
+  const charge = n => { used += n; if (used > request.workLimit) fail('reader_failed'); };
+  topicSession.prepare({ charge, request });
+  const { cursor, ...bound } = request, binding = JSON.stringify(bound);
+  function fence(state) {
+    charge(4);
+    let captured;
+    try { captured = topicSession.snapshot(request.namespace); }
+    catch (error) { if (state && error.code === 'index_unavailable') fail('cursor_stale'); throw error; }
+    if (state && JSON.stringify(captured) !== JSON.stringify(state.snapshot)) fail('cursor_stale');
+    const origin = topicSession.originBinding(request.namespace, captured);
+    if (state) tokens.verifyOrigin(state.originToken, origin);
+    return { captured, origin };
+  }
+  if (cursor) {
+    if (!traversal) fail('cursor_stale');
+    if (binding !== traversal.binding) fail('invalid_cursor');
+    topicSession.transaction(() => fence(traversal));
+    if (cursor === traversal.lastInput) return traversal.lastOutput;
+    if (cursor !== traversal.nextCursor) fail('cursor_stale');
+  } else {
+    const { captured, origin } = topicSession.transaction(() => fence());
+    charge(1);
+    traversal = { binding, snapshot: captured, originToken: tokens.issueOrigin(origin),
+      data: topicSession.overviewCreate(request.namespace, request, captured), offset: 0, nextCursor: null };
+  }
+  const state = traversal;
+  charge(1);
+  try {
+    while (!state.items && used + 5 <= request.workLimit - 4) {
+      const done = topicSession.transaction(() => {
+        fence(state);
+        const start = performance.now(); let quantum = 4;
+        while (used < request.workLimit - 4 && quantum < 64 && performance.now() - start < 5) {
+          charge(1); quantum++;
+          if (state.data.scan.next().done) return true;
+        }
+        return false;
+      });
+      if (done) { state.items = state.data.finish(); break; }
+      await yieldTurn();
+    }
+  } catch (error) {
+    if (error.code !== 'state_limit') throw error;
+    topicSession.transaction(() => fence(state)); traversal = undefined;
+    return success({ snapshot: publicSnapshot(state, request), items: [], totals: null,
+      coverage: { complete: false, countsComplete: false, reason: 'state_limit' }, nextCursor: null });
+  }
+  const value = { snapshot: publicSnapshot(state, request), items: [], totals: state.items ? state.data.totals : null,
+    coverage: { complete: false, countsComplete: Boolean(state.items), reason: 'work_limit' }, nextCursor: token() };
+  if (state.items) {
+    value.coverage.reason = 'node_limit';
+    while (value.items.length < request.nodeLimit && state.offset + value.items.length < state.items.length) {
+      value.items.push(state.items[state.offset + value.items.length]);
+      if (Buffer.byteLength(JSON.stringify(success(value))) > request.maxBytes) {
+        value.items.pop(); value.coverage.reason = 'byte_limit'; break;
+      }
+    }
+    if (!value.items.length && state.offset < state.items.length) fail('context_item_too_large');
+    state.offset += value.items.length;
+    if (state.offset === state.items.length) { value.coverage = { complete: true, countsComplete: true, reason: null }; value.nextCursor = null; }
+  }
+  if (Buffer.byteLength(JSON.stringify(success(value))) > request.maxBytes) fail('context_item_too_large');
+  topicSession.transaction(() => fence(state)); topicSession.accept(state.data);
+  state.lastInput = cursor; state.lastOutput = success(value); state.nextCursor = value.nextCursor;
+  return state.lastOutput;
+}
 parentPort.on('message', async request => {
   try {
-    if (request.method === 'members') { open(true, Boolean(request.request.cursor)); parentPort.postMessage(await memberReader.read(request.request, request.deadlineAt)); }
-    else parentPort.postMessage(await read(request));
+    if (request.method === 'members') parentPort.postMessage(await memberReader.read(request.request, request.deadlineAt));
+    else parentPort.postMessage(await (request.snapshotVersion ? readOptin(request) : readLegacy(request)));
   }
   catch (error) { if (request.method !== 'members') traversal = undefined; parentPort.postMessage(safeReaderFailure(error)); }
 });

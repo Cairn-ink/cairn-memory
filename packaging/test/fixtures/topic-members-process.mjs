@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { openSync, closeSync, readFileSync, mkdtempSync } from 'node:fs';
+import { openSync, closeSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join, dirname, delimiter } from 'node:path';
 import { tmpdir } from 'node:os';
 import { commandInvocation } from '../../build.mjs';
@@ -9,17 +9,21 @@ import { commandInvocation } from '../../build.mjs';
 export function runMemberProcess(executable, args, cwd, userconfig, extraEnv = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'member-process-'));
   const out = join(directory, 'stdout'), err = join(directory, 'stderr');
-  const stdout = openSync(out, 'w', 0o600), stderr = openSync(err, 'w', 0o600);
-  let result;
+  let stdout, stderr;
   try {
+    stdout = openSync(out, 'w', 0o600); stderr = openSync(err, 'w', 0o600);
     const invocation = commandInvocation(executable, args);
-    result = spawnSync(invocation.executable, invocation.args, { cwd, timeout: 120000,
+    const result = spawnSync(invocation.executable, invocation.args, { cwd, timeout: 120000,
       stdio: ['ignore', stdout, stderr], env: { PATH: dirname(process.execPath) + delimiter + (process.env.PATH ?? ''),
         ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
         TMPDIR: directory, TMP: directory, TEMP: directory,
         npm_config_userconfig: userconfig, npm_config_audit: 'false', npm_config_fund: 'false', ...extraEnv } });
-  } finally { closeSync(stdout); closeSync(stderr); }
-  return { ...result, stdout: readFileSync(out, 'utf8'), stderr: readFileSync(err, 'utf8') };
+    return { ...result, stdout: readFileSync(out, 'utf8'), stderr: readFileSync(err, 'utf8') };
+  } finally {
+    try { if (stdout !== undefined) closeSync(stdout); }
+    finally { try { if (stderr !== undefined) closeSync(stderr); }
+      finally { rmSync(directory, { recursive: true, force: true }); } }
+  }
 }
 export function memberCommand(executable, args, cwd, userconfig) {
   const result = runMemberProcess(executable, args, cwd, userconfig);

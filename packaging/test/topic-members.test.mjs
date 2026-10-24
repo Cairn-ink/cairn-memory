@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
-import {readFileSync,readdirSync,mkdirSync,writeFileSync,existsSync,copyFileSync} from 'node:fs';
+import {readFileSync,readdirSync,mkdirSync,writeFileSync,existsSync,copyFileSync,rmSync} from 'node:fs';
 import {join,dirname} from 'node:path';
 import {homedir} from 'node:os';
 import {fileURLToPath} from 'node:url';
@@ -45,7 +45,8 @@ test('E1M-09 installed offline archive, exact manifest/closure bytes, physical v
     if(result.error||result.status!==0)throw Error(JSON.stringify({exe,args,code:result.error?.code,error:result.error?.message,exitCode:result.status,stderr:result.stderr}));
     return result.stdout;
   };
-  const artifact=buildArtifact({runCommand:command});
+  let artifactDirectory;
+  const artifact=buildArtifact({runCommand:command,ownDirectory:directory=>{artifactDirectory=directory;ws.defer(()=>rmSync(directory,{recursive:true,force:true}));}});
   writeFileSync(join(ws.path,'package.json'),JSON.stringify({name:'synthetic-installed-members',private:true}));
   command('npm',['install','--prefix',ws.path,'--offline','--ignore-scripts','--no-audit','--no-fund',artifact.artifactPath],ws.path,artifact.userconfig);
   const installed=join(ws.path,'node_modules',packageName);
@@ -70,5 +71,5 @@ test('E1M-09 installed offline archive, exact manifest/closure bytes, physical v
   assert.equal(child.error,undefined);assert.equal(child.signal,null);assert.equal(child.status,0,child.stderr);
   const report=JSON.parse(child.stdout);assert.equal(report.importedCore,join(installed,'core/index.mjs'));assert.equal(report.workersClosed,true);assert.equal(report.outcomes.length,4);
   t.diagnostic(JSON.stringify({...report,childCode:child.status,childSignal:child.signal,archiveFiles:archived.length,closureFiles:graph.required.length,memberModules:modules.length,docs:docs.length,setDifferences:[]}));
-  await ws.cleanup();assert.equal(existsSync(ws.path),false);
+  await ws.cleanup();assert.equal(existsSync(ws.path),false);assert.equal(existsSync(artifactDirectory),false);
 });

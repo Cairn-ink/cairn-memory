@@ -39,7 +39,7 @@ export function openMemoryReader(input) {
     worker = instance;
     instance.on('message', result => {
       if (worker !== instance || !pending) return;
-      if (result?.error?.code === 'read_timeout') void failed(instance, 'read_timeout');
+      if ((result?.ok && pending.expiresAt !== undefined && performance.now() >= pending.expiresAt) || result?.error?.code === 'read_timeout') void failed(instance, 'read_timeout');
       else finish(pending, result);
     });
     instance.on('error', () => { void failed(instance, 'reader_failed'); });
@@ -57,6 +57,7 @@ export function openMemoryReader(input) {
     return new Promise(resolve => {
       const slot = { resolve }; pending = slot;
       const duration = members ? request.deadlineMs : 5000;
+      if (members) slot.expiresAt = started + duration;
       slot.deadline = setTimeout(() => {
         void (async () => { await stop(); finish(slot, readerFailure('read_timeout')); })();
       }, members ? Math.max(0, duration - (performance.now() - started)) : 5000);

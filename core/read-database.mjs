@@ -18,7 +18,7 @@ function identity(path) {
   }
   return stat;
 }
-export function openReadDatabase(path, { contextRead = false, topicMembers = false, preflight } = {}) {
+export function openReadDatabase(path, { contextRead = false, topicMembers = false, deferTopicValidation = false, preflight } = {}) {
   const initial = identity(path);
   preflight?.();
   const db = new DatabaseSync(path, { readOnly: true });
@@ -78,7 +78,9 @@ export function openReadDatabase(path, { contextRead = false, topicMembers = fal
     if (metadataKey.length !== 1 || metadataKey[0].name !== 'singleton' ||
         metadataKey[0].type !== 'INTEGER' || metadataKey[0].pk !== 1) fail('unsupported_database');
     };
-    if (contextRead) readTransaction(db, validate); else validate();
+    if (!(topicMembers && deferTopicValidation)) {
+      if (contextRead) readTransaction(db, validate); else validate();
+    }
     return { db, assertFile() {
       const stat = identity(path);
       if (stat.dev !== initial.dev || stat.ino !== initial.ino) fail('cursor_stale');

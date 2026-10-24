@@ -241,3 +241,16 @@ See the [frozen member contract](plans/topic-overview-member-pages.md).
 Performance/overlap measurements are opt-in: `npm run measure:topic-members`.
 The primary schedules them serially on Node 22.16.0 and 24.15.0 and records
 E1-C's chosen lock policy and thresholds before performance acceptance.
+
+
+Member and opt-in snapshot reads require UTF-8 database encoding and BINARY
+comparison semantics on the consumed namespace and identifier columns. Other
+encodings or comparison collations return `unsupported_database`; legacy
+overview opening is unchanged. Initialization walks schema metadata with a
+bounded keyset checkpoint and validates one seek/column row at a time under
+`workLimit`. A work-only page can therefore represent initialization progress
+before member enumeration begins. It never implies an empty selection.
+
+Cached member replay must finish its fence and delivery checks within the
+call deadline. A call that cannot advance a checkpoint before its deadline
+returns `read_timeout` instead of minting another unchanged deadline cursor.

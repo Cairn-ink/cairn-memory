@@ -8,7 +8,7 @@ const success = value => ({ ok: true, value });
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 /** Worker-owned traversal. Dependencies are explicit for deterministic boundary tests. */
 export function createTopicMemberReader({ storage, snapshot, transaction, tokens, originBinding,
-  now = () => performance.now(), yieldQuantum = yieldTurn, observe = () => {} }) {
+  now = () => performance.now(), yieldQuantum = yieldTurn, observe = () => {}, prepare = () => {}, accept = () => {} }) {
   let traversal;
   async function read(request, deadlineAt = now() + request.deadlineMs) {
     const { cursor, ...bound } = request, binding = JSON.stringify(bound);
@@ -21,7 +21,7 @@ export function createTopicMemberReader({ storage, snapshot, transaction, tokens
     }
     const prior = traversal;
     let state = cursor ? { ...prior, data: structuredClone(prior.data) } : undefined;
-    let used = cursor ? 2 : 0, quantum = 0;
+    let used = cursor ? 2 : 0, quantum = 0, advanced = false;
     const charge = units => { used += units; quantum += units; observe({ used, units }); };
     // Fence metadata/point visits fit three bounded validation units, plus
     // one token step. Reserve all four final units, also at workLimit=16.
@@ -48,9 +48,13 @@ export function createTopicMemberReader({ storage, snapshot, transaction, tokens
         throw error;
       }
     }
+    const inTime = () => { if (now() >= deadlineAt) fail('read_timeout'); };
     try {
+      inTime();
+      prepare({ charge, request, deadlineAt });
+      inTime();
       const initial = transaction(fence);
-      if (cursor && cursor === state.lastInput) return state.lastOutput;
+      if (cursor && cursor === state.lastInput) { inTime(); return state.lastOutput; }
       if (!state) {
         charge(1);
         const publicSnapshot = request.expectedSnapshot ?? { indexRevision: initial.captured.indexRevision,
@@ -98,7 +102,7 @@ export function createTopicMemberReader({ storage, snapshot, transaction, tokens
             if (!finalFits) fail('context_item_too_large');
             state.data.held = state.data.pending; state.data.heldLimit = limitFits;
           }
-          state.data.pending = null;
+          state.data.pending = null; advanced = true;
         }
         if (state.data.done) { reason = null; break; }
         if (used + 5 > request.workLimit - 4) { reason = 'work_limit'; break; }
@@ -108,7 +112,7 @@ export function createTopicMemberReader({ storage, snapshot, transaction, tokens
           quantum = 0;
           fence();
           while (used < request.workLimit - 4 && quantum < 64 && now() - started < 5 && now() < deadlineAt - 5) {
-            charge(1); storage.step(state.data, request, state.captured);
+            charge(1); storage.step(state.data, request, state.captured); advanced = true;
             if (state.data.pending || state.data.done) break;
           }
         });
@@ -116,19 +120,20 @@ export function createTopicMemberReader({ storage, snapshot, transaction, tokens
         if (Buffer.byteLength(JSON.stringify(state)) > MEMBER_STATE_BYTES) fail('state_limit');
         await yieldQuantum();
       }
+      if (reason === 'deadline' && !advanced) fail('read_timeout');
       value.coverage = { complete: reason === null, reason };
       value.status = reason === null || reason === 'limit' ? 'page' : 'partial';
       if (reason === null) value.nextCursor = null;
       if (!fits()) fail('context_item_too_large');
       transaction(fence);
-      if (now() >= deadlineAt) fail('read_timeout');
+      inTime();
       state.lastInput = cursor; state.lastOutput = success(value); state.nextCursor = value.nextCursor;
-      traversal = state;
+      traversal = state; accept(state.data);
       return state.lastOutput;
     } catch (error) {
       if (error.code === 'ERR_OUT_OF_RANGE') fail('unsupported_database');
       if (error.code === 'state_limit') {
-        transaction(fence);
+        inTime(); transaction(fence); inTime();
         traversal = undefined;
         return success({ version: 'topic-members-v1', status: 'partial',
           namespace: { ...request.namespace, projectId: request.namespace.scope === 'personal' ? null : request.namespace.projectId },
