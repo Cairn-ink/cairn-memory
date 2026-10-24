@@ -40,8 +40,8 @@ are not modelled faithfully.
 
 ## HR-2b runtime input profile
 
-HR-2b v1 is frozen at `c546bfc1`. No HR-2b fixture or ranking hash is
-invented here: they do not exist at tooling time. At run time,
+HR-2b v1.1 is frozen at `d3a6e24f`. Fixture version remains `hr2b-fixture-v1`;
+no fixture or ranking hashes are invented here. At run time,
 `fixtures-hr2b/FROZEN.md` authenticates its complete listed manifest (including
 at least the seven `hr1-*.json` schema files). The corpus version selects
 `hr2b-fixture-v1`, and all version-bearing products must agree.
@@ -52,6 +52,22 @@ SHA-256 tables. Cells embed these manifests, configuration, placement quotas,
 represented guard categories, paths and hashes; scoring/reporting re-read and
 authenticate them. Keep frozen fixture/ranking paths available throughout.
 The HR-2 JSON manifest above remains authoritative only for HR-2.
+
+The amended profile allows 1–4 receipts with histogram `[.20,.25,.25,.30]`.
+For each of first-receipt and later-receipt, test requires ≥30 groups / ≥12
+families; dev requires ≥4 families and no group minimum. Per-category counts
+and the frozen guard-category union remain descriptive; no per-category
+minimum applies. The confirmatory later-receipt guard uses
+`pooled-group-coverage-v1`: covered-group count difference / group occurrences,
+in percentage points, with N contributing families sampled N times with
+replacement per draw (10,000 draws, seed `hr2b-bootstrap-v1`, N≥10,
+interpolated 2.5/97.5 percentiles, no category redraw). Any invalid draw is
+Inconclusive. Absolute guard coverage and ranking ceiling are pooled with
+the same denominator; zero pooled ceiling is an Inconclusive gate. The
+per-category delta table has point/groups/families only, no CI or decision.
+The primary contrast and other strata retain category-macro statistics and
+the +3/−5 decision thresholds remain unchanged. Calibration probes 1–4
+receipts; the overhead constants are unchanged.
 
 HR-2b ranking commands explicitly select `--fixture-version hr2b-fixture-v1`
 before fixture loading; this bypasses only the HR-1 selection branch and is

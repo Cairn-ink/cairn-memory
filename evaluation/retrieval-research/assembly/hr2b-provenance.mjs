@@ -49,7 +49,11 @@ export function validateHR2bScoredCell(cell, replay) {
     if (!stratum || !Array.isArray(stratum.queries)) fail('hr2b_placement_strata_missing');
     if (placement === 'later-receipt') {
       const represented = stratum.representedCategories;
-      if (!equal(represented, categories)) fail('hr2b_guard_category_set');
+      // The frozen union is descriptive. A category may contribute zero rows
+      // in this split; authenticate actual membership without imposing a floor.
+      const expected = categories.filter(category => authenticated.labels.queries.some(label =>
+        !label.dropped && label.split === run.split && label.category === category && label.groups.some(group => group.placement === placement)));
+      if (!equal(represented, expected)) fail('hr2b_guard_category_set');
     }
   }
 }

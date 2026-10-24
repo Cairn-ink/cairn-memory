@@ -9,7 +9,7 @@ import { runCli } from './fixtures-tooling/cli.mjs';
 import { HR2B, authenticateHR2bFixture, loadHR2bRankings, authenticateHR2bRanking, parseManifest } from '../assembly/hr2b-profile.mjs';
 import { runAssembly } from '../assembly/run.mjs';
 import { scoreDirectory, scoreCell } from '../assembly/score.mjs';
-import { buildReport, reportMarkdown } from '../assembly/report.mjs';
+import { buildReport, reportMarkdown, statisticsRows } from '../assembly/report.mjs';
 import { validateScoredCell } from '../assembly/provenance.mjs';
 import { decisionHR2b, primaryHR2b, compareHR2bCells } from '../assembly/hr2b-report.mjs';
 import { calibration } from '../assembly/calibrate-host-v2.mjs';
@@ -18,25 +18,129 @@ import { authenticateHostV2 } from '../assembly/host-v2.mjs';
 import { countTokens } from '../assembly/counter.mjs';
 import { validateOutputPath, validateOutputPaths } from '../assembly/output-paths.mjs';
 import { sourceIdentity } from '../assembly/identity.mjs';
+import { pooledGuardComparison, POOLED_GUARD_STATISTIC } from '../lib/pooled-coverage.mjs';
+import { seededRandom } from '../tools/split.mjs';
+import { clusterBootstrap, percentile } from '../lib/stats.mjs';
 
 const compare = (point, ci, status = 'ok') => ({ status, bootstrap: { status, point, ci } });
+const guardCompare = (...args) => ({ ...compare(...args), statistic: POOLED_GUARD_STATISTIC });
+const pooledOptions = { seed: HR2B.seed, resamples: 10000, minimumFamilies: 10, categories: ['C1', 'C2', 'C3'] };
+function pooledToy(families = 2) {
+  const baseline = Array.from({ length: families }, (_, i) => ({ id: `q${i}`, family: `f${String(i).padStart(2, '0')}`,
+    category: i % 2 ? 'C3' : 'C1', groupCount: i % 2 ? 6 : 2, coveredGroups: i % 2 ? 1 : 2, ceiling: i % 2 ? 5 / 6 : 1 }));
+  const candidate = baseline.map((row, i) => ({ ...row, coveredGroups: i % 2 ? 4 : 0 }));
+  return { baseline, candidate };
+}
 test('HR-2b primary selector and every §4 decision outcome and Inconclusive gate', () => {
-  const gates = { quotasOK: true, guardCeiling: .1 }, main = compare(3, [.01, 6]), guard = compare(-3, [-5, -1]);
+  const gates = { quotasOK: true, guardCeiling: .1 }, main = compare(3, [.01, 6]), guard = guardCompare(-3, [-5, -1]);
   assert.equal(decisionHR2b(main, guard, gates), 'adopt');
   assert.equal(decisionHR2b(compare(0, [-2, 2.99]), guard, gates), 'keep');
-  assert.equal(decisionHR2b(main, compare(-7, [-9, -5.01]), gates), 'keep');
+  assert.equal(decisionHR2b(main, guardCompare(-7, [-9, -5.01]), gates), 'keep');
   for (const [p, g, gate] of [
     [compare(2.99, [1, 4]), guard, gates], [compare(3, [0, 6]), guard, gates],
-    [compare(0, [-2, 3]), guard, gates], [main, compare(-4, [-5.01, -1]), gates],
+    [compare(0, [-2, 3]), guard, gates], [main, guardCompare(-4, [-5.01, -1]), gates],
     [compare(1, [-2, 4]), guard, gates], [main, guard, { ...gates, quotasOK: false }],
     [main, guard, { ...gates, guardCeiling: 0 }], [main, guard, { ...gates, guardCeiling: null }],
-    [compare(3, [1, 6], 'inconclusive'), guard, gates], [main, compare(-1, [-2, 0], 'inconclusive'), gates],
+    [compare(3, [1, 6], 'inconclusive'), guard, gates], [main, guardCompare(-1, [-2, 0], 'inconclusive'), gates],
     [null, guard, gates], [main, null, gates], [compare(NaN, [0, 1]), guard, gates],
-    [main, compare(-1, [null, 0]), gates], [compare(3, [4, 1]), guard, gates],
+    [main, guardCompare(-1, [null, 0]), gates], [compare(3, [4, 1]), guard, gates],
+    [main, compare(-3, [-5, -1]), gates], [main, { ...guard, statistic: 'category-macro' }, gates],
   ]) assert.equal(decisionHR2b(p, g, gate), 'inconclusive');
   const run = { split: 'test', scale: 'S1000', ranking: 'A3--bge-m3', overhead: 'host-v2', budget: 1500 };
   assert.equal(primaryHR2b(run), true);
   for (const change of [{ split: 'dev' }, { scale: 'S300' }, { ranking: 'A1' }, { overhead: 0 }, { budget: 1000 }]) assert.equal(primaryHR2b({ ...run, ...change }), false);
+});
+
+test('pooled guard hand example uses group occurrences and has descriptive categories without intervals', () => {
+  const { baseline, candidate } = pooledToy();
+  const result = pooledGuardComparison(baseline, candidate, pooledOptions);
+  // A: 2 groups, 2 -> 0 covered. B: 6 groups, 1 -> 4 covered.
+  // Delta = (4 - 3) / 8 * 100 = +12.5pp, rather than category macro -25pp.
+  assert.equal(result.bootstrap.point, 12.5);
+  assert.equal(result.absolute.baseline.coverage, 3 / 8);
+  assert.equal(result.absolute.candidate.coverage, 4 / 8);
+  assert.equal(result.absolute.baseline.ceilingCoveredGroups, 7);
+  assert.equal(result.absolute.baseline.ceiling, 7 / 8);
+  assert.equal(result.absolute.baseline.families, 2); assert.equal(result.absolute.baseline.categoryCount, 2);
+  assert.deepEqual(result.absolute.baseline.categoryCounts, { C1: { queries: 1, groups: 2 }, C2: { queries: 0, groups: 0 }, C3: { queries: 1, groups: 6 } });
+  assert.deepEqual(result.descriptive, [
+    { category: 'C1', point: -100, groups: 2, families: 1 },
+    { category: 'C2', point: null, groups: 0, families: 0 },
+    { category: 'C3', point: 50, groups: 6, families: 1 },
+  ]);
+  assert.ok(result.descriptive.every(row => !Object.hasOwn(row, 'ci') && !Object.hasOwn(row, 'decision')));
+  assert.equal(result.status, 'inconclusive'); assert.equal(result.bootstrap.reason, 'too_few_families');
+  assert.equal(result.bootstrap.ci, null); assert.equal(result.bootstrap.accepted, 0);
+});
+
+test('pooled family bootstrap recomputes denominators with full family multiplicity, deterministically', () => {
+  const { baseline, candidate } = pooledToy(10);
+  baseline.push({ id: 'extra', family: 'f00', category: 'C3', groupCount: 4, coveredGroups: 2, ceiling: .75 });
+  candidate.push({ ...baseline.at(-1), coveredGroups: 1 });
+  const result = pooledGuardComparison(baseline, candidate, pooledOptions);
+  assert.equal(result.status, 'ok'); assert.equal(result.statistic, POOLED_GUARD_STATISTIC);
+  assert.equal(result.bootstrap.point, 4 / 44 * 100); assert.equal(result.bootstrap.families, 10);
+  assert.equal(result.bootstrap.accepted, 10000); assert.equal(result.bootstrap.rejected, 0); assert.equal(result.bootstrap.attempts, 10000);
+  assert.deepEqual(result.bootstrap.endpoints, [.025, .975]); assert.equal(result.bootstrap.confidence, .95);
+  // Independent reference draws retain every query row of a selected family.
+  const random = seededRandom('hr2b-bootstrap-v1'), samples = [];
+  for (let draw = 0; draw < 10000; draw++) {
+    let groups = 0, difference = 0;
+    for (let i = 0; i < 10; i++) {
+      const family = `f${String(Math.floor(random() * 10)).padStart(2, '0')}`;
+      for (const row of baseline.filter(row => row.family === family)) {
+        groups += row.groupCount; difference += candidate.find(other => other.id === row.id).coveredGroups - row.coveredGroups;
+      }
+    }
+    samples.push(difference / groups * 100);
+  }
+  samples.sort((a, b) => a - b);
+  assert.deepEqual(result.bootstrap.ci, [.025, .975].map(p => percentile(samples, p)));
+  assert.deepEqual(pooledGuardComparison(baseline, candidate, pooledOptions), result);
+  assert.deepEqual(pooledGuardComparison([...baseline].reverse(), [...candidate].reverse(), pooledOptions), result);
+});
+
+test('pooled minimum counts stratum families, with no category floor or category redraw', () => {
+  const { baseline, candidate } = pooledToy(10);
+  for (const rows of [baseline, candidate]) rows.forEach((row, i) => { row.category = i ? 'C3' : 'C1'; });
+  const result = pooledGuardComparison(baseline, candidate, pooledOptions);
+  assert.equal(result.status, 'ok'); assert.deepEqual(result.bootstrap.familyCounts, { C1: 1, C2: 0, C3: 9 });
+  assert.equal(result.bootstrap.accepted, 10000); assert.equal(result.bootstrap.attempts, 10000); assert.equal(result.bootstrap.rejected, 0);
+  const small = pooledGuardComparison(baseline.slice(0, 9), candidate.slice(0, 9), pooledOptions);
+  assert.equal(small.bootstrap.reason, 'too_few_families'); assert.equal(small.bootstrap.families, 9);
+});
+
+test('pooled guard refuses malformed pairs, nonfinite/count/ceiling inputs and category trimming', () => {
+  for (const change of [
+    (a, b) => { b.pop(); }, (a, b) => { b[0].family = 'other'; },
+    (a, b) => { b[0].groupCount++; }, (a, b) => { b[0].coveredGroups = NaN; },
+    (a, b) => { a[0].groupCount = b[0].groupCount = Infinity; },
+    (a, b) => { a[0].groupCount = b[0].groupCount = 0; a[0].coveredGroups = b[0].coveredGroups = 0; },
+    (a, b) => { b[0].coveredGroups = -1; }, (a, b) => { b[0].coveredGroups = .5; },
+    (a, b) => { b[0].coveredGroups = 3; }, (a, b) => { a[0].ceiling = NaN; },
+    (a, b) => { a[0].ceiling = b[0].ceiling = .3; }, (a, b) => { b[0].ceiling = 0; },
+  ]) {
+    const { baseline, candidate } = pooledToy(10); change(baseline, candidate);
+    assert.throws(() => pooledGuardComparison(baseline, candidate, pooledOptions), /paired_query|invalid_pooled|pooled_ceiling_mismatch/);
+  }
+  const { baseline, candidate } = pooledToy(10);
+  assert.throws(() => pooledGuardComparison(baseline, candidate, { ...pooledOptions, categories: ['C1'] }), /invalid_pooled_counts/);
+  for (const options of [{ resamples: 0 }, { minimumFamilies: 0 }, { seed: '' }, { categories: ['C1', 'C1'] }])
+    assert.throws(() => pooledGuardComparison(baseline, candidate, { ...pooledOptions, ...options }), /invalid_pooled_bootstrap_options/);
+});
+
+test('decision consumes a pooled guard CI and pooled ceiling while retaining every outcome', () => {
+  const baseline = Array.from({ length: 10 }, (_, i) => ({ id: `q${i}`, family: `f${i}`, category: 'C1', groupCount: 1000, coveredGroups: 30, ceiling: 1 }));
+  const candidate = baseline.map(row => ({ ...row, coveredGroups: 0 }));
+  const guard = pooledGuardComparison(baseline, candidate, pooledOptions);
+  const gates = { quotasOK: true, guardCeiling: guard.absolute.baseline.ceiling };
+  assert.equal(decisionHR2b(compare(3, [1, 5]), guard, gates), 'adopt');
+  assert.equal(decisionHR2b(compare(0, [-1, 2]), guard, gates), 'keep');
+  const loss = pooledGuardComparison(baseline.map(row => ({ ...row, coveredGroups: 70 })), candidate, pooledOptions);
+  assert.equal(decisionHR2b(compare(4, [1, 6]), loss, gates), 'keep');
+  assert.equal(decisionHR2b(compare(2, [1, 5]), guard, gates), 'inconclusive');
+  const zero = pooledGuardComparison(baseline.map(row => ({ ...row, coveredGroups: 0, ceiling: 0 })), candidate.map(row => ({ ...row, ceiling: 0 })), pooledOptions);
+  assert.equal(decisionHR2b(compare(4, [1, 6]), zero, { ...gates, guardCeiling: zero.absolute.baseline.ceiling }), 'inconclusive');
 });
 
 test('calibration uses exact v2 probes, counts long text, models completeness transitions and does not retune', async t => {
@@ -65,7 +169,9 @@ test('calibration uses exact v2 probes, counts long text, models completeness tr
     assert.equal(countTokens(wire.body), 120); assert.equal(wire.sources.length, probe.delivered);
     assert.equal(wire.sourcesComplete ?? true, probe.sourcesComplete && probe.delivered === 2);
   }
-  assert.throws(() => calibration({ counts: [7] }), /invalid_probe_grid/);
+  const defaultCounts = calibration({ bodies: [120], receipts: [40], itemCounts: [1] });
+  assert.deepEqual([...new Set(defaultCounts.probes.map(probe => probe.receiptCount))], [1, 2, 3, 4]);
+  for (const count of [5, 6, 7]) assert.throws(() => calibration({ counts: [count] }), /invalid_probe_grid/);
   const workspace = createTestWorkspace(t, { prefix: 'hr2b-calibration-cli-' });
   const args = ['evaluation/retrieval-research/assembly/calibrate-host-v2.mjs', '--bodies', '120', '--receipts', '40', '--counts', '2', '--items', '1', '--out', join(workspace.path, 'calibration.json')];
   const ran = await runCli(workspace, args);
@@ -78,7 +184,9 @@ test('HR-2b authenticated dev pipeline, placements, source identity, strict budg
   const workspace = createTestWorkspace(t, { prefix: 'hr2b-pipeline-' });
   const { fixture, dir, rankingsDir } = await hr2bToy(workspace);
   const authenticated = await authenticateHR2bFixture(dir);
-  assert.deepEqual(authenticated.profile.budgets, [1000, 1500, 2000, 4000]); assert.equal(authenticated.profile.protocolCommit, 'c546bfc1');
+  assert.deepEqual(authenticated.profile.budgets, [1000, 1500, 2000, 4000]); assert.equal(authenticated.profile.protocolCommit, 'd3a6e24f');
+  assert.equal(authenticated.profile.protocol, 'HR-2b v1.1');
+  assert.equal(authenticated.profile.guard.statistic, POOLED_GUARD_STATISTIC);
   const config = { 'fixture-dir': dir, rankings: rankingsDir, split: 'dev', scale: 'S1000', arms: 'P-top,P-top-s1', 'rankings-select': 'A3--bge-m3', budgets: '1500', out: join(workspace.path, 'cells') };
   const result = await runAssembly(config);
   assert.equal(result.cells, 4); assert.equal(result.expectedCells, 4);
@@ -93,15 +201,30 @@ test('HR-2b authenticated dev pipeline, placements, source identity, strict budg
   assert.equal(first.strata['placement:later-receipt'].families, 12);
   const contrast = compareHR2bCells(full, first, 'placement:later-receipt');
   assert.equal(contrast.bootstrap.seed, 'hr2b-bootstrap-v1'); assert.equal(contrast.bootstrap.requested, 10000);
+  assert.equal(contrast.statistic, POOLED_GUARD_STATISTIC);
+  assert.equal(contrast.absolute.baseline.coverage, 1); assert.equal(contrast.absolute.candidate.coverage, 0);
+  assert.equal(contrast.absolute.baseline.ceiling, 1);
   assert.deepEqual(contrast.bootstrap.ci, [-100, -100]);
+  for (const stratum of [undefined, 'placement:first-receipt', 'fidelity:span-only']) {
+    const before = statisticsRows(stratum ? full.strata[stratum].queries : full.queries);
+    const after = statisticsRows(stratum ? first.strata[stratum].queries : first.queries);
+    const categories = stratum ? ['C1'] : ['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7'];
+    assert.deepEqual(compareHR2bCells(full, first, stratum).bootstrap,
+      clusterBootstrap(before, after, { seed: HR2B.seed, resamples: 10000, minimumFamilies: 10, exploratory: true, categories }));
+  }
   const report = buildReport(scores);
   assert.equal(report.ok, true); assert.equal(report.outcome, 'inconclusive'); assert.equal(report.outcomeReason, 'primary_cell_absent');
   assert.match(reportMarkdown(report), /later-receipt/);
+  assert.deepEqual(report.comparisons[0].guard.descriptive, [{ category: 'C1', point: -100, groups: 36, families: 12 }]);
+  assert.match(reportMarkdown(report), /per-category deltas are descriptive/);
+  assert.match(reportMarkdown(report), /Pooled guard coverage baseline\/candidate/);
   assert.equal(buildReport({ ...scores, cells: [...scores.cells, { ...scores.cells[0], run: { ...scores.cells[0].run, fixtureVersion: 'hr1-fixture-v2', protocol: 'HR-2 v1.1' } }] }).ok, false);
   const names = await readdir(config.out), raw = JSON.parse(await readFile(join(config.out, names[0])));
   assert.throws(() => scoreCell({ ...fixture, corpus: { ...fixture.corpus, version: 'hr1-fixture-v2' } }, raw), /mixed_fixture_profiles/);
   const bad = structuredClone(raw); bad.run.budget = 1536;
   assert.throws(() => scoreCell(fixture, bad), /invalid_hr2b_cell_run/);
+  for (const pin of [{ protocol: 'HR-2b v1' }, { protocolCommit: 'c546bfc1' }])
+    assert.throws(() => scoreCell(fixture, { ...raw, run: { ...raw.run, ...pin } }), /invalid_hr2b_cell_run/);
   for (const override of [{ budgets: '1536' }, { overheads: '8' }, { 'rankings-select': 'F-RRF10--openai-3-small' }, { scale: 'S300' }, { 'overhead-model': 'unknown' }, { 'overhead-model': 'host-v2', overheads: '0' }])
     await assert.rejects(runAssembly({ ...config, ...override, out: join(workspace.path, 'bad') }));
   const identity = await sourceIdentity();
@@ -113,6 +236,29 @@ test('HR-2b authenticated dev pipeline, placements, source identity, strict budg
   await writeFile(rankPath, JSON.stringify(ranking));
   await assert.rejects(loadHR2bRankings(rankingsDir, authenticated), /ranking_member_hash_mismatch/);
   assert.throws(() => parseManifest('| `../bad` | `' + 'a'.repeat(64) + '` |'), /manifest_files/);
+});
+
+test('four-family dev strata authenticate with a frozen category absent from dev and a descriptive zero row', async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'hr2b-v11-dev-' });
+  const { dir, rankingsDir } = await hr2bToy(workspace, { devFamilies: 4, categoryFor: (split, i) => split === 'test' && i === 0 ? 'C3' : 'C1' });
+  const fixture = await authenticateHR2bFixture(dir);
+  assert.equal(fixture.profile.placement.ok, true);
+  assert.deepEqual(fixture.profile.placement.guardCategories, ['C1', 'C3']);
+  assert.deepEqual(fixture.profile.placement.splits.dev['later-receipt'], { groups: 12, families: 4, categories: { C1: 4, C3: 0 } });
+  const out = join(workspace.path, 'cells');
+  await runAssembly({ 'fixture-dir': dir, rankings: rankingsDir, split: 'dev', scale: 'S1000', arms: 'P-top,P-top-s1', 'rankings-select': 'A1', budgets: '1500', out });
+  const scores = await scoreDirectory(dir, out);
+  scores.cells.forEach(validateScoredCell);
+  const report = buildReport(scores);
+  assert.equal(report.ok, true, report.error);
+  for (const comparison of report.comparisons) {
+    assert.equal(comparison.guard.statistic, POOLED_GUARD_STATISTIC);
+    assert.equal(comparison.guard.bootstrap.reason, 'too_few_families');
+    assert.equal(comparison.guard.bootstrap.families, 4);
+    assert.deepEqual(comparison.guard.descriptive.find(row => row.category === 'C3'), { category: 'C3', point: null, groups: 0, families: 0 });
+  }
+  const invalid = structuredClone(scores.cells[0]); invalid.run.protocolProfile.placement.guardCategories.pop();
+  assert.throws(() => validateScoredCell(invalid), /hr2b_placement_snapshot/);
 });
 
 test('HR-2b protected output roots are checked dynamically and through symlinks', async t => {
@@ -253,13 +399,13 @@ test('fixed configuration and protocol snapshots cannot mutate later authenticat
   assert.throws(() => checkHR2bConfiguration(configuration, hashes), /fixed_configuration_mismatch/);
   assert.equal(hr2bConfiguration(hashes).fusion.depth, 12);
   assert.throws(() => { HR2B_FIXED.fusion.depth = 99; }, TypeError);
-  assert.throws(() => { FIXTURE_PROFILES[HR2B_VERSION].quotas.groups = 1; }, TypeError);
+  assert.throws(() => { FIXTURE_PROFILES[HR2B_VERSION].quotas.test.groups = 1; }, TypeError);
   assert.throws(() => { HR2B.primary.budget = 1; }, TypeError);
   assert.deepEqual(HR2B.quotas, FIXTURE_PROFILES[HR2B_VERSION].quotas);
   const workspace = createTestWorkspace(t, { prefix: 'hr2b-profile-snapshot-' }), { dir } = await hr2bToy(workspace);
-  const first = await authenticateHR2bFixture(dir); first.profile.primary.budget = 1; first.profile.quotas.groups = 1;
+  const first = await authenticateHR2bFixture(dir); first.profile.primary.budget = 1; first.profile.quotas.test.groups = 1;
   const returned = await profileForDirectory(dir); returned.budgets[0] = 1;
   assert.equal((await authenticateHR2bFixture(dir)).profile.primary.budget, 1500);
-  assert.equal((await authenticateHR2bFixture(dir)).profile.quotas.groups, 30);
+  assert.equal((await authenticateHR2bFixture(dir)).profile.quotas.test.groups, 30);
   assert.deepEqual((await profileForDirectory(dir)).budgets, [1000, 1500, 2000, 4000]);
 });

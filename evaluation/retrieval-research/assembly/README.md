@@ -240,7 +240,7 @@ paired contrast.
   host metadata refuse explicitly. The §5 ranking/fixture authentication is
   unchanged. No new dependency, model, network call or API key is used.
 
-## HR-2b v1 (freeze `c546bfc1`)
+## HR-2b v1.1 (freeze `d3a6e24f`)
 
 HR-2b selects a separate protocol profile from `hr2b-fixture-v1`. HR-2's
 identities, fixed hashes, ranking paths, eight budgets, bootstrap seed, numeric
@@ -252,8 +252,20 @@ bge-m3+A3 rankings, budgets 1000/1500/2000/4000 and seed
 `hr2b-bootstrap-v1`. Default HR-2b assembly writes both O=0 and host-v2 (80
 cells); `--overheads 0` or `--overhead-model host-v2` restricts the model.
 Only test/A3--bge-m3/host-v2/B1500/P-top-s1 versus P-top is confirmatory.
-Later-receipt is the guard; quota failure, either invalid/underpopulated
-bootstrap, or zero guard ranking ceiling makes the decision Inconclusive.
+Later-receipt is the pooled guard (`pooled-group-coverage-v1`):
+`100 × (Σ coveredGroups(candidate) − Σ coveredGroups(baseline)) / Σ groupCount`.
+Its bootstrap draws N contributing families N times with replacement, retaining
+every paired row with multiplicity and recomputing the denominator per draw.
+It requires N≥10 and 10,000 valid draws, seed `hr2b-bootstrap-v1`, and uses
+interpolated 2.5/97.5 percentiles. There is no category weighting or redraw;
+any invalid draw makes the interval Inconclusive. Report pooled absolute
+coverage per arm, pooled ranking ceiling (ceiling-covered groups / groups),
+group/family/category counts and descriptive per-category deltas (point,
+groups, families; no CI or decision). Categories with more later-receipt group
+occurrences weigh more; this guard does not bound each category's loss.
+The primary and all other strata retain the category-macro statistic.
+Quota failure, either invalid/underpopulated bootstrap, or zero pooled guard
+ranking ceiling makes the decision Inconclusive; +3/−5 thresholds are unchanged.
 
 The field-schema filenames retain `hr1-*.json` in the new fixture directory.
 All version-bearing roots must agree, including optional audit versions. The HR-2b split CLI adds its authenticated
@@ -265,12 +277,19 @@ body-only expressions and explicit span expressions for receipt evidence.
 Placement is recomputed after every audit from eligible members: any body,
 then any first receipt, then later only. Labels record `placement` per group
 and top-level `placement:{ok,errors,guardCategories,splits}`. The represented
-guard categories are the union across both splits, and are checked in both
-splits without trimming. Dropped queries do not count toward quotas.
+guard categories are the frozen union across both splits. Membership is
+authenticated per split; absent categories retain descriptive zero counts.
+For each of first-receipt and later-receipt, test requires ≥30 groups and ≥12
+families; dev requires ≥4 families with no group minimum. Per-category family
+counts are descriptive, with no per-category minimum. Dropped queries do not
+count toward quotas.
 
 Structural conventions where §3 leaves encoding/tolerances unspecified:
 
 - Counts allow ±10% around 160/320/60, as the HR-1 “about” convention.
+  Receipts are capped at 1–4 per memory with histogram `{1:.20,2:.25,3:.25,4:.30}`;
+  later-only facts occur in receipts 2–4. This is the single-admission seeding
+  cap; accumulated longer receipt chains are outside this fixture's scope.
   Length and receipt-count distribution shares allow ±5 percentage points.
   Length bands are lower-inclusive, upper-exclusive except the last upper
   endpoint (400/200), which is inclusive. Means are matched within 15%.
@@ -306,7 +325,7 @@ Structural conventions where §3 leaves encoding/tolerances unspecified:
 The dependency-free research serializer transcribes the payload rules at
 `b18dabe0`, including defaults, metadata ordering, sourcesComplete,
 sameAsBody and backward sameAs. Calibration serializes 120/220/400-token
-bodies, 40/120/200-token receipts, 1–6 receipts, 1/2 items, all delivered
+bodies, 40/120/200-token receipts, 1–4 receipts, 1/2 items, all delivered
 prefix lengths and both completeness states. Probe strings are deterministic,
 synthetic and fact-free; errors are modelled minus measured o200k tokens.
 The pinned overhead JSON is read and authenticated, never retuned.
@@ -338,7 +357,7 @@ hr2b_checkout="$(git --no-optional-locks status --porcelain --untracked-files=al
 hr2b_commit="$(git rev-parse HEAD)"
 [[ "$(node --version)" == v22.16.0 ]]
 hr2b_stage_root="$(mktemp -d "$hr2b_root/assembly/.hr2-hr2b-coordinator-XXXXXX")"
-print -r -- "checkoutCommit=$hr2b_commit" "checkoutStatus=$hr2b_checkout" 'protocolCommit=c546bfc1' > "$hr2b_stage_root/preflight.log"
+print -r -- "checkoutCommit=$hr2b_commit" "checkoutStatus=$hr2b_checkout" 'protocolCommit=d3a6e24f' > "$hr2b_stage_root/preflight.log"
 hr2b_stage() {
   local hr2b_name="$1"
   shift
@@ -385,7 +404,7 @@ hr2b_stage freeze-rankings node "$hr2b_root/tools/freeze-hr2b.mjs" --dir "$hr2b_
 hr2b_test_checkout="$(git --no-optional-locks status --porcelain --untracked-files=all -- . ':(exclude,glob)evaluation/retrieval-research/assembly/.hr2-*/**')"
 [[ -z "$hr2b_test_checkout" ]]
 {
-  print -r -- "checkoutCommit=$(git rev-parse HEAD)" "checkoutStatus=$hr2b_test_checkout" 'protocolCommit=c546bfc1'
+  print -r -- "checkoutCommit=$(git rev-parse HEAD)" "checkoutStatus=$hr2b_test_checkout" 'protocolCommit=d3a6e24f'
   node --version
   sha256sum "$hr2b_fixture/FROZEN.md" "$hr2b_rankings/FROZEN.md" "$hr2b_root/assembly/overhead-host-v2.json"
 } > "$hr2b_stage_root/test-preflight.log" 2>&1

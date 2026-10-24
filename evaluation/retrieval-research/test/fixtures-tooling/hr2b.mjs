@@ -14,12 +14,12 @@ export async function freeze(dir, names) {
   await writeFile(join(dir, 'FROZEN.md'), '| File | SHA-256 |\n| --- | --- |\n' + pairs.map(([name, hash]) => `| \`${name}\` | \`${hash}\` |`).join('\n') + '\n');
   return Object.fromEntries(pairs);
 }
-export async function hr2bToy(workspace) {
+export async function hr2bToy(workspace, { devFamilies = 12, categoryFor = () => 'C1' } = {}) {
   const dir = join(workspace.path, 'fixture'), rankingsDir = join(workspace.path, 'rankings');
   await mkdir(dir); await mkdir(rankingsDir);
   const fixture = { facts: { version: HR2B_VERSION, families: [], facts: [] }, corpus: { version: HR2B_VERSION, memories: [] },
     queries: { version: HR2B_VERSION, queries: [] }, split: {}, labels: null, audit: { overrides: [] }, hashes: {} };
-  for (const split of ['dev', 'test']) for (let i = 0; i < (split === 'dev' ? 12 : 14); i++) {
+  for (const split of ['dev', 'test']) for (let i = 0; i < (split === 'dev' ? devFamilies : 14); i++) {
     const family = `${split}-f${i}`;
     fixture.facts.families.push({ id: family, role: 'target', domain: 'engineering', summary: family });
     fixture.split[family] = split;
@@ -33,7 +33,7 @@ export async function hr2bToy(workspace) {
         expresses: [{ fact, where: placement === 'body' ? 'body' : 'span', span: placement === 'body' ? null : `${id}#s${placement === 'first-receipt' ? 1 : 2}` }] });
       requiredFacts.push(fact);
     }
-    fixture.queries.queries.push({ id: `q-${family}`, family, category: 'C1', lang: 'en', intent: 'current', text: 'KEY', keyTerm: 'KEY', note: 'toy', secondaryTags: [], requiredFacts });
+    fixture.queries.queries.push({ id: `q-${family}`, family, category: categoryFor(split, i), lang: 'en', intent: 'current', text: 'KEY', keyTerm: 'KEY', note: 'toy', secondaryTags: [], requiredFacts });
   }
   fixture.labels = buildLabels(fixture, tokenizers);
   const documents = { 'hr1-facts.json': fixture.facts, 'hr1-corpus.json': fixture.corpus, 'hr1-facts-view.json': factsView(fixture),

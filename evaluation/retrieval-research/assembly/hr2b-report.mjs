@@ -1,6 +1,7 @@
 import { CATEGORIES } from '../lib/fixture.mjs';
 import { equal } from '../lib/hr2b-configuration.mjs';
 import { clusterBootstrap, exactMcNemar, pairedQueries } from '../lib/stats.mjs';
+import { pooledGuardComparison } from '../lib/pooled-coverage.mjs';
 import { HR2B, isHR2b } from './hr2b-profile.mjs';
 import { validateScoredCell } from './provenance.mjs';
 import { statisticsRows } from './report.mjs';
@@ -14,7 +15,7 @@ const validBootstrap = comparison => comparison?.status === 'ok' && comparison.b
   Number.isFinite(comparison.bootstrap.point) && Array.isArray(comparison.bootstrap.ci) && comparison.bootstrap.ci.length === 2 &&
   comparison.bootstrap.ci.every(Number.isFinite) && comparison.bootstrap.ci[0] <= comparison.bootstrap.ci[1];
 export function decisionHR2b(primary, guard, { quotasOK, guardCeiling } = {}) {
-  if (quotasOK !== true || !Number.isFinite(guardCeiling) || guardCeiling <= 0 || !validBootstrap(primary) || !validBootstrap(guard)) return 'inconclusive';
+  if (quotasOK !== true || guard?.statistic !== HR2B.guard.statistic || !Number.isFinite(guardCeiling) || guardCeiling <= 0 || !validBootstrap(primary) || !validBootstrap(guard)) return 'inconclusive';
   const main = primary.bootstrap, later = guard.bootstrap;
   if (main.point >= HR2B.decision.adoptGain && main.ci[0] > 0 && later.ci[0] >= HR2B.decision.guardLoss) return 'adopt';
   if ((main.point <= 0 && main.ci[1] < HR2B.decision.adoptGain) || later.ci[1] < HR2B.decision.guardLoss) return 'keep';
@@ -28,19 +29,23 @@ function validatePair(baseline, candidate) {
   pairedQueries(statisticsRows(baseline.queries), statisticsRows(candidate.queries));
 }
 export function compareHR2bCells(baseline, candidate, stratum) {
+  const pooled = stratum === 'placement:later-receipt';
   try {
     validatePair(baseline, candidate);
     const before = statisticsRows(stratum ? baseline.strata[stratum]?.queries : baseline.queries);
     const after = statisticsRows(stratum ? candidate.strata[stratum]?.queries : candidate.queries);
-    const categories = stratum === 'placement:later-receipt' ? baseline.run.protocolProfile.placement.guardCategories :
+    const categories = pooled ? baseline.run.protocolProfile.placement.guardCategories :
       stratum ? CATEGORIES.filter(category => before.some(row => row.category === category)) : CATEGORIES;
     if (!categories.length) fail('empty_statistics_categories');
-    const bootstrap = clusterBootstrap(before, after, { seed: HR2B.seed, resamples: HR2B.decision.resamples, categories, exploratory: true, minimumFamilies: HR2B.decision.minimumFamilies });
+    const options = { seed: HR2B.seed, resamples: HR2B.decision.resamples, categories, exploratory: true, minimumFamilies: HR2B.decision.minimumFamilies };
+    const comparison = pooled ? pooledGuardComparison(baseline.strata[stratum].queries, candidate.strata[stratum].queries, options) :
+      { bootstrap: clusterBootstrap(before, after, options) };
+    const bootstrap = comparison.bootstrap;
     const mcnemar = exactMcNemar(before, after);
     if (baseline.run.split === 'dev') mcnemar.selection = 'smallest-scored-dev-query-id-per-family';
-    return { status: bootstrap.status, bootstrap, mcnemar };
+    return { ...comparison, status: bootstrap.status, mcnemar };
   } catch (error) {
-    return { status: 'inconclusive', bootstrap: { status: 'inconclusive', reason: 'invalid_inputs', error: error.message,
+    return { ...(pooled ? { statistic: HR2B.guard.statistic } : {}), status: 'inconclusive', bootstrap: { status: 'inconclusive', reason: 'invalid_inputs', error: error.message,
       seed: HR2B.seed, requested: HR2B.decision.resamples, confidence: HR2B.decision.confidence, endpoints: [.025, .975], exploratory: true, minimumFamilies: HR2B.decision.minimumFamilies,
       accepted: 0, rejected: 0, point: null, ci: null }, mcnemar: null };
   }
@@ -69,12 +74,12 @@ export function buildHR2bReport(scores, implementation) {
     const guard = compareHR2bCells(baseline, candidate, 'placement:later-receipt');
     comparisons.push({ run: candidate.run, baseline: 'P-top', candidate: candidate.run.arm,
       designation: confirmatory ? 'confirmatory' : 'exploratory', ...compareHR2bCells(baseline, candidate), guard,
-      guardAbsolute: { baseline: baseline.strata['placement:later-receipt'], candidate: candidate.strata['placement:later-receipt'] },
+      guardAbsolute: guard.absolute,
       strata: Object.fromEntries(Object.keys(candidate.strata).map(stratum => [stratum, compareHR2bCells(baseline, candidate, stratum)])) });
   }
   const primary = comparisons.find(comparison => comparison.designation === 'confirmatory');
   const quotasOK = cells[0].run.protocolProfile.placement.ok === true;
-  const guardCeiling = primary?.guardAbsolute.baseline.macroCeiling;
+  const guardCeiling = primary?.guardAbsolute?.baseline.ceiling;
   const outcome = decisionHR2b(primary, primary?.guard, { quotasOK, guardCeiling });
   const outcomeReason = !quotasOK ? 'structural_quotas_failed' : !primary ? 'primary_cell_absent' :
     guardCeiling === 0 ? 'zero_guard_ranking_ceiling' : !validBootstrap(primary) || !validBootstrap(primary.guard) ? 'bootstrap_inconclusive' : null;
@@ -92,7 +97,7 @@ export function buildHR2bReport(scores, implementation) {
 }
 export function hr2bMarkdown(report) {
   const lines = ['# HR-2b long-item assembly', '', `Protocol ${HR2B.protocol}, frozen at ${HR2B.protocolCommit}. Decision: **${report.outcome}** (${report.outcomeReason ?? '§4'}).`, '',
-    'Confirmatory: test / S1000 / bge-m3 + A3 / host-v2 / B=1500; P-top-s1 minus P-top. Guard: later-receipt; frozen represented categories. All other comparisons and strata are exploratory, pointwise unadjusted 95% CIs.', '',
+    'Confirmatory: test / S1000 / bge-m3 + A3 / host-v2 / B=1500; P-top-s1 minus P-top. Guard: later-receipt, pooled-group-coverage-v1 over group occurrences; family bootstrap, frozen descriptive categories. Primary and other strata retain category-macro statistics. All other comparisons and strata are exploratory, pointwise unadjusted 95% CIs.', '',
     'host-v2 is a fixed additive approximation; calibration errors do not retune its constants. The guard bounds the incremental loss on skipped later evidence; it does not demonstrate preservation.', '',
     'All provenance, absolute guard coverage, ranking ceiling, category/group/family counts, rejected-unit diagnostics, token use, strata, bootstrap/McNemar results and saturation are retained in JSON.', ''];
   if (!report.ok) return [...lines, `Invalid inputs: ${report.error}`, ''].join('\n');
@@ -102,7 +107,14 @@ export function hr2bMarkdown(report) {
     const r = cell.run, s = cell.summary;
     lines.push(`| ${r.split} | ${r.ranking} | ${r.arm} | ${r.overhead} | ${r.budget} | ${s.macroCoverage} | ${s.macroAllRequired} | ${s.macroCeiling} | ${s.macroAssemblyLoss} | ${s.tokenUse.p50}/${s.tokenUse.p95} | ${cell.budgetRejectedQueryCount ?? 'NA'} |`);
   }
-  lines.push('', '| Contrast | Designation | Delta (pp) | 95% CI | Guard delta | Guard CI | Guard ceiling |', '| --- | --- | ---: | --- | ---: | --- | ---: |');
-  for (const row of report.comparisons) lines.push(`| ${row.run.ranking}/${row.run.overhead}/${row.run.budget}/${row.candidate} | ${row.designation} | ${row.bootstrap.point} | ${JSON.stringify(row.bootstrap.ci)} | ${row.guard.bootstrap.point} | ${JSON.stringify(row.guard.bootstrap.ci)} | ${row.guardAbsolute.baseline.macroCeiling} |`);
+  lines.push('', '| Contrast | Designation | Delta (pp) | 95% CI | Pooled guard delta | Guard CI | Pooled guard coverage baseline/candidate | Pooled guard ceiling | Guard groups/families/categories |', '| --- | --- | ---: | --- | ---: | --- | --- | ---: | --- |');
+  for (const row of report.comparisons) {
+    const before = row.guardAbsolute?.baseline, after = row.guardAbsolute?.candidate;
+    lines.push(`| ${row.run.ranking}/${row.run.overhead}/${row.run.budget}/${row.candidate} | ${row.designation} | ${row.bootstrap.point} | ${JSON.stringify(row.bootstrap.ci)} | ${row.guard.bootstrap.point} | ${JSON.stringify(row.guard.bootstrap.ci)} | ${before?.coverage ?? 'NA'}/${after?.coverage ?? 'NA'} | ${before?.ceiling ?? 'NA'} | ${before ? `${before.groupCount}/${before.families}/${before.categoryCount}` : 'NA'} |`);
+  }
+  lines.push('', 'Later-receipt per-category deltas are descriptive: group-occurrence denominators, no CI and no decision.', '',
+    '| Contrast | Category | Delta (pp) | Groups | Families |', '| --- | --- | ---: | ---: | ---: |');
+  for (const row of report.comparisons) for (const category of row.guard.descriptive ?? [])
+    lines.push(`| ${row.run.ranking}/${row.run.overhead}/${row.run.budget}/${row.candidate} | ${category.category} | ${category.point ?? 'NA'} | ${category.groups} | ${category.families} |`);
   return [...lines, ''].join('\n');
 }

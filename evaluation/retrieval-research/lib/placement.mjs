@@ -19,6 +19,7 @@ export function placementQuotas(labels) {
   const guardCategories = unique(active.filter(label => label.groups.some(group => group.placement === 'later-receipt')).map(label => label.category));
   const errors = [], splits = {};
   for (const split of ['dev', 'test']) {
+    const minimum = quotas[split];
     const rows = active.filter(label => label.split === split);
     splits[split] = {};
     for (const placement of ['first-receipt', 'later-receipt']) {
@@ -28,10 +29,8 @@ export function placementQuotas(labels) {
       const categories = Object.fromEntries(guardCategories.map(category => [category,
         new Set(selected.filter(label => label.category === category).map(label => label.family)).size]));
       splits[split][placement] = { groups, families, categories };
-      if (groups < quotas.groups) errors.push(`${split}:${placement}:groups_minimum_${quotas.groups}`);
-      if (families < quotas.families) errors.push(`${split}:${placement}:families_minimum_${quotas.families}`);
-      if (placement === 'later-receipt') for (const category of guardCategories)
-        if (categories[category] < (split === 'test' ? quotas.guardTestFamilies : quotas.guardDevFamilies)) errors.push(`${split}:guard:${category}:family_minimum`);
+      if (minimum.groups !== undefined && groups < minimum.groups) errors.push(`${split}:${placement}:groups_minimum_${minimum.groups}`);
+      if (families < minimum.families) errors.push(`${split}:${placement}:families_minimum_${minimum.families}`);
     }
   }
   return { ok: !errors.length, errors, guardCategories, splits };

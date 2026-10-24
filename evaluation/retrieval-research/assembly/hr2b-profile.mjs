@@ -1,4 +1,5 @@
 import { deepFreeze } from '../lib/immutable.mjs';
+import { POOLED_GUARD_STATISTIC } from '../lib/pooled-coverage.mjs';
 import { auditedHR2bQueries, auditedHR2bFixture } from '../lib/hr2b-queries.mjs';
 import { placementQuotas } from '../lib/placement.mjs';
 import { readFile } from 'node:fs/promises';
@@ -8,9 +9,10 @@ import { HR2B_VERSION, FIXTURE_PROFILES } from '../lib/fixture.mjs';
 import { checkHR2bConfiguration, equal } from '../lib/hr2b-configuration.mjs';
 import { FILES, authenticateRanking, sha256, fail } from './auth.mjs';
 
-export const HR2B = deepFreeze({ version: HR2B_VERSION, protocol: 'HR-2b v1', protocolCommit: 'c546bfc1',
+export const HR2B = deepFreeze({ version: HR2B_VERSION, protocol: 'HR-2b v1.1', protocolCommit: 'd3a6e24f',
   budgets: [1000, 1500, 2000, 4000], seed: 'hr2b-bootstrap-v1', rankings: ['A1', 'A3--bge-m3'],
   strata: ['fidelity', 'language', 'category', 'placement'],
+  guard: { statistic: POOLED_GUARD_STATISTIC },
   primary: { split: 'test', scale: 'S1000', ranking: 'A3--bge-m3', overhead: 'host-v2', budget: 1500 },
   decision: { baseline: 'P-top', candidate: 'P-top-s1', guard: 'later-receipt', adoptGain: 3, guardLoss: -5,
     resamples: 10000, minimumFamilies: 10, confidence: .95 },

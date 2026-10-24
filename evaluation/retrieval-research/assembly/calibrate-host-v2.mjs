@@ -1,6 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { cliMain, requiredOption } from '../lib/fixture.mjs';
+import { FIXTURE_PROFILES, HR2B_VERSION } from '../lib/fixture-profiles.mjs';
 import { countTokens, COUNTER_ID } from './counter.mjs';
 import { serializeRepresentationV2, SERIALIZER_COMMIT } from './representation-v2.mjs';
 import { authenticateHostV2 } from './host-v2.mjs';
@@ -14,18 +15,19 @@ export function probeText(tokens, word = 'maple', suffix = '') {
   if (countTokens(text) !== tokens) fail('probe_token_count');
   return text;
 }
-export function calibration({ bodies = [120, 220, 400], receipts = [40, 120, 200], counts = [1, 2, 3, 4, 5, 6], itemCounts = [1, 2] } = {}) {
+const maxReceipts = FIXTURE_PROFILES[HR2B_VERSION].maxSpans;
+export function calibration({ bodies = [120, 220, 400], receipts = [40, 120, 200], counts = Array.from({ length: maxReceipts }, (_, i) => i + 1), itemCounts = [1, 2] } = {}) {
   for (const values of [bodies, receipts, counts, itemCounts]) if (!Array.isArray(values) || !values.length || values.some(n => !Number.isSafeInteger(n) || n < 1)) fail('invalid_probe_grid');
-  if (counts.some(n => n > 6) || itemCounts.some(n => n > 24)) fail('invalid_probe_grid');
+  if (counts.some(n => n > maxReceipts) || itemCounts.some(n => n > 24)) fail('invalid_probe_grid');
   const model = authenticateHostV2(), cost = hostV2Cost(model), probes = [];
   for (const bodyTokens of bodies) for (const receiptTokens of receipts) for (const receiptCount of counts) for (const itemCount of itemCounts) {
     const prepared = Array.from({ length: itemCount }, (_, i) => ({ ns: 0, type: 'memory',
       ref: { memoryId: `00000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`, revision: 1 },
       fence: 'AbCdEfGh', rank: i + 1, text: probeText(bodyTokens), sourceAccess: 'available', sourcesComplete: true,
       metadata: { state: 'active', reviewState: 'none', filing: { status: 'unfiled' }, kind: 'fact', origin: 'explicit', confidence: 1 },
-      sources: Array.from({ length: receiptCount }, (_, j) => ({ index: j, role: 'user', excerpt: probeText(receiptTokens, 'cedar', String(i * 6 + j)) })) }));
+      sources: Array.from({ length: receiptCount }, (_, j) => ({ index: j, role: 'user', excerpt: probeText(receiptTokens, 'cedar', String(i * maxReceipts + j)) })) }));
     for (const item of prepared) for (const source of item.sources) {
-      // Unique integer suffixes (0–143) are one o200k token.
+      // Unique integer suffixes (0–95) are one o200k token.
       if (countTokens(source.excerpt) !== receiptTokens) fail('probe_token_count');
     }
     for (const complete of [true, false]) for (let delivered = 0; delivered <= receiptCount; delivered++) {

@@ -70,7 +70,7 @@ function world() {
     }
     for (let i = 0; i < count; i++) {
       const id = `${role}-m${i}`, familyIndex = Math.floor(i / (count / familyCount)), family = `${role}-f${familyIndex}`;
-      const bin = i / count < .2 ? 1 : i / count < .45 ? 2 : i / count < .7 ? 3 : i / count < .85 ? 4 : i / count < .95 ? 5 : 6;
+      const bin = i / count < .2 ? 1 : i / count < .45 ? 2 : i / count < .7 ? 3 : 4;
       const bodyLength = i / count < .3 ? 140 : i / count < .7 ? 220 : 300;
       // Five punctuation-separated sentences. The ' a.' sequence costs two.
       const content = probeText(bodyLength - 10) + ' a. a. a. a. a.';
@@ -103,6 +103,8 @@ function world() {
 test('HR-2b world accepts 160/320/60 long items, histograms, lengths, placement and disclosed fact-free filler', () => {
   const fixture = world(), result = checkHR2bWorld(fixture);
   assert.equal(result.ok, true, JSON.stringify(result.errors));
+  assert.deepEqual(RECEIPT_HISTOGRAM, [.20, .25, .25, .30]);
+  assert.equal(fixtureProfile(fixture).maxSpans, 4);
   assert.deepEqual(result.statistics.S300.histogram, RECEIPT_HISTOGRAM);
   assert.deepEqual(result.statistics.placement.target, { body: .45, 'first-receipt': .25, 'later-receipt': .30 });
 });
@@ -115,6 +117,7 @@ for (const [code, mutate] of [
   ['hr2b:length_range', fixture => { fixture.corpus.memories[0].content = 'short'; }],
   ['hr2b:length_band', fixture => { fixture.corpus.memories.filter(m => m.scale === 'S300').forEach(m => { m.content = probeText(220); }); }],
   ['hr2b:receipt_histogram', fixture => { fixture.corpus.memories.filter(m => m.scale === 'S300').slice(32, 70).forEach(m => { m.spans.length = 1; }); }],
+  ['hr2b:receipt_count', fixture => { const m = fixture.corpus.memories.find(m => m.spans.length === 4); m.spans.push({ ...m.spans[3], id: `${m.id}#s5` }); }],
   ['hr2b:inconsistent_fact_placement', fixture => { fixture.corpus.memories[3].expresses[1].where = 'span'; fixture.corpus.memories[3].expresses[1].span = fixture.corpus.memories[3].spans[0].id; }],
   ['hr2b:filler_range', fixture => { fixture.corpus.filler.ranges[0].end--; }],
   ['hr2b:undisclosed_unit', fixture => { fixture.corpus.filler.ranges = []; }],
@@ -163,17 +166,30 @@ test('placement uses audited eligible members, with body before first before lat
   assert.deepEqual(makeMember(m, { where: 'body', span: 'a#s1' }).spans, ['a#s1']);
 });
 
-test('placement quotas freeze represented guard categories and refuse every group/family/category shortage', () => {
-  const queries = ['dev', 'test'].flatMap(split => Array.from({ length: 12 }, (_, i) => ({ id: `${split}${i}`, family: `f${split}${i}`, split, category: 'C1',
-    groups: ['first-receipt', 'later-receipt'].flatMap(placement => Array.from({ length: 3 }, () => ({ placement }))) })));
-  assert.equal(placementQuotas({ queries }).ok, true);
-  assert.deepEqual(placementQuotas({ queries }).guardCategories, ['C1']);
-  for (const mutate of [
-    rows => { rows.filter(row => row.split === 'dev').forEach(row => { row.family = 'same'; }); },
-    rows => { rows.forEach(row => { row.groups = row.groups.slice(0, 1); }); },
-    rows => { rows[0].category = 'C2'; },
-    rows => { rows.at(-1).category = 'C2'; },
-  ]) { const rows = structuredClone(queries); mutate(rows); assert.equal(placementQuotas({ queries: rows }).ok, false); }
+test('v1.1 placement quotas keep frozen descriptive categories with split-specific group/family minima', () => {
+  const queries = ['dev', 'test'].flatMap(split => Array.from({ length: split === 'dev' ? 4 : 12 }, (_, i) => ({ id: `${split}${i}`, family: `f${split}${i}`, split,
+    category: split === 'test' && i === 0 ? 'C2' : 'C1',
+    groups: ['first-receipt', 'later-receipt'].flatMap(placement => Array.from({ length: split === 'dev' ? 1 : i < 6 ? 3 : 2 }, () => ({ placement }))) })));
+  const quotas = placementQuotas({ queries });
+  assert.equal(quotas.ok, true, JSON.stringify(quotas.errors));
+  assert.deepEqual(quotas.guardCategories, ['C1', 'C2']);
+  for (const placement of ['first-receipt', 'later-receipt']) {
+    assert.deepEqual(quotas.splits.dev[placement], { groups: 4, families: 4, categories: { C1: 4, C2: 0 } });
+    assert.deepEqual(quotas.splits.test[placement], { groups: 30, families: 12, categories: { C1: 11, C2: 1 } });
+  }
+  for (const [error, mutate] of [
+    ['dev:first-receipt:families_minimum_4', rows => { rows[0].family = rows[1].family; }],
+    ['test:first-receipt:families_minimum_12', rows => { rows.at(-1).family = rows.at(-2).family; }],
+    ['test:first-receipt:groups_minimum_30', rows => { rows[4].groups.splice(0, 1); }],
+    ['test:later-receipt:groups_minimum_30', rows => { rows[4].groups.pop(); }],
+  ]) {
+    const rows = structuredClone(queries); mutate(rows);
+    const result = placementQuotas({ queries: rows });
+    assert.equal(result.ok, false); assert.ok(result.errors.includes(error), result.errors.join(','));
+    assert.ok(result.errors.every(error => !error.includes(':guard:')));
+  }
+  const dropped = structuredClone(queries); dropped[0].dropped = true;
+  assert.ok(placementQuotas({ queries: dropped }).errors.includes('dev:later-receipt:families_minimum_4'));
 });
 
 test('coordinator freezer cross-checks filesystem/Git members, prints a count and refuses an existing manifest', async t => {
@@ -279,7 +295,7 @@ test('receipt order uses parsed instants, subsecond precision and id ties', () =
 
 test('fixture constraints have one immutable authority and returned profiles are independent', () => {
   const first = fixtureProfile({ facts: { version: HR2B_VERSION } }), second = fixtureProfile({ facts: { version: HR2B_VERSION } });
-  first.counts.S300 = 1; first.quotas.groups = 1; first.receiptHistogram[0] = 1;
-  assert.equal(second.counts.S300, 160); assert.equal(second.quotas.groups, 30); assert.equal(second.receiptHistogram[0], .2);
+  first.counts.S300 = 1; first.quotas.test.groups = 1; first.receiptHistogram[0] = 1;
+  assert.equal(second.counts.S300, 160); assert.equal(second.quotas.test.groups, 30); assert.equal(second.receiptHistogram[0], .2);
   assert.notEqual(first.counts, second.counts);
 });
