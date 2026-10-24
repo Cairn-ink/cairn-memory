@@ -288,3 +288,11 @@
   h1／hN) + Σ(span: C−bodyTokens + tokens | alias A)`；120 cells；`run.overhead='host-v2'` 字串使之永遠進不了確認性比較；
   輸出 results v1.1、`results/hr2-host-v2/`、limitations 一句），草稿提交 **`2f69c7a5`** 已推送。派非作者稽核 `hr2_ext_audit`
   （read-only，乾淨 worktree `/home/chichieh/cairn-memory-review-hr2`），負載 0.2。
+- **§11 稽核**（`hr2_ext_audit`，exit 0）：無 P0；P1：(1) 要兩條嚴格驗證分支（舊數值 O 分支不動；host-v2 分支驗 model 的
+  commit／sha256／常數／bodyTokens，模型 digest 進比較身分，確認性選擇器維持數值 `overhead===0`，混模型拒絕）；(2) 舊結果
+  回歸要定義為「去掉 scorer 身分後位元相同」＋報告統計精確相等，不得覆寫凍結產物；(3) 揭露近似模型的結構限制
+  （`rank`／`sourcesComplete:false` 已含在校準中；C／A 含第一條 receipt 的完整性轉換；後續轉換、跨 item `sameAs`、非預設
+  metadata、Card、UUID 變異未建模；稽核者量到雙 receipt 164 對模型 160）；(4) 定義 48 個配對對比、逐點未校正探索性 CI、
+  飽和門檻與被拒單元計數。P2：`B<E` 先拒、「第一筆」跨 pass 定義、P-top+tail 試探性 bundle；檔名加 `@42627f60`、記
+  `extensionCommit`。稽核者獨立驗證 sha256、C=22（加在 body-only 上）、C−15=7、A=10、h1=58、hN=57 皆正確。
+- **協定 v1.2.1 提交 `598d6c53`**（六項全套用，只動 §11 與標頭註記），已推送；派複查（resume）。負載 0.1。
