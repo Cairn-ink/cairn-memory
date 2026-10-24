@@ -514,3 +514,9 @@
   **[−23.82, −0.15]**（28 家族、0 拒絕）；pooled guard：P-top-s1 0/49 群對 P-top 19/49（**−38.78 點**），pooled ceiling 0.735；
   逐類別 later-receipt Δ 全負（C1 −42.9、C2 −50、C3 −57.1、C4 −40、C5 −22.2、C6 −33.3、C7 −33.3）。64 個對比、飽和度未達。
   接著寫結果文件、limitations 條目、派轉錄檢查。
+- **結果文件 `docs/plans/budgeted-assembly-hr2b-results.md` ＋ `docs/limitations.md` 條目提交 `29a76e1a`**（約 2,700 字，沿用 HR-2 結構：
+  provenance、§1 確認性結果與 pooled guard、§2 探索（40 格覆蓋表、16 個 P-top-s1 對比、其他 arm、校準）、§3 保留的失敗、§4 限制
+  （題目層 98.6% receipt、≤4 receipt、pooled guard、body-only ranking 天花板 0.71–0.74、host-v2 低估 0…−34）、§5 建議、§6 重現）。
+  主要發現：P-top-s1 在 16 格全落後且**預算越大輸越多**（與 HR-2 短項目相反）；coverage-first 輸 10–50 點；P-top+tail≈P-top；
+  瓶頸是 body-only ranking 看不到 receipt（天花板 0.74），建議下一步研究 receipt-aware ranking 而非再加 assembly arm。
+  派非作者轉錄檢查（resume Spec 審查者，read-only，xhigh＋fast）。
