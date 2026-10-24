@@ -11,7 +11,7 @@ export const DOMAINS = Object.freeze(['engineering', 'work-preferences', 'operat
 export const LANGS = Object.freeze(['zh', 'en', 'mixed']);
 export const BODY_BANDS = Object.freeze([[120, 180, .30], [180, 260, .40], [260, 400, .30]]);
 export const RECEIPT_BANDS = Object.freeze([[40, 70, .35], [70, 130, .40], [130, 200, .25]]);
-export const RECEIPT_COUNTS = Object.freeze([[1, .20], [2, .25], [3, .25], [4, .15], [5, .10], [6, .05]]);
+export const RECEIPT_COUNTS = Object.freeze([[1, .20], [2, .25], [3, .25], [4, .30]]);
 export const PLACEMENTS = Object.freeze([['body', .45], ['first-receipt', .25], ['later-receipt', .30]]);
 export const LANGUAGE_SHARES = Object.freeze([['zh', .55], ['en', .30], ['mixed', .15]]);
 // Four independently extracted episodes: old decision, adopted decision,

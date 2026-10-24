@@ -1,6 +1,7 @@
 # HR-2b synthetic long-item world
 
-W1 stage-1 authoring product for frozen protocol v1 at `c546bfc1`.
+W1 authoring product for protocol v1.1, frozen at `d3a6e24f` (amending v1
+at `c546bfc1`). The v1.1 rebuild restarts candidate 0, seed `1924440465`.
 All people, organizations, incidents, conversations and amounts are invented.
 The setting is independent Taiwan-based founder workspaces. Nothing describes
 real conversations, product usage, or benchmark measurements.
@@ -45,11 +46,15 @@ Largest-remainder apportionment, ties in declared order, fixes exact bucket
 counts before seeded shuffling. No process time, locale-dependent random
 source, network input, query or label influences a build.
 
-Fact placement is allocated before memory receipt counts. One-receipt
+The amended receipt-count distribution is **1: 20%, 2: 25%, 3: 25%, 4: 30%**.
+Each memory has one to four receipts, matching the core's per-admission cap.
+Later-only evidence is in receipts two through four.
+
+Within each role, fact placement is allocated before memory receipt counts. One-receipt
 memories are chosen only among episodes without a later-receipt fact. The
 remaining receipt-count multiset is shuffled over the remaining memories.
 Raw receipts are sorted by parsed event time and their temporary stable ids
-before ordinal `#s1` through `#s6` ids and evidence positions are assigned.
+before ordinal `#s1` through `#s4` ids and evidence positions are assigned.
 Every fact keeps its placement in every expressing memory. Body placement
 uses body-only expressions with `span:null`; first-only and later-only facts
 are stated in exactly one corresponding receipt of each expressing memory.
@@ -65,13 +70,34 @@ endpoints. The schema's 4000/800 UTF-16 caps also apply. Bodies have three to
 eight complete sentences and one or two paragraphs. Receipts are complete
 user or assistant turns, never prefixes of longer text.
 
-The selected seed is a **stage-1 candidate**, not an assertion of two-stage
-acceptance. The coordinator must test stage-2 quotas after W3 and consider
-candidates in the frozen order. To rebuild candidate `N`, pass
-`--candidate N` to both scripts, including `--check`. With `--record`, the
-checker retains earlier candidate-history rows, including a coordinator's
-`stage2: "rejected"` row and its quota diagnostics. Do not remove a rejection
-to obtain acceptance. Later seeds are unattempted unless recorded otherwise.
+The v1 candidate 0 was rejected at stage 2; the supplied coordinator
+diagnostics are retained verbatim in `build/world-stats.json`, pointing to
+`build/candidate0-v1-validation/`. That directory is retained unchanged and
+is never read or traversed by the W1 checker. Earlier development diagnostics
+are also preserved. Protocol v1.1 §9 restarts the unchanged frozen candidate
+sequence at **candidate 0**, rather than advancing because of the v1 rejection.
+Only `RECEIPT_COUNTS` changes in the generator; families, facts, filler,
+lexicon, seed sequence, PRNG, rendering and band logic remain untouched.
+
+The checker invokes `build/check-identity.mjs` mechanically against HEAD:
+all fact fields (including kind/state categories and coverage), families,
+lexicon, per-fact placement, fact-to-memory plan and unchanged generator
+sources are compared. It prints differing field names and retains details.
+No query categories or W2/W3 products are read. A mismatch makes the checker
+exit nonzero and requires W1 to stop and report; W1 does not advance the seed
+or repair the generator beyond the authorized distribution amendment.
+Although placement precedes receipts **within** each role, the unchanged
+builder shares its random stream across roles; receipt draws in an earlier
+role can affect later roles' allocation. Identity must be verified, not assumed.
+
+After a stop condition, `check-world.mjs --record --report-only -o W1-REPORT.md`
+refreshes delivery reporting and file-list/whitespace verification from the
+saved result, without building, rechecking the world or advancing a seed. It
+retains the failed exit status rather than presenting reporting as acceptance.
+
+A structural pass is not two-stage acceptance or an identity pass. The
+coordinator owns stage-2 validation under v1.1 and W3's full re-audit.
+Later candidates remain unattempted unless separately authorized and recorded.
 Pre-acceptance implementation failures and their fixes are disclosed in
 `build/development-diagnostics.json`, distinct from seed selection.
 
@@ -192,8 +218,13 @@ five-point share tolerances, 15% means, namespaces, foreign links, filler
 lexicons/ranges, normalized body uniqueness, exact unannotated statements,
 HR-1 exact-statement non-overlap and deterministic rebuilding. Annotation
 totals are independently aggregated forward and backward. The delivery
-inventory uses a filesystem walk and Git's cached/untracked enumeration,
-diffs them, and prints a count; it includes ignored files and untracked docs.
+owned-file inventory uses a filesystem walk with prohibited products pruned
+and Git's cached/untracked enumeration over an explicit W1 allowlist. The
+changed-file list is independently derived from Git diff plus untracked
+paths and filesystem bytes versus HEAD blobs, then diffed with a count.
+Whitespace checks cover owned tracked and untracked files only; no W2/W3
+file or retained validation file is opened. This round runs only the build,
+its byte check and the world checker; no test file is run.
 
 The checker does not certify query-category eligibility, guard-stratum
 quotas, semantic entailment, label accuracy, retrieval difficulty or assembly

@@ -1,0 +1,96 @@
+{
+  "ok": false,
+  "baseline": "e3fd8dba",
+  "fixtureDir": "evaluation/retrieval-research/fixtures-hr2b",
+  "results": [
+    {
+      "check": "facts_bytes_identical",
+      "ok": true,
+      "detail": {
+        "baseline": "78e486837b8eb442a530165c0f6d5e6f20724bf0c3bb477da064f9b717c8f881",
+        "rerender": "78e486837b8eb442a530165c0f6d5e6f20724bf0c3bb477da064f9b717c8f881"
+      }
+    },
+    {
+      "check": "facts_fields_identical",
+      "ok": true,
+      "detail": {
+        "facts": 1020,
+        "differing": []
+      }
+    },
+    {
+      "check": "families_identical",
+      "ok": true,
+      "detail": {
+        "families": 90
+      }
+    },
+    {
+      "check": "lexicon_identical",
+      "ok": true,
+      "detail": {}
+    },
+    {
+      "check": "coverage_identical",
+      "ok": true,
+      "detail": {}
+    },
+    {
+      "check": "placement_allocation_identical",
+      "ok": false,
+      "detail": {
+        "entries": 940,
+        "seed": [
+          1924440465,
+          1924440465
+        ]
+      }
+    },
+    {
+      "check": "fact_to_memory_plan_identical",
+      "ok": false,
+      "detail": {
+        "memories": 540,
+        "differingIndexes": [
+          160,
+          161,
+          162,
+          163,
+          164,
+          165,
+          167,
+          168,
+          169,
+          170,
+          172,
+          173,
+          174,
+          175,
+          177,
+          180,
+          181,
+          182,
+          183,
+          184
+        ]
+      }
+    },
+    {
+      "check": "receipts_at_most_four",
+      "ok": true,
+      "detail": {
+        "maxReceipts": 4,
+        "baselineMax": 6
+      }
+    },
+    {
+      "check": "facts_view_bytes_identical",
+      "ok": false,
+      "detail": {
+        "baseline": "c422f160859167cbc2431480f01288cb2a15bc63da23ae9ddbbe945872c7be3a",
+        "regenerated": "b26453c9a47e428fdb67fa3e6c74fbc2f9bc903e068d2076a9449703d38921ea"
+      }
+    }
+  ]
+}

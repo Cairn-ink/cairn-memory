@@ -1,5 +1,5 @@
 // W1 stage 1 only. Never loads queries, split, labels, rankings or assembly.
-import { readFileSync, writeFileSync, readdirSync, lstatSync, openSync, closeSync, unlinkSync, fstatSync, readSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, lstatSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolve, relative, join } from 'node:path';
@@ -8,8 +8,11 @@ import { buildWorld as hr1PatternWorld } from '../../fixtures/build/build-world.
 import { VERSION, CANDIDATE_SEEDS, DOMAINS, LANGS, BODY_BANDS, RECEIPT_BANDS, RECEIPT_COUNTS,
   PLACEMENTS, LANGUAGE_SHARES } from './config.mjs';
 import { fillerSentences } from './filler.mjs';
+import { OWNED_FILES, PREFIX, gitText, headBytes, checkIdentity, identityOutput } from './check-identity.mjs';
 
-const ROOT = fileURLToPath(fixtureRoot), REPO = fileURLToPath(new URL('../../../../', import.meta.url));
+const ROOT = fileURLToPath(fixtureRoot);
+const PROTOCOL = {revision:'v1.1',freezeCommit:'d3a6e24f'};
+const V1_REJECTION = '16 placement-quota errors: dev:first-receipt:groups_minimum_30, dev:first-receipt:families_minimum_12, dev:later-receipt:groups_minimum_30, dev:later-receipt:families_minimum_12, dev:guard:{C1,C2,C3,C4,C5,C7}:family_minimum, test:guard:{C1,C2,C4,C5,C6,C7}:family_minimum (later-receipt test families per category C1–C7 6/7/11/8/7/8/3); 81 memories with 5–6 receipts refused by the public-admission preflight (core admit cap 4)';
 const count = values => Object.fromEntries([...new Set(values)].sort().map(key => [key, values.filter(value => value === key).length]));
 const mean = values => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
 const rounded = value => Math.round(value * 10000) / 10000;
@@ -81,10 +84,10 @@ export function checkWorld(candidate = 0) {
     const bodyKey = `${memory.namespace}:${normalize(memory.content)}`;
     check(!normalizedBodies.has(bodyKey), 'memory:duplicate_normalized_body', memory.id); normalizedBodies.add(bodyKey);
     units.set(`${memory.id}:body`, { memory, where: 'body', span: null, text: memory.content });
-    check(memory.spans.length >= 1 && memory.spans.length <= 6, 'memory:receipt_count', memory.id);
+    check(memory.spans.length >= 1 && memory.spans.length <= 4, 'memory:receipt_count', memory.id);
     memory.spans.forEach((span, index) => {
       keys(span, ['id','role','eventTime','text'], span.id);
-      check(span.id === `${memory.id}#s${index + 1}` && ['user','assistant'].includes(span.role) && time(span.eventTime) && text(span.text) && span.text.length <= 800, 'span:metadata', span.id);
+      check(index < 4 && span.id === `${memory.id}#s${index + 1}` && ['user','assistant'].includes(span.role) && time(span.eventTime) && text(span.text) && span.text.length <= 800, 'span:metadata', span.id);
       check(/[.!?。！？]$/u.test(span.text), 'span:whole_sentences', span.id);
       check(Date.parse(span.eventTime) <= Date.parse(memory.eventTime), 'span:future', span.id);
       const previous = memory.spans[index - 1];
@@ -255,48 +258,57 @@ export function checkWorld(candidate = 0) {
 
 function inventory() {
   const filesystem = [];
+  const prohibited = new Set(['hr1-queries.json','hr1-labels.json','hr1-split.json','hr1-label-audit.json','hr1-facts-view.json','label-audit-report.md']);
   function visit(dir = '') {
     for (const name of readdirSync(join(ROOT,dir)).sort()) {
-      const path = join(dir,name), stat = lstatSync(join(ROOT,path));
+      const path = join(dir,name);
+      if ((!dir && prohibited.has(name)) || path === 'build/candidate0-v1-validation') continue;
+      const stat = lstatSync(join(ROOT,path));
       if (stat.isSymbolicLink()) throw new Error('inventory_symlink');
       if (stat.isDirectory()) visit(path); else if (stat.isFile()) filesystem.push(path); else throw new Error('inventory_special_file');
     }
   }
   visit(); filesystem.sort();
-  const prefix = relative(REPO,ROOT), scratch = join(ROOT,'build/.inventory-git.tmp');
-  let gitOutput;
-  const fd = openSync(scratch,'wx+');
-  // Keep an anonymous open file: it must not enumerate itself as a deliverable.
-  unlinkSync(scratch);
-  try {
-    const child = spawnSync('git',['--no-optional-locks','ls-files','--cached','--others','--',prefix],{cwd:REPO,stdio:['ignore',fd,'inherit']});
-    if (child.error || child.status !== 0) throw new Error(`inventory_git_failed:${child.status}:${child.error?.message ?? child.signal}`);
-    const bytes = Buffer.alloc(fstatSync(fd).size);
-    readSync(fd,bytes,0,bytes.length,0); gitOutput = bytes.toString('utf8');
-  } finally { closeSync(fd); }
-  const git = [...new Set(gitOutput.trim().split('\n').filter(Boolean).map(path=>relative(prefix,path)))].sort();
+  const paths = OWNED_FILES.map(name=>PREFIX+name), lines = value=>value.trim().split('\n').filter(Boolean);
+  const git = [...new Set(lines(gitText(['ls-files','--cached','--others','--',...paths])).map(path=>path.slice(PREFIX.length)))].sort();
   const diff = { filesystemOnly: filesystem.filter(path=>!git.includes(path)), gitOnly: git.filter(path=>!filesystem.includes(path)) };
   if (diff.filesystemOnly.length || diff.gitOnly.length) throw new Error(`inventory_mismatch:${JSON.stringify(diff)}`);
-  return { count: filesystem.length, methodA:'recursive filesystem walk',methodB:'git ls-files --cached --others (includes ignored files)', gitExitCode:0,diff,files:filesystem };
+  const changedA = [...new Set([...lines(gitText(['diff','--name-only','HEAD','--',...paths])),...lines(gitText(['ls-files','--others','--',...paths]))].map(path=>path.slice(PREFIX.length)))].sort();
+  const baselineNames = new Set(lines(gitText(['ls-tree','-r','--name-only','HEAD','--',...paths])).map(path=>path.slice(PREFIX.length)));
+  const changedB = filesystem.filter(name=>!baselineNames.has(name)||readFileSync(join(ROOT,name),'utf8')!==headBytes(name));
+  const changedDiff = {gitOnly:changedA.filter(name=>!changedB.includes(name)),byteComparisonOnly:changedB.filter(name=>!changedA.includes(name))};
+  if (changedDiff.gitOnly.length || changedDiff.byteComparisonOnly.length) throw new Error(`changed_file_list_mismatch:${JSON.stringify(changedDiff)}`);
+  return { count: filesystem.length, methodA:'filesystem walk with prohibited products pruned',methodB:'Git cached/untracked enumeration over W1 allowlist',gitExitCode:0,diff,files:filesystem,
+    changed:{count:changedA.length,files:changedA,methodA:'git diff HEAD --name-only plus untracked',methodB:'filesystem file bytes versus HEAD blobs',diff:changedDiff} };
 }
 
 function report(result, exits, files) {
   const s = result.statistics, scales = s.scales;
   const rows = Object.entries(scales).map(([scale,v]) => `| ${scale} | ${v.count} | ${v.languages.zh}/${v.languages.en}/${v.languages.mixed} | ${v.receiptRoles.user}/${v.receiptRoles.assistant} | ${Object.values(v.receiptCountHistogram).join('/')} | ${Object.values(v.bodyTokens.bands).join('/')} | ${Object.values(v.receiptTokens.bands).join('/')} | ${v.bodyTokens.mean}/${v.receiptTokens.mean} |`).join('\n');
   const domainRows = DOMAINS.map(domain=>`| ${domain} | ${scales.S300.domain[domain] ?? 0} | ${scales['S1000-extra'].domain[domain] ?? 0} | ${scales.foreign.domain[domain] ?? 0} |`).join('\n');
-  return `# HR-2b W1 delivery report
+  return `# HR-2b v1.1 W1 rebuild report
 
-Synthetic stage-1 world; candidate ${result.candidateIndex}, seed ${result.seed}, mulberry32. Stage 2 quota validation and W3 semantic audit remain pending. No queries, labels, retrieval, rankings, assembly runs, network access or commits were used.
+Protocol v1.1, frozen at d3a6e24f; restart candidate ${result.candidateIndex}, seed ${result.seed}, mulberry32. ${result.identity.ok ? 'Identity passed; stage 2 and W3 re-audit remain pending.' : 'STOP: the required identity check failed; no seed was advanced and the generator was not changed further.'} No tests, prohibited products, retained validator contents, retrieval/assembly runs, network or commits were used.
 
-Actual exits: build-world.mjs **${exits.build}**; build-world.mjs --check **${exits.buildCheck}**; check-world.mjs **${result.ok ? 0 : 1}**. Structural errors: ${result.errors.length}.
+Actual exits: build-world.mjs **${exits.build}**; build-world.mjs --check **${exits.buildCheck}**; check-world.mjs **${result.ok ? 0 : 1}**. Structural checks: ${result.structuralOk ? 'pass' : 'fail'}; identity: ${result.identity.ok ? 'pass' : 'fail'}.
+
+Structural diagnostics: ${result.structuralErrors.length ? result.structuralErrors.map(error=>`${error.code} (${error.detail})`).join('; ') : 'none'}. The failed structural result cannot be recorded as a stage-1 pass.
+
+Identity helper output (also printed by the checker):
+
+\`\`\`json
+${JSON.stringify(identityOutput(result.identity))}
+\`\`\`
+
+Fact categories mean kind/state metadata; no query categories were read. The helper also checks every fact field, the lexicon, fact-to-memory plan, six unchanged generator sources and config excluding RECEIPT_COUNTS against HEAD.
 
 There are ${s.families.total} families (${s.families.byRole.target} target, ${s.families.byRole.distractor} distractor, ${s.families.byRole.foreign} foreign), ${s.facts.total} facts and ${Object.values(scales).reduce((sum,value)=>sum+value.count,0)} memories. Target facts: 280 rendered plus 40 absent; distractors: 600 rendered plus 40 absent; foreign: 60 rendered, including ${s.foreignNearDuplicates} near-duplicates and ${s.foreignAnchorFamilies} unique custody anchors. All bodies are assistant notes. Receipt roles total user ${s.receiptRoles.user}, assistant ${s.receiptRoles.assistant}.
 
-| Scale | Memories | zh/en/mixed | Receipt user/assistant | Receipts 1/2/3/4/5/6 | Body bands | Receipt bands | Mean body/receipt tokens |
+| Scale | Memories | zh/en/mixed | Receipt user/assistant | Receipts 1/2/3/4 | Body bands | Receipt bands | Mean body/receipt tokens |
 | --- | ---: | --- | --- | --- | --- | --- | --- |
 ${rows}
 
-Body bands are [120,180), [180,260), [260,400]; receipt bands [40,70), [70,130), [130,200]. Counts and means use tiktoken@${s.counter.version}, o200k_base. Namespace target contains S300 plus S1000-extra; namespace foreign contains foreign. Overall languages are ${s.memoryLanguages.zh}/${s.memoryLanguages.en}/${s.memoryLanguages.mixed}. Distractor authoring is ${scales['S1000-extra'].authoring.hand} hand/${scales['S1000-extra'].authoring.template} template.
+Receipt-count shares per scale are ${Object.entries(scales).map(([name,value])=>`${name}: ${RECEIPT_COUNTS.map(([n])=>100*(value.receiptCountHistogram[n] ?? 0)/value.count).join('/')}%`).join('; ')}, against **20/25/25/30%**. Body bands: [120,180), [180,260), [260,400]; receipt bands: [40,70), [70,130), [130,200]. Counter: tiktoken@${s.counter.version}, o200k_base. Overall languages: ${s.memoryLanguages.zh}/${s.memoryLanguages.en}/${s.memoryLanguages.mixed}. Distractors: ${scales['S1000-extra'].authoring.hand} hand/${scales['S1000-extra'].authoring.template} template.
 
 | Domain | Target memories | Distractors | Foreign |
 | --- | ---: | ---: | ---: |
@@ -306,22 +318,23 @@ Distinct-fact placements (body/first/later): targets ${Object.values(s.placement
 
 Filler disclosure: ${s.filler.bankSentences} complete bank sentences, ${s.filler.disclosedRanges} UTF-16 ranges across ${s.filler.disclosedUnits} units; ${s.filler.lexiconTerms} per-fact terms scanned, ${s.filler.lexiconHits} hits. HR-1 exact-statement overlaps: ${s.hr1ExactStatementOverlap}; exact unannotated facts: ${s.unannotatedExactFactOccurrences}. Annotation totals independently agree (${s.annotationsCrossChecked.forward} forward/${s.annotationsCrossChecked.reverse} reverse).
 
-Declared decisions: four target episodes express three facts each; 2–4 facts means the entire memory including receipts. Historical notes may also contain still-valid bounds or nearby attributes with current support elsewhere. Changed decisions/reasons and primary/nearby assignments never share a memory. Body allocation uses body-only support with span:null. Non-supporting units have entity-bearing topical anchors disclosed apart from fact-free padding, since their entity references intentionally belong to the forbidden lexicon. Authored filler is factored by domain and role; every resulting sentence is disclosed, and opening/ending clauses cannot repeat within a unit. Mixed units contain substantive English and Chinese clauses. Distractors use four hand-authored adjacent-artifact episodes and four disclosed fabrication-template episodes; only those 160 memories count as template. Seeded capacity matching assigns whole-sentence constructions to token bands; endpoints follow the coordinator convention.
+Declared decisions: only RECEIPT_COUNTS changed in the generator. Families, factual sources, filler banks, seed sequence and band logic were preserved. Four target episodes still express three facts each across body/receipts, with separate decision/reason and primary/nearby assignment notes. Body-only support uses span:null; entity-bearing topical anchors remain separately disclosed. All earlier development diagnostics were preserved.
 
-Candidate diagnostics: ${JSON.stringify(result.candidateHistory)}. Rejected-candidate diagnostics: ${JSON.stringify(result.rejectedCandidates)}. Later candidates are unattempted. The coordinator must complete stage 2 in frozen seed order, retaining any quota rejection. W1 cannot establish query quotas or semantic entailment. No -o destination was supplied; this report uses W1-REPORT.md inside the authorized directory.
+History in build/world-stats.json records v1 candidate 0 as stage2 rejected, pointing at build/candidate0-v1-validation/ and preserving the supplied coordinator diagnostics verbatim; v1.1 restarts candidate 0 with structural stage1 ${result.structuralOk ? 'pass' : 'fail'}, stage2 pending-coordinator and the identity result. The retained directory was never traversed or modified.
 
-Development diagnostics are retained separately: an import-entry failure (exit 1), sixteen timestamp errors (checker exit 1), and sandbox-only piped-child EPERM plus transient inventory self-enumeration (exit 1). These implementation issues were corrected before acceptance; see build/development-diagnostics.json. No seed was discarded to improve results.
+${result.identity.ok ? 'No W1 rebuild item remains incomplete. Stage-2 quotas and semantic re-audit belong to the coordinator/W3.' : 'Could not deliver all three exits as zero or certify unchanged placement: fewer target receipt draws shift the shared random stream before distractor/foreign placement allocation. No corrective generator edit or seed advance was attempted. Coordinator resolution is required.'}
 
-Inventory: ${files.count} files, filesystem walk versus Git cached/untracked enumeration, mechanically diffed; filesystem-only ${files.diff.filesystemOnly.length}, Git-only ${files.diff.gitOnly.length}; Git exit ${files.gitExitCode}. Whitespace checks include every listed file, including untracked files.
+Owned inventory: ${files.count} files, filesystem/Git diff empty. Changed files: **${files.changed.count}**, independently derived from Git diff plus untracked paths and filesystem bytes versus HEAD blobs; diff ${JSON.stringify(files.changed.diff)}; Git exits 0. Whitespace checks cover all owned files, including untracked files.
 
-${files.files.map(path=>`- \`${path}\``).join('\n')}
+${files.changed.files.map(path=>`- \`${path}\``).join('\n')}
 `;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   try {
     const args = process.argv.slice(2), option = (name, fallback) => args.includes(name) ? args[args.indexOf(name)+1] : fallback;
-    const candidate = Number(option('--candidate','0')), record = args.includes('--record'), output = option('-o',null), verify = args.includes('--verify-builds');
+    const candidate = Number(option('--candidate','0')), record = args.includes('--record'), output = option('-o',null), verify = args.includes('--verify-builds'), reportOnly = args.includes('--report-only');
+    if (reportOnly && verify) throw new Error('report_only_cannot_rebuild');
     const exits = { build: null, buildCheck: null };
     if (verify) {
       for (const [key, extra] of [['build',[]],['buildCheck',['--check']]]) {
@@ -331,31 +344,46 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
         if (child.error || child.status !== 0) throw new Error(`build_subprocess_failed:${key}:${child.status}:${child.error?.message ?? child.signal}`);
       }
     }
-    const result = checkWorld(candidate);
+    const result = reportOnly ? JSON.parse(readFileSync(join(ROOT,'build/world-stats.json'),'utf8')) : checkWorld(candidate);
+    if (reportOnly) {
+      if (result.candidateIndex !== candidate) throw new Error('report_candidate_mismatch');
+      Object.assign(exits,result.actualExitCodes);
+    } else {
+      result.protocol = PROTOCOL;
+      result.structuralOk = result.ok;
+      result.structuralErrors = [...result.errors];
+      result.identity = checkIdentity(result.generation.placementAllocation);
+      console.log(JSON.stringify({identityCheck:identityOutput(result.identity)}));
+      if (!result.identity.ok) result.errors.push({code:'identity:changed_fields',detail:result.identity.differingFields});
+      result.ok = result.structuralOk && result.identity.ok;
+    }
     let history = [], previousRecord = null;
     const statsPath = join(ROOT,'build/world-stats.json');
-    if (record) {
+    if (record && !reportOnly) {
       try { previousRecord = JSON.parse(readFileSync(statsPath,'utf8'));history = previousRecord.candidateHistory ?? []; } catch(error) { if(error.code !== 'ENOENT') throw error; }
-      const old = history.find(row=>row.candidateIndex === candidate);
-      const attempt = { stage1:result.ok?'pass':'fail',errors:result.errors,hashes:result.hashes };
-      const attempts = old?.stage1Attempts ?? (old ? [{stage1:old.stage1,errors:old.stage1Errors,hashes:previousRecord.candidateIndex === candidate ? previousRecord.hashes : old.hashes}] : []);
+      const legacy = history.find(row=>row.candidateIndex === 0 && (row.protocolRevision ?? 'v1') === 'v1');
+      const rejectedV1 = {...legacy,protocolRevision:'v1',protocolCommit:'c546bfc1',candidateIndex:0,seed:CANDIDATE_SEEDS[0],stage2:'rejected',validationRecord:'build/candidate0-v1-validation/',coordinatorDiagnostics:V1_REJECTION};
+      const old = history.find(row=>row.candidateIndex === candidate && row.protocolRevision === PROTOCOL.revision);
+      const attempt = {stage1:result.structuralOk?'pass':'fail',errors:result.structuralErrors,hashes:result.hashes,identity:result.identity.ok?'pass':'fail'};
+      const attempts = old?.stage1Attempts ?? [];
       if (!same(attempts.at(-1),attempt)) attempts.push(attempt);
-      const row = { ...old,candidateIndex:candidate,seed:CANDIDATE_SEEDS[candidate],stage1:attempt.stage1,stage1Errors:result.errors,stage1Attempts:attempts,stage2:old?.stage2 ?? 'pending-coordinator' };
-      history = [...history.filter(row=>row.candidateIndex !== candidate),row].sort((a,b)=>a.candidateIndex-b.candidateIndex);
+      const row = {...old,protocolRevision:PROTOCOL.revision,protocolCommit:PROTOCOL.freezeCommit,candidateIndex:candidate,seed:CANDIDATE_SEEDS[candidate],stage1:attempt.stage1,stage1Errors:result.structuralErrors,stage1Attempts:attempts,identity:attempt.identity,stage2:old?.stage2 ?? 'pending-coordinator'};
+      history = [...history.filter(row=>!(row.candidateIndex === 0 && (row.protocolRevision ?? 'v1') === 'v1') && !(row.candidateIndex === candidate && row.protocolRevision === PROTOCOL.revision)),rejectedV1,row]
+        .sort((a,b)=>(a.protocolRevision ?? 'v1').localeCompare(b.protocolRevision ?? 'v1','en') || a.candidateIndex-b.candidateIndex);
       result.candidateHistory = history; result.rejectedCandidates = history.filter(row=>row.stage1 === 'fail' || row.stage2 === 'rejected');
       result.actualExitCodes = { ...exits,checkWorld:result.ok?0:1 }; result.stage2 = 'pending coordinator quota validation after W3';
       result.developmentDiagnostics = JSON.parse(readFileSync(join(ROOT,'build/development-diagnostics.json'),'utf8'));
       writeFileSync(statsPath,serialize(result));
     }
     if (output) {
-      if (!record || !verify) throw new Error('report_requires_record_and_verify_builds');
+      if (!record || (!verify && !reportOnly)) throw new Error('report_requires_record_and_verify_builds_or_saved_results');
       const path = resolve(ROOT,output), within = relative(ROOT,path);
       if (!within || within.startsWith('..') || path === statsPath) throw new Error('report_outside_authorized_directory');
       writeFileSync(path,'');
       result.inventory = inventory();
       writeFileSync(statsPath,serialize(result));
       const reportText = report(result,exits,result.inventory), words = reportText.trim().split(/\s+/u).length;
-      if (words > 900) throw new Error(`report_word_limit:${words}`);
+      if (words > 700) throw new Error(`report_word_limit:${words}`);
       writeFileSync(path,reportText);
       const whitespaceErrors = [];
       for (const filename of result.inventory.files) {
@@ -363,12 +391,13 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
         if (/[\t ]+$/mu.test(bytes) || bytes.includes('\r') || !bytes.endsWith('\n')) whitespaceErrors.push(filename);
       }
       if (whitespaceErrors.length) throw new Error(`delivery_whitespace:${whitespaceErrors.join(',')}`);
-      result.deliveryVerification = { reportWords:words,reportMaximumWords:900,whitespaceFilesChecked:result.inventory.count,whitespaceErrors };
+      result.deliveryVerification = {reportWords:words,reportMaximumWords:700,whitespaceFilesChecked:result.inventory.count,whitespaceErrors};
       // Re-enumerate after delivery writes; both independent lists must agree.
       const finalInventory = inventory();
       if (!same(finalInventory,result.inventory)) throw new Error('delivery_inventory_changed');
       writeFileSync(statsPath,serialize(result));
       console.log(JSON.stringify({ inventoryCrossCheck:result.inventory.methodA+' == '+result.inventory.methodB,count:result.inventory.count,diff:result.inventory.diff }));
+      console.log(JSON.stringify({changedFileCrossCheck:result.inventory.changed}));
       console.log(JSON.stringify({ deliveryVerification:result.deliveryVerification }));
     }
     console.log(JSON.stringify({ ok:result.ok,actualExitCode:result.ok?0:1,candidateIndex:candidate,errors:result.errors,statistics:result.statistics },null,2));
