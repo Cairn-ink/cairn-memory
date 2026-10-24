@@ -69,6 +69,7 @@
     "test:raw-producer": "node integrations/client/testing/run.mjs integrations/client/test/raw-*.test.mjs",
     "test:pairing:golden": "node integrations/client/testing/run.mjs --script integrations/client/testing/golden-cli.mjs --verify",
     "measure:method-packages": "node tools/testing/run.mjs --script tools/testing/measure-method-packages.mjs",
-    "measure:assets": "node tools/testing/run.mjs --script tools/testing/measure-assets.mjs"
+    "measure:assets": "node tools/testing/run.mjs --script tools/testing/measure-assets.mjs",
+    "measure:role-profiles": "node tools/testing/run.mjs --script tools/testing/measure-role-profiles.mjs"
   }
 }
