@@ -378,3 +378,11 @@
   1,080 句、3,840 個範圍、18,297 個禁用詞掃描 0 命中；與 HR-1 語句 0 重疊。協調者重跑 build --check／check-world 皆 0、
   whitespace 0、抽樽文字為合成中文筆記與對話。產生 facts view（無文字、無記憶 id）。**提交 W1 世界 `e3fd8dba`**（未凍結）。
 - 使用者指示：之後 Codex 派工改用 **fast（`service_tier="fast"`，rollout 顯示 priority）**；worker 改 `high`、審查者維持 `xhigh`。自 W2 起套用。派 W2 `hr2b_query_author`。
+- **W2 完成**（high＋fast，約 15 分鐘）：160 題（140 計分、10 C8、10 foreign），語言 96／46／18，123／140 計分題需要 span-only
+  事實、涵蓋全部 40 個目標家族。協調者跑 split（`hr2b-split-v1`，dev 46／test 94 計分）與 labels（160）皆 0；提交 `48919651`
+  （未凍結）。**審前驗證器失敗（35 錯）**：1 個 `audit:overrides`（尚無稽核檔，預期）、18 個類別機械檢查失敗（C1×6、C2×1、
+  C3×7、C5×4，交 W3 裁定）、**16 個 placement 配額**：dev 兩層 groups<30／families<12；guard 每類別 ≥10 test families 只有 C3
+  達標（later-receipt test 每類別 6／7／11／8／7／8／3 家族）。分析：每類別 14 題 test × 30% later 份額 ≈ 4–7 家族，七類各 ≥10
+  需約 70 個 later 題家族，與 45／25／30 設計矛盾——配額本身是缺陷，換 seed 或加家族都救不了。提案 v1.1：guard 對比改為
+  pooled（單一層、minimumFamilies 10）、test 層 ≥30 groups／≥12 families（已達：57／20、43／23）、dev 層 ≥4 families 無 group 下限、
+  門檻與門不變。已送主控決定；派 W3（xhigh＋fast）同步稽核。
