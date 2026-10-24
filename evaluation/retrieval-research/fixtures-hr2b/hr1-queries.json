@@ -80,11 +80,11 @@
       "secondaryTags": [],
       "lang": "zh",
       "intent": "current",
-      "text": "OakSlip 現在整理討論摘要時，是依什麼來安排內容順序？",
+      "text": "槲札現在整理討論摘要時，是依什麼來安排內容順序？",
       "requiredFacts": [
         "B-hr2b-t11-02"
       ],
-      "keyTerm": "OakSlip",
+      "keyTerm": "槲札",
       "note": "The current ordering decision determines the summary structure."
     },
     {
@@ -138,11 +138,11 @@
       "secondaryTags": [],
       "lang": "en",
       "intent": "current",
-      "text": "What is the quarterly spending limit for CopperQuay labelling supplies?",
+      "text": "What is the quarterly spending limit for CopperQuay (銅碼頭) labelling supplies?",
       "requiredFacts": [
         "B-hr2b-t19-04"
       ],
-      "keyTerm": "CopperQuay",
+      "keyTerm": "銅碼頭",
       "note": "The quarterly supplies cap answers the budget question."
     },
     {
@@ -212,11 +212,11 @@
       "secondaryTags": [],
       "lang": "en",
       "intent": "current",
-      "text": "Did ReedBooklet approve estimating every shipment at the highest single-item rate?",
+      "text": "Did ReedBooklet (蒲簿) approve estimating every shipment at the highest single-item rate?",
       "requiredFacts": [
         "B-hr2b-t29-07"
       ],
-      "keyTerm": "ReedBooklet",
+      "keyTerm": "蒲簿",
       "note": "The rejected-option fact settles the approval status of that approach."
     },
     {
@@ -226,11 +226,11 @@
       "secondaryTags": [],
       "lang": "mixed",
       "intent": "current",
-      "text": "PalmCounter 做 installment 差額覆核時，金額上限是多少？",
+      "text": "棕籌做 installment 差額覆核時，金額上限是多少？",
       "requiredFacts": [
         "B-hr2b-t31-04"
       ],
-      "keyTerm": "PalmCounter",
+      "keyTerm": "棕籌",
       "note": "The installment-review ceiling answers the amount question."
     },
     {
@@ -272,11 +272,11 @@
       "secondaryTags": [],
       "lang": "zh",
       "intent": "current",
-      "text": "芍窗 現在做完操作後，要去哪裡找撤銷入口？",
+      "text": "PeonyWindow 現在做完操作後，要去哪裡找撤銷入口？",
       "requiredFacts": [
         "B-hr2b-t37-02"
       ],
-      "keyTerm": "芍窗",
+      "keyTerm": "PeonyWindow",
       "note": "The current undo-entry decision identifies where the control appears."
     },
     {
@@ -306,7 +306,7 @@
       "requiredFacts": [
         "B-hr2b-t01-05"
       ],
-      "keyTerm": "索引",
+      "keyTerm": "鎏砂",
       "note": "The backfill assignment identifies the person needed."
     },
     {
@@ -320,7 +320,7 @@
       "requiredFacts": [
         "B-hr2b-t02-07"
       ],
-      "keyTerm": "附件",
+      "keyTerm": "赭苔",
       "note": "The proposal fact supplies whether this deletion option has approval."
     },
     {
@@ -334,24 +334,22 @@
       "requiredFacts": [
         "B-hr2b-t04-04"
       ],
-      "keyTerm": "隔離",
+      "keyTerm": "犢紙弧",
       "note": "The isolation-exercise ceiling supplies the spending limit."
     },
     {
-      "id": "q-024",
+      "id": "q-190",
       "family": "hr2b-t07",
       "category": "C2",
-      "secondaryTags": [
-        "C7"
-      ],
+      "secondaryTags": [],
       "lang": "zh",
       "intent": "current",
-      "text": "汀磚的刪除意圖要請誰來稽查？",
+      "text": "汀磚接下來的清除演練，費用最高能到多少？",
       "requiredFacts": [
-        "B-hr2b-t07-05"
+        "B-hr2b-t07-04"
       ],
-      "keyTerm": "意圖",
-      "note": "The audit assignment identifies the person for this task."
+      "keyTerm": "汀磚",
+      "note": "The exercise-spending ceiling alone supplies the limit; the Han family entity is the exact-term anchor."
     },
     {
       "id": "q-025",
@@ -366,7 +364,7 @@
       "requiredFacts": [
         "B-hr2b-t08-06"
       ],
-      "keyTerm": "時間線",
+      "keyTerm": "寓線軸",
       "note": "The page-specific assignment limits the person's responsibility."
     },
     {
@@ -382,7 +380,7 @@
       "requiredFacts": [
         "B-hr2b-t10-05"
       ],
-      "keyTerm": "密鑰",
+      "keyTerm": "層雲閂",
       "note": "The environment-key inventory assignment identifies its owner."
     },
     {
@@ -398,7 +396,7 @@
       "requiredFacts": [
         "B-hr2b-t12-05"
       ],
-      "keyTerm": "困惑",
+      "keyTerm": "紫菀邊",
       "note": "The confusion-list assignment supplies the responsible person."
     },
     {
@@ -414,7 +412,7 @@
       "requiredFacts": [
         "B-hr2b-t14-05"
       ],
-      "keyTerm": "依賴",
+      "keyTerm": "燼簡",
       "note": "The dependency assignment supplies the owner."
     },
     {
@@ -428,7 +426,7 @@
       "requiredFacts": [
         "B-hr2b-t15-04"
       ],
-      "keyTerm": "通知",
+      "keyTerm": "穗墨",
       "note": "The notification-copy allowance answers the effort ceiling."
     },
     {
@@ -444,24 +442,22 @@
       "requiredFacts": [
         "B-hr2b-t17-05"
       ],
-      "keyTerm": "反例",
+      "keyTerm": "蕨頁",
       "note": "The counterexample assignment supplies the responsible person."
     },
     {
-      "id": "q-031",
+      "id": "q-191",
       "family": "hr2b-t20",
       "category": "C2",
-      "secondaryTags": [
-        "C7"
-      ],
+      "secondaryTags": [],
       "lang": "zh",
       "intent": "current",
-      "text": "漆棧收到候補回覆之後，找誰彙整？",
+      "text": "漆棧想自動接受所有候補，這個提案已經核准了嗎？",
       "requiredFacts": [
-        "B-hr2b-t20-05"
+        "B-hr2b-t20-07"
       ],
-      "keyTerm": "候補",
-      "note": "The response-consolidation assignment supplies the owner."
+      "keyTerm": "漆棧",
+      "note": "The unapproved-option fact supplies its authorization status; the Han family entity is the exact-term anchor."
     },
     {
       "id": "q-032",
@@ -476,7 +472,7 @@
       "requiredFacts": [
         "B-hr2b-t21-06"
       ],
-      "keyTerm": "桌牌",
+      "keyTerm": "瓣鑄坊",
       "note": "The desk-sign assignment specifies the limited task."
     },
     {
@@ -492,7 +488,7 @@
       "requiredFacts": [
         "B-hr2b-t22-06"
       ],
-      "keyTerm": "材料",
+      "keyTerm": "苔埠",
       "note": "The display-board assignment supplies the person's exact scope."
     },
     {
@@ -506,7 +502,7 @@
       "requiredFacts": [
         "B-hr2b-t24-07"
       ],
-      "keyTerm": "簡介",
+      "keyTerm": "荻窯",
       "note": "The proposal fact settles the approval status of that option."
     },
     {
@@ -522,7 +518,7 @@
       "requiredFacts": [
         "B-hr2b-t27-06"
       ],
-      "keyTerm": "付款",
+      "keyTerm": "榛算",
       "note": "The payment-guide assignment specifies the person's limited role."
     },
     {
@@ -538,7 +534,7 @@
       "requiredFacts": [
         "B-hr2b-t30-05"
       ],
-      "keyTerm": "返還",
+      "keyTerm": "鈷匣",
       "note": "The deposit-return assignment identifies the task owner."
     },
     {
@@ -554,7 +550,7 @@
       "requiredFacts": [
         "B-hr2b-t32-05"
       ],
-      "keyTerm": "餘額",
+      "keyTerm": "芹衡",
       "note": "The balance-checking assignment supplies the owner."
     },
     {
@@ -568,36 +564,40 @@
       "requiredFacts": [
         "B-hr2b-t34-04"
       ],
-      "keyTerm": "介面",
+      "keyTerm": "餘燼圖",
       "note": "The interface-design ceiling supplies the spending limit."
     },
     {
-      "id": "q-039",
+      "id": "q-192",
       "family": "hr2b-t37",
       "category": "C2",
-      "secondaryTags": [],
+      "secondaryTags": [
+        "C7"
+      ],
       "lang": "zh",
       "intent": "current",
-      "text": "芍窗現在把撤銷入口安排在哪裡？",
+      "text": "袁沐在芍窗的偏好圖卡上，只需要處理哪個部分？",
       "requiredFacts": [
-        "B-hr2b-t37-02"
+        "B-hr2b-t37-06"
       ],
-      "keyTerm": "撤銷",
-      "note": "The current undo-entry decision gives the control's location."
+      "keyTerm": "芍窗",
+      "note": "The preference-card assignment supplies the person's limited task; the Han family entity is the exact-term anchor."
     },
     {
-      "id": "q-040",
+      "id": "q-193",
       "family": "hr2b-t40",
       "category": "C2",
-      "secondaryTags": [],
+      "secondaryTags": [
+        "C7"
+      ],
       "lang": "zh",
       "intent": "current",
-      "text": "蕎袋想讓所有借物共用收納袋，這案子已經通過了嗎？",
+      "text": "蕎袋出發前要先整理借物，這項工作歸誰？",
       "requiredFacts": [
-        "B-hr2b-t40-07"
+        "B-hr2b-t40-05"
       ],
-      "keyTerm": "借物",
-      "note": "The proposal fact determines whether common bags are approved."
+      "keyTerm": "蕎袋",
+      "note": "The departure-packing assignment identifies the owner; the Han family entity is the exact-term anchor."
     },
     {
       "id": "q-041",
@@ -613,56 +613,56 @@
       "note": "The backfill assignment identifies who handles missing index entries; the task is paraphrased."
     },
     {
-      "id": "q-042",
+      "id": "q-161",
       "family": "hr2b-t02",
       "category": "C3",
       "secondaryTags": [],
-      "lang": "zh",
+      "lang": "en",
       "intent": "current",
-      "text": "赭苔要試驗不同附件會不會被錯認成同一份，應該找誰？",
+      "text": "Why did OchreMoss need a different way to tell whether an uploaded file was already there?",
       "requiredFacts": [
-        "B-hr2b-t02-05"
+        "B-hr2b-t02-03"
       ],
-      "note": "The collision-exercise assignment identifies the person for this paraphrased test."
+      "note": "The change reason explains the failure of name-based duplicate detection; all supporting memories are English."
     },
     {
-      "id": "q-043",
+      "id": "q-162",
       "family": "hr2b-t07",
       "category": "C3",
       "secondaryTags": [],
       "lang": "zh",
-      "intent": "current",
-      "text": "汀磚想確認待刪標記有沒有記對，這項檢查交給誰？",
+      "intent": "history",
+      "text": "汀磚還沒改流程之前，收到要移除檔案的要求時，會怎麼處理實際資料？",
       "requiredFacts": [
-        "B-hr2b-t07-05"
+        "B-hr2b-t07-01"
       ],
-      "note": "The deletion-intent audit assignment answers the paraphrased ownership request."
+      "note": "The historical decision alone supplies the earlier deletion behavior; every supporting memory is Chinese."
     },
     {
       "id": "q-044",
       "family": "hr2b-t08",
       "category": "C3",
       "secondaryTags": [],
-      "lang": "zh",
+      "lang": "en",
       "intent": "current",
-      "text": "寓線軸要驗證日期換過一天後還能正常運作，找誰安排？",
+      "text": "Who should I ask to check that FableSpool still behaves correctly when one date rolls into the next?",
       "requiredFacts": [
         "B-hr2b-t08-05"
       ],
-      "note": "The cross-day testing assignment supplies the responsible person."
+      "note": "The cross-day testing assignment supplies the owner under paraphrased wording; all supporting memories are English."
     },
     {
-      "id": "q-045",
+      "id": "q-163",
       "family": "hr2b-t10",
       "category": "C3",
       "secondaryTags": [],
-      "lang": "zh",
+      "lang": "en",
       "intent": "current",
-      "text": "層雲閂要清點不同部署各自拿來簽連結的祕密值，應該請誰？",
+      "text": "What made NimbusLatch change the way it signs links for testing?",
       "requiredFacts": [
-        "B-hr2b-t10-05"
+        "B-hr2b-t10-03"
       ],
-      "note": "The key-inventory assignment supplies the owner of the paraphrased task."
+      "note": "The linked reason explains the signing change; all supporting memories are English."
     },
     {
       "id": "q-046",
@@ -678,17 +678,17 @@
       "note": "The confusion-list assignment identifies who compiles these reader difficulties."
     },
     {
-      "id": "q-047",
+      "id": "q-164",
       "family": "hr2b-t15",
       "category": "C3",
       "secondaryTags": [],
       "lang": "zh",
       "intent": "current",
-      "text": "穗墨要把提醒人的文案重新整理，時間最多能花多久？",
+      "text": "方湛在穗墨那封請人加入社群的信裡，只需要處理哪個部分？",
       "requiredFacts": [
-        "B-hr2b-t15-04"
+        "B-hr2b-t15-06"
       ],
-      "note": "The notification-copy effort ceiling supplies the limit under paraphrased wording."
+      "note": "The invitation-specific assignment supplies the person's limited task; every supporting memory is Chinese."
     },
     {
       "id": "q-048",
@@ -704,43 +704,43 @@
       "note": "The counterexample assignment identifies the owner without repeating the task term."
     },
     {
-      "id": "q-049",
+      "id": "q-165",
       "family": "hr2b-t27",
       "category": "C3",
       "secondaryTags": [],
       "lang": "zh",
-      "intent": "current",
-      "text": "榛算現在會把退回給客人的款項掛在哪一筆帳上？",
+      "intent": "history",
+      "text": "榛算還沒改記帳方式時，退回給客人的錢是放到哪一期處理？",
       "requiredFacts": [
-        "B-hr2b-t27-02"
+        "B-hr2b-t27-01"
       ],
-      "note": "The superseding refund decision supplies the current accounting placement."
+      "note": "The historical refund decision supplies the earlier accounting period; every supporting memory is Chinese."
     },
     {
-      "id": "q-050",
+      "id": "q-166",
       "family": "hr2b-t32",
       "category": "C3",
       "secondaryTags": [],
       "lang": "zh",
       "intent": "current",
-      "text": "芹衡要確認客人還剩多少可以折抵，該找哪位同事查？",
+      "text": "芹衡現在會把還沒拿去折抵課程的券，記成哪一類款項？",
       "requiredFacts": [
-        "B-hr2b-t32-05"
+        "B-hr2b-t32-02"
       ],
-      "note": "The redemption-balance assignment identifies the owner of the paraphrased check."
+      "note": "The superseding voucher-accounting decision supplies the current treatment; every supporting memory is Chinese."
     },
     {
-      "id": "q-051",
+      "id": "q-167",
       "family": "hr2b-t34",
       "category": "C3",
       "secondaryTags": [],
-      "lang": "zh",
+      "lang": "en",
       "intent": "current",
-      "text": "餘燼圖要重做查看過往修改的畫面，最多可以花多少錢？",
+      "text": "What made EmberAtlas change the way people look back over their edits?",
       "requiredFacts": [
-        "B-hr2b-t34-04"
+        "B-hr2b-t34-03"
       ],
-      "note": "The history-interface design cap supplies the spending ceiling."
+      "note": "The linked reason explains the history-display change; all supporting memories are English."
     },
     {
       "id": "q-052",
@@ -760,119 +760,117 @@
       "family": "hr2b-t06",
       "category": "C3",
       "secondaryTags": [],
-      "lang": "en",
+      "lang": "zh",
       "intent": "current",
-      "text": "Who should I ask to maintain the table that links PrismSkein's failure identifiers to their meanings?",
+      "text": "稜絲要維護那份把失敗代號對上意思的表，這件事應該找誰？",
       "requiredFacts": [
         "B-hr2b-t06-05"
       ],
-      "note": "The error-code crosswalk assignment supplies the owner under a paraphrased description."
+      "note": "The error-code crosswalk assignment supplies the owner under paraphrased wording; every supporting memory is Chinese."
     },
     {
-      "id": "q-054",
+      "id": "q-168",
       "family": "hr2b-t09",
       "category": "C3",
       "secondaryTags": [],
       "lang": "en",
       "intent": "current",
-      "text": "For GrainBriar, who checks what changed between saved versions of the path-selection data?",
+      "text": "On GrainBriar's diagram about choosing paths, what is the limit of Du Rui's design responsibility?",
       "requiredFacts": [
-        "B-hr2b-t09-05"
+        "B-hr2b-t09-06"
       ],
-      "note": "The snapshot-difference assignment identifies the owner of the paraphrased comparison."
+      "note": "The route-poster assignment alone supplies the person's limited role; all supporting memories are English."
     },
     {
       "id": "q-055",
       "family": "hr2b-t19",
       "category": "C3",
       "secondaryTags": [],
-      "lang": "en",
+      "lang": "zh",
       "intent": "current",
-      "text": "Who makes sure CopperQuay's borrowed gear carries the identifying marks it needs?",
+      "text": "銅碼頭要確保借出去的器材都有辨識用的記號，這件事交給誰？",
       "requiredFacts": [
         "B-hr2b-t19-05"
       ],
-      "note": "The lending-mark assignment identifies the responsible person."
+      "note": "The lending-mark assignment identifies the owner under paraphrased wording; every supporting memory is Chinese."
     },
     {
-      "id": "q-056",
+      "id": "q-169",
       "family": "hr2b-t29",
       "category": "C3",
       "secondaryTags": [],
-      "lang": "en",
+      "lang": "zh",
       "intent": "current",
-      "text": "How large a mismatch with the delivery company's bill can ReedBooklet allow?",
+      "text": "蒲簿現在認列送貨的花費時，是以哪一方提供的資料為準？",
       "requiredFacts": [
-        "B-hr2b-t29-04"
+        "B-hr2b-t29-02"
       ],
-      "note": "The carrier-difference ceiling supplies the permitted amount."
+      "note": "The current delivery-cost decision supplies the source used for recognition; every supporting memory is Chinese."
     },
     {
       "id": "q-057",
       "family": "hr2b-t36",
       "category": "C3",
       "secondaryTags": [],
-      "lang": "en",
+      "lang": "zh",
       "intent": "current",
-      "text": "In LarchCanvas now, when will the interface show me where the card would land?",
+      "text": "落葉松幕現在會在我移動卡片的哪個階段，讓我先看到它將落在哪裡？",
       "requiredFacts": [
         "B-hr2b-t36-02"
       ],
-      "note": "The current preview-timing decision supplies the answer without its distinctive phrase."
+      "note": "The current preview-timing decision supplies the stage under paraphrased wording; every supporting memory is Chinese."
     },
     {
-      "id": "q-058",
+      "id": "q-170",
       "family": "hr2b-t05",
       "category": "C3",
       "secondaryTags": [],
-      "lang": "mixed",
-      "intent": "history",
-      "text": "ReedCove 舊版處理一批操作時，產生預覽圖跟 atomic write 的先後順序是什麼？",
+      "lang": "en",
+      "intent": "current",
+      "text": "In ReedCove now, does making a small preview happen before or after the saved changes become final?",
       "requiredFacts": [
-        "B-hr2b-t05-01"
+        "B-hr2b-t05-02"
       ],
-      "note": "The historical decision alone supplies the earlier thumbnail timing."
+      "note": "The current thumbnail-timing decision supplies the ordering; all supporting memories are English."
     },
     {
       "id": "q-059",
       "family": "hr2b-t11",
       "category": "C3",
       "secondaryTags": [],
-      "lang": "mixed",
+      "lang": "zh",
       "intent": "current",
-      "text": "OakSlip 要把還沒解開的提問整併成一份，這個 follow-up 找誰？",
+      "text": "槲札要把還沒解開的提問整併成一份，這件事找誰接？",
       "requiredFacts": [
         "B-hr2b-t11-05"
       ],
-      "note": "The question-consolidation assignment identifies its owner in paraphrased wording."
+      "note": "The question-consolidation assignment identifies its owner under paraphrased wording; every supporting memory is Chinese."
     },
     {
-      "id": "q-060",
+      "id": "q-171",
       "family": "hr2b-t38",
       "category": "C3",
       "secondaryTags": [],
-      "lang": "mixed",
-      "intent": "current",
-      "text": "LichenMap 想讓外部夥伴看懂自己能做什麼，這次 guide 重做最多能花多少？",
-      "requiredFacts": [
-        "B-hr2b-t38-04"
-      ],
-      "note": "The permission-guide redesign ceiling supplies the requested budget."
-    },
-    {
-      "id": "q-061",
-      "family": "hr2b-t02",
-      "category": "C4",
-      "secondaryTags": [
-        "C7"
-      ],
       "lang": "zh",
       "intent": "current",
-      "text": "林頌在赭苔的附件說明卡上，只管哪個部分？",
+      "text": "蘚圖為什麼要換掉原本告訴別人可以做什麼的說明方式？",
       "requiredFacts": [
-        "B-hr2b-t02-06"
+        "B-hr2b-t38-03"
       ],
-      "note": "The English-only card assignment gives the person's exact scope."
+      "note": "The linked reason explains the permission-guidance change; every supporting memory is Chinese."
+    },
+    {
+      "id": "q-172",
+      "family": "hr2b-t02",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "赭苔為什麼不再靠檔名判斷附件是否重複？",
+      "requiredFacts": [
+        "B-hr2b-t02-03"
+      ],
+      "note": "The English-only reason explains the duplicate-detection change."
     },
     {
       "id": "q-062",
@@ -953,19 +951,17 @@
       "note": "The English-only historical decision supplies the original note-taking focus."
     },
     {
-      "id": "q-068",
+      "id": "q-173",
       "family": "hr2b-t25",
       "category": "C4",
-      "secondaryTags": [
-        "C7"
-      ],
+      "secondaryTags": [],
       "lang": "zh",
       "intent": "current",
-      "text": "方湛在鏽帆帳的租借價目表上，只需要處理哪一部分？",
+      "text": "鏽帆帳為什麼要改變訂金對帳的依據？",
       "requiredFacts": [
-        "B-hr2b-t25-06"
+        "B-hr2b-t25-03"
       ],
-      "note": "The English-only price-sheet assignment supplies the limited responsibility."
+      "note": "The English-only reason explains the deposit-matching change."
     },
     {
       "id": "q-069",
@@ -974,13 +970,13 @@
       "secondaryTags": [
         "C7"
       ],
-      "lang": "zh",
+      "lang": "en",
       "intent": "current",
-      "text": "頂針帳那份結算匯差表，現在由誰負責？",
+      "text": "Who is responsible for ThimbleLedger's settlement exchange-difference table?",
       "requiredFacts": [
         "B-hr2b-t28-05"
       ],
-      "note": "The English-only assignment identifies the settlement-table owner."
+      "note": "The Chinese-only assignment identifies the settlement-table owner."
     },
     {
       "id": "q-070",
@@ -989,13 +985,13 @@
       "secondaryTags": [
         "C7"
       ],
-      "lang": "zh",
+      "lang": "en",
       "intent": "current",
-      "text": "姜羽在蘚圖的邀請郵件上，只管哪個部分？",
+      "text": "What is Jiang Yu's limited responsibility on LichenMap's invitation email?",
       "requiredFacts": [
         "B-hr2b-t38-06"
       ],
-      "note": "The English-only invitation assignment specifies the person's limited task."
+      "note": "The Chinese-only invitation assignment specifies the person's limited task."
     },
     {
       "id": "q-071",
@@ -1058,32 +1054,30 @@
       "note": "The Chinese-only confusion-list assignment supplies the responsible person."
     },
     {
-      "id": "q-075",
+      "id": "q-174",
       "family": "hr2b-t16",
       "category": "C4",
-      "secondaryTags": [
-        "C7"
-      ],
+      "secondaryTags": [],
       "lang": "en",
       "intent": "current",
-      "text": "What is Qin He's limited responsibility on LinenPrompt's classroom notice?",
+      "text": "Why did LinenPrompt change the way it asks colleagues collaboration questions?",
       "requiredFacts": [
-        "B-hr2b-t16-06"
+        "B-hr2b-t16-03"
       ],
-      "note": "The Chinese-only notice assignment specifies the person's precise scope."
+      "note": "The Chinese-only reason explains the collaboration-question change."
     },
     {
       "id": "q-076",
       "family": "hr2b-t22",
       "category": "C4",
       "secondaryTags": [],
-      "lang": "en",
+      "lang": "zh",
       "intent": "current",
-      "text": "What now triggers a request to restock MossWharf's materials?",
+      "text": "苔埠現在是依什麼來啟動補貨申請？",
       "requiredFacts": [
         "B-hr2b-t22-02"
       ],
-      "note": "The Chinese-only current decision supplies the replenishment trigger."
+      "note": "The English-only current decision supplies the replenishment trigger."
     },
     {
       "id": "q-077",
@@ -1114,32 +1108,30 @@
       "note": "The Chinese-only renewal-ledger assignment identifies its owner."
     },
     {
-      "id": "q-079",
+      "id": "q-175",
       "family": "hr2b-t30",
       "category": "C4",
-      "secondaryTags": [
-        "C7"
-      ],
-      "lang": "en",
+      "secondaryTags": [],
+      "lang": "zh",
       "intent": "current",
-      "text": "Who follows up on getting CobaltCoffer's deposits back?",
+      "text": "鈷匣現在用什麼方式記錄保證金，讓之後能追蹤返還？",
       "requiredFacts": [
-        "B-hr2b-t30-05"
+        "B-hr2b-t30-02"
       ],
-      "note": "The Chinese-only return-tracking assignment supplies the owner."
+      "note": "The English-only superseding decision supplies the current deposit treatment."
     },
     {
-      "id": "q-080",
+      "id": "q-176",
       "family": "hr2b-t37",
       "category": "C4",
       "secondaryTags": [],
       "lang": "en",
       "intent": "current",
-      "text": "Where should I look for undo immediately after doing something in PeonyWindow now?",
+      "text": "Why did PeonyWindow change where it offers undo?",
       "requiredFacts": [
-        "B-hr2b-t37-02"
+        "B-hr2b-t37-03"
       ],
-      "note": "The Chinese-only current decision supplies the undo control's location."
+      "note": "The Chinese-only reason explains the undo-entry change."
     },
     {
       "id": "q-081",
@@ -1153,21 +1145,21 @@
         "B-hr2b-t02-03",
         "B-hr2b-t02-05"
       ],
-      "note": "The change reason answers why; the collision-exercise assignment identifies who handles the requested follow-up."
+      "note": "The change reason answers why; the collision-exercise assignment identifies who handles the requested follow-up. Their disjoint memoryLangs sets prove that one memory cannot support both facts."
     },
     {
-      "id": "q-082",
+      "id": "q-177",
       "family": "hr2b-t04",
       "category": "C5",
       "secondaryTags": [],
       "lang": "zh",
-      "intent": "current",
-      "text": "犢紙弧當初是遇到什麼問題才調整重試？現在要找誰準備簽收重播腳本？",
+      "intent": "history",
+      "text": "犢紙弧以前由哪一端重試失敗的簽收？現在的重播腳本要找誰負責？",
       "requiredFacts": [
-        "B-hr2b-t04-03",
+        "B-hr2b-t04-01",
         "B-hr2b-t04-05"
       ],
-      "note": "The reason explains the retry change and the replay-script assignment supplies the owner."
+      "note": "The historical retry decision and current script-owner assignment answer the two parts; their supporting memoryStates are disjoint, so they cannot share a memory."
     },
     {
       "id": "q-083",
@@ -1181,21 +1173,21 @@
         "B-hr2b-t06-03",
         "B-hr2b-t06-05"
       ],
-      "note": "The reason explains the change and the crosswalk assignment independently identifies the owner."
+      "note": "The reason explains the change and the crosswalk assignment independently identifies the owner. Their disjoint memoryLangs sets prove that one memory cannot support both facts."
     },
     {
-      "id": "q-084",
+      "id": "q-178",
       "family": "hr2b-t08",
       "category": "C5",
       "secondaryTags": [],
       "lang": "zh",
-      "intent": "current",
-      "text": "寓線軸為什麼要換測試時鐘？接下來的跨日案例應該找誰跑？",
+      "intent": "history",
+      "text": "寓線軸改動前的測試時間跟哪個時鐘走？跨日測試目前由誰負責？",
       "requiredFacts": [
-        "B-hr2b-t08-03",
+        "B-hr2b-t08-01",
         "B-hr2b-t08-05"
       ],
-      "note": "The reason explains the clock change and the cross-day testing assignment supplies the owner."
+      "note": "The old clock decision supplies the earlier behavior and the current testing assignment supplies the owner; disjoint historical/current memoryStates prove separation."
     },
     {
       "id": "q-085",
@@ -1209,49 +1201,49 @@
         "B-hr2b-t10-03",
         "B-hr2b-t10-05"
       ],
-      "note": "The reason explains key separation and the inventory assignment identifies its owner."
+      "note": "The reason explains key separation and the inventory assignment identifies its owner. Their disjoint memoryLangs sets prove that one memory cannot support both facts."
     },
     {
-      "id": "q-086",
+      "id": "q-179",
       "family": "hr2b-t12",
       "category": "C5",
       "secondaryTags": [],
       "lang": "zh",
-      "intent": "current",
-      "text": "紫菀邊為什麼改變給作者回饋的方式？現在那份讀者困惑清單交給誰？",
+      "intent": "history",
+      "text": "紫菀邊早期給改稿回饋時，會怎麼處理正文？現在誰整理讀者困惑清單？",
       "requiredFacts": [
-        "B-hr2b-t12-03",
+        "B-hr2b-t12-01",
         "B-hr2b-t12-05"
       ],
-      "note": "The reason supplies the feedback-change motivation and the list assignment supplies the owner."
+      "note": "The old feedback decision and current list-owner assignment answer the two parts; their supporting historical/current memoryStates are disjoint."
     },
     {
-      "id": "q-087",
+      "id": "q-180",
       "family": "hr2b-t14",
       "category": "C5",
       "secondaryTags": [],
       "lang": "zh",
-      "intent": "current",
-      "text": "燼簡為什麼調整進度回報的排列方式？跨部門的依賴關係要由誰整理？",
+      "intent": "history",
+      "text": "燼簡舊版進度回報按什麼來排列？目前誰彙整跨部門的依賴關係？",
       "requiredFacts": [
-        "B-hr2b-t14-03",
+        "B-hr2b-t14-01",
         "B-hr2b-t14-05"
       ],
-      "note": "The reason explains the reporting change and the dependency assignment identifies the owner."
+      "note": "The historical ordering decision and current dependency assignment answer the two parts; disjoint memoryStates rule out one supporting memory for both."
     },
     {
-      "id": "q-088",
+      "id": "q-181",
       "family": "hr2b-t16",
       "category": "C5",
       "secondaryTags": [],
       "lang": "en",
       "intent": "current",
-      "text": "What problem led LinenPrompt to revise its collaboration questions, and who collects the observations?",
+      "text": "What does LinenPrompt now put first in collaboration questions, and which part of its classroom notice is Qin He responsible for?",
       "requiredFacts": [
-        "B-hr2b-t16-03",
-        "B-hr2b-t16-05"
+        "B-hr2b-t16-02",
+        "B-hr2b-t16-06"
       ],
-      "note": "The change reason and observation-extract assignment answer the two independent parts."
+      "note": "The current question decision and notice assignment answer separate parts; their memoryLangs sets are disjoint (mixed versus en/zh), so no memory can support both."
     },
     {
       "id": "q-089",
@@ -1265,7 +1257,7 @@
         "B-hr2b-t18-03",
         "B-hr2b-t18-05"
       ],
-      "note": "The reason explains the timing change and the departure-inspection assignment supplies the owner."
+      "note": "The reason explains the timing change and the departure-inspection assignment supplies the owner. Their disjoint memoryLangs sets prove that one memory cannot support both facts."
     },
     {
       "id": "q-090",
@@ -1279,77 +1271,77 @@
         "B-hr2b-t20-03",
         "B-hr2b-t20-05"
       ],
-      "note": "The reason explains the contact-method change and the response assignment identifies the owner."
+      "note": "The reason explains the contact-method change and the response assignment identifies the owner. Their disjoint memoryLangs sets prove that one memory cannot support both facts."
     },
     {
-      "id": "q-091",
+      "id": "q-182",
       "family": "hr2b-t22",
       "category": "C5",
       "secondaryTags": [],
       "lang": "zh",
       "intent": "current",
-      "text": "苔埠為什麼調整補貨方式？另外，林頌在材料展示板上只需要處理哪一部分？",
+      "text": "苔埠現在依什麼提出補貨申請？林頌在材料展示板上只管什麼？",
       "requiredFacts": [
-        "B-hr2b-t22-03",
+        "B-hr2b-t22-02",
         "B-hr2b-t22-06"
       ],
-      "note": "The reason answers the replenishment question and the display-board assignment separately limits Lin Song's role."
+      "note": "The current replenishment decision and display-board assignment answer separate parts; disjoint memoryLangs (en versus mixed/zh) prove memory separation."
     },
     {
-      "id": "q-092",
+      "id": "q-183",
       "family": "hr2b-t24",
       "category": "C5",
       "secondaryTags": [],
       "lang": "zh",
-      "intent": "current",
-      "text": "荻窯為什麼要改變講者簡介的確認流程？簡介回簽由誰負責？",
+      "intent": "history",
+      "text": "荻窯原本在什麼時候、用什麼方式確認講者簡介？現在簡介回簽由誰負責？",
       "requiredFacts": [
-        "B-hr2b-t24-03",
+        "B-hr2b-t24-01",
         "B-hr2b-t24-05"
       ],
-      "note": "The reason explains the process change and the sign-off assignment supplies its owner."
+      "note": "The historical confirmation decision supplies the old timing and method; the current sign-off assignment supplies the owner; disjoint memoryStates prove separation."
     },
     {
-      "id": "q-093",
+      "id": "q-184",
       "family": "hr2b-t26",
       "category": "C5",
       "secondaryTags": [],
       "lang": "en",
-      "intent": "current",
-      "text": "Why did MarbleWren separate its licensing expenses, and who owns the renewal ledger?",
+      "intent": "history",
+      "text": "How did MarbleWren originally group licensing expenses, and who now maintains the renewal ledger?",
       "requiredFacts": [
-        "B-hr2b-t26-03",
+        "B-hr2b-t26-01",
         "B-hr2b-t26-05"
       ],
-      "note": "The reason supplies the accounting motivation and the renewal-ledger assignment identifies the owner."
+      "note": "The historical expense decision and current renewal assignment answer the two parts; their disjoint historical/current memoryStates prove memory separation."
     },
     {
-      "id": "q-094",
+      "id": "q-185",
       "family": "hr2b-t28",
       "category": "C5",
       "secondaryTags": [],
       "lang": "en",
-      "intent": "current",
-      "text": "What prompted ThimbleLedger to revise its exchange-difference accounting, and who handles the settlement table?",
+      "intent": "history",
+      "text": "Where did ThimbleLedger originally allocate foreign-exchange differences, and who now owns the settlement-difference table?",
       "requiredFacts": [
-        "B-hr2b-t28-03",
+        "B-hr2b-t28-01",
         "B-hr2b-t28-05"
       ],
-      "note": "The reason explains the accounting change and the table assignment supplies the owner."
+      "note": "The historical allocation decision and current table assignment answer the two parts; disjoint historical/current memoryStates rule out shared support."
     },
     {
-      "id": "q-095",
+      "id": "q-186",
       "family": "hr2b-t30",
       "category": "C5",
       "secondaryTags": [],
       "lang": "zh",
       "intent": "current",
-      "text": "鈷匣為什麼要改變保證金的記錄方式？追蹤返還這件事交給誰？",
+      "text": "鈷匣現在怎麼處理保證金的記錄？溫蘅在租約索引上只管哪個部分？",
       "requiredFacts": [
-        "B-hr2b-t30-03",
-        "B-hr2b-t30-05"
+        "B-hr2b-t30-02",
+        "B-hr2b-t30-06"
       ],
-      "note": "The reason explains the recording change and the return-tracking assignment identifies the owner."
+      "note": "The current deposit decision and lease-index assignment answer separate parts; disjoint memoryLangs (en versus zh) prove they cannot share a memory."
     },
     {
       "id": "q-096",
@@ -1363,7 +1355,7 @@
         "B-hr2b-t32-03",
         "B-hr2b-t32-05"
       ],
-      "note": "The reason explains the voucher-accounting change and the balance-check assignment supplies the owner."
+      "note": "The reason explains the voucher-accounting change and the balance-check assignment supplies the owner. Their disjoint memoryLangs sets prove that one memory cannot support both facts."
     },
     {
       "id": "q-097",
@@ -1377,49 +1369,49 @@
         "B-hr2b-t34-03",
         "B-hr2b-t34-05"
       ],
-      "note": "The reason supplies the interface-change motivation and the sidebar assignment identifies its owner."
+      "note": "The reason supplies the interface-change motivation and the sidebar assignment identifies its owner. Their disjoint memoryLangs sets prove that one memory cannot support both facts."
     },
     {
-      "id": "q-098",
+      "id": "q-187",
       "family": "hr2b-t36",
       "category": "C5",
       "secondaryTags": [],
       "lang": "en",
-      "intent": "current",
-      "text": "Why did LarchCanvas revise its drag interaction, and what part of the completion card belongs to Qin He?",
+      "intent": "history",
+      "text": "What did LarchCanvas originally show only after a drag ended, and who now owns the drop-target previews?",
       "requiredFacts": [
-        "B-hr2b-t36-03",
-        "B-hr2b-t36-06"
+        "B-hr2b-t36-01",
+        "B-hr2b-t36-05"
       ],
-      "note": "The reason explains the interaction change and the completion-card assignment supplies a separate limited responsibility."
+      "note": "The historical drag decision and current preview assignment answer the two parts; their disjoint historical/current memoryStates prove memory separation."
     },
     {
-      "id": "q-099",
+      "id": "q-188",
       "family": "hr2b-t38",
       "category": "C5",
       "secondaryTags": [],
       "lang": "mixed",
-      "intent": "current",
-      "text": "LichenMap 為什麼換掉原本的權限說明方式？另外 Jiang Yu 在邀請信上只管哪個部分？",
+      "intent": "history",
+      "text": "LichenMap 以前用什麼來解釋 permissions？現在的操作說明表由誰維護？",
       "requiredFacts": [
-        "B-hr2b-t38-03",
-        "B-hr2b-t38-06"
+        "B-hr2b-t38-01",
+        "B-hr2b-t38-05"
       ],
-      "note": "The reason explains the permission change and the invitation assignment separately specifies Jiang Yu's scope."
+      "note": "The historical permission decision and current table assignment answer the two parts; disjoint historical/current memoryStates prove separation."
     },
     {
-      "id": "q-100",
+      "id": "q-189",
       "family": "hr2b-t40",
       "category": "C5",
       "secondaryTags": [],
       "lang": "mixed",
-      "intent": "current",
-      "text": "蕎袋 為什麼改變借物整理流程？還有 Wen Heng 在散步地圖上只需要處理什麼？",
+      "intent": "history",
+      "text": "蕎袋原本何時整理外出借物？現在出發前的 packing 由誰負責？",
       "requiredFacts": [
-        "B-hr2b-t40-03",
-        "B-hr2b-t40-06"
+        "B-hr2b-t40-01",
+        "B-hr2b-t40-05"
       ],
-      "note": "The reason explains the packing change and the walking-map assignment supplies the separate task limit."
+      "note": "The historical packing decision and current packing assignment answer the two parts; disjoint historical/current memoryStates prove memory separation."
     },
     {
       "id": "q-101",

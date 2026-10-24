@@ -1,0 +1,454 @@
+{
+  "ok": false,
+  "errors": [
+    {
+      "code": "audit:overrides"
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-002",
+        "category": "C1"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-010",
+        "category": "C1"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-023",
+        "category": "C2"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-025",
+        "category": "C2"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-026",
+        "category": "C2"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-027",
+        "category": "C2"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-028",
+        "category": "C2"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-029",
+        "category": "C2"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-032",
+        "category": "C2"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-036",
+        "category": "C2"
+      }
+    },
+    {
+      "code": "category:check_failed",
+      "detail": {
+        "query": "q-038",
+        "category": "C2"
+      }
+    },
+    {
+      "code": "hr2b:placement_quota",
+      "detail": "test:first-receipt:groups_minimum_30"
+    }
+  ],
+  "statistics": {
+    "split": {
+      "total": 140,
+      "dev": 46,
+      "devFraction": 0.32857142857142857,
+      "overallTotal": 160,
+      "overallDev": 51,
+      "overallDevFraction": 0.31875,
+      "categories": {
+        "C1": {
+          "total": 20,
+          "dev": 5,
+          "test": 15,
+          "devFamilies": 5,
+          "testFamilies": 15
+        },
+        "C2": {
+          "total": 20,
+          "dev": 6,
+          "test": 14,
+          "devFamilies": 6,
+          "testFamilies": 14
+        },
+        "C3": {
+          "total": 20,
+          "dev": 7,
+          "test": 13,
+          "devFamilies": 7,
+          "testFamilies": 13
+        },
+        "C4": {
+          "total": 20,
+          "dev": 8,
+          "test": 12,
+          "devFamilies": 8,
+          "testFamilies": 12
+        },
+        "C5": {
+          "total": 20,
+          "dev": 7,
+          "test": 13,
+          "devFamilies": 7,
+          "testFamilies": 13
+        },
+        "C6": {
+          "total": 20,
+          "dev": 6,
+          "test": 14,
+          "devFamilies": 6,
+          "testFamilies": 14
+        },
+        "C7": {
+          "total": 20,
+          "dev": 7,
+          "test": 13,
+          "devFamilies": 7,
+          "testFamilies": 13
+        }
+      }
+    },
+    "corpus": {
+      "S300": {
+        "count": 160,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "domains": {
+          "engineering": 0.25,
+          "work-preferences": 0.175,
+          "operations": 0.175,
+          "finance": 0.2,
+          "product": 0.15,
+          "everyday": 0.05
+        },
+        "bodyMeanLength": 601.78125,
+        "spanMeanLength": 254.42216981132074,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.3
+        }
+      },
+      "extras": {
+        "count": 320,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "domains": {
+          "engineering": 0.25,
+          "work-preferences": 0.175,
+          "operations": 0.175,
+          "finance": 0.2,
+          "product": 0.15,
+          "everyday": 0.05
+        },
+        "bodyMeanLength": 610.14375,
+        "spanMeanLength": 222.08372641509433,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.3
+        }
+      },
+      "foreign": {
+        "count": 60,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "domains": {
+          "engineering": 0.2,
+          "work-preferences": 0.2,
+          "operations": 0.2,
+          "finance": 0.2,
+          "product": 0.1,
+          "everyday": 0.1
+        },
+        "bodyMeanLength": 611.3,
+        "spanMeanLength": 228.0314465408805,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.3
+        }
+      }
+    },
+    "byNamespaceScale": {
+      "target:S300": {
+        "count": 160,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "bodyMeanLength": 601.78125,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.3
+        }
+      },
+      "foreign:S300": {
+        "count": 60,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "bodyMeanLength": 611.3,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.3
+        }
+      },
+      "target:S1000": {
+        "count": 480,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "bodyMeanLength": 607.35625,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.3
+        }
+      },
+      "foreign:S1000": {
+        "count": 60,
+        "languages": {
+          "zh": 0.55,
+          "en": 0.3,
+          "mixed": 0.15
+        },
+        "bodyMeanLength": 611.3,
+        "spans": {
+          "1": 0.2,
+          "2": 0.25,
+          "3": 0.25,
+          "4": 0.3
+        }
+      }
+    },
+    "templateShare": 0.5,
+    "spanOnlyGroupShare": 0.5210526315789473,
+    "spanCountMatch": {
+      "targets": {
+        "1": 0.2,
+        "2": 0.24444444444444444,
+        "3": 0.2518518518518518,
+        "4": 0.3037037037037037
+      },
+      "distractors": {
+        "1": 0.2,
+        "2": 0.28,
+        "3": 0.24,
+        "4": 0.28
+      }
+    },
+    "queryLanguages": {
+      "zh": 0.57,
+      "en": 0.31,
+      "mixed": 0.12
+    },
+    "hr2b": {
+      "S300": {
+        "bodyMean": 216.85,
+        "receiptMean": 92.57311320754717,
+        "histogram": [
+          0.2,
+          0.25,
+          0.25,
+          0.3
+        ],
+        "bodyBands": [
+          0.3,
+          0.4,
+          0.3
+        ],
+        "receiptBands": [
+          0.3490566037735849,
+          0.4009433962264151,
+          0.25
+        ]
+      },
+      "S1000-extra": {
+        "bodyMean": 218.91875,
+        "receiptMean": 92.76533018867924,
+        "histogram": [
+          0.2,
+          0.25,
+          0.25,
+          0.3
+        ],
+        "bodyBands": [
+          0.3,
+          0.4,
+          0.3
+        ],
+        "receiptBands": [
+          0.35023584905660377,
+          0.39976415094339623,
+          0.25
+        ]
+      },
+      "placement": {
+        "target": {
+          "body": 0.45,
+          "first-receipt": 0.25,
+          "later-receipt": 0.3
+        },
+        "distractor": {
+          "body": 0.45,
+          "first-receipt": 0.25,
+          "later-receipt": 0.3
+        }
+      },
+      "filler": {
+        "sentences": 1080,
+        "ranges": 3676,
+        "semanticAudit": "W3-required"
+      }
+    },
+    "placement": {
+      "ok": false,
+      "errors": [
+        "test:first-receipt:groups_minimum_30"
+      ],
+      "guardCategories": [
+        "C1",
+        "C2",
+        "C3",
+        "C4",
+        "C5",
+        "C6",
+        "C7"
+      ],
+      "splits": {
+        "dev": {
+          "first-receipt": {
+            "groups": 22,
+            "families": 11,
+            "categories": {
+              "C1": 3,
+              "C2": 1,
+              "C3": 2,
+              "C4": 3,
+              "C5": 6,
+              "C6": 5,
+              "C7": 1
+            }
+          },
+          "later-receipt": {
+            "groups": 11,
+            "families": 6,
+            "categories": {
+              "C1": 0,
+              "C2": 2,
+              "C3": 2,
+              "C4": 0,
+              "C5": 3,
+              "C6": 1,
+              "C7": 3
+            }
+          }
+        },
+        "test": {
+          "first-receipt": {
+            "groups": 20,
+            "families": 12,
+            "categories": {
+              "C1": 1,
+              "C2": 2,
+              "C3": 4,
+              "C4": 1,
+              "C5": 4,
+              "C6": 4,
+              "C7": 2
+            }
+          },
+          "later-receipt": {
+            "groups": 46,
+            "families": 22,
+            "categories": {
+              "C1": 5,
+              "C2": 9,
+              "C3": 3,
+              "C4": 5,
+              "C5": 8,
+              "C6": 9,
+              "C7": 3
+            }
+          }
+        }
+      }
+    }
+  },
+  "policy": {
+    "countTolerance": 0.1,
+    "distributionTolerance": 0.05,
+    "languages": {
+      "zh": 0.55,
+      "en": 0.3,
+      "mixed": 0.15
+    },
+    "counts": {
+      "S300": 160,
+      "extras": 320,
+      "foreign": 60
+    }
+  },
+  "version": "hr2b-fixture-v1"
+}
