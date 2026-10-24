@@ -1,6 +1,6 @@
 # Installer local mode: contract for `@cairn-ink/memory` 0.6.0
 
-Status: v0.9 (setup session, 2026-10-25). v0.1 (`f053a18c`) was audited by a
+Status: v0.10 (setup session, 2026-10-25). v0.1 (`f053a18c`) was audited by a
 non-author Codex auditor (gpt-6.1-sol, xhigh, read-only): no P0, fourteen P1,
 two P2. v0.2 (`4332b800`): no P0, ten P1, three P2. v0.3 (`3f337e9d`): no
 P0, six P1, two P2. v0.4 (`e4462168`): no P0, three P1, one P2. v0.5
@@ -12,7 +12,8 @@ SIGKILL go through the stale-lock step; L16 symlinked root is
 `local_root_invalid`). v0.9 adopts the S2 reviewers' contract requests:
 scoped uninstall only from `installed` (§4.2, §9), the Codex setup lock
 carries the holder pid for stale recovery (§7.2), and `--cloud` with local
-ownership plus unknown is `mode_unknown` (§6.3).
+ownership plus unknown is `mode_unknown` (§6.3). v0.10 adds the L06
+version-normalization rule S3 needs when the package version becomes 0.6.0.
 
 Base: `main` at `b2513501` (PR #469 local V1 Raw chain and PR #470 unified
 memory V1 are merged). Branch `feat/setup-local-mode`.
@@ -649,6 +650,20 @@ only additional calls are from the allowlist of new read-only probes
 already called at that point, the Codex inspection copy); output identical
 after normalizing the version string and the runtime directory digest
 (`codex-runtime.mjs:90`); no file under `CAIRN_MEMORY_HOME`; no new prompt.
+
+**Version normalization (v0.10).** The 0.5.3 baseline is generated from the
+git object store (`b2513501`) and run through the same fakes. Once the
+package version is 0.6.0, exactly these version-derived differences are
+normalized before comparison, and nothing else: the installer version string
+in output and in `installation.json`; the hosted runtime directory name
+`runtime/<version>-<digest>` (`codex-runtime.mjs:86–92`) wherever it appears
+(hook command strings in `hooks.json`, `installation.json`, the recorded argv
+of fake calls); the runtime manifest hash inside that name. File **contents**
+copied into the runtime directory must still be byte-identical to the
+baseline's, and every other byte of `config.toml`, `hooks.json` and
+`installation.json` must match after that substitution. A test asserts the
+normalizer touches only these fields by running it against a baseline pair
+with an injected unrelated difference, which must still fail.
 
 | ID | Case | Observable |
 | --- | --- | --- |
