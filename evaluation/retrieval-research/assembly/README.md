@@ -14,9 +14,16 @@ install or replace them in the worker sandbox; report a missing dependency.
 
 Check that `node --version` is `v22.16.0`. Do not remove or replace an existing `node_modules` symlink. The checked-in lockfile pins the counter to `tiktoken@1.0.22`.
 
-After review and acceptance, the **coordinator only** executes the frozen test grid. The following output directories must be absent or empty. `--rankings` accepts an extracted archive root or its `with-foreign` directory, not a compressed archive filename.
+### Historical v1.1 run — do not re-run
 
-```sh
+**Historical, do not re-run:** the following commands record the frozen v1.1
+run. Their `results/hr2-final/` destinations are now protected regression
+inputs. Use the [current host-v2 commands](#exact-coordinator-commands-for-the-host-v2-test-grid)
+with `results/hr2-host-v2/` destinations, or fresh owned scratch for dev runs.
+`--rankings` accepts an extracted archive root or its `with-foreign` directory,
+not a compressed archive filename.
+
+```text
 mkdir -p evaluation/retrieval-research/results/hr2-final/inputs
 sha256sum evaluation/retrieval-research/results/test-final/rankings.tar.xz
 tar -xJf evaluation/retrieval-research/results/test-final/rankings.tar.xz -C evaluation/retrieval-research/results/hr2-final/inputs
@@ -27,9 +34,21 @@ tar -xJf evaluation/retrieval-research/results/test-final/rankings.tar.xz -C eva
 
 Compare the printed archive SHA-256 with [INPUTS.md](INPUTS.md). All 240 cells (5 arms × 3 rankings × 2 overheads × 8 budgets) contain per-query ranked IDs, admitted unit IDs, base token counts, charged costs and used totals. Metadata records the implementation HEAD, frozen protocol commit, all seven fixture hashes, counter ID, source ranking path/hash/run metadata and CPU/RAM/OS. Before writing any cell, `run.mjs` authenticates every selected input. For test, it also pins each selected member's exact bytes to INPUTS.md. The scorer reauthenticates fixtures, source ranking bytes and metadata, ranked IDs and costs, then replays the declared arm and requires exact admission order and totals. Keep source ranking files at their recorded absolute paths until scoring finishes.
 
-For a dev smoke run, substitute `--rankings evaluation/retrieval-research/results/dev --split dev` and choose fresh output paths in an owned `createTestWorkspace`. Worker smoke runs are restricted to dev; see WORKER-REPORT.md for commands actually completed. Dev reports have no confirmatory comparison or decision. Tests use tiny authored dev fixtures; the statistics adapter uses synthetic rows to verify the primary designation without running test assembly.
+For a current dev smoke run, use the host-v2 command with `--rankings evaluation/retrieval-research/results/dev --split dev` and fresh output paths in an owned `createTestWorkspace`. Worker smoke runs are restricted to dev; see WORKER-REPORT-host-v2.md for commands actually completed. Dev reports have no confirmatory comparison or decision. Tests use tiny authored dev fixtures; the statistics adapter uses synthetic rows to verify the primary designation without running test assembly.
 
-`run.mjs` defaults to all five arms, all three rankings, all eight frozen budgets and both overheads if those four options are omitted. Fixture directory, ranking directory, split, scale and output are required. Invalid options or inputs fail explicitly with exit 1. `score.mjs` and `report.mjs` accept the exact options illustrated above. Report JSON retains all scored query admissions and strata; Markdown includes cell metrics, category means/deltas, strata counts, provenance, bootstrap counts/status and McNemar discordants. An inconclusive statistical outcome is a valid report, not a process error.
+All three stages refuse protected destinations with `protected_output_path`
+before creating output or provenance scratch. The shared guard resolves the
+deepest existing ancestor with `realpathSync`, follows symlinks, and appends
+missing components. Protected paths are fixed relative to the repository:
+`assembly/overhead-host-v2.json`, everything in `results/hr2-final/`,
+`results/test-final/` and `fixtures/`, and any existing regular output file.
+Score and report require fresh, distinct file destinations; run accepts a
+fresh directory or an existing empty directory and keeps its non-empty-directory
+refusal. Writers revalidate physical paths and create files exclusively, so
+existing files are never overwritten, including files created earlier by the
+same stage.
+
+`run.mjs` defaults to all five arms, all three rankings, all eight frozen budgets and both overheads if those four options are omitted. Fixture directory, ranking directory, split, scale and output are required. Invalid options or inputs fail explicitly with exit 1. Use the current host-v2 section for executable score/report commands with fresh destinations. Report JSON retains all scored query admissions and strata; Markdown includes cell metrics, category means/deltas, strata counts, provenance, bootstrap counts/status and McNemar discordants. An inconclusive statistical outcome is a valid report, not a process error.
 
 ## Worker-declared decisions
 
@@ -51,7 +70,7 @@ For a dev smoke run, substitute `--rankings evaluation/retrieval-research/result
 
 Each stage records an implementation identity: Git commit, deterministic SHA-256 of a sorted list of relative `.mjs` paths and their byte hashes under `assembly/`, source paths, Git dirty state and whether HEAD is detached. This includes nested source modules; documentation and reserved `.hr2-*` owned scratch directories are excluded from the source hash. Dirty state covers the working tree except those scratch directories. Assembly identity is in each cell; scoring preserves it and records its own identity; reports preserve both and record the report identity. Comparisons require identical assembly identities. Old cells without these records must be regenerated; no compatibility fallback is used.
 
-Scorer/report identities are captured at module load; assembly identity is captured when assembly starts. Git uses explicit file descriptors and `createTestWorkspace` with an assembly-directory parent, so neither subprocess pipes nor writable `/tmp` are required. For light fix-round tests, use the owned runner one file at a time without the heavy queue; set `TMPDIR`, `TMP` and `TEMP` to an owned workspace inside the worktree when `/tmp` is read-only. The runner's `--script <test-file>` mode exposes per-case TAP counts when sandbox IPC leaves normal mode with file-level counts only.
+Scorer/report identities are captured at module load for imports; direct CLI runs capture them after all output destinations pass preflight. Assembly identity is captured when assembly starts, after destination preflight. Git uses explicit file descriptors and `createTestWorkspace` with an assembly-directory parent, so neither subprocess pipes nor writable `/tmp` are required. For light fix-round tests, use the owned runner one file at a time without the heavy queue; set `TMPDIR`, `TMP` and `TEMP` to an owned workspace inside the worktree when `/tmp` is read-only. The runner's `--script <test-file>` mode exposes per-case TAP counts when sandbox IPC leaves normal mode with file-level counts only.
 
 Before any bootstrap, reporting validates every scored cell's format, complete status, frozen protocol version/commit/counter, source ranking configuration and hash, seven fixture hashes, query set and stage identities. Test hashes must match INPUTS.md; dev hashes must have valid SHA-256 shape and agree with recorded source metadata. Invalid provenance, pair metadata or assembly identities yields `invalid_inputs`, no comparisons, and no confirmatory designation. Dirty or detached trees are recorded explicitly and are not silently treated as clean.
 

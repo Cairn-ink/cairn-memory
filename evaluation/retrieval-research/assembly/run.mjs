@@ -1,7 +1,7 @@
 import { mkdir, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import os from 'node:os';
-import { cliMain, requiredOption, writeJson } from '../lib/fixture.mjs';
+import { cliMain, requiredOption } from '../lib/fixture.mjs';
 import { ARMS, assemble } from './arms.mjs';
 import { COUNTER_ID } from './counter.mjs';
 import { prepareItems } from './units.mjs';
@@ -9,6 +9,7 @@ import { implementationIdentity } from './identity.mjs';
 import { BUDGETS, expectedCellCount } from './grid.mjs';
 import { hostV2Cost } from './cost.mjs';
 import { authenticateHostV2, EXTENSION_COMMIT, HOST_V2_LIMITATIONS } from './host-v2.mjs';
+import { validateOutputPath, validateOutputPaths, writeOutputJson } from './output-paths.mjs';
 import { PROTOCOL, PROTOCOL_COMMIT, RANKINGS, authenticateFixture, authenticateRanking, readRanking, inputManifest, fail } from './auth.mjs';
 
 export { BUDGETS } from './grid.mjs';
@@ -21,9 +22,13 @@ export function list(value, allowed, name) {
   if (!result.length || new Set(result).size !== result.length || result.some(entry => !allowed.includes(entry))) fail(`invalid_${name}`);
   return result;
 }
-export async function emptyOutput(dir) {
-  await mkdir(dir, { recursive: true });
-  if ((await readdir(dir)).length) fail('output_directory_not_empty');
+export async function emptyOutput(dir, { create = true } = {}) {
+  dir = validateOutputPath(dir);
+  if (create) await mkdir(dir, { recursive: true });
+  let entries;
+  try { entries = await readdir(dir); }
+  catch (error) { if (!create && error.code === 'ENOENT') return; throw error; }
+  if (entries.length) fail('output_directory_not_empty');
 }
 export async function runAssembly(options) {
   const model = options['overhead-model'] === 'host-v2' ? authenticateHostV2() : null;
@@ -40,7 +45,11 @@ export async function runAssembly(options) {
   const budgets = list(options.budgets ?? BUDGETS.join(','), BUDGETS.map(String), 'budgets').map(Number);
   const overheads = model ? ['host-v2'] : list(options.overheads ?? '0,8', ['0', '8'], 'overheads').map(Number);
   if (model && budgets.some(budget => budget < model.constants.envelope)) fail('context_item_too_large');
-  const out = requiredOption(options, 'out'), fixture = await authenticateFixture(fixtureDir);
+  const out = validateOutputPath(requiredOption(options, 'out'));
+  await emptyOutput(out, { create: false });
+  const cellPath = (selection, arm, overhead, budget) => join(out, `${arm}--${selection}--O${model ? `host-v2@${model.implementationCommit}` : overhead}--B${budget}.json`);
+  validateOutputPaths(selections.flatMap(selection => arms.flatMap(arm => overheads.flatMap(overhead => budgets.map(budget => cellPath(selection, arm, overhead, budget))))));
+  const fixture = await authenticateFixture(fixtureDir);
   if (split === 'test') {
     const manifest = await inputManifest();
     for (const [name, hash] of Object.entries(manifest.fixtureHashes)) if (fixture.hashes[name] !== hash) fail(`hr2_fixture_hash_mismatch:${name}`);
@@ -66,7 +75,7 @@ export async function runAssembly(options) {
       const ranked = source.ranking.queries[query.id].ranked;
       return { id: query.id, ranked, ...assemble(items, ranked, { arm, budget, overhead, ...(model ? { cost: hostV2Cost(model) } : {}) }) };
     }) };
-    await writeJson(join(out, `${arm}--${source.selection}--O${model ? `host-v2@${model.implementationCommit}` : overhead}--B${budget}.json`), cell); cells++;
+    await writeOutputJson(cellPath(source.selection, arm, overhead, budget), cell); cells++;
   }
   const grid = { arms, rankings: selections, overheads, budgets }, expectedCells = expectedCellCount(grid);
   if (cells !== expectedCells) fail('grid_cell_count_mismatch');

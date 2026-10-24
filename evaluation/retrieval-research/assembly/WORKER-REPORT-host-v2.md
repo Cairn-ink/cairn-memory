@@ -51,3 +51,42 @@ Worker-declared decisions and ambiguities:
 - No `-o` path was supplied; this report uses the previously announced `assembly/WORKER-REPORT-host-v2.md` default.
 
 No unresolved worker blockers. Non-author reviews, full acceptance and the 120 host-v2 test cells remain coordinator-owned outside this sandbox. No dependencies were installed; no network, model, API key or private research directory was used.
+
+## Fix 1
+
+P1 fixed against `5d0a344b`. All CLI destinations are checked before writes;
+symlinks resolve through existing ancestors, protected roots are repository-relative,
+and existing regular files cannot be overwritten. Non-empty-directory refusal remains.
+
+Changes/inventory, relative to `evaluation/retrieval-research/`:
+
+- `assembly/README.md:17` — historical commands; protected destinations documented.
+- `assembly/WORKER-REPORT-host-v2.md:55` — this fix report.
+- `assembly/output-paths.mjs:18` — shared physical-path guard and exclusive writers.
+- `assembly/report.mjs:199` — both outputs preflighted together.
+- `assembly/run.mjs:48` — directory/cell preflight before creation.
+- `assembly/score.mjs:138` — output preflight before provenance scratch.
+- `test/assembly-output-paths.test.mjs:64` — protected-byte, refusal and scratch tests.
+
+Inventory derived from `git diff --name-only -z HEAD` plus untracked
+`git ls-files`, independently from `git status --porcelain=v1 -z`, then diffed:
+**7/7 identical; diff exit 0**. Whitespace, including untracked files: exit 0.
+
+Commands (only the touched test file):
+
+```sh
+node tools/testing/run.mjs evaluation/retrieval-research/test/assembly-output-paths.test.mjs
+~/.nvm/versions/node/v24.15.0/bin/node tools/testing/run.mjs evaluation/retrieval-research/test/assembly-output-paths.test.mjs
+```
+
+Both were also executed with `--script` immediately after `run.mjs`.
+
+| Node | Normal pass/fail; exit | Script pass/fail/skip; exit |
+| --- | --- | --- |
+| 22.16.0 | 1/0 file; 0 | 33/0/0; 0 |
+| 24.15.0 | 1/0 file; 0 | 33/0/0; 0 |
+
+Every refusal preserved protected hashes and created no outputs; host-v2/scalar
+toy dev pipelines succeeded in fresh scratch. No sandbox EROFS/EPERM failures,
+test-split run or commit. Earlier legacy results above were not rerun this round.
+Protected Git blobs: 1,142 checked, zero mismatches.

@@ -1,6 +1,6 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { CATEGORIES, compareIds, loadFixture, labelEntries, cliMain, requiredOption, writeJson } from '../lib/fixture.mjs';
+import { CATEGORIES, compareIds, loadFixture, labelEntries, cliMain, requiredOption } from '../lib/fixture.mjs';
 import { average, scoreGroups } from '../lib/metrics.mjs';
 import { percentile } from '../lib/stats.mjs';
 import { ARMS, assemble } from './arms.mjs';
@@ -9,10 +9,11 @@ import { implementationIdentity, validateImplementation } from './identity.mjs';
 import { prepareItems } from './units.mjs';
 import { COUNTER_ID } from './counter.mjs';
 import { authenticateHostRun } from './host-v2.mjs';
+import { isStageCli, validateOutputPaths, writeOutputJson } from './output-paths.mjs';
 import { PROTOCOL, PROTOCOL_COMMIT, RANKINGS, authenticateFixture, authenticateRanking, selectedQueries, inputManifest, sha256, fail } from './auth.mjs';
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-const SCORER_IMPLEMENTATION = await implementationIdentity();
+let SCORER_IMPLEMENTATION = isStageCli(import.meta.url) ? null : await implementationIdentity();
 function metrics(groups, have, ranked) {
   if (!groups.length) fail('empty_required_groups');
   const covered = groups.filter(group => group.members.some(member => member.where === 'body'
@@ -134,7 +135,9 @@ export async function scoreDirectory(fixtureDir, dir) {
 
 await cliMain(import.meta.url, async options => {
   if (Object.keys(options).some(key => !['_', 'fixture-dir', 'cells', 'out'].includes(key)) || options._.length) fail('unknown_score_option');
+  const [out] = validateOutputPaths([requiredOption(options, 'out')]);
+  SCORER_IMPLEMENTATION = await implementationIdentity();
   const scores = await scoreDirectory(requiredOption(options, 'fixture-dir'), requiredOption(options, 'cells'));
-  await writeJson(requiredOption(options, 'out'), scores);
+  await writeOutputJson(out, scores);
   console.log(JSON.stringify({ ok: true, cells: scores.cells.length }));
 });

@@ -1,5 +1,4 @@
-import { writeFile } from 'node:fs/promises';
-import { CATEGORIES, cliMain, readJson, writeJson, requiredOption } from '../lib/fixture.mjs';
+import { CATEGORIES, cliMain, readJson, requiredOption } from '../lib/fixture.mjs';
 import { clusterBootstrap, exactMcNemar, pairedQueries } from '../lib/stats.mjs';
 import { PROTOCOL, fail } from './auth.mjs';
 import { implementationIdentity, implementationKey } from './identity.mjs';
@@ -7,8 +6,9 @@ import { validateScoredCell } from './provenance.mjs';
 import { ARMS } from './arms.mjs';
 import { BUDGETS } from './grid.mjs';
 import { HOST_V2_LIMITATIONS } from './host-v2.mjs';
+import { isStageCli, validateOutputPaths, writeOutputJson, writeOutputText } from './output-paths.mjs';
 
-const REPORT_IMPLEMENTATION = await implementationIdentity();
+let REPORT_IMPLEMENTATION = isStageCli(import.meta.url) ? null : await implementationIdentity();
 
 export function statisticsRows(queries) {
   if (!Array.isArray(queries) || !queries.length || new Set(queries.map(row => row.id)).size !== queries.length) fail('invalid_statistics_query_set');
@@ -196,9 +196,11 @@ export function reportMarkdown(report) {
 
 await cliMain(import.meta.url, async options => {
   if (Object.keys(options).some(key => !['_', 'scores', 'out', 'markdown'].includes(key)) || options._.length) fail('unknown_report_option');
+  const [out, markdown] = validateOutputPaths([requiredOption(options, 'out'), requiredOption(options, 'markdown')]);
+  REPORT_IMPLEMENTATION = await implementationIdentity();
   const report = buildReport(await readJson(requiredOption(options, 'scores')));
-  await writeJson(requiredOption(options, 'out'), report);
-  await writeFile(requiredOption(options, 'markdown'), reportMarkdown(report));
+  await writeOutputJson(out, report);
+  await writeOutputText(markdown, reportMarkdown(report));
   console.log(JSON.stringify({ ok: report.ok, outcome: report.outcome, comparisons: report.comparisons.length }));
   if (!report.ok) process.exitCode = 1;
 });
