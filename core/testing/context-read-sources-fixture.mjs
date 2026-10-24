@@ -78,3 +78,37 @@ export function sourceChild(f, job, { sync = false, rendezvous = false } = {}) {
       }
     } };
 }
+
+// Public-operation-authored balanced corpus, also used for foreign-link probes.
+// In-memory fixture only; ANALYZE is explicit and persists planner statistics.
+export async function publicMocCorpus(t, { size = 10000, groupSize = 25 } = {}) {
+  const { DatabaseSync } = await import('node:sqlite');
+  const { openMemoryCore } = await import('../index.mjs');
+  let db;
+  const native = DatabaseSync.prototype.prepare;
+  const spy = t.mock.method(DatabaseSync.prototype, 'prepare', function (sql) {
+    if (/INSERT INTO memories/.test(sql)) db = this;
+    return native.call(this, sql);
+  });
+  const core = openMemoryCore({ path: ':memory:', model: { contextWindow: 32768, countTokens: () => 1 } }); t.after(() => core.close());
+  let indexRevision;
+  function admit(content, namespace = ns) {
+    const admitted = ok(core.admit({ namespace, memory: { content, kind: 'fact' }, receipts: [receipt(content)] }));
+    indexRevision = admitted.indexRevision; return admitted.memory;
+  }
+  let parent;
+  try {
+    for (let offset = 0; offset < size; offset += 5) {
+      const records = [];
+      for (let i = offset; i < Math.min(size, offset + 5); i++) records.push(admit('Synthetic member ' + i));
+      const fresh = offset % groupSize === 0;
+      const placed = ok(core.applyPlacement({ namespace: ns, expectedIndexRevision: indexRevision,
+        expectedMemoryRevisions: records.map(m => ({ memoryId: m.id, revision: m.revision })), proposal: { items: records.map(m => ({ memoryId: m.id,
+          parentIds: fresh ? [] : [parent], ...(fresh ? { newL1: { title: 'needle synthetic topic ' + Math.floor(offset / groupSize), parentL2Ids: [] } } : {}) })) } }));
+      if (placed.createdMocs.length) parent = placed.createdMocs[0].id;
+      if (offset === 0 || offset % 1000 === 0) db.exec('ANALYZE');
+      if ((offset + records.length) % 1000 === 0) console.log(JSON.stringify({ kind: 'public_moc_fixture_progress', memories: offset + records.length }));
+    }
+  } finally { spy.mock.restore(); }
+  return { core, db, admit };
+}

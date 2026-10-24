@@ -42,6 +42,7 @@ export function rankMoc(db, identity, features, input, deadlineAt) {
     return Boolean(row && columns.every((column, i) => row[column] === values[i]));
   }
   function topic(ns, type, id, revision) {
+    if (!reader.scopeIds(ns, type, [id], { topic: true }).size) return null;
     budget.charge('checks');
     const row = sourceDb.prepare(`SELECT id,revision,level FROM ${type === 'memory' ? 'mocs' : 'card_mocs'} WHERE ${where} AND id=?`)
       .get(...boundary(ns), id);
@@ -103,14 +104,20 @@ export function rankMoc(db, identity, features, input, deadlineAt) {
   }
   function fileMembers(partition, score, parent) {
     const { ns, type } = partition, memory = type === 'memory'; let after = '';
-    while (true) {
-      budget.check();
-      // Ref-first indexed batch; endpoint authorization and exact/current
-      // validation occur in one bounded metadata query, never per-member seeks.
+    function* raw() {
+      while (true) {
+        const rows = reader.privateDb.prepare(`SELECT ${memory ? 'memory_id' : 'card_id'} FROM ${memory ? 'moc_memory_refs' : 'card_moc_refs'}
+          WHERE moc_id=? AND ${memory ? 'memory_id' : 'card_id'}>? ORDER BY ${memory ? 'memory_id' : 'card_id'} LIMIT 128`).all(parent.id, after);
+        if (!rows.length) return;
+        after = rows.at(-1)[memory ? 'memory_id' : 'card_id']; yield* rows;
+        if (rows.length < 128) return;
+      }
+    }
+    for (const keys of reader.authorizedBatches(raw(), ns, type, row => row.memory_id ?? row.card_id)) {
       const rows = sourceDb.prepare(`SELECT * FROM ${memory ? 'moc_memory_refs' : 'card_moc_refs'}
-        WHERE moc_id=? AND ${memory ? 'memory_id' : 'card_id'}>? ORDER BY ${memory ? 'memory_id' : 'card_id'} LIMIT 128`).all(parent.id, after);
+        WHERE moc_id=? AND ${memory ? 'memory_id' : 'card_id'} IN (${keys.map(() => '?').join(',') || 'NULL'}) ORDER BY ${memory ? 'memory_id' : 'card_id'}`)
+        .all(parent.id, ...keys.map(row => row.memory_id ?? row.card_id));
       if (!rows.length) break;
-      after = rows.at(-1)[memory ? 'memory_id' : 'card_id'];
       const refs = rows.map(row => ref(partition, row.memory_id ?? row.card_id, row.memory_revision ?? row.card_revision, row.body_revision));
       const results = reader.endpoints(refs, { projection: memory });
       for (let i = 0; i < rows.length; i++) {
@@ -166,11 +173,18 @@ export function rankMoc(db, identity, features, input, deadlineAt) {
       if (doc.level === 1) fileMembers(partition, score, doc);
       else {
         let after = '';
-        while (true) {
-          const edge = sourceDb.prepare(`SELECT e.* FROM ${partition.type === 'memory' ? 'moc_edges' : 'card_moc_edges'} e
-            WHERE e.parent_id=? AND e.child_id>? ORDER BY e.child_id LIMIT 1`).get(doc.id, after);
+        const memory = partition.type === 'memory', table = memory ? 'moc_edges' : 'card_moc_edges';
+        function* raw() {
+          while (true) {
+            const edges = reader.privateDb.prepare(`SELECT child_id FROM ${table} WHERE parent_id=? AND child_id>? ORDER BY child_id LIMIT 128`).all(doc.id, after);
+            if (!edges.length) return;
+            after = edges.at(-1).child_id; yield* edges;
+            if (edges.length < 128) return;
+          }
+        }
+        for (const keys of reader.authorizedBatches(raw(), partition.ns, partition.type, row => row.child_id, { size: 1, topic: true })) {
+          const edge = sourceDb.prepare(`SELECT * FROM ${table} WHERE parent_id=? AND child_id=?`).get(doc.id, keys[0]?.child_id ?? '');
           if (!edge) break;
-          after = edge.child_id;
           if (edge.parent_revision !== doc.revision) continue;
           const child = topic(partition.ns, partition.type, edge.child_id, edge.child_revision);
           if (!child || child.level !== 1 || partition.type === 'memory' && !projected(partition.ns, 'index_edges',

@@ -1,3 +1,6 @@
+import { DatabaseSync } from 'node:sqlite';
+import { readTransaction, STORAGE_BUSY_TIMEOUT_MS } from '../database.mjs';
+import { expandRelations } from '../context-read-relations.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sourcesFixture, ns, ok, sourceQuery, memoryRef } from '../testing/context-read-sources-fixture.mjs';
@@ -137,4 +140,35 @@ test('C05 total lexical failure reports unavailable sources and never complete-e
   const result = await trusted.call(core, 'findCandidates', sourceQuery()); denied(result, 'index_unavailable');
   assert.equal(Array.isArray(result.error.details.trace.sources), false);
   for (const value of Object.values(result.error.details.trace.sources)) { assert.equal(value.status, 'unavailable'); assert.deepEqual(value.reasons, ['index_unavailable']); }
+});
+
+test('C04/C08 inconsistent foreign incident edges across physical batches leave all relation bytes identical', async t => {
+  const f = sourcesFixture(t, { cards: true, sources: ['relations-one-hop-v1'] }), foreign = { ...ns, ownerId: 'foreign-existing-data' };
+  const seed = f.admit('needle seed'), local = f.admit('Local endpoint'); await f.relate(local, seed);
+  const card = f.card('Independent direct Card'), foreignCard = f.card('Foreign Card', { namespace: foreign });
+  const aliens = Array.from({ length: 257 }, (_, i) => f.admit('Foreign endpoint ' + i, foreign));
+  const db = new DatabaseSync(f.path, { timeout: STORAGE_BUSY_TIMEOUT_MS }); t.after(() => db.close());
+  const metadata = db.prepare('SELECT store_id,cursor_secret FROM store_metadata').get();
+  const identity = { storeId: metadata.store_id, cursorSecret: metadata.cursor_secret };
+  const direct = [memoryRef(seed), card].map(ref => ({ ref }));
+  const rank = () => JSON.stringify(readTransaction(db, () => expandRelations(db, identity, { cards: true, receipts: true, reviews: true },
+    { readSet: [ns], types: ['memory', 'card'], intent: 'current' }, direct, Infinity)));
+  const before = rank(), template = db.prepare('SELECT * FROM rationale_edges').get();
+  // Deliberate out-of-band inconsistent links: preserve public-authored receipt
+  // material, vary only the foreign endpoint IDs/revisions. No authority follows.
+  db.exec('BEGIN');
+  for (const alien of aliens) for (const family of ['supports-decision', 'challenges-premise']) for (const outgoing of [false, true]) {
+    db.prepare('INSERT INTO rationale_edges VALUES(?,?,?,?,?,?,?,?,?)').run(outgoing ? seed.id : alien.id, 1, outgoing ? alien.id : seed.id, 1,
+      family, template.from_receipt, template.to_receipt, template.from_digest, template.to_digest);
+  }
+  for (const alien of aliens) {
+    const [left, right] = [seed.id, alien.id].sort();
+    db.prepare('INSERT INTO memory_conflicts VALUES(?,?,?,?,?,?)').run(left, 1, right, 1, 'contradicts', 'explicit-hint');
+  }
+  const foreignReceipt = db.prepare('SELECT id FROM receipts WHERE memory_id=?').get(aliens[0].id).id;
+  db.prepare('INSERT INTO card_memory_bindings VALUES(?,?,?,?,?,?)').run(card.cardId, aliens[0].id, 1, foreignReceipt, '{}', 0);
+  const localReceipt = db.prepare('SELECT id FROM receipts WHERE memory_id=?').get(seed.id).id;
+  db.prepare('INSERT INTO card_memory_bindings VALUES(?,?,?,?,?,?)').run(foreignCard.cardId, seed.id, 1, localReceipt, '{}', 0);
+  db.exec('COMMIT');
+  assert.equal(rank(), before);
 });

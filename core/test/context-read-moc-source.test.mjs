@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { sourcesFixture, ns, ok, memoryRef } from '../testing/context-read-sources-fixture.mjs';
-import { STORAGE_BUSY_TIMEOUT_MS } from '../database.mjs';
+import { sourcesFixture, publicMocCorpus, ns, ok, memoryRef } from '../testing/context-read-sources-fixture.mjs';
+import { rankMoc } from '../context-read-moc.mjs';
+import { instrumentSourceWork } from '../../tools/testing/context-read-source-work.mjs';
+import { STORAGE_BUSY_TIMEOUT_MS, readTransaction } from '../database.mjs';
 
 // Independent oracle: these token arrays are hand-authored T1 goldens, and all
 // BM25 / maximum-over-topics / RRF arithmetic below is separate from production.
@@ -216,5 +218,65 @@ test('C05 independent oracle observes depth twelve over eighteen ranked members 
     assert.equal(value.items[i].channels.moc.rank, i + 1);
     assert.ok(Math.abs(value.items[i].channels.moc.rawScore - expected[i].score) < 1e-15);
     assert.ok(Math.abs(value.items[i].fusionScore - 0.10 / (60 + i + 1)) < 1e-15);
+  }
+});
+
+// Schema-valid links below are deliberately inconsistent existing data. Every
+// endpoint/topic was authored through public operations; only cross-scope links
+// are injected out of band. They confer neither authority nor source allowance.
+for (const type of ['memory', 'card']) test(`C05/C08 inconsistent foreign ${type} membership and containment leave source bytes identical`, async t => {
+  const f = sourcesFixture(t, { cards: true, sources: ['moc-v1'] }), foreign = { ...ns, ownerId: 'foreign-existing-data' };
+  const local = type === 'memory' ? f.topic(f.admit('Local member'), 'needle local title', 'rootquery') : f.cardTopic(f.card('Local card'), 'needle local title', 'rootquery');
+  const alien = type === 'memory' ? f.topic(f.admit('Foreign member', foreign), 'Foreign title', 'Foreign root', foreign) :
+    f.cardTopic(f.card('Foreign card', { namespace: foreign }), 'Foreign title', 'Foreign root');
+  const db = new DatabaseSync(f.path, { timeout: STORAGE_BUSY_TIMEOUT_MS }); t.after(() => db.close());
+  const identityRow = db.prepare('SELECT store_id,cursor_secret FROM store_metadata').get();
+  const identity = { storeId: identityRow.store_id, cursorSecret: identityRow.cursor_secret };
+  const rank = query => JSON.stringify(readTransaction(db, () => rankMoc(db, identity, { cards: true, organization: true, receipts: true, reviews: true },
+    { readSet: [ns], types: [type], intent: 'current', query }, Infinity)));
+  const before = ['needle', 'rootquery'].map(rank);
+  const l1 = type === 'memory' ? local.createdMocs.find(m => m.level === 'L1') : local.createdMocRefs.find(m => m.level === 'L1');
+  const l2 = type === 'memory' ? local.createdMocs.find(m => m.level === 'L2') : local.createdMocRefs.find(m => m.level === 'L2');
+  const foreignL1 = type === 'memory' ? alien.createdMocs.find(m => m.level === 'L1') : alien.createdMocRefs.find(m => m.level === 'L1');
+  if (type === 'memory') {
+    const member = alien.memories[0];
+    db.prepare('INSERT INTO moc_memory_refs VALUES(?,?,?,?)').run(l1.id, l1.revision, member.id, member.revision);
+    db.prepare('INSERT INTO moc_edges VALUES(?,?,?,?)').run(l2.id, l2.revision, foreignL1.id, foreignL1.revision);
+  } else {
+    const member = db.prepare('SELECT id,revision,body_revision FROM private_cards WHERE owner_id=?').get(foreign.ownerId);
+    db.prepare('INSERT INTO card_moc_refs VALUES(?,?,?,?,?)').run(l1.mocId, l1.revision, member.id, member.revision, member.body_revision);
+    db.prepare('INSERT INTO card_moc_edges VALUES(?,?,?,?)').run(l2.mocId, l2.revision, foreignL1.mocId, foreignL1.revision);
+  }
+  assert.deepEqual(['needle', 'rootquery'].map(rank), before);
+});
+test('C05/C08/C10 ANALYZEd 10^4 corpus plus 257 inconsistent foreign memberships still yields byte-identical complete top twelve', async t => {
+  const f = await publicMocCorpus(t), foreign = { ...ns, ownerId: 'foreign-existing-data' };
+  const aliens = Array.from({ length: 257 }, (_, i) => f.admit('Foreign injected member ' + i, foreign));
+  const meter = instrumentSourceWork(f.db), input = { readSet: [ns], types: ['memory'], intent: 'current', query: 'needle' };
+  const rank = () => readTransaction(f.db, () => rankMoc(meter.database, {}, {}, input, Infinity));
+  const before = rank(), beforeCounts = structuredClone(meter.counts);
+  assert.equal(before.diagnostic.complete, true); assert.equal(before.rows.length, 12); assert.equal(before.diagnostic.membersRanked, 10000);
+  const topic = f.db.prepare('SELECT id,revision FROM mocs ORDER BY id LIMIT 1').get();
+  for (const member of aliens) f.db.prepare('INSERT INTO moc_memory_refs VALUES(?,?,?,?)').run(topic.id, topic.revision, member.id, member.revision);
+  const after = rank();
+  assert.equal(JSON.stringify(after), JSON.stringify(before));
+  assert.equal(meter.counts.visits - beforeCounts.visits, after.diagnostic.records);
+  assert.equal(meter.counts.lookups - beforeCounts.lookups, after.diagnostic.lookups);
+  const privateBefore = beforeCounts.private.lookups + beforeCounts.private.visits;
+  const privateAfter = meter.counts.private.lookups + meter.counts.private.visits - privateBefore;
+  assert.ok(privateAfter > privateBefore); assert.ok(privateAfter <= 50000);
+  console.log(JSON.stringify({ kind: 'foreign_membership_10000', analyzed: true, foreignRows: aliens.length, baseline: before.diagnostic,
+    after: after.diagnostic, privateBefore, privateAfter, publicDatabaseWork: after.diagnostic.records + after.diagnostic.lookups }));
+});
+
+test('C05/C08 foreign memberships do not change logical seeks at 127/128/129/256 authorized-member boundaries', async t => {
+  for (const size of [127, 128, 129, 256]) {
+    const f = await publicMocCorpus(t, { size, groupSize: 1000000 }), foreign = { ...ns, ownerId: 'foreign-existing-data' };
+    const aliens = Array.from({ length: 257 }, (_, i) => f.admit('Foreign boundary member ' + i, foreign));
+    const input = { readSet: [ns], types: ['memory'], intent: 'current', query: 'needle' };
+    const rank = () => JSON.stringify(readTransaction(f.db, () => rankMoc(f.db, {}, {}, input, Infinity)));
+    const before = rank(), topic = f.db.prepare('SELECT id,revision FROM mocs').get();
+    for (const member of aliens) f.db.prepare('INSERT INTO moc_memory_refs VALUES(?,?,?,?)').run(topic.id, topic.revision, member.id, member.revision);
+    assert.equal(rank(), before, 'authorized boundary ' + size);
   }
 });

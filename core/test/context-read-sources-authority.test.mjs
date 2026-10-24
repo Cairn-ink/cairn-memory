@@ -1,3 +1,5 @@
+import { sourceBudget, sourceReader, sourcePrivateBudget, SourceStop } from '../context-read-relations.mjs';
+import { readTransaction } from '../database.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
@@ -99,4 +101,22 @@ test('C08 every namespace is authorized before any source lookup and capture con
   denied(await f.context.findCandidates(sourceQuery(), {}), 'authority_required'); assert.equal(looked, false);
   f.trusted.state.allowed = [];
   denied(await f.find(), 'authority_required'); assert.equal(looked, false);
+});
+
+test('C08 foreign existing endpoint IDs are rejected before public checks; private work and state bounds are enforced', t => {
+  const f = sourcesFixture(t, { cards: true }), foreign = { ...ns, ownerId: 'foreign-existing-data' };
+  const memory = f.admit('Foreign endpoint', foreign), card = f.card('Foreign Card', { namespace: foreign });
+  const budget = sourceBudget(Infinity), reader = sourceReader(f.db, {}, { cards: true }, { readSet: [ns], types: ['memory', 'card'] }, budget);
+  const before = JSON.stringify(budget.stats());
+  readTransaction(f.db, () => {
+    for (const ref of [{ type: 'memory', namespace: ns, memoryId: memory.id, revision: 1 }, { ...card, namespace: ns }])
+      assert.equal(reader.endpoint(ref).reason, 'unavailable');
+    assert.equal(reader.endpoints([{ type: 'memory', namespace: ns, memoryId: memory.id, revision: 1 }])[0].reason, 'unavailable');
+  });
+  assert.equal(JSON.stringify(budget.stats()), before);
+  const privateBudget = sourcePrivateBudget(() => {});
+  for (let i = 0; i < 50000; i++) privateBudget.charge('lookups');
+  assert.throws(() => privateBudget.charge('lookups'), error => error instanceof SourceStop && error.reason === 'work_limit');
+  assert.throws(() => sourcePrivateBudget(() => {}).hold(1024 * 1024), error => error instanceof SourceStop && error.reason === 'state_limit');
+  assert.equal(JSON.stringify(budget.stats()), before, 'private failures expose no public counter');
 });

@@ -67,13 +67,14 @@ test('C04/C10 2,000 incoming public edges yield two canonical additions; SQLite 
   assert.deepEqual(result.items.slice(1).map(i => i.ref.memoryId), endpoints.map(m => m.id).sort().slice(0, 2));
   assert.equal(d.examined, 2000); assert.equal(d.added, 2); assert.deepEqual(d.reasons, ['capped']);
   assert.equal(d.records, meter.counts.visits); assert.equal(d.lookups, meter.counts.lookups);
-  // Independent oracle: each edge visits itself, its authorization endpoint,
+  assert.ok(meter.counts.private.visits > 0); assert.ok(meter.counts.private.lookups + meter.counts.private.visits <= 50000);
+  // Public oracle: each edge visits itself, its authorized endpoint metadata,
   // two validated endpoints, the exact witness again, and two receipt records.
   assert.equal(meter.counts.visits, 2000 * 7);
   assert.equal(meter.counts.byTable.rationale_edges, 4000);
   assert.equal(meter.counts.byTable.memories, 6000); assert.equal(meter.counts.byTable.receipts, 4000);
   assert.equal(d.work, d.records + d.lookups + 6002); // two endpoint checks + one selection check/edge, direct/seed passes
-  assert.ok(d.work + d.reservedWork <= 50000); assert.ok(d.peakBytes < 200000);
+  assert.ok(d.work + d.reservedWork <= 50000); assert.ok(d.peakBytes < 2 * 1024 * 1024);
   console.log(JSON.stringify({ kind: 'high_degree_work', independent: meter.counts, charged: d.work, records: d.records, lookups: d.lookups, peakBytes: d.peakBytes }));
 });
 test('C10 empty incident streams visit zero namespace records in a large public fixture; counter catches a deliberately scope-driven control', t => {

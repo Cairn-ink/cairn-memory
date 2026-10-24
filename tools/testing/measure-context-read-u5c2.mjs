@@ -97,12 +97,13 @@ else {
           const boundary = readTransaction(db, () => source === 'moc-v1' ? rankMoc(meter.database, identity, {},
             { readSet: [ns], types: ['memory'], intent: 'current', query: 'needle' }, Infinity) :
             expandRelations(meter.database, identity, {}, { readSet: [ns], types: ['memory'], intent: 'current' }, direct, Infinity));
+          const privateWork = { lookups: meter.counts.private.lookups - before.private.lookups, visits: meter.counts.private.visits - before.private.visits };
           const d = boundary.diagnostic, independent = { lookups: meter.counts.lookups - before.lookups, visits: meter.counts.visits - before.visits };
-          if (d.records !== independent.visits || d.lookups !== independent.lookups || d.work + d.reservedWork > 50000 || d.peakBytes > 8 * 1024 * 1024)
+          if (privateWork.lookups + privateWork.visits > 50000 || d.records !== independent.visits || d.lookups !== independent.lookups || d.work + d.reservedWork > 50000 || d.peakBytes > 8 * 1024 * 1024)
             throw Error('source_boundary_exceeded_or_work_mismatch: ' + JSON.stringify({ source, independent, diagnostic: d }));
           console.log(JSON.stringify({ kind: 'source_boundary', size, shape, source, elapsedMs: performance.now() - started,
             independent: { ...independent, databaseWork: independent.lookups + independent.visits, plansChecked: meter.counts.plansChecked - before.plansChecked },
-            chargedDatabaseWork: d.records + d.lookups, diagnostic: d }));
+            privateScopeWork: privateWork, chargedDatabaseWork: d.records + d.lookups, diagnostic: d }));
         }
       } finally { db.close(); }
       // Build the complete lexical projection outside query timing; maintenance
