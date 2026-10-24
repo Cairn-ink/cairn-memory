@@ -1,0 +1,41 @@
+Cairn.ink Memory <version>
+
+Node.js and Claude Code are available.
+Claude Code
+Marketplace: absent
+  ✗ Plugin is not installed
+  Install:
+npx @cairn-ink/memory setup
+  To see whether the last connection worked, type /cairn-memory:status in it.
+
+Node.js and Codex CLI are available.
+User-level MCP cairn: absent
+Cairn endpoint: https://cairn.ink (default).
+Codex 0.160.0
+Automatic memory is paused: Codex 0.160.0 has not been verified yet.
+  Recheck:
+npx @cairn-ink/memory status --client codex
+Automatic memory is not installed
+  Install:
+npx @cairn-ink/memory setup
+Codex automatic memory is off (this version has not been verified).
+You can use the Cairn tools in Codex /mcp to save and find memories manually.
+PAT, remote service and hooks are not tested.
+
+Only local settings were read; no connection was tested.
+Details:
+npx @cairn-ink/memory status --verbose
+Claude Code: local memory (cairn-local)
+  Registration: registered
+Codex: local memory (cairn-local)
+  Registration: registered
+  The engine was not started to test the connection.
+  Node: available
+  Data: ~/.cairn-memory/data
+"<HOME>/.cairn-memory/data/memory.sqlite"
+"<NODE>"
+"<HOME>/.cairn-memory/engine/99.0.0-e88b1ea56ae9/app/node_modules/cairn-memory-local-preview/bin/cairn-memory.mjs"
+"<owner>"
+"99.0.0-e88b1ea56ae9"
+  Retained failed installations:
+"<HOME>/.cairn-memory/engine/<engine-id>.failed-123"

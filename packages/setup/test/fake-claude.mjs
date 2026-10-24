@@ -19,8 +19,13 @@ if (process.env.FAKE_GLOBAL_CALLS) appendFileSync(process.env.FAKE_GLOBAL_CALLS,
 const state = JSON.parse(readFileSync(process.env.FAKE_STATE, 'utf8'));
 const scopeIndex = args.indexOf('--scope');
 const command = (scopeIndex < 0 ? args : args.filter((_, index) => index !== scopeIndex && index !== scopeIndex + 1)).join(' ');
+if (state.killBefore === command) {
+  delete state.killBefore; writeFileSync(process.env.FAKE_STATE, JSON.stringify(state));
+  process.kill(process.ppid, 'SIGKILL'); process.exit(0);
+}
 const entry = scope => ({ scope, version: state.version || '0.3.0' });
 const entries = state.entries ?? (state.installed ? [entry('user')] : []);
+if (state.failAdds && args[0] === 'mcp' && args[1] === 'add' && !args.includes('--help')) process.exit(7);
 if (state.fail === command || (state.failPairing && values.pairing_record)) {
   console.error(values.api_token || state.token || 'synthetic-child-error');
   process.exit(state.failCode || 7);

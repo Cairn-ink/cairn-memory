@@ -180,6 +180,7 @@ export async function main(argv, {
   env = process.env, locale = Intl.DateTimeFormat().resolvedOptions().locale,
   coordinated = false, pairingConsent, claudeDeclined, inspectCodex, identityPlan, endpointChoice,
   forceReauthorize = false, expectedCodex, hostsStopped, progress = {}, disableLocalMode = false, platform = process.platform,
+  localInstallerVersion = installerVersion,
 } = {}) {
   const rawWrite = write;
   const rawPrompt = prompt;
@@ -218,16 +219,16 @@ export async function main(argv, {
     t.locale = translate.locale;
     if (forceReauthorize && !options.argv.includes('--reauthorize')) options.argv.push('--reauthorize');
     const selection = parseClient(options.argv, SetupError);
+    if (options.captureExec !== undefined && selection.client === 'claude') throw new SetupError('invalid_exec_setting', 2);
+    if (options.dailyCap !== undefined && selection.client === 'claude') throw new SetupError('cap_option_scope', 2);
     if (!coordinated && ['setup', 'status'].includes(selection.argv[0]))
       write(t(selection.argv[0] === 'status' ? 'status_header' : 'installer_version', { version: installerVersion }));
     if (!coordinated && !disableLocalMode) {
       const routed = await routeLocalMode(options, selection, { write, prompt, interactive, env, t, verbose,
-        runClaude: run, nodeVersion, supportedNode, installerVersion, platform, progress });
+        runClaude: run, nodeVersion, supportedNode, installerVersion: localInstallerVersion, platform, progress });
       localDetection = routed.detection; localStatusCode = routed.statusCode ?? 0;
       if (routed.handled) return routed.code;
     }
-    if (options.captureExec !== undefined && selection.client === 'claude') throw new SetupError('invalid_exec_setting', 2);
-    if (options.dailyCap !== undefined && selection.client === 'claude') throw new SetupError('cap_option_scope', 2);
     if (!coordinated && !selection.client && ['setup', 'status'].includes(selection.argv[0])) {
       return Math.max(localStatusCode, await setupDetected(selection.argv, { write, prompt, interactive, browse, nodeVersion,
         authOptions, env, locale, t, endpointOverride, dailyCap:options.dailyCap, captureExec:options.captureExec, verbose, progress,
@@ -431,9 +432,9 @@ export async function main(argv, {
       for (const stage of ['local_engine', 'local_claude', 'local_codex']) if (progress[stage]) write(t('progress_' + stage));
       if (error.key === 'codex_lock') write(t('lock_retry'));
       if (params.path) write.literal(shellArgument(params.path));
-      if (error.key === 'local_lock_stale') write.literal('rm -- ' + shellArgument(params.path));
+      if (['local_lock_stale', 'codex_lock_stale'].includes(error.key)) write.literal('rm -- ' + shellArgument(params.path));
       if (error.key === 'local_recovery_required') write.literal('npx @cairn-ink/memory uninstall --local --purge-config');
-      const recoveryOnly = ['local_lock_stale', 'lock_retry', 'codex_lock', 'local_recovery_required', 'local_root_invalid', 'local_option_invalid'];
+      const recoveryOnly = ['local_lock_stale', 'lock_retry', 'codex_lock', 'codex_lock_stale', 'local_recovery_required', 'local_root_invalid', 'local_option_invalid'];
       if (progress.localAction === 'uninstall') {
         write(t('local_data_kept')); write.literal(progress.localUninstallCommand);
       } else if (/mcp_/u.test(error.key ?? '') || (progress.localOperation && !recoveryOnly.includes(error.key))) writeLocalResume(write, t);

@@ -1,5 +1,5 @@
 import { constants } from 'node:fs';
-import { lstat, mkdir, open, readFile, realpath, rename, rm } from 'node:fs/promises';
+import { lstat, mkdir, open, readdir, realpath, rename, rm } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
@@ -16,6 +16,34 @@ export const validPath = value => typeof value === 'string' && isAbsolute(value)
 export const inside = (root, path) => path === root || (!relative(root, path).startsWith('..' + sep) &&
   relative(root, path) !== '..' && !isAbsolute(relative(root, path)));
 const recovery = root => new SetupError('local_recovery_required', 2, { path: join(root, 'installation.json') });
+export const localFilesystemError = (error, key = 'local_recovery_required') => error instanceof SetupError ? error :
+  new SetupError(key, 2, { code: typeof error.code === 'string' ? error.code : 'filesystem_error' });
+export const pidIsDead = pid => {
+  if (!Number.isSafeInteger(pid) || pid < 1) return false;
+  try { process.kill(pid, 0); return false; } catch (error) { return error.code === 'ESRCH'; }
+};
+export async function ownedDirectory(path, { missing = false, key = 'local_root_invalid' } = {}) {
+  try {
+    const stat = await lstat(path);
+    if (!stat.isDirectory() || stat.isSymbolicLink() || (stat.mode & 0o7777) !== 0o700 ||
+        (process.getuid && stat.uid !== process.getuid())) throw new SetupError(key, 2, { code: 'insecure_directory' });
+    return true;
+  } catch (error) { if (missing && error.code === 'ENOENT') return false; throw localFilesystemError(error, key); }
+}
+export async function ownedLocalTree(root) {
+  if (!await ownedDirectory(root, { missing: true })) return;
+  await ownedDirectory(join(root, 'data'), { missing: true });
+  if (!await ownedDirectory(join(root, 'engine'), { missing: true })) return;
+  try {
+    for (const entry of await readdir(join(root, 'engine'), { withFileTypes: true })) {
+      if (entry.name === 'npm-cache' || entry.isDirectory() || entry.isSymbolicLink()) {
+        const path = join(root, 'engine', entry.name);
+        await ownedDirectory(path);
+        if (entry.name !== 'npm-cache') await ownedDirectory(join(path, 'app'), { missing: true });
+      }
+    }
+  } catch (error) { throw localFilesystemError(error, 'local_root_invalid'); }
+}
 
 // A small strict JSON reader: JSON.parse alone silently accepts duplicate keys.
 // No source text or parse excerpts escape this function.
@@ -88,9 +116,9 @@ export async function canonicalPath(path) {
   if (!validPath(path)) throw new SetupError('local_root_invalid', 2);
   try { const canonical = await realpath(path); if (!validPath(canonical)) throw new SetupError('local_root_invalid', 2); return canonical; }
   catch (error) {
-    if (error.code !== 'ENOENT') throw error;
+    if (error.code !== 'ENOENT') throw localFilesystemError(error, 'local_root_invalid');
     const parent = dirname(path);
-    if (parent === path) throw error;
+    if (parent === path) throw localFilesystemError(error, 'local_root_invalid');
     return join(await canonicalPath(parent), path.slice(parent.length));
   }
 }
@@ -104,10 +132,14 @@ export async function localRoot(env = process.env, { create = false } = {}) {
   try {
     const stat = await lstat(path);
     if (!stat.isDirectory() || stat.isSymbolicLink() || (process.getuid && stat.uid !== process.getuid()) ||
-        (stat.mode & 0o077)) throw new Error('unsafe_root');
+        (stat.mode & 0o7777) !== 0o700) throw new Error('unsafe_root');
   } catch (error) {
-    if (error.code !== 'ENOENT') throw new SetupError('local_root_invalid', 2);
-    if (create) await mkdir(path, { recursive: true, mode: 0o700 });
+    if (error.code !== 'ENOENT') throw localFilesystemError(error, 'local_root_invalid');
+    if (create) {
+      try { await mkdir(path, { recursive: true, mode: 0o700 }); }
+      catch (failure) { throw localFilesystemError(failure, 'local_root_invalid'); }
+      await ownedDirectory(path);
+    }
   }
   return canonicalPath(path);
 }
@@ -161,7 +193,7 @@ export function validateDescriptor(value, root) {
       if (!keys(checkpoint, ['state', 'destination', 'previous', 'desired']) || !validPath(checkpoint.destination) ||
           !(op.kind === 'setup' ? ['planned', 'registering', 'done', 'manual'] : ['planned', 'detaching', 'detached']).includes(checkpoint.state) ||
           ![checkpoint.previous, checkpoint.desired].every(vector => vector === null || (validVector(vector) && consistent(vector) && databaseSafe(vector.databasePath))) ||
-          (op.kind === 'setup' && checkpoint.desired === null) || (op.kind === 'uninstall' && checkpoint.desired !== null)) fail();
+          (op.kind === 'setup' && checkpoint.desired === null)) fail();
     }
   }
   if (value.state === 'pending' && (!value.node || op?.kind !== 'setup')) fail();
@@ -181,7 +213,7 @@ export async function readDescriptor(root) {
       if ([join(root, 'engine'), ...['.setup.lock', 'installation.json', '.npmrc'].map(name => join(root, name))].some(target => inside(target, path))) throw recovery(root);
     }
     return value;
-  } catch (error) { if (error.code === 'ENOENT') return null; throw recovery(root); }
+  } catch (error) { if (error.code === 'ENOENT') return null; throw localFilesystemError(error); }
 }
 export function publishedReferences(descriptor) {
   const result = new Set();
@@ -192,38 +224,54 @@ export function publishedReferences(descriptor) {
   return result;
 }
 export async function deletionPath(root, name, { purge = false, databasePath, references = new Set(), renameOnly = false } = {}) {
+  try {
+  await ownedDirectory(root);
   const allowed = ['.setup.lock', 'engine', ...(purge ? ['installation.json', '.npmrc'] : [])];
   if (!allowed.includes(name) && !(renameOnly && name.startsWith('engine/') &&
       engineIdPattern.test(name.slice(7)) && !references.has(name.slice(7)))) throw recovery(root);
   const path = join(root, name);
   if (databasePath && inside(path, await canonicalPath(databasePath))) throw recovery(root);
-  if (name.startsWith('engine/') && (!(await lstat(join(root, 'engine'))).isDirectory() || (await lstat(join(root, 'engine'))).isSymbolicLink())) throw recovery(root);
-  try { const stat = await lstat(path); if (stat.isSymbolicLink()) throw recovery(root); }
+  if (name.startsWith('engine/')) await ownedDirectory(join(root, 'engine'), { key: 'local_recovery_required' });
+  try { const stat = await lstat(path); if (stat.isSymbolicLink()) throw recovery(root);
+    if (stat.isDirectory()) await ownedDirectory(path, { key: 'local_recovery_required' });
+    if (name.startsWith('engine/')) await ownedDirectory(join(path, 'app'), { missing: true, key: 'local_recovery_required' });
+    if (name === 'engine') await ownedLocalTree(root);
+  }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   return path;
+  } catch (error) { throw localFilesystemError(error); }
 }
 const locks = new Map();
 export async function withLocalLock(root, work) {
+  await ownedLocalTree(root);
   const path = join(root, '.setup.lock'); let file;
   try { file = await open(path, 'wx', 0o600); }
   catch (error) {
-    if (error.code !== 'EEXIST') throw error;
+    if (error.code !== 'EEXIST') throw localFilesystemError(error, 'local_root_invalid');
     let stale = false;
     try { const value = await boundedJSON(path, 1024, { privateFile: true });
-      if (Number.isSafeInteger(value.pid) && value.pid > 0) {
-        try { process.kill(value.pid, 0); } catch (error) { stale = error.code === 'ESRCH'; }
-      }
+      stale = pidIsDead(value.pid) && (!Object.hasOwn(value, 'child') || value.child === null || pidIsDead(value.child));
     } catch { /* An unreadable lock cannot be proven stale. */ }
     throw new SetupError(stale ? 'local_lock_stale' : 'lock_retry', 2, { path });
   }
   try {
-    await file.writeFile(JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }) + '\n');
-    await file.sync(); locks.set(root, file); return await work();
+    const value = { pid: process.pid, startedAt: new Date().toISOString(), child: null };
+    const updateChild = async child => {
+      value.child = child;
+      const bytes = Buffer.from(JSON.stringify(value) + '\n');
+      try { await file.truncate(0); await file.write(bytes, 0, bytes.length, 0); await file.sync(); }
+      catch (error) { throw localFilesystemError(error, 'local_root_invalid'); }
+    };
+    await updateChild(null); locks.set(root, file); return await work(updateChild);
+  } catch (error) { throw localFilesystemError(error, 'local_root_invalid');
   } finally {
-    locks.delete(root); await file.close(); await rm(await deletionPath(root, '.setup.lock'));
+    locks.delete(root);
+    try { await file.close(); await rm(await deletionPath(root, '.setup.lock')); }
+    catch (error) { throw localFilesystemError(error, 'local_root_invalid'); }
   }
 }
 export async function writeDescriptor(root, descriptor) {
+  try {
   if (!locks.has(root)) throw recovery(root);
   descriptor.updatedAt = new Date().toISOString(); validateDescriptor(descriptor, root);
   const temporary = join(root, `.installation-${process.pid}-${randomBytes(8).toString('hex')}.tmp`);
@@ -232,6 +280,7 @@ export async function writeDescriptor(root, descriptor) {
   finally { await file.close(); }
   await rename(temporary, join(root, 'installation.json'));
   const directory = await open(root, 'r'); try { await directory.sync(); } finally { await directory.close(); }
+  } catch (error) { throw localFilesystemError(error); }
 }
 export function newDescriptor(root, installerVersion, { owner, db, project } = {}) {
   const now = new Date().toISOString();

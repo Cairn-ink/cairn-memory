@@ -5,9 +5,9 @@ import { homedir } from 'node:os';
 import { availableClient, codexHome, inspectCodexServers } from './codex.mjs';
 import { installEngine, engineIdFor, engineBaseId } from './local-engine.mjs';
 import { localRoot, requestedRoot, canonicalPath, readDescriptor, writeDescriptor, withLocalLock,
-  engineIdPattern, executableFor, newDescriptor, beginOperation, recordClient, publishedReferences, deletionPath, inside } from './local-descriptor.mjs';
+  engineIdPattern, executableFor, newDescriptor, beginOperation, recordClient, publishedReferences, deletionPath, inside, ownedDirectory, ownedLocalTree } from './local-descriptor.mjs';
 import { readClaudeServers, registerClaude, detachClaude } from './local-claude.mjs';
-import { registerCodex, detachCodex } from './local-codex.mjs';
+import { registerCodex, detachCodex, checkCodexLock } from './local-codex.mjs';
 import { shellArgument } from './output.mjs';
 import { SetupError } from './errors.mjs';
 
@@ -113,6 +113,7 @@ function refusal(key, detection, { write, t }, params = {}) {
     command(write, shellArgument(params.previous)); command(write, shellArgument(params.current));
     command(write, `${params.client === 'claude' ? 'HOME' : 'CODEX_HOME'}=${shellArgument(params.client === 'claude' ? params.previous : dirname(params.previous))} npx @cairn-ink/memory ${params.action ?? 'setup'} --local`);
   }
+  if (key === 'local_operation_pending') command(write, 'npx @cairn-ink/memory uninstall --local');
   return { handled: true, code: 2 };
 }
 function validateLocalOptions(options, selection, descriptor) {
@@ -141,19 +142,16 @@ export async function routeLocalMode(options, selection, context) {
     if (union === 'unknown' && Object.values(states).some(state => state.local)) return refusal('mode_unknown', detection, context);
     return { handled: false };
   }
-  if (detection.descriptorError) return refusal(detection.descriptorError.key, detection, context);
-  for (const client of clientNames) if (states[client].changedHome) return refusal('local_client_home_changed', detection, context,
-    { client, ...states[client].changedHome });
-  if (options.local || union === 'local') validateLocalOptions(options, selection, descriptor);
+  if (options.local || union === 'local' || (detection.descriptorError && !options.cloud)) validateLocalOptions(options, selection, descriptor);
   const localOwnership = Object.values(states).some(state => state.local) || Boolean(descriptor?.operation);
   if (union === 'mixed') return refusal('mode_mixed', detection, context);
-  if (!descriptor && (detection.orphanEngine || Object.values(states).some(state => state.entry))) return refusal('local_orphan', detection, context);
-  if (options.cloud && localOwnership) return refusal('mode_conflict_local', detection, context);
-  if (union === 'unknown' && (options.local || localOwnership || Object.values(states).some(state => state.localUnknown))) {
+  if (!descriptor && !detection.descriptorError && (detection.orphanEngine || Object.values(states).some(state => state.entry))) return refusal('local_orphan', detection, context);
+  if (union === 'unknown' && (options.cloud || !Object.values(states).some(state => state.changedHome)) && (options.local || localOwnership || Object.values(states).some(state => state.localUnknown))) {
     const [client, state] = Object.entries(states).find(([, state]) => state.unknown);
     return refusal('mode_unknown', detection, context, { client: client === 'claude' ? 'Claude Code' : 'Codex', probe: state.probe });
   }
-  let local = options.local || union === 'local';
+  if (options.cloud && localOwnership) return refusal('mode_conflict_local', detection, context);
+  let local = options.local || union === 'local' || (!options.cloud && (localOwnership || Boolean(detection.descriptorError)));
   if (options.local && union === 'cloud') return refusal('mode_conflict_cloud', detection, context);
   if (!Object.values(states).some(state => state.available)) { write(t('clients_missing')); return { handled: true, code: 0 }; }
   if (union === 'none' && !options.local && !options.cloud) {
@@ -163,7 +161,10 @@ export async function routeLocalMode(options, selection, context) {
     if (!['1', '2'].includes(choice)) return refusal('mode_required', detection, context);
     local = choice === '1';
   }
-  if (!local) return { handled: false };
+  if (!local) {
+    if (detection.descriptorError) return refusal(detection.descriptorError.key, detection, context);
+    return { handled: false };
+  }
   validateLocalOptions(options, selection, descriptor);
   if (options.db) {
     const db = await canonicalPath(options.db);
@@ -175,6 +176,9 @@ export async function routeLocalMode(options, selection, context) {
     write(t('local_dry_run')); if (descriptor?.operation) writeLocalResume(write, t, 'local_resume_hint');
     return { handled: true, code: 0 };
   }
+  if (detection.descriptorError) return refusal(detection.descriptorError.key, detection, context);
+  for (const client of clientNames) if (states[client].changedHome) return refusal('local_client_home_changed', detection, context,
+    { client, ...states[client].changedHome });
   if (descriptor?.operation && descriptor.operation.kind !== 'setup') return refusal('local_recovery_required', detection, context);
   return { handled: true, code: await setupLocal(options, selection, detection, context) };
 }
@@ -194,16 +198,25 @@ async function setupLocal(options, selection, detection, context) {
     }
   } else if (selection.client && selected.some(client => client !== selection.client)) throw new SetupError('local_option_invalid', 2);
   if (!selected.length) { write(t(detection.descriptor ? 'local_done' : 'clients_declined')); return 0; }
+  if (selected.includes('codex') && !['done', 'manual'].includes(detection.descriptor?.operation?.checkpoints.codex?.state)) await checkCodexLock(dirname(detection.destinations.codex));
   progress.localOperation = true; progress.localAction = 'setup';
+  await ownedLocalTree(detection.root);
+  // CAIRN_SETUP_NPM_CACHE is caller-supplied test storage, not an owned
+  // installation directory. S1 validates that absolute-directory seam when used.
   const root = await localRoot(env, { create: true });
-  return withLocalLock(root, async () => {
+  return withLocalLock(root, async updateChild => {
     let descriptor = await readDescriptor(root);
     if (descriptor && JSON.stringify(descriptor) !== JSON.stringify(detection.descriptor)) throw new SetupError('local_recovery_required', 2, { path: join(root, 'installation.json') });
     descriptor ??= newDescriptor(root, installerVersion, options);
     if (options.project !== undefined) descriptor.projectId = options.project;
     if (options.db && inside(root, await canonicalPath(options.db)) && options.db !== join(root, 'data/memory.sqlite')) throw new SetupError('local_option_invalid', 2);
-    const bytes = await readFile(new URL('../runtime/engine/manifest.json', import.meta.url));
-    const manifest = JSON.parse(bytes), baseId = engineIdFor(installerVersion, bytes);
+    let bytes, manifest;
+    try {
+      bytes = await readFile(new URL('../runtime/engine/manifest.json', import.meta.url));
+      manifest = JSON.parse(bytes);
+      if (typeof manifest?.package?.name !== 'string' || typeof manifest?.package?.version !== 'string') throw new Error('manifest');
+    } catch { throw new SetupError('engine_bundle_invalid'); }
+    const baseId = engineIdFor(installerVersion, bytes);
     if (!descriptor.operation) {
       descriptor.node = process.execPath;
       beginOperation(descriptor, 'setup', selected, detection.destinations,
@@ -220,8 +233,7 @@ async function setupLocal(options, selection, detection, context) {
     await mkdir(join(root, 'data'), { recursive: true, mode: 0o700 });
     for (const name of ['data', 'engine']) {
       await mkdir(join(root, name), { recursive: true, mode: 0o700 });
-      const info = await lstat(join(root, name));
-      if (!info.isDirectory() || info.isSymbolicLink() || (process.getuid && info.uid !== process.getuid()) || (info.mode & 0o077)) throw new SetupError('local_root_invalid', 2);
+      await ownedDirectory(join(root, name));
     }
     await deletionPath(root, '.npmrc', { purge: true, databasePath: descriptor.database.path });
     const npmrc = await open(join(root, '.npmrc'), constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600);
@@ -250,10 +262,11 @@ async function setupLocal(options, selection, detection, context) {
     let installed;
     try {
       installed = await installEngine({ root, engineId: candidate, node: process.execPath, env, write, t,
-        databasePath: descriptor.database.path, ownerId: descriptor.ownerId, projectId: descriptor.projectId, references });
+        databasePath: descriptor.database.path, ownerId: descriptor.ownerId, projectId: descriptor.projectId, references,
+        onChild: ({ kind, pid }) => updateChild(kind === 'npm' ? pid : null) });
     } catch (error) {
       descriptor.engine = null; await writeDescriptor(root, descriptor); throw error;
-    }
+    } finally { await updateChild(null); }
     progress.local_engine = true;
     descriptor.engine = { id: installed.engineId, package: manifest.package.name, packageVersion: manifest.package.version, sha256: installed.sha256 };
     descriptor.node = process.execPath;
@@ -304,6 +317,9 @@ export async function localStatus(detection, { write, t, verbose }) {
   }
 }
 async function uninstallLocal(options, selection, detection, { write, t, prompt, interactive, env, runClaude, progress = {} }) {
+  const pendingSetup = detection.descriptor?.operation?.kind === 'setup';
+  if (pendingSetup && selection.client) return refusal('local_operation_pending', detection, { write, t }).code;
+  if (selection.client && detection.descriptor && !['installed', 'uninstalling'].includes(detection.descriptor.state)) throw new SetupError('local_option_invalid', 2);
   const selected = detection.descriptor?.operation?.kind === 'uninstall' ? detection.descriptor.operation.clients :
     clientNames.filter(client => (!selection.client || selection.client === client) &&
       (detection.states[client].available || recorded(detection.descriptor, client)));
@@ -314,14 +330,25 @@ async function uninstallLocal(options, selection, detection, { write, t, prompt,
     if (detection.descriptor?.operation?.checkpoints[client]?.state === 'detached') continue;
     if (!state.available) { refusal('mode_unknown', detection, { write, t }, { client, probe: 'CLI' }); return 2; }
   }
+  if (selected.includes('codex') && detection.descriptor?.operation?.checkpoints.codex?.state !== 'detached') await checkCodexLock(dirname(detection.destinations.codex));
+  await ownedLocalTree(detection.root);
   write(t('local_uninstall_plan')); write(t('local_data_kept'));
-  if (!detection.descriptor?.operation && !options.yes && (!interactive || !yes(await prompt(t('local_uninstall_confirm'))))) return 2;
+  if (detection.descriptor?.operation?.kind !== 'uninstall' && !options.yes && (!interactive || !yes(await prompt(t('local_uninstall_confirm'))))) return 2;
   progress.localOperation = true; progress.localAction = 'uninstall';
   progress.localUninstallCommand = 'npx @cairn-ink/memory uninstall --local' + (options.yes ? ' --yes' : '') + (selection.client ? ' --client ' + selection.client : '') + (options.purgeConfig ? ' --purge-config' : '');
   const root = await localRoot(env, { create: true });
   return withLocalLock(root, async () => {
     let descriptor = detection.descriptorError ? null : await readDescriptor(root);
-    if (descriptor && selected.length && descriptor.operation?.kind !== 'uninstall') {
+    if (descriptor?.operation?.kind === 'setup') {
+      const previous = descriptor.operation;
+      descriptor.state = 'uninstalling';
+      descriptor.operation = { kind: 'uninstall', clients: selected, startedAt: new Date().toISOString(),
+        checkpoints: Object.fromEntries(selected.map(client => [client, previous.checkpoints[client] ?
+          { ...previous.checkpoints[client], state: 'detaching' } :
+          { state: 'detaching', destination: client === 'claude' ? descriptor.clients[client]?.home ?? detection.destinations[client] :
+            descriptor.clients[client]?.configPath ?? detection.destinations[client], previous: descriptor.clients[client]?.vector ?? null, desired: null }])) };
+      await writeDescriptor(root, descriptor);
+    } else if (descriptor && selected.length && descriptor.operation?.kind !== 'uninstall') {
       beginOperation(descriptor, 'uninstall', selected, detection.destinations); await writeDescriptor(root, descriptor);
     }
     for (const client of selected) {

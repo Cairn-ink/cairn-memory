@@ -7,6 +7,10 @@ const home = process.env.CODEX_HOME || join(process.env.HOME, '.codex');
 appendFileSync(process.env.FAKE_CALLS, JSON.stringify({ args, home, cwd: process.cwd(),
   ...(state.recordEnv ? {env:process.env} : {}) }) + '\n');
 if (process.env.FAKE_GLOBAL_CALLS) appendFileSync(process.env.FAKE_GLOBAL_CALLS, JSON.stringify({ client: 'codex', args }) + '\n');
+if (state.killBefore === args.join(' ')) {
+  delete state.killBefore; writeFileSync(process.env.FAKE_STATE, JSON.stringify(state));
+  process.kill(process.ppid, 'SIGKILL'); process.exit(0);
+}
 if (state.fail === args.join(' ') || (state.failValidation && (home.includes('.cairn-validate-') || home.includes('cx5-candidate')))) {
   writeSync(2, state.token); process.exit(7);
 }
@@ -76,10 +80,11 @@ if (args[0] === 'mcp' && ['add', 'remove'].includes(args[1])) {
     } else text += (text && !text.endsWith('\n') ? '\n' : '') + addition;
   }
   mkdirSync(home, { recursive: true, mode: 0o700 }); writeFileSync(join(home, 'config.toml'), text, { mode: 0o600 });
-  if (state.killAfterAdd && args[1] === 'add') process.kill(process.ppid, 'SIGKILL');
+  if (state.killAfterAdd && args[1] === 'add') { delete state.killAfterAdd; writeFileSync(process.env.FAKE_STATE, JSON.stringify(state)); process.kill(process.ppid, 'SIGKILL'); }
   process.exit(0);
 }
 if (args.join(' ') === 'mcp list --json') {
+  if (state.verificationMismatch && local) local.transport.command = '/synthetic/verification-mismatch';
   writeSync(1, JSON.stringify([entry, local].filter(Boolean).map(e => ({ ...e, auth_status: state.authStatus || 'not_logged_in' })))); process.exit(0);
 }
 if (args[0] === 'mcp' && args[1] === 'get' && args[3] === '--json') {

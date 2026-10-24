@@ -42,7 +42,7 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
   const server = await fakeAuthServer(t, auth);
   const targetModule = process.env.CAIRN_SETUP_TEST_MODULE || (process.env.CAIRN_SETUP_TEST_PACKAGE ? pathToFileURL(join(process.env.CAIRN_SETUP_TEST_PACKAGE, 'lib/setup.mjs')).href : new URL('../lib/setup.mjs', import.meta.url).href);
   const harness = join(ws.path, 'harness.mjs');
-  await writeFile(harness, `import{writeSync,writeFileSync}from'node:fs';import{main}from${JSON.stringify(targetModule)};
+  const makeHarness = async (targetModule, path) => writeFile(path, `import{writeSync,writeFileSync}from'node:fs';import{main}from${JSON.stringify(targetModule)};
     import{SetupError}from${JSON.stringify(new URL('./errors.mjs', targetModule).href)};
     import{requestJSON}from${JSON.stringify(new URL('./transport.mjs', targetModule).href)};
     import{installChildWire}from${JSON.stringify(new URL('./http-wire.mjs', import.meta.url).href)};
@@ -71,13 +71,16 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
         if(q.includes('確認 Cairn endpoint')||q.includes('Confirm Cairn endpoint'))return ${JSON.stringify(server.endpoint)};
         throw new Error('unexpected prompt');},browse:async()=>{writeSync(1, 'browser opened\\n');},
       authOptions:{now:()=>clock,sleep:async ms=>{clock+=ms;},request:(url,options)=>requestJSON(url,{...options,env:{}}),copy:async()=>false,progress:()=>()=>{}}});disconnect();`);
+  await makeHarness(targetModule, harness);
   const installation = join(codexHome, 'cairn/installation.json');
   const lines = async path => (await readFile(path, 'utf8')).trim().split('\n').filter(Boolean).map(JSON.parse);
-  async function run({ args = ['setup'], choices = {}, interactive = true, tmpdir, disableLocalMode = true, fixedNow } = {}) {
+  async function run({ args = ['setup'], choices = {}, interactive = true, tmpdir, disableLocalMode = true, fixedNow, module } = {}) {
     const configured=JSON.parse(await readFile(claudeState,'utf8')).configured;
     const installed=await readInstallation(installation).then(()=>true,()=>false);
     if(args[0]==='setup'&&!args.includes('--local')&&!configured&&!installed&&!args.includes('--endpoint'))args=[...args,'--endpoint',server.endpoint];
-    const child = spawn(process.execPath, [harness, ...args], { cwd: ws.path,
+    const selectedHarness = module ? join(ws.path, 'historical-harness.mjs') : harness;
+    if (module) await makeHarness(module, selectedHarness);
+    const child = spawn(process.execPath, [selectedHarness, ...args], { cwd: ws.path,
       env: { HOME: home, CODEX_HOME: codexHome, PATH: bin, LANG: 'en_US.UTF-8', TMPDIR: tmpdir ?? process.env.TMPDIR,
         FAKE_GLOBAL_CALLS: allCalls, TEST_CHOICES: JSON.stringify(choices), TEST_TTY: String(interactive), TEST_HOSTED_BASELINE: String(disableLocalMode), TEST_FIXED_NOW: fixedNow === undefined ? '' : String(fixedNow), CAIRN_MEMORY_HOME: join(home, 'local-memory') }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
     wireChild(child, server.server);
