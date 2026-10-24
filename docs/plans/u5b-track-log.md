@@ -311,3 +311,7 @@
   README 舊指令標為歷史紀錄、每類拒絕測試含位元不變斷言。
 - **fix1 完成**（共用 `output-paths.mjs` 實體路徑守衛；三個 stage 寫入前預檢；README 舊指令標歷史；33 個拒絕／位元不變測試）。
   協調者沙箱外全套 assembly 測試兩版本 exit 0。**提交 `14fdacb5`**（已推送），審查 worktree 移到 `14fdacb5`，派 Spec／Standards 複查。
+- **`14fdacb5` 複查：Spec yes、Standards yes**，無新 P0／P1（守衛涵蓋三個 stage 全部寫入路徑、實體路徑解析正確、2,003 個受保護
+  檔不變、常數 hash 一致、數值分支與回歸測試未動）。**啟動 §11 正式跑**：乾淨 checkout `14fdacb5`（主 worktree，status 乾淨，
+  Node 22.16.0），照 README 協調者指令（preflight → extract → run → score → report → hashes → 封存，各 stage 經 `cairn-heavy`、
+  記實際 exit code）。派出時負載 0.7。
