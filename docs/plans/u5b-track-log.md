@@ -322,3 +322,8 @@
   題至少一個單元被拒）；body-equal span 0。§1 確認性結論不變。
 - **results v1.1 §7＋limitations 一句＋`results/hr2-host-v2/` 封存（壓縮 cells／scores／report、report.md、兩個 hash 檔、各
   stage command／exit／log、preflight）提交 `a442215d`**，已推送。派 Spec 審查者做數字轉錄核對（非作者）後再交主控。
+- **results v1.1 轉錄核對**（非作者，Spec 審查者）：15 列 120 個 macro 值、48 個對比與 CI、McNemar、飽和、hash（3／3 封存、
+  123／123 未壓縮）全部正確；§§1–6 位元不變。四個 P1 轉錄錯誤：test split 是 94 題非 160；token use p50 範圍 0.74–1.00；
+  1536 的 s1 例外只在 bge-m3；preflight 與九個 stage log 被 `.log` ignore 規則擋掉未進 commit，且只有 run／score／report
+  經 cairn-heavy。兩個 P2：機制措辭、limitations 句子要與 §11.4 字面相同。全部修正，log 以 `git add -f` 補進，
+  **results v1.1 最終 commit `8ed4dadb`**，已推送。
