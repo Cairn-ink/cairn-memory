@@ -465,3 +465,6 @@
   正好落在期望值附近（約 42×70%≈29），這是凍結設計的弱點，單靠 W2 提高 span-only 份額也救不了這個 split 的家族組成。
   依 §3.1 兩階段驗收與 §9：**stage-2 配額失敗 → 候選 1 否決、前進候選 2**，紀錄提交到 `build/candidate1-v11-validation/`，
   派 W1（resume，high＋fast）。若候選 2 再失敗，向主控報告統計並提選項，不再無限重擲。
+- **W1 第二次前進**（high＋fast，exit 0）：候選 2（seed 依凍結序列）stage 1 失敗（重複正規化本文，0/0/1，紀錄保留）；**候選 3、
+  seed 3023009795** 0/0/0 通過。協調者重跑 `--candidate 3 --check`／`check-world --candidate 3`／facts view 皆 0，提交候選 3。
+  派 W2 第二次修題（resume，high＋fast；同規則，span-only 份額 ≥60% 且各類別盡量分散家族）。
