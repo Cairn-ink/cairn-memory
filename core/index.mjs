@@ -7,6 +7,8 @@ export { MemoryStoreError } from "./validation.mjs";
 export { openMemoryCore } from "./contract.mjs";
 export { openMemoryReader } from './memory-reader.mjs';
 export { openContextReader } from './context-reader.mjs';
+// U5c-2 public configuration constants; storage readers remain internal.
+export { CONTEXT_SOURCES, SOURCE_LIMITS } from './context-read-input.mjs';
 
 /** Embedded storage only. The caller, not this library, authenticates owners. */
 export function openMemoryStore(input) {

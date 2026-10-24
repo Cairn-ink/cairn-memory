@@ -289,33 +289,9 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     } };
   }
   function cardEligible(ns, row, intent, metrics) {
-    if (row.state !== 'confirmed') return false;
-    const sourceDb = supportDatabase(metrics), raw = createCardRawSources(sourceDb, identity);
-    // Canonical history requires confirmed state, even if support is gone.
-    if (intent === 'history') return true;
-    if (!features.reviews || cardApplicabilityInside(sourceDb, row).applicability !== 'current') return false;
-    const binding = (purpose, value) => keyed(identity.cursorSecret, purpose, [identity.storeId, value]);
-    const receiptSources = createCardReceiptSources(sourceDb, binding);
-    const values = [...sourceDb.prepare('SELECT source_ref,position FROM card_bindings WHERE card_id=?').all(row.id),
-      ...(features.receipts ? sourceDb.prepare('SELECT source_ref,position FROM card_memory_bindings WHERE card_id=?').all(row.id) : []), ...raw.refs(row.id)]
-      .sort((a, b) => a.position - b.position).map(value => JSON.parse(value.source_ref));
-    return values.length > 0 && values.every(value => {
-      try {
-        sourceRef(value, ns, true);
-        if (value.type === 'raw') raw.resolve(ns, value);
-        else if (value.type === 'receipt') receiptSources.resolve(ns, value);
-        else {
-          const note = sourceDb.prepare(`SELECT id,revision,state,text FROM card_notes WHERE ${where} AND id=?`).get(...boundary(ns), value.sourceId);
-          if (!note || note.state !== 'available' || note.revision !== value.revision ||
-              binding('submitted-note-content-v1', [ns, note.id, note.revision, note.text]) !== value.contentIdentity) fail('source_unavailable');
-        }
-        return true;
-      } catch (error) {
-        if (['source_unavailable', 'source_excluded', 'raw_crypto_unavailable'].includes(error.code)) return false;
-        throw error;
-      }
-    });
+    return contextCardEligible(supportDatabase(metrics), identity, features, ns, row, intent);
   }
+
   function metadata(stream, after, maximum, p, metrics, exact = false) {
     const started = performance.now(); metrics.projectionLookups++;
     const { ns, type } = stream;
@@ -677,4 +653,55 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
   return Object.freeze({ reconcile, lexicalPage, lexical: (...args) => lexicalPage(...args).rows,
     refreshVectors, semanticPreflight, state, assertState, assertFile: checkFile,
     close() { if (!closed) { closed = true; if (side.isOpen) side.close(); } } });
+}
+
+// U5c-2 internal seam: the optional readers supply a charged database wrapper.
+// Reconciliation, members and relation endpoints use the canonical current/
+// history predicate. Only organization title-source checks omit applicability,
+// matching private-organization-storage titleInside; support remains required.
+export function contextCardEligible(sourceDb, identity, features, ns, row, intent = 'current', { requireApplicability = true, rawRows } = {}) {
+  if (row.state !== 'confirmed') return false;
+  const raw = createCardRawSources(sourceDb, identity);
+  // Canonical history requires confirmed state, even if support is gone.
+  if (intent === 'history') return true;
+  if (requireApplicability && (!features.reviews || cardApplicabilityInside(sourceDb, row).applicability !== 'current')) return false;
+  const binding = (purpose, value) => keyed(identity.cursorSecret, purpose, [identity.storeId, value]);
+  const receiptSources = createCardReceiptSources(sourceDb, binding);
+  const values = [...sourceDb.prepare('SELECT source_ref,position FROM card_bindings WHERE card_id=?').all(row.id),
+    ...(features.receipts ? sourceDb.prepare('SELECT source_ref,position FROM card_memory_bindings WHERE card_id=?').all(row.id) : []), ...raw.refs(row.id)]
+    .sort((a, b) => a.position - b.position).map(value => JSON.parse(value.source_ref));
+  return values.length > 0 && values.every(value => {
+    try {
+      sourceRef(value, ns, true);
+      if (value.type === 'raw') raw.resolve(ns, value, rawRows === undefined ? undefined : raw.budget(64000, rawRows));
+      else if (value.type === 'receipt') receiptSources.resolve(ns, value);
+      else {
+        const note = sourceDb.prepare(`SELECT id,revision,state,text FROM card_notes WHERE ${where} AND id=?`).get(...boundary(ns), value.sourceId);
+        if (!note || note.state !== 'available' || note.revision !== value.revision ||
+            binding('submitted-note-content-v1', [ns, note.id, note.revision, note.text]) !== value.contentIdentity) fail('source_unavailable');
+      }
+      return true;
+    } catch (error) {
+      if (['source_unavailable', 'source_excluded', 'raw_crypto_unavailable'].includes(error.code)) return false;
+      throw error;
+    }
+  });
+}
+
+// U5c-2: call only inside the facade's deferred authoritative transaction.
+export function contextSourceFences(db, readSet, types, sources, features) {
+  return readSet.map(ns => {
+    const value = { memory: db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch ?? 1 };
+    if (types.includes('card') && features.cards) {
+      value.card = db.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1;
+      if (sources.includes('moc-v1') && features.organization)
+        value.cardMoc = db.prepare(`SELECT revision FROM card_moc_epochs WHERE ${where}`).get(...boundary(ns))?.revision ?? 1;
+    }
+    if (sources.includes('moc-v1') && types.includes('memory')) {
+      const state = db.prepare(`SELECT active_generation FROM namespace_index_state WHERE ${where}`).get(...boundary(ns));
+      value.memoryProjection = !state ? { state: 'live-without-state-row' } : state.active_generation === null ?
+        { state: 'unavailable' } : { state: 'published', generation: state.active_generation };
+    }
+    return value;
+  });
 }

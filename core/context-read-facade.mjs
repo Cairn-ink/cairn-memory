@@ -10,14 +10,16 @@ import { createPrivateCardStorage } from './private-card-storage.mjs';
 import { createPrivateEvidenceStorage } from './private-evidence-storage.mjs';
 import { createCardReceiptSources } from './card-receipt-sources.mjs';
 import { MemoryStoreError, fail } from './validation.mjs';
-import { openContextReadSidecar, assertContextReadReadOnlyAuxiliaries } from './context-read-sidecar.mjs';
+import { openContextReadSidecar, assertContextReadReadOnlyAuxiliaries, contextSourceFences } from './context-read-sidecar.mjs';
+import { createSourceContext, expandRelations, relationDiagnostic, sourceReader, sourceBudget, sourceStateBytes, validateRelationWitness, SourceStop } from './context-read-relations.mjs';
+import { rankMoc, mocDiagnostic } from './context-read-moc.mjs';
 import { fuseCandidates, RRF_PRESETS } from './context-read-fusion.mjs';
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION } from './context-read-tokenize.mjs';
 import { validateVector } from './context-read-embedder.mjs';
 import { contextBudget } from './context-read-budget.mjs';
 import { assembleContext } from './context-read-assembly.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
-import { CONTEXT_VERSION, CONTEXT_METHODS, CONTEXT_LIMITS, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES, ASSEMBLY_DEFAULTS, DEFAULT_ASSEMBLY_POLICY,
+import { CONTEXT_VERSION, CONTEXT_METHODS, CONTEXT_LIMITS, SOURCE_LIMITS, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES, ASSEMBLY_DEFAULTS, DEFAULT_ASSEMBLY_POLICY,
   contextOptions, contextInput, contextRefs, namespaceKey } from './context-read-input.mjs';
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -88,6 +90,7 @@ function createContextFacade(path, options, { readOnly }) {
 }
 function initializeContextFacade(path, options, { readOnly, database }) {
   let closed = false;
+  let retainedSourceBytes = 0;
   const rankings = new Map(), controllers = new Set(), indexes = new Map(), dispatch = contextBudget(options);
   const memoryOnly = path === ':memory:';
   const guardAuxiliaries = () => { if (readOnly) assertContextReadReadOnlyAuxiliaries(path); };
@@ -102,13 +105,16 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     if (!row) fail('unsupported_database');
     const has = table => Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table));
     return { storeId: row.store_id, cursorSecret: row.cursor_secret,
-      cards: has('private_cards') && has('card_memory_bindings') && has('card_applicability_reviews'), raw: has('card_raw_bindings') };
+      cards: has('private_cards') && has('card_memory_bindings') && has('card_applicability_reviews'), raw: has('card_raw_bindings'),
+      ...(options.sources ? { organization: ['card_mocs', 'card_moc_epochs', 'card_moc_title_sources', 'card_moc_refs', 'card_moc_edges'].every(has),
+        reviews: has('card_applicability_reviews'), receipts: has('card_memory_bindings') } : {}) };
   });
   const supportedTypes = ['memory', ...(info.cards ? ['card'] : [])];
   const bind = (purpose, value) => createHmac('sha256', info.cursorSecret ?? 'unavailable')
     .update(JSON.stringify([CONTEXT_VERSION, purpose, info.storeId, value])).digest('base64url');
   const configuration = deepFreeze({ family: options.family, preset: options.preset, embedder: metadata(options.embedder),
-    tokenizer: TOKENIZER_VERSION, representation: REPRESENTATION_VERSION });
+    tokenizer: TOKENIZER_VERSION, representation: REPRESENTATION_VERSION,
+    ...(options.sources ? { sources: options.sources } : {}) });
   function encode(purpose, value, maximum) {
     const body = Buffer.from(JSON.stringify(value)).toString('base64url'), token = `${body}.${bind(purpose, body)}`;
     if (token.length > maximum) fail('context_item_too_large');
@@ -209,33 +215,62 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     value.stops.budget ||= Boolean(maintenance?.stops?.budget) || maxItems !== undefined && (maintenance?.metrics.transformed ?? 0) >= maxItems;
     return value;
   }
-  function coverage(input, state, preflight, mode, matched, unionSize, maintenance) {
+  function coverage(input, state, preflight, mode, matched, unionSize, maintenance, semanticState) {
     const value = unknownCoverage(input); value.status = 'complete'; value.freshness = 'current';
     value.maintenance.state = 'ready'; value.maintenance.buildState = 'ready'; value.maintenance.progress = state.progress;
     maintenanceCoverage(value, maintenance ?? { ...state, status: 'complete' });
+    const semanticUsed = mode === 'hybrid' && (!options.sources || semanticState === 'ready');
     for (const type of input.types) {
       const counts = state.byType[type], semantic = preflight?.byType?.[type];
-      const scanned = mode === 'hybrid' ? semantic?.scanned ?? 0 : 0;
+      const scanned = semanticUsed ? semantic?.scanned ?? 0 : 0;
       value.byType[type] = { ...counts, embedded: semantic?.embedded ?? null, scanned,
         embeddedFraction: semantic ? counts.eligible ? semantic.embedded / counts.eligible : 1 : null,
         scannedFraction: counts.eligible ? scanned / counts.eligible : 1 };
     }
     const depth = mode === 'hybrid' ? RRF_PRESETS[options.preset].depth : 24;
-    value.depths = { lexical: depth, semantic: mode === 'hybrid' ? depth : 0 };
+    value.depths = { lexical: depth, semantic: semanticUsed ? depth : 0 };
     value.omitted = { lexical: matched === null ? null : Math.max(0, matched - depth),
-      semantic: mode === 'hybrid' ? Math.max(0, preflight.eligible - depth) : null, horizon: Math.max(0, unionSize - 24) };
+      semantic: semanticUsed ? Math.max(0, preflight.eligible - depth) : null, horizon: Math.max(0, unionSize - 24) };
     return value;
   }
   function trace(input) {
     return { requested: input.semantic ? 'hybrid' : 'lexical', effective: 'lexical', ...configuration,
       timings: { maintenanceMs: 0, lexicalMs: 0, semanticPreflightMs: 0, embeddingMs: 0, fusionMs: 0 } };
   }
-  function expireRankings() {
-    for (const [id, ranking] of rankings) if (Date.now() >= ranking.expires) rankings.delete(id);
+  // U5c-2 retained state includes identities, witnesses, fences and diagnostics;
+  // the scan corpora never enter a ranking. Oldest eviction never renews TTL.
+  function dropRanking(id) {
+    retainedSourceBytes -= rankings.get(id)?.sourceBytes ?? 0; rankings.delete(id);
   }
-  const requestBinding = input => bind('ranking-request', [input.readSet, input.query, input.types, input.intent, input.semantic]);
+  function expireRankings() {
+    for (const [id, ranking] of rankings) if (Date.now() >= ranking.expires) dropRanking(id);
+  }
+  const requestBinding = input => bind('ranking-request', [input.readSet, input.query, input.types, input.intent, input.semantic, ...(options.sources ? [input.sources] : [])]);
   const accessBinding = access => bind('access', access.accessGenerations);
   const stateBinding = state => bind('index', [state.fence, state.sequence, state.checkpoint, state.incarnation]);
+  function captureSources(input) {
+    return input.sources?.length ? contextSourceFences(db, input.readSet, input.types, input.sources, info) : [];
+  }
+  function assertSourcesInside(input, sourceState, code) {
+    if (sourceState && !same(captureSources(input), sourceState.fences)) fail(code);
+  }
+  function witnessInside(input, path, code, budget = sourceBudget(Infinity)) {
+    try {
+      const reader = sourceReader(db, { storeId: info.storeId, cursorSecret: info.cursorSecret }, info, input, budget);
+      if (validateRelationWitness(reader, path)) fail(code);
+    } catch (error) { if (error instanceof SourceStop) fail(code); throw error; }
+  }
+  function deliverPage(input, ranking, position, limit) {
+    if (!options.sources) return page(ranking, position, limit);
+    return read(() => {
+      assertSourcesInside(input, ranking.sourceState, 'cursor_stale');
+      const budget = sourceBudget(Infinity);
+      for (const path of ranking.sourceState.witnesses) witnessInside(input, path, 'cursor_stale', budget);
+      return page(ranking, position, limit);
+    });
+  }
+  const rankingConfiguration = (trace, sourceState, items) => bind('ranking-config', [configuration, trace.requested, trace.effective,
+    ...(sourceState ? [sourceState, items] : [])]);
   function page(ranking, position, limit) {
     let end = Math.min(ranking.items.length, position + limit);
     while (end > position || ranking.items.length === 0) {
@@ -255,27 +290,31 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       if (Object.keys(token).length !== 8 || !['r', 'b', 'c', 'a', 'g'].every(key => typeof token[key] === 'string') ||
           !Number.isSafeInteger(token.e)) fail('invalid_cursor');
     } catch { fail('invalid_cursor'); }
-    if (!token || token.v !== 1 || token.b !== requestBinding(input) || !Number.isInteger(token.p) || token.p < 1 || token.p > 24) fail('invalid_cursor');
+    if (!token || token.v !== 1 || token.b !== requestBinding(input) || !Number.isInteger(token.p) || token.p < 1 || token.p > (options.sources ? 32 : 24)) fail('invalid_cursor');
     expireRankings();
     const ranking = rankings.get(token.r);
     if (!ranking || token.e !== ranking.expires || token.c !== ranking.configuration || token.a !== accessBinding(access) ||
         token.g !== ranking.index || token.p >= ranking.items.length || Date.now() >= token.e) fail('cursor_stale');
-    if (ranking.configuration !== bind('ranking-config', [configuration, ranking.trace.requested, ranking.trace.effective])) fail('cursor_stale');
+    if (ranking.configuration !== rankingConfiguration(ranking.trace, ranking.sourceState, ranking.items)) fail('cursor_stale');
     access.check();
     const projection = selected(input, access), lease = acquireSidecar(projection, access);
     try {
       const current = lease.storage.state(projection);
       if (!current.ready || stateBinding(current) !== ranking.index) fail('cursor_stale');
       access.check(); lease.storage.assertState(projection, current);
-      return page(ranking, token.p, input.limit);
+      return deliverPage(input, ranking, token.p, input.limit);
     } catch (error) { lease.invalidate(error); throw error; }
     finally { lease.release(); }
   }
   async function searchCandidates(input, access, deadlineAt, internal = false) {
-    let diagnostics, controller, lease;
+    let diagnostics, controller, lease, sourceState;
     try {
       diagnostics = { channels: { lexical: channel('unavailable'), semantic: channel(input.semantic ? options.embedder ? 'unavailable' : 'absent' : 'disabled',
         !input.semantic && !options.embedder ? ['disabled', 'absent'] : undefined) }, coverage: unknownCoverage(input), trace: trace(input) };
+      if (options.sources) diagnostics.trace.sources = Object.fromEntries(options.sources.map(id => {
+        const reason = !input.sources.includes(id) ? 'disabled' : id === 'relations-one-hop-v1' && input.intent === 'history' ? 'unsupported_intent' : 'index_unavailable';
+        return [id, id === 'moc-v1' ? mocDiagnostic(reason) : relationDiagnostic(reason)];
+      }));
       if (input.semantic && (!options.embedder || !dispatch)) {
         if (options.embedder) diagnostics.channels.semantic = channel('budget_denied');
         throw new MemoryStoreError('invalid_input');
@@ -300,6 +339,22 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       const lexical = storage.lexicalPage(projection, input.query, 24, { deadlineAt });
       diagnostics.trace.timings.lexicalMs = performance.now() - time;
       diagnostics.channels.lexical = channel('ready');
+      let moc = [];
+      const sourceContext = options.sources ? createSourceContext() : undefined;
+      if (options.sources) {
+        access.check();
+        const collected = read(() => {
+          const fences = captureSources(input), sources = {};
+          for (const id of options.sources) sources[id] = id === 'moc-v1' ? mocDiagnostic('disabled') : relationDiagnostic('disabled');
+          if (input.sources.includes('moc-v1')) {
+            const ranked = rankMoc(db, { storeId: info.storeId, cursorSecret: info.cursorSecret }, info, input, deadlineAt, sourceContext);
+            moc = ranked.rows; sources['moc-v1'] = ranked.diagnostic;
+          }
+          return { fences, sources };
+        });
+        sourceState = { fences: collected.fences, witnesses: [] };
+        diagnostics.trace.sources = collected.sources;
+      }
       let preflight, semantic = [];
       if (input.semantic) {
         time = performance.now();
@@ -314,7 +369,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         preflight?.release?.();
         if (preflight?.state === 'ready' && preflight.eligible > 0) {
           controller = new AbortController(); controllers.add(controller);
-          const guard = () => { access.check(); storage.assertState(projection, current); };
+          const guard = () => { access.check();
+            if (sourceState) read(() => assertSourcesInside(input, sourceState, internal ? 'snapshot_stale' : 'cursor_stale'));
+            storage.assertState(projection, current); };
           time = performance.now();
           try {
             const vectors = await dispatch(options.embedder, [input.query], { signal: controller.signal, deadlineAt, guard });
@@ -330,33 +387,58 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           diagnostics.trace.timings.embeddingMs = performance.now() - time;
         }
       }
-      access.check(); storage.assertState(projection, current);
+      access.check();
+      if (sourceState) read(() => assertSourcesInside(input, sourceState, internal ? 'snapshot_stale' : 'cursor_stale'));
+      storage.assertState(projection, current);
       time = performance.now();
       const fused = fuseCandidates(lexical.rows, semantic, { preset: options.preset,
-        semanticState: diagnostics.channels.semantic.state, coverageComplete: preflight?.state === 'ready' });
+        semanticState: diagnostics.channels.semantic.state, coverageComplete: preflight?.state === 'ready', ...(options.sources ? { moc } : {}) });
       diagnostics.trace.timings.fusionMs = performance.now() - time; diagnostics.trace.effective = fused.mode;
-      diagnostics.coverage = coverage(input, current, preflight, fused.mode, lexical.matched, fused.unionSize, maintenance);
+      diagnostics.coverage = coverage(input, current, preflight, fused.mode, lexical.matched, fused.unionSize, maintenance, diagnostics.channels.semantic.state);
       diagnostics.coverage.stops = { deadline: diagnostics.channels.semantic.causes.includes('timeout'),
         budget: diagnostics.channels.semantic.causes.includes('budget_denied') };
+      let candidateItems = fused.rows.map((row, i) => ({ ref: row.ref, rank: i + 1, fusionScore: row.fusionScore, channels: row.channels }));
+      if (sourceState) {
+        access.check();
+        read(() => {
+          assertSourcesInside(input, sourceState, internal ? 'snapshot_stale' : 'cursor_stale');
+          if (input.sources.includes('relations-one-hop-v1')) {
+            const expanded = expandRelations(db, { storeId: info.storeId, cursorSecret: info.cursorSecret }, info,
+              { ...input, mocPreset: options.preset === 'rrf-k60-d12-moc-v1' }, candidateItems, deadlineAt, sourceContext);
+            candidateItems = expanded.items.map((item, i) => ({ ...item, rank: i + 1 }));
+            sourceState.witnesses = expanded.witnesses;
+            diagnostics.trace.sources['relations-one-hop-v1'] = expanded.diagnostic;
+          }
+        });
+      }
+      if (sourceState) diagnostics.coverage.stops.deadline ||= Object.values(diagnostics.trace.sources).some(source => source.reasons.includes('deadline'));
       if (internal) {
         access.check(); storage.assertState(projection, current);
-        const horizon = deepFreeze({ items: fused.rows.map((row, i) => ({ ref: row.ref, rank: i + 1,
-          fusionScore: row.fusionScore, channels: row.channels })), ...diagnostics });
-        return { ok: true, horizon, check() {
+        const horizon = deepFreeze({ items: candidateItems, ...diagnostics });
+        return { ok: true, horizon, ...(sourceState ? { sourceState } : {}), check() {
           access.check();
+          if (sourceState) read(() => assertSourcesInside(input, sourceState, 'snapshot_stale'));
           const resumed = acquireSidecar(projection, access);
-          try { resumed.storage.assertState(projection, current); }
+          try { resumed.storage.assertState(projection, current);
+            if (sourceState) read(() => assertSourcesInside(input, sourceState, internal ? 'snapshot_stale' : 'cursor_stale')); }
           finally { resumed.release(); }
         } };
       }
       const ranking = deepFreeze({ id: randomUUID(), expires: Date.now() + 300000, request: requestBinding(input),
-        configuration: bind('ranking-config', [configuration, diagnostics.trace.requested, fused.mode]), access: accessBinding(access),
-        index: stateBinding(current), items: fused.rows.map((row, i) => ({ ref: row.ref, rank: i + 1, fusionScore: row.fusionScore, channels: row.channels })),
+        configuration: rankingConfiguration(diagnostics.trace, sourceState, candidateItems), access: accessBinding(access),
+        index: stateBinding(current), items: candidateItems,
+        ...(sourceState ? { sourceState, sourceBytes: sourceStateBytes({ items: candidateItems, sourceState, sources: diagnostics.trace.sources }) } : {}),
         ...diagnostics });
-      expireRankings(); rankings.set(ranking.id, ranking);
-      while (rankings.size > 128) rankings.delete(rankings.keys().next().value);
-      access.check(); storage.assertState(projection, current);
-      return success(page(ranking, 0, input.limit));
+      expireRankings();
+      const sourceBytes = ranking.sourceBytes ?? 0;
+      if (sourceBytes > SOURCE_LIMITS.retainedBytes) fail('context_item_too_large');
+      // Evict before transferring request-local state into retained ownership.
+      while (rankings.size >= 128 || retainedSourceBytes + sourceBytes > SOURCE_LIMITS.retainedBytes) dropRanking(rankings.keys().next().value);
+      rankings.set(ranking.id, ranking); retainedSourceBytes += sourceBytes;
+      access.check();
+      if (sourceState) read(() => assertSourcesInside(input, sourceState, 'cursor_stale'));
+      storage.assertState(projection, current);
+      return success(deliverPage(input, ranking, 0, input.limit));
     } catch (error) {
       lease?.invalidate(error);
       if (diagnostics && (error.code === 'index_unavailable' || error.reason === 'timeout')) {
@@ -371,7 +453,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   async function findCandidates(original, token) {
     try {
       ready();
-      const { payload, input } = contextInput('findCandidates', original, supportedTypes);
+      const { payload, input } = contextInput('findCandidates', original, supportedTypes, options.sources);
       const deadlineAt = performance.now() + input.deadlineMs;
       const access = authorize('findCandidates', input, payload, token);
       if (input.cursor !== undefined) return success(continuation(input, access));
@@ -447,7 +529,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     let candidates;
     try {
       ready();
-      const { payload, input } = contextInput('contextRead', original, supportedTypes);
+      const { payload, input } = contextInput('contextRead', original, supportedTypes, options.sources);
       const deadlineAt = performance.now() + input.deadlineMs;
       const access = authorize('contextRead', input, payload, token);
       if (!options.counter) return failure(new MemoryStoreError('invalid_input'), { counter: 'absent' });
@@ -464,10 +546,19 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       deadline ||= performance.now() >= deadlineAt;
       const prepared = read(() => {
         const generations = canonicalFence(input.readSet, input.types), items = [];
+        if (searched.sourceState) assertSourcesInside(input, searched.sourceState, 'snapshot_stale');
         let unavailable = 0;
+        const witnessBudget = searched.sourceState ? sourceBudget(Infinity) : null;
         for (const candidate of candidates.items) {
           let item;
-          try { item = evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent)[0]; }
+          try {
+            if (candidate.via) {
+              const path = searched.sourceState.witnesses.find(value => same(value.ref, candidate.ref));
+              try { witnessInside(input, path, 'evidence_unavailable', witnessBudget); }
+              catch (error) { if (error.code === 'evidence_unavailable') { unavailable++; continue; } throw error; }
+            }
+            item = evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent)[0];
+          }
           catch (error) {
             if (!['evidence_unavailable', 'revision_conflict'].includes(error.code)) throw error;
             unavailable++; continue;
@@ -508,6 +599,12 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       if (bytes(result) > CONTEXT_LIMITS.responseBytes) fail('context_item_too_large');
       // No host callback, count or await follows this authoritative read.
       return read(() => {
+        if (searched.sourceState) {
+          assertSourcesInside(input, searched.sourceState, 'snapshot_stale');
+          const witnessBudget = sourceBudget(Infinity);
+          for (const path of searched.sourceState.witnesses) if (delivered.some(item => same(item.ref, path.ref)))
+            witnessInside(input, path, 'snapshot_stale', witnessBudget);
+        }
         if (delivered.length && !same(canonicalFence(input.readSet, [...new Set(delivered.map(item => item.type))]), generationsFor(delivered))) fail('snapshot_stale');
         for (const item of delivered) {
           let current;
@@ -573,13 +670,14 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   return { methods: { getContextReadCapabilities() {
     return success(structuredClone({ version: CONTEXT_VERSION, methods: [...CONTEXT_METHODS], types: [...supportedTypes], intents: ['current', 'history'],
       channels: { lexical: { enabled: true }, semantic: { configured: Boolean(options.embedder), budgetConfigured: Boolean(dispatch) } },
-      ...configuration, limits: { ...CONTEXT_LIMITS }, maintenance: !readOnly && !memoryOnly,
+      ...configuration, limits: { ...CONTEXT_LIMITS, ...(options.sources ? { horizon: 32, sources: SOURCE_LIMITS } : {}) }, maintenance: !readOnly && !memoryOnly,
       assembly: { representation: 'representation-v2', defaults: ASSEMBLY_DEFAULTS, policies: [...ASSEMBLY_POLICIES], defaultPolicy: DEFAULT_ASSEMBLY_POLICY,
-        counter: options.counter ? { id: options.counter.id } : null, limits: { ...ASSEMBLY_LIMITS } },
-      unsupported: ['role-profiles', 'relations', 'moc', 'raw-search', 'partial-semantic-search'] }));
+        counter: options.counter ? { id: options.counter.id } : null, limits: { ...ASSEMBLY_LIMITS, ...(options.sources ? { candidates: 32, counterCalls: 1634 } : {}) } },
+      unsupported: ['role-profiles', ...(!options.sources?.includes('relations-one-hop-v1') ? ['relations'] : []),
+        ...(!options.sources?.includes('moc-v1') ? ['moc'] : []), 'raw-search', 'partial-semantic-search'] }));
   }, findCandidates, refreshContextIndex, fetchCandidateEvidence, contextRead }, close() {
     if (closed) return;
     closed = true; for (const controller of controllers) controller.abort();
-    rankings.clear(); for (const entry of indexes.values()) entry.storage.close(); indexes.clear(); if (db?.isOpen) db.close();
+    rankings.clear(); retainedSourceBytes = 0; for (const entry of indexes.values()) entry.storage.close(); indexes.clear(); if (db?.isOpen) db.close();
   } };
 }

@@ -10,6 +10,9 @@ import { createScopedCardAccess } from './private-card-access.mjs';
 import { createMethodReadAccess } from './method-package-access.mjs';
 import { registerMethodTools, METHOD_TOOL_NAMES } from './method-package-tools.mjs';
 import { createContextReadAccess } from './context-read-access.mjs';
+// U5c-2 source registration composes the unchanged legacy tools.
+import { contextReadSources } from './context-read-sources-configuration.mjs';
+import { registerContextReadSourcesTools, contextSourcesToolResponse } from './context-read-sources-tools.mjs';
 import { registerContextReadTools, CONTEXT_TOOL_NAMES } from './context-read-tools.mjs';
 import { contextToolResponse } from './context-read-transport.mjs';
 // U5c-1 registration and authority boundary.
@@ -64,12 +67,14 @@ export function createCairnServer(options = {}) {
   object(options, ['path', 'namespace', 'model', 'captureQualification', 'captureRationale',
     'captureEvidence', 'captureEvidenceAccess', 'sourceSnapshot', 'recallContext', 'classificationRecovery',
     'captureDeadlineMs', 'sessionEpisodesAccess', 'client', 'sessionId', 'readClient', 'sessionEpisodes', 'privateCards', 'methodPackages', 'methodReadPersonal',
-    'contextRead', 'contextReadPersonal', 'contextEmbedding', 'contextCounter', 'assets', 'roleProfiles', 'roleProfileAttribution']);
+    'contextRead', 'contextReadPersonal', 'contextEmbedding', 'contextCounter', 'assets', 'roleProfiles', 'roleProfileAttribution', 'contextReadSources']);
   const { path, namespace, model } = options;
   const contextConfigured = Object.hasOwn(options,'contextRead');
   if (contextConfigured && options.contextRead !== 'context-read-v1' || Object.hasOwn(options,'contextReadPersonal') &&
       (!contextConfigured || options.contextReadPersonal !== true || namespace?.scope !== 'project') ||
       Object.hasOwn(options,'contextEmbedding') && !contextConfigured) throw Error('invalid_mcp_configuration');
+  const sources = Object.hasOwn(options, 'contextReadSources') ? contextReadSources(options.contextReadSources) : null;
+  if (sources && !contextConfigured) throw Error('invalid_mcp_configuration');
   if (options.contextEmbedding) object(options.contextEmbedding,['embedder','policy']);
   if (Object.hasOwn(options, 'contextCounter') && !contextConfigured) throw Error('invalid_mcp_configuration');
   const assetsConfigured=Object.hasOwn(options,'assets');
@@ -148,7 +153,7 @@ export function createCairnServer(options = {}) {
       contextCounterReady = createContextCounter().then(counter => { readyCounter = counter; return true; }, () => false);
     } else contextCounterReady = Promise.resolve(true);
   }
-  const core = openMemoryCore({ path, model, ...(context?{contextRead:{...context.configuration,...options.contextEmbedding,counter:contextCounter}}:{}),
+  const core = openMemoryCore({ path, model, ...(context?{contextRead:{...context.configuration,...options.contextEmbedding,counter:contextCounter,...(sources ? { sources } : {})}}:{}),
     ...(roles ? { roleProfiles: roles.configuration } : {}),
     ...(assets?{assets:roles ? roleProfileAssetConfiguration(assets, roles) : assets.configuration}:{}),
     ...(methods?{methodPackages:methods.configuration}:{}), ...(cards ? { privateCards: cards.configuration } : {}),
@@ -158,7 +163,7 @@ export function createCairnServer(options = {}) {
     ...(stagingConfigured ? { captureEvidence: options.captureEvidence } : {}) });
   const server = buildCairnServer({ path, model, binding, cards, methods, assets, context, roles, core, client, sessionId, captureSessionId, readClient,
     episodesAccess, configured, rationaleConfigured, evidenceAccess, snapshotConfigured,
-    recallContextConfigured, recallContext, recoveryConfigured, stagingConfigured });
+    recallContextConfigured, recallContext, recoveryConfigured, stagingConfigured, ...(sources ? { contextReadSources: sources } : {}) });
   if (context) Object.defineProperty(server, 'contextCounterReady', { value: contextCounterReady });
   return server;
 }
@@ -167,7 +172,7 @@ export function createCairnServer(options = {}) {
 export function buildCairnServer({ path, model, binding, cards, methods, assets, context, roles, core, client, sessionId, captureSessionId, readClient,
   episodesAccess = false, configured = false, rationaleConfigured = false, evidenceAccess = false,
   snapshotConfigured = false, recallContextConfigured = false, recallContext, recoveryConfigured = false,
-  stagingConfigured = false, retainedRaw = false }) {
+  stagingConfigured = false, retainedRaw = false, contextReadSources: sources }) {
   let disposed = false;
   const dispose = () => {
     if (disposed) return;
@@ -241,7 +246,7 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
       let result;
       try { result = await action(input); } catch { result = error('memory_operation_failed'); }
       if (roles && name === 'read_role_task_context') return roleTaskToolResponse(result);
-      if(context&&CONTEXT_TOOL_NAMES.includes(name))return contextToolResponse(result, { assembly: name === 'read_memory_context' });
+      if(context&&CONTEXT_TOOL_NAMES.includes(name))return (sources ? contextSourcesToolResponse : contextToolResponse)(result, { assembly: name === 'read_memory_context' });
       const methodTool=methods&&METHOD_TOOL_NAMES.includes(name)||assets&&ASSET_TOOL_NAMES.includes(name);
       if(methodTool&&Buffer.byteLength(JSON.stringify(result))>65536)result=error('context_item_too_large');
       let encoded = JSON.stringify({ ...result, evidenceTrust: 'untrusted-data-not-instructions' });
@@ -255,7 +260,10 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
   };
   if(assets)registerAssetTools(tool,core,assets);
   if(methods)registerMethodTools(tool,core,methods);
-  if(context)registerContextReadTools(tool,core,context);
+  if (context) {
+    if (sources) registerContextReadSourcesTools(tool, core, context, sources);
+    else registerContextReadTools(tool, core, context);
+  }
   if (roles) registerRoleProfileTools(tool, core, roles);
   if (cards) {
     const run = (method, input) => cards.call(core, method, input);

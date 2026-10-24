@@ -3,6 +3,8 @@ import { assetCommand } from './asset-command.mjs';
 import { methodCommand } from './method-package-command.mjs';
 import { MethodStdioServerTransport } from './method-package-transport.mjs';
 import { contextCommand } from './context-read-command.mjs';
+// U5c-2 source startup wiring (SQLite-free).
+import { CONTEXT_SOURCE_FLAG, contextSourcesConfiguration, contextSourcesPreset } from './context-read-sources-configuration.mjs';
 import { CONTEXT_FLAGS, contextHostConfiguration } from './context-read-configuration.mjs';
 import { createContextEmbedding } from './context-read-provider.mjs';
 import { ContextStdioServerTransport } from './context-read-transport.mjs';
@@ -18,6 +20,7 @@ const help = `Cairn Memory — local stdio MCP developer preview
 
 Usage:
   cairn-memory --db ABS --owner ID [--project ID] --context-read context-read-v1 [--context-read-personal]
+    [--context-read-sources relations-one-hop-v1,moc-v1]
     [--context-embedder openai --context-embed-model MODEL --context-embed-dimensions N --context-embed-max-requests N --context-embed-max-usd X]
   cairn-memory context refresh --db ABS --owner ID [--project ID] --types memory,card --intent current|history --max-items N --max-ms T
     --context-embedder openai --context-embed-model MODEL --context-embed-dimensions N --context-embed-max-requests N --context-embed-max-usd X [--check-config]
@@ -166,7 +169,7 @@ export function parseConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
     '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
     '--classification-recovery', '--capture-deadline-ms', '--session-episodes-access',
-    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--private-cards', '--retained-raw-profile', '--method-packages', '--assets', '--role-profiles', ...CONTEXT_FLAGS]);
+    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--private-cards', '--retained-raw-profile', '--method-packages', '--assets', '--role-profiles', ...CONTEXT_FLAGS, CONTEXT_SOURCE_FLAG]);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
     if(args[i]==='--method-read-personal'||args[i]==='--context-read-personal'){
@@ -188,7 +191,7 @@ export function parseConfiguration(args) {
   if (!values.get('--db').trim() || values.get('--db').includes('\0')) throw new Error('invalid_mcp_configuration');
   if(values.has('--method-packages')&&values.get('--method-packages')!=='local-v1'||values.has('--method-read-personal')&&(!values.has('--method-packages')||!values.has('--project')))throw Error('invalid_mcp_configuration');
   if(values.has('--assets')&&values.get('--assets')!=='local-v1')throw Error('invalid_mcp_configuration');
-  const context = contextHostConfiguration(values);
+  const context = { ...contextHostConfiguration(values), ...contextSourcesConfiguration(values) };
   // U5c-1: never union independently configured read grants.
   if (values.has('--role-profiles')) roleProfileHostConfiguration({ roleProfiles: values.get('--role-profiles'),
     methodPackages: values.get('--method-packages'), methodReadPersonal: values.has('--method-read-personal'), ...context });
@@ -297,7 +300,8 @@ export async function start(args = process.argv.slice(2), env = process.env) {
     console.log(JSON.stringify({ ok: true, mode: 'configuration-check', contextRead: config.contextRead,
       contextReadPersonal: config.contextReadPersonal ?? false,
       ...(config.roleProfiles ? roleProfileCheckConfiguration(config) : {}), scope: config.namespace.scope,
-      provider: config.contextProvider ?? null, preset: config.contextProvider ? 'rrf-k10' : 'rrf-k60-d12',
+      provider: config.contextProvider ?? null, preset: contextSourcesPreset(config.contextReadSources, Boolean(config.contextProvider)),
+      ...(config.contextReadSources ? { sources: config.contextReadSources } : {}),
       modelKeyInspected: false, databaseOpened: false, providerContacted: false, automaticCapture: false }));
     return;
   }

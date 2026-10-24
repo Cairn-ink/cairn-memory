@@ -245,5 +245,10 @@
   "adapters/mcp/role-profile-configuration.mjs",
   "adapters/mcp/role-profile-tools.mjs",
   "adapters/mcp/role-profile-transport.mjs",
-  "docs/role-profiles-local.md"
+  "docs/role-profiles-local.md",
+  "core/context-read-relations.mjs",
+  "core/context-read-moc.mjs",
+  "adapters/mcp/context-read-sources-configuration.mjs",
+  "adapters/mcp/context-read-sources-tools.mjs",
+  "docs/limitations.md"
 ]
