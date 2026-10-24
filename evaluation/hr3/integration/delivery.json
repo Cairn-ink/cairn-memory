@@ -1,0 +1,104 @@
+{
+  "sourceCount": 13,
+  "sourceRoutes": [
+    "git ls-files cached + untracked, exclude-standard",
+    "pathlib.rglob excluding artifacts"
+  ],
+  "files": [
+    {
+      "path": ".gitignore",
+      "bytes": 12,
+      "sha256": "defc758c6720f3e63dbe47182a9c485a47eeed2999b3903f8dbfbdca4c906499"
+    },
+    {
+      "path": "README.md",
+      "bytes": 7510,
+      "sha256": "483683dab155f8206e66c8c66e4526f6effd76b64faa9279c4959de06f9f0e03"
+    },
+    {
+      "path": "REPORT.md",
+      "bytes": 21180,
+      "sha256": "ded49bf10253bca94385650d53c605dee104e3f275e10dff521df3b87f1c233d"
+    },
+    {
+      "path": "adapters.mjs",
+      "bytes": 9577,
+      "sha256": "911b62f33d288d3fc01d3d0dae6a70516455e515e27685cec0abee5366660b77"
+    },
+    {
+      "path": "cli.mjs",
+      "bytes": 1703,
+      "sha256": "fa258ac86e4c5a674de17f2ff75940ad2270332b708757e71b69da3ed7d63e96"
+    },
+    {
+      "path": "delivery.json"
+    },
+    {
+      "path": "field-map.mjs",
+      "bytes": 3439,
+      "sha256": "9d1eb09c814e1379f7554fd20db0cfd8140550e256c2569f8618cd2bd56b19ef"
+    },
+    {
+      "path": "gate.mjs",
+      "bytes": 13355,
+      "sha256": "f8ca201644269c6158e0da90ab2279246dcf3cef70eeae87798d5e21fb1261cc"
+    },
+    {
+      "path": "mechanical-results.json",
+      "bytes": 112589,
+      "sha256": "122c0d64855a3f3df4dbd8a01cd64542f93b017deecfa7bcaed77ffe795783fa"
+    },
+    {
+      "path": "mechanical.mjs",
+      "bytes": 9173,
+      "sha256": "75ea3f683b5760c758e9d2f9f0abeedde5bb27a51ebdfa6651ce0ad92f3de771"
+    },
+    {
+      "path": "reconciliation-fields.json",
+      "bytes": 173164,
+      "sha256": "57e13e1011014bd0aa584f157fe6dcf445e3ed0c3f3745f67fa4796ff230430e"
+    },
+    {
+      "path": "reproduce.mjs",
+      "bytes": 4062,
+      "sha256": "92f12be323bc28c42c136cb3c8674b63d3bc1e53bb2bbbc857f0a09f5cfbb72b"
+    },
+    {
+      "path": "test/integration.test.mjs",
+      "bytes": 14030,
+      "sha256": "86971f3d43929c675a9ad358eaf75b2ce1d279c0791e904dad1f7bf3f58b082c"
+    }
+  ],
+  "generatedCountIncludingManifest": 3149,
+  "generatedManifest": {
+    "path": "artifacts/frozen-v1/artifact-manifest.json",
+    "sha256": "f41bfa5241c051133fe7fc9392d34e4aa7553203dbc1b6918257566bd6511177"
+  },
+  "totalFiles": 3162,
+  "allFilesRoutes": [
+    "pathlib.rglob",
+    "os.walk"
+  ],
+  "commands": [
+    {
+      "command": "focused integration node:test",
+      "exitCode": 0,
+      "tests": 17,
+      "pass": 17,
+      "fail": 0
+    },
+    {
+      "command": "mechanical CLI + frozen generator/challenge CLI hash checks",
+      "exitCode": 0
+    },
+    {
+      "command": "gate CLI, zero adjudications",
+      "exitCode": 1,
+      "expected": "genuine referral quotas fail, judgments pending"
+    },
+    {
+      "command": "independent payload/key, determinism, file inventory, hash and whitespace audit",
+      "exitCode": 0
+    }
+  ]
+}

@@ -1,0 +1,3952 @@
+{
+  "generator:$/family/ast/events/*/change_type": {
+    "count": 3264,
+    "destination": "audit.source/family/ast/events/*/change_type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/claims/*/field": {
+    "count": 3720,
+    "destination": "audit.source/family/ast/events/*/claims/*/field",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/claims/*/value/text": {
+    "count": 3168,
+    "destination": "audit.source/family/ast/events/*/claims/*/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/claims/*/value/type": {
+    "count": 3720,
+    "destination": "audit.source/family/ast/events/*/claims/*/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/claims/*/value/value": {
+    "count": 288,
+    "destination": "audit.source/family/ast/events/*/claims/*/value/value",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/commitment": {
+    "count": 3264,
+    "destination": "audit.source/family/ast/events/*/commitment",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/effective_interval/from": {
+    "count": 3264,
+    "destination": "audit.source/family/ast/events/*/effective_interval/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/effective_interval/to": {
+    "count": 3264,
+    "destination": "audit.source/family/ast/events/*/effective_interval/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/event_id": {
+    "count": 3264,
+    "destination": "audit.source/family/ast/events/*/event_id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/field_mask/*": {
+    "count": 3720,
+    "destination": "audit.source/family/ast/events/*/field_mask/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/kind": {
+    "count": 3264,
+    "destination": "audit.source/family/ast/events/*/kind",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/observed_at": {
+    "count": 3264,
+    "destination": "audit.source/family/ast/events/*/observed_at",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/predecessor_anchors": {
+    "count": 3024,
+    "destination": "audit.source/family/ast/events/*/predecessor_anchors",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/predicate": {
+    "count": 3264,
+    "destination": "audit.source/family/ast/events/*/predicate",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_edges": {
+    "count": 3064,
+    "destination": "audit.source/family/ast/events/*/reason_edges",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_nodes": {
+    "count": 3064,
+    "destination": "audit.source/family/ast/events/*/reason_nodes",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/record_name": {
+    "count": 384,
+    "destination": "audit.source/family/ast/events/*/record_name",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/replacement_extent": {
+    "count": 3264,
+    "destination": "audit.source/family/ast/events/*/replacement_extent",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/scope/any/*/all": {
+    "count": 2736,
+    "destination": "audit.source/family/ast/events/*/scope/any/*/all",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/source_quotes/*/end": {
+    "count": 3264,
+    "destination": "audit.source/family/ast/events/*/source_quotes/*/end",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/source_quotes/*/offset_unit": {
+    "count": 3264,
+    "destination": "audit.source/family/ast/events/*/source_quotes/*/offset_unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/source_quotes/*/quote": {
+    "count": 3264,
+    "destination": "audit.source/family/ast/events/*/source_quotes/*/quote",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/source_quotes/*/start": {
+    "count": 3264,
+    "destination": "audit.source/family/ast/events/*/source_quotes/*/start",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/source_quotes/*/turn_id": {
+    "count": 3264,
+    "destination": "audit.source/family/ast/events/*/source_quotes/*/turn_id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/source_turns/*": {
+    "count": 3264,
+    "destination": "audit.source/family/ast/events/*/source_turns/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/subject": {
+    "count": 3264,
+    "destination": "audit.source/family/ast/events/*/subject",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/distractor": {
+    "count": 2880,
+    "destination": "audit.source/family/ast/events/*/distractor",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/scope/any/*/all/*/field": {
+    "count": 1488,
+    "destination": "audit.source/family/ast/events/*/scope/any/*/all/*/field",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/scope/any/*/all/*/values/*": {
+    "count": 1512,
+    "destination": "audit.source/family/ast/events/*/scope/any/*/all/*/values/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/predecessor_anchors/*/predicate": {
+    "count": 264,
+    "destination": "audit.source/family/ast/events/*/predecessor_anchors/*/predicate",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/predecessor_anchors/*/record_name": {
+    "count": 264,
+    "destination": "audit.source/family/ast/events/*/predecessor_anchors/*/record_name",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/predecessor_anchors/*/source_turn": {
+    "count": 264,
+    "destination": "audit.source/family/ast/events/*/predecessor_anchors/*/source_turn",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/predecessor_anchors/*/subject": {
+    "count": 264,
+    "destination": "audit.source/family/ast/events/*/predecessor_anchors/*/subject",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_edges/*/from": {
+    "count": 520,
+    "destination": "audit.source/family/ast/events/*/reason_edges/*/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_edges/*/support/*/*/end": {
+    "count": 520,
+    "destination": "audit.source/family/ast/events/*/reason_edges/*/support/*/*/end",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_edges/*/support/*/*/offset_unit": {
+    "count": 520,
+    "destination": "audit.source/family/ast/events/*/reason_edges/*/support/*/*/offset_unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_edges/*/support/*/*/quote": {
+    "count": 520,
+    "destination": "audit.source/family/ast/events/*/reason_edges/*/support/*/*/quote",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_edges/*/support/*/*/start": {
+    "count": 520,
+    "destination": "audit.source/family/ast/events/*/reason_edges/*/support/*/*/start",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_edges/*/support/*/*/turn_id": {
+    "count": 520,
+    "destination": "audit.source/family/ast/events/*/reason_edges/*/support/*/*/turn_id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_edges/*/to": {
+    "count": 520,
+    "destination": "audit.source/family/ast/events/*/reason_edges/*/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_nodes/*/claim/citations": {
+    "count": 720,
+    "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/citations",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_nodes/*/claim/predicate": {
+    "count": 720,
+    "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/predicate",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_nodes/*/claim/qualifiers": {
+    "count": 720,
+    "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/qualifiers",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_nodes/*/claim/scope/any/*/all": {
+    "count": 576,
+    "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/scope/any/*/all",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_nodes/*/claim/subject": {
+    "count": 720,
+    "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/subject",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_nodes/*/claim/valid/from": {
+    "count": 720,
+    "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/valid/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_nodes/*/claim/valid/to": {
+    "count": 720,
+    "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/valid/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_nodes/*/claim/value/text": {
+    "count": 720,
+    "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_nodes/*/claim/value/type": {
+    "count": 720,
+    "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_nodes/*/id": {
+    "count": 720,
+    "destination": "audit.source/family/ast/events/*/reason_nodes/*/id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/focal_changes/*": {
+    "count": 240,
+    "destination": "audit.source/family/ast/focal_changes/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/interval_convention": {
+    "count": 120,
+    "destination": "audit.source/family/ast/interval_convention",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/time_zone": {
+    "count": 120,
+    "destination": "audit.source/family/ast/time_zone",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/variant/future_effective": {
+    "count": 120,
+    "destination": "audit.source/family/ast/variant/future_effective",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/variant/retroactive": {
+    "count": 120,
+    "destination": "audit.source/family/ast/variant/retroactive",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/batches/*/effective_at": {
+    "count": 480,
+    "destination": "audit.source/family/batches/*/effective_at",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/batches/*/observed_at": {
+    "count": 480,
+    "destination": "audit.source/family/batches/*/observed_at",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/batches/*/ordinal": {
+    "count": 480,
+    "destination": "audit.source/family/batches/*/ordinal",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/batches/*/turns/*/speaker": {
+    "count": 960,
+    "destination": "audit.source/family/batches/*/turns/*/speaker",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/batches/*/turns/*/text": {
+    "count": 960,
+    "destination": "audit.source/family/batches/*/turns/*/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/batches/*/turns/*/turn_id": {
+    "count": 960,
+    "destination": "audit.source/family/batches/*/turns/*/turn_id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/causal_class": {
+    "count": 120,
+    "destination": "audit.source/family/causal_class",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/change_type": {
+    "count": 120,
+    "destination": "audit.source/family/change_type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/checkpoints/*/at": {
+    "count": 240,
+    "destination": "audit.source/family/checkpoints/*/at",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/checkpoints/*/batch": {
+    "count": 240,
+    "destination": "audit.source/family/checkpoints/*/batch",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/checkpoints/*/focal_turn": {
+    "count": 240,
+    "destination": "audit.source/family/checkpoints/*/focal_turn",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/checkpoints/*/primary": {
+    "count": 240,
+    "destination": "audit.source/family/checkpoints/*/primary",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/checkpoints/*/query": {
+    "count": 240,
+    "destination": "audit.source/family/checkpoints/*/query",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/checkpoints/*/question": {
+    "count": 240,
+    "destination": "gold.question (selected batch)",
+    "disposition": "mapped"
+  },
+  "generator:$/family/checkpoints/*/requested_predecessor_turns/*": {
+    "count": 264,
+    "destination": "audit.source/family/checkpoints/*/requested_predecessor_turns/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls": {
+    "count": 30,
+    "destination": "audit.source/family/controls",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/family_id": {
+    "count": 120,
+    "destination": "audit.source/family/family_id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/header/predicate": {
+    "count": 120,
+    "destination": "audit.source/family/header/predicate",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/header/scope_text": {
+    "count": 120,
+    "destination": "audit.source/family/header/scope_text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/header/subject": {
+    "count": 120,
+    "destination": "audit.source/family/header/subject",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/language": {
+    "count": 120,
+    "destination": "audit.source/family/language",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/lineage_id": {
+    "count": 120,
+    "destination": "audit.source/family/lineage_id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/multi_hop": {
+    "count": 120,
+    "destination": "audit.source/family/multi_hop",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/namespace/ownerId": {
+    "count": 120,
+    "destination": "audit.source/family/namespace/ownerId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/namespace/projectId": {
+    "count": 120,
+    "destination": "audit.source/family/namespace/projectId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/namespace/scope": {
+    "count": 120,
+    "destination": "audit.source/family/namespace/scope",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/query_scope/any/*/all": {
+    "count": 120,
+    "destination": "audit.source/family/query_scope/any/*/all",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/schema_version": {
+    "count": 120,
+    "destination": "audit.source/family/schema_version",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/seed": {
+    "count": 120,
+    "destination": "audit.source/family/seed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/split": {
+    "count": 120,
+    "destination": "audit.source/family/split",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/acceptedGraphs/*/edges/*/from": {
+    "count": 520,
+    "destination": "gold.reason.acceptedGraphs topology cross-checked against support",
+    "disposition": "mapped"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/acceptedGraphs/*/edges/*/to": {
+    "count": 520,
+    "destination": "gold.reason.acceptedGraphs topology cross-checked against support",
+    "disposition": "mapped"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/current/claims/*/citations": {
+    "count": 240,
+    "destination": "audit.source + reversible empty constant",
+    "disposition": "mapped:empty-gold-placeholder-checked"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/current/claims/*/predicate": {
+    "count": 240,
+    "destination": "gold/current/claims/*/predicate",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/current/claims/*/qualifiers/*/key": {
+    "count": 432,
+    "destination": "gold/current/claims/*/qualifiers/*/key",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/current/claims/*/qualifiers/*/value/type": {
+    "count": 432,
+    "destination": "gold/current/claims/*/qualifiers/*/value/type",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/current/claims/*/qualifiers/*/value/value": {
+    "count": 240,
+    "destination": "gold/current/claims/*/qualifiers/*/value/value",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/current/claims/*/scope/any/*/all": {
+    "count": 144,
+    "destination": "gold/current/claims/*/scope/any/*/all",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/current/claims/*/subject": {
+    "count": 240,
+    "destination": "gold/current/claims/*/subject",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/current/claims/*/valid/from": {
+    "count": 240,
+    "destination": "gold/current/claims/*/valid/from",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/current/claims/*/valid/to": {
+    "count": 240,
+    "destination": "gold/current/claims/*/valid/to",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/current/claims/*/value/text": {
+    "count": 240,
+    "destination": "gold/current/claims/*/value/text",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/current/claims/*/value/type": {
+    "count": 240,
+    "destination": "gold/current/claims/*/value/type",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/current/status": {
+    "count": 240,
+    "destination": "gold/current/status",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/old/records/*/claims/*/citations": {
+    "count": 264,
+    "destination": "audit.source + reversible empty constant",
+    "disposition": "mapped:empty-gold-placeholder-checked"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/old/records/*/claims/*/predicate": {
+    "count": 264,
+    "destination": "gold/old/records/*/claims/*/predicate",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/old/records/*/claims/*/qualifiers/*/key": {
+    "count": 480,
+    "destination": "gold/old/records/*/claims/*/qualifiers/*/key",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/old/records/*/claims/*/qualifiers/*/value/type": {
+    "count": 480,
+    "destination": "gold/old/records/*/claims/*/qualifiers/*/value/type",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/old/records/*/claims/*/qualifiers/*/value/value": {
+    "count": 264,
+    "destination": "gold/old/records/*/claims/*/qualifiers/*/value/value",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/old/records/*/claims/*/scope/any/*/all": {
+    "count": 240,
+    "destination": "gold/old/records/*/claims/*/scope/any/*/all",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/old/records/*/claims/*/subject": {
+    "count": 264,
+    "destination": "gold/old/records/*/claims/*/subject",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/old/records/*/claims/*/valid/from": {
+    "count": 264,
+    "destination": "gold/old/records/*/claims/*/valid/from",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/old/records/*/claims/*/valid/to": {
+    "count": 264,
+    "destination": "gold/old/records/*/claims/*/valid/to",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/old/records/*/claims/*/value/text": {
+    "count": 264,
+    "destination": "gold/old/records/*/claims/*/value/text",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/old/records/*/claims/*/value/type": {
+    "count": 264,
+    "destination": "gold/old/records/*/claims/*/value/type",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/old/records/*/status": {
+    "count": 264,
+    "destination": "gold/old/records/*/status",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/old/status": {
+    "count": 240,
+    "destination": "gold/old/status",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/reason/edges": {
+    "count": 240,
+    "destination": "audit.source; empty generator placeholder / redundant challenge topology checked",
+    "disposition": "mapped:redundant-checked"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/citations": {
+    "count": 720,
+    "destination": "audit.source + reversible empty constant",
+    "disposition": "mapped:empty-gold-placeholder-checked"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/predicate": {
+    "count": 720,
+    "destination": "gold/reason/nodes/*/claim/predicate",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/qualifiers": {
+    "count": 720,
+    "destination": "gold/reason/nodes/*/claim/qualifiers",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/scope/any/*/all": {
+    "count": 576,
+    "destination": "gold/reason/nodes/*/claim/scope/any/*/all",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/subject": {
+    "count": 720,
+    "destination": "gold/reason/nodes/*/claim/subject",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/valid/from": {
+    "count": 720,
+    "destination": "gold/reason/nodes/*/claim/valid/from",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/valid/to": {
+    "count": 720,
+    "destination": "gold/reason/nodes/*/claim/valid/to",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/value/text": {
+    "count": 720,
+    "destination": "gold/reason/nodes/*/claim/value/text",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/value/type": {
+    "count": 720,
+    "destination": "gold/reason/nodes/*/claim/value/type",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/id": {
+    "count": 720,
+    "destination": "gold/reason/nodes/*/id",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/reason/status": {
+    "count": 240,
+    "destination": "gold/reason/status",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/batch": {
+    "count": 240,
+    "destination": "audit.source/goldRow/checkpoints/*/batch",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/goldRow/family_id": {
+    "count": 120,
+    "destination": "audit.source/goldRow/family_id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/goldRow/lineage_id": {
+    "count": 120,
+    "destination": "audit.source/goldRow/lineage_id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/supportRow/checkpoints/*/acceptedGraphs/*/edges/*/from": {
+    "count": 520,
+    "destination": "gold.reason.acceptedGraphs/*/edges/*/from",
+    "disposition": "mapped:verified-source-span-interning"
+  },
+  "generator:$/supportRow/checkpoints/*/acceptedGraphs/*/edges/*/support/*/*/end": {
+    "count": 520,
+    "destination": "gold.reason.acceptedGraphs/*/edges/*/support/*/* -> gold.supportSpans/end",
+    "disposition": "mapped:verified-source-span-interning"
+  },
+  "generator:$/supportRow/checkpoints/*/acceptedGraphs/*/edges/*/support/*/*/offset_unit": {
+    "count": 520,
+    "destination": "gold.reason.acceptedGraphs/*/edges/*/support/*/* -> gold.supportSpans/offset_unit",
+    "disposition": "mapped:verified-source-span-interning"
+  },
+  "generator:$/supportRow/checkpoints/*/acceptedGraphs/*/edges/*/support/*/*/quote": {
+    "count": 520,
+    "destination": "gold.reason.acceptedGraphs/*/edges/*/support/*/* -> gold.supportSpans/quote",
+    "disposition": "mapped:verified-source-span-interning"
+  },
+  "generator:$/supportRow/checkpoints/*/acceptedGraphs/*/edges/*/support/*/*/start": {
+    "count": 520,
+    "destination": "gold.reason.acceptedGraphs/*/edges/*/support/*/* -> gold.supportSpans/start",
+    "disposition": "mapped:verified-source-span-interning"
+  },
+  "generator:$/supportRow/checkpoints/*/acceptedGraphs/*/edges/*/support/*/*/turn_id": {
+    "count": 520,
+    "destination": "gold.reason.acceptedGraphs/*/edges/*/support/*/* -> gold.supportSpans/turn_id",
+    "disposition": "mapped:verified-source-span-interning"
+  },
+  "generator:$/supportRow/checkpoints/*/acceptedGraphs/*/edges/*/to": {
+    "count": 520,
+    "destination": "gold.reason.acceptedGraphs/*/edges/*/to",
+    "disposition": "mapped:verified-source-span-interning"
+  },
+  "generator:$/supportRow/checkpoints/*/assertion_spans/*/event_id": {
+    "count": 624,
+    "destination": "audit.source/supportRow/checkpoints/*/assertion_spans/*/event_id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/supportRow/checkpoints/*/assertion_spans/*/spans/*/end": {
+    "count": 624,
+    "destination": "gold.supportSpans/{origin=turn_id,start,end,text=quote}; offset_unit checked utf16",
+    "disposition": "mapped:verified-source-span-interning"
+  },
+  "generator:$/supportRow/checkpoints/*/assertion_spans/*/spans/*/offset_unit": {
+    "count": 624,
+    "destination": "gold.supportSpans/{origin=turn_id,start,end,text=quote}; offset_unit checked utf16",
+    "disposition": "mapped:verified-source-span-interning"
+  },
+  "generator:$/supportRow/checkpoints/*/assertion_spans/*/spans/*/quote": {
+    "count": 624,
+    "destination": "gold.supportSpans/{origin=turn_id,start,end,text=quote}; offset_unit checked utf16",
+    "disposition": "mapped:verified-source-span-interning"
+  },
+  "generator:$/supportRow/checkpoints/*/assertion_spans/*/spans/*/start": {
+    "count": 624,
+    "destination": "gold.supportSpans/{origin=turn_id,start,end,text=quote}; offset_unit checked utf16",
+    "disposition": "mapped:verified-source-span-interning"
+  },
+  "generator:$/supportRow/checkpoints/*/assertion_spans/*/spans/*/turn_id": {
+    "count": 624,
+    "destination": "gold.supportSpans/{origin=turn_id,start,end,text=quote}; offset_unit checked utf16",
+    "disposition": "mapped:verified-source-span-interning"
+  },
+  "generator:$/supportRow/checkpoints/*/batch": {
+    "count": 240,
+    "destination": "audit.source/supportRow/checkpoints/*/batch",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/supportRow/family_id": {
+    "count": 120,
+    "destination": "audit.source/supportRow/family_id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/batch": {
+    "count": 120,
+    "destination": "audit.source.batch",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/authority": {
+    "count": 870,
+    "destination": "audit.source/family/controls/*/actions/*/authority",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/batch": {
+    "count": 870,
+    "destination": "audit.source/family/controls/*/actions/*/batch",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/call": {
+    "count": 870,
+    "destination": "audit.source/family/controls/*/actions/*/call",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/expected": {
+    "count": 620,
+    "destination": "audit.source/family/controls/*/actions/*/expected",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/actionId": {
+    "count": 570,
+    "destination": "audit.source/family/controls/*/actions/*/payload/actionId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/files/*/mediaType": {
+    "count": 130,
+    "destination": "audit.source/family/controls/*/actions/*/payload/files/*/mediaType",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/files/*/path": {
+    "count": 130,
+    "destination": "audit.source/family/controls/*/actions/*/payload/files/*/path",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/files/*/text": {
+    "count": 130,
+    "destination": "audit.source/family/controls/*/actions/*/payload/files/*/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/namespace/ownerId": {
+    "count": 440,
+    "destination": "audit.source/family/controls/*/actions/*/payload/namespace/ownerId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/namespace/projectId": {
+    "count": 440,
+    "destination": "audit.source/family/controls/*/actions/*/payload/namespace/projectId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/namespace/scope": {
+    "count": 440,
+    "destination": "audit.source/family/controls/*/actions/*/payload/namespace/scope",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/title": {
+    "count": 150,
+    "destination": "audit.source/family/controls/*/actions/*/payload/title",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/returns/*": {
+    "count": 1090,
+    "destination": "audit.source/family/controls/*/actions/*/returns/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/bindingNamespace/ownerId": {
+    "count": 130,
+    "destination": "audit.source/family/controls/*/actions/*/payload/bindingNamespace/ownerId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/bindingNamespace/projectId": {
+    "count": 130,
+    "destination": "audit.source/family/controls/*/actions/*/payload/bindingNamespace/projectId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/bindingNamespace/scope": {
+    "count": 130,
+    "destination": "audit.source/family/controls/*/actions/*/payload/bindingNamespace/scope",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/expectedRevision": {
+    "count": 360,
+    "destination": "audit.source/family/controls/*/actions/*/payload/expectedRevision",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/package": {
+    "count": 280,
+    "destination": "audit.source/family/controls/*/actions/*/payload/package",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/readSet/*/ownerId": {
+    "count": 230,
+    "destination": "audit.source/family/controls/*/actions/*/payload/readSet/*/ownerId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/readSet/*/projectId": {
+    "count": 230,
+    "destination": "audit.source/family/controls/*/actions/*/payload/readSet/*/projectId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/readSet/*/scope": {
+    "count": 230,
+    "destination": "audit.source/family/controls/*/actions/*/payload/readSet/*/scope",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/roleId": {
+    "count": 230,
+    "destination": "audit.source/family/controls/*/actions/*/payload/roleId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/version": {
+    "count": 130,
+    "destination": "audit.source/family/controls/*/actions/*/payload/version",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/drafting": {
+    "count": 80,
+    "destination": "audit.source/family/controls/*/actions/*/payload/drafting",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/input/authoredInput/occurredAt": {
+    "count": 80,
+    "destination": "audit.source/family/controls/*/actions/*/payload/input/authoredInput/occurredAt",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/input/authoredInput/text": {
+    "count": 80,
+    "destination": "audit.source/family/controls/*/actions/*/payload/input/authoredInput/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/input/body": {
+    "count": 80,
+    "destination": "audit.source/family/controls/*/actions/*/payload/input/body",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/input/title": {
+    "count": 80,
+    "destination": "audit.source/family/controls/*/actions/*/payload/input/title",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/applicability": {
+    "count": 110,
+    "destination": "audit.source/family/controls/*/actions/*/payload/applicability",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/cardId": {
+    "count": 230,
+    "destination": "audit.source/family/controls/*/actions/*/payload/cardId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/currentDependencies/context/readSet/*/ownerId": {
+    "count": 210,
+    "destination": "audit.source/family/controls/*/actions/*/payload/currentDependencies/context/readSet/*/ownerId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/currentDependencies/context/readSet/*/projectId": {
+    "count": 210,
+    "destination": "audit.source/family/controls/*/actions/*/payload/currentDependencies/context/readSet/*/projectId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/currentDependencies/context/readSet/*/scope": {
+    "count": 210,
+    "destination": "audit.source/family/controls/*/actions/*/payload/currentDependencies/context/readSet/*/scope",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/currentDependencies/context/roleId": {
+    "count": 210,
+    "destination": "audit.source/family/controls/*/actions/*/payload/currentDependencies/context/roleId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/currentDependencies/packages/*/package": {
+    "count": 210,
+    "destination": "audit.source/family/controls/*/actions/*/payload/currentDependencies/packages/*/package",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/currentDependencies/packages/*/snapshot": {
+    "count": 210,
+    "destination": "audit.source/family/controls/*/actions/*/payload/currentDependencies/packages/*/snapshot",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/expectedDependencyRevision": {
+    "count": 120,
+    "destination": "audit.source/family/controls/*/actions/*/payload/expectedDependencyRevision",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/basedOn": {
+    "count": 50,
+    "destination": "audit.source/family/controls/*/actions/*/payload/basedOn",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/expectedPackageRevision": {
+    "count": 50,
+    "destination": "audit.source/family/controls/*/actions/*/payload/expectedPackageRevision",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/branch": {
+    "count": 80,
+    "destination": "audit.source/family/controls/*/branch",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/checkpoints/*/batch": {
+    "count": 160,
+    "destination": "audit.source/family/controls/*/checkpoints/*/batch",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/checkpoints/*/currentEligible": {
+    "count": 160,
+    "destination": "audit.source/family/controls/*/checkpoints/*/currentEligible",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/checkpoints/*/historyEligible": {
+    "count": 160,
+    "destination": "audit.source/family/controls/*/checkpoints/*/historyEligible",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/checkpoints/*/body": {
+    "count": 80,
+    "destination": "audit.source/family/controls/*/checkpoints/*/body",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/execution_status": {
+    "count": 80,
+    "destination": "audit.source/family/controls/*/execution_status",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/historyIsCurrent": {
+    "count": 80,
+    "destination": "audit.source/family/controls/*/historyIsCurrent",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/kind": {
+    "count": 120,
+    "destination": "audit.source/family/controls/*/kind",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/scoring/*": {
+    "count": 240,
+    "destination": "audit.source/family/controls/*/scoring/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/separate_assertion": {
+    "count": 80,
+    "destination": "audit.source/family/controls/*/separate_assertion",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/unresolved_protocol/*": {
+    "count": 80,
+    "destination": "audit.source/family/controls/*/unresolved_protocol/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/acceptedGraphs": {
+    "count": 40,
+    "destination": "gold/acceptedGraphs",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes": {
+    "count": 40,
+    "destination": "gold/reason/nodes",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/supportRow/checkpoints/*/acceptedGraphs": {
+    "count": 40,
+    "destination": "audit.source/supportRow/checkpoints/*/acceptedGraphs",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/bindings": {
+    "count": 20,
+    "destination": "audit.source/family/controls/*/actions/*/payload/bindings",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/payload/body": {
+    "count": 20,
+    "destination": "audit.source/family/controls/*/actions/*/payload/body",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/checkpoints/*/overwrittenBodyRecoverable": {
+    "count": 20,
+    "destination": "audit.source/family/controls/*/checkpoints/*/overwrittenBodyRecoverable",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/actionId": {
+    "count": 200,
+    "destination": "audit.source/family/controls/*/actions/*/actionId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/content": {
+    "count": 160,
+    "destination": "audit.source/family/controls/*/actions/*/content",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/namespace/ownerId": {
+    "count": 200,
+    "destination": "audit.source/family/controls/*/actions/*/namespace/ownerId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/namespace/projectId": {
+    "count": 200,
+    "destination": "audit.source/family/controls/*/actions/*/namespace/projectId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/namespace/scope": {
+    "count": 200,
+    "destination": "audit.source/family/controls/*/actions/*/namespace/scope",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/expectedRevision": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/actions/*/expectedRevision",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/target": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/actions/*/target",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/expected/suppressed": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/actions/*/expected/suppressed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/expected/foreignExposed": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/expected/foreignExposed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/expected/independentCopyEligible": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/expected/independentCopyEligible",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/expected/namedRecordExposed": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/expected/namedRecordExposed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/expected/receiptsExposed": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/expected/receiptsExposed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/expected/replayResurrection": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/expected/replayResurrection",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/foreignNamespace/ownerId": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/foreignNamespace/ownerId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/foreignNamespace/projectId": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/foreignNamespace/projectId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/foreignNamespace/scope": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/foreignNamespace/scope",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/independentArtifactAudit/*": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/independentArtifactAudit/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/namespace/ownerId": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/namespace/ownerId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/namespace/projectId": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/namespace/projectId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/namespace/scope": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/namespace/scope",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/readSet/*/ownerId": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/readSet/*/ownerId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/readSet/*/projectId": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/readSet/*/projectId",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/readSet/*/scope": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/readSet/*/scope",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/targetRecord": {
+    "count": 40,
+    "destination": "audit.source/family/controls/*/targetRecord",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/expected/dependencyEligible": {
+    "count": 20,
+    "destination": "audit.source/family/controls/*/actions/*/expected/dependencyEligible",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/expected/error": {
+    "count": 30,
+    "destination": "audit.source/family/controls/*/actions/*/expected/error",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/expected/mutation": {
+    "count": 30,
+    "destination": "audit.source/family/controls/*/actions/*/expected/mutation",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/controls/*/actions/*/returns": {
+    "count": 30,
+    "destination": "audit.source/family/controls/*/actions/*/returns",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/claims/*/value/decimal": {
+    "count": 264,
+    "destination": "audit.source/family/ast/events/*/claims/*/value/decimal",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/claims/*/value/unit": {
+    "count": 264,
+    "destination": "audit.source/family/ast/events/*/claims/*/value/unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/current/claims/*/qualifiers/*/value/decimal": {
+    "count": 192,
+    "destination": "gold/current/claims/*/qualifiers/*/value/decimal",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/current/claims/*/qualifiers/*/value/unit": {
+    "count": 192,
+    "destination": "gold/current/claims/*/qualifiers/*/value/unit",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/old/records/*/claims/*/qualifiers/*/value/decimal": {
+    "count": 216,
+    "destination": "gold/old/records/*/claims/*/qualifiers/*/value/decimal",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/old/records/*/claims/*/qualifiers/*/value/unit": {
+    "count": 216,
+    "destination": "gold/old/records/*/claims/*/qualifiers/*/value/unit",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/family/ast/events/*/reason_nodes/*/claim/scope/any/*/all/*/field": {
+    "count": 144,
+    "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/scope/any/*/all/*/field",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/reason_nodes/*/claim/scope/any/*/all/*/values/*": {
+    "count": 216,
+    "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/scope/any/*/all/*/values/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/current/claims/*/scope/any/*/all/*/field": {
+    "count": 96,
+    "destination": "gold/current/claims/*/scope/any/*/all/*/field",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/current/claims/*/scope/any/*/all/*/values/*": {
+    "count": 144,
+    "destination": "gold/current/claims/*/scope/any/*/all/*/values/*",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/scope/any/*/all/*/field": {
+    "count": 144,
+    "destination": "gold/reason/nodes/*/claim/scope/any/*/all/*/field",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/scope/any/*/all/*/values/*": {
+    "count": 216,
+    "destination": "gold/reason/nodes/*/claim/scope/any/*/all/*/values/*",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/old/records/*/claims/*/scope/any/*/all/*/field": {
+    "count": 24,
+    "destination": "gold/old/records/*/claims/*/scope/any/*/all/*/field",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/old/records/*/claims/*/scope/any/*/all/*/values/*": {
+    "count": 24,
+    "destination": "gold/old/records/*/claims/*/scope/any/*/all/*/values/*",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/family/ast/events/*/claims": {
+    "count": 48,
+    "destination": "audit.source/family/ast/events/*/claims",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/family/ast/events/*/field_mask": {
+    "count": 48,
+    "destination": "audit.source/family/ast/events/*/field_mask",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/current/claims": {
+    "count": 48,
+    "destination": "gold/current/claims",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/citations/*/intent": {
+    "count": 2596,
+    "destination": "submission.answer/current/claims/*/citations/*/intent",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/citations/*/item": {
+    "count": 2596,
+    "destination": "submission.answer/current/claims/*/citations/*/item",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/citations/*/occurrence": {
+    "count": 2596,
+    "destination": "submission.answer/current/claims/*/citations/*/occurrence",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/citations/*/quote": {
+    "count": 2596,
+    "destination": "submission.answer/current/claims/*/citations/*/quote",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/citations/*/source": {
+    "count": 2596,
+    "destination": "submission.answer/current/claims/*/citations/*/source",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/citations/*/unit": {
+    "count": 2596,
+    "destination": "submission.answer/current/claims/*/citations/*/unit",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/predicate": {
+    "count": 2612,
+    "destination": "submission.answer/current/claims/*/predicate",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/qualifiers/*/key": {
+    "count": 5114,
+    "destination": "submission.answer/current/claims/*/qualifiers/*/key",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/qualifiers/*/value/text": {
+    "count": 2518,
+    "destination": "submission.answer/current/claims/*/qualifiers/*/value/text",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/qualifiers/*/value/type": {
+    "count": 5114,
+    "destination": "submission.answer/current/claims/*/qualifiers/*/value/type",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/qualifiers/*/value/value": {
+    "count": 2596,
+    "destination": "submission.answer/current/claims/*/qualifiers/*/value/value",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/scope/any/*/all/*/field": {
+    "count": 9990,
+    "destination": "submission.answer/current/claims/*/scope/any/*/all/*/field",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/scope/any/*/all/*/values/*": {
+    "count": 12120,
+    "destination": "submission.answer/current/claims/*/scope/any/*/all/*/values/*",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/subject": {
+    "count": 2612,
+    "destination": "submission.answer/current/claims/*/subject",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/valid/from": {
+    "count": 2612,
+    "destination": "submission.answer/current/claims/*/valid/from",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/valid/to": {
+    "count": 2612,
+    "destination": "submission.answer/current/claims/*/valid/to",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/value/lower": {
+    "count": 140,
+    "destination": "submission.answer/current/claims/*/value/lower",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/value/lowerClosed": {
+    "count": 140,
+    "destination": "submission.answer/current/claims/*/value/lowerClosed",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/value/type": {
+    "count": 2612,
+    "destination": "submission.answer/current/claims/*/value/type",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/value/unit": {
+    "count": 299,
+    "destination": "submission.answer/current/claims/*/value/unit",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/value/upper": {
+    "count": 140,
+    "destination": "submission.answer/current/claims/*/value/upper",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/value/upperClosed": {
+    "count": 140,
+    "destination": "submission.answer/current/claims/*/value/upperClosed",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/status": {
+    "count": 1984,
+    "destination": "submission.answer/current/status",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/citations/*/intent": {
+    "count": 2240,
+    "destination": "submission.answer/old/records/*/claims/*/citations/*/intent",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/citations/*/item": {
+    "count": 2240,
+    "destination": "submission.answer/old/records/*/claims/*/citations/*/item",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/citations/*/occurrence": {
+    "count": 2240,
+    "destination": "submission.answer/old/records/*/claims/*/citations/*/occurrence",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/citations/*/quote": {
+    "count": 2240,
+    "destination": "submission.answer/old/records/*/claims/*/citations/*/quote",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/citations/*/source": {
+    "count": 2240,
+    "destination": "submission.answer/old/records/*/claims/*/citations/*/source",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/citations/*/unit": {
+    "count": 2240,
+    "destination": "submission.answer/old/records/*/claims/*/citations/*/unit",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/predicate": {
+    "count": 2258,
+    "destination": "submission.answer/old/records/*/claims/*/predicate",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/qualifiers/*/key": {
+    "count": 4480,
+    "destination": "submission.answer/old/records/*/claims/*/qualifiers/*/key",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/qualifiers/*/value/text": {
+    "count": 2240,
+    "destination": "submission.answer/old/records/*/claims/*/qualifiers/*/value/text",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/qualifiers/*/value/type": {
+    "count": 4480,
+    "destination": "submission.answer/old/records/*/claims/*/qualifiers/*/value/type",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/qualifiers/*/value/value": {
+    "count": 2240,
+    "destination": "submission.answer/old/records/*/claims/*/qualifiers/*/value/value",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/scope/any/*/all/*/field": {
+    "count": 8412,
+    "destination": "submission.answer/old/records/*/claims/*/scope/any/*/all/*/field",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/scope/any/*/all/*/values/*": {
+    "count": 10600,
+    "destination": "submission.answer/old/records/*/claims/*/scope/any/*/all/*/values/*",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/subject": {
+    "count": 2258,
+    "destination": "submission.answer/old/records/*/claims/*/subject",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/valid/from": {
+    "count": 2258,
+    "destination": "submission.answer/old/records/*/claims/*/valid/from",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/valid/to": {
+    "count": 2258,
+    "destination": "submission.answer/old/records/*/claims/*/valid/to",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/value/lower": {
+    "count": 113,
+    "destination": "submission.answer/old/records/*/claims/*/value/lower",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/value/lowerClosed": {
+    "count": 113,
+    "destination": "submission.answer/old/records/*/claims/*/value/lowerClosed",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/value/type": {
+    "count": 2258,
+    "destination": "submission.answer/old/records/*/claims/*/value/type",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/value/unit": {
+    "count": 243,
+    "destination": "submission.answer/old/records/*/claims/*/value/unit",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/value/upper": {
+    "count": 113,
+    "destination": "submission.answer/old/records/*/claims/*/value/upper",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/value/upperClosed": {
+    "count": 113,
+    "destination": "submission.answer/old/records/*/claims/*/value/upperClosed",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/status": {
+    "count": 2258,
+    "destination": "submission.answer/old/records/*/status",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/status": {
+    "count": 1984,
+    "destination": "submission.answer/old/status",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/edges/*/citations/*/intent": {
+    "count": 4072,
+    "destination": "submission.answer/reason/edges/*/citations/*/intent",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/edges/*/citations/*/item": {
+    "count": 4072,
+    "destination": "submission.answer/reason/edges/*/citations/*/item",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/edges/*/citations/*/occurrence": {
+    "count": 4072,
+    "destination": "submission.answer/reason/edges/*/citations/*/occurrence",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/edges/*/citations/*/quote": {
+    "count": 4072,
+    "destination": "submission.answer/reason/edges/*/citations/*/quote",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/edges/*/citations/*/source": {
+    "count": 4072,
+    "destination": "submission.answer/reason/edges/*/citations/*/source",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/edges/*/citations/*/unit": {
+    "count": 4072,
+    "destination": "submission.answer/reason/edges/*/citations/*/unit",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/edges/*/from": {
+    "count": 4106,
+    "destination": "submission.answer/reason/edges/*/from",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/edges/*/to": {
+    "count": 4106,
+    "destination": "submission.answer/reason/edges/*/to",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/nodes/*/claim/citations/*/intent": {
+    "count": 6268,
+    "destination": "submission.answer/reason/nodes/*/claim/citations/*/intent",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/nodes/*/claim/citations/*/item": {
+    "count": 6268,
+    "destination": "submission.answer/reason/nodes/*/claim/citations/*/item",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/nodes/*/claim/citations/*/occurrence": {
+    "count": 6268,
+    "destination": "submission.answer/reason/nodes/*/claim/citations/*/occurrence",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/nodes/*/claim/citations/*/quote": {
+    "count": 6268,
+    "destination": "submission.answer/reason/nodes/*/claim/citations/*/quote",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/nodes/*/claim/citations/*/source": {
+    "count": 6268,
+    "destination": "submission.answer/reason/nodes/*/claim/citations/*/source",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/nodes/*/claim/citations/*/unit": {
+    "count": 6268,
+    "destination": "submission.answer/reason/nodes/*/claim/citations/*/unit",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/nodes/*/claim/predicate": {
+    "count": 6308,
+    "destination": "submission.answer/reason/nodes/*/claim/predicate",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/nodes/*/claim/qualifiers": {
+    "count": 6308,
+    "destination": "submission.answer/reason/nodes/*/claim/qualifiers",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/nodes/*/claim/scope/any/*/all/*/field": {
+    "count": 23655,
+    "destination": "submission.answer/reason/nodes/*/claim/scope/any/*/all/*/field",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/nodes/*/claim/scope/any/*/all/*/values/*": {
+    "count": 29924,
+    "destination": "submission.answer/reason/nodes/*/claim/scope/any/*/all/*/values/*",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/nodes/*/claim/subject": {
+    "count": 6308,
+    "destination": "submission.answer/reason/nodes/*/claim/subject",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/nodes/*/claim/valid/from": {
+    "count": 6308,
+    "destination": "submission.answer/reason/nodes/*/claim/valid/from",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/nodes/*/claim/valid/to": {
+    "count": 6308,
+    "destination": "submission.answer/reason/nodes/*/claim/valid/to",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/nodes/*/claim/value/text": {
+    "count": 6308,
+    "destination": "submission.answer/reason/nodes/*/claim/value/text",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/nodes/*/claim/value/type": {
+    "count": 6308,
+    "destination": "submission.answer/reason/nodes/*/claim/value/type",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/nodes/*/id": {
+    "count": 6308,
+    "destination": "submission.answer/reason/nodes/*/id",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/status": {
+    "count": 1984,
+    "destination": "submission.answer/reason/status",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/causal_class": {
+    "count": 1984,
+    "destination": "audit.source/row/causal_class",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/delivered/*/item": {
+    "count": 12844,
+    "destination": "submission.delivered/*/item",
+    "disposition": "mapped:already-delivered-text-identity-map;provenance-defect-reported"
+  },
+  "challenge:$/row/delivered/*/source": {
+    "count": 12844,
+    "destination": "submission.delivered/*/source",
+    "disposition": "mapped:already-delivered-text-identity-map;provenance-defect-reported"
+  },
+  "challenge:$/row/delivered/*/text": {
+    "count": 12844,
+    "destination": "submission.delivered/*/segments/0/text",
+    "disposition": "mapped:already-delivered-text-identity-map;provenance-defect-reported"
+  },
+  "challenge:$/row/delivered/*/unit": {
+    "count": 12844,
+    "destination": "submission.delivered/*/unit",
+    "disposition": "mapped:already-delivered-text-identity-map;provenance-defect-reported"
+  },
+  "challenge:$/row/evidence_variant": {
+    "count": 1984,
+    "destination": "audit.source/row/evidence_variant",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/gold/acceptedGraphs/*/*/from": {
+    "count": 4630,
+    "destination": "gold.reason.acceptedGraphs/*/edges/*/*/from",
+    "disposition": "mapped:graph-nesting;[[]]->[]"
+  },
+  "challenge:$/row/gold/acceptedGraphs/*/*/to": {
+    "count": 4630,
+    "destination": "gold.reason.acceptedGraphs/*/edges/*/*/to",
+    "disposition": "mapped:graph-nesting;[[]]->[]"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/citations": {
+    "count": 2240,
+    "destination": "audit.source + reversible empty constant",
+    "disposition": "mapped:empty-gold-placeholder-checked"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/predicate": {
+    "count": 2240,
+    "destination": "gold/current/claims/*/predicate",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/qualifiers/*/key": {
+    "count": 4480,
+    "destination": "gold/current/claims/*/qualifiers/*/key",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/qualifiers/*/value/text": {
+    "count": 2240,
+    "destination": "gold/current/claims/*/qualifiers/*/value/text",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/qualifiers/*/value/type": {
+    "count": 4480,
+    "destination": "gold/current/claims/*/qualifiers/*/value/type",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/qualifiers/*/value/value": {
+    "count": 2240,
+    "destination": "gold/current/claims/*/qualifiers/*/value/value",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/scope/any/*/all/*/field": {
+    "count": 6720,
+    "destination": "gold/current/claims/*/scope/any/*/all/*/field",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/scope/any/*/all/*/values/*": {
+    "count": 8960,
+    "destination": "gold/current/claims/*/scope/any/*/all/*/values/*",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/subject": {
+    "count": 2240,
+    "destination": "gold/current/claims/*/subject",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/valid/from": {
+    "count": 2240,
+    "destination": "gold/current/claims/*/valid/from",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/valid/to": {
+    "count": 2240,
+    "destination": "gold/current/claims/*/valid/to",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/value/lower": {
+    "count": 130,
+    "destination": "gold/current/claims/*/value/lower",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/value/lowerClosed": {
+    "count": 130,
+    "destination": "gold/current/claims/*/value/lowerClosed",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/value/type": {
+    "count": 2240,
+    "destination": "gold/current/claims/*/value/type",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/value/unit": {
+    "count": 264,
+    "destination": "gold/current/claims/*/value/unit",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/value/upper": {
+    "count": 130,
+    "destination": "gold/current/claims/*/value/upper",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/value/upperClosed": {
+    "count": 130,
+    "destination": "gold/current/claims/*/value/upperClosed",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/status": {
+    "count": 1984,
+    "destination": "gold/current/status",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/citations": {
+    "count": 2240,
+    "destination": "audit.source + reversible empty constant",
+    "disposition": "mapped:empty-gold-placeholder-checked"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/predicate": {
+    "count": 2240,
+    "destination": "gold/old/records/*/claims/*/predicate",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/qualifiers/*/key": {
+    "count": 4480,
+    "destination": "gold/old/records/*/claims/*/qualifiers/*/key",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/qualifiers/*/value/text": {
+    "count": 2240,
+    "destination": "gold/old/records/*/claims/*/qualifiers/*/value/text",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/qualifiers/*/value/type": {
+    "count": 4480,
+    "destination": "gold/old/records/*/claims/*/qualifiers/*/value/type",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/qualifiers/*/value/value": {
+    "count": 2240,
+    "destination": "gold/old/records/*/claims/*/qualifiers/*/value/value",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/scope/any/*/all/*/field": {
+    "count": 6720,
+    "destination": "gold/old/records/*/claims/*/scope/any/*/all/*/field",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/scope/any/*/all/*/values/*": {
+    "count": 9304,
+    "destination": "gold/old/records/*/claims/*/scope/any/*/all/*/values/*",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/subject": {
+    "count": 2240,
+    "destination": "gold/old/records/*/claims/*/subject",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/valid/from": {
+    "count": 2240,
+    "destination": "gold/old/records/*/claims/*/valid/from",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/valid/to": {
+    "count": 2240,
+    "destination": "gold/old/records/*/claims/*/valid/to",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/value/lower": {
+    "count": 119,
+    "destination": "gold/old/records/*/claims/*/value/lower",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/value/lowerClosed": {
+    "count": 119,
+    "destination": "gold/old/records/*/claims/*/value/lowerClosed",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/value/type": {
+    "count": 2240,
+    "destination": "gold/old/records/*/claims/*/value/type",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/value/unit": {
+    "count": 249,
+    "destination": "gold/old/records/*/claims/*/value/unit",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/value/upper": {
+    "count": 119,
+    "destination": "gold/old/records/*/claims/*/value/upper",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/value/upperClosed": {
+    "count": 119,
+    "destination": "gold/old/records/*/claims/*/value/upperClosed",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/status": {
+    "count": 2240,
+    "destination": "gold/old/records/*/status",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/status": {
+    "count": 1984,
+    "destination": "gold/old/status",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/reason/edges/*/citations": {
+    "count": 4158,
+    "destination": "audit.source + reversible empty constant",
+    "disposition": "mapped:empty-gold-placeholder-checked"
+  },
+  "challenge:$/row/gold/answer/reason/edges/*/from": {
+    "count": 4158,
+    "destination": "audit.source; empty generator placeholder / redundant challenge topology checked",
+    "disposition": "mapped:redundant-checked"
+  },
+  "challenge:$/row/gold/answer/reason/edges/*/to": {
+    "count": 4158,
+    "destination": "audit.source; empty generator placeholder / redundant challenge topology checked",
+    "disposition": "mapped:redundant-checked"
+  },
+  "challenge:$/row/gold/answer/reason/nodes/*/claim/citations": {
+    "count": 6268,
+    "destination": "audit.source + reversible empty constant",
+    "disposition": "mapped:empty-gold-placeholder-checked"
+  },
+  "challenge:$/row/gold/answer/reason/nodes/*/claim/predicate": {
+    "count": 6268,
+    "destination": "gold/reason/nodes/*/claim/predicate",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/reason/nodes/*/claim/qualifiers": {
+    "count": 6268,
+    "destination": "gold/reason/nodes/*/claim/qualifiers",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/reason/nodes/*/claim/scope/any/*/all/*/field": {
+    "count": 18804,
+    "destination": "gold/reason/nodes/*/claim/scope/any/*/all/*/field",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/reason/nodes/*/claim/scope/any/*/all/*/values/*": {
+    "count": 26171,
+    "destination": "gold/reason/nodes/*/claim/scope/any/*/all/*/values/*",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/reason/nodes/*/claim/subject": {
+    "count": 6268,
+    "destination": "gold/reason/nodes/*/claim/subject",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/reason/nodes/*/claim/valid/from": {
+    "count": 6268,
+    "destination": "gold/reason/nodes/*/claim/valid/from",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/reason/nodes/*/claim/valid/to": {
+    "count": 6268,
+    "destination": "gold/reason/nodes/*/claim/valid/to",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/reason/nodes/*/claim/value/text": {
+    "count": 6268,
+    "destination": "gold/reason/nodes/*/claim/value/text",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/reason/nodes/*/claim/value/type": {
+    "count": 6268,
+    "destination": "gold/reason/nodes/*/claim/value/type",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/reason/nodes/*/id": {
+    "count": 6268,
+    "destination": "gold/reason/nodes/*/id",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/reason/status": {
+    "count": 1984,
+    "destination": "gold/reason/status",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/group_id": {
+    "count": 1984,
+    "destination": "audit.source/row/group_id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/id": {
+    "count": 1984,
+    "destination": "audit.source/row/id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/language": {
+    "count": 1984,
+    "destination": "audit.source/row/language",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/lineage": {
+    "count": 1984,
+    "destination": "audit.source/row/lineage",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations": {
+    "count": 872,
+    "destination": "audit.source/row/provenance/mutations",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/protocol_sections/*": {
+    "count": 9920,
+    "destination": "audit.source/row/provenance/protocol_sections/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/source": {
+    "count": 1984,
+    "destination": "audit.source/row/provenance/source",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/transformations/*/kind": {
+    "count": 19952,
+    "destination": "audit.source/row/provenance/transformations/*/kind",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/transformations/*/timezone": {
+    "count": 5352,
+    "destination": "audit.source/row/provenance/transformations/*/timezone",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/transformations/*/style": {
+    "count": 8502,
+    "destination": "audit.source/row/provenance/transformations/*/style",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/question": {
+    "count": 1984,
+    "destination": "gold.question",
+    "disposition": "mapped"
+  },
+  "challenge:$/row/referral": {
+    "count": 1024,
+    "destination": "audit.source/row/referral",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/representation": {
+    "count": 1600,
+    "destination": "audit.source/row/representation",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/role": {
+    "count": 1984,
+    "destination": "audit.source/row/role",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/scenario": {
+    "count": 1984,
+    "destination": "audit.source/row/scenario",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/set": {
+    "count": 1984,
+    "destination": "audit.source/row/set",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/style": {
+    "count": 1984,
+    "destination": "audit.source/row/style",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/true_label/causal_correct": {
+    "count": 1984,
+    "destination": "audit.source/row/true_label/causal_correct",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/true_label/causal_supported": {
+    "count": 1984,
+    "destination": "audit.source/row/true_label/causal_supported",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/true_label/components/C": {
+    "count": 1984,
+    "destination": "audit.source/row/true_label/components/C",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/true_label/components/O": {
+    "count": 1984,
+    "destination": "audit.source/row/true_label/components/O",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/true_label/components/R": {
+    "count": 1984,
+    "destination": "audit.source/row/true_label/components/R",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/true_label/equivalent": {
+    "count": 1984,
+    "destination": "audit.source/row/true_label/equivalent",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/true_label/reason": {
+    "count": 1984,
+    "destination": "audit.source/row/true_label/reason",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/world_id": {
+    "count": 1984,
+    "destination": "audit.source/row/world_id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/causal_class": {
+    "count": 1984,
+    "destination": "audit.source/world/causal_class",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/checkpoint": {
+    "count": 1984,
+    "destination": "audit.source/world/checkpoint",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/claims_support/*/citation/intent": {
+    "count": 4480,
+    "destination": "submission.delivered address intent (authored harness plan)",
+    "disposition": "mapped:address-plan"
+  },
+  "challenge:$/world/claims_support/*/citation/item": {
+    "count": 4480,
+    "destination": "submission.delivered address intent (authored harness plan)",
+    "disposition": "mapped:address-plan"
+  },
+  "challenge:$/world/claims_support/*/citation/occurrence": {
+    "count": 4480,
+    "destination": "submission.delivered address intent (authored harness plan)",
+    "disposition": "mapped:address-plan"
+  },
+  "challenge:$/world/claims_support/*/citation/quote": {
+    "count": 4480,
+    "destination": "submission.delivered address intent (authored harness plan)",
+    "disposition": "mapped:address-plan"
+  },
+  "challenge:$/world/claims_support/*/citation/source": {
+    "count": 4480,
+    "destination": "submission.delivered address intent (authored harness plan)",
+    "disposition": "mapped:address-plan"
+  },
+  "challenge:$/world/claims_support/*/citation/unit": {
+    "count": 4480,
+    "destination": "submission.delivered address intent (authored harness plan)",
+    "disposition": "mapped:address-plan"
+  },
+  "challenge:$/world/claims_support/*/section": {
+    "count": 4480,
+    "destination": "audit.source/world/claims_support/*/section",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/delivered/*/item": {
+    "count": 12952,
+    "destination": "gold.supportSpans context span; only edge_support licenses causal support",
+    "disposition": "mapped:local-source-registry"
+  },
+  "challenge:$/world/delivered/*/source": {
+    "count": 12952,
+    "destination": "gold.supportSpans context span; only edge_support licenses causal support",
+    "disposition": "mapped:local-source-registry"
+  },
+  "challenge:$/world/delivered/*/text": {
+    "count": 12952,
+    "destination": "gold.supportSpans context span; only edge_support licenses causal support",
+    "disposition": "mapped:local-source-registry"
+  },
+  "challenge:$/world/delivered/*/unit": {
+    "count": 12952,
+    "destination": "gold.supportSpans context span; only edge_support licenses causal support",
+    "disposition": "mapped:local-source-registry"
+  },
+  "challenge:$/world/edge_support/*/alternatives/*/*/intent": {
+    "count": 4394,
+    "destination": "gold.reason.acceptedGraphs/*/edges/*/support -> gold.supportSpans; exact source citation verified",
+    "disposition": "mapped:OR-AND-preserved"
+  },
+  "challenge:$/world/edge_support/*/alternatives/*/*/item": {
+    "count": 4394,
+    "destination": "gold.reason.acceptedGraphs/*/edges/*/support -> gold.supportSpans; exact source citation verified",
+    "disposition": "mapped:OR-AND-preserved"
+  },
+  "challenge:$/world/edge_support/*/alternatives/*/*/occurrence": {
+    "count": 4394,
+    "destination": "gold.reason.acceptedGraphs/*/edges/*/support -> gold.supportSpans; exact source citation verified",
+    "disposition": "mapped:OR-AND-preserved"
+  },
+  "challenge:$/world/edge_support/*/alternatives/*/*/quote": {
+    "count": 4394,
+    "destination": "gold.reason.acceptedGraphs/*/edges/*/support -> gold.supportSpans; exact source citation verified",
+    "disposition": "mapped:OR-AND-preserved"
+  },
+  "challenge:$/world/edge_support/*/alternatives/*/*/source": {
+    "count": 4394,
+    "destination": "gold.reason.acceptedGraphs/*/edges/*/support -> gold.supportSpans; exact source citation verified",
+    "disposition": "mapped:OR-AND-preserved"
+  },
+  "challenge:$/world/edge_support/*/alternatives/*/*/unit": {
+    "count": 4394,
+    "destination": "gold.reason.acceptedGraphs/*/edges/*/support -> gold.supportSpans; exact source citation verified",
+    "disposition": "mapped:OR-AND-preserved"
+  },
+  "challenge:$/world/edge_support/*/from": {
+    "count": 4394,
+    "destination": "gold.reason.acceptedGraphs/*/edges/*/support -> gold.supportSpans; exact source citation verified",
+    "disposition": "mapped:OR-AND-preserved"
+  },
+  "challenge:$/world/edge_support/*/to": {
+    "count": 4394,
+    "destination": "gold.reason.acceptedGraphs/*/edges/*/support -> gold.supportSpans; exact source citation verified",
+    "disposition": "mapped:OR-AND-preserved"
+  },
+  "challenge:$/world/gold/acceptedGraphs/*/*/from": {
+    "count": 4630,
+    "destination": "audit.source/world/gold/acceptedGraphs/*/*/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/acceptedGraphs/*/*/to": {
+    "count": 4630,
+    "destination": "audit.source/world/gold/acceptedGraphs/*/*/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/citations": {
+    "count": 2240,
+    "destination": "audit.source/world/gold/answer/current/claims/*/citations",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/predicate": {
+    "count": 2240,
+    "destination": "audit.source/world/gold/answer/current/claims/*/predicate",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/qualifiers/*/key": {
+    "count": 4480,
+    "destination": "audit.source/world/gold/answer/current/claims/*/qualifiers/*/key",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/qualifiers/*/value/text": {
+    "count": 2240,
+    "destination": "audit.source/world/gold/answer/current/claims/*/qualifiers/*/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/qualifiers/*/value/type": {
+    "count": 4480,
+    "destination": "audit.source/world/gold/answer/current/claims/*/qualifiers/*/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/qualifiers/*/value/value": {
+    "count": 2240,
+    "destination": "audit.source/world/gold/answer/current/claims/*/qualifiers/*/value/value",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/scope/any/*/all/*/field": {
+    "count": 6720,
+    "destination": "audit.source/world/gold/answer/current/claims/*/scope/any/*/all/*/field",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/scope/any/*/all/*/values/*": {
+    "count": 8960,
+    "destination": "audit.source/world/gold/answer/current/claims/*/scope/any/*/all/*/values/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/subject": {
+    "count": 2240,
+    "destination": "audit.source/world/gold/answer/current/claims/*/subject",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/valid/from": {
+    "count": 2240,
+    "destination": "audit.source/world/gold/answer/current/claims/*/valid/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/valid/to": {
+    "count": 2240,
+    "destination": "audit.source/world/gold/answer/current/claims/*/valid/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/value/lower": {
+    "count": 130,
+    "destination": "audit.source/world/gold/answer/current/claims/*/value/lower",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/value/lowerClosed": {
+    "count": 130,
+    "destination": "audit.source/world/gold/answer/current/claims/*/value/lowerClosed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/value/type": {
+    "count": 2240,
+    "destination": "audit.source/world/gold/answer/current/claims/*/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/value/unit": {
+    "count": 264,
+    "destination": "audit.source/world/gold/answer/current/claims/*/value/unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/value/upper": {
+    "count": 130,
+    "destination": "audit.source/world/gold/answer/current/claims/*/value/upper",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/value/upperClosed": {
+    "count": 130,
+    "destination": "audit.source/world/gold/answer/current/claims/*/value/upperClosed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/status": {
+    "count": 1984,
+    "destination": "audit.source/world/gold/answer/current/status",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/citations": {
+    "count": 2240,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/citations",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/predicate": {
+    "count": 2240,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/predicate",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/qualifiers/*/key": {
+    "count": 4480,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/qualifiers/*/key",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/qualifiers/*/value/text": {
+    "count": 2240,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/qualifiers/*/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/qualifiers/*/value/type": {
+    "count": 4480,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/qualifiers/*/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/qualifiers/*/value/value": {
+    "count": 2240,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/qualifiers/*/value/value",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/scope/any/*/all/*/field": {
+    "count": 6720,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/scope/any/*/all/*/field",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/scope/any/*/all/*/values/*": {
+    "count": 9304,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/scope/any/*/all/*/values/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/subject": {
+    "count": 2240,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/subject",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/valid/from": {
+    "count": 2240,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/valid/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/valid/to": {
+    "count": 2240,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/valid/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/value/lower": {
+    "count": 119,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/value/lower",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/value/lowerClosed": {
+    "count": 119,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/value/lowerClosed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/value/type": {
+    "count": 2240,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/value/unit": {
+    "count": 249,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/value/unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/value/upper": {
+    "count": 119,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/value/upper",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/value/upperClosed": {
+    "count": 119,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/value/upperClosed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/status": {
+    "count": 2240,
+    "destination": "audit.source/world/gold/answer/old/records/*/status",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/status": {
+    "count": 1984,
+    "destination": "audit.source/world/gold/answer/old/status",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/reason/edges/*/citations": {
+    "count": 4158,
+    "destination": "audit.source/world/gold/answer/reason/edges/*/citations",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/reason/edges/*/from": {
+    "count": 4158,
+    "destination": "audit.source/world/gold/answer/reason/edges/*/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/reason/edges/*/to": {
+    "count": 4158,
+    "destination": "audit.source/world/gold/answer/reason/edges/*/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/reason/nodes/*/claim/citations": {
+    "count": 6268,
+    "destination": "audit.source/world/gold/answer/reason/nodes/*/claim/citations",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/reason/nodes/*/claim/predicate": {
+    "count": 6268,
+    "destination": "audit.source/world/gold/answer/reason/nodes/*/claim/predicate",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/reason/nodes/*/claim/qualifiers": {
+    "count": 6268,
+    "destination": "audit.source/world/gold/answer/reason/nodes/*/claim/qualifiers",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/reason/nodes/*/claim/scope/any/*/all/*/field": {
+    "count": 18804,
+    "destination": "audit.source/world/gold/answer/reason/nodes/*/claim/scope/any/*/all/*/field",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/reason/nodes/*/claim/scope/any/*/all/*/values/*": {
+    "count": 26171,
+    "destination": "audit.source/world/gold/answer/reason/nodes/*/claim/scope/any/*/all/*/values/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/reason/nodes/*/claim/subject": {
+    "count": 6268,
+    "destination": "audit.source/world/gold/answer/reason/nodes/*/claim/subject",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/reason/nodes/*/claim/valid/from": {
+    "count": 6268,
+    "destination": "audit.source/world/gold/answer/reason/nodes/*/claim/valid/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/reason/nodes/*/claim/valid/to": {
+    "count": 6268,
+    "destination": "audit.source/world/gold/answer/reason/nodes/*/claim/valid/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/reason/nodes/*/claim/value/text": {
+    "count": 6268,
+    "destination": "audit.source/world/gold/answer/reason/nodes/*/claim/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/reason/nodes/*/claim/value/type": {
+    "count": 6268,
+    "destination": "audit.source/world/gold/answer/reason/nodes/*/claim/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/reason/nodes/*/id": {
+    "count": 6268,
+    "destination": "audit.source/world/gold/answer/reason/nodes/*/id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/reason/status": {
+    "count": 1984,
+    "destination": "audit.source/world/gold/answer/reason/status",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/id": {
+    "count": 1984,
+    "destination": "audit.source/world/id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/language": {
+    "count": 1984,
+    "destination": "audit.source/world/language",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/lineage": {
+    "count": 1984,
+    "destination": "audit.source/world/lineage",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/observed_at": {
+    "count": 1984,
+    "destination": "audit.source/world/observed_at",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/question": {
+    "count": 1984,
+    "destination": "audit.source/world/question",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/scenario": {
+    "count": 1984,
+    "destination": "audit.source/world/scenario",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/accepted_graphs/*/*/from": {
+    "count": 4630,
+    "destination": "audit.source/world/source_ast/accepted_graphs/*/*/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/accepted_graphs/*/*/to": {
+    "count": 4630,
+    "destination": "audit.source/world/source_ast/accepted_graphs/*/*/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/date_readings/actual_source_claimed_intervals/*/from": {
+    "count": 4480,
+    "destination": "audit.source/world/source_ast/date_readings/actual_source_claimed_intervals/*/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/date_readings/actual_source_claimed_intervals/*/to": {
+    "count": 4480,
+    "destination": "audit.source/world/source_ast/date_readings/actual_source_claimed_intervals/*/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/date_readings/boundary_example/exclusive_to": {
+    "count": 1984,
+    "destination": "audit.source/world/source_ast/date_readings/boundary_example/exclusive_to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/date_readings/boundary_example/from": {
+    "count": 1984,
+    "destination": "audit.source/world/source_ast/date_readings/boundary_example/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/date_readings/boundary_example/through": {
+    "count": 1984,
+    "destination": "audit.source/world/source_ast/date_readings/boundary_example/through",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/derivation": {
+    "count": 1984,
+    "destination": "audit.source/world/source_ast/derivation",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/explicit_commitment": {
+    "count": 1984,
+    "destination": "audit.source/world/source_ast/explicit_commitment",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/predecessor_relation": {
+    "count": 1984,
+    "destination": "audit.source/world/source_ast/predecessor_relation",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/citations": {
+    "count": 2240,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/citations",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/predicate": {
+    "count": 2240,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/predicate",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/qualifiers/*/key": {
+    "count": 4480,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/qualifiers/*/key",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/qualifiers/*/value/text": {
+    "count": 2240,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/qualifiers/*/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/qualifiers/*/value/type": {
+    "count": 4480,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/qualifiers/*/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/qualifiers/*/value/value": {
+    "count": 2240,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/qualifiers/*/value/value",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/scope/any/*/all/*/field": {
+    "count": 6720,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/scope/any/*/all/*/field",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/scope/any/*/all/*/values/*": {
+    "count": 8960,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/scope/any/*/all/*/values/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/subject": {
+    "count": 2240,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/subject",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/valid/from": {
+    "count": 2240,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/valid/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/valid/to": {
+    "count": 2240,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/valid/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/value/lower": {
+    "count": 130,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/value/lower",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/value/lowerClosed": {
+    "count": 130,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/value/lowerClosed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/value/type": {
+    "count": 2240,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/value/unit": {
+    "count": 264,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/value/unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/value/upper": {
+    "count": 130,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/value/upper",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/value/upperClosed": {
+    "count": 130,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/value/upperClosed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/status": {
+    "count": 1984,
+    "destination": "audit.source/world/source_ast/semantics/current/status",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/citations": {
+    "count": 2240,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/citations",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/predicate": {
+    "count": 2240,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/predicate",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/qualifiers/*/key": {
+    "count": 4480,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/qualifiers/*/key",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/qualifiers/*/value/text": {
+    "count": 2240,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/qualifiers/*/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/qualifiers/*/value/type": {
+    "count": 4480,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/qualifiers/*/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/qualifiers/*/value/value": {
+    "count": 2240,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/qualifiers/*/value/value",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/scope/any/*/all/*/field": {
+    "count": 6720,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/scope/any/*/all/*/field",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/scope/any/*/all/*/values/*": {
+    "count": 9304,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/scope/any/*/all/*/values/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/subject": {
+    "count": 2240,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/subject",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/valid/from": {
+    "count": 2240,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/valid/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/valid/to": {
+    "count": 2240,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/valid/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/value/lower": {
+    "count": 119,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/value/lower",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/value/lowerClosed": {
+    "count": 119,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/value/lowerClosed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/value/type": {
+    "count": 2240,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/value/unit": {
+    "count": 249,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/value/unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/value/upper": {
+    "count": 119,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/value/upper",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/value/upperClosed": {
+    "count": 119,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/value/upperClosed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/status": {
+    "count": 2240,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/status",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/status": {
+    "count": 1984,
+    "destination": "audit.source/world/source_ast/semantics/old/status",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/reason/edges/*/citations": {
+    "count": 4158,
+    "destination": "audit.source/world/source_ast/semantics/reason/edges/*/citations",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/reason/edges/*/from": {
+    "count": 4158,
+    "destination": "audit.source/world/source_ast/semantics/reason/edges/*/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/reason/edges/*/to": {
+    "count": 4158,
+    "destination": "audit.source/world/source_ast/semantics/reason/edges/*/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/reason/nodes/*/claim/citations": {
+    "count": 6268,
+    "destination": "audit.source/world/source_ast/semantics/reason/nodes/*/claim/citations",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/reason/nodes/*/claim/predicate": {
+    "count": 6268,
+    "destination": "audit.source/world/source_ast/semantics/reason/nodes/*/claim/predicate",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/reason/nodes/*/claim/qualifiers": {
+    "count": 6268,
+    "destination": "audit.source/world/source_ast/semantics/reason/nodes/*/claim/qualifiers",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/reason/nodes/*/claim/scope/any/*/all/*/field": {
+    "count": 18804,
+    "destination": "audit.source/world/source_ast/semantics/reason/nodes/*/claim/scope/any/*/all/*/field",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/reason/nodes/*/claim/scope/any/*/all/*/values/*": {
+    "count": 26171,
+    "destination": "audit.source/world/source_ast/semantics/reason/nodes/*/claim/scope/any/*/all/*/values/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/reason/nodes/*/claim/subject": {
+    "count": 6268,
+    "destination": "audit.source/world/source_ast/semantics/reason/nodes/*/claim/subject",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/reason/nodes/*/claim/valid/from": {
+    "count": 6268,
+    "destination": "audit.source/world/source_ast/semantics/reason/nodes/*/claim/valid/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/reason/nodes/*/claim/valid/to": {
+    "count": 6268,
+    "destination": "audit.source/world/source_ast/semantics/reason/nodes/*/claim/valid/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/reason/nodes/*/claim/value/text": {
+    "count": 6268,
+    "destination": "audit.source/world/source_ast/semantics/reason/nodes/*/claim/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/reason/nodes/*/claim/value/type": {
+    "count": 6268,
+    "destination": "audit.source/world/source_ast/semantics/reason/nodes/*/claim/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/reason/nodes/*/id": {
+    "count": 6268,
+    "destination": "audit.source/world/source_ast/semantics/reason/nodes/*/id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/reason/status": {
+    "count": 1984,
+    "destination": "audit.source/world/source_ast/semantics/reason/status",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/text_atom": {
+    "count": 1984,
+    "destination": "audit.source/world/source_ast/text_atom",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/value_kind": {
+    "count": 1984,
+    "destination": "audit.source/world/source_ast/value_kind",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/split": {
+    "count": 1984,
+    "destination": "audit.source/world/split",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/subject": {
+    "count": 1984,
+    "destination": "audit.source/world/subject",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/candidate/current/claims/*/citations": {
+    "count": 16,
+    "destination": "submission.answer/current/claims/*/citations",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/current/claims/*/value/text": {
+    "count": 2012,
+    "destination": "submission.answer/current/claims/*/value/text",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/value/decimal": {
+    "count": 130,
+    "destination": "submission.answer/old/records/*/claims/*/value/decimal",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/edges": {
+    "count": 94,
+    "destination": "submission.answer/reason/edges",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/nodes": {
+    "count": 90,
+    "destination": "submission.answer/reason/nodes",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/acceptedGraphs/*": {
+    "count": 110,
+    "destination": "gold.reason.acceptedGraphs/*/edges/*",
+    "disposition": "mapped:graph-nesting;[[]]->[]"
+  },
+  "challenge:$/row/gold/answer/current/claims": {
+    "count": 88,
+    "destination": "gold/current/claims",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/value/decimal": {
+    "count": 130,
+    "destination": "gold/old/records/*/claims/*/value/decimal",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/reason/edges": {
+    "count": 110,
+    "destination": "audit.source; empty generator placeholder / redundant challenge topology checked",
+    "disposition": "mapped:redundant-checked"
+  },
+  "challenge:$/row/gold/answer/reason/nodes": {
+    "count": 110,
+    "destination": "gold/reason/nodes",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/citations": {
+    "count": 16,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/citations",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/predicate": {
+    "count": 526,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/predicate",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/qualifiers/*/key": {
+    "count": 942,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/qualifiers/*/key",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/qualifiers/*/value/text": {
+    "count": 432,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/qualifiers/*/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/qualifiers/*/value/type": {
+    "count": 942,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/qualifiers/*/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/scope/any/*/all/*/field": {
+    "count": 2313,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/scope/any/*/all/*/field",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/scope/any/*/all/*/values/*": {
+    "count": 2830,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/scope/any/*/all/*/values/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/subject": {
+    "count": 526,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/subject",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/valid/from": {
+    "count": 526,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/valid/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/valid/to": {
+    "count": 526,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/valid/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/value/text": {
+    "count": 474,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/value/type": {
+    "count": 526,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/status": {
+    "count": 1152,
+    "destination": "audit.source/row/provenance/mutations/*/after/status",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims": {
+    "count": 16,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/status": {
+    "count": 1152,
+    "destination": "audit.source/row/provenance/mutations/*/before/status",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/component": {
+    "count": 1152,
+    "destination": "audit.source/row/provenance/mutations/*/component",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/kind": {
+    "count": 1152,
+    "destination": "audit.source/row/provenance/mutations/*/kind",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/path": {
+    "count": 1152,
+    "destination": "audit.source/row/provenance/mutations/*/path",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/rationale": {
+    "count": 1152,
+    "destination": "audit.source/row/provenance/mutations/*/rationale",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/transformations": {
+    "count": 56,
+    "destination": "audit.source/row/provenance/transformations",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/edge_support": {
+    "count": 110,
+    "destination": "audit.source/world/edge_support",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/acceptedGraphs/*": {
+    "count": 110,
+    "destination": "audit.source/world/gold/acceptedGraphs/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims": {
+    "count": 88,
+    "destination": "audit.source/world/gold/answer/current/claims",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/value/decimal": {
+    "count": 130,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/value/decimal",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/reason/edges": {
+    "count": 110,
+    "destination": "audit.source/world/gold/answer/reason/edges",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/reason/nodes": {
+    "count": 110,
+    "destination": "audit.source/world/gold/answer/reason/nodes",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/accepted_graphs/*": {
+    "count": 110,
+    "destination": "audit.source/world/source_ast/accepted_graphs/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims": {
+    "count": 88,
+    "destination": "audit.source/world/source_ast/semantics/current/claims",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/value/decimal": {
+    "count": 130,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/value/decimal",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/reason/edges": {
+    "count": 110,
+    "destination": "audit.source/world/source_ast/semantics/reason/edges",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/reason/nodes": {
+    "count": 110,
+    "destination": "audit.source/world/source_ast/semantics/reason/nodes",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/edges/*/citations/*/intent": {
+    "count": 678,
+    "destination": "audit.source/row/provenance/mutations/*/after/edges/*/citations/*/intent",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/edges/*/citations/*/item": {
+    "count": 678,
+    "destination": "audit.source/row/provenance/mutations/*/after/edges/*/citations/*/item",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/edges/*/citations/*/occurrence": {
+    "count": 678,
+    "destination": "audit.source/row/provenance/mutations/*/after/edges/*/citations/*/occurrence",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/edges/*/citations/*/quote": {
+    "count": 678,
+    "destination": "audit.source/row/provenance/mutations/*/after/edges/*/citations/*/quote",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/edges/*/citations/*/source": {
+    "count": 678,
+    "destination": "audit.source/row/provenance/mutations/*/after/edges/*/citations/*/source",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/edges/*/citations/*/unit": {
+    "count": 678,
+    "destination": "audit.source/row/provenance/mutations/*/after/edges/*/citations/*/unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/edges/*/from": {
+    "count": 712,
+    "destination": "audit.source/row/provenance/mutations/*/after/edges/*/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/edges/*/to": {
+    "count": 712,
+    "destination": "audit.source/row/provenance/mutations/*/after/edges/*/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/nodes/*/claim/citations/*/intent": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/after/nodes/*/claim/citations/*/intent",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/nodes/*/claim/citations/*/item": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/after/nodes/*/claim/citations/*/item",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/nodes/*/claim/citations/*/occurrence": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/after/nodes/*/claim/citations/*/occurrence",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/nodes/*/claim/citations/*/quote": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/after/nodes/*/claim/citations/*/quote",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/nodes/*/claim/citations/*/source": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/after/nodes/*/claim/citations/*/source",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/nodes/*/claim/citations/*/unit": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/after/nodes/*/claim/citations/*/unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/nodes/*/claim/predicate": {
+    "count": 1212,
+    "destination": "audit.source/row/provenance/mutations/*/after/nodes/*/claim/predicate",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/nodes/*/claim/qualifiers": {
+    "count": 1212,
+    "destination": "audit.source/row/provenance/mutations/*/after/nodes/*/claim/qualifiers",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/nodes/*/claim/scope/any/*/all/*/field": {
+    "count": 4515,
+    "destination": "audit.source/row/provenance/mutations/*/after/nodes/*/claim/scope/any/*/all/*/field",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/nodes/*/claim/scope/any/*/all/*/values/*": {
+    "count": 5713,
+    "destination": "audit.source/row/provenance/mutations/*/after/nodes/*/claim/scope/any/*/all/*/values/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/nodes/*/claim/subject": {
+    "count": 1212,
+    "destination": "audit.source/row/provenance/mutations/*/after/nodes/*/claim/subject",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/nodes/*/claim/valid/from": {
+    "count": 1212,
+    "destination": "audit.source/row/provenance/mutations/*/after/nodes/*/claim/valid/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/nodes/*/claim/valid/to": {
+    "count": 1212,
+    "destination": "audit.source/row/provenance/mutations/*/after/nodes/*/claim/valid/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/nodes/*/claim/value/text": {
+    "count": 1212,
+    "destination": "audit.source/row/provenance/mutations/*/after/nodes/*/claim/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/nodes/*/claim/value/type": {
+    "count": 1212,
+    "destination": "audit.source/row/provenance/mutations/*/after/nodes/*/claim/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/nodes/*/id": {
+    "count": 1212,
+    "destination": "audit.source/row/provenance/mutations/*/after/nodes/*/id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/edges/*/citations/*/intent": {
+    "count": 764,
+    "destination": "audit.source/row/provenance/mutations/*/before/edges/*/citations/*/intent",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/edges/*/citations/*/item": {
+    "count": 764,
+    "destination": "audit.source/row/provenance/mutations/*/before/edges/*/citations/*/item",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/edges/*/citations/*/occurrence": {
+    "count": 764,
+    "destination": "audit.source/row/provenance/mutations/*/before/edges/*/citations/*/occurrence",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/edges/*/citations/*/quote": {
+    "count": 764,
+    "destination": "audit.source/row/provenance/mutations/*/before/edges/*/citations/*/quote",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/edges/*/citations/*/source": {
+    "count": 764,
+    "destination": "audit.source/row/provenance/mutations/*/before/edges/*/citations/*/source",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/edges/*/citations/*/unit": {
+    "count": 764,
+    "destination": "audit.source/row/provenance/mutations/*/before/edges/*/citations/*/unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/edges/*/from": {
+    "count": 764,
+    "destination": "audit.source/row/provenance/mutations/*/before/edges/*/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/edges/*/to": {
+    "count": 764,
+    "destination": "audit.source/row/provenance/mutations/*/before/edges/*/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/nodes/*/claim/citations/*/intent": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/before/nodes/*/claim/citations/*/intent",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/nodes/*/claim/citations/*/item": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/before/nodes/*/claim/citations/*/item",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/nodes/*/claim/citations/*/occurrence": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/before/nodes/*/claim/citations/*/occurrence",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/nodes/*/claim/citations/*/quote": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/before/nodes/*/claim/citations/*/quote",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/nodes/*/claim/citations/*/source": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/before/nodes/*/claim/citations/*/source",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/nodes/*/claim/citations/*/unit": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/before/nodes/*/claim/citations/*/unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/nodes/*/claim/predicate": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/before/nodes/*/claim/predicate",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/nodes/*/claim/qualifiers": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/before/nodes/*/claim/qualifiers",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/nodes/*/claim/scope/any/*/all/*/field": {
+    "count": 4395,
+    "destination": "audit.source/row/provenance/mutations/*/before/nodes/*/claim/scope/any/*/all/*/field",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/nodes/*/claim/scope/any/*/all/*/values/*": {
+    "count": 5553,
+    "destination": "audit.source/row/provenance/mutations/*/before/nodes/*/claim/scope/any/*/all/*/values/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/nodes/*/claim/subject": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/before/nodes/*/claim/subject",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/nodes/*/claim/valid/from": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/before/nodes/*/claim/valid/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/nodes/*/claim/valid/to": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/before/nodes/*/claim/valid/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/nodes/*/claim/value/text": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/before/nodes/*/claim/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/nodes/*/claim/value/type": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/before/nodes/*/claim/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/nodes/*/id": {
+    "count": 1172,
+    "destination": "audit.source/row/provenance/mutations/*/before/nodes/*/id",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/candidate/current/claims": {
+    "count": 120,
+    "destination": "submission.answer/current/claims",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records": {
+    "count": 142,
+    "destination": "submission.answer/old/records",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records": {
+    "count": 88,
+    "destination": "gold/old/records",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/world/claims_support": {
+    "count": 44,
+    "destination": "audit.source/world/claims_support",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records": {
+    "count": 88,
+    "destination": "audit.source/world/gold/answer/old/records",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/date_readings/actual_source_claimed_intervals": {
+    "count": 44,
+    "destination": "audit.source/world/source_ast/date_readings/actual_source_claimed_intervals",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records": {
+    "count": 88,
+    "destination": "audit.source/world/source_ast/semantics/old/records",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/candidate/current/claims/*/value/iso": {
+    "count": 148,
+    "destination": "submission.answer/current/claims/*/value/iso",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/value/iso": {
+    "count": 132,
+    "destination": "submission.answer/old/records/*/claims/*/value/iso",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/value/iso": {
+    "count": 117,
+    "destination": "gold/current/claims/*/value/iso",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/value/iso": {
+    "count": 132,
+    "destination": "gold/old/records/*/claims/*/value/iso",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/value/iso": {
+    "count": 117,
+    "destination": "audit.source/world/gold/answer/current/claims/*/value/iso",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/value/iso": {
+    "count": 132,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/value/iso",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/value/iso": {
+    "count": 117,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/value/iso",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/value/iso": {
+    "count": 132,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/value/iso",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/candidate/current/claims/*/value/value": {
+    "count": 153,
+    "destination": "submission.answer/current/claims/*/value/value",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/value/value": {
+    "count": 132,
+    "destination": "submission.answer/old/records/*/claims/*/value/value",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/value/value": {
+    "count": 130,
+    "destination": "gold/current/claims/*/value/value",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/value/value": {
+    "count": 128,
+    "destination": "gold/old/records/*/claims/*/value/value",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/value/value": {
+    "count": 130,
+    "destination": "audit.source/world/gold/answer/current/claims/*/value/value",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/value/value": {
+    "count": 128,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/value/value",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/value/value": {
+    "count": 130,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/value/value",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/value/value": {
+    "count": 128,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/value/value",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/candidate/current/claims/*/value/decimal": {
+    "count": 159,
+    "destination": "submission.answer/current/claims/*/value/decimal",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/value/decimal": {
+    "count": 134,
+    "destination": "gold/current/claims/*/value/decimal",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/citations/*/intent": {
+    "count": 510,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/citations/*/intent",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/citations/*/item": {
+    "count": 510,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/citations/*/item",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/citations/*/occurrence": {
+    "count": 510,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/citations/*/occurrence",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/citations/*/quote": {
+    "count": 510,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/citations/*/quote",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/citations/*/source": {
+    "count": 510,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/citations/*/source",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/citations/*/unit": {
+    "count": 510,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/citations/*/unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/qualifiers/*/value/value": {
+    "count": 510,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/qualifiers/*/value/value",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/value/decimal": {
+    "count": 16,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/value/decimal",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/value/unit": {
+    "count": 30,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/value/unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/citations/*/intent": {
+    "count": 628,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/citations/*/intent",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/citations/*/item": {
+    "count": 628,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/citations/*/item",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/citations/*/occurrence": {
+    "count": 628,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/citations/*/occurrence",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/citations/*/quote": {
+    "count": 628,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/citations/*/quote",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/citations/*/source": {
+    "count": 628,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/citations/*/source",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/citations/*/unit": {
+    "count": 628,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/citations/*/unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/predicate": {
+    "count": 628,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/predicate",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/qualifiers/*/key": {
+    "count": 1256,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/qualifiers/*/key",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/qualifiers/*/value/text": {
+    "count": 628,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/qualifiers/*/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/qualifiers/*/value/type": {
+    "count": 1256,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/qualifiers/*/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/qualifiers/*/value/value": {
+    "count": 628,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/qualifiers/*/value/value",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/scope/any/*/all/*/field": {
+    "count": 2277,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/scope/any/*/all/*/field",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/scope/any/*/all/*/values/*": {
+    "count": 2774,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/scope/any/*/all/*/values/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/subject": {
+    "count": 628,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/subject",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/valid/from": {
+    "count": 628,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/valid/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/valid/to": {
+    "count": 628,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/valid/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/value/decimal": {
+    "count": 22,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/value/decimal",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/value/type": {
+    "count": 628,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/value/unit": {
+    "count": 42,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/value/unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/transformations/*/ratio": {
+    "count": 198,
+    "destination": "audit.source/row/provenance/transformations/*/ratio",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/transformations/*/location": {
+    "count": 474,
+    "destination": "audit.source/row/provenance/transformations/*/location",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/value/decimal": {
+    "count": 134,
+    "destination": "audit.source/world/gold/answer/current/claims/*/value/decimal",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/value/decimal": {
+    "count": 134,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/value/decimal",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/transformations/*/domain_cells": {
+    "count": 2727,
+    "destination": "audit.source/row/provenance/transformations/*/domain_cells",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/citations/*/intent": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/citations/*/intent",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/citations/*/item": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/citations/*/item",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/citations/*/occurrence": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/citations/*/occurrence",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/citations/*/quote": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/citations/*/quote",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/citations/*/source": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/citations/*/source",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/citations/*/unit": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/citations/*/unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/predicate": {
+    "count": 390,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/predicate",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/qualifiers/*/key": {
+    "count": 744,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/qualifiers/*/key",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/qualifiers/*/value/text": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/qualifiers/*/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/qualifiers/*/value/type": {
+    "count": 744,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/qualifiers/*/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/qualifiers/*/value/value": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/qualifiers/*/value/value",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/scope/any/*/all/*/field": {
+    "count": 1461,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/scope/any/*/all/*/field",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/scope/any/*/all/*/values/*": {
+    "count": 1841,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/scope/any/*/all/*/values/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/subject": {
+    "count": 390,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/subject",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/valid/from": {
+    "count": 390,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/valid/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/valid/to": {
+    "count": 390,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/valid/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/value/decimal": {
+    "count": 12,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/value/decimal",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/value/type": {
+    "count": 390,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/value/unit": {
+    "count": 24,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/value/unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/status": {
+    "count": 390,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/status",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/citations/*/intent": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/citations/*/intent",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/citations/*/item": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/citations/*/item",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/citations/*/occurrence": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/citations/*/occurrence",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/citations/*/quote": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/citations/*/quote",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/citations/*/source": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/citations/*/source",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/citations/*/unit": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/citations/*/unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/predicate": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/predicate",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/qualifiers/*/key": {
+    "count": 744,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/qualifiers/*/key",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/qualifiers/*/value/text": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/qualifiers/*/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/qualifiers/*/value/type": {
+    "count": 744,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/qualifiers/*/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/qualifiers/*/value/value": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/qualifiers/*/value/value",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/scope/any/*/all/*/field": {
+    "count": 1407,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/scope/any/*/all/*/field",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/scope/any/*/all/*/values/*": {
+    "count": 1767,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/scope/any/*/all/*/values/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/subject": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/subject",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/valid/from": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/valid/from",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/valid/to": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/valid/to",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/value/decimal": {
+    "count": 12,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/value/decimal",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/value/type": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/value/type",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/value/unit": {
+    "count": 30,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/value/unit",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/status": {
+    "count": 372,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/status",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/value/value": {
+    "count": 12,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/value/value",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/value/value": {
+    "count": 20,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/value/value",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/citations": {
+    "count": 18,
+    "destination": "submission.answer/old/records/*/claims/*/citations",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/qualifiers": {
+    "count": 18,
+    "destination": "submission.answer/old/records/*/claims/*/qualifiers",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/old/records/*/claims/*/value/text": {
+    "count": 1751,
+    "destination": "submission.answer/old/records/*/claims/*/value/text",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/citations": {
+    "count": 18,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/citations",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/qualifiers": {
+    "count": 18,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/qualifiers",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/value/text": {
+    "count": 334,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records": {
+    "count": 18,
+    "destination": "audit.source/row/provenance/mutations/*/before/records",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/gold/answer/old/records/*/claims/*/value/text": {
+    "count": 1731,
+    "destination": "gold/old/records/*/claims/*/value/text",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/world/gold/answer/old/records/*/claims/*/value/text": {
+    "count": 1731,
+    "destination": "audit.source/world/gold/answer/old/records/*/claims/*/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/old/records/*/claims/*/value/text": {
+    "count": 1731,
+    "destination": "audit.source/world/source_ast/semantics/old/records/*/claims/*/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/candidate/reason/edges/*/citations": {
+    "count": 34,
+    "destination": "submission.answer/reason/edges/*/citations",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/candidate/reason/nodes/*/claim/citations": {
+    "count": 40,
+    "destination": "submission.answer/reason/nodes/*/claim/citations",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/row/provenance/mutations/*/after/edges/*/citations": {
+    "count": 34,
+    "destination": "audit.source/row/provenance/mutations/*/after/edges/*/citations",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/nodes/*/claim/citations": {
+    "count": 40,
+    "destination": "audit.source/row/provenance/mutations/*/after/nodes/*/claim/citations",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/edges": {
+    "count": 20,
+    "destination": "audit.source/row/provenance/mutations/*/before/edges",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/nodes": {
+    "count": 20,
+    "destination": "audit.source/row/provenance/mutations/*/before/nodes",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/gold/answer/current/claims/*/value/text": {
+    "count": 1729,
+    "destination": "gold/current/claims/*/value/text",
+    "disposition": "mapped:identity"
+  },
+  "challenge:$/world/gold/answer/current/claims/*/value/text": {
+    "count": 1729,
+    "destination": "audit.source/world/gold/answer/current/claims/*/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/world/source_ast/semantics/current/claims/*/value/text": {
+    "count": 1729,
+    "destination": "audit.source/world/source_ast/semantics/current/claims/*/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims": {
+    "count": 48,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/value/value": {
+    "count": 16,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/value/value",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/value/value": {
+    "count": 12,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/value/value",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/value/lower": {
+    "count": 12,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/value/lower",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/value/lowerClosed": {
+    "count": 12,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/value/lowerClosed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/value/upper": {
+    "count": 12,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/value/upper",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/value/upperClosed": {
+    "count": 12,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/value/upperClosed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/value/lower": {
+    "count": 18,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/value/lower",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/value/lowerClosed": {
+    "count": 18,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/value/lowerClosed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/value/upper": {
+    "count": 18,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/value/upper",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/value/upperClosed": {
+    "count": 18,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/value/upperClosed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records": {
+    "count": 72,
+    "destination": "audit.source/row/provenance/mutations/*/after/records",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/value/text": {
+    "count": 314,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/records/*/claims/*/value/iso": {
+    "count": 16,
+    "destination": "audit.source/row/provenance/mutations/*/after/records/*/claims/*/value/iso",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/records/*/claims/*/value/iso": {
+    "count": 16,
+    "destination": "audit.source/row/provenance/mutations/*/before/records/*/claims/*/value/iso",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/value/iso": {
+    "count": 10,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/value/iso",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/value/iso": {
+    "count": 10,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/value/iso",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/value/text": {
+    "count": 556,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/value/text",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/value/lower": {
+    "count": 14,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/value/lower",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/value/lowerClosed": {
+    "count": 14,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/value/lowerClosed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/value/upper": {
+    "count": 14,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/value/upper",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/claims/*/value/upperClosed": {
+    "count": 14,
+    "destination": "audit.source/row/provenance/mutations/*/after/claims/*/value/upperClosed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/value/lower": {
+    "count": 20,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/value/lower",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/value/lowerClosed": {
+    "count": 20,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/value/lowerClosed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/value/upper": {
+    "count": 20,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/value/upper",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/before/claims/*/value/upperClosed": {
+    "count": 20,
+    "destination": "audit.source/row/provenance/mutations/*/before/claims/*/value/upperClosed",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/provenance/mutations/*/after/edges": {
+    "count": 4,
+    "destination": "audit.source/row/provenance/mutations/*/after/edges",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/referral/designated_components/*": {
+    "count": 1440,
+    "destination": "audit.source/row/referral/designated_components/*",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/referral/qualification": {
+    "count": 960,
+    "destination": "audit.source/row/referral/qualification",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/referral/rationale": {
+    "count": 960,
+    "destination": "audit.source/row/referral/rationale",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/referral/selection_rule": {
+    "count": 960,
+    "destination": "audit.source/row/referral/selection_rule",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/representation/distortion_class": {
+    "count": 384,
+    "destination": "audit.source/row/representation/distortion_class",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/representation/locally_supported_false_body": {
+    "count": 384,
+    "destination": "audit.source/row/representation/locally_supported_false_body",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
+  "challenge:$/row/representation/variant": {
+    "count": 384,
+    "destination": "audit.source/row/representation/variant",
+    "disposition": "defect:no-scorer-metadata-slot"
+  }
+}

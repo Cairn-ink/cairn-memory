@@ -1,0 +1,133 @@
+# HR-3 integration
+
+Offline Node >=22.16 ESM, built-ins only. The scorer schema is canonical. Authority:
+`../protocol/protocol-v0.3.4.md` §§2, 6–8, with errata E-1/E-2. No model runner,
+network client, credentials, or external service is used.
+
+```sh
+node evaluation/hr3/integration/cli.mjs mechanical --out evaluation/hr3/integration/artifacts/NEW_RUN
+node --test --experimental-test-isolation=none evaluation/hr3/integration/test/integration.test.mjs
+node evaluation/hr3/integration/cli.mjs gate \
+  --index evaluation/hr3/integration/artifacts/NEW_RUN/private-index.json \
+  --judgments /tmp/judgments.jsonl --out /tmp/new-gate.json
+```
+
+`mechanical` requires a new directory and exits 0 when all source records were
+adapted/validated/scored; 1 denotes execution/validation failure. It reports
+calibration failures as data, so exit 0 does **not** mean calibration passed.
+`gate` exits 0 for pass, 1 for fail (including an already impossible quota),
+2 for pending with no failed gate. Output files must not already exist.
+Only the integration test file is run; no broad or sibling suites.
+
+`reproduce.mjs` invokes the generator's actual pilot CLI in `/tmp`. Because the
+challenge CLI hardcodes its output directory, it copies exactly the frozen
+challenge sources to `/tmp` and invokes that CLI there. It verifies regenerated
+pilot bytes against `generator/freeze.json` (including the pilot manifest), all
+13 challenge artifacts against `challenge/manifest.json`, original source
+hashes, and both protocol hashes: 43 checks. It records actual child exit codes.
+The source protocol and all sibling files are read-only. Only pilot is rendered;
+no held-out splits are generated. Runtime, errata, integration/scorer hashes and
+canonicalized command records identify the observed pipeline. Temporary path
+names never affect emitted artifacts or keys.
+
+## Adapters and audit boundary
+
+`adapters.mjs` exports:
+
+- `adaptGenerator(family, goldRow, supportRow, batch)` → `{gold, submission:null, audit}`.
+- `adaptChallenge(row, authoredWorld)` → `{gold, submission, audit}`.
+- `goldWitness(gold)` → an explicit synthetic submission delivering authored spans
+  and citing one complete accepted graph, for gold self-scoring only.
+- `restore(adapted)` → exact original inputs after verifying the sidecar hash.
+
+A closed scorer object cannot hold family IDs, ASTs, labels or provenance. The
+**audit envelope** is lossless; the scorer-only projection cannot be lossless
+for those fields, and reports them as defects. Every observed leaf pattern has
+a field mapping, count and disposition in `reconciliation-fields.json`.
+Metadata is preserved in the private audit, never silently dropped or inserted
+into the scorer schema. Nonempty gold citations, incorrect source slices,
+unsupported offset units, mismatched topology, and incompatible Answer fields
+are errors. New source metadata stays in the audit and is reported as unmapped.
+No paraphrase dictionary or causal license is added to the scorer.
+
+Challenge origins are local identities of the supplied final source units.
+Historical addresses come from `world.claims_support`, independent of the
+candidate; remaining units use the challenge's authored current intent. No
+alias is invented. Final text is mapped with `normalize:false,truncate:null`:
+normalization/truncation already happened upstream in this fixture. Its missing
+product/raw ancestry is a reported provenance defect, not fabricated evidence.
+Changed/new representation units get distinct local origins. All original
+source units are context spans, while only `world.edge_support` licenses edges.
+This preserves negation referrals and never substitutes a different citation.
+
+Generated output under `artifacts/frozen-v1/` includes:
+
+| File | Audience |
+| --- | --- |
+| `summary.json`, `field-counts.json`, `pilot.json`, `failures.jsonl` | Primary/reviewers; reconciliation, validation and calibration observations |
+| `observations.jsonl` | Primary only; per-case decisions, labels and references |
+| `audit-private.jsonl` | Primary only; exact sources, hashes, conventions and defects |
+| `private-index.json` | Primary only; truth, mechanical state, key applications and expected payload hashes |
+| `judge-input/<opaque-key>.json` | The sole payload for ONE fresh isolated pass session |
+| `gate-no-judgments.json` | Demonstration that absent judgments cannot pass |
+| `artifact-manifest.json` | Readback SHA-256/bytes inventory, excluding itself |
+
+Never send the private index, summary, directory listing, other bundle, or audit
+to an adjudicator. Each judge-input file contains exactly the scorer's one
+anonymized original answer and pass-specific rubric/context. Correctness gets
+quotation-free `G_correct`; support gets actual delivered text without gold.
+Opaque filenames are contextual keys, not arm identities. No arm field exists
+in these challenge records; synthetic subject/update tokens preserve evidence.
+The primary arranges the §8 fresh sessions and transports structured outputs.
+No model invocation is implemented here.
+
+## Judgment interchange
+
+One JSONL row per key/pass/judge. `judge` is 1 or 2, or 3 for an independent
+resolution session. Obtain `payloadHash` from the **primary-only** index; attach
+transport metadata outside the judge-visible payload. Never expose index labels
+to the session. Every session ID must be globally unique across records.
+
+```json
+{
+  "key": "opaque filename without .json",
+  "payloadHash": "SHA-256 from private-index.json",
+  "pass": "correctness",
+  "judge": 1,
+  "verdict": {"C": true, "O": true, "R": null},
+  "findings": [],
+  "citations": [],
+  "rationale": "Concise pass-specific explanation.",
+  "execution": {
+    "requestedModel": "gpt-6.1-sol",
+    "observedModel": "gpt-6.1-sol",
+    "effort": "xhigh",
+    "command": "codex exec -m gpt-6.1-sol -c model_reasoning_effort=\"xhigh\" --ignore-user-config --disable hooks",
+    "session": "unique fresh session ID",
+    "nonAuthor": true,
+    "isolated": true,
+    "noPriorJudgments": true
+  }
+}
+```
+
+Correctness verdicts contain C, O, R (R means causal content only). Support
+verdicts contain only R (submitted causal support). Values are true/false/null;
+null remains unresolved. Findings/citations are structured arrays; rationale
+must be nonempty. Execution fields are mandatory attestations whose external
+truth the primary must verify. Third sessions see the same original pass
+payload and no previous judgments. Matching non-null first-two vectors resolve;
+otherwise an independent third is required. Unnecessary thirds are rejected.
+Every exported referral needs resolution, even when mechanical J is forced zero.
+
+The gate combines factual C/O with `R=causalCorrectness AND support`, then J per
+observation. It preserves forced zeros and unresolved components. It evaluates
+all §8 observed threshold rows, including actual designated referral quotas,
+per-style referral errors, evidence support panel and final R, matched-style
+error spread, first-two component-vector agreement before resolution, and no
+unresolved verdicts. It reports pass-specific errors, κ, descriptive rates,
+independent-world/key denominators and Wilson 95% intervals. A world-level
+error means at least one erroneous variant; variants are not independent trials.
+Matched positives are reused across C/O/R and disclosed. No generalized mappings
+are propagated. External non-author/ancestry/resource/continuation gates remain
+outside this calculator; passing it alone cannot authorize paid work.

@@ -1,0 +1,3698 @@
+{
+  "version": "hr3-integration-v1",
+  "adjudicationRun": false,
+  "verification": {
+    "runtime": "v22.16.0",
+    "commands": [
+      {
+        "command": "node evaluation/hr3/generator/cli.mjs --split pilot --out <TEMP>/pilot",
+        "exitCode": 0,
+        "signal": null,
+        "error": null,
+        "log": "<TEMP>/generator.log"
+      },
+      {
+        "command": "node <TEMP>/challenge/generate.mjs",
+        "exitCode": 0,
+        "signal": null,
+        "error": null,
+        "log": "<TEMP>/challenge.log"
+      }
+    ],
+    "checks": [
+      {
+        "name": "generator/README.md",
+        "sha256": "9ad4b9c209300677348adfdedeae7881a6821a81d05363966c822d57ead68224",
+        "bytes": 12149
+      },
+      {
+        "name": "generator/answer.schema.json",
+        "sha256": "7d837d51df0ca69835932254ee0b858c8a0fa973ed1c573dac2111824dda58de",
+        "bytes": 13187
+      },
+      {
+        "name": "generator/bank.mjs",
+        "sha256": "dd93083098b4ea4abc2920358c05e681939bd79a59a73c933af2f1a8136470b5",
+        "bytes": 5895
+      },
+      {
+        "name": "generator/canonicalize.mjs",
+        "sha256": "c31ac36d7a3eee8028eda68e29b67c72e9bbaeeaf02a226cfde70911b00f0089",
+        "bytes": 4007
+      },
+      {
+        "name": "generator/cli.mjs",
+        "sha256": "9335b6d3c9eb4b8d89832095dd4f385602a89e4a4903ba3bc3bda90529c3e2b2",
+        "bytes": 971
+      },
+      {
+        "name": "generator/common.mjs",
+        "sha256": "9e7de2f8c9413f02b15b45a812c51e0442e01ad8b07095d91dfc0ed4563469de",
+        "bytes": 3967
+      },
+      {
+        "name": "generator/controls.mjs",
+        "sha256": "d485b577bddec31833382343aae8618035af1e185cde5e3bcbab96fda88a8b74",
+        "bytes": 5528
+      },
+      {
+        "name": "generator/deliver.mjs",
+        "sha256": "53aa6ce3452ef48b3fc1419ad8cd3680388416c4276b0391a9126fcd9aceeb13",
+        "bytes": 5658
+      },
+      {
+        "name": "generator/generate.mjs",
+        "sha256": "c9dd7bd17d6804a1f08c82c33841331b6a3837237530262cca0d8de8d89a60f0",
+        "bytes": 14413
+      },
+      {
+        "name": "generator/inventory.mjs",
+        "sha256": "1017c07bd64632d22c99a3a98293b80d79f3571f73eaef47f1f77347bab8e6da",
+        "bytes": 5937
+      },
+      {
+        "name": "generator/test/generator.test.mjs",
+        "sha256": "4c1d33129dc03806e98fda1ed5610bdb81a1e53de389a68cbfb53898a3221438",
+        "bytes": 19821
+      },
+      {
+        "name": "generator/validate.mjs",
+        "sha256": "d485489270a5dfc958b76d076cc99869796f8a615f67b646aa7015c641d8fb83",
+        "bytes": 24246
+      },
+      {
+        "name": "generator/artifacts/pilot/families.jsonl",
+        "sha256": "f7633dd926dfc8ec00810758d9fad82b31965eee108de4c266669030ee46736f",
+        "bytes": 2749701
+      },
+      {
+        "name": "generator/artifacts/pilot/gold.jsonl",
+        "sha256": "7ba3721aed9c956f2b61bf0a483d57370e732351dccb1ddff45909d27150a713",
+        "bytes": 228648
+      },
+      {
+        "name": "generator/artifacts/pilot/grammar-and-sentence-bank.json",
+        "sha256": "abab8f1a0e5cdd4234ac0a306da8b3451ee3e5a6c07d194fac4ce90ccca0fc5a",
+        "bytes": 253121
+      },
+      {
+        "name": "generator/artifacts/pilot/lineage-inventory.json",
+        "sha256": "a23250d23e619d64772e86481d7e791b6e8575aba3f5e0e0f63c1ca1d01b50a5",
+        "bytes": 546379
+      },
+      {
+        "name": "generator/artifacts/pilot/rejected-candidates.jsonl",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      {
+        "name": "generator/artifacts/pilot/support.jsonl",
+        "sha256": "03ebf86486f69f55324945670de61743435e0df6cd772532f28247d86244f193",
+        "bytes": 267239
+      },
+      {
+        "name": "generator/artifacts/pilot/validation-audit.jsonl",
+        "sha256": "b9598f665b8b3314e4325ca20fd84c3becc0bdf7ea5526b37bcfebf1ed1273af",
+        "bytes": 8532
+      },
+      {
+        "name": "generator/artifacts/pilot/manifest.json",
+        "sha256": "4ccf37b5b1d7abf77cd359e0aff3ae9e97b3040367a0cfa09fa485cf2d1fd8e1",
+        "bytes": 2689
+      },
+      {
+        "name": "challenge/source/README.md",
+        "sha256": "e25b0059da3ec35ac9a4d1c515d9e499f8afa582458c2f7035e3cd94df0d8b76",
+        "bytes": 14997
+      },
+      {
+        "name": "challenge/source/REPORT.md",
+        "sha256": "d306f887107ebd708c0e41343e1e70dc9e72a36132f4ddda1d030437c16f0ddf",
+        "bytes": 6789
+      },
+      {
+        "name": "challenge/source/answer.schema.json",
+        "sha256": "f76e99f27dcb6b38c22c74401dec9dcd5c2cf6fa396397b6d58b55b4505a04d8",
+        "bytes": 10564
+      },
+      {
+        "name": "challenge/source/bundles.mjs",
+        "sha256": "a9748f5c6f573b7ce12a93b780322fb4e983cfeb6bbd28106e3232e405cb04e1",
+        "bytes": 401
+      },
+      {
+        "name": "challenge/source/challenge.test.mjs",
+        "sha256": "128b000444326c49411bfa1f8209739bb6fb17500c83c8d47843cb3f77cffac0",
+        "bytes": 12483
+      },
+      {
+        "name": "challenge/source/generate.mjs",
+        "sha256": "8b7dcc03d817ebfaed59e5208db54f31bae72e13413919a3676f1e0e17a37477",
+        "bytes": 44463
+      },
+      {
+        "name": "challenge/source/schema.mjs",
+        "sha256": "f7cccceb50fd4d58b11c3fffc3927978f11801275de2525cb27a1fba4cadd6c0",
+        "bytes": 4569
+      },
+      {
+        "name": "challenge/source/validate.mjs",
+        "sha256": "b9437aded3d80382af733ff4aea4f95089157f14cdc34e4154f77665dfaa5ca4",
+        "bytes": 15737
+      },
+      {
+        "name": "challenge/README.md",
+        "sha256": "e25b0059da3ec35ac9a4d1c515d9e499f8afa582458c2f7035e3cd94df0d8b76",
+        "bytes": 14997
+      },
+      {
+        "name": "challenge/REPORT.md",
+        "sha256": "d306f887107ebd708c0e41343e1e70dc9e72a36132f4ddda1d030437c16f0ddf",
+        "bytes": 6789
+      },
+      {
+        "name": "challenge/answer.schema.json",
+        "sha256": "f76e99f27dcb6b38c22c74401dec9dcd5c2cf6fa396397b6d58b55b4505a04d8",
+        "bytes": 10564
+      },
+      {
+        "name": "challenge/bundles.mjs",
+        "sha256": "a9748f5c6f573b7ce12a93b780322fb4e983cfeb6bbd28106e3232e405cb04e1",
+        "bytes": 401
+      },
+      {
+        "name": "challenge/challenge.test.mjs",
+        "sha256": "128b000444326c49411bfa1f8209739bb6fb17500c83c8d47843cb3f77cffac0",
+        "bytes": 12483
+      },
+      {
+        "name": "challenge/evidence-contrasts.jsonl",
+        "sha256": "b2bfbccafbad2419993f8544fb85180a0a21e60bb416fcd7e7af34d9c4a687c7",
+        "bytes": 2841700
+      },
+      {
+        "name": "challenge/generate.mjs",
+        "sha256": "8b7dcc03d817ebfaed59e5208db54f31bae72e13413919a3676f1e0e17a37477",
+        "bytes": 44463
+      },
+      {
+        "name": "challenge/pooled.jsonl",
+        "sha256": "a9833fc85d3bb4409bcfda923ca7d66a2e39403458cf49c69dc6c3ad3d102355",
+        "bytes": 4393819
+      },
+      {
+        "name": "challenge/referral-candidates.jsonl",
+        "sha256": "e1ef3d54ad323e88d118666edca8d37263324e59bd6997b5e8aea365218436ee",
+        "bytes": 14726725
+      },
+      {
+        "name": "challenge/representation-pairs.jsonl",
+        "sha256": "1e7c929dba0f530da0037824e9674130909b72a84d314b9f7f84d51205dc3981",
+        "bytes": 4839740
+      },
+      {
+        "name": "challenge/schema.mjs",
+        "sha256": "f7cccceb50fd4d58b11c3fffc3927978f11801275de2525cb27a1fba4cadd6c0",
+        "bytes": 4569
+      },
+      {
+        "name": "challenge/validate.mjs",
+        "sha256": "b9437aded3d80382af733ff4aea4f95089157f14cdc34e4154f77665dfaa5ca4",
+        "bytes": 15737
+      },
+      {
+        "name": "challenge/worlds.jsonl",
+        "sha256": "cd16c7e781587f767afac3459c2d3a27bb9e5ba3b79726566cf59e07ec726ea9",
+        "bytes": 6927828
+      },
+      {
+        "name": "generator/protocol",
+        "sha256": "639c55edb6633186580af434ee2fe3ed39bffc2bf36a9292dac03b7a1b20b3cc",
+        "bytes": 45768
+      },
+      {
+        "name": "challenge/protocol",
+        "sha256": "639c55edb6633186580af434ee2fe3ed39bffc2bf36a9292dac03b7a1b20b3cc",
+        "bytes": 45768
+      }
+    ],
+    "scorer": [
+      {
+        "path": "answer.schema.json",
+        "sha256": "095f7c4f1d1dde39503ffb22f780d82865487b62c813e1257cb1a849a9e3d533"
+      },
+      {
+        "path": "canonical.mjs",
+        "sha256": "d71a2203a6de43f64fc2bd44a1394a017345858e7a3c37511b135913f05add3f"
+      },
+      {
+        "path": "citations.mjs",
+        "sha256": "5c198bf5f0aad866157e85ba6e413b4363dc7cb4d7dd4831f7cd8946ab796d0d"
+      },
+      {
+        "path": "cli.mjs",
+        "sha256": "7fdc7f7d2ed1654d843a6ee6a59fe679cfcf3e9fb38c3216cddb93b97bce6f47"
+      },
+      {
+        "path": "gold.schema.json",
+        "sha256": "90f175b884233b71b04f20a6b0daee74b91223c8e13ec1f083e323e67bb1cfee"
+      },
+      {
+        "path": "schema.mjs",
+        "sha256": "da864e622d6f7aeea610ba41ef1c560dd112505aa7726d2d44799425c35e4656"
+      },
+      {
+        "path": "scorer.mjs",
+        "sha256": "005f0d7a538cdeb1c30af59f5874fef522a490d6574df82663aee55a53063410"
+      },
+      {
+        "path": "submission.schema.json",
+        "sha256": "3680af2c1354eba1017a89edf7941851800f3edc93c511f5d54a52177250b383"
+      }
+    ],
+    "integration": [
+      {
+        "path": "adapters.mjs",
+        "sha256": "911b62f33d288d3fc01d3d0dae6a70516455e515e27685cec0abee5366660b77"
+      },
+      {
+        "path": "field-map.mjs",
+        "sha256": "9d1eb09c814e1379f7554fd20db0cfd8140550e256c2569f8618cd2bd56b19ef"
+      },
+      {
+        "path": "mechanical.mjs",
+        "sha256": "75ea3f683b5760c758e9d2f9f0abeedde5bb27a51ebdfa6651ce0ad92f3de771"
+      },
+      {
+        "path": "reproduce.mjs",
+        "sha256": "92f12be323bc28c42c136cb3c8674b63d3bc1e53bb2bbbc857f0a09f5cfbb72b"
+      },
+      {
+        "path": "gate.mjs",
+        "sha256": "f8ca201644269c6158e0da90ab2279246dcf3cef70eeae87798d5e21fb1261cc"
+      },
+      {
+        "path": "cli.mjs",
+        "sha256": "fa258ac86e4c5a674de17f2ff75940ad2270332b708757e71b69da3ed7d63e96"
+      }
+    ],
+    "errata": "a26c5f1e60cc26890fc18d95e71412b9bdcc0076e185e480b40225a96b5a9a1f"
+  },
+  "pilot": {
+    "families": 60,
+    "checkpoints": 120,
+    "schemaValid": 120,
+    "fullCredit": 120,
+    "failures": []
+  },
+  "challenge": {
+    "expected": 1984,
+    "scored": 1984,
+    "valid": 1984,
+    "worlds": 736,
+    "failures": []
+  },
+  "confusion": {
+    "pooled/C/en/conversational/positive": {
+      "mechanical_accept": 27,
+      "mechanical_reject": 0,
+      "referred": 13
+    },
+    "pooled/O/en/conversational/positive": {
+      "mechanical_accept": 33,
+      "mechanical_reject": 0,
+      "referred": 8
+    },
+    "pooled/R/en/conversational/positive": {
+      "mechanical_accept": 13,
+      "mechanical_reject": 0,
+      "referred": 27
+    },
+    "pooled/J/en/conversational/positive": {
+      "mechanical_accept": 5,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "pooled/C/en/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 9,
+      "referred": 1
+    },
+    "pooled/O/en/terse/positive": {
+      "mechanical_accept": 41,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "pooled/R/en/terse/positive": {
+      "mechanical_accept": 40,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "pooled/J/en/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 17,
+      "referred": 8
+    },
+    "pooled/R/en/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 3,
+      "referred": 7
+    },
+    "pooled/J/en/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 18,
+      "referred": 7
+    },
+    "pooled/C/en/terse/positive": {
+      "mechanical_accept": 40,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "pooled/J/en/terse/positive": {
+      "mechanical_accept": 25,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "pooled/C/zh-Hant/terse/positive": {
+      "mechanical_accept": 40,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "pooled/O/zh-Hant/terse/positive": {
+      "mechanical_accept": 41,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "pooled/R/zh-Hant/terse/positive": {
+      "mechanical_accept": 40,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "pooled/J/zh-Hant/terse/positive": {
+      "mechanical_accept": 25,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "pooled/C/zh-Hant/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 9,
+      "referred": 1
+    },
+    "pooled/O/zh-Hant/operational/positive": {
+      "mechanical_accept": 32,
+      "mechanical_reject": 0,
+      "referred": 7
+    },
+    "pooled/R/zh-Hant/operational/positive": {
+      "mechanical_accept": 14,
+      "mechanical_reject": 0,
+      "referred": 26
+    },
+    "pooled/J/zh-Hant/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 17,
+      "referred": 8
+    },
+    "pooled/C/en/operational/positive": {
+      "mechanical_accept": 28,
+      "mechanical_reject": 0,
+      "referred": 12
+    },
+    "pooled/O/en/operational/positive": {
+      "mechanical_accept": 32,
+      "mechanical_reject": 0,
+      "referred": 7
+    },
+    "pooled/R/en/operational/positive": {
+      "mechanical_accept": 14,
+      "mechanical_reject": 0,
+      "referred": 26
+    },
+    "pooled/J/en/operational/positive": {
+      "mechanical_accept": 7,
+      "mechanical_reject": 0,
+      "referred": 18
+    },
+    "pooled/C/en/formal/positive": {
+      "mechanical_accept": 27,
+      "mechanical_reject": 0,
+      "referred": 13
+    },
+    "pooled/O/en/formal/positive": {
+      "mechanical_accept": 32,
+      "mechanical_reject": 0,
+      "referred": 7
+    },
+    "pooled/R/en/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 3,
+      "referred": 7
+    },
+    "pooled/J/en/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 18,
+      "referred": 7
+    },
+    "pooled/C/zh-Hant/conversational/positive": {
+      "mechanical_accept": 27,
+      "mechanical_reject": 0,
+      "referred": 13
+    },
+    "pooled/O/zh-Hant/conversational/positive": {
+      "mechanical_accept": 33,
+      "mechanical_reject": 0,
+      "referred": 8
+    },
+    "pooled/R/zh-Hant/conversational/positive": {
+      "mechanical_accept": 13,
+      "mechanical_reject": 0,
+      "referred": 27
+    },
+    "pooled/J/zh-Hant/conversational/positive": {
+      "mechanical_accept": 5,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "pooled/O/en/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 7,
+      "referred": 2
+    },
+    "pooled/C/en/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 10,
+      "referred": 0
+    },
+    "pooled/C/zh-Hant/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 9,
+      "referred": 1
+    },
+    "pooled/J/zh-Hant/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 17,
+      "referred": 8
+    },
+    "pooled/R/en/formal/positive": {
+      "mechanical_accept": 9,
+      "mechanical_reject": 0,
+      "referred": 31
+    },
+    "pooled/J/en/formal/positive": {
+      "mechanical_accept": 5,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "pooled/O/en/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 3
+    },
+    "pooled/C/zh-Hant/operational/positive": {
+      "mechanical_accept": 28,
+      "mechanical_reject": 0,
+      "referred": 12
+    },
+    "pooled/R/zh-Hant/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 4,
+      "referred": 6
+    },
+    "pooled/O/en/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 7,
+      "referred": 2
+    },
+    "pooled/O/zh-Hant/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 3
+    },
+    "pooled/C/zh-Hant/formal/positive": {
+      "mechanical_accept": 27,
+      "mechanical_reject": 0,
+      "referred": 13
+    },
+    "pooled/O/zh-Hant/formal/positive": {
+      "mechanical_accept": 32,
+      "mechanical_reject": 0,
+      "referred": 7
+    },
+    "pooled/R/zh-Hant/formal/positive": {
+      "mechanical_accept": 9,
+      "mechanical_reject": 0,
+      "referred": 31
+    },
+    "pooled/J/zh-Hant/formal/positive": {
+      "mechanical_accept": 5,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "pooled/C/zh-Hant/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 10,
+      "referred": 0
+    },
+    "pooled/J/zh-Hant/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 18,
+      "referred": 7
+    },
+    "pooled/J/zh-Hant/operational/positive": {
+      "mechanical_accept": 7,
+      "mechanical_reject": 0,
+      "referred": 18
+    },
+    "pooled/R/en/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 3,
+      "referred": 7
+    },
+    "pooled/R/zh-Hant/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 3,
+      "referred": 7
+    },
+    "pooled/O/zh-Hant/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 3
+    },
+    "pooled/J/zh-Hant/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 18,
+      "referred": 7
+    },
+    "pooled/C/en/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 9,
+      "referred": 1
+    },
+    "pooled/O/en/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 3
+    },
+    "pooled/J/en/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 17,
+      "referred": 8
+    },
+    "pooled/R/zh-Hant/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 3,
+      "referred": 7
+    },
+    "pooled/R/en/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 4,
+      "referred": 6
+    },
+    "pooled/C/zh-Hant/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 9,
+      "referred": 1
+    },
+    "pooled/R/zh-Hant/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 3,
+      "referred": 7
+    },
+    "pooled/C/en/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 9,
+      "referred": 1
+    },
+    "pooled/O/zh-Hant/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 7,
+      "referred": 2
+    },
+    "pooled/O/zh-Hant/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 7,
+      "referred": 2
+    },
+    "referral_candidates/C/mixed/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/O/mixed/operational/positive": {
+      "mechanical_accept": 30,
+      "mechanical_reject": 0,
+      "referred": 30
+    },
+    "referral_candidates/R/mixed/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/J/mixed/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "referral_candidates/C/zh-Hant/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/O/zh-Hant/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 10,
+      "referred": 10
+    },
+    "referral_candidates/R/zh-Hant/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/J/zh-Hant/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 24,
+      "referred": 36
+    },
+    "referral_candidates/C/en/terse/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/O/en/terse/positive": {
+      "mechanical_accept": 30,
+      "mechanical_reject": 0,
+      "referred": 30
+    },
+    "referral_candidates/R/en/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 1,
+      "referred": 19
+    },
+    "referral_candidates/J/en/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 24,
+      "referred": 36
+    },
+    "referral_candidates/C/mixed/terse/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/O/mixed/terse/positive": {
+      "mechanical_accept": 30,
+      "mechanical_reject": 0,
+      "referred": 30
+    },
+    "referral_candidates/R/mixed/terse/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/J/mixed/terse/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "referral_candidates/C/zh-Hant/terse/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/O/zh-Hant/terse/positive": {
+      "mechanical_accept": 30,
+      "mechanical_reject": 0,
+      "referred": 30
+    },
+    "referral_candidates/R/zh-Hant/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 1,
+      "referred": 19
+    },
+    "referral_candidates/J/zh-Hant/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 24,
+      "referred": 36
+    },
+    "referral_candidates/C/mixed/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 13,
+      "referred": 7
+    },
+    "referral_candidates/O/mixed/formal/positive": {
+      "mechanical_accept": 30,
+      "mechanical_reject": 0,
+      "referred": 30
+    },
+    "referral_candidates/R/mixed/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/J/mixed/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 24,
+      "referred": 36
+    },
+    "referral_candidates/O/zh-Hant/operational/positive": {
+      "mechanical_accept": 30,
+      "mechanical_reject": 0,
+      "referred": 30
+    },
+    "referral_candidates/R/zh-Hant/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 1,
+      "referred": 19
+    },
+    "referral_candidates/O/mixed/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 10,
+      "referred": 10
+    },
+    "referral_candidates/J/mixed/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 24,
+      "referred": 36
+    },
+    "referral_candidates/C/en/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 13,
+      "referred": 7
+    },
+    "referral_candidates/O/en/conversational/positive": {
+      "mechanical_accept": 30,
+      "mechanical_reject": 0,
+      "referred": 30
+    },
+    "referral_candidates/R/en/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/J/en/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 24,
+      "referred": 36
+    },
+    "referral_candidates/R/zh-Hant/terse/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/J/zh-Hant/terse/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "referral_candidates/C/en/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/J/en/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "referral_candidates/C/en/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 13,
+      "referred": 7
+    },
+    "referral_candidates/R/en/terse/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/C/mixed/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/R/mixed/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 1,
+      "referred": 19
+    },
+    "referral_candidates/C/zh-Hant/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/O/zh-Hant/formal/positive": {
+      "mechanical_accept": 30,
+      "mechanical_reject": 0,
+      "referred": 30
+    },
+    "referral_candidates/R/zh-Hant/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 1,
+      "referred": 19
+    },
+    "referral_candidates/J/zh-Hant/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 24,
+      "referred": 36
+    },
+    "referral_candidates/O/en/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 10,
+      "referred": 10
+    },
+    "referral_candidates/R/zh-Hant/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/J/zh-Hant/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "referral_candidates/C/zh-Hant/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 13,
+      "referred": 7
+    },
+    "referral_candidates/C/en/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/O/en/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 10,
+      "referred": 10
+    },
+    "referral_candidates/R/en/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/J/en/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 24,
+      "referred": 36
+    },
+    "referral_candidates/C/en/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 13,
+      "referred": 7
+    },
+    "referral_candidates/O/en/formal/positive": {
+      "mechanical_accept": 30,
+      "mechanical_reject": 0,
+      "referred": 30
+    },
+    "referral_candidates/C/zh-Hant/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/O/zh-Hant/conversational/positive": {
+      "mechanical_accept": 30,
+      "mechanical_reject": 0,
+      "referred": 30
+    },
+    "referral_candidates/R/zh-Hant/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/J/zh-Hant/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "referral_candidates/C/zh-Hant/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 13,
+      "referred": 7
+    },
+    "referral_candidates/R/mixed/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 1,
+      "referred": 19
+    },
+    "referral_candidates/J/mixed/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 24,
+      "referred": 36
+    },
+    "referral_candidates/O/mixed/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 10,
+      "referred": 10
+    },
+    "referral_candidates/J/mixed/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "referral_candidates/C/en/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 13,
+      "referred": 7
+    },
+    "referral_candidates/O/en/operational/positive": {
+      "mechanical_accept": 30,
+      "mechanical_reject": 0,
+      "referred": 30
+    },
+    "referral_candidates/R/en/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/J/en/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 24,
+      "referred": 36
+    },
+    "referral_candidates/C/mixed/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 13,
+      "referred": 7
+    },
+    "referral_candidates/C/en/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/O/en/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 10,
+      "referred": 10
+    },
+    "referral_candidates/J/en/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "referral_candidates/O/zh-Hant/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 10,
+      "referred": 10
+    },
+    "referral_candidates/J/zh-Hant/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 24,
+      "referred": 36
+    },
+    "referral_candidates/R/en/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 1,
+      "referred": 19
+    },
+    "referral_candidates/O/mixed/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 10,
+      "referred": 10
+    },
+    "referral_candidates/J/zh-Hant/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "referral_candidates/C/zh-Hant/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 13,
+      "referred": 7
+    },
+    "referral_candidates/J/en/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "referral_candidates/C/mixed/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 13,
+      "referred": 7
+    },
+    "referral_candidates/R/mixed/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 1,
+      "referred": 19
+    },
+    "referral_candidates/C/mixed/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 13,
+      "referred": 7
+    },
+    "referral_candidates/O/mixed/conversational/positive": {
+      "mechanical_accept": 30,
+      "mechanical_reject": 0,
+      "referred": 30
+    },
+    "referral_candidates/R/mixed/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/J/mixed/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 24,
+      "referred": 36
+    },
+    "referral_candidates/C/mixed/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 60
+    },
+    "referral_candidates/O/mixed/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 10,
+      "referred": 10
+    },
+    "referral_candidates/O/zh-Hant/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 10,
+      "referred": 10
+    },
+    "referral_candidates/J/mixed/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "referral_candidates/O/zh-Hant/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 10,
+      "referred": 10
+    },
+    "referral_candidates/C/zh-Hant/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 13,
+      "referred": 7
+    },
+    "referral_candidates/R/mixed/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 1,
+      "referred": 19
+    },
+    "referral_candidates/R/en/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 1,
+      "referred": 19
+    },
+    "referral_candidates/J/en/terse/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "referral_candidates/R/en/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 1,
+      "referred": 19
+    },
+    "referral_candidates/R/zh-Hant/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 1,
+      "referred": 19
+    },
+    "referral_candidates/O/en/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 10,
+      "referred": 10
+    },
+    "evidence_contrasts/C/zh-Hant/operational/positive": {
+      "mechanical_accept": 10,
+      "mechanical_reject": 0,
+      "referred": 10
+    },
+    "evidence_contrasts/O/zh-Hant/operational/positive": {
+      "mechanical_accept": 10,
+      "mechanical_reject": 0,
+      "referred": 10
+    },
+    "evidence_contrasts/R/zh-Hant/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/J/zh-Hant/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/C/mixed/operational/positive": {
+      "mechanical_accept": 10,
+      "mechanical_reject": 0,
+      "referred": 10
+    },
+    "evidence_contrasts/O/mixed/operational/positive": {
+      "mechanical_accept": 10,
+      "mechanical_reject": 0,
+      "referred": 10
+    },
+    "evidence_contrasts/R/mixed/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/J/mixed/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/C/zh-Hant/conversational/positive": {
+      "mechanical_accept": 15,
+      "mechanical_reject": 0,
+      "referred": 5
+    },
+    "evidence_contrasts/O/zh-Hant/conversational/positive": {
+      "mechanical_accept": 15,
+      "mechanical_reject": 0,
+      "referred": 5
+    },
+    "evidence_contrasts/R/zh-Hant/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/J/zh-Hant/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/C/en/conversational/positive": {
+      "mechanical_accept": 15,
+      "mechanical_reject": 0,
+      "referred": 5
+    },
+    "evidence_contrasts/O/en/conversational/positive": {
+      "mechanical_accept": 15,
+      "mechanical_reject": 0,
+      "referred": 5
+    },
+    "evidence_contrasts/R/en/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/J/en/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/C/mixed/formal/positive": {
+      "mechanical_accept": 10,
+      "mechanical_reject": 0,
+      "referred": 10
+    },
+    "evidence_contrasts/O/mixed/formal/positive": {
+      "mechanical_accept": 15,
+      "mechanical_reject": 0,
+      "referred": 5
+    },
+    "evidence_contrasts/R/mixed/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/J/mixed/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/R/en/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "evidence_contrasts/J/en/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "evidence_contrasts/C/zh-Hant/terse/positive": {
+      "mechanical_accept": 20,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "evidence_contrasts/O/zh-Hant/terse/positive": {
+      "mechanical_accept": 20,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "evidence_contrasts/R/zh-Hant/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/J/zh-Hant/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/C/zh-Hant/formal/positive": {
+      "mechanical_accept": 10,
+      "mechanical_reject": 0,
+      "referred": 10
+    },
+    "evidence_contrasts/O/zh-Hant/formal/positive": {
+      "mechanical_accept": 15,
+      "mechanical_reject": 0,
+      "referred": 5
+    },
+    "evidence_contrasts/R/zh-Hant/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/J/zh-Hant/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/R/mixed/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "evidence_contrasts/J/mixed/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "evidence_contrasts/C/mixed/conversational/positive": {
+      "mechanical_accept": 15,
+      "mechanical_reject": 0,
+      "referred": 5
+    },
+    "evidence_contrasts/O/mixed/conversational/positive": {
+      "mechanical_accept": 15,
+      "mechanical_reject": 0,
+      "referred": 5
+    },
+    "evidence_contrasts/R/mixed/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/J/mixed/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/C/en/terse/positive": {
+      "mechanical_accept": 20,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "evidence_contrasts/O/en/terse/positive": {
+      "mechanical_accept": 20,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "evidence_contrasts/R/en/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/J/en/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/C/en/formal/positive": {
+      "mechanical_accept": 10,
+      "mechanical_reject": 0,
+      "referred": 10
+    },
+    "evidence_contrasts/O/en/formal/positive": {
+      "mechanical_accept": 15,
+      "mechanical_reject": 0,
+      "referred": 5
+    },
+    "evidence_contrasts/R/en/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/J/en/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/C/mixed/terse/positive": {
+      "mechanical_accept": 20,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "evidence_contrasts/O/mixed/terse/positive": {
+      "mechanical_accept": 20,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "evidence_contrasts/R/mixed/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/J/mixed/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/C/en/operational/positive": {
+      "mechanical_accept": 10,
+      "mechanical_reject": 0,
+      "referred": 10
+    },
+    "evidence_contrasts/O/en/operational/positive": {
+      "mechanical_accept": 10,
+      "mechanical_reject": 0,
+      "referred": 10
+    },
+    "evidence_contrasts/R/en/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/J/en/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 12,
+      "referred": 4
+    },
+    "evidence_contrasts/R/mixed/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "evidence_contrasts/J/mixed/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "evidence_contrasts/R/mixed/terse/positive": {
+      "mechanical_accept": 4,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "evidence_contrasts/J/mixed/terse/positive": {
+      "mechanical_accept": 4,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "evidence_contrasts/R/zh-Hant/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "evidence_contrasts/J/zh-Hant/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "evidence_contrasts/R/en/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "evidence_contrasts/J/en/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "evidence_contrasts/R/zh-Hant/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "evidence_contrasts/J/zh-Hant/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "evidence_contrasts/R/zh-Hant/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "evidence_contrasts/J/zh-Hant/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "evidence_contrasts/R/mixed/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "evidence_contrasts/J/mixed/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "evidence_contrasts/R/en/terse/positive": {
+      "mechanical_accept": 4,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "evidence_contrasts/J/en/terse/positive": {
+      "mechanical_accept": 4,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "evidence_contrasts/R/zh-Hant/terse/positive": {
+      "mechanical_accept": 4,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "evidence_contrasts/J/zh-Hant/terse/positive": {
+      "mechanical_accept": 4,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "evidence_contrasts/R/en/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "evidence_contrasts/J/en/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "representation_pairs/C/en/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "representation_pairs/O/en/formal/positive": {
+      "mechanical_accept": 32,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "representation_pairs/R/en/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 28
+    },
+    "representation_pairs/J/en/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 16
+    },
+    "representation_pairs/C/mixed/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 4
+    },
+    "representation_pairs/O/mixed/operational/positive": {
+      "mechanical_accept": 32,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "representation_pairs/R/mixed/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 28
+    },
+    "representation_pairs/J/mixed/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 8
+    },
+    "representation_pairs/C/zh-Hant/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "representation_pairs/O/zh-Hant/conversational/positive": {
+      "mechanical_accept": 32,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "representation_pairs/R/zh-Hant/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 28
+    },
+    "representation_pairs/J/zh-Hant/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 16
+    },
+    "representation_pairs/C/mixed/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 4
+    },
+    "representation_pairs/O/mixed/formal/positive": {
+      "mechanical_accept": 32,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "representation_pairs/R/mixed/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 28
+    },
+    "representation_pairs/J/mixed/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 8
+    },
+    "representation_pairs/C/zh-Hant/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "representation_pairs/O/zh-Hant/formal/positive": {
+      "mechanical_accept": 32,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "representation_pairs/R/zh-Hant/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 28
+    },
+    "representation_pairs/J/zh-Hant/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 16
+    },
+    "representation_pairs/C/en/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 4
+    },
+    "representation_pairs/O/en/operational/positive": {
+      "mechanical_accept": 32,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "representation_pairs/R/en/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 28
+    },
+    "representation_pairs/J/en/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 8
+    },
+    "representation_pairs/C/en/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "representation_pairs/O/en/conversational/positive": {
+      "mechanical_accept": 32,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "representation_pairs/R/en/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 28
+    },
+    "representation_pairs/J/en/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 16
+    },
+    "representation_pairs/C/mixed/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "representation_pairs/O/mixed/conversational/positive": {
+      "mechanical_accept": 32,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "representation_pairs/R/mixed/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 28
+    },
+    "representation_pairs/J/mixed/conversational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 16
+    },
+    "representation_pairs/C/zh-Hant/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "representation_pairs/O/zh-Hant/operational/positive": {
+      "mechanical_accept": 32,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "representation_pairs/R/zh-Hant/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 28
+    },
+    "representation_pairs/J/zh-Hant/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 16
+    },
+    "representation_pairs/C/zh-Hant/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 4
+    },
+    "representation_pairs/J/zh-Hant/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 8
+    },
+    "representation_pairs/C/mixed/terse/positive": {
+      "mechanical_accept": 20,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "representation_pairs/O/mixed/terse/positive": {
+      "mechanical_accept": 32,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "representation_pairs/R/mixed/terse/positive": {
+      "mechanical_accept": 16,
+      "mechanical_reject": 0,
+      "referred": 12
+    },
+    "representation_pairs/J/mixed/terse/positive": {
+      "mechanical_accept": 16,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "representation_pairs/C/en/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "representation_pairs/R/en/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "representation_pairs/C/zh-Hant/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 4
+    },
+    "representation_pairs/J/zh-Hant/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 8
+    },
+    "representation_pairs/J/en/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 16
+    },
+    "representation_pairs/C/mixed/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "representation_pairs/J/mixed/formal/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 16
+    },
+    "representation_pairs/C/zh-Hant/terse/positive": {
+      "mechanical_accept": 20,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "representation_pairs/O/zh-Hant/terse/positive": {
+      "mechanical_accept": 32,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "representation_pairs/R/zh-Hant/terse/positive": {
+      "mechanical_accept": 16,
+      "mechanical_reject": 0,
+      "referred": 12
+    },
+    "representation_pairs/J/zh-Hant/terse/positive": {
+      "mechanical_accept": 16,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "representation_pairs/C/mixed/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 4
+    },
+    "representation_pairs/J/mixed/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 8
+    },
+    "representation_pairs/C/mixed/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 20
+    },
+    "representation_pairs/R/mixed/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "representation_pairs/C/en/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 4
+    },
+    "representation_pairs/J/en/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 8
+    },
+    "representation_pairs/R/zh-Hant/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "representation_pairs/C/en/terse/positive": {
+      "mechanical_accept": 20,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "representation_pairs/O/en/terse/positive": {
+      "mechanical_accept": 32,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "representation_pairs/R/en/terse/positive": {
+      "mechanical_accept": 16,
+      "mechanical_reject": 0,
+      "referred": 12
+    },
+    "representation_pairs/J/en/terse/positive": {
+      "mechanical_accept": 16,
+      "mechanical_reject": 0,
+      "referred": 0
+    },
+    "representation_pairs/R/zh-Hant/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "representation_pairs/R/mixed/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "representation_pairs/C/mixed/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 4
+    },
+    "representation_pairs/J/mixed/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 8
+    },
+    "representation_pairs/J/mixed/operational/positive": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 16
+    },
+    "representation_pairs/C/en/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 4
+    },
+    "representation_pairs/J/en/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 8
+    },
+    "representation_pairs/C/zh-Hant/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 4
+    },
+    "representation_pairs/J/zh-Hant/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 8
+    },
+    "representation_pairs/R/en/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "representation_pairs/R/zh-Hant/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "representation_pairs/J/zh-Hant/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 8
+    },
+    "representation_pairs/R/mixed/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "representation_pairs/C/en/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 4
+    },
+    "representation_pairs/J/en/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 8
+    },
+    "representation_pairs/C/zh-Hant/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 8,
+      "referred": 4
+    },
+    "representation_pairs/R/zh-Hant/operational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "representation_pairs/R/mixed/formal/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "representation_pairs/R/en/conversational/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    },
+    "representation_pairs/R/en/terse/negative": {
+      "mechanical_accept": 0,
+      "mechanical_reject": 0,
+      "referred": 4
+    }
+  },
+  "population": {
+    "observations": 1736,
+    "worlds": 584,
+    "uniquePassKeys": 3140,
+    "passApplications": 3284,
+    "bySet": {
+      "pooled": 248,
+      "referral_candidates": 960,
+      "evidence_contrasts": 192,
+      "representation_pairs": 336
+    },
+    "byLanguage": {
+      "en": 620,
+      "zh-Hant": 620,
+      "mixed": 496
+    },
+    "byStyle": {
+      "conversational": 474,
+      "operational": 468,
+      "formal": 474,
+      "terse": 320
+    },
+    "bySetLanguageStyle": {
+      "pooled/en/conversational": 39,
+      "pooled/zh-Hant/operational": 36,
+      "pooled/en/operational": 36,
+      "pooled/en/formal": 39,
+      "pooled/zh-Hant/formal": 39,
+      "pooled/zh-Hant/conversational": 39,
+      "pooled/en/terse": 10,
+      "pooled/zh-Hant/terse": 10,
+      "referral_candidates/mixed/operational": 80,
+      "referral_candidates/zh-Hant/operational": 80,
+      "referral_candidates/en/terse": 80,
+      "referral_candidates/mixed/terse": 80,
+      "referral_candidates/zh-Hant/terse": 80,
+      "referral_candidates/mixed/formal": 80,
+      "referral_candidates/en/conversational": 80,
+      "referral_candidates/zh-Hant/formal": 80,
+      "referral_candidates/en/formal": 80,
+      "referral_candidates/zh-Hant/conversational": 80,
+      "referral_candidates/en/operational": 80,
+      "referral_candidates/mixed/conversational": 80,
+      "evidence_contrasts/zh-Hant/operational": 20,
+      "evidence_contrasts/mixed/operational": 20,
+      "evidence_contrasts/zh-Hant/conversational": 20,
+      "evidence_contrasts/en/conversational": 20,
+      "evidence_contrasts/mixed/formal": 20,
+      "evidence_contrasts/zh-Hant/formal": 20,
+      "evidence_contrasts/mixed/conversational": 20,
+      "evidence_contrasts/en/formal": 20,
+      "evidence_contrasts/en/operational": 20,
+      "evidence_contrasts/mixed/terse": 4,
+      "evidence_contrasts/en/terse": 4,
+      "evidence_contrasts/zh-Hant/terse": 4,
+      "representation_pairs/en/formal": 32,
+      "representation_pairs/mixed/operational": 32,
+      "representation_pairs/zh-Hant/conversational": 32,
+      "representation_pairs/mixed/formal": 32,
+      "representation_pairs/zh-Hant/formal": 32,
+      "representation_pairs/en/operational": 32,
+      "representation_pairs/en/conversational": 32,
+      "representation_pairs/mixed/conversational": 32,
+      "representation_pairs/zh-Hant/operational": 32,
+      "representation_pairs/mixed/terse": 16,
+      "representation_pairs/zh-Hant/terse": 16,
+      "representation_pairs/en/terse": 16
+    },
+    "byPass": {
+      "correctness": 1698,
+      "support": 1586
+    },
+    "forcedJZero": 564,
+    "modelDependentComponents": {
+      "C": 1189,
+      "O": 604,
+      "R": 1590,
+      "J": 1172
+    }
+  },
+  "qualification": {
+    "definition": "A designated component occurs in an actual scorer referral (correctness or support); final component/J may already be forced zero.",
+    "allQuotasMet": false,
+    "strataMet": 36,
+    "totalStrata": 72,
+    "observedDesignatedBundles": 684,
+    "strata": {
+      "C/en/terse/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0122",
+          "referral-candidates-0151",
+          "referral-candidates-0261",
+          "referral-candidates-0271",
+          "referral-candidates-0275",
+          "referral-candidates-0390",
+          "referral-candidates-0395",
+          "referral-candidates-0397",
+          "referral-candidates-0429",
+          "referral-candidates-0478",
+          "referral-candidates-0504",
+          "referral-candidates-0508",
+          "referral-candidates-0629",
+          "referral-candidates-0671",
+          "referral-candidates-0693",
+          "referral-candidates-0705",
+          "referral-candidates-0765",
+          "referral-candidates-0878",
+          "referral-candidates-0896",
+          "referral-candidates-0921"
+        ],
+        "met": true
+      },
+      "C/en/terse/negative": {
+        "finalPending": 7,
+        "candidates": 20,
+        "observed": 7,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0014",
+          "referral-candidates-0204",
+          "referral-candidates-0257",
+          "referral-candidates-0323",
+          "referral-candidates-0599",
+          "referral-candidates-0616",
+          "referral-candidates-0834"
+        ],
+        "met": false
+      },
+      "C/en/conversational/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0012",
+          "referral-candidates-0060",
+          "referral-candidates-0211",
+          "referral-candidates-0263",
+          "referral-candidates-0402",
+          "referral-candidates-0485",
+          "referral-candidates-0498",
+          "referral-candidates-0510",
+          "referral-candidates-0518",
+          "referral-candidates-0618",
+          "referral-candidates-0626",
+          "referral-candidates-0647",
+          "referral-candidates-0651",
+          "referral-candidates-0666",
+          "referral-candidates-0675",
+          "referral-candidates-0689",
+          "referral-candidates-0708",
+          "referral-candidates-0759",
+          "referral-candidates-0773",
+          "referral-candidates-0939"
+        ],
+        "met": true
+      },
+      "C/en/conversational/negative": {
+        "finalPending": 7,
+        "candidates": 20,
+        "observed": 7,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0009",
+          "referral-candidates-0313",
+          "referral-candidates-0383",
+          "referral-candidates-0495",
+          "referral-candidates-0606",
+          "referral-candidates-0815",
+          "referral-candidates-0860"
+        ],
+        "met": false
+      },
+      "C/en/formal/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0042",
+          "referral-candidates-0089",
+          "referral-candidates-0100",
+          "referral-candidates-0132",
+          "referral-candidates-0150",
+          "referral-candidates-0184",
+          "referral-candidates-0300",
+          "referral-candidates-0329",
+          "referral-candidates-0403",
+          "referral-candidates-0444",
+          "referral-candidates-0480",
+          "referral-candidates-0583",
+          "referral-candidates-0591",
+          "referral-candidates-0614",
+          "referral-candidates-0691",
+          "referral-candidates-0794",
+          "referral-candidates-0805",
+          "referral-candidates-0806",
+          "referral-candidates-0836",
+          "referral-candidates-0886"
+        ],
+        "met": true
+      },
+      "C/en/formal/negative": {
+        "finalPending": 7,
+        "candidates": 20,
+        "observed": 7,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0114",
+          "referral-candidates-0159",
+          "referral-candidates-0175",
+          "referral-candidates-0615",
+          "referral-candidates-0639",
+          "referral-candidates-0847",
+          "referral-candidates-0857"
+        ],
+        "met": false
+      },
+      "C/en/operational/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0054",
+          "referral-candidates-0069",
+          "referral-candidates-0147",
+          "referral-candidates-0217",
+          "referral-candidates-0302",
+          "referral-candidates-0308",
+          "referral-candidates-0350",
+          "referral-candidates-0476",
+          "referral-candidates-0481",
+          "referral-candidates-0493",
+          "referral-candidates-0521",
+          "referral-candidates-0538",
+          "referral-candidates-0539",
+          "referral-candidates-0562",
+          "referral-candidates-0725",
+          "referral-candidates-0770",
+          "referral-candidates-0869",
+          "referral-candidates-0876",
+          "referral-candidates-0900",
+          "referral-candidates-0928"
+        ],
+        "met": true
+      },
+      "C/en/operational/negative": {
+        "finalPending": 7,
+        "candidates": 20,
+        "observed": 7,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0077",
+          "referral-candidates-0099",
+          "referral-candidates-0120",
+          "referral-candidates-0405",
+          "referral-candidates-0455",
+          "referral-candidates-0623",
+          "referral-candidates-0807"
+        ],
+        "met": false
+      },
+      "C/zh-Hant/terse/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0011",
+          "referral-candidates-0022",
+          "referral-candidates-0067",
+          "referral-candidates-0131",
+          "referral-candidates-0223",
+          "referral-candidates-0270",
+          "referral-candidates-0314",
+          "referral-candidates-0367",
+          "referral-candidates-0400",
+          "referral-candidates-0413",
+          "referral-candidates-0483",
+          "referral-candidates-0497",
+          "referral-candidates-0541",
+          "referral-candidates-0545",
+          "referral-candidates-0609",
+          "referral-candidates-0661",
+          "referral-candidates-0752",
+          "referral-candidates-0801",
+          "referral-candidates-0804",
+          "referral-candidates-0924"
+        ],
+        "met": true
+      },
+      "C/zh-Hant/terse/negative": {
+        "finalPending": 7,
+        "candidates": 20,
+        "observed": 7,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0221",
+          "referral-candidates-0250",
+          "referral-candidates-0341",
+          "referral-candidates-0470",
+          "referral-candidates-0652",
+          "referral-candidates-0830",
+          "referral-candidates-0855"
+        ],
+        "met": false
+      },
+      "C/zh-Hant/conversational/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0027",
+          "referral-candidates-0084",
+          "referral-candidates-0219",
+          "referral-candidates-0378",
+          "referral-candidates-0506",
+          "referral-candidates-0519",
+          "referral-candidates-0522",
+          "referral-candidates-0555",
+          "referral-candidates-0565",
+          "referral-candidates-0595",
+          "referral-candidates-0602",
+          "referral-candidates-0621",
+          "referral-candidates-0658",
+          "referral-candidates-0665",
+          "referral-candidates-0713",
+          "referral-candidates-0768",
+          "referral-candidates-0810",
+          "referral-candidates-0841",
+          "referral-candidates-0884",
+          "referral-candidates-0889"
+        ],
+        "met": true
+      },
+      "C/zh-Hant/conversational/negative": {
+        "finalPending": 7,
+        "candidates": 20,
+        "observed": 7,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0129",
+          "referral-candidates-0241",
+          "referral-candidates-0267",
+          "referral-candidates-0440",
+          "referral-candidates-0450",
+          "referral-candidates-0509",
+          "referral-candidates-0949"
+        ],
+        "met": false
+      },
+      "C/zh-Hant/formal/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0023",
+          "referral-candidates-0113",
+          "referral-candidates-0118",
+          "referral-candidates-0291",
+          "referral-candidates-0327",
+          "referral-candidates-0366",
+          "referral-candidates-0446",
+          "referral-candidates-0561",
+          "referral-candidates-0695",
+          "referral-candidates-0702",
+          "referral-candidates-0711",
+          "referral-candidates-0712",
+          "referral-candidates-0715",
+          "referral-candidates-0733",
+          "referral-candidates-0771",
+          "referral-candidates-0819",
+          "referral-candidates-0837",
+          "referral-candidates-0873",
+          "referral-candidates-0894",
+          "referral-candidates-0937"
+        ],
+        "met": true
+      },
+      "C/zh-Hant/formal/negative": {
+        "finalPending": 7,
+        "candidates": 20,
+        "observed": 7,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0024",
+          "referral-candidates-0038",
+          "referral-candidates-0078",
+          "referral-candidates-0141",
+          "referral-candidates-0238",
+          "referral-candidates-0679",
+          "referral-candidates-0772"
+        ],
+        "met": false
+      },
+      "C/zh-Hant/operational/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0051",
+          "referral-candidates-0074",
+          "referral-candidates-0101",
+          "referral-candidates-0109",
+          "referral-candidates-0117",
+          "referral-candidates-0303",
+          "referral-candidates-0307",
+          "referral-candidates-0334",
+          "referral-candidates-0343",
+          "referral-candidates-0368",
+          "referral-candidates-0424",
+          "referral-candidates-0535",
+          "referral-candidates-0550",
+          "referral-candidates-0636",
+          "referral-candidates-0638",
+          "referral-candidates-0667",
+          "referral-candidates-0703",
+          "referral-candidates-0723",
+          "referral-candidates-0803",
+          "referral-candidates-0892"
+        ],
+        "met": true
+      },
+      "C/zh-Hant/operational/negative": {
+        "finalPending": 7,
+        "candidates": 20,
+        "observed": 7,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0107",
+          "referral-candidates-0282",
+          "referral-candidates-0419",
+          "referral-candidates-0741",
+          "referral-candidates-0783",
+          "referral-candidates-0812",
+          "referral-candidates-0947"
+        ],
+        "met": false
+      },
+      "C/mixed/terse/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0004",
+          "referral-candidates-0017",
+          "referral-candidates-0073",
+          "referral-candidates-0166",
+          "referral-candidates-0171",
+          "referral-candidates-0233",
+          "referral-candidates-0243",
+          "referral-candidates-0255",
+          "referral-candidates-0284",
+          "referral-candidates-0295",
+          "referral-candidates-0333",
+          "referral-candidates-0431",
+          "referral-candidates-0442",
+          "referral-candidates-0443",
+          "referral-candidates-0453",
+          "referral-candidates-0520",
+          "referral-candidates-0548",
+          "referral-candidates-0604",
+          "referral-candidates-0822",
+          "referral-candidates-0828"
+        ],
+        "met": true
+      },
+      "C/mixed/terse/negative": {
+        "finalPending": 7,
+        "candidates": 20,
+        "observed": 7,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0037",
+          "referral-candidates-0228",
+          "referral-candidates-0273",
+          "referral-candidates-0371",
+          "referral-candidates-0529",
+          "referral-candidates-0575",
+          "referral-candidates-0927"
+        ],
+        "met": false
+      },
+      "C/mixed/conversational/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0082",
+          "referral-candidates-0143",
+          "referral-candidates-0178",
+          "referral-candidates-0194",
+          "referral-candidates-0306",
+          "referral-candidates-0315",
+          "referral-candidates-0322",
+          "referral-candidates-0344",
+          "referral-candidates-0353",
+          "referral-candidates-0363",
+          "referral-candidates-0369",
+          "referral-candidates-0375",
+          "referral-candidates-0434",
+          "referral-candidates-0436",
+          "referral-candidates-0448",
+          "referral-candidates-0533",
+          "referral-candidates-0589",
+          "referral-candidates-0640",
+          "referral-candidates-0721",
+          "referral-candidates-0859"
+        ],
+        "met": true
+      },
+      "C/mixed/conversational/negative": {
+        "finalPending": 7,
+        "candidates": 20,
+        "observed": 7,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0119",
+          "referral-candidates-0142",
+          "referral-candidates-0179",
+          "referral-candidates-0489",
+          "referral-candidates-0527",
+          "referral-candidates-0690",
+          "referral-candidates-0704"
+        ],
+        "met": false
+      },
+      "C/mixed/formal/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0035",
+          "referral-candidates-0135",
+          "referral-candidates-0144",
+          "referral-candidates-0290",
+          "referral-candidates-0316",
+          "referral-candidates-0381",
+          "referral-candidates-0389",
+          "referral-candidates-0401",
+          "referral-candidates-0534",
+          "referral-candidates-0547",
+          "referral-candidates-0685",
+          "referral-candidates-0687",
+          "referral-candidates-0717",
+          "referral-candidates-0737",
+          "referral-candidates-0782",
+          "referral-candidates-0823",
+          "referral-candidates-0891",
+          "referral-candidates-0911",
+          "referral-candidates-0923",
+          "referral-candidates-0954"
+        ],
+        "met": true
+      },
+      "C/mixed/formal/negative": {
+        "finalPending": 7,
+        "candidates": 20,
+        "observed": 7,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0013",
+          "referral-candidates-0028",
+          "referral-candidates-0262",
+          "referral-candidates-0433",
+          "referral-candidates-0800",
+          "referral-candidates-0865",
+          "referral-candidates-0879"
+        ],
+        "met": false
+      },
+      "C/mixed/operational/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0001",
+          "referral-candidates-0048",
+          "referral-candidates-0059",
+          "referral-candidates-0063",
+          "referral-candidates-0185",
+          "referral-candidates-0207",
+          "referral-candidates-0213",
+          "referral-candidates-0260",
+          "referral-candidates-0299",
+          "referral-candidates-0312",
+          "referral-candidates-0335",
+          "referral-candidates-0399",
+          "referral-candidates-0421",
+          "referral-candidates-0456",
+          "referral-candidates-0610",
+          "referral-candidates-0628",
+          "referral-candidates-0633",
+          "referral-candidates-0641",
+          "referral-candidates-0870",
+          "referral-candidates-0893"
+        ],
+        "met": true
+      },
+      "C/mixed/operational/negative": {
+        "finalPending": 7,
+        "candidates": 20,
+        "observed": 7,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0423",
+          "referral-candidates-0487",
+          "referral-candidates-0503",
+          "referral-candidates-0736",
+          "referral-candidates-0769",
+          "referral-candidates-0788",
+          "referral-candidates-0960"
+        ],
+        "met": false
+      },
+      "O/en/terse/positive": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0122",
+          "referral-candidates-0261",
+          "referral-candidates-0271",
+          "referral-candidates-0395",
+          "referral-candidates-0478",
+          "referral-candidates-0629",
+          "referral-candidates-0671",
+          "referral-candidates-0705",
+          "referral-candidates-0878",
+          "referral-candidates-0896"
+        ],
+        "met": false
+      },
+      "O/en/terse/negative": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0019",
+          "referral-candidates-0021",
+          "referral-candidates-0137",
+          "referral-candidates-0158",
+          "referral-candidates-0361",
+          "referral-candidates-0657",
+          "referral-candidates-0698",
+          "referral-candidates-0761",
+          "referral-candidates-0838",
+          "referral-candidates-0898"
+        ],
+        "met": false
+      },
+      "O/en/conversational/positive": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0060",
+          "referral-candidates-0211",
+          "referral-candidates-0485",
+          "referral-candidates-0510",
+          "referral-candidates-0618",
+          "referral-candidates-0626",
+          "referral-candidates-0647",
+          "referral-candidates-0666",
+          "referral-candidates-0689",
+          "referral-candidates-0773"
+        ],
+        "met": false
+      },
+      "O/en/conversational/negative": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0214",
+          "referral-candidates-0245",
+          "referral-candidates-0253",
+          "referral-candidates-0281",
+          "referral-candidates-0492",
+          "referral-candidates-0542",
+          "referral-candidates-0743",
+          "referral-candidates-0929",
+          "referral-candidates-0938",
+          "referral-candidates-0958"
+        ],
+        "met": false
+      },
+      "O/en/formal/positive": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0042",
+          "referral-candidates-0089",
+          "referral-candidates-0100",
+          "referral-candidates-0132",
+          "referral-candidates-0150",
+          "referral-candidates-0300",
+          "referral-candidates-0329",
+          "referral-candidates-0444",
+          "referral-candidates-0480",
+          "referral-candidates-0691"
+        ],
+        "met": false
+      },
+      "O/en/formal/negative": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0034",
+          "referral-candidates-0134",
+          "referral-candidates-0292",
+          "referral-candidates-0458",
+          "referral-candidates-0499",
+          "referral-candidates-0524",
+          "referral-candidates-0644",
+          "referral-candidates-0672",
+          "referral-candidates-0748",
+          "referral-candidates-0944"
+        ],
+        "met": false
+      },
+      "O/en/operational/positive": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0054",
+          "referral-candidates-0069",
+          "referral-candidates-0302",
+          "referral-candidates-0308",
+          "referral-candidates-0493",
+          "referral-candidates-0539",
+          "referral-candidates-0725",
+          "referral-candidates-0770",
+          "referral-candidates-0900",
+          "referral-candidates-0928"
+        ],
+        "met": false
+      },
+      "O/en/operational/negative": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0040",
+          "referral-candidates-0083",
+          "referral-candidates-0199",
+          "referral-candidates-0220",
+          "referral-candidates-0224",
+          "referral-candidates-0289",
+          "referral-candidates-0385",
+          "referral-candidates-0425",
+          "referral-candidates-0581",
+          "referral-candidates-0601"
+        ],
+        "met": false
+      },
+      "O/zh-Hant/terse/positive": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0011",
+          "referral-candidates-0067",
+          "referral-candidates-0131",
+          "referral-candidates-0314",
+          "referral-candidates-0367",
+          "referral-candidates-0400",
+          "referral-candidates-0413",
+          "referral-candidates-0661",
+          "referral-candidates-0752",
+          "referral-candidates-0801"
+        ],
+        "met": false
+      },
+      "O/zh-Hant/terse/negative": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0086",
+          "referral-candidates-0108",
+          "referral-candidates-0376",
+          "referral-candidates-0407",
+          "referral-candidates-0420",
+          "referral-candidates-0459",
+          "referral-candidates-0496",
+          "referral-candidates-0556",
+          "referral-candidates-0781",
+          "referral-candidates-0917"
+        ],
+        "met": false
+      },
+      "O/zh-Hant/conversational/positive": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0027",
+          "referral-candidates-0084",
+          "referral-candidates-0219",
+          "referral-candidates-0378",
+          "referral-candidates-0519",
+          "referral-candidates-0522",
+          "referral-candidates-0555",
+          "referral-candidates-0602",
+          "referral-candidates-0713",
+          "referral-candidates-0841"
+        ],
+        "met": false
+      },
+      "O/zh-Hant/conversational/negative": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0043",
+          "referral-candidates-0139",
+          "referral-candidates-0244",
+          "referral-candidates-0251",
+          "referral-candidates-0277",
+          "referral-candidates-0294",
+          "referral-candidates-0568",
+          "referral-candidates-0719",
+          "referral-candidates-0785",
+          "referral-candidates-0945"
+        ],
+        "met": false
+      },
+      "O/zh-Hant/formal/positive": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0023",
+          "referral-candidates-0327",
+          "referral-candidates-0695",
+          "referral-candidates-0702",
+          "referral-candidates-0715",
+          "referral-candidates-0733",
+          "referral-candidates-0771",
+          "referral-candidates-0837",
+          "referral-candidates-0873",
+          "referral-candidates-0894"
+        ],
+        "met": false
+      },
+      "O/zh-Hant/formal/negative": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0079",
+          "referral-candidates-0103",
+          "referral-candidates-0112",
+          "referral-candidates-0161",
+          "referral-candidates-0182",
+          "referral-candidates-0269",
+          "referral-candidates-0296",
+          "referral-candidates-0379",
+          "referral-candidates-0899",
+          "referral-candidates-0933"
+        ],
+        "met": false
+      },
+      "O/zh-Hant/operational/positive": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0051",
+          "referral-candidates-0117",
+          "referral-candidates-0307",
+          "referral-candidates-0334",
+          "referral-candidates-0343",
+          "referral-candidates-0424",
+          "referral-candidates-0638",
+          "referral-candidates-0667",
+          "referral-candidates-0703",
+          "referral-candidates-0892"
+        ],
+        "met": false
+      },
+      "O/zh-Hant/operational/negative": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0066",
+          "referral-candidates-0167",
+          "referral-candidates-0418",
+          "referral-candidates-0451",
+          "referral-candidates-0572",
+          "referral-candidates-0696",
+          "referral-candidates-0754",
+          "referral-candidates-0821",
+          "referral-candidates-0890",
+          "referral-candidates-0956"
+        ],
+        "met": false
+      },
+      "O/mixed/terse/positive": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0004",
+          "referral-candidates-0017",
+          "referral-candidates-0073",
+          "referral-candidates-0166",
+          "referral-candidates-0233",
+          "referral-candidates-0255",
+          "referral-candidates-0284",
+          "referral-candidates-0295",
+          "referral-candidates-0431",
+          "referral-candidates-0442"
+        ],
+        "met": false
+      },
+      "O/mixed/terse/negative": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0033",
+          "referral-candidates-0085",
+          "referral-candidates-0268",
+          "referral-candidates-0317",
+          "referral-candidates-0320",
+          "referral-candidates-0351",
+          "referral-candidates-0411",
+          "referral-candidates-0428",
+          "referral-candidates-0552",
+          "referral-candidates-0780"
+        ],
+        "met": false
+      },
+      "O/mixed/conversational/positive": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0082",
+          "referral-candidates-0143",
+          "referral-candidates-0315",
+          "referral-candidates-0344",
+          "referral-candidates-0375",
+          "referral-candidates-0533",
+          "referral-candidates-0589",
+          "referral-candidates-0640",
+          "referral-candidates-0721",
+          "referral-candidates-0859"
+        ],
+        "met": false
+      },
+      "O/mixed/conversational/negative": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0174",
+          "referral-candidates-0192",
+          "referral-candidates-0239",
+          "referral-candidates-0512",
+          "referral-candidates-0605",
+          "referral-candidates-0655",
+          "referral-candidates-0775",
+          "referral-candidates-0787",
+          "referral-candidates-0826",
+          "referral-candidates-0872"
+        ],
+        "met": false
+      },
+      "O/mixed/formal/positive": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0135",
+          "referral-candidates-0381",
+          "referral-candidates-0547",
+          "referral-candidates-0685",
+          "referral-candidates-0687",
+          "referral-candidates-0717",
+          "referral-candidates-0737",
+          "referral-candidates-0823",
+          "referral-candidates-0891",
+          "referral-candidates-0923"
+        ],
+        "met": false
+      },
+      "O/mixed/formal/negative": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0047",
+          "referral-candidates-0346",
+          "referral-candidates-0494",
+          "referral-candidates-0557",
+          "referral-candidates-0596",
+          "referral-candidates-0686",
+          "referral-candidates-0766",
+          "referral-candidates-0875",
+          "referral-candidates-0905",
+          "referral-candidates-0946"
+        ],
+        "met": false
+      },
+      "O/mixed/operational/positive": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0001",
+          "referral-candidates-0213",
+          "referral-candidates-0299",
+          "referral-candidates-0335",
+          "referral-candidates-0421",
+          "referral-candidates-0456",
+          "referral-candidates-0610",
+          "referral-candidates-0628",
+          "referral-candidates-0870",
+          "referral-candidates-0893"
+        ],
+        "met": false
+      },
+      "O/mixed/operational/negative": {
+        "finalPending": 10,
+        "candidates": 20,
+        "observed": 10,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0049",
+          "referral-candidates-0173",
+          "referral-candidates-0235",
+          "referral-candidates-0437",
+          "referral-candidates-0632",
+          "referral-candidates-0660",
+          "referral-candidates-0682",
+          "referral-candidates-0728",
+          "referral-candidates-0767",
+          "referral-candidates-0942"
+        ],
+        "met": false
+      },
+      "R/en/terse/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0122",
+          "referral-candidates-0151",
+          "referral-candidates-0261",
+          "referral-candidates-0271",
+          "referral-candidates-0275",
+          "referral-candidates-0390",
+          "referral-candidates-0395",
+          "referral-candidates-0397",
+          "referral-candidates-0429",
+          "referral-candidates-0478",
+          "referral-candidates-0504",
+          "referral-candidates-0508",
+          "referral-candidates-0629",
+          "referral-candidates-0671",
+          "referral-candidates-0693",
+          "referral-candidates-0705",
+          "referral-candidates-0765",
+          "referral-candidates-0878",
+          "referral-candidates-0896",
+          "referral-candidates-0921"
+        ],
+        "met": true
+      },
+      "R/en/terse/negative": {
+        "finalPending": 19,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0003",
+          "referral-candidates-0061",
+          "referral-candidates-0152",
+          "referral-candidates-0190",
+          "referral-candidates-0242",
+          "referral-candidates-0264",
+          "referral-candidates-0356",
+          "referral-candidates-0373",
+          "referral-candidates-0404",
+          "referral-candidates-0412",
+          "referral-candidates-0474",
+          "referral-candidates-0570",
+          "referral-candidates-0642",
+          "referral-candidates-0664",
+          "referral-candidates-0697",
+          "referral-candidates-0699",
+          "referral-candidates-0726",
+          "referral-candidates-0854",
+          "referral-candidates-0881",
+          "referral-candidates-0913"
+        ],
+        "met": true
+      },
+      "R/en/conversational/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0012",
+          "referral-candidates-0060",
+          "referral-candidates-0211",
+          "referral-candidates-0263",
+          "referral-candidates-0402",
+          "referral-candidates-0485",
+          "referral-candidates-0498",
+          "referral-candidates-0510",
+          "referral-candidates-0518",
+          "referral-candidates-0618",
+          "referral-candidates-0626",
+          "referral-candidates-0647",
+          "referral-candidates-0651",
+          "referral-candidates-0666",
+          "referral-candidates-0675",
+          "referral-candidates-0689",
+          "referral-candidates-0708",
+          "referral-candidates-0759",
+          "referral-candidates-0773",
+          "referral-candidates-0939"
+        ],
+        "met": true
+      },
+      "R/en/conversational/negative": {
+        "finalPending": 19,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0116",
+          "referral-candidates-0197",
+          "referral-candidates-0210",
+          "referral-candidates-0248",
+          "referral-candidates-0258",
+          "referral-candidates-0293",
+          "referral-candidates-0337",
+          "referral-candidates-0364",
+          "referral-candidates-0388",
+          "referral-candidates-0414",
+          "referral-candidates-0438",
+          "referral-candidates-0491",
+          "referral-candidates-0569",
+          "referral-candidates-0729",
+          "referral-candidates-0745",
+          "referral-candidates-0784",
+          "referral-candidates-0842",
+          "referral-candidates-0877",
+          "referral-candidates-0920",
+          "referral-candidates-0955"
+        ],
+        "met": true
+      },
+      "R/en/formal/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0042",
+          "referral-candidates-0089",
+          "referral-candidates-0100",
+          "referral-candidates-0132",
+          "referral-candidates-0150",
+          "referral-candidates-0184",
+          "referral-candidates-0300",
+          "referral-candidates-0329",
+          "referral-candidates-0403",
+          "referral-candidates-0444",
+          "referral-candidates-0480",
+          "referral-candidates-0583",
+          "referral-candidates-0591",
+          "referral-candidates-0614",
+          "referral-candidates-0691",
+          "referral-candidates-0794",
+          "referral-candidates-0805",
+          "referral-candidates-0806",
+          "referral-candidates-0836",
+          "referral-candidates-0886"
+        ],
+        "met": true
+      },
+      "R/en/formal/negative": {
+        "finalPending": 19,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0045",
+          "referral-candidates-0110",
+          "referral-candidates-0154",
+          "referral-candidates-0176",
+          "referral-candidates-0227",
+          "referral-candidates-0274",
+          "referral-candidates-0279",
+          "referral-candidates-0328",
+          "referral-candidates-0392",
+          "referral-candidates-0473",
+          "referral-candidates-0515",
+          "referral-candidates-0559",
+          "referral-candidates-0560",
+          "referral-candidates-0566",
+          "referral-candidates-0579",
+          "referral-candidates-0622",
+          "referral-candidates-0731",
+          "referral-candidates-0777",
+          "referral-candidates-0934",
+          "referral-candidates-0943"
+        ],
+        "met": true
+      },
+      "R/en/operational/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0054",
+          "referral-candidates-0069",
+          "referral-candidates-0147",
+          "referral-candidates-0217",
+          "referral-candidates-0302",
+          "referral-candidates-0308",
+          "referral-candidates-0350",
+          "referral-candidates-0476",
+          "referral-candidates-0481",
+          "referral-candidates-0493",
+          "referral-candidates-0521",
+          "referral-candidates-0538",
+          "referral-candidates-0539",
+          "referral-candidates-0562",
+          "referral-candidates-0725",
+          "referral-candidates-0770",
+          "referral-candidates-0869",
+          "referral-candidates-0876",
+          "referral-candidates-0900",
+          "referral-candidates-0928"
+        ],
+        "met": true
+      },
+      "R/en/operational/negative": {
+        "finalPending": 19,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0149",
+          "referral-candidates-0153",
+          "referral-candidates-0191",
+          "referral-candidates-0202",
+          "referral-candidates-0311",
+          "referral-candidates-0372",
+          "referral-candidates-0427",
+          "referral-candidates-0447",
+          "referral-candidates-0462",
+          "referral-candidates-0630",
+          "referral-candidates-0716",
+          "referral-candidates-0744",
+          "referral-candidates-0776",
+          "referral-candidates-0795",
+          "referral-candidates-0811",
+          "referral-candidates-0825",
+          "referral-candidates-0866",
+          "referral-candidates-0926",
+          "referral-candidates-0948",
+          "referral-candidates-0950"
+        ],
+        "met": true
+      },
+      "R/zh-Hant/terse/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0011",
+          "referral-candidates-0022",
+          "referral-candidates-0067",
+          "referral-candidates-0131",
+          "referral-candidates-0223",
+          "referral-candidates-0270",
+          "referral-candidates-0314",
+          "referral-candidates-0367",
+          "referral-candidates-0400",
+          "referral-candidates-0413",
+          "referral-candidates-0483",
+          "referral-candidates-0497",
+          "referral-candidates-0541",
+          "referral-candidates-0545",
+          "referral-candidates-0609",
+          "referral-candidates-0661",
+          "referral-candidates-0752",
+          "referral-candidates-0801",
+          "referral-candidates-0804",
+          "referral-candidates-0924"
+        ],
+        "met": true
+      },
+      "R/zh-Hant/terse/negative": {
+        "finalPending": 19,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0005",
+          "referral-candidates-0031",
+          "referral-candidates-0050",
+          "referral-candidates-0056",
+          "referral-candidates-0163",
+          "referral-candidates-0169",
+          "referral-candidates-0172",
+          "referral-candidates-0216",
+          "referral-candidates-0236",
+          "referral-candidates-0237",
+          "referral-candidates-0347",
+          "referral-candidates-0357",
+          "referral-candidates-0441",
+          "referral-candidates-0517",
+          "referral-candidates-0523",
+          "referral-candidates-0544",
+          "referral-candidates-0597",
+          "referral-candidates-0659",
+          "referral-candidates-0709",
+          "referral-candidates-0856"
+        ],
+        "met": true
+      },
+      "R/zh-Hant/conversational/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0027",
+          "referral-candidates-0084",
+          "referral-candidates-0219",
+          "referral-candidates-0378",
+          "referral-candidates-0506",
+          "referral-candidates-0519",
+          "referral-candidates-0522",
+          "referral-candidates-0555",
+          "referral-candidates-0565",
+          "referral-candidates-0595",
+          "referral-candidates-0602",
+          "referral-candidates-0621",
+          "referral-candidates-0658",
+          "referral-candidates-0665",
+          "referral-candidates-0713",
+          "referral-candidates-0768",
+          "referral-candidates-0810",
+          "referral-candidates-0841",
+          "referral-candidates-0884",
+          "referral-candidates-0889"
+        ],
+        "met": true
+      },
+      "R/zh-Hant/conversational/negative": {
+        "finalPending": 19,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0160",
+          "referral-candidates-0181",
+          "referral-candidates-0196",
+          "referral-candidates-0209",
+          "referral-candidates-0276",
+          "referral-candidates-0287",
+          "referral-candidates-0326",
+          "referral-candidates-0409",
+          "referral-candidates-0467",
+          "referral-candidates-0472",
+          "referral-candidates-0553",
+          "referral-candidates-0567",
+          "referral-candidates-0580",
+          "referral-candidates-0613",
+          "referral-candidates-0662",
+          "referral-candidates-0680",
+          "referral-candidates-0681",
+          "referral-candidates-0829",
+          "referral-candidates-0839",
+          "referral-candidates-0925"
+        ],
+        "met": true
+      },
+      "R/zh-Hant/formal/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0023",
+          "referral-candidates-0113",
+          "referral-candidates-0118",
+          "referral-candidates-0291",
+          "referral-candidates-0327",
+          "referral-candidates-0366",
+          "referral-candidates-0446",
+          "referral-candidates-0561",
+          "referral-candidates-0695",
+          "referral-candidates-0702",
+          "referral-candidates-0711",
+          "referral-candidates-0712",
+          "referral-candidates-0715",
+          "referral-candidates-0733",
+          "referral-candidates-0771",
+          "referral-candidates-0819",
+          "referral-candidates-0837",
+          "referral-candidates-0873",
+          "referral-candidates-0894",
+          "referral-candidates-0937"
+        ],
+        "met": true
+      },
+      "R/zh-Hant/formal/negative": {
+        "finalPending": 19,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0016",
+          "referral-candidates-0096",
+          "referral-candidates-0104",
+          "referral-candidates-0168",
+          "referral-candidates-0200",
+          "referral-candidates-0280",
+          "referral-candidates-0285",
+          "referral-candidates-0297",
+          "referral-candidates-0435",
+          "referral-candidates-0466",
+          "referral-candidates-0501",
+          "referral-candidates-0532",
+          "referral-candidates-0564",
+          "referral-candidates-0749",
+          "referral-candidates-0778",
+          "referral-candidates-0790",
+          "referral-candidates-0797",
+          "referral-candidates-0840",
+          "referral-candidates-0846",
+          "referral-candidates-0953"
+        ],
+        "met": true
+      },
+      "R/zh-Hant/operational/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0051",
+          "referral-candidates-0074",
+          "referral-candidates-0101",
+          "referral-candidates-0109",
+          "referral-candidates-0117",
+          "referral-candidates-0303",
+          "referral-candidates-0307",
+          "referral-candidates-0334",
+          "referral-candidates-0343",
+          "referral-candidates-0368",
+          "referral-candidates-0424",
+          "referral-candidates-0535",
+          "referral-candidates-0550",
+          "referral-candidates-0636",
+          "referral-candidates-0638",
+          "referral-candidates-0667",
+          "referral-candidates-0703",
+          "referral-candidates-0723",
+          "referral-candidates-0803",
+          "referral-candidates-0892"
+        ],
+        "met": true
+      },
+      "R/zh-Hant/operational/negative": {
+        "finalPending": 19,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0007",
+          "referral-candidates-0030",
+          "referral-candidates-0102",
+          "referral-candidates-0105",
+          "referral-candidates-0180",
+          "referral-candidates-0310",
+          "referral-candidates-0359",
+          "referral-candidates-0430",
+          "referral-candidates-0452",
+          "referral-candidates-0537",
+          "referral-candidates-0619",
+          "referral-candidates-0620",
+          "referral-candidates-0649",
+          "referral-candidates-0722",
+          "referral-candidates-0740",
+          "referral-candidates-0750",
+          "referral-candidates-0809",
+          "referral-candidates-0862",
+          "referral-candidates-0901",
+          "referral-candidates-0940"
+        ],
+        "met": true
+      },
+      "R/mixed/terse/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0004",
+          "referral-candidates-0017",
+          "referral-candidates-0073",
+          "referral-candidates-0166",
+          "referral-candidates-0171",
+          "referral-candidates-0233",
+          "referral-candidates-0243",
+          "referral-candidates-0255",
+          "referral-candidates-0284",
+          "referral-candidates-0295",
+          "referral-candidates-0333",
+          "referral-candidates-0431",
+          "referral-candidates-0442",
+          "referral-candidates-0443",
+          "referral-candidates-0453",
+          "referral-candidates-0520",
+          "referral-candidates-0548",
+          "referral-candidates-0604",
+          "referral-candidates-0822",
+          "referral-candidates-0828"
+        ],
+        "met": true
+      },
+      "R/mixed/terse/negative": {
+        "finalPending": 19,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0032",
+          "referral-candidates-0080",
+          "referral-candidates-0090",
+          "referral-candidates-0145",
+          "referral-candidates-0203",
+          "referral-candidates-0225",
+          "referral-candidates-0266",
+          "referral-candidates-0288",
+          "referral-candidates-0362",
+          "referral-candidates-0439",
+          "referral-candidates-0500",
+          "referral-candidates-0513",
+          "referral-candidates-0531",
+          "referral-candidates-0612",
+          "referral-candidates-0700",
+          "referral-candidates-0746",
+          "referral-candidates-0798",
+          "referral-candidates-0813",
+          "referral-candidates-0827",
+          "referral-candidates-0849"
+        ],
+        "met": true
+      },
+      "R/mixed/conversational/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0082",
+          "referral-candidates-0143",
+          "referral-candidates-0178",
+          "referral-candidates-0194",
+          "referral-candidates-0306",
+          "referral-candidates-0315",
+          "referral-candidates-0322",
+          "referral-candidates-0344",
+          "referral-candidates-0353",
+          "referral-candidates-0363",
+          "referral-candidates-0369",
+          "referral-candidates-0375",
+          "referral-candidates-0434",
+          "referral-candidates-0436",
+          "referral-candidates-0448",
+          "referral-candidates-0533",
+          "referral-candidates-0589",
+          "referral-candidates-0640",
+          "referral-candidates-0721",
+          "referral-candidates-0859"
+        ],
+        "met": true
+      },
+      "R/mixed/conversational/negative": {
+        "finalPending": 19,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0088",
+          "referral-candidates-0094",
+          "referral-candidates-0095",
+          "referral-candidates-0164",
+          "referral-candidates-0205",
+          "referral-candidates-0249",
+          "referral-candidates-0252",
+          "referral-candidates-0256",
+          "referral-candidates-0265",
+          "referral-candidates-0358",
+          "referral-candidates-0370",
+          "referral-candidates-0377",
+          "referral-candidates-0387",
+          "referral-candidates-0525",
+          "referral-candidates-0571",
+          "referral-candidates-0684",
+          "referral-candidates-0742",
+          "referral-candidates-0791",
+          "referral-candidates-0817",
+          "referral-candidates-0820"
+        ],
+        "met": true
+      },
+      "R/mixed/formal/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0035",
+          "referral-candidates-0135",
+          "referral-candidates-0144",
+          "referral-candidates-0290",
+          "referral-candidates-0316",
+          "referral-candidates-0381",
+          "referral-candidates-0389",
+          "referral-candidates-0401",
+          "referral-candidates-0534",
+          "referral-candidates-0547",
+          "referral-candidates-0685",
+          "referral-candidates-0687",
+          "referral-candidates-0717",
+          "referral-candidates-0737",
+          "referral-candidates-0782",
+          "referral-candidates-0823",
+          "referral-candidates-0891",
+          "referral-candidates-0911",
+          "referral-candidates-0923",
+          "referral-candidates-0954"
+        ],
+        "met": true
+      },
+      "R/mixed/formal/negative": {
+        "finalPending": 19,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0015",
+          "referral-candidates-0018",
+          "referral-candidates-0097",
+          "referral-candidates-0206",
+          "referral-candidates-0298",
+          "referral-candidates-0318",
+          "referral-candidates-0384",
+          "referral-candidates-0416",
+          "referral-candidates-0454",
+          "referral-candidates-0546",
+          "referral-candidates-0574",
+          "referral-candidates-0586",
+          "referral-candidates-0587",
+          "referral-candidates-0598",
+          "referral-candidates-0607",
+          "referral-candidates-0764",
+          "referral-candidates-0818",
+          "referral-candidates-0882",
+          "referral-candidates-0915",
+          "referral-candidates-0922"
+        ],
+        "met": true
+      },
+      "R/mixed/operational/positive": {
+        "finalPending": 20,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0001",
+          "referral-candidates-0048",
+          "referral-candidates-0059",
+          "referral-candidates-0063",
+          "referral-candidates-0185",
+          "referral-candidates-0207",
+          "referral-candidates-0213",
+          "referral-candidates-0260",
+          "referral-candidates-0299",
+          "referral-candidates-0312",
+          "referral-candidates-0335",
+          "referral-candidates-0399",
+          "referral-candidates-0421",
+          "referral-candidates-0456",
+          "referral-candidates-0610",
+          "referral-candidates-0628",
+          "referral-candidates-0633",
+          "referral-candidates-0641",
+          "referral-candidates-0870",
+          "referral-candidates-0893"
+        ],
+        "met": true
+      },
+      "R/mixed/operational/negative": {
+        "finalPending": 19,
+        "candidates": 20,
+        "observed": 20,
+        "required": 20,
+        "selected": [
+          "referral-candidates-0062",
+          "referral-candidates-0064",
+          "referral-candidates-0093",
+          "referral-candidates-0146",
+          "referral-candidates-0208",
+          "referral-candidates-0212",
+          "referral-candidates-0222",
+          "referral-candidates-0230",
+          "referral-candidates-0382",
+          "referral-candidates-0422",
+          "referral-candidates-0482",
+          "referral-candidates-0663",
+          "referral-candidates-0678",
+          "referral-candidates-0683",
+          "referral-candidates-0758",
+          "referral-candidates-0789",
+          "referral-candidates-0808",
+          "referral-candidates-0861",
+          "referral-candidates-0887",
+          "referral-candidates-0909"
+        ],
+        "met": true
+      }
+    }
+  },
+  "pooledMechanics": {
+    "falseAccepts": 0,
+    "falseRejects": 0,
+    "falseAcceptIDs": [],
+    "falseRejectIDs": [],
+    "referred": 176,
+    "pass": true
+  },
+  "reconciliation": {
+    "adaptedCheckpoints": 2104,
+    "sourceLeafPatterns": 790,
+    "sourceLeavesAudited": 1561948,
+    "losslessSidecarRoundTrips": 2104,
+    "defectCounts": {
+      "generator/NON_SCORER_METADATA": 120,
+      "challenge/NON_SCORER_METADATA": 1984,
+      "challenge/DELIVERY_PROVENANCE_LIMIT": 1984
+    }
+  },
+  "failures": []
+}
