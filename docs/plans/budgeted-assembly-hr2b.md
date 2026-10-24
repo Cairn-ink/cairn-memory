@@ -1,7 +1,19 @@
-# HR-2b: long-item budgeted assembly, offline protocol (v1, frozen)
+# HR-2b: long-item budgeted assembly, offline protocol (v1.1 draft, amending frozen v1)
 
-Status: **v1, frozen 2026-10-24 before any fixture tool, fixture, ranking or
-cell exists; the commit carrying this line is the protocol freeze.** v0.3
+Status: **v1.1 draft, 2026-10-24: a pre-outcome amendment of frozen v1
+(`c546bfc1`), pending its non-author audit; the v1.1 freeze commit will replace
+this line.** v1.1 changes four things and nothing else: the receipt-count
+distribution of §3.1 (1–4 receipts, because core `admit` accepts at most four
+receipts per admission), the guard statistic of §4/§7 (pooled over the
+`later-receipt` stratum instead of macro over categories), the §3.2
+guard-stratum quotas (the per-category ≥10 test families clause is dropped,
+dev keeps a family minimum only), and the §8/§9/§10 text these imply. The
+thresholds (+3 / −5), the zero-ceiling gate, the Adopt / Keep / Inconclusive
+semantics and the primary C1–C7 macro contrast are unchanged. The amendment's
+provenance, including every number seen before it was written, is declared
+below. The primary approved the amendment (pooled guard and the ≤4 cap; the
+alternatives were not taken) before this draft was written. v1 was frozen
+2026-10-24 before any fixture tool, fixture, ranking or cell existed. v0.3
 (`58425923`) was confirmed by the auditor's second re-check ("can be frozen:
 yes, no blocking items"); v1 changes only this status line. Written by the
 U5b coordinator at the primary's request (charter
@@ -21,6 +33,39 @@ v1.1 and before any HR-2b fixture exists. No HR-2b query, label, ranking or
 assembly result was inspected; the only inputs are the frozen HR-2 results, the
 HR-1 fixture generator and schema, and the shipped `representation-v2`
 constants. Dev-split inspection, if any, is recorded in §9 before the test run.
+
+**v1.1 amendment provenance (2026-10-24).** The amendment was written **after**
+the W1 world, the W2 queries, the W3 audit and the validator output of the
+first candidate fixture (seed `1924440465`, candidate 0) had been seen, and
+**before** any ranking, host-v2 calibration or assembly of any HR-2b split: no
+HR-2b ranking file, calibration file, dev or test cell exists at this commit.
+Exactly these numbers were seen. W1: 90 families (40 target / 40 distractor /
+10 foreign), 1,020 facts, 540 memories; target receipt-count histogram
+32/40/40/24/16/8 for 1–6 receipts; distinct-fact placement 126/70/84
+(45/25/30); 0 forbidden-lexicon hits over 18,297 scanned terms. W2: 160 queries
+(140 scored, 10 C8, 10 foreign controls); seeded split `hr2b-split-v1` with 46
+dev / 94 test scored queries; 123 of 140 scored queries need a span-only fact.
+Pre-audit validator (`hr2b-validate1`): 35 errors, of which 1 `audit:overrides`
+(no audit file yet), 18 mechanical category-check failures (C1×6, C2×1, C3×7,
+C5×4) and 16 placement-quota failures; the stratum counts were dev
+first-receipt 23 groups / 10 families, dev later-receipt 21 groups / 8
+families, test first-receipt 43 groups / 23 families, test later-receipt 57
+groups / 20 families, and the later-receipt test families per category
+C1–C7 were 6/7/11/8/7/8/3 (dev: 3/1/2/3/2/5/2). W3: 19 overrides (18
+recategorize, 1 add-member), 0 semantic leaks over 1,049 non-supporting units
+and 7,113 terms, 78 later-receipt groups confirmed free of body or
+first-receipt support. Post-audit validator (`hr2b-validate2`): 81 target and
+distractor memories with 5–6 receipts rejected by the public-admission
+preflight with `invalid_input` (reproduced in isolation: the same memory is
+admitted with 1–4 receipts and refused with 5). Both defects are structural:
+the per-category guard quota is infeasible under 20 queries per category with
+a 30% later share (about 4–7 later-receipt test families per category, where
+≥10 would need about 70 such families), and the receipt cap is a product
+limit, not a property of this world. No coverage, Δ, ranking or ceiling of any
+arm was computed or seen. The rebuilt fixture keeps the same families and
+facts (W2's queries stay valid) and changes only the receipt counts under the
+cap and the next candidate seed in the frozen sequence; its validator output is
+recorded in §9.
 
 ## 1. Question and what HR-2 could not answer
 
@@ -89,16 +134,21 @@ HR-1 behaviour is preserved for `hr1-fixture-v2`.
   **2–4 facts of its family** whose body length is drawn from a frozen
   distribution over `o200k` tokens (target mean about 220, bands 120–180:
   30%, 180–260: 40%, 260–400: 30%), 3–8 whole sentences in one or two
-  paragraphs, with **1–6 receipts** whose lengths are drawn from a frozen
+  paragraphs, with **1–4 receipts** whose lengths are drawn from a frozen
   distribution (mean about 90 tokens, bands 40–70: 35%, 70–130: 40%, 130–200:
   25%), each a chat turn with the natural wording a person types. Receipt
   counts are drawn from the frozen distribution `{1: 20%, 2: 25%, 3: 25%,
-  4: 15%, 5: 10%, 6: 5%}` per target memory.
+  4: 30%}` per target memory (**v1.1**; v1 had `{1: 20%, 2: 25%, 3: 25%,
+  4: 15%, 5: 10%, 6: 5%}`). **The cap of four comes from the product**: core
+  `admit` accepts at most four receipts per admission, so a memory with five or
+  six receipts cannot be stored and fails the validator's public-admission
+  preflight; the long-item claim of this protocol is therefore limited to
+  memories with **at most four receipts** (§10).
 - **Deterministic generation, frozen before rendering.** The builder is a
   seeded program (`fixtures-hr2b/build/`, one named PRNG, one seed constant,
   ordered sentence banks, length-target distributions, the joint
   receipt-count/placement allocation, whole-sentence assembly). Receipts are
-  ordered by `eventTime` then id before ordinal ids `#s1…#s6` are assigned, and
+  ordered by `eventTime` then id before ordinal ids `#s1…#s4` are assigned, and
   the validator checks array order. Acceptance has **two stages over a frozen
   candidate-seed sequence** (written into the builder before generation): W1's
   `check-world.mjs` reads facts and corpus only and applies the §3.1
@@ -111,7 +161,7 @@ HR-1 behaviour is preserved for `hr1-fixture-v2`.
 - **Evidence placement** is the designed variable. It is defined over
   **distinct rendered target facts**: each such fact is assigned one placement
   by the seeded allocation with frozen shares **body 45%**, **first receipt
-  only 25%**, **later receipt only (receipt 2–6) 30%**, and every target memory
+  only 25%**, **later receipt only (receipt 2–4) 30%**, and every target memory
   that expresses the fact renders it consistently with that placement (a
   "later" fact is rendered only in memories with at least two receipts).
   "Only" means the body and the other receipts of that memory refer to the
@@ -167,14 +217,19 @@ HR-1 behaviour is preserved for `hr1-fixture-v2`.
   and receipt positions are evaluator-only: W2 never sees them or any rendered
   text.
 - **Guard-stratum quotas (structural, checked before the fixture is
-  accepted).** Per split, the `later-receipt` and `first-receipt` strata each
-  have **at least 30 required groups and 12 families**, and, because the
-  bootstrap's `minimumFamilies: 10` applies **per category**, every category
-  represented in the guard stratum has **at least 10 test families** (and at
-  least 4 dev families); the set of represented guard categories is frozen
-  with the labels and is never trimmed afterwards to obtain a CI. A fixture
-  that cannot meet these quotas is rebuilt with another seed (or more
-  authored families) before freeze; W1 is told the quotas up front.
+  accepted; v1.1).** In the **test** split, the `later-receipt` and
+  `first-receipt` strata each have **at least 30 required groups and 12
+  families**; in the **dev** split each has **at least 4 families** and no
+  group minimum. The guard bootstrap of §4 is pooled over the whole
+  `later-receipt` stratum, so its `minimumFamilies: 10` applies to the
+  stratum's family count, not per category; v1's clause requiring ≥10 test
+  families in every represented category is dropped (it was infeasible by
+  construction under 20 queries per category and a 30% later share, see the
+  provenance declaration). The set of categories represented in the guard
+  stratum is still frozen with the labels, is never trimmed afterwards, and is
+  used only for the descriptive per-category report of §4. A fixture that
+  cannot meet these quotas is rebuilt with another seed (or more authored
+  families) before freeze; W1 is told the quotas up front.
 - **W3** audits labels as HR-1 §4.1 step 5 and the semantic filler audit of
   §3.1; overrides are applied before the freeze.
 
@@ -197,18 +252,35 @@ changes; a defect creates `hr2b-fixture-v2`, reported alongside.
   macro group coverage over C1–C7, family cluster bootstrap 95% CI (10,000
   resamples, seed `hr2b-bootstrap-v1`, `minimumFamilies: 10`). One
   preregistered comparison.
-- **Guard stratum**: the same contrast restricted to the `later-receipt`
-  stratum (§3.2 classification: groups with no body or first-receipt support
-  among eligible members), macro over the categories represented in that
-  stratum as frozen with the labels, same bootstrap. **What the guard means:**
+- **Guard stratum (v1.1: pooled)**: the same contrast restricted to the
+  `later-receipt` stratum (§3.2 classification: groups with no body or
+  first-receipt support among eligible members), computed as **one pooled
+  (micro) statistic**: the stratum's Δ is the number of covered later-receipt
+  groups of P-top-s1 minus that of P-top, divided by the number of
+  later-receipt groups in the split, in percentage points; the family cluster
+  bootstrap resamples families with replacement and recomputes that pooled
+  ratio, 10,000 resamples, seed `hr2b-bootstrap-v1`, `minimumFamilies: 10` on
+  the stratum's family count, `ok` only when that minimum is met. Categories
+  are not weighted equally in the guard: **the pooled guard is dominated by
+  the categories with more later-receipt families** (in the first candidate
+  fixture C3 had 11 later-receipt test families where the others had 3–8, over
+  20 distinct families), **and it therefore no longer
+  bounds the per-category loss**; it bounds the loss over the stratum as a
+  whole. To make any concentration visible, the results report the
+  later-receipt Δ **per represented category descriptively** (point value,
+  groups and families, no CI and no decision), beside the pooled guard. v1
+  defined the guard as a macro over the represented categories with the
+  per-category family minimum; it was replaced because that minimum cannot be
+  met by a 45/25/30 world with 20 queries per category. **What the guard
+  means:**
   on strict later-only groups P-top-s1 can never admit the evidence, so its
   stratum coverage is zero by construction and the guard Δ equals minus
   P-top's stratum coverage. The guard therefore bounds the **incremental
   loss** first-receipt-only accepts on exactly the evidence it skips; it does
   not demonstrate that later evidence is preserved. The results report the
-  stratum's absolute coverage per arm, its ranking ceiling and its family and
-  category counts beside the Δ, and a zero ranking ceiling on the guard
-  stratum makes the decision Inconclusive.
+  stratum's absolute coverage per arm (pooled), its pooled ranking ceiling
+  and its family and category counts beside the Δ, and a zero pooled ranking
+  ceiling on the guard stratum makes the decision Inconclusive.
 
 | Outcome | Condition |
 | --- | --- |
@@ -267,7 +339,7 @@ assembly output existed when these thresholds were written.
   model, not a long-receipt measurement (HR-2 §11.2 records 164 measured versus
   160 modelled for two concrete receipts). Before any ranking is computed, the
   coordinator serializes deterministic fact-free probes (bodies of 120/220/400
-  tokens; receipts of 40/120/200 tokens; 1–6 receipts; `sourcesComplete`
+  tokens; receipts of 40/120/200 tokens; 1–4 receipts; `sourcesComplete`
   transitions) with the normative `representation-v2` serializer at
   `b18dabe0` and counts them with `o200k`, publishes the model-versus-measured
   errors in `results/hr2b-rankings/host-v2-calibration.json`, and does **not**
@@ -303,14 +375,22 @@ New stratum family: **placement** (`body`, `first-receipt`, `later-receipt`),
 derived from the audited eligible label members after W3 by the §3.2 rule;
 the builder's placement records are diagnostic only. Reported with group and
 family counts per category. Bootstrap seed `hr2b-bootstrap-v1`; McNemar on
-all-required with the smallest test query id per family.
+all-required with the smallest test query id per family. **Guard statistic
+(v1.1)**: on the `later-receipt` stratum the confirmatory quantity is the
+**pooled** group coverage, `Σ covered later-receipt groups / Σ later-receipt
+groups` over the split's scored queries, and its Δ between arms; the cluster
+bootstrap resamples families and recomputes the pooled ratio, with
+`minimumFamilies: 10` on the stratum's family count. The per-category
+later-receipt Δ is reported as a descriptive table (point, groups, families)
+with no interval and no decision. All other strata and the primary contrast
+keep the macro (equal category weight) statistic of HR-2 §8.
 
 ## 8. Harness changes (reviewed like HR-2)
 
 - **Fixture tools (`lib/fixture.mjs`, `tools/{facts-view,split,labels,
   validate,apply-audit}.mjs`)**: a **versioned validation profile** keyed by
   the fixture version (`hr1-fixture-v2` keeps its constants: 300/700/100,
-  1–3 spans, 35–45% span-only; `hr2b-fixture-v1` carries 160/320/60, 1–6
+  1–3 spans, 35–45% span-only; `hr2b-fixture-v1` carries 160/320/60, 1–4
   receipts, the §3.1 length and receipt-count distributions, the placement
   bands and the §3.2 quotas), the authenticated version propagated into the
   facts view, labels, audit application and validation output, `span: null`
@@ -335,6 +415,21 @@ all-required with the smallest test query id per family.
   ranking and fixture-tool modules, and the output-path guard protects
   `fixtures-hr2b/`, `results/hr2b-rankings/` and `results/hr2b-final/` once
   frozen.
+- **v1.1 tooling amendment (one Codex worker, two non-author reviews, after
+  the v1.1 freeze and before the fixture freeze)**: the `hr2b-fixture-v1`
+  profile's receipt histogram becomes four bins `{.20, .25, .25, .30}` and its
+  quotas become test `groups: 30, families: 12`, dev `families: 4` (no group
+  minimum, no per-category guard minimum); the placement classification keeps
+  emitting the frozen `guardCategories` list and the per-split per-category
+  family counts; the report computes the §4 pooled guard Δ with a pooled
+  cluster bootstrap (`minimumFamilies: 10` on the stratum's families) and the
+  pooled absolute coverage and ceiling of the stratum, and adds the
+  descriptive per-category later-receipt table; the protocol profile pins the
+  v1.1 freeze commit. The primary contrast, the other strata, the HR-2 legacy
+  and host-v2 regressions and every authentication rule are unchanged, and
+  the toy-fixture tests cover the new branches and refusals. Nothing in the
+  fixture tools or the report reads a ranking or an assembly result to decide
+  anything.
 - **Regressions, both required**: the HR-2 legacy regression (240 archived
   cells byte-identical after stripping only the current scorer identity;
   regenerated report equal except the current report identity) and a new
@@ -365,7 +460,15 @@ ranking configuration and rankings freeze → one test run.
    the validator (structural quotas of §3.2 included); **W3** audits labels
    and filler; apply-audit; validator passes; **fixture freeze** commit with
    `fixtures-hr2b/FROZEN.md`. A quota failure sends the fixture back to W1
-   with the diagnostics, never forward.
+   with the diagnostics, never forward. **v1.1 path**: the first candidate
+   (seed `1924440465`) was rejected at stage 2 for the two structural defects
+   recorded in the provenance declaration; its diagnostics stay in the build
+   record. W1 rebuilds under the ≤4 receipt cap with the next candidate seed
+   in the frozen sequence, keeping families and facts unchanged so W2's
+   queries remain valid; W2 revises only the 18 queries W3 recategorized and
+   any coverage gap the validator names; labels are re-derived; W3 re-audits
+   the rebuilt corpus and labels; apply-audit and the validator must pass
+   before the fixture freeze.
 4. **Rankings**: the coordinator records the fixed configuration (§5), runs
    the host-v2 calibration check, then runs A1 and bge-m3 + A3 on dev and test
    through `cairn-heavy` (bge-m3 is CPU-heavy: about 540 documents and 160
@@ -401,12 +504,26 @@ only the test files they touch and receive the 11-item traps list.
   deepening less than this fixture does.
 - The `host-v2` cost model is the approximate additive calibration of HR-2
   §11.2, measured on 15-token probes and **extrapolated** here to 40–200-token
-  receipts and 1–6 receipts; the §5 calibration check publishes the error but
+  receipts and 1–4 receipts; the §5 calibration check publishes the error but
   does not retune. The shipped host's exact token counts differ, and a product
   default change needs its own exact-host validation.
 - The guard stratum measures the incremental loss first-receipt-only accepts
   on evidence it skips by construction (§4); it cannot show that later
   evidence is preserved.
+- **Pooled guard (v1.1).** The guard is one pooled ratio over all
+  later-receipt groups, so categories with more later-receipt families weigh
+  more (in the first candidate fixture C3 had 11 later-receipt test families
+  where the others had 3–8);
+  the guard **no longer bounds the per-category loss**, only the loss over the
+  stratum as a whole. The per-category later-receipt Δ is reported
+  descriptively so that a concentration of loss in one category is visible,
+  but no per-category interval or decision is defined.
+- **Receipts capped at four (v1.1).** The ≤4 cap is core `admit`'s
+  per-admission receipt limit, not a modelling choice; a memory with more
+  receipts cannot be stored by the product. The long-item claim of this
+  protocol, whatever the outcome, is limited to memories with **at most four
+  receipts**; nothing here speaks to notes assembled from longer receipt
+  chains.
 - Rankings are the two free, body-only arms; receipts are not indexed for
   ranking and the hosted product ranking is not evaluated.
 - Generated summaries, prefixes, windows, Cards, MOC, reranking and answer
