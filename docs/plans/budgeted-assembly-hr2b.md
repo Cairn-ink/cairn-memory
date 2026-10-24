@@ -1,11 +1,14 @@
-# HR-2b: long-item budgeted assembly, offline protocol (v0.2 draft)
+# HR-2b: long-item budgeted assembly, offline protocol (v0.3 draft)
 
-Status: **draft v0.2, 2026-10-24, awaiting the auditor's re-check; frozen
-before any fixture tool is built, any fixture is authored or any cell is
-scored.** Written by the U5b coordinator at the primary's request (charter §6
-"next step: a long-item fixture"). v0.1 (`9b3095cb`) was audited by an
+Status: **draft v0.3, 2026-10-24, awaiting the auditor's second re-check;
+frozen before any fixture tool is built, any fixture is authored or any cell
+is scored.** Written by the U5b coordinator at the primary's request (charter
+§6 "next step: a long-item fixture"). v0.1 (`9b3095cb`) was audited by an
 independent, non-author, read-only Codex (`hr2b_protocol_audit`,
-gpt-6.1-sol/xhigh): four P0, six P1, one P2; v0.2 applies all eleven. Branch
+gpt-6.1-sol/xhigh): four P0, six P1, one P2; v0.2 (`b4c31dd3`) applied all
+eleven; the re-check found three residual P1 (placement wording in §7,
+two-stage generator acceptance, dev-check ordering in §9) and an arithmetic
+P2, applied in v0.3. Branch
 `experiment/hr2-assembly` (it holds the HR-1 ranking harness, the HR-2 assembly
 harness and the host-v2 model). No public core API, schema, default, adapter or
 installed artifact changes; the engineering consumer is a possible contract §15
@@ -94,10 +97,15 @@ HR-1 behaviour is preserved for `hr1-fixture-v2`.
   ordered sentence banks, length-target distributions, the joint
   receipt-count/placement allocation, whole-sentence assembly). Receipts are
   ordered by `eventTime` then id before ordinal ids `#s1…#s6` are assigned, and
-  the validator checks array order. A seed is accepted only if the fixture
-  passes the preregistered structural checks of §3.1–3.2; the first passing
-  seed is used and every rejected seed's diagnostics are retained in the build
-  record. No check reads queries, rankings or assembly output.
+  the validator checks array order. Acceptance has **two stages over a frozen
+  candidate-seed sequence** (written into the builder before generation): W1's
+  `check-world.mjs` reads facts and corpus only and applies the §3.1
+  structural checks (counts, lengths, receipt counts, fact-level placement
+  shares, lexicon scan); the coordinator's quota validator reads the queries
+  and the post-W3 labels and applies the §3.2 group and category quotas. The
+  first candidate seed that passes **both** stages is used; the diagnostics of
+  every rejected candidate are retained in the build record. Neither stage
+  reads rankings or assembly output.
 - **Evidence placement** is the designed variable. It is defined over
   **distinct rendered target facts**: each such fact is assigned one placement
   by the seeded allocation with frozen shares **body 45%**, **first receipt
@@ -266,8 +274,8 @@ assembly output existed when these thresholds were written.
   validation.
 - Budgets: `{1000, 1500, 2000, 4000}`. Under `host-v2`, 24 items with the
   minimum body (120) and one minimum receipt (40) cost 43 + 58 + 23·57 +
-  24·(120 + 7 + 40) = **5,420** tokens (3,840 at `O = 0`); at the distribution
-  midpoints (220-token bodies, 2.8 receipts of 90) about **16,300**. Every
+  24·(120 + 7 + 40) = **5,420** tokens (3,840 at `O = 0`); with the assumed
+  means (220-token bodies, 2.85 receipts of 90 tokens) about **13,300**. Every
   budget is therefore expected to bind on a full horizon, but short rankings
   or restricted schedules can saturate, so the results report the actual
   pressure (rejected-unit query counts, saturation as HR-2 §11.4) rather than
@@ -290,8 +298,9 @@ once. Only the §4 primary cell and its guard stratum are confirmatory.
 HR-2 §7 and §8 unchanged: group coverage@B over required regions (whole
 units), all-required@B, ceiling and assembly loss, token use p50/p95, strata.
 New stratum family: **placement** (`body`, `first-receipt`, `later-receipt`),
-derived from the fixture's placement record, reported with group and family
-counts per category. Bootstrap seed `hr2b-bootstrap-v1`; McNemar on
+derived from the audited eligible label members after W3 by the §3.2 rule;
+the builder's placement records are diagnostic only. Reported with group and
+family counts per category. Bootstrap seed `hr2b-bootstrap-v1`; McNemar on
 all-required with the smallest test query id per family.
 
 ## 8. Harness changes (reviewed like HR-2)
@@ -343,8 +352,10 @@ ranking configuration and rankings freeze → one test run.
    the versioned validation profile, the assembly protocol profile and both
    regressions; two non-author reviews (Spec, Standards) on a clean detached
    worktree of the exact commit; owned-runner tests on Node 22.16.0 and
-   24.15.0 through `cairn-heavy`. Toy-fixture and dev-pipeline checks happen
-   here, after the rule freeze.
+   24.15.0 through `cairn-heavy`. Pipeline checks in this step use **toy
+   fixtures or the legacy HR-1/HR-2 dev inputs only**; HR-2b dev assembly and
+   scoring happen at most once, in step 4, after the fixture, configuration
+   and ranking freezes.
 3. **Authoring pipeline**: **W1** builds the world, the forbidden lexicon and
    the deterministic builder under `fixtures-hr2b/build/` with
    `check-world.mjs`; the coordinator runs the facts view; **W2** writes
