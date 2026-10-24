@@ -373,3 +373,8 @@
   §9 步驟 3 開始：派 **W1 `hr2b_world_author`**（workspace-write，只寫 `fixtures-hr2b/`；≥40 目標家族 7＋1 事實；長本文、1–6
   receipt、placement 45／25／30；填充句庫與禁用詞典；候選 seed 序列；`build-world.mjs`／`check-world.mjs`）。W2／W3 派工單
   已備（W2 只看 `body`／`span-only`／`absent`，不知 receipt 位置）。派出時負載 0.2。
+- **W1 完成**（36 分鐘，exit 0）：90 家族（40 目標／40 干擾／10 foreign）、1,020 事實、540 記憶；本文平均約 217 token、receipt
+  約 92；receipt 直方圖 32／40／40／24／16／8（目標）符合 20／25／25／15／10／5%；placement 126／70／84＝45／25／30 精確；填充
+  1,080 句、3,840 個範圍、18,297 個禁用詞掃描 0 命中；與 HR-1 語句 0 重疊。協調者重跑 build --check／check-world 皆 0、
+  whitespace 0、抽樽文字為合成中文筆記與對話。產生 facts view（無文字、無記憶 id）。**提交 W1 世界 `e3fd8dba`**（未凍結）。
+- 使用者指示：之後 Codex 派工改用 **fast（`service_tier="priority"`）**，effort 不降。自 W2 起套用。派 W2 `hr2b_query_author`。
