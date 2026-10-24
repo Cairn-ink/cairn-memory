@@ -257,5 +257,11 @@
   "core/card-current-facade.mjs",
   "adapters/mcp/card-current-configuration.mjs",
   "adapters/mcp/card-current-tools.mjs",
-  "docs/card-current-dependencies-local.md"
+  "docs/card-current-dependencies-local.md",
+  "core/topic-members-input.mjs",
+  "core/topic-members-reader.mjs",
+  "core/topic-members-storage.mjs",
+  "core/topic-snapshot.mjs",
+  "docs/topic-overview.md",
+  "docs/plans/topic-overview-member-pages.md"
 ]

@@ -1,3 +1,5 @@
+import { membersInput } from './topic-members-input.mjs';
+import { performance } from 'node:perf_hooks';
 import { Worker } from 'node:worker_threads';
 import { readerOptions, overviewInput, readerFailure, safeReaderFailure } from './topic-overview-input.mjs';
 
@@ -35,27 +37,38 @@ export function openMemoryReader(input) {
     });
     instance.stdout.resume(); instance.stderr.resume();
     worker = instance;
-    instance.on('message', result => { if (worker === instance && pending) finish(pending, result); });
+    instance.on('message', result => {
+      if (worker !== instance || !pending) return;
+      if (result?.error?.code === 'read_timeout') void failed(instance, 'read_timeout');
+      else finish(pending, result);
+    });
     instance.on('error', () => { void failed(instance, 'reader_failed'); });
     instance.on('exit', () => { void failed(instance, 'reader_failed'); });
     return instance;
   }
+  async function dispatch(input, members = false) {
+    if (closed) return readerFailure('store_closed');
+    const started = performance.now();
+    let request;
+    try { request = (members ? membersInput : overviewInput)(input, options.ownerId); }
+    catch (error) { return safeReaderFailure(error); }
+    if (pending) return readerFailure('read_in_progress');
+    clearTimeout(idle);
+    return new Promise(resolve => {
+      const slot = { resolve }; pending = slot;
+      const duration = members ? request.deadlineMs : 5000;
+      slot.deadline = setTimeout(() => {
+        void (async () => { await stop(); finish(slot, readerFailure('read_timeout')); })();
+      }, members ? Math.max(0, duration - (performance.now() - started)) : 5000);
+      try {
+        const instance = start(); instance.ref();
+        instance.postMessage(members ? { method: 'members', request, deadlineAt: started + duration } : request);
+      } catch { void (async () => { await stop(); finish(slot, readerFailure('reader_failed')); })(); }
+    });
+  }
   return Object.freeze({
-    async readTopicOverview(input) {
-      if (closed) return readerFailure('store_closed');
-      let request;
-      try { request = overviewInput(input, options.ownerId); } catch (error) { return safeReaderFailure(error); }
-      if (pending) return readerFailure('read_in_progress');
-      clearTimeout(idle);
-      return new Promise(resolve => {
-        const slot = { resolve }; pending = slot;
-        slot.deadline = setTimeout(() => {
-          void (async () => { await stop(); finish(slot, readerFailure('read_timeout')); })();
-        }, 5000);
-        try { const instance = start(); instance.ref(); instance.postMessage(request); }
-        catch { void (async () => { await stop(); finish(slot, readerFailure('reader_failed')); })(); }
-      });
-    },
+    readTopicOverview: input => dispatch(input),
+    readTopicMembers: input => dispatch(input, true),
     async close() {
       closed = true;
       const slot = pending;

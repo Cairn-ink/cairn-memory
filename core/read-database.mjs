@@ -18,7 +18,7 @@ function identity(path) {
   }
   return stat;
 }
-export function openReadDatabase(path, { contextRead = false, preflight } = {}) {
+export function openReadDatabase(path, { contextRead = false, topicMembers = false, preflight } = {}) {
   const initial = identity(path);
   preflight?.();
   const db = new DatabaseSync(path, { readOnly: true });
@@ -29,11 +29,26 @@ export function openReadDatabase(path, { contextRead = false, preflight } = {}) 
     const validate = () => {
     if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID ||
         !(contextRead ? CONTEXT_READ_SCHEMA_VERSIONS : READ_SCHEMA_VERSIONS).includes(db.prepare('PRAGMA user_version').get().user_version)) fail('unsupported_database');
-    if (db.prepare('PRAGMA user_version').get().user_version < 33) assertNoCardCurrentDependencies(db);
-    if (db.prepare('PRAGMA user_version').get().user_version < 32) assertNoRoleProfiles(db);
-    if (db.prepare('PRAGMA user_version').get().user_version < 31) assertNoAssets(db);
-    if (db.prepare('PRAGMA user_version').get().user_version >= 30) validateExistingStore(db, {
+    // Member reads validate only consumed Memory metadata and seek paths below;
+    // full-store attestation can read unrelated Card/Raw bodies and is unbounded.
+    if (!topicMembers && db.prepare('PRAGMA user_version').get().user_version < 33) assertNoCardCurrentDependencies(db);
+    if (!topicMembers && db.prepare('PRAGMA user_version').get().user_version < 32) assertNoRoleProfiles(db);
+    if (!topicMembers && db.prepare('PRAGMA user_version').get().user_version < 31) assertNoAssets(db);
+    if (!topicMembers && db.prepare('PRAGMA user_version').get().user_version >= 30) validateExistingStore(db, {
       storeId: db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id });
+    if (topicMembers) {
+      // Attest version boundaries from schema metadata, never private data rows.
+      // A v18 file relabelled as current is not a current physical layout.
+      const version = db.prepare('PRAGMA user_version').get().user_version;
+      const present = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?");
+      for (const [first, table] of [[20, 'private_cards'], [20, 'card_notes'],
+        [21, 'card_memory_bindings'], [22, 'card_applicability_reviews'], [23, 'card_mocs'],
+        [24, 'raw_conversations'], [25, 'raw_capture_events'], [26, 'raw_source_maps'],
+        [27, 'raw_deletion_actions'], [28, 'card_raw_bindings'], [29, 'local_capture_controls'],
+        [30, 'method_packages'], [31, 'assets'], [32, 'role_profiles'], [33, 'card_current_dependencies']]) {
+        if (Boolean(present.get(table)) !== (version >= first)) fail('unsupported_database');
+      }
+    }
     // Validate every physical seek, including automatically named primary keys.
     // A matching name alone does not establish column order/collation/coverage.
     const list = db.prepare('SELECT name,origin,partial FROM pragma_index_list(?)');
