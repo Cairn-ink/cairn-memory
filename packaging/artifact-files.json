@@ -250,5 +250,12 @@
   "core/context-read-moc.mjs",
   "adapters/mcp/context-read-sources-configuration.mjs",
   "adapters/mcp/context-read-sources-tools.mjs",
-  "docs/limitations.md"
+  "docs/limitations.md",
+  "core/card-current-input.mjs",
+  "core/card-current-schema.mjs",
+  "core/card-current-storage.mjs",
+  "core/card-current-facade.mjs",
+  "adapters/mcp/card-current-configuration.mjs",
+  "adapters/mcp/card-current-tools.mjs",
+  "docs/card-current-dependencies-local.md"
 ]

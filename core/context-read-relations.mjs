@@ -198,7 +198,7 @@ export function sourceReader(db, identity, features, input, budget, sharedContex
       }
     } else {
       const scratch = budget.hold(4 * 1024 * 1024);
-      try { if (!contextCardEligible(charged, identity, features, ns, row, 'current', { requireApplicability: !titleSource, rawRows: 128 })) return { reason: 'ineligible' }; }
+      try { if (!contextCardEligible(charged, identity, features, ns, row, 'current', { requireApplicability: !titleSource, rawRows: 128, readSet: input.readSet })) return { reason: 'ineligible' }; }
       catch (error) { if (error.code === 'source_budget_exceeded') throw new SourceStop('state_limit'); throw error; }
       finally { budget.release(scratch); }
     }

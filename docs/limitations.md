@@ -2724,3 +2724,7 @@ not provide durable proofs of the discovery path. MCP source diagnostics stay
 in host `_meta`, with the existing client-contract caveat: clients forwarding
 metadata to models do not get a metadata invisibility guarantee.
 <!-- End U5c-2 integration. -->
+
+### Current-dependent Cards
+
+Explicit Card dependency review is opt-in for authoring and always enforced for existing declarations. Stale current evidence is excluded; eligible retained authored history is qualified. Review does not judge semantic accuracy, rewrite content, archive overwritten revisions or restore purged sources/methods. Complete declaration context requires separate authorization; restricted readers receive minimal `access_revoked` metadata. Memory dependencies and generated-summary freshness remain unsupported. Schema v33 requires stopping older binaries before upgrade. Dependency contention/latency gates run only in the opt-in measurement script. See [the local guide](card-current-dependencies-local.md).

@@ -1,3 +1,4 @@
+import { cardDependencyFence } from './card-current-storage.mjs';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { keyed } from './private-card-input.mjs';
 import { organizationInput } from './private-organization-input.mjs';
@@ -7,7 +8,7 @@ const where = 'owner_id=? AND scope=? AND project_id=?';
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const size = value => Buffer.byteLength(JSON.stringify({ ok: true, value }), 'utf8');
 const key = title => title.normalize('NFKC').toLocaleLowerCase('und');
-const sourceEligible = card => card?.state === 'confirmed' && card.support.status === 'eligible';
+const sourceEligible = card => card?.state === 'confirmed' && card.support.status === 'eligible' && (!card.support.currentDependency || card.support.currentDependency.status === 'current');
 const sameRef = (card, ref) => card?.revision === ref.revision && card.bodyRevision === ref.bodyRevision;
 
 /** Canonical organization shares the existing authorized transaction and store. */
@@ -16,7 +17,7 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
   const memoryIndex = ns => db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch ?? 1;
   const cardIndex = ns => db.prepare(`SELECT revision FROM card_moc_epochs WHERE ${where}`).get(...boundary(ns))?.revision ?? 1;
   const routing = ns => db.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1;
-  const generations = ns => [memoryIndex(ns), cardIndex(ns), routing(ns)];
+  const generations = ns => [memoryIndex(ns), cardIndex(ns), routing(ns), ...(Object.keys(cardDependencyFence(db, ns)).length ? [cardDependencyFence(db, ns)] : [])];
   const advanceIndex = ns => db.prepare(`INSERT INTO card_moc_epochs VALUES(?,?,?,2)
     ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET revision=revision+1`).run(...boundary(ns));
   const topic = (ns, id) => db.prepare(`SELECT * FROM card_mocs WHERE ${where} AND id=?`).get(...boundary(ns), id);

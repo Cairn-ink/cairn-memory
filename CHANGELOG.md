@@ -2,6 +2,8 @@
 
 ## Unreleased — local role profiles (U5c-1)
 
+- Add explicit current-method dependency review for private Cards, canonical v33 guards, and read-time invalidation across evidence, retrieval, organization and role guidance.
+
 - Add opt-in direct agent role publication with dual CAS and v32 guards, matching
   method/context scopes, and one budgeted MCP role/task read with caller-held
   receipts, historical labels and exact-version file continuation. See the

@@ -1,3 +1,4 @@
+import { createCardCurrentStorage } from './card-current-storage.mjs';
 import { randomUUID } from 'node:crypto';
 import { createMethodBindingStorage } from './method-binding-storage.mjs';
 import { createMethodAttachmentStorage } from './method-attachment-storage.mjs';
@@ -84,7 +85,7 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
         return Boolean(row && row.revision === ref.revision && !db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(ref.memoryId).some(r => excludedReceipt(r.id)));
       }
       if (ref.type === 'card') {
-        const card = cardDetailInside(ns, ref.cardId);
+        const card = cardDetailInside(ns, ref.cardId, undefined, { historicalReason: true });
         return Boolean(card && card.state === 'confirmed' && card.revision === ref.revision &&
           card.bodyRevision === ref.bodyRevision && card.support.status === 'eligible' &&
           card.bindings.every(item => item.source.type !== 'receipt' || !excludedReceipt(item.source.receiptId)));
@@ -99,6 +100,14 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
         'raw_crypto_unavailable','revision_conflict'].includes(error.code)) return false;
       throw error;
     }
+  }
+  // Intent-specific gate: recorded reasonAvailable keeps its frozen provenance semantics.
+  function currentRoleRelatedAvailable(ns, ref, readSet) {
+    if (!reasonAvailable(ns, ref)) return false;
+    if (ref.type !== 'card') return true;
+    const card = db.prepare(`SELECT id,revision,body_revision FROM private_cards WHERE ${where} AND id=?`).get(...boundary(ns), ref.cardId);
+    const dependency = createCardCurrentStorage({ db, identity }).compare(ns, card, readSet);
+    return !dependency || dependency.status === 'current';
   }
   function metadata(ns, row) {
     return { ref: versionRef(ns,row), ordinal: row.ordinal,
@@ -306,8 +315,8 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
   }
   return Object.freeze({
     // Internal synchronous seam: caller owns the one shared read transaction.
-    roleRead: Object.freeze({ stateFor: bindings.stateFor, adoption: bindings.adoption,
-      packageRow, targetMetadata, targetLifecycle, verifyFile, reasonAvailable,
+    roleRead: Object.freeze({ stateFor: bindings.stateFor, decode: bindings.decode, adoption: bindings.adoption,
+      packageRow, targetMetadata, targetLifecycle, verifyFile, reasonAvailable, currentRoleRelatedAvailable,
       verifyBinaryMetadata: attachments.verifyBinaryMetadata,
       readInside: (method,ns,input,access) => read(method,ns,input,1,access,null) }),
     payloadBinding: value => binding('method-action-v1',value),

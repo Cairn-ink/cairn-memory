@@ -223,6 +223,7 @@ export function createMemoryCore(input, internal) {
   object(input, CORE_OPTIONS);
   const privateCards = privateCardOptions(input.privateCards);
   const methodPackages = methodPackageOptions(input.methodPackages);
+  if (privateCards?.currentDependencies && !methodPackages) fail('invalid_input');
   const assets = assetOptions(input.assets);
   const roleProfiles = roleProfileOptions(input.roleProfiles);
   const decisionReview = decisionReviewOption(input);

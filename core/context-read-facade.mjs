@@ -524,7 +524,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   const receipt = memoryOnly ? null : createCardReceiptSources(db, (purpose, value) =>
     createHmac('sha256', info.cursorSecret).update(JSON.stringify([purpose, [info.storeId, value]])).digest('base64url'));
   const evidence = memoryOnly ? null : createPrivateEvidenceStorage({ db, identity,
-    cardDetailInside: (ns, id) => cards.cardDetailInside(ns, id), receiptRefInside: (ns, memory, row) => receipt.refInside(ns, memory, row) });
+    cardDetailInside: (ns, id, readSet) => cards.cardDetailInside(ns, id, readSet), receiptRefInside: (ns, memory, row) => receipt.refInside(ns, memory, row) });
   async function contextRead(original, token) {
     let candidates;
     try {
@@ -557,7 +557,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
               try { witnessInside(input, path, 'evidence_unavailable', witnessBudget); }
               catch (error) { if (error.code === 'evidence_unavailable') { unavailable++; continue; } throw error; }
             }
-            item = evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent)[0];
+            item = evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet)[0];
           }
           catch (error) {
             if (!['evidence_unavailable', 'revision_conflict'].includes(error.code)) throw error;
@@ -608,7 +608,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         if (delivered.length && !same(canonicalFence(input.readSet, [...new Set(delivered.map(item => item.type))]), generationsFor(delivered))) fail('snapshot_stale');
         for (const item of delivered) {
           let current;
-          try { current = evidence.itemsInside(item.ref.namespace, [item.ref], input.intent)[0]; }
+          try { current = evidence.itemsInside(item.ref.namespace, [item.ref], input.intent, input.readSet)[0]; }
           catch (error) {
             if (['evidence_unavailable', 'revision_conflict'].includes(error.code)) fail('snapshot_stale');
             throw error;
@@ -645,7 +645,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       function fetchInside() {
         const generations = canonicalFence(input.readSet, types);
         if (previous && (!same(previous.generations, generations) || !same(previous.access, access.accessGenerations))) fail('snapshot_stale');
-        const items = refs.map(ref => evidence.itemsInside(ref.namespace, [ref], intent)[0]);
+        const items = refs.map(ref => evidence.itemsInside(ref.namespace, [ref], intent, input.readSet)[0]);
         const fences = items.map(item => bind('snapshot-item', item));
         if (input.fences?.some((prefix, i) => prefix !== null && !fences[i].startsWith(prefix))) fail('snapshot_stale');
         if (previous && !same(previous.fences, fences)) fail('snapshot_stale');

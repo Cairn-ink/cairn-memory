@@ -83,7 +83,7 @@ export function createRoleContextReader(storage,options,config) {
   }
   function deliverRelease(release,readSet) {
     if(!release?.fields)return release;
-    const eligible=release.fields.related.every(ref=>includesNamespace(readSet,ref.namespace)&&methods.reasonAvailable(cardNamespace(ref.namespace),ref));
+    const eligible=release.fields.related.every(ref=>includesNamespace(readSet,ref.namespace)&&methods.currentRoleRelatedAvailable(cardNamespace(ref.namespace),ref,readSet));
     // Keep CAS/lifecycle metadata available even when guidance is fenced.
     return eligible?release:{...release,fields:null,actorId:null,agentId:null,changeReason:null};
   }

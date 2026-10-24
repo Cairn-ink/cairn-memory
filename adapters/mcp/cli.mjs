@@ -1,3 +1,4 @@
+import { cardCurrentHostConfiguration } from './card-current-configuration.mjs';
 import { pathToFileURL } from 'node:url';
 import { assetCommand } from './asset-command.mjs';
 import { methodCommand } from './method-package-command.mjs';
@@ -169,7 +170,7 @@ export function parseConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
     '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
     '--classification-recovery', '--capture-deadline-ms', '--session-episodes-access',
-    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--private-cards', '--retained-raw-profile', '--method-packages', '--assets', '--role-profiles', ...CONTEXT_FLAGS, CONTEXT_SOURCE_FLAG]);
+    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--private-cards', '--retained-raw-profile', '--method-packages', '--assets', '--role-profiles', '--private-card-current-dependencies', ...CONTEXT_FLAGS, CONTEXT_SOURCE_FLAG]);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
     if(args[i]==='--method-read-personal'||args[i]==='--context-read-personal'){
@@ -195,6 +196,7 @@ export function parseConfiguration(args) {
   // U5c-1: never union independently configured read grants.
   if (values.has('--role-profiles')) roleProfileHostConfiguration({ roleProfiles: values.get('--role-profiles'),
     methodPackages: values.get('--method-packages'), methodReadPersonal: values.has('--method-read-personal'), ...context });
+  if (values.has('--private-card-current-dependencies')) cardCurrentHostConfiguration({ privateCardCurrentDependencies: values.get('--private-card-current-dependencies'), privateCards: values.get('--private-cards'), methodPackages: values.get('--method-packages') });
   if (values.has('--private-cards') && values.get('--private-cards') !== 'local-v1') throw new Error('invalid_mcp_configuration');
   if (values.has('--capture-qualification')
     && !['source-bound-v1', 'source-bound-v2'].includes(values.get('--capture-qualification'))) {
@@ -243,6 +245,7 @@ export function parseConfiguration(args) {
   return { path: values.get('--db'), namespace: { ownerId: values.get('--owner'),
     scope: values.has('--project') ? 'project' : 'personal', projectId: values.get('--project') ?? null },
     ...context,
+    ...(values.has('--private-card-current-dependencies') ? { privateCardCurrentDependencies: values.get('--private-card-current-dependencies') } : {}),
     ...(values.has('--role-profiles') ? { roleProfiles: values.get('--role-profiles') } : {}),
     ...(values.has('--assets')?{assets:'local-v1'}:{}),
     ...(values.has('--method-packages')?{methodPackages:'local-v1'}:{}),
@@ -296,9 +299,17 @@ export async function start(args = process.argv.slice(2), env = process.env) {
     const stdio = await import('@modelcontextprotocol/server/stdio');
     return startStdio(factory, stdio);
   }
+  if (check && config.privateCardCurrentDependencies && !config.contextRead) {
+    console.log(JSON.stringify({ ok: true, mode: 'configuration-check', privateCards: config.privateCards,
+      methodPackages: config.methodPackages, privateCardCurrentDependencies: config.privateCardCurrentDependencies,
+      cardDependencyApproval: 'separate-local-tty-required', scope: config.namespace.scope,
+      modelKeyInspected: false, databaseOpened: false, providerContacted: false, automaticCapture: false }));
+    return;
+  }
   if (check && config.contextRead) {
     console.log(JSON.stringify({ ok: true, mode: 'configuration-check', contextRead: config.contextRead,
       contextReadPersonal: config.contextReadPersonal ?? false,
+      ...(config.privateCardCurrentDependencies ? { privateCardCurrentDependencies: config.privateCardCurrentDependencies, cardDependencyApproval: 'separate-local-tty-required' } : {}),
       ...(config.roleProfiles ? roleProfileCheckConfiguration(config) : {}), scope: config.namespace.scope,
       provider: config.contextProvider ?? null, preset: contextSourcesPreset(config.contextReadSources, Boolean(config.contextProvider)),
       ...(config.contextReadSources ? { sources: config.contextReadSources } : {}),

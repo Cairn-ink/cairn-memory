@@ -1,3 +1,5 @@
+import { cardCurrentHostConfiguration } from './card-current-configuration.mjs';
+import { registerCardCurrentTools } from './card-current-tools.mjs';
 import { createAssetReadAccess } from './asset-access.mjs';
 import { registerAssetTools, ASSET_TOOL_NAMES } from './asset-tools.mjs';
 import { createHash, randomUUID } from 'node:crypto';
@@ -67,7 +69,7 @@ export function createCairnServer(options = {}) {
   object(options, ['path', 'namespace', 'model', 'captureQualification', 'captureRationale',
     'captureEvidence', 'captureEvidenceAccess', 'sourceSnapshot', 'recallContext', 'classificationRecovery',
     'captureDeadlineMs', 'sessionEpisodesAccess', 'client', 'sessionId', 'readClient', 'sessionEpisodes', 'privateCards', 'methodPackages', 'methodReadPersonal',
-    'contextRead', 'contextReadPersonal', 'contextEmbedding', 'contextCounter', 'assets', 'roleProfiles', 'roleProfileAttribution', 'contextReadSources']);
+    'contextRead', 'contextReadPersonal', 'contextEmbedding', 'contextCounter', 'assets', 'roleProfiles', 'roleProfileAttribution', 'contextReadSources', 'privateCardCurrentDependencies']);
   const { path, namespace, model } = options;
   const contextConfigured = Object.hasOwn(options,'contextRead');
   if (contextConfigured && options.contextRead !== 'context-read-v1' || Object.hasOwn(options,'contextReadPersonal') &&
@@ -84,6 +86,7 @@ export function createCairnServer(options = {}) {
   const cardsConfigured = Object.hasOwn(options, 'privateCards');
   if (cardsConfigured && options.privateCards !== 'local-v1') throw new Error('invalid_mcp_configuration');
   const client = Object.hasOwn(options, 'client') ? options.client : 'cairn-local-mcp';
+  const cardCurrent = cardCurrentHostConfiguration(options);
   const roleAttribution = roleProfileHostConfiguration(options, client);
   const sessionId = Object.hasOwn(options, 'sessionId') ? options.sessionId : 'explicit-tool';
   if (!clientKey.safeParse(client).success || !id.safeParse(sessionId).success ||
@@ -136,7 +139,7 @@ export function createCairnServer(options = {}) {
   identifier(binding.ownerId);
   if (binding.scope === 'project') identifier(binding.projectId);
   else if (binding.scope !== 'personal' || binding.projectId !== null) throw new Error('invalid_mcp_configuration');
-  const cards = cardsConfigured ? createScopedCardAccess(binding) : null;
+  const cards = cardsConfigured ? createScopedCardAccess(binding, { currentDependencies: cardCurrent, readSet: methodsConfigured && options.methodReadPersonal ? [{ ownerId: binding.ownerId, scope: 'personal', projectId: null }, binding] : [binding] }) : null;
   const assets=assetsConfigured?createAssetReadAccess(binding):null;
   const methods=methodsConfigured?createMethodReadAccess(binding,options.methodReadPersonal===true):null;
   const context=contextConfigured?createContextReadAccess(binding,options.contextReadPersonal===true):null;
@@ -265,6 +268,7 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
     else registerContextReadTools(tool, core, context);
   }
   if (roles) registerRoleProfileTools(tool, core, roles);
+  if (cards?.currentDependencies) registerCardCurrentTools(tool);
   if (cards) {
     const run = (method, input) => cards.call(core, method, input);
     const cardRef = { cardId: id, expectedRevision: revision, actionId: id };
