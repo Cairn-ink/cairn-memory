@@ -58,7 +58,7 @@ test('C06 actual tgz source/import closure, independent tar enumeration, install
   console.log(JSON.stringify({C06:{sourceClosure:source.required.length,installedClosure:actual.required.length,manifest:manifest.length,derived:derived.length,archive:archive.length,installedFilesystem:walk(installed.root).length,newCore:9,newMcp:4,diff:0,packExit:0,installExit:0}}));
 });
 
-test('C05 frozen pre-v32 installed closure refuses v32; current installed flag-off writers retain role guards',async()=>{
+test('C05 frozen 0416ef3c pre-v32 installed closure refuses v32',async()=>{
   const tgz=fileURLToPath(new URL('./fixtures/role-profile-pre-v32.tgz',import.meta.url));
   assert.equal(baseFixture.base,'0416ef3c');assert.equal(sha(readFileSync(tgz)),baseFixture.sha256);
   const dir=join(workspace.path,'old-binary');mkdirSync(dir);writeFileSync(join(dir,'package.json'),'{"name":"synthetic-old","version":"0.0.0","private":true}');
@@ -67,7 +67,7 @@ test('C05 frozen pre-v32 installed closure refuses v32; current installed flag-o
   assert.deepEqual(files,baseFixture.files);for(const [p,hash]of Object.entries(baseFixture.sourceHashes))assert.equal(sha(readFileSync(join(old,p))),hash,p);
   const rolePath=join(workspace.path,'upgraded.sqlite');
   const c=coreModule.openMemoryCore({path:rolePath,roleProfiles:{version:'role-profiles-local-v1',storage:'local-plain-v1',authority,attribution:{actorId:'a',agentId:'b'}}});
-  const input={...publish('finance',fields()),namespace:ns};const head=ok(c.publishRoleProfileRelease(input,token));c.close();
+  const input={...publish('finance',fields()),namespace:ns};ok(c.publishRoleProfileRelease(input,token));c.close();
   const bytes=readFileSync(rolePath);
   child('old-refusal',`import assert from 'node:assert/strict';const {openMemoryCore}=await import(${JSON.stringify(pathToFileURL(join(old,'core/contract.mjs')).href)});
     assert.throws(()=>openMemoryCore({path:process.argv[1]}),e=>e.code==='unsupported_database');console.log('old installed opener refused v32');`,[rolePath]);
@@ -75,6 +75,28 @@ test('C05 frozen pre-v32 installed closure refuses v32; current installed flag-o
   await assert.rejects(()=>roleHost(workspace,join(old,'bin/cairn-memory.mjs'),rolePath,{enabled:false,onExit:r=>oldTransportExit=r.code}),/cairn_mcp_transport_error/);
   assert.equal(oldTransportExit,0); // Frozen serveStdio reports factory refusal through transport closure.
   assert.deepEqual(readFileSync(rolePath),bytes);
+  console.log(JSON.stringify({C05:{oldInstalledFiles:files.length,oldOpenerExit:0,oldTransportExit,oldHandshakeRefused:true}}));
+});
+
+test('C05 pinned 4aa9327b installed flag-off bytes remain identical; feature-off v32 writers retain guards and fences',async()=>{
+  const expected=JSON.parse(readFileSync(new URL('../../adapters/mcp/test/fixtures/role-profile-pre-u5c1.json',import.meta.url)));
+  assert.equal(expected.base,'4aa9327b');assert.equal(expected.archive.base,expected.base);
+  const tgz=fileURLToPath(new URL('./fixtures/role-profile-flag-off.tgz',import.meta.url));
+  assert.equal(sha(readFileSync(tgz)),expected.archive.sha256);
+  const dir=join(workspace.path,'flag-off-binary');mkdirSync(dir);writeFileSync(join(dir,'package.json'),'{"name":"synthetic-flag-off","version":"0.0.0","private":true}');
+  fileCommand(workspace,'npm',['install','--prefix',dir,'--offline','--ignore-scripts','--no-audit','--no-fund',tgz],dir,installed.artifact.userconfig);
+  const baseline=join(dir,'node_modules','cairn-memory-local-preview'),files=walk(baseline);
+  assert.deepEqual(files,expected.archive.files);
+  for(const [p,hash]of Object.entries(expected.archive.sourceHashes))assert.equal(sha(readFileSync(join(baseline,p))),hash,p);
+  // Reproduce every pinned value from the independently frozen U5c-2 tree,
+  // then require the current installation to match those same bytes exactly.
+  const legacy=join(workspace.path,'flag-off-probe');mkdirSync(legacy);
+  assert.deepEqual(await roleLegacyProbe(baseline,legacy),expected.value);
+  const current=join(workspace.path,'current-probe');mkdirSync(current);
+  assert.deepEqual(await roleLegacyProbe(installed.root,current),expected.value);
+  const rolePath=join(workspace.path,'feature-off.sqlite');
+  const c=coreModule.openMemoryCore({path:rolePath,roleProfiles:{version:'role-profiles-local-v1',storage:'local-plain-v1',authority,attribution:{actorId:'a',agentId:'b'}}});
+  const head=ok(c.publishRoleProfileRelease({...publish('finance',fields()),namespace:ns},token));c.close();
   const off=coreModule.openMemoryCore({path:rolePath});assert.equal(off.publishRoleProfileRelease,undefined);
   const admitted=ok(off.admit({namespace:ns,memory:{content:'Synthetic canonical record',kind:'fact'},receipts:[{client:'s',sessionId:'s',eventId:'e',role:'user',excerpt:'Synthetic canonical record'}]}));
   const relatedClient=await roleHost(workspace,installed.entry,rolePath);
@@ -85,12 +107,7 @@ test('C05 frozen pre-v32 installed closure refuses v32; current installed flag-o
   assert.equal((await read(relatedClient,{mode:'now',roleKey:'related'})).profile.release.fields,null);
   await relatedClient.close();
   const db=new DatabaseSync(rolePath);try{assert.throws(()=>db.prepare('DELETE FROM role_profile_releases').run());assert.throws(()=>db.prepare("UPDATE role_profiles SET revision=0").run());assert.equal(db.prepare("SELECT current_release_id FROM role_profiles WHERE role_key='finance'").get().current_release_id,head.release.releaseId);}finally{db.close();}
-  // The frozen closure regenerates the pinned compatibility outputs itself.
-  const legacy=join(workspace.path,'frozen-probe');mkdirSync(legacy);
-  const expected=JSON.parse(readFileSync(new URL('../../adapters/mcp/test/fixtures/role-profile-pre-u5c1.json',import.meta.url)));
-  assert.deepEqual(await roleLegacyProbe(old,legacy),expected.value);
-  const current=join(workspace.path,'current-probe');mkdirSync(current);assert.deepEqual(await roleLegacyProbe(installed.root,current),expected.value);
-  console.log(JSON.stringify({C05:{oldInstalledFiles:files.length,oldOpenerExit:0,oldTransportExit,oldHandshakeRefused:true,baselineModes:5,flagOffDiff:0}}));
+  console.log(JSON.stringify({C05:{flagOffBase:expected.base,baselineInstalledFiles:files.length,baselineModes:5,flagOffDiff:0}}));
 });
 
 test('C01/C02/C03/C07 installed MCP three-role workflow, two-client CAS, restart and second-process exact-version continuation',{timeout:90000},async()=>{
