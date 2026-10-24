@@ -613,7 +613,7 @@
       "statementLang": "zh",
       "statement": "鎏砂的壓測租機費上限是 NT$23,700。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t01-05",
@@ -633,7 +633,7 @@
       "statementLang": "zh",
       "statement": "蘇苒負責鎏砂的簽章索引回補。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t01-06",
@@ -671,7 +671,7 @@
       "statementLang": "zh",
       "statement": "鎏砂已否決把簽章原文寫進錯誤訊息。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t01-08",
@@ -707,7 +707,7 @@
       "statementLang": "zh",
       "statement": "赭苔原先以檔名判斷附件是否重複。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t02-02",
@@ -743,7 +743,7 @@
       "statementLang": "zh",
       "statement": "赭苔改動的原因是手機會重複使用預設檔名。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t02-04",
@@ -781,7 +781,7 @@
       "statementLang": "zh",
       "statement": "林頌負責赭苔的指紋碰撞演練。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t02-06",
@@ -819,7 +819,7 @@
       "statementLang": "zh",
       "statement": "赭苔的自動刪除同名附件仍是未核准提案。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t02-08",
@@ -909,7 +909,7 @@
       "statementLang": "en",
       "statement": "MasonLamp caps dictionary cleanup at 137 hours.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t03-05",
@@ -967,7 +967,7 @@
       "statementLang": "en",
       "statement": "MasonLamp rejected downloading every font at boot.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t03-08",
@@ -1003,7 +1003,7 @@
       "statementLang": "zh",
       "statement": "VellumArc 原先由呼叫端重試失敗的簽收。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t04-02",
@@ -1021,7 +1021,7 @@
       "statementLang": "zh",
       "statement": "VellumArc 後來把簽收重試移到隔離佇列。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t04-03",
@@ -1077,7 +1077,7 @@
       "statementLang": "zh",
       "statement": "葉苓負責 VellumArc 的簽收重播腳本。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t04-06",
@@ -1097,7 +1097,7 @@
       "statementLang": "zh",
       "statement": "葉苓在 VellumArc 的延遲海報只負責標題。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t04-07",
@@ -1151,7 +1151,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：ReedCove originally generated thumbnails inside the transaction.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t05-02",
@@ -1187,7 +1187,7 @@
       "statementLang": "zh",
       "statement": "葭灣改動的原因是大圖解碼拖住鎖定。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t05-04",
@@ -1225,7 +1225,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：Fang Zhan owns the ReedCove thumbnail rebuild.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t05-06",
@@ -1245,7 +1245,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：Fang Zhan only owns alt text on ReedCove's image tutorial page.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t05-07",
@@ -1263,7 +1263,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：ReedCove rejected putting original images inside job messages.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t05-08",
@@ -1353,7 +1353,7 @@
       "statementLang": "en",
       "statement": "PrismSkein caps error-case curation at 143 hours.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t06-05",
@@ -1373,7 +1373,7 @@
       "statementLang": "en",
       "statement": "Qin He owns the PrismSkein error-code crosswalk.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t06-06",
@@ -1411,7 +1411,7 @@
       "statementLang": "en",
       "statement": "Silently swallowing parse errors remains an unapproved PrismSkein proposal.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t06-08",
@@ -1465,7 +1465,7 @@
       "statementLang": "zh",
       "statement": "汀磚後來改為先寫刪除意圖再清除。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t07-03",
@@ -1501,7 +1501,7 @@
       "statementLang": "zh",
       "statement": "汀磚的清除演練費上限是 NT$31,800。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t07-05",
@@ -1521,7 +1521,7 @@
       "statementLang": "zh",
       "statement": "袁沐負責汀磚的刪除意圖稽查。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t07-06",
@@ -1613,7 +1613,7 @@
       "statementLang": "zh",
       "statement": "FableSpool 後來改用可注入的測試時鐘。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t08-03",
@@ -1649,7 +1649,7 @@
       "statementLang": "zh",
       "statement": "FableSpool 的時間案例維護上限是 157 小時。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t08-05",
@@ -1689,7 +1689,7 @@
       "statementLang": "zh",
       "statement": "姜羽在 FableSpool 的時間線說明頁只負責圖例。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t08-07",
@@ -1797,7 +1797,7 @@
       "statementLang": "en",
       "statement": "GrainBriar caps monthly route-checking fees at NT$33,400.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t09-05",
@@ -1817,7 +1817,7 @@
       "statementLang": "en",
       "statement": "Du Rui owns GrainBriar's snapshot-difference checks.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t09-06",
@@ -1927,7 +1927,7 @@
       "statementLang": "zh",
       "statement": "NimbusLatch 改動的原因是環境複製會沿用有效連結。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t10-04",
@@ -1945,7 +1945,7 @@
       "statementLang": "zh",
       "statement": "NimbusLatch 的密鑰輪替工時上限是 163 小時。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t10-05",
@@ -1965,7 +1965,7 @@
       "statementLang": "zh",
       "statement": "溫蘅負責 NimbusLatch 的環境密鑰盤點。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t10-06",
@@ -1985,7 +1985,7 @@
       "statementLang": "zh",
       "statement": "溫蘅在 NimbusLatch 的設定導覽只負責螢幕截圖。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t10-07",
@@ -2003,7 +2003,7 @@
       "statementLang": "zh",
       "statement": "NimbusLatch 的永久測試連結仍是未核准提案。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t10-08",
@@ -2039,7 +2039,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：OakSlip originally ordered discussion summaries by speaking order.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t11-02",
@@ -2057,7 +2057,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：OakSlip later ordered discussion summaries by open questions.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t11-03",
@@ -2113,7 +2113,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：Su Ran owns OakSlip's question consolidation.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t11-06",
@@ -2205,7 +2205,7 @@
       "statementLang": "zh",
       "statement": "AsterMargin 的改稿回饋後來改為先寫讀者困惑。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t12-03",
@@ -2241,7 +2241,7 @@
       "statementLang": "zh",
       "statement": "AsterMargin 的校稿支出上限是 NT$35,900。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t12-05",
@@ -2281,7 +2281,7 @@
       "statementLang": "zh",
       "statement": "林頌在 AsterMargin 的訪談稿只負責人名拼字。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t12-07",
@@ -2353,7 +2353,7 @@
       "statementLang": "en",
       "statement": "MallowLeaf later began interview notes with concrete frustrations.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t13-03",
@@ -2371,7 +2371,7 @@
       "statementLang": "en",
       "statement": "Wish lists obscuring actual circumstances caused the MallowLeaf change.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t13-04",
@@ -2409,7 +2409,7 @@
       "statementLang": "en",
       "statement": "Xu Che owns MallowLeaf's frustration classification.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t13-06",
@@ -2447,7 +2447,7 @@
       "statementLang": "en",
       "statement": "MallowLeaf rejected guessing wishes that interviewees never voiced.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t13-08",
@@ -2483,7 +2483,7 @@
       "statementLang": "zh",
       "statement": "CinderBrief 的進度回報原先按部門排列。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t14-02",
@@ -2557,7 +2557,7 @@
       "statementLang": "zh",
       "statement": "葉苓負責 CinderBrief 的依賴關係整理。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t14-06",
@@ -2631,7 +2631,7 @@
       "statementLang": "zh",
       "statement": "穗墨的非同步討論原先每則訊息即時提醒。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t15-02",
@@ -2667,7 +2667,7 @@
       "statementLang": "en",
       "statement": "Fragmented notifications interrupting writing caused the EarInk change.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t15-04",
@@ -2685,7 +2685,7 @@
       "statementLang": "zh",
       "statement": "穗墨的通知文字整理上限是 193 小時。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t15-05",
@@ -2705,7 +2705,7 @@
       "statementLang": "zh",
       "statement": "方湛負責穗墨的主題收尾摘要。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t15-06",
@@ -2725,7 +2725,7 @@
       "statementLang": "zh",
       "statement": "方湛在穗墨的社群邀請函只負責稱謂。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t15-07",
@@ -2779,7 +2779,7 @@
       "statementLang": "en",
       "statement": "LinenPrompt originally attached solution choices to collaboration questions.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t16-02",
@@ -2815,7 +2815,7 @@
       "statementLang": "en",
       "statement": "Choices making colleagues converge too early caused the LinenPrompt change.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t16-04",
@@ -2873,7 +2873,7 @@
       "statementLang": "en",
       "statement": "Qin He only owns letter spacing on LinenPrompt's classroom notice.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t16-07",
@@ -2945,7 +2945,7 @@
       "statementLang": "zh",
       "statement": "蕨頁的週末閱讀摘記後來改為記下反例。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t17-03",
@@ -3001,7 +3001,7 @@
       "statementLang": "zh",
       "statement": "袁沐負責蕨頁的反例整理。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t17-06",
@@ -3021,7 +3021,7 @@
       "statementLang": "zh",
       "statement": "袁沐在蕨頁的書籍寄件單只負責地址格式。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t17-07",
@@ -3039,7 +3039,7 @@
       "statementLang": "zh",
       "statement": "蕨頁已否決用摘記數量評估閱讀成效。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t17-08",
@@ -3093,7 +3093,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：GardeniaHouse later inspected shared space after closing.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t18-03",
@@ -3111,7 +3111,7 @@
       "statementLang": "en",
       "statement": "Problems becoming visible only after departures caused the GardeniaHouse change.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t18-04",
@@ -3129,7 +3129,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：GardeniaHouse caps monthly inspection supplies at NT$4,730.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t18-05",
@@ -3149,7 +3149,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：Jiang Yu owns GardeniaHouse's departure inspection.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t18-06",
@@ -3169,7 +3169,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：Jiang Yu only owns fonts on GardeniaHouse's welcome stand.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t18-07",
@@ -3187,7 +3187,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：Cancelling departure inspections remains an unapproved GardeniaHouse proposal.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t18-08",
@@ -3297,7 +3297,7 @@
       "statementLang": "en",
       "statement": "Du Rui owns CopperQuay's lending marks.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t19-06",
@@ -3317,7 +3317,7 @@
       "statementLang": "en",
       "statement": "Du Rui only owns arrows on CopperQuay's warehouse guide map.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t19-07",
@@ -3389,7 +3389,7 @@
       "statementLang": "zh",
       "statement": "漆棧的活動候補後來改用可回覆的郵件通知。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t20-03",
@@ -3407,7 +3407,7 @@
       "statementLang": "en",
       "statement": "Untraceable responses to missed calls caused the LacquerDepot change.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t20-04",
@@ -3425,7 +3425,7 @@
       "statementLang": "zh",
       "statement": "漆棧的候補聯絡費上限是 NT$6,410。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t20-05",
@@ -3445,7 +3445,7 @@
       "statementLang": "zh",
       "statement": "溫蘅負責漆棧的候補回覆彙整。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t20-06",
@@ -3519,7 +3519,7 @@
       "statementLang": "zh",
       "statement": "PetalFoundry 原先口頭交接會場遺失物。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t21-02",
@@ -3555,7 +3555,7 @@
       "statementLang": "zh",
       "statement": "PetalFoundry 改動的原因是物品描述在轉述時走樣。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t21-04",
@@ -3593,7 +3593,7 @@
       "statementLang": "zh",
       "statement": "蘇苒負責 PetalFoundry 的遺失物封袋。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t21-06",
@@ -3631,7 +3631,7 @@
       "statementLang": "zh",
       "statement": "PetalFoundry 已否決把無人認領物直接送人。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t21-08",
@@ -3667,7 +3667,7 @@
       "statementLang": "zh",
       "statement": "苔埠的補貨原先等缺料才申請。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t22-02",
@@ -3685,7 +3685,7 @@
       "statementLang": "zh",
       "statement": "苔埠的補貨後來改用消耗登記觸發。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t22-03",
@@ -3703,7 +3703,7 @@
       "statementLang": "zh",
       "statement": "苔埠改動的原因是臨時採買打亂工作坊準備。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t22-04",
@@ -3741,7 +3741,7 @@
       "statementLang": "zh",
       "statement": "林頌負責苔埠的消耗紀錄核對。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t22-06",
@@ -3779,7 +3779,7 @@
       "statementLang": "zh",
       "statement": "苔埠的由訪客自行補料仍是未核准提案。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t22-08",
@@ -3815,7 +3815,7 @@
       "statementLang": "en",
       "statement": "SaffronPier originally required video calls for remote check-in.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t23-02",
@@ -3833,7 +3833,7 @@
       "statementLang": "en",
       "statement": "SaffronPier later adopted text confirmation for remote check-in.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t23-03",
@@ -3851,7 +3851,7 @@
       "statementLang": "en",
       "statement": "Unstable temporary connections failing to carry video caused the SaffronPier change.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t23-04",
@@ -3889,7 +3889,7 @@
       "statementLang": "en",
       "statement": "Xu Che owns SaffronPier's check-in responses.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t23-06",
@@ -3963,7 +3963,7 @@
       "statementLang": "zh",
       "statement": "荻窯的講者簡介原先現場口頭核對。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t24-02",
@@ -4037,7 +4037,7 @@
       "statementLang": "zh",
       "statement": "葉苓負責荻窯的簡介回簽。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t24-06",
@@ -4111,7 +4111,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：RustSail originally matched deposits by transfer date.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t25-02",
@@ -4147,7 +4147,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：Combined transfers obscuring booked sessions caused the RustSail change.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t25-04",
@@ -4185,7 +4185,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：Fang Zhan owns RustSail's reservation-deposit matching.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t25-06",
@@ -4205,7 +4205,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：Fang Zhan only owns footnotes on RustSail's rental price sheet.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t25-07",
@@ -4223,7 +4223,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：RustSail rejected recognizing unidentified deposits as revenue.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t25-08",
@@ -4259,7 +4259,7 @@
       "statementLang": "en",
       "statement": "MarbleWren originally combined licensing fees with design fees.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t26-02",
@@ -4295,7 +4295,7 @@
       "statementLang": "en",
       "statement": "Renewals being obscured by project closure caused the MarbleWren change.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t26-04",
@@ -4425,7 +4425,7 @@
       "statementLang": "zh",
       "statement": "榛算後來改在原交易下記退款。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t27-03",
@@ -4443,7 +4443,7 @@
       "statementLang": "zh",
       "statement": "榛算改動的原因是跨期折讓無法回溯取消原因。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t27-04",
@@ -4481,7 +4481,7 @@
       "statementLang": "zh",
       "statement": "袁沐負責榛算的原單退款核對。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t27-06",
@@ -4501,7 +4501,7 @@
       "statementLang": "zh",
       "statement": "袁沐在榛算的客戶付款說明只負責圖示。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t27-07",
@@ -4519,7 +4519,7 @@
       "statementLang": "zh",
       "statement": "榛算已否決刪除已退款的原始訂單。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t27-08",
@@ -4555,7 +4555,7 @@
       "statementLang": "zh",
       "statement": "ThimbleLedger 原先把外幣匯差分攤到品項。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t28-02",
@@ -4667,7 +4667,7 @@
       "statementLang": "zh",
       "statement": "ThimbleLedger 的統一套用年底匯率仍是未核准提案。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t28-08",
@@ -4739,7 +4739,7 @@
       "statementLang": "en",
       "statement": "Consolidated-box discounts keeping estimates too high caused the ReedBooklet change.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t29-04",
@@ -4757,7 +4757,7 @@
       "statementLang": "en",
       "statement": "ReedBooklet caps permitted carrier differences at NT$15,730.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t29-05",
@@ -4797,7 +4797,7 @@
       "statementLang": "en",
       "statement": "Du Rui only owns whitespace on ReedBooklet's shipping stickers.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t29-07",
@@ -4851,7 +4851,7 @@
       "statementLang": "zh",
       "statement": "CobaltCoffer 原先把保證金列在一般預付。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t30-02",
@@ -4887,7 +4887,7 @@
       "statementLang": "zh",
       "statement": "CobaltCoffer 改動的原因是租約結束後仍留著未收款項。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t30-04",
@@ -4905,7 +4905,7 @@
       "statementLang": "zh",
       "statement": "CobaltCoffer 的保證金催收費上限是 NT$16,490。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t30-05",
@@ -4925,7 +4925,7 @@
       "statementLang": "zh",
       "statement": "溫蘅負責 CobaltCoffer 的保證金返還追蹤。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t30-06",
@@ -4945,7 +4945,7 @@
       "statementLang": "zh",
       "statement": "溫蘅在 CobaltCoffer 的租約索引只負責分隔頁。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t30-07",
@@ -4963,7 +4963,7 @@
       "statementLang": "zh",
       "statement": "CobaltCoffer 的自動沖銷過期保證金仍是未核准提案。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t30-08",
@@ -4999,7 +4999,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：PalmCounter originally recorded installments as fully received.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t31-02",
@@ -5017,7 +5017,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：PalmCounter later recorded received installments by actual bank credits.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t31-03",
@@ -5073,7 +5073,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：Su Ran owns PalmCounter's installment-credit matching.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t31-06",
@@ -5093,7 +5093,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：Su Ran only owns line spacing on PalmCounter's payment reminder card.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t31-07",
@@ -5111,7 +5111,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：PalmCounter rejected recognizing undebited installments as cash in advance.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t31-08",
@@ -5183,7 +5183,7 @@
       "statementLang": "zh",
       "statement": "芹衡改動的原因是抵用後又退款會重複減收。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t32-04",
@@ -5201,7 +5201,7 @@
       "statementLang": "zh",
       "statement": "芹衡的折價券核對費上限是 NT$18,670。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t32-05",
@@ -5241,7 +5241,7 @@
       "statementLang": "zh",
       "statement": "林頌在芹衡的課程收據樣張只負責底紋。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t32-07",
@@ -5259,7 +5259,7 @@
       "statementLang": "zh",
       "statement": "芹衡的折價券過期自動轉現金仍是未核准提案。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t32-08",
@@ -5369,7 +5369,7 @@
       "statementLang": "en",
       "statement": "Xu Che owns PorcelainPath's starter examples.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t33-06",
@@ -5389,7 +5389,7 @@
       "statementLang": "en",
       "statement": "Xu Che only owns line art in PorcelainPath's login illustration.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t33-07",
@@ -5479,7 +5479,7 @@
       "statementLang": "zh",
       "statement": "EmberAtlas 改動的原因是對照原稿時會失去編輯位置。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t34-04",
@@ -5497,7 +5497,7 @@
       "statementLang": "zh",
       "statement": "EmberAtlas 的紀錄介面設計費上限是 NT$46,100。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t34-05",
@@ -5517,7 +5517,7 @@
       "statementLang": "zh",
       "statement": "葉苓負責 EmberAtlas 的側欄互動。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t34-06",
@@ -5537,7 +5537,7 @@
       "statementLang": "zh",
       "statement": "葉苓在 EmberAtlas 的匯入封面只負責底色。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t34-07",
@@ -5609,7 +5609,7 @@
       "statementLang": "zh",
       "statement": "茴格的搜尋結果後來改為點開才顯示摘要。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t35-03",
@@ -5645,7 +5645,7 @@
       "statementLang": "zh",
       "statement": "茴格的搜尋介面改版費上限是 NT$47,900。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t35-05",
@@ -5665,7 +5665,7 @@
       "statementLang": "zh",
       "statement": "方湛負責茴格的摘要展開手勢。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t35-06",
@@ -5685,7 +5685,7 @@
       "statementLang": "zh",
       "statement": "方湛在茴格的收藏插頁只負責紙感紋理。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t35-07",
@@ -5775,7 +5775,7 @@
       "statementLang": "en",
       "statement": "Users placing cards in adjacent columns caused the LarchCanvas change.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t36-04",
@@ -5793,7 +5793,7 @@
       "statementLang": "en",
       "statement": "LarchCanvas caps drag-interaction design spending at NT$49,600.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t36-05",
@@ -5887,7 +5887,7 @@
       "statementLang": "zh",
       "statement": "芍窗的撤銷入口原先只放在選單。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t37-02",
@@ -5923,7 +5923,7 @@
       "statementLang": "zh",
       "statement": "芍窗改動的原因是使用者找入口時已忘記誤操作。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t37-04",
@@ -5999,7 +5999,7 @@
       "statementLang": "zh",
       "statement": "芍窗已否決用確認彈窗取代所有撤銷。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t37-08",
@@ -6035,7 +6035,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：LichenMap originally explained permissions with role names alone.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t38-02",
@@ -6109,7 +6109,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：Jiang Yu owns LichenMap's action explanation table.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t38-06",
@@ -6129,7 +6129,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：Jiang Yu only owns separators in LichenMap's invitation email.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t38-07",
@@ -6147,7 +6147,7 @@
       "statementLang": "mixed",
       "statement": "團隊紀錄：Enabling every action by default remains an unapproved LichenMap proposal.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t38-08",
@@ -6183,7 +6183,7 @@
       "statementLang": "en",
       "statement": "TorreyaTable originally placed shared snacks on the window table.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t39-02",
@@ -6201,7 +6201,7 @@
       "statementLang": "en",
       "statement": "TorreyaTable later placed shared snacks on the low entrance cabinet.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t39-03",
@@ -6219,7 +6219,7 @@
       "statementLang": "en",
       "statement": "Afternoon sunlight causing moisture inside wrappers prompted the TorreyaTable change.",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t39-04",
@@ -6277,7 +6277,7 @@
       "statementLang": "en",
       "statement": "Du Rui only owns ribbons on TorreyaTable's tea gift box.",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t39-07",
@@ -6385,7 +6385,7 @@
       "statementLang": "zh",
       "statement": "蕎袋的收納用品季費上限是 NT$3,690。",
       "rendered": true,
-      "coverage": "span-only"
+      "coverage": "body"
     },
     {
       "id": "B-hr2b-t40-05",
@@ -6443,7 +6443,7 @@
       "statementLang": "zh",
       "statement": "蕎袋的借物一律共用收納袋仍是未核准提案。",
       "rendered": true,
-      "coverage": "body"
+      "coverage": "span-only"
     },
     {
       "id": "B-hr2b-t40-08",

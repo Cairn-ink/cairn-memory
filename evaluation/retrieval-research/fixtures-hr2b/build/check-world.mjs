@@ -22,6 +22,14 @@ const V11_RESOLUTION = {
   facts_identical:true,families_identical:true,lexicon_identical:true,target_coverage_identical:true,
   provenance:'Coordinator resolution supplied in the seed-advance task; retained record was not opened.',
 };
+const CANDIDATE1_REJECTION = {
+  validationRecord:'build/candidate1-v11-validation/',
+  coordinatorDiagnostics:'`hr2b:placement_quota` → `test:first-receipt:groups_minimum_30` (test first-receipt stratum 20 groups / 12 families; test later-receipt 46 / 22; dev first-receipt 22 / 11; dev later-receipt 11 / 6; W3 had not run).',
+  quotaDiagnostics:{code:'hr2b:placement_quota',detail:'test:first-receipt:groups_minimum_30',
+    test:{firstReceipt:{groups:20,families:12},laterReceipt:{groups:46,families:22}},
+    dev:{firstReceipt:{groups:22,families:11},laterReceipt:{groups:11,families:6}},w3:'not-run'},
+  provenance:'Coordinator resolution supplied in the second seed-advance task; retained validation files were not opened.',
+};
 const GENERATOR_FILES = ['build/build-world.mjs','build/config.mjs','build/targets.mjs','build/distractors.mjs','build/foreign.mjs','build/filler.mjs','build/source.mjs'];
 const count = values => Object.fromEntries([...new Set(values)].sort().map(key => [key, values.filter(value => value === key).length]));
 const mean = values => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
@@ -272,7 +280,7 @@ function inventory() {
   function visit(dir = '') {
     for (const name of readdirSync(join(ROOT,dir)).sort()) {
       const path = join(dir,name);
-      if ((!dir && prohibited.has(name)) || ['build/candidate0-v1-validation','build/candidate0-v11-identity'].includes(path)) continue;
+      if (/audit/iu.test(name) || (!dir && prohibited.has(name)) || ['build/candidate0-v1-validation','build/candidate0-v11-identity','build/candidate1-v11-validation'].includes(path)) continue;
       const stat = lstatSync(join(ROOT,path));
       if (stat.isSymbolicLink()) throw new Error('inventory_symlink');
       if (stat.isDirectory()) visit(path); else if (stat.isFile()) filesystem.push(path); else throw new Error('inventory_special_file');
@@ -295,46 +303,41 @@ function inventory() {
 function report(result, exits, files) {
   const s = result.statistics, scales = s.scales;
   const roles = {S300:'target','S1000-extra':'distractor',foreign:'foreign'};
-  const rows = Object.entries(scales).map(([scale,v]) => `| ${scale} | ${v.count} | ${v.languages.zh}/${v.languages.en}/${v.languages.mixed} | ${Object.values(v.receiptCountHistogram).join('/')} | ${Object.values(s.placement[roles[scale]].counts).join('/')} | ${Object.values(v.bodyTokens.bands).join('/')} | ${Object.values(v.receiptTokens.bands).join('/')} | ${v.bodyTokens.mean}/${v.receiptTokens.mean} |`).join('\n');
-  const domainRows = DOMAINS.map(domain=>`| ${domain} | ${scales.S300.domain[domain] ?? 0} | ${scales['S1000-extra'].domain[domain] ?? 0} | ${scales.foreign.domain[domain] ?? 0} |`).join('\n');
-  const attempted = result.candidateHistory.filter(row=>row.protocolRevision===PROTOCOL.revision&&row.candidateIndex>=1);
+  const rows = Object.entries(scales).map(([scale,v]) => `| ${scale} | ${v.count} | ${v.languages.zh}/${v.languages.en}/${v.languages.mixed} | ${Object.values(v.receiptCountHistogram).join('/')} | ${Object.values(s.placement[roles[scale]].counts).join('/')} | ${Object.values(v.bodyTokens.bands).join('/')} | ${Object.values(v.receiptTokens.bands).join('/')} | ${v.bodyTokens.mean}/${v.receiptTokens.mean} | ${DOMAINS.map(domain=>v.domain[domain]).join('/')} |`).join('\n');
+  const attempted = result.candidateHistory.filter(row=>row.protocolRevision===PROTOCOL.revision&&row.candidateIndex>=2);
   const attemptedRows = attempted.map(row=> {
     const exit = row.actualExitCodes ?? {}, diagnostics = row.stage1Errors.length ? row.stage1Errors.map(error=>`${error.code}:${typeof error.detail==='string'?error.detail:'see retained diagnostics'}`).join('; ') : 'none';
     return `| ${row.candidateIndex} | ${row.seed} | ${exit.build ?? 'not-run'}/${exit.buildCheck ?? 'not-run'}/${exit.checkWorld ?? 'not-run'} | ${row.stage1} | ${diagnostics} |`;
   }).join('\n');
-  return `# HR-2b v1.1 W1 seed-advance report
+  return `# HR-2b v1.1 W1 second seed-advance report
 
-Protocol v1.1, frozen at d3a6e24f. Candidate in use: **${result.candidateIndex}**, seed **${result.seed}**, mulberry32; structural stage 1 **${result.ok?'pass':'fail'}**. New-candidate identity comparisons are inapplicable and were not run. No W2/W3 products, retained validator contents, tests, retrieval/assembly runs, network or commits were used.
+Protocol v1.1 (d3a6e24f). Chosen candidate **${result.candidateIndex}**, seed **${result.seed}**, mulberry32; stage 1 **${result.ok?'pass':'fail'}**. No generator edits, identity gate, W2/W3 products, retained validator contents, tests, retrieval/assembly runs, network or commits.
 
-Actual exits for every candidate attempted in this advance round, ordered as build-world.mjs / build-world.mjs --check / check-world.mjs:
+Actual exits this round: build-world.mjs / build-world.mjs --check / check-world.mjs.
 
 | Candidate | Seed | Exits | Stage 1 | Diagnostics |
 | --- | ---: | --- | --- | --- |
 ${attemptedRows}
 
-The frozen sequence was followed from candidate 1 and stopped at its first stage-1 pass. Later candidates are unattempted. The selected command exits are ${exits.build}/${exits.buildCheck}/${result.ok?0:1}.
+The frozen sequence started at candidate 2 and stopped at its first stage-1 pass. Later candidates are unattempted. Selected exits: **${exits.build}/${exits.buildCheck}/${result.ok?0:1}**.
 
-There are ${s.families.total} families (40 target/40 distractor/10 foreign), ${s.facts.total} facts and ${Object.values(scales).reduce((sum,v)=>sum+v.count,0)} memories. Target facts: 280 rendered/40 absent; distractors: 600 rendered/40 absent; foreign: 60 rendered, including 20 near-duplicates. All 540 bodies are assistant notes; receipt roles are ${s.receiptRoles.user} user/${s.receiptRoles.assistant} assistant.
+World: ${s.families.total} families (40 target/40 distractor/10 foreign), ${s.facts.total} facts, ${Object.values(scales).reduce((sum,v)=>sum+v.count,0)} assistant-note bodies; receipt roles ${s.receiptRoles.user} user/${s.receiptRoles.assistant} assistant.
 
-| Scale | Memories | zh/en/mixed | Receipts 1/2/3/4 | Placement body/first/later | Body bands | Receipt bands | Mean body/receipt tokens |
-| --- | ---: | --- | --- | --- | --- | --- | --- |
+| Scale | Memories | zh/en/mixed | Receipts 1/2/3/4 | Placement body/first/later | Body bands | Receipt bands | Mean body/receipt tokens | Domains E/W/O/F/P/D |
+| --- | ---: | --- | --- | --- | --- | --- | --- | --- |
 ${rows}
 
-Every scale realizes receipt-count shares **20/25/25/30%** and distinct-fact placement shares **45/25/30%**, exactly matching their targets. Language shares per scale are 55/30/15%; overall counts ${s.memoryLanguages.zh}/${s.memoryLanguages.en}/${s.memoryLanguages.mixed}. Body bands: [120,180), [180,260), [260,400]; receipt bands: [40,70), [70,130), [130,200]. Counter: tiktoken@${s.counter.version}, o200k_base. Distractors remain 160 hand/160 template.
+Every scale exactly matches receipt-count targets **20/25/25/30%** and distinct-fact placement targets **45/25/30%**. Languages: 55/30/15%; total ${s.memoryLanguages.zh}/${s.memoryLanguages.en}/${s.memoryLanguages.mixed}. Body bands: [120,180), [180,260), [260,400]; receipt bands: [40,70), [70,130), [130,200]. Counter: tiktoken@${s.counter.version}, o200k_base. Domains E/W/O/F/P/D: engineering/work-preferences/operations/finance/product/everyday. Distractors: 160 hand/160 template.
 
-| Domain | Target memories | Distractors | Foreign |
-| --- | ---: | ---: | ---: |
-${domainRows}
+Filler: ${s.filler.bankSentences} bank sentences, ${s.filler.disclosedRanges} UTF-16 ranges across ${s.filler.disclosedUnits} units; ${s.filler.lexiconTerms} per-fact terms scanned, ${s.filler.lexiconHits} hits. HR-1 exact-statement overlaps/unannotated exact facts: ${s.hr1ExactStatementOverlap}/${s.unannotatedExactFactOccurrences}. Independent annotation totals: ${s.annotationsCrossChecked.forward}/${s.annotationsCrossChecked.reverse}. Detailed measurements and diagnostics are in build/world-stats.json.
 
-Filler disclosure: ${s.filler.bankSentences} complete bank sentences, ${s.filler.disclosedRanges} UTF-16 ranges across ${s.filler.disclosedUnits} units; ${s.filler.lexiconTerms} per-fact terms scanned with ${s.filler.lexiconHits} hits. Exact HR-1 statement overlaps and unannotated exact facts: ${s.hr1ExactStatementOverlap}/${s.unannotatedExactFactOccurrences}. Independent annotation totals: ${s.annotationsCrossChecked.forward}/${s.annotationsCrossChecked.reverse}. Full measurements, evidence ranges and per-attempt diagnostics remain in build/world-stats.json.
+Decisions: all seven generator files, including four-bin config, are byte-identical to HEAD. Only the authorized candidate index changed; no sentence tuning or structural-check relaxation. Decision/reason and primary/nearby assignments stay separated. Body-only support uses span:null; topical anchors remain disclosed.
 
-Declared decisions: the seven generator files, including four-bin config, are byte-identical to HEAD; only the authorized candidate index changed. Families, factual sources, filler, lexicon, seed sequence and band logic were not edited. Facts-view coverage and placement can differ for a new candidate. Four target episodes express three facts each across body/receipts; decision/reason and primary/nearby assignments stay separated. Body-only support uses span:null; topical anchors remain separately disclosed.
+History preserves both candidate-0 rejections, candidate 1's stage-1 pass/stage-2 rejection (test:first-receipt:groups_minimum_30, 20 groups/12 families), and this round's attempts. Supplied diagnostics are verbatim in world-stats.json, referencing build/candidate1-v11-validation/. All three retained directories and earlier development diagnostics remain untouched.
 
-Preserved history: v1 candidate 0 stage-2 rejection (quota failures and admission cap); v1.1 candidate 0 duplicate normalized body m-9e1321fab528a943, identity failure and coordinator rejection. References point to build/candidate0-v1-validation/ and build/candidate0-v11-identity/; neither directory was traversed or modified. Earlier development diagnostics are retained.
+${result.ok?'W1 stage 1 is complete; stage-2 quotas and W3 re-audit remain pending with their owners.':'No candidate has passed; the next frozen seed is required.'}
 
-${result.ok?'W1 stage 1 is complete. Stage-2 quotas and W3 semantic re-audit remain pending with their owners.':'No candidate is accepted; the recorded failure requires the next frozen seed, without generator edits.'}
-
-Owned inventory: ${files.count} files, filesystem/Git diff empty. Changed files: **${files.changed.count}**, independently derived from Git diff plus untracked paths and filesystem bytes versus HEAD blobs; diff ${JSON.stringify(files.changed.diff)}; Git exits 0. Whitespace checks cover all owned files, including untracked files.
+Inventory: ${files.count} owned files, filesystem/Git diff empty. **${files.changed.count} changed files**, independently derived from Git diff/untracked paths and filesystem bytes versus HEAD blobs; diff ${JSON.stringify(files.changed.diff)}, Git exits 0. All owned files pass whitespace checks.
 
 ${files.changed.files.map(path=>`- \`${path}\``).join('\n')}
 `;
@@ -378,7 +381,10 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     try {previousRecord = JSON.parse(readFileSync(statsPath,'utf8'));} catch(error) {if(error.code!=='ENOENT') throw error;}
     let history = previousRecord?.candidateHistory ?? [];
     if (!reportOnly) {
-      if (!Number.isInteger(candidate) || candidate<1 || candidate>=CANDIDATE_SEEDS.length) throw new Error('seed_advance_requires_candidate_1_through_15');
+      const one = history.find(row=>row.protocolRevision===PROTOCOL.revision&&row.candidateIndex===1);
+      if (!one || one.stage1!=='pass') throw new Error('candidate_1_stage1_history_missing');
+      history = history.map(row=>row===one?{...row,stage2:'rejected',...CANDIDATE1_REJECTION}:row);
+      if (!Number.isInteger(candidate) || candidate<2 || candidate>=CANDIDATE_SEEDS.length) throw new Error('second_seed_advance_requires_candidate_2_through_15');
       for(let prior=1;prior<candidate;prior++) {
         const row = history.find(row=>row.protocolRevision===PROTOCOL.revision&&row.candidateIndex===prior);
         if (!row || (row.stage1!=='fail'&&row.stage2!=='rejected')) throw new Error(`candidate_sequence_not_ready:${prior}`);
@@ -443,7 +449,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
       result.inventory = inventory();
       writeFileSync(statsPath,serialize(result));
       const reportText = report(result,exits,result.inventory), words = reportText.trim().split(/\s+/u).length;
-      if (words > 600) throw new Error(`report_word_limit:${words}`);
+      if (words > 500) throw new Error(`report_word_limit:${words}`);
       writeFileSync(path,reportText);
       const whitespaceErrors = [];
       for (const filename of result.inventory.files) {
@@ -451,7 +457,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
         if (/[\t ]+$/mu.test(bytes) || bytes.includes('\r') || !bytes.endsWith('\n')) whitespaceErrors.push(filename);
       }
       if (whitespaceErrors.length) throw new Error(`delivery_whitespace:${whitespaceErrors.join(',')}`);
-      result.deliveryVerification = {reportWords:words,reportMaximumWords:600,whitespaceFilesChecked:result.inventory.count,whitespaceErrors};
+      result.deliveryVerification = {reportWords:words,reportMaximumWords:500,whitespaceFilesChecked:result.inventory.count,whitespaceErrors};
       // Re-enumerate after delivery writes; both independent lists must agree.
       const finalInventory = inventory();
       if (!same(finalInventory,result.inventory)) throw new Error('delivery_inventory_changed');

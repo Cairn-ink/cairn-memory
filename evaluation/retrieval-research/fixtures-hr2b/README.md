@@ -1,8 +1,8 @@
 # HR-2b synthetic long-item world
 
 W1 authoring product for protocol v1.1, frozen at `d3a6e24f` (amending v1
-at `c546bfc1`). Candidate in use is **1**, seed **500613191**: the first
-stage-1 pass after the coordinator rejected candidate 0 under v1.1.
+at `c546bfc1`). Candidate in use is **3**, seed **3023009795**: the first
+stage-1 pass in the second seed-advance round, after candidate 2 failed.
 Stage-2 validation and W3's semantic re-audit remain pending.
 All people, organizations, incidents, conversations and amounts are invented.
 The setting is independent Taiwan-based founder workspaces. Nothing describes
@@ -19,16 +19,16 @@ commit or create `FROZEN.md`.
 Run from the repository root with the installed research `tiktoken@1.0.22`:
 
 ```sh
-node evaluation/retrieval-research/fixtures-hr2b/build/build-world.mjs --candidate 1
-node evaluation/retrieval-research/fixtures-hr2b/build/build-world.mjs --candidate 1 --check
-node evaluation/retrieval-research/fixtures-hr2b/build/check-world.mjs --candidate 1
+node evaluation/retrieval-research/fixtures-hr2b/build/build-world.mjs --candidate 3
+node evaluation/retrieval-research/fixtures-hr2b/build/build-world.mjs --candidate 3 --check
+node evaluation/retrieval-research/fixtures-hr2b/build/check-world.mjs --candidate 3
 ```
 
 For retained statistics, independently checked inventory, actual subprocess
 exits and the delivery report:
 
 ```sh
-node evaluation/retrieval-research/fixtures-hr2b/build/check-world.mjs --candidate 1 --record --verify-builds -o W1-REPORT.md
+node evaluation/retrieval-research/fixtures-hr2b/build/check-world.mjs --candidate 3 --record --verify-builds -o W1-REPORT.md
 ```
 
 `build-world.mjs` writes **only** the two schema products. `--check` rebuilds
@@ -44,7 +44,7 @@ entry is imported directly by ESM; no `createRequire` is used.
 `build/config.mjs` was written before the first rendering. Its named PRNG is
 mulberry32, with a frozen ordered sequence of sixteen numeric seeds. Default
 builder candidate index is still zero; the commands above explicitly pin
-candidate 1. All banks and source arrays have stable order.
+candidate 3. All banks and source arrays have stable order.
 Largest-remainder apportionment, ties in declared order, fixes exact bucket
 counts before seeded shuffling. No process time, locale-dependent random
 source, network input, query or label influences a build.
@@ -87,10 +87,26 @@ families, lexicon and target coverage were identical. This supplied resolution
 is retained in the history with reference `build/candidate0-v11-identity/`.
 Neither retained directory is opened or traversed by W1.
 
-Per §9 and the coordinator's explicit authorization, this round advanced to
-**candidate 1**, the second frozen seed. Its build, byte check and structural
-checker all exited **0**, with no structural errors. No further candidate was
-attempted. All seven generator files, including the four-bin `RECEIPT_COUNTS`,
+The first seed-advance round used **candidate 1**, seed **500613191**. Its
+build, byte check and structural checker all exited **0**, with no structural
+errors. The coordinator then rejected it at stage 2 for
+`hr2b:placement_quota` → `test:first-receipt:groups_minimum_30`: test
+first-receipt 20 groups/12 families; test later-receipt 46/22; dev
+first-receipt 22/11; dev later-receipt 11/6; W3 had not run. The supplied
+diagnostics are retained verbatim in its candidate-history row, pointing to
+`build/candidate1-v11-validation/`. This third retained directory is also
+never opened or traversed by W1.
+
+Per §9 and the coordinator's explicit authorization, the second advance round
+started with **candidate 2**, seed **2352062053**. Build and byte check exited
+**0**, but the structural checker exited **1** on
+`memory:duplicate_normalized_body` for `m-8dd15190c519f600`. The failure,
+command exits, hashes, statistics and diagnostics were retained without any
+generator edit. The next frozen seed, **candidate 3** (**3023009795**), passed
+with exits **0/0/0** and no structural errors. Candidate 3 is in use;
+candidates 4–15 remain unattempted.
+
+All seven generator files, including the four-bin `RECEIPT_COUNTS`,
 are byte-identical to HEAD: no family, factual source, filler bank, lexicon
 rule, seed sequence, PRNG, rendering rule or band logic was edited this round.
 Their hashes and source commit are retained in `generatorIntegrity`.
@@ -104,7 +120,7 @@ exit codes, hashes, command output, errors and statistics, and the next frozen
 seed is tried without editing the generator. Sequence guards prevent skipping
 an unattempted seed or advancing past an unrejected passing candidate.
 
-`check-world.mjs --candidate 1 --record --report-only -o W1-REPORT.md`
+`check-world.mjs --candidate 3 --record --report-only -o W1-REPORT.md`
 refreshes delivery reporting and file-list/whitespace verification from the
 saved result, without building, rechecking the world or advancing a seed. It
 retains the recorded exit status rather than treating reporting as acceptance.

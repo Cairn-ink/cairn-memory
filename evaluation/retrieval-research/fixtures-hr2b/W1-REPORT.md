@@ -1,43 +1,35 @@
-# HR-2b v1.1 W1 seed-advance report
+# HR-2b v1.1 W1 second seed-advance report
 
-Protocol v1.1, frozen at d3a6e24f. Candidate in use: **1**, seed **500613191**, mulberry32; structural stage 1 **pass**. New-candidate identity comparisons are inapplicable and were not run. No W2/W3 products, retained validator contents, tests, retrieval/assembly runs, network or commits were used.
+Protocol v1.1 (d3a6e24f). Chosen candidate **3**, seed **3023009795**, mulberry32; stage 1 **pass**. No generator edits, identity gate, W2/W3 products, retained validator contents, tests, retrieval/assembly runs, network or commits.
 
-Actual exits for every candidate attempted in this advance round, ordered as build-world.mjs / build-world.mjs --check / check-world.mjs:
+Actual exits this round: build-world.mjs / build-world.mjs --check / check-world.mjs.
 
 | Candidate | Seed | Exits | Stage 1 | Diagnostics |
 | --- | ---: | --- | --- | --- |
-| 1 | 500613191 | 0/0/0 | pass | none |
+| 2 | 2352062053 | 0/0/1 | fail | memory:duplicate_normalized_body:m-8dd15190c519f600 |
+| 3 | 3023009795 | 0/0/0 | pass | none |
 
-The frozen sequence was followed from candidate 1 and stopped at its first stage-1 pass. Later candidates are unattempted. The selected command exits are 0/0/0.
+The frozen sequence started at candidate 2 and stopped at its first stage-1 pass. Later candidates are unattempted. Selected exits: **0/0/0**.
 
-There are 90 families (40 target/40 distractor/10 foreign), 1020 facts and 540 memories. Target facts: 280 rendered/40 absent; distractors: 600 rendered/40 absent; foreign: 60 rendered, including 20 near-duplicates. All 540 bodies are assistant notes; receipt roles are 908 user/523 assistant.
+World: 90 families (40 target/40 distractor/10 foreign), 1020 facts, 540 assistant-note bodies; receipt roles 905 user/526 assistant.
 
-| Scale | Memories | zh/en/mixed | Receipts 1/2/3/4 | Placement body/first/later | Body bands | Receipt bands | Mean body/receipt tokens |
-| --- | ---: | --- | --- | --- | --- | --- | --- |
-| S300 | 160 | 88/48/24 | 32/40/40/48 | 126/70/84 | 48/64/48 | 148/170/106 | 216.85/92.5731 |
-| S1000-extra | 320 | 176/96/48 | 64/80/80/96 | 270/150/180 | 96/128/96 | 297/339/212 | 218.9188/92.7653 |
-| foreign | 60 | 33/18/9 | 12/15/15/18 | 27/15/18 | 18/24/18 | 56/63/40 | 219.05/92.1321 |
+| Scale | Memories | zh/en/mixed | Receipts 1/2/3/4 | Placement body/first/later | Body bands | Receipt bands | Mean body/receipt tokens | Domains E/W/O/F/P/D |
+| --- | ---: | --- | --- | --- | --- | --- | --- | --- |
+| S300 | 160 | 88/48/24 | 32/40/40/48 | 126/70/84 | 48/64/48 | 148/170/106 | 216.7813/92.8656 | 40/28/28/32/24/8 |
+| S1000-extra | 320 | 176/96/48 | 64/80/80/96 | 270/150/180 | 96/128/96 | 297/339/212 | 218.6031/92.4682 | 80/56/56/64/48/16 |
+| foreign | 60 | 33/18/9 | 12/15/15/18 | 27/15/18 | 18/24/18 | 56/63/40 | 218.9333/92.5031 | 12/12/12/12/6/6 |
 
-Every scale realizes receipt-count shares **20/25/25/30%** and distinct-fact placement shares **45/25/30%**, exactly matching their targets. Language shares per scale are 55/30/15%; overall counts 297/162/81. Body bands: [120,180), [180,260), [260,400]; receipt bands: [40,70), [70,130), [130,200]. Counter: tiktoken@1.0.22, o200k_base. Distractors remain 160 hand/160 template.
+Every scale exactly matches receipt-count targets **20/25/25/30%** and distinct-fact placement targets **45/25/30%**. Languages: 55/30/15%; total 297/162/81. Body bands: [120,180), [180,260), [260,400]; receipt bands: [40,70), [70,130), [130,200]. Counter: tiktoken@1.0.22, o200k_base. Domains E/W/O/F/P/D: engineering/work-preferences/operations/finance/product/everyday. Distractors: 160 hand/160 template.
 
-| Domain | Target memories | Distractors | Foreign |
-| --- | ---: | ---: | ---: |
-| engineering | 40 | 80 | 12 |
-| work-preferences | 28 | 56 | 12 |
-| operations | 28 | 56 | 12 |
-| finance | 32 | 64 | 12 |
-| product | 24 | 48 | 6 |
-| everyday | 8 | 16 | 6 |
+Filler: 1080 bank sentences, 3683 UTF-16 ranges across 1971 units; 18297 per-fact terms scanned, 0 hits. HR-1 exact-statement overlaps/unannotated exact facts: 0/0. Independent annotation totals: 1340/1340. Detailed measurements and diagnostics are in build/world-stats.json.
 
-Filler disclosure: 1080 complete bank sentences, 3676 UTF-16 ranges across 1971 units; 18297 per-fact terms scanned with 0 hits. Exact HR-1 statement overlaps and unannotated exact facts: 0/0. Independent annotation totals: 1340/1340. Full measurements, evidence ranges and per-attempt diagnostics remain in build/world-stats.json.
+Decisions: all seven generator files, including four-bin config, are byte-identical to HEAD. Only the authorized candidate index changed; no sentence tuning or structural-check relaxation. Decision/reason and primary/nearby assignments stay separated. Body-only support uses span:null; topical anchors remain disclosed.
 
-Declared decisions: the seven generator files, including four-bin config, are byte-identical to HEAD; only the authorized candidate index changed. Families, factual sources, filler, lexicon, seed sequence and band logic were not edited. Facts-view coverage and placement can differ for a new candidate. Four target episodes express three facts each across body/receipts; decision/reason and primary/nearby assignments stay separated. Body-only support uses span:null; topical anchors remain separately disclosed.
+History preserves both candidate-0 rejections, candidate 1's stage-1 pass/stage-2 rejection (test:first-receipt:groups_minimum_30, 20 groups/12 families), and this round's attempts. Supplied diagnostics are verbatim in world-stats.json, referencing build/candidate1-v11-validation/. All three retained directories and earlier development diagnostics remain untouched.
 
-Preserved history: v1 candidate 0 stage-2 rejection (quota failures and admission cap); v1.1 candidate 0 duplicate normalized body m-9e1321fab528a943, identity failure and coordinator rejection. References point to build/candidate0-v1-validation/ and build/candidate0-v11-identity/; neither directory was traversed or modified. Earlier development diagnostics are retained.
+W1 stage 1 is complete; stage-2 quotas and W3 re-audit remain pending with their owners.
 
-W1 stage 1 is complete. Stage-2 quotas and W3 semantic re-audit remain pending with their owners.
-
-Owned inventory: 15 files, filesystem/Git diff empty. Changed files: **6**, independently derived from Git diff plus untracked paths and filesystem bytes versus HEAD blobs; diff {"gitOnly":[],"byteComparisonOnly":[]}; Git exits 0. Whitespace checks cover all owned files, including untracked files.
+Inventory: 15 owned files, filesystem/Git diff empty. **6 changed files**, independently derived from Git diff/untracked paths and filesystem bytes versus HEAD blobs; diff {"gitOnly":[],"byteComparisonOnly":[]}, Git exits 0. All owned files pass whitespace checks.
 
 - `README.md`
 - `W1-REPORT.md`
