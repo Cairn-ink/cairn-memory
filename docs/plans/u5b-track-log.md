@@ -315,3 +315,10 @@
   檔不變、常數 hash 一致、數值分支與回歸測試未動）。**啟動 §11 正式跑**：乾淨 checkout `14fdacb5`（主 worktree，status 乾淨，
   Node 22.16.0），照 README 協調者指令（preflight → extract → run → score → report → hashes → 封存，各 stage 經 `cairn-heavy`、
   記實際 exit code）。派出時負載 0.7。
+- **§11 正式跑完成**（乾淨 checkout `14fdacb5`，九個 stage 全 exit 0，`cells:120`、`comparisons:48`、host-only 報告 outcome
+  `inconclusive (primary_cell_absent)` 如規格）。結果：host-v2 下 coverage-first 在 192–512 落後 rank-first 4–15 點、768–1536
+  落後 **12–27 點**（三個 ranking 的 CI 都不含 0），因每筆 57–58 的表示開銷讓 bodies-first 永遠擠不出 receipt 的空間；
+  P-top-s1 從未更差、+0.3–2.3 點（只有 bge-m3@256 的 CI 不含 0）；**三個 ranking 到 1536 都未飽和**（每個 cell 有 89–94／160
+  題至少一個單元被拒）；body-equal span 0。§1 確認性結論不變。
+- **results v1.1 §7＋limitations 一句＋`results/hr2-host-v2/` 封存（壓縮 cells／scores／report、report.md、兩個 hash 檔、各
+  stage command／exit／log、preflight）提交 `a442215d`**，已推送。派 Spec 審查者做數字轉錄核對（非作者）後再交主控。
