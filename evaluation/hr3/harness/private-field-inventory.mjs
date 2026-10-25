@@ -46,9 +46,9 @@ export function derivePrivateFieldInventory() {
   const fields=[...origins].map(([name,locations])=>({name,variants:variants(name),origins:[...locations].sort()})).sort((a,b)=>a.name.localeCompare(b.name,'en'));
   for(const name of ['stage','arm','multi_hop','expiry_mode'])assert.ok(fields.some(f=>f.name===name));
   const sources=Object.fromEntries(['evaluation/hr3/harness/private-field-inventory.mjs','evaluation/hr3/harness/run-configuration.mjs','evaluation/hr3/harness/cap-stress-fixtures.mjs','evaluation/hr3/generator/generate.mjs','evaluation/hr3/generator/inventory.mjs'].map(p=>[p,hash(readFileSync(p))]));sources[path]=hash(bytes);
-  return {version:'hr3-private-field-inventory-v1',derivation:'All nonpublic top-level fixture and allocation authoring keys, reason membership keys, AST variant flags, and executable run routing keys; plus previously supported reserved private identifiers. Naming variants normalized across snake/camel/Pascal/kebab and is-prefixed membership flags.',publicSemanticFields:publicFields,fields,sources};
+  return {version:'hr3-private-field-inventory-a4-v1',publicContractBoundary:{path:'public_contract',policy:'Only exact deterministic re-projections of generator/public-contract.json; private keys remain forbidden everywhere else.'},derivation:'All nonpublic top-level fixture and allocation authoring keys, reason membership keys, AST variant flags, and executable run routing keys; plus previously supported reserved private identifiers. Naming variants normalized across snake/camel/Pascal/kebab and is-prefixed membership flags.',publicSemanticFields:publicFields,fields,sources};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href) {
- const report=derivePrivateFieldInventory();writeFileSync('evaluation/hr3/harness/reports/private-field-inventory-a3.json',JSON.stringify(report,null,2)+'\n');
+ const report=derivePrivateFieldInventory();writeFileSync('evaluation/hr3/harness/reports/private-field-inventory-a4.json',JSON.stringify(report,null,2)+'\n');
  process.stdout.write(JSON.stringify({fields:report.fields.length,variants:new Set(report.fields.flatMap(f=>f.variants)).size})+'\n');
 }

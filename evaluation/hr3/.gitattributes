@@ -1,0 +1,3 @@
+# Verification logs are hash-bound by the harness freeze; keep their bytes verbatim.
+harness/reports/*.tap -whitespace
+harness/reports/*.stdout -whitespace

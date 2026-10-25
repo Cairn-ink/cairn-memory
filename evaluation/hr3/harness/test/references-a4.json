@@ -1,0 +1,6878 @@
+[
+  {
+    "name": "correction",
+    "arms": {
+      "U": {
+        "state": {
+          "arm": "U",
+          "at": "2031-01-02T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "correction",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "historical",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            }
+          ],
+          "pending": [],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "observed_at": "2031-01-02T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "correction",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ],
+              "batch": 2,
+              "ordinal": 0,
+              "targets": [
+                "e1"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "U"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "U"
+            }
+          ]
+        },
+        "serializer_sha256": "5f507eace801b61255cf9a206a8607c7aaabd2ed957846a7d3282c58ff846952"
+      },
+      "T": {
+        "state": {
+          "arm": "T",
+          "at": "2031-01-02T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "correction",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "erroneous",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            }
+          ],
+          "pending": [],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "observed_at": "2031-01-02T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "correction",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ],
+              "batch": 2,
+              "ordinal": 0,
+              "targets": [
+                "e1"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "T"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "T"
+            }
+          ]
+        },
+        "serializer_sha256": "a3aaf8d77aa14180e6a29613b876671032f1de38416c9ee6744962ebec3dedbd"
+      },
+      "O": {
+        "state": {
+          "arm": "O",
+          "at": "2031-01-02T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "correction",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [],
+          "pending": [],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "O"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "O"
+            }
+          ]
+        },
+        "serializer_sha256": "a858391ba00829b5333d255082b51b21f6f08cf4bb772f4a87a42ea2129a86d3"
+      }
+    }
+  },
+  {
+    "name": "reversal",
+    "arms": {
+      "U": {
+        "state": {
+          "arm": "U",
+          "at": "2031-01-02T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "historical",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            }
+          ],
+          "pending": [],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "observed_at": "2031-01-02T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "reversal",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ],
+              "batch": 2,
+              "ordinal": 0,
+              "targets": [
+                "e1"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "U"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "U"
+            }
+          ]
+        },
+        "serializer_sha256": "5f923262e00f6d9a7f200ccb6a481eb60befb77940b129f259ef8d73fe231d96"
+      },
+      "T": {
+        "state": {
+          "arm": "T",
+          "at": "2031-01-02T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "previously_adopted",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            }
+          ],
+          "pending": [],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "observed_at": "2031-01-02T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "reversal",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ],
+              "batch": 2,
+              "ordinal": 0,
+              "targets": [
+                "e1"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "T"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "T"
+            }
+          ]
+        },
+        "serializer_sha256": "c8197661e5611cdf77c75a2fc41032541b7f7bf24e7109e5bb527372974e1d05"
+      },
+      "O": {
+        "state": {
+          "arm": "O",
+          "at": "2031-01-02T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [],
+          "pending": [],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "O"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "O"
+            }
+          ]
+        },
+        "serializer_sha256": "832fdd1b424564210aa5f62b5b5a9f955030809ea65b4cfb2ea6299afced258e"
+      }
+    }
+  },
+  {
+    "name": "partial_refinement",
+    "arms": {
+      "U": {
+        "state": {
+          "arm": "U",
+          "at": "2031-01-02T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "cap",
+                  "value": {
+                    "type": "Text",
+                    "text": "20"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "refinement",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "route"
+                  }
+                },
+                {
+                  "field": "cap",
+                  "value": {
+                    "type": "Text",
+                    "text": "10"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "historical",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            }
+          ],
+          "pending": [],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "route"
+                  }
+                },
+                {
+                  "field": "cap",
+                  "value": {
+                    "type": "Text",
+                    "text": "10"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value",
+                "cap"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "observed_at": "2031-01-02T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "refinement",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "cap",
+                  "value": {
+                    "type": "Text",
+                    "text": "20"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "partial",
+              "field_mask": [
+                "cap"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ],
+              "batch": 2,
+              "ordinal": 0,
+              "targets": [
+                "e1"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "U"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "U"
+            }
+          ]
+        },
+        "serializer_sha256": "1c898b2f438cd55005d8d7de6e86a687f8593ecabe1fe7485ea06fb55cf025c0"
+      },
+      "T": {
+        "state": {
+          "arm": "T",
+          "at": "2031-01-02T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "cap",
+                  "value": {
+                    "type": "Text",
+                    "text": "20"
+                  }
+                },
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "route"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "refinement",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1",
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                },
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "cap",
+                  "value": {
+                    "type": "Text",
+                    "text": "10"
+                  }
+                },
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "route"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "previously_adopted",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            }
+          ],
+          "pending": [],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "route"
+                  }
+                },
+                {
+                  "field": "cap",
+                  "value": {
+                    "type": "Text",
+                    "text": "10"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value",
+                "cap"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "observed_at": "2031-01-02T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "refinement",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "cap",
+                  "value": {
+                    "type": "Text",
+                    "text": "20"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "partial",
+              "field_mask": [
+                "cap"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ],
+              "batch": 2,
+              "ordinal": 0,
+              "targets": [
+                "e1"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "T"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "T"
+            }
+          ]
+        },
+        "serializer_sha256": "8db86ad782ee4e5692f75a21878860fae201345e8bca93d6f66c888ac67b8726"
+      },
+      "O": {
+        "state": {
+          "arm": "O",
+          "at": "2031-01-02T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "cap",
+                  "value": {
+                    "type": "Text",
+                    "text": "20"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "refinement",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [],
+          "pending": [],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "O"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "O"
+            }
+          ]
+        },
+        "serializer_sha256": "de1115f1e0eca5a27beff9b1017876301250e9fd4656fb16484e016555b44f12"
+      }
+    }
+  },
+  {
+    "name": "overlapping_scopes",
+    "arms": {
+      "U": {
+        "state": {
+          "arm": "U",
+          "at": "2031-01-02T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            },
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": [
+                      {
+                        "field": "country",
+                        "values": [
+                          "TW"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "scope_change",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [],
+          "pending": [],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "observed_at": "2031-01-02T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "scope_change",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": [
+                      {
+                        "field": "country",
+                        "values": [
+                          "TW"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "partial",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ],
+              "batch": 2,
+              "ordinal": 0,
+              "targets": [
+                "e1"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "U"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "U"
+            }
+          ]
+        },
+        "serializer_sha256": "4bd517566d7ab41b97f6cd892c2b301a72c0710b972ffdc43f29c70b7f86e034"
+      },
+      "T": {
+        "state": {
+          "arm": "T",
+          "at": "2031-01-02T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": [
+                      {
+                        "field": "country",
+                        "values": [
+                          "JP",
+                          "US"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            },
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": [
+                      {
+                        "field": "country",
+                        "values": [
+                          "TW"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "scope_change",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "previously_adopted",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            }
+          ],
+          "pending": [],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "observed_at": "2031-01-02T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "scope_change",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": [
+                      {
+                        "field": "country",
+                        "values": [
+                          "TW"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "partial",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ],
+              "batch": 2,
+              "ordinal": 0,
+              "targets": [
+                "e1"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "T"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "T"
+            }
+          ]
+        },
+        "serializer_sha256": "3a1ff3d848e4d9db3d6704133b2c933e790b55e6c8c238321ee598af7a11f290"
+      },
+      "O": {
+        "state": {
+          "arm": "O",
+          "at": "2031-01-02T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            },
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": [
+                      {
+                        "field": "country",
+                        "values": [
+                          "TW"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "scope_change",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [],
+          "pending": [],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "O"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "O"
+            }
+          ]
+        },
+        "serializer_sha256": "4bd517566d7ab41b97f6cd892c2b301a72c0710b972ffdc43f29c70b7f86e034"
+      }
+    }
+  },
+  {
+    "name": "retroactive_correction",
+    "arms": {
+      "U": {
+        "state": {
+          "arm": "U",
+          "at": "2031-01-03T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e3",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "3"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "correction",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e3"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t3",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "3"
+                }
+              ]
+            }
+          ],
+          "history": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "historical",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            }
+          ],
+          "pending": [],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e3",
+              "source_turns": [
+                "t3"
+              ],
+              "observed_at": "2031-01-03T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "correction",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "3"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t3",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "3"
+                }
+              ],
+              "batch": 3,
+              "ordinal": 0,
+              "targets": [
+                "e1"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "U"
+            },
+            {
+              "event": "e3",
+              "source_turns": [
+                "t3"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "U"
+            }
+          ]
+        },
+        "serializer_sha256": "3f23fd20e8f32b079ecdbf5819afbb0e7bf72527f4a35b40703a56db2297ee89"
+      },
+      "T": {
+        "state": {
+          "arm": "T",
+          "at": "2031-01-03T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e3",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "3"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "correction",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e3"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t3",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "3"
+                }
+              ]
+            }
+          ],
+          "history": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "erroneous",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            }
+          ],
+          "pending": [],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e3",
+              "source_turns": [
+                "t3"
+              ],
+              "observed_at": "2031-01-03T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "correction",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "3"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t3",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "3"
+                }
+              ],
+              "batch": 3,
+              "ordinal": 0,
+              "targets": [
+                "e1"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "T"
+            },
+            {
+              "event": "e3",
+              "source_turns": [
+                "t3"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "T"
+            }
+          ]
+        },
+        "serializer_sha256": "6ad257bef1f4c874fe0967c80df88dd7303fcfce9fa2301848c76f883f6e090b"
+      },
+      "O": {
+        "state": {
+          "arm": "O",
+          "at": "2031-01-03T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e3",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "3"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "correction",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e3"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t3",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "3"
+                }
+              ]
+            }
+          ],
+          "history": [],
+          "pending": [],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "O"
+            },
+            {
+              "event": "e3",
+              "source_turns": [
+                "t3"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "O"
+            }
+          ]
+        },
+        "serializer_sha256": "c7f729b23c32ac78d125d1996e433f30db8b10d6049aed77c0dda671a05b2913"
+      }
+    }
+  },
+  {
+    "name": "future_pending",
+    "arms": {
+      "U": {
+        "state": {
+          "arm": "U",
+          "at": "2031-01-02T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            }
+          ],
+          "history": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-04T00:00:00.000Z",
+                "to": null
+              },
+              "status": "historical",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "pending": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-04T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "observed_at": "2031-01-02T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "reversal",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-04T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ],
+              "batch": 2,
+              "ordinal": 0,
+              "targets": [
+                "e1"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "U"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "U"
+            }
+          ]
+        },
+        "serializer_sha256": "6cb5de781ba85201f1b963e33f226eb6bc5c463b94b77e0ba01aec7f5befae2b"
+      },
+      "T": {
+        "state": {
+          "arm": "T",
+          "at": "2031-01-02T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            }
+          ],
+          "history": [],
+          "pending": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-04T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "observed_at": "2031-01-02T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "reversal",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-04T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ],
+              "batch": 2,
+              "ordinal": 0,
+              "targets": [
+                "e1"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "T"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "T"
+            }
+          ]
+        },
+        "serializer_sha256": "152931f4bc60280cf6d69e1c002c3c2f58e31ea367903bcbed6ea6e5fedf58c4"
+      },
+      "O": {
+        "state": {
+          "arm": "O",
+          "at": "2031-01-02T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            }
+          ],
+          "history": [],
+          "pending": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-04T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "O"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "O"
+            }
+          ]
+        },
+        "serializer_sha256": "152931f4bc60280cf6d69e1c002c3c2f58e31ea367903bcbed6ea6e5fedf58c4"
+      }
+    }
+  },
+  {
+    "name": "future_activated",
+    "arms": {
+      "U": {
+        "state": {
+          "arm": "U",
+          "at": "2031-01-04T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-04T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "historical",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            }
+          ],
+          "pending": [],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "observed_at": "2031-01-02T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "reversal",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-04T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ],
+              "batch": 2,
+              "ordinal": 0,
+              "targets": [
+                "e1"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-04T00:00:00.000Z",
+              "arm": "U"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-04T00:00:00.000Z",
+              "arm": "U"
+            }
+          ]
+        },
+        "serializer_sha256": "0adb9ab7f76b8ff196864a2edf242c56eac746619b05b38f73fa390472b9dc5e"
+      },
+      "T": {
+        "state": {
+          "arm": "T",
+          "at": "2031-01-04T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-04T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "previously_adopted",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            }
+          ],
+          "pending": [],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "observed_at": "2031-01-02T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "reversal",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-04T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ],
+              "batch": 2,
+              "ordinal": 0,
+              "targets": [
+                "e1"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-04T00:00:00.000Z",
+              "arm": "T"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-04T00:00:00.000Z",
+              "arm": "T"
+            }
+          ]
+        },
+        "serializer_sha256": "18ed0134e5776c31f5b31ea352015ca64cad58923a2a4d77c503a537334380d7"
+      },
+      "O": {
+        "state": {
+          "arm": "O",
+          "at": "2031-01-04T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-04T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [],
+          "pending": [],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-04T00:00:00.000Z",
+              "arm": "O"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-04T00:00:00.000Z",
+              "arm": "O"
+            }
+          ]
+        },
+        "serializer_sha256": "df27b9d160f7f06d6e9fb1719da2285e40651f8b3f3fb7a378aceda19ed507a4"
+      }
+    }
+  },
+  {
+    "name": "expiry",
+    "arms": {
+      "U": {
+        "state": {
+          "arm": "U",
+          "at": "2031-01-03T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": "2031-01-03T00:00:00.000Z"
+              },
+              "status": "no_active_decision",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "historical",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            },
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": "2031-01-03T00:00:00.000Z"
+              },
+              "status": "expired",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "pending": [],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "observed_at": "2031-01-02T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "reversal",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": "2031-01-03T00:00:00.000Z"
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ],
+              "batch": 2,
+              "ordinal": 0,
+              "targets": [
+                "e1"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "U"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "U"
+            }
+          ]
+        },
+        "serializer_sha256": "471c47d69e5cd965d02c8ec490022de359008169ed40a41b1e952605a0fc31f6"
+      },
+      "T": {
+        "state": {
+          "arm": "T",
+          "at": "2031-01-03T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": "2031-01-03T00:00:00.000Z"
+              },
+              "status": "no_active_decision",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "previously_adopted",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            },
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": "2031-01-03T00:00:00.000Z"
+              },
+              "status": "expired",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "pending": [],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "observed_at": "2031-01-02T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "reversal",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": "2031-01-03T00:00:00.000Z"
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ],
+              "batch": 2,
+              "ordinal": 0,
+              "targets": [
+                "e1"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "T"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "T"
+            }
+          ]
+        },
+        "serializer_sha256": "fd8cf3b2820264e9f1c0692c0837333adc25448087de62dab0dae0f2b517eb64"
+      },
+      "O": {
+        "state": {
+          "arm": "O",
+          "at": "2031-01-03T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": "2031-01-03T00:00:00.000Z"
+              },
+              "status": "no_active_decision",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [],
+          "pending": [],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "O"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "O"
+            }
+          ]
+        },
+        "serializer_sha256": "77fdc49bf7a39d060a9943295e3378d00fedda215f43177b9bc27193836c53de"
+      }
+    }
+  },
+  {
+    "name": "multiple_predecessors",
+    "arms": {
+      "U": {
+        "state": {
+          "arm": "U",
+          "at": "2031-01-03T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e3",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "3"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-03T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1",
+                "e2"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e3"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t3",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "3"
+                }
+              ]
+            },
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": [
+                      {
+                        "field": "country",
+                        "values": [
+                          "TW"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "scope_change",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "historical",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            }
+          ],
+          "pending": [],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "observed_at": "2031-01-02T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "scope_change",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": [
+                      {
+                        "field": "country",
+                        "values": [
+                          "TW"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "partial",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ],
+              "batch": 2,
+              "ordinal": 0,
+              "targets": [
+                "e1"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e3",
+              "source_turns": [
+                "t3"
+              ],
+              "observed_at": "2031-01-03T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "reversal",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "3"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-03T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t2",
+                  "record_name": "2",
+                  "subject": "service",
+                  "predicate": "route"
+                },
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t3",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "3"
+                }
+              ],
+              "batch": 3,
+              "ordinal": 0,
+              "targets": [
+                "e1",
+                "e2"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "U"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "U"
+            },
+            {
+              "event": "e3",
+              "source_turns": [
+                "t3"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t2",
+                  "record_name": "2",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                },
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "U"
+            }
+          ]
+        },
+        "serializer_sha256": "6eae1b13921c5f295a1582eaca1ca04d1cc8646e1626d36179bc7451f77a6053"
+      },
+      "T": {
+        "state": {
+          "arm": "T",
+          "at": "2031-01-03T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e3",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "3"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-03T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1",
+                "e2"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e3"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t3",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "3"
+                }
+              ]
+            }
+          ],
+          "history": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "previously_adopted",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            },
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": [
+                      {
+                        "field": "country",
+                        "values": [
+                          "TW"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "previously_adopted",
+              "change_type": "scope_change",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "pending": [],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "observed_at": "2031-01-02T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "scope_change",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": [
+                      {
+                        "field": "country",
+                        "values": [
+                          "TW"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "partial",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ],
+              "batch": 2,
+              "ordinal": 0,
+              "targets": [
+                "e1"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e3",
+              "source_turns": [
+                "t3"
+              ],
+              "observed_at": "2031-01-03T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "reversal",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "3"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-03T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [
+                {
+                  "source_turn": "t2",
+                  "record_name": "2",
+                  "subject": "service",
+                  "predicate": "route"
+                },
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "subject": "service",
+                  "predicate": "route"
+                }
+              ],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t3",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "3"
+                }
+              ],
+              "batch": 3,
+              "ordinal": 0,
+              "targets": [
+                "e1",
+                "e2"
+              ],
+              "unresolved": false,
+              "link_errors": []
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "T"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "T"
+            },
+            {
+              "event": "e3",
+              "source_turns": [
+                "t3"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t2",
+                  "record_name": "2",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                },
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "T"
+            }
+          ]
+        },
+        "serializer_sha256": "9402ed615136a8bfe7b064f3c91052cad9995123c1a435411c42ac2b865c6a8e"
+      },
+      "O": {
+        "state": {
+          "arm": "O",
+          "at": "2031-01-03T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e3",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "3"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-03T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1",
+                "e2"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e3"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t3",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "3"
+                }
+              ]
+            },
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": [
+                      {
+                        "field": "country",
+                        "values": [
+                          "TW"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "scope_change",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [
+                "e1"
+              ],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [],
+          "pending": [],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "O"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "O"
+            },
+            {
+              "event": "e3",
+              "source_turns": [
+                "t3"
+              ],
+              "anchors": [
+                {
+                  "source_turn": "t2",
+                  "record_name": "2",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                },
+                {
+                  "source_turn": "t1",
+                  "record_name": "1",
+                  "missing": false,
+                  "nonunique": false,
+                  "incompatible": false,
+                  "historical": false
+                }
+              ],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-03T00:00:00.000Z",
+              "arm": "O"
+            }
+          ]
+        },
+        "serializer_sha256": "77042a1a93887e91f7e2e35f2f5074b8b17a3c1c7c20489ee3b2f406c53ed58b"
+      }
+    }
+  },
+  {
+    "name": "unresolved_link",
+    "arms": {
+      "U": {
+        "state": {
+          "arm": "U",
+          "at": "2031-01-02T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            },
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "unresolved",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": true,
+              "link_errors": [
+                "missing_predecessor"
+              ],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "historical",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": true,
+              "link_errors": [
+                "missing_predecessor"
+              ],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "pending": [],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "observed_at": "2031-01-02T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "reversal",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ],
+              "batch": 2,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": true,
+              "link_errors": [
+                "missing_predecessor"
+              ]
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "U"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [],
+              "link_errors": [
+                "missing_predecessor"
+              ],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "unresolved_record",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "U"
+            }
+          ]
+        },
+        "serializer_sha256": "ca9e10bc28831cb85a3f6e1470313d8e188f6ee18cbb70d80e2cc9e3c315fb12"
+      },
+      "T": {
+        "state": {
+          "arm": "T",
+          "at": "2031-01-02T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            },
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "unresolved",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": true,
+              "link_errors": [
+                "missing_predecessor"
+              ],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [],
+          "pending": [],
+          "events": [
+            {
+              "event_id": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "observed_at": "2031-01-01T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "initial",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ],
+              "batch": 1,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": false,
+              "link_errors": []
+            },
+            {
+              "event_id": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "observed_at": "2031-01-02T00:00:00.000Z",
+              "kind": "decision",
+              "commitment": "adopted",
+              "change_type": "reversal",
+              "subject": "service",
+              "predicate": "route",
+              "claims": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "effective_interval": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "predecessor_anchors": [],
+              "replacement_extent": "entire_predecessor",
+              "field_mask": [
+                "value"
+              ],
+              "reason_nodes": [],
+              "reason_edges": [],
+              "source_quotes": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ],
+              "batch": 2,
+              "ordinal": 0,
+              "targets": [],
+              "unresolved": true,
+              "link_errors": [
+                "missing_predecessor"
+              ]
+            }
+          ],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "T"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [],
+              "link_errors": [
+                "missing_predecessor"
+              ],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "unresolved_record",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "T"
+            }
+          ]
+        },
+        "serializer_sha256": "feaac45bfa1a2eff467cd7eae3eddffb65f0d5de9cf8f2539e61d3a61ed26491"
+      },
+      "O": {
+        "state": {
+          "arm": "O",
+          "at": "2031-01-02T00:00:00.000Z",
+          "current": [
+            {
+              "id": "e1",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "1"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-01T00:00:00.000Z",
+                "to": null
+              },
+              "status": "active",
+              "change_type": "initial",
+              "commitment": "adopted",
+              "unresolved": false,
+              "link_errors": [],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e1"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t1",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "1"
+                }
+              ]
+            },
+            {
+              "id": "e2",
+              "subject": "service",
+              "predicate": "route",
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "fields": [
+                {
+                  "field": "value",
+                  "value": {
+                    "type": "Text",
+                    "text": "2"
+                  }
+                }
+              ],
+              "valid": {
+                "from": "2031-01-02T00:00:00.000Z",
+                "to": null
+              },
+              "status": "unresolved",
+              "change_type": "reversal",
+              "commitment": "adopted",
+              "unresolved": true,
+              "link_errors": [
+                "missing_predecessor"
+              ],
+              "predecessors": [],
+              "context": null,
+              "kind": "decision",
+              "supporting_events": [
+                "e2"
+              ],
+              "receipts": [
+                {
+                  "turn_id": "t2",
+                  "start": 0,
+                  "end": 1,
+                  "quote": "2"
+                }
+              ]
+            }
+          ],
+          "history": [],
+          "pending": [],
+          "ingestionLosses": [
+            {
+              "event": "e1",
+              "source_turns": [
+                "t1"
+              ],
+              "anchors": [],
+              "link_errors": [],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "retained",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "O"
+            },
+            {
+              "event": "e2",
+              "source_turns": [
+                "t2"
+              ],
+              "anchors": [],
+              "link_errors": [
+                "missing_predecessor"
+              ],
+              "commitment_filtered": false,
+              "unresolved_extent": false,
+              "outcome": "unresolved_record",
+              "at": "2031-01-02T00:00:00.000Z",
+              "arm": "O"
+            }
+          ]
+        },
+        "serializer_sha256": "feaac45bfa1a2eff467cd7eae3eddffb65f0d5de9cf8f2539e61d3a61ed26491"
+      }
+    }
+  }
+]

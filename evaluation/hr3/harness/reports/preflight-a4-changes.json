@@ -1,0 +1,31 @@
+{
+  "version": "hr3-a4-stop-change-manifest-v1",
+  "count": 10,
+  "agree": true,
+  "routes": {
+    "gitDiffPlusUntracked": [
+      "evaluation/hr3/harness/REPORT-A4.md",
+      "evaluation/hr3/harness/contract-projection-a4.mjs",
+      "evaluation/hr3/harness/preflight-a4-schema.mjs",
+      "evaluation/hr3/harness/preflight-a4.mjs",
+      "evaluation/hr3/harness/reports/preflight-a4-changes.json",
+      "evaluation/hr3/harness/reports/preflight-a4-tests.tap",
+      "evaluation/hr3/harness/reports/preflight-a4.json",
+      "evaluation/hr3/harness/reports/preflight-a4.stderr",
+      "evaluation/hr3/harness/reports/preflight-a4.stdout",
+      "evaluation/hr3/harness/test/preflight-a4.test.mjs"
+    ],
+    "filesystemContentBaseline": [
+      "evaluation/hr3/harness/REPORT-A4.md",
+      "evaluation/hr3/harness/contract-projection-a4.mjs",
+      "evaluation/hr3/harness/preflight-a4-schema.mjs",
+      "evaluation/hr3/harness/preflight-a4.mjs",
+      "evaluation/hr3/harness/reports/preflight-a4-changes.json",
+      "evaluation/hr3/harness/reports/preflight-a4-tests.tap",
+      "evaluation/hr3/harness/reports/preflight-a4.json",
+      "evaluation/hr3/harness/reports/preflight-a4.stderr",
+      "evaluation/hr3/harness/reports/preflight-a4.stdout",
+      "evaluation/hr3/harness/test/preflight-a4.test.mjs"
+    ]
+  }
+}

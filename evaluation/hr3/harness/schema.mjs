@@ -1,18 +1,11 @@
 import { answerSchema, validate } from '../scorer/schema.mjs';
 import { cells, fail, DIMENSIONS } from './common.mjs';
 export { answerSchema };
-const s={type:'string'}, arr=items=>({type:'array',items}), obj=properties=>({type:'object',properties,required:Object.keys(properties),additionalProperties:false});
-const en=(...values)=>({type:'string',enum:values});
-const span=obj({turn_id:s,quote:s,occurrence:{type:'integer',minimum:1}});
-const defs=structuredClone(answerSchema.$defs);
-delete defs.DeliveredUnit; delete defs.GoldClaim;
-export const extractionSchema={type:'object',properties:{events:arr(obj({
-  event_id:s,source_turns:arr(s),observed_at:s,kind:en('fact','preference','decision','instruction','context'),commitment:en('adopted','proposed','quoted','rejected','unresolved'),
-  change_type:en('initial','correction','reversal','refinement','scope_change','expiry','unchanged'),subject:s,predicate:s,
-  claims:arr(obj({field:s,value:{$ref:'#/$defs/Value'}})),scope:{$ref:'#/$defs/Scope'},effective_interval:{$ref:'#/$defs/Interval'},
-  predecessor_anchors:arr(obj({source_turn:s,record_name:s,subject:s,predicate:s})),replacement_extent:en('entire_predecessor','partial','unresolved'),field_mask:arr(s),
-  reason_nodes:arr(obj({id:s,claim:{$ref:'#/$defs/Claim'}})),reason_edges:arr(obj({from:s,to:s,source_quotes:arr(span)})),source_quotes:arr(span)
-}))},required:['events'],additionalProperties:false,$defs:defs};
+import {preflightExtractionSchema} from './preflight-a4-schema.mjs';
+import {canonicalPublicName} from '../generator/slots.mjs';
+import {PUBLIC_CONTRACT} from './contract-projection-a4.mjs';
+export const EXTRACTION_VERSION='hr3-extraction-a4-v1';
+export const extractionSchema=preflightExtractionSchema;
 // Responses strict JSON schema uses anyOf rather than the algebraic oneOf.
 export function providerSchema(schema) {
   const out=JSON.parse(JSON.stringify(schema, (key,value)=>key==='$schema'||key==='title'?undefined:value));
@@ -52,36 +45,84 @@ export function anchorQuote(q,turns) {
 // or legacy occurrence default is permitted in live validation.
 function withoutOffsets(value) {
   const copy=structuredClone(value);
-  if(Array.isArray(copy?.events))for(const e of copy.events) {
-    const quotes=[...(Array.isArray(e?.source_quotes)?e.source_quotes:[]),
-      ...(Array.isArray(e?.reason_edges)?e.reason_edges.flatMap(x=>Array.isArray(x?.source_quotes)?x.source_quotes:[]):[])];
-    for(const q of quotes)if(q&&typeof q==='object'){delete q.start;delete q.end;}
+  const strip=q=>{if(q&&typeof q==='object'){delete q.start;delete q.end;}};
+  for(const e of copy?.events??[]) {
+    for(const q of [...(e?.source_quotes??[]),...(e?.reason_quotes??[]),...(e?.payload?.anchors??[])])strip(q);
+    for(const slot of ['route','approval','cap'])for(const q of e?.payload?.[slot]?.anchors??[])strip(q);
   }
   return copy;
 }
+const legacy={route:'value',approval:'approval',cap:'cap'};
+function slotValue(slot,value) {
+  const expected={route:'Text',approval:'Boolean',cap:'Quantity'};
+  if(value.type!==expected[slot])return null;
+  if(slot==='route')return {...value,text:value.text.normalize('NFKC').replace(/\s+/gu,' ').trim()};
+  if(slot==='approval')return value;
+  const unit=PUBLIC_CONTRACT.values.units.find(u=>u.alias===value.unit.normalize('NFKC').trim());
+  if(!unit)return null;
+  // Public unit factors have denominator one; exact decimal scaling uses BigInt.
+  const match=/^([+-]?)([0-9]*)(?:\.([0-9]*))?$/.exec(value.decimal);
+  if(!match||!match[2]&&!match[3])return null;
+  const scale=(match[3]??'').length,n=BigInt((match[2]||'0')+(match[3]??''))*BigInt(unit.numerator);
+  if(BigInt(unit.denominator)!==1n)return null;
+  const digits=n.toString().padStart(scale+1,'0');
+  const decimal=(match[1]==='-'&&n!==0n?'-':'')+(scale?digits.slice(0,-scale)+'.'+digits.slice(-scale):digits);
+  return {type:'Quantity',decimal,unit:unit.canonical};
+}
 export function validateExtraction(value,input) {
-  const raw=withoutOffsets(value);
+  let raw;try {raw=withoutOffsets(value);}catch {fail('malformed_extraction');}
   if(validate(extractionSchema,raw).length)fail('malformed_extraction');
   const counts=new Map(),turns=new Map(input.turns.map(t=>[t.turn_id,t.text]));
   for(const e of raw.events)counts.set(e.event_id,(counts.get(e.event_id)??0)+1);
-  const events=[],rejected=[];
+  const events=[],rejected=[],assignments=[],quotations=[];
+  const totals={rawAssignments:0,admittedAssignments:0,excludedAssignments:0,rawQuotations:0,admittedQuotations:0,excludedQuotations:0};
   for(const [index,e] of raw.events.entries()) {
     const reasons=new Set();
-    if(!e.event_id||counts.get(e.event_id)>1||e.observed_at!==input.observed_at||!e.source_turns.length||e.source_turns.some(t=>!turns.has(t))||!cells(e.scope).length)reasons.add('invalid_extraction_provenance');
-    for(const clause of e.scope.any)for(const atom of clause.all)if(atom.values.some(v=>!DIMENSIONS[atom.field].includes(v)))reasons.add('invalid_extraction_scope');
-    for(const boundary of Object.values(e.effective_interval))if(boundary!==null&&(!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(boundary)||!Number.isFinite(Date.parse(boundary))))reasons.add('invalid_extraction_interval');
+    for(const [field,allowed] of Object.entries({kind:['fact','preference','decision','instruction','context'],commitment:['adopted','proposed','quoted','rejected','unresolved'],change_type:['initial','correction','reversal','refinement','scope_change','expiry','unchanged'],replacement_extent:['entire_predecessor','partial','unresolved']}))if(!allowed.includes(e[field]))reasons.add('invalid_'+field);
+    if(!e.subject.normalize('NFKC').trim()||!e.predicate.normalize('NFKC').trim()||!e.event_id.trim()||counts.get(e.event_id)>1||e.observed_at!==input.observed_at||!e.source_turns.length||e.source_turns.some(t=>!turns.has(t))||!cells(e.scope).length)reasons.add('invalid_extraction_provenance');
+    for(const clause of e.scope.any)for(const atom of clause.all)if(atom.values.some(v=>!DIMENSIONS[atom.field]?.includes(v)))reasons.add('invalid_extraction_scope');
+    for(const boundary of Object.values(e.effective_interval))if(boundary!==null&&(!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(boundary)||!Number.isFinite(Date.parse(boundary))||new Date(boundary).toISOString()!==boundary))reasons.add('invalid_extraction_interval');
     if(e.effective_interval.from&&e.effective_interval.to&&Date.parse(e.effective_interval.from)>=Date.parse(e.effective_interval.to))reasons.add('invalid_extraction_interval');
-    if(new Set(e.field_mask).size!==e.field_mask.length||e.claims.some(c=>!e.field_mask.includes(c.field))||new Set(e.claims.map(c=>c.field)).size!==e.claims.length)reasons.add('invalid_field_mask');
-    const nodeIds=new Set(e.reason_nodes.map(n=>n.id));
-    for(const edge of e.reason_edges)if(!nodeIds.has(edge.from)||!nodeIds.has(edge.to))reasons.add('dangling_reason');
-    const anchored=e.source_quotes.map(q=>anchorQuote(q,turns));
-    const edges=e.reason_edges.map(edge=>({...edge,source_quotes:edge.source_quotes.map(q=>anchorQuote(q,turns))}));
-    const invalidQuoteEdges=edges.flatMap((edge,i)=>edge.source_quotes.some(q=>!q)?[i]:[]);
-    if(anchored.some(q=>!q)||invalidQuoteEdges.length)reasons.add('invalid_extraction_quote');
-    if(reasons.size)rejected.push({index,event_id:e.event_id,raw_event_id:e.event_id,reasons:[...reasons].sort(),invalidQuoteEdges});
-    else events.push({...e,source_quotes:anchored,reason_edges:edges});
+    const anchor=q=>e.source_turns.includes(q.turn_id)?anchorQuote(q,turns):null;
+    const core=e.source_quotes.map(anchor);
+    if(!core.length||core.some(q=>!q))reasons.add('invalid_event_anchor');
+    const claims=[],factQuotes=[],admittedSlots={route:null,approval:null,cap:null};
+    if(e.payload.type==='slots')for(const slot of ['route','approval','cap']) {
+      const supplied=e.payload[slot];if(supplied===null)continue;
+      totals.rawAssignments++;
+      const errors=[],anchors=supplied.anchors.map(anchor),converted=slotValue(slot,supplied.value);
+      if(!converted)errors.push('incompatible_slot_value');
+      if(!anchors.length||anchors.some(q=>!q))errors.push('invalid_assignment_anchor');
+      if(reasons.size)errors.push('invalid_event_core');
+      const admitted=!errors.length;totals[admitted?'admittedAssignments':'excludedAssignments']++;
+      assignments.push({index,event_id:e.event_id,slot,admitted,reasons:errors});
+      if(admitted){claims.push({field:legacy[slot],value:converted});factQuotes.push(...anchors);admittedSlots[slot]={value:converted,anchors};}
+    }
+    let context=null;
+    if(e.payload.type==='context') {
+      const anchors=e.payload.anchors.map(anchor);
+      // Extracted text must itself be an exact anchored quotation, never a raw-source harvest.
+      if(!e.payload.text||!anchors.length||anchors.some(q=>!q)||!anchors.some(q=>q?.quote===e.payload.text))reasons.add('invalid_context_anchor');
+      else {context={text:e.payload.text,anchors};factQuotes.push(...anchors);}
+    } else if(!claims.length&&e.change_type!=='expiry')reasons.add('no_admitted_assignment');
+    const reason_quotes=[];
+    for(const [quoteIndex,q] of e.reason_quotes.entries()) {
+      totals.rawQuotations++;const anchored=anchor(q),errors=[];
+      if(!anchored)errors.push('invalid_reason_anchor');if(reasons.size)errors.push('invalid_event_core');
+      const admitted=!errors.length;totals[admitted?'admittedQuotations':'excludedQuotations']++;
+      quotations.push({index,event_id:e.event_id,quoteIndex,admitted,reasons:errors});
+      if(admitted)reason_quotes.push(anchored);
+    }
+    if(reasons.size)rejected.push({index,event_id:e.event_id,raw_event_id:e.event_id,reasons:[...reasons].sort()});
+    else {
+      const {payload,...metadata}=e;
+      const unique=qs=>[...new Map(qs.map(q=>[JSON.stringify([q.turn_id,q.start,q.end]),q])).values()];
+      events.push({...metadata,subject:canonicalPublicName(e.subject,'subjects'),predicate:canonicalPublicName(e.predicate,'predicates'),
+        payload:context?{type:'context',...context}:{type:'slots',...admittedSlots},context,claims,field_mask:claims.map(c=>c.field),
+        source_quotes:unique([...core,...factQuotes,...reason_quotes]),reason_quotes});
+    }
   }
-  const diagnostics={stage:'extraction',armIndependent:true,totalEvents:raw.events.length,validEvents:events.length,rejectedEvents:rejected.length,
-    reasons:Object.fromEntries([...new Set(rejected.flatMap(e=>e.reasons))].sort().map(r=>[r,rejected.filter(e=>e.reasons.includes(r)).length])),rejected};
+  const diagnostics={version:EXTRACTION_VERSION,stage:'extraction',armIndependent:true,totalEvents:raw.events.length,validEvents:events.length,rejectedEvents:rejected.length,...totals,
+    reasons:Object.fromEntries([...new Set(rejected.flatMap(e=>e.reasons))].sort().map(r=>[r,rejected.filter(e=>e.reasons.includes(r)).length])),rejected,assignments,quotations};
   return {events,diagnostics};
 }

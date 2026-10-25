@@ -91,14 +91,14 @@ test('completed-stage report requires execution hashes, checks artifact bytes, a
   save('families.jsonl',null); // replace with actual JSONL below
   writeFileSync(join(root,'families.jsonl'),families.map(canonical).join('\n')+'\n');
   const familyBytes=readFileSync(join(root,'families.jsonl'));
-  save('manifest.json',{split:'pilot',seed:'hr3-worlds-v1',hashes:{'families.jsonl':{sha256:hash(familyBytes),bytes:familyBytes.length}}});
+  save('manifest.json',{split:'pilot',seed:JSON.parse(readFileSync(new URL('../../generator/freeze.json',import.meta.url))).seed,hashes:{'families.jsonl':{sha256:hash(familyBytes),bytes:familyBytes.length}}});
   const inputManifest=readFileSync(join(root,'manifest.json'));
   // Use a separate stage directory so its manifest cannot replace input hashes.
   const stage=mkdtempSync(join(root,'stage-'));
   const stageSave=(name,data)=>writeFileSync(join(stage,name),canonical(data)+'\n');
   const run={stage:'pilot',offline:true,families:families.map(f=>f.family_id),frozenArtifacts:{'protocol/errata.md':{sha256:'frozen-errata-hash'},'generator/pilot/manifest.json':{sha256:hash(inputManifest)}}};
   stageSave('run.json',run);stageSave('summary.json',{stage:'pilot',complete:true,attempted:1,ledger:{unsettled:[],stopped:null,total:1500000000}});
-  stageSave('scored.jsonl',{...observation(families[0],{C:0,O:0,R:0,J:0},{valid:false}),version:'hr3-scorer-v1',protocol:'v0.3.4'});
+  stageSave('scored.jsonl',{...observation(families[0],{C:0,O:0,R:0,J:0},{valid:false}),version:'hr3-scorer-a4-v2',protocol:'v0.3.4+A-4'});
   const journal = [
     {type:'configuration',configuration:{}},
     {type:'reserve',id:'settled',reserved:1500000000},

@@ -1,0 +1,102 @@
+{
+  "version": "hr3-budget-a4.1-v1",
+  "status": "PASS_RETAINED_CEILING_ARITHMETIC",
+  "paidReadiness": false,
+  "cumulativePilotCapUSD": 50,
+  "inputCaps": {
+    "reader": 30000,
+    "extraction": 20480
+  },
+  "readerInputCaps": {
+    "U": 30000,
+    "T": 30000,
+    "O": 22000,
+    "P": 30000
+  },
+  "outputCaps": {
+    "reader": 2176,
+    "extraction": 4352
+  },
+  "attemptsPerCall": 2,
+  "extractionNanodollars": 7274496000,
+  "readerNanodollars": 14094336000,
+  "entireEmbeddingNanodollars": 2560000000,
+  "incrementalConservativeNanodollars": 23928832000,
+  "carryForward": {
+    "path": "evaluation/hr3/harness/reports/a3-carry-forward.json",
+    "sha256": "8a133069ea1851e49f75db199253ec3a5576be33ac58ff0a089afffe24745e28",
+    "preparationComplete": true,
+    "settledNanodollars": 836664260,
+    "outstandingNanodollars": 25576400,
+    "embedding": {
+      "research": 174846,
+      "product": 68457
+    },
+    "exposureNanodollars": 862240660
+  },
+  "availableCarryCombinedNanodollars": 24786206600,
+  "availableCarryFits": true,
+  "remainingEmbeddingNanodollars": 2555133940,
+  "accountingGate": {
+    "status": "BLOCKED_THIRD_PILOT_CHAIN_REQUIRED",
+    "completeThirdPilotMerged": false,
+    "manifestUnchanged": true,
+    "availableSnapshotIsFullA4Exposure": false
+  },
+  "hypotheticalFullPriorPilotCapNanodollars": 47928832000,
+  "stages": [
+    {
+      "stage": "pilot",
+      "extractionCalls": 240,
+      "readerCalls": 480,
+      "forecastNanodollars": 5262336000,
+      "allMaximumRetryNanodollars": 21368832000,
+      "unchangedLaterStageLimitUSD": 50
+    },
+    {
+      "stage": "development",
+      "extractionCalls": 800,
+      "readerCalls": 1600,
+      "forecastNanodollars": 17541120000,
+      "allMaximumRetryNanodollars": 71229440000,
+      "unchangedLaterStageLimitUSD": 46
+    },
+    {
+      "stage": "test",
+      "extractionCalls": 6400,
+      "readerCalls": 12800,
+      "forecastNanodollars": 140328960000,
+      "allMaximumRetryNanodollars": 569835520000,
+      "unchangedLaterStageLimitUSD": 345
+    },
+    {
+      "stage": "alternative",
+      "extractionCalls": 800,
+      "readerCalls": 800,
+      "forecastNanodollars": 25172480000,
+      "allMaximumRetryNanodollars": 80680960000,
+      "unchangedLaterStageLimitUSD": 45
+    }
+  ],
+  "global": {
+    "operationalStopUSD": 450,
+    "authorizationUSD": 500,
+    "unavailableHeadroomUSD": 50,
+    "embeddingUnits": {
+      "research": 64000000,
+      "product": 64000000
+    }
+  },
+  "laterStageCapsChanged": false,
+  "uncoveredAllMaximumRetryEnvelopeNanodollars": 745674752000,
+  "sources": {
+    "evaluation/hr3/harness/requests.mjs": "1c7a21e7c11f48cc88c558595969439b0b64363728aea06fbe221bcac0ac97e5",
+    "evaluation/hr3/harness/ledger.mjs": "c1bb83ff0189c9818d5eb2f384ef4afae57d082a34ec934c004a07ed28f1aa7a",
+    "evaluation/hr3/harness/budget-a4.mjs": "9d1a60314ea16c9db1716b52c90de10dbaaca80a8f4e99b75f3ab57b7c341513",
+    "evaluation/hr3/harness/accounting.mjs": "8432123e2812b17033803c2ca633d0cab4933e781c1b0107bbcfbb7ee132258b",
+    "evaluation/hr3/harness/accounting-a4.mjs": "be44ac6dc32748c20e59ab09f0b80ecceb3df9484bb824d9e12378392a9357f7",
+    "evaluation/hr3/harness/projection-schema.mjs": "00d60c5c1f845652b62383ebb1ce84ace6b663672a9ffda2471b3c0fae09accf",
+    "evaluation/hr3/harness/reports/a3-carry-forward.json": "8a133069ea1851e49f75db199253ec3a5576be33ac58ff0a089afffe24745e28",
+    "evaluation/hr3/protocol/errata.md": "16d22bbe91cb6d75139975157440e235645f5c9a3e9e38ec77df31d12b2e1090"
+  }
+}

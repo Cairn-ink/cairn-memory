@@ -8,16 +8,19 @@ import { join } from 'node:path';
 import { canonical, normalize, hash, orderEvents, intervalStart } from './common.mjs';
 import {PrivacyGuard,sourceOrderAliases,neutralControl,namespaceAliases} from './privacy.mjs';
 import { freshEvents } from './event-identity.mjs';
-import { resolveLinks, unit } from './research.mjs';
+import { resolveLinks, unit,distinctQuotes,compactSlots,ingestionLosses } from './research.mjs';
 const ok=r=>{if(!r.ok)throw Object.assign(Error(r.error.code),{code:r.error.code});return r.value;};
 const TOKEN=Object.freeze({fixtureAuthority:'explicit-user'});
 function linkedTransports() {
   const pair=[{},{}];
   pair.forEach((port,i)=>Object.assign(port,{async start(){},async send(message){queueMicrotask(()=>pair[1-i].onmessage?.(structuredClone(message)));},async close(){port.onclose?.();}}));return pair;
 }
-export function formatEvent(e) {
-  // Never append the predecessor's old prose. Preserve only this extracted assertion/qualifications/reasons.
-  return `${e.subject} ${e.predicate}; scope=${canonical(e.scope)}; valid=${canonical(e.effective_interval)}; ${e.claims.map(x=>`${x.field}=${canonical(x.value)}`).join('; ')}${e.reason_edges.length?' Reasons: '+e.reason_edges.flatMap(x=>x.source_quotes.map(q=>q.quote)).join(' '):''}`;
+export function formatEvent(e,readerId='record') {
+  const header=canonical({record:readerId,subject:e.subject,predicate:e.predicate,kind:e.context?'context':'slots',
+    scope:e.scope,valid:e.effective_interval,...(e.context?{}:{slots:compactSlots(e.claims)}),sources:e.source_turns});
+  // Every admitted quotation occurs once in this formatter. Never append any
+  // predecessor text, residual scope or overwritten-content reconstruction.
+  return header+'\n'+distinctQuotes([e]).map(q=>`${q.turn_id}: ${q.quote}`).join('\n');
 }
 export class ProductAgent {
   static async open({namespace,embedder,counter,tempRoot=tmpdir(),onAuthorizationExposure=()=>{},privacy=new PrivacyGuard(),aliases=sourceOrderAliases()}={}) {
@@ -34,26 +37,39 @@ export class ProductAgent {
   }
   call(method,input,authority=TOKEN) {
     input=this.namespaceAliases.payload(input);this.privacy.check('product-payload',input,{surface:'core',method});
-    const result=this.core[method](input,authority);this.log.push({surface:'core',method,input:structuredClone(input),result:structuredClone(result)});return result;
+    const result=this.core[method](input,authority);this.log.push({surface:'core',method,event:this.activeEvent??null,arm:'P',input:structuredClone(input),result:structuredClone(result),outcome:result.ok?'operation_success':'operation_refusal'});return result;
   }
   async tool(name,input) {
     input=this.namespaceAliases.payload(input);this.privacy.check('product-payload',input,{surface:'mcp',method:name});
-    const result=await this.client.callTool({name,arguments:input});this.log.push({surface:'mcp',method:name,input:structuredClone(input),result:structuredClone(result)});return result;
+    const result=await this.client.callTool({name,arguments:input});this.log.push({surface:'mcp',method:name,input:structuredClone(input),result:structuredClone(result),outcome:result.isError?'operation_refusal':'operation_returned'});return result;
   }
-  async toolEnvelope(name,input) {const result=await this.tool(name,input);try {return JSON.parse(result.content[0].text);}catch {return {ok:false,error:{code:'invalid_mcp_reply'}};}}
+  async toolEnvelope(name,input) {const result=await this.tool(name,input);let envelope;try {envelope=JSON.parse(result.content[0].text);}catch {envelope={ok:false,error:{code:'invalid_mcp_reply'}};}this.log.push({surface:'agent',method:'operation_outcome',operation:name,event:this.activeEvent??null,arm:'P',outcome:envelope.ok?'operation_success':'operation_refusal'});return envelope;}
   inspect(id,namespace=this.namespace) {return this.call('get',{namespace,memoryId:id,receiptLimit:50});}
+  registerReceiptOrigin(excerpt,map) {
+    const maps=this.receiptOrigins.get(excerpt)??[];
+    if(!maps.some(m=>canonical(m)===canonical(map)))maps.push(map);
+    this.receiptOrigins.set(excerpt,maps);
+  }
+  receiptOrigin(excerpt) {
+    const maps=this.receiptOrigins.get(excerpt)??[];
+    if(maps.length===1)return maps[0];
+    if(maps.length>1)this.log.push({surface:'agent',method:'ambiguous_receipt_origin',candidates:maps.length});
+    // The product does not expose enough source identity to choose among
+    // identical excerpts. Preserve support uncertainty; never guess an origin.
+    return null;
+  }
   receipts(e) {
     const quotes=[...e.source_quotes].sort((a,b)=>e.source_turns.indexOf(a.turn_id)-e.source_turns.indexOf(b.turn_id)||a.start-b.start);
     this.log.push({surface:'agent',method:'receipt_selection',event:e.event_id,omitted:quotes.slice(4)});
     return quotes.slice(0,4).map((q,i)=>{
       const excerpt=normalize(q.quote).slice(0,800),receipt={client:'hr3',sessionId:'hr3-public-agent',eventId:`${this.aliases.id(e.event_id)}/${i}`,role:'user',excerpt};
-      this.receiptOrigins.set(excerpt,{segments:[{origin:q.turn_id,start:q.start,text:q.quote}],normalize:true,truncate:800});return receipt;
+      this.registerReceiptOrigin(excerpt,{segments:[{origin:q.turn_id,start:q.start,text:q.quote}],normalize:true,truncate:800});return receipt;
     });
   }
   registerContent(text,e) {
     // Construct a provenance segmentation of the formatter, preserving verbatim quote portions only.
     const segments=[];let cursor=0;
-    for(const q of e.reason_edges.flatMap(x=>x.source_quotes)) {
+    for(const q of distinctQuotes([e])) {
       const at=text.indexOf(q.quote,cursor);if(at<0)continue;
       if(at>cursor)segments.push({origin:`product-format:${e.event_id}`,start:cursor,text:text.slice(cursor,at)});
       segments.push({origin:q.turn_id,start:q.start,text:q.quote});cursor=at+q.quote.length;
@@ -66,14 +82,14 @@ export class ProductAgent {
     this.aliases.register(incoming);this.events.push(...incoming);
     const linked=resolveLinks(this.events);const fresh=new Set(incoming.map(e=>e.event_id));
     for(const e of linked.filter(e=>fresh.has(e.event_id))) {
-      if(e.commitment!=='adopted'){this.log.push({surface:'agent',method:'skip_nonadopted',event:e.event_id});continue;}
-      if(e.unresolved){this.log.push({surface:'agent',method:'unresolved_mapping',event:e.event_id,errors:e.link_errors});continue;}
+      if(e.commitment!=='adopted'){this.log.push({surface:'agent',method:'skip_nonadopted',event:e.event_id,source_turns:e.source_turns,reason:'commitment_filter',commitment:e.commitment});continue;}
+      if(e.unresolved){this.log.push({surface:'agent',method:'unresolved_mapping',event:e.event_id,errors:e.link_errors,anchor_diagnostics:ingestionLosses(this.events,at).find(row=>row.event===e.event_id)?.anchors});continue;}
       this.pending.push(e);
     }
     const due=this.pending.filter(e=>intervalStart(e)<=Date.parse(at)).sort((a,b)=>intervalStart(a)-intervalStart(b)||orderEvents(a,b));
     this.pending=this.pending.filter(e=>intervalStart(e)>Date.parse(at));
     // Checkpoint writes precede scheduled expiries.
-    for(const e of due)await this.apply(e);
+    for(const e of due){this.activeEvent=e.event_id;await this.apply(e);}this.activeEvent=null;
     await this.expire(at);
   }
   async apply(e) {
@@ -81,9 +97,9 @@ export class ProductAgent {
       // Extracted explicit boundary confirms a deadline, rather than creating a decision assertion.
       for(const id of e.targets){const ref=this.refs.get(id);if(ref&&e.replacement_extent==='entire_predecessor')this.schedules.set(ref.id,{id:ref.id,revision:ref.revision,deadline:e.effective_interval.from,anchor:e.source_quotes[0],event:e,contentHash:hash(this.inspect(ref.id).value?.memory?.content??'')});else {if(ref)this.schedules.delete(ref.id);this.log.push({surface:'agent',method:'partial_expiry_unresolved',event:e.event_id});}}return;
     }
-    const content=formatEvent(e),receipts=this.receipts(e);this.registerContent(content,e);
+    const content=formatEvent(e,this.aliases.id(e.event_id)),receipts=this.receipts(e);this.registerContent(content,e);
     const targets=e.targets.map(id=>this.refs.get(id));
-    if(targets.some(x=>!x)){this.log.push({surface:'agent',method:'unresolved_product_target',event:e.event_id});return;}
+    if(targets.some(x=>!x)){this.log.push({surface:'agent',method:'unresolved_product_target',event:e.event_id,reason:'absent_product_target'});return;}
     let result;
     if(e.change_type==='correction') {
       // Atomic corrections only. Preserve multi-target refusals rather than synthesizing a merged record.
@@ -93,7 +109,7 @@ export class ProductAgent {
         if(result.ok){const inspected=this.inspect(ref.id);this.refs.set(e.event_id,{id:ref.id,revision:inspected.value.memory.revision});this.schedules.delete(ref.id);this.schedule(e,this.refs.get(e.event_id),content);}
       }
       // MCP creates its receipt from the submitted formatter, not the original source quote.
-      this.receiptOrigins.set(normalize(content).slice(0,800),{segments:[{origin:`mcp-submitted:${e.event_id}`,start:0,text:content}],normalize:true,truncate:800});
+      this.registerReceiptOrigin(normalize(content).slice(0,800),{segments:[{origin:`mcp-submitted:${e.event_id}`,start:0,text:content}],normalize:true,truncate:800});
       return;
     }
     if(e.replacement_extent==='entire_predecessor'&&e.change_type==='reversal'&&targets.length) {
@@ -117,7 +133,7 @@ export class ProductAgent {
       const before={state:m.state,revision:m.revision};
       const content=`no_active_decision; ${s.event.subject} ${s.event.predicate}; scope=${canonical(s.event.scope)}; expiry=${s.deadline}`;
       const result=this.call('supersede',{namespace:this.namespace,memoryId:id,expectedRevision:m.revision,replacement:{content,kind:'context'},receipts:this.receipts({...s.event,source_quotes:s.anchor?[s.anchor]:[]})});
-      this.log.push({surface:'agent',method:'adapter-scheduled',before,after:this.inspect(id),result});if(result.ok)this.schedules.delete(id);
+      this.log.push({surface:'agent',method:'adapter-scheduled',event:s.event.event_id,source_turns:s.event.source_turns,outcome:result.ok?'scheduled_expiry_success':'scheduled_expiry_refusal',before,after:this.inspect(id),result});if(result.ok)this.schedules.delete(id);
     }
   }
   async controls(controls,batch) {
@@ -199,13 +215,13 @@ export class ProductAgent {
           if(s.sameAsBody)text=item.body;
           if(s.sameAs){const previous=items[s.sameAs.item];const src=previous.sources[s.sameAs.source];text=src.sameAsBody?previous.body:src.excerpt;}
           if(typeof text!=='string')throw Error('unsupported_product_source_alias');
-          const map=s.sameAsBody?bodyMap:this.receiptOrigins.get(text);
+          const map=s.sameAsBody?bodyMap:this.receiptOrigin(text);
           delivered.push(map?{...unit(intent,i,'receipt',s.index,text,'product-receipt:'+item.ref.id),...map}:unit(intent,i,'receipt',s.index,text,'product-receipt:'+item.ref.id));
         }
       }
     }
     return {blocks,delivered,diagnostics};
   }
-  state() {return {readerAliases:this.aliases.diagnostics(),namespaceAliases:this.namespaceAliases.diagnostics(),pending:this.pending.map(e=>e.event_id),schedules:[...this.schedules.values()].map(({event,...s})=>({...s,event_id:event.event_id})),refs:[...this.refs],controls:this.controlSnapshot(),operations:this.log};}
+  state() {return {version:'hr3-product-agent-a4-v1',arm:'P',readerAliases:this.aliases.diagnostics(),namespaceAliases:this.namespaceAliases.diagnostics(),pending:this.pending.map(e=>e.event_id),schedules:[...this.schedules.values()].map(({event,...s})=>({...s,event_id:event.event_id})),refs:[...this.refs],controls:this.controlSnapshot(),operations:this.log};}
   async close() {try{await this.client?.close();await this.server?.close();}finally{this.core?.close();if(this.directory)rmSync(this.directory,{recursive:true,force:true});}}
 }

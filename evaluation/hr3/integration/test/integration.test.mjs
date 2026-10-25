@@ -1,3 +1,4 @@
+import './pipeline-a4.test.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from '../../challenge/generate.mjs';
@@ -8,91 +9,65 @@ import { validate, goldSchema, submissionSchema } from '../../scorer/schema.mjs'
 import { qualification, confusion } from '../mechanical.mjs';
 import { calibrationGate } from '../gate.mjs';
 import { fieldMapping } from '../field-map.mjs';
-const challenge = build(), worlds = new Map(challenge.worlds.map(w => [w.id, w]));
-const rows = Object.values(challenge.sets).flat();
-const adapt = row => adaptChallenge(row, worlds.get(row.world_id));
-const pilot = generateSplit('pilot').bundles;
-const clone = structuredClone;
+import { a4Fixture } from './fixtures-a4.mjs';
+// Historical labels exercise gate arithmetic only; old candidates never enter
+// an A-4 adapter or count as calibration-v2 qualification evidence.
+const challenge=build(),rows=Object.values(challenge.sets).flat();
+const pilot=generateSplit('pilot').bundles,clone=structuredClone;
 
-test('every pilot checkpoint validates and its witnessed gold earns all four ones', () => {
-  let n = 0;
-  for (const { family, gold, support } of pilot) for (const cp of family.checkpoints) {
-    const a = adaptGenerator(family, gold, support, cp.batch);
-    assert.deepEqual(validate(goldSchema, a.gold), []);
-    assert.deepEqual(restore(a), { family, goldRow: gold, supportRow: support, batch: cp.batch });
-    const submission = goldWitness(a.gold);
-    assert.deepEqual(validate(submissionSchema, submission), []);
-    assert.deepEqual(score(a.gold, submission).scores, { C: 1, O: 1, R: 1, J: 1 }); n++;
-  }
-  assert.equal(n, 120);
+test('all 120 pilot slot checkpoints validate, restore exactly and earn witnessed full credit',()=>{
+ for(const {family,gold,support} of pilot)for(const cp of family.checkpoints){
+  const a=adaptGenerator(family,gold,support,cp.batch);assert.deepEqual(validate(goldSchema,a.gold),[]);
+  assert.deepEqual(restore(a),{family,goldRow:gold,supportRow:support,batch:cp.batch});
+  const submission=goldWitness(a.gold);assert.deepEqual(validate(submissionSchema,submission),[]);
+  assert.deepEqual(score(a.gold,submission).scores,{C:1,O:1,R:1,J:1});
+  assert.ok(!Object.hasOwn(submission.answer.reason,'nodes'));assert.ok(!Object.hasOwn(submission.answer.current,'claims'));
+ }
 });
-test('all challenge source shapes, five Value variants, graph and intent maps are preserved', () => {
-  const variants = new Set(); let n = 0;
-  for (const row of rows) {
-    const a = adapt(row);
-    assert.deepEqual(a.submission.answer, row.candidate);
-    assert.deepEqual(restore(a), { row, world: worlds.get(row.world_id) });
-    assert.deepEqual(validate(goldSchema, a.gold), []);
-    for (const c of a.gold.current.claims) variants.add(c.value.type);
-    for (const record of row.candidate.old.records) for (const c of record.claims) for (const citation of c.citations) {
-      if (!row.delivered.some(u => u.item === citation.item)) continue;
-      const d = a.submission.delivered.find(u => u.item === citation.item && u.unit === citation.unit);
-      if (d) assert.equal(d.intent, citation.intent);
-    }
-    n++;
-  }
-  assert.equal(n, 1984); assert.equal(variants.size, 5);
+test('independent A-4 challenge slots, predecessor identities and selected quotations pass unchanged',()=>{
+ const {row,world}=a4Fixture(),a=adaptChallenge(row,world);assert.deepEqual(a.submission.answer,row.candidate);
+ assert.deepEqual(restore(a),{row,world});assert.equal(a.submission.delivered[2].intent,'history');
+ const r=score(a.gold,a.submission);assert.deepEqual(r.scores,{C:1,O:1,R:null,J:null});assert.equal(r.reason.correctness,1);assert.ok(r.referrals.some(f=>f.pass==='support'));
+ assert.equal(fieldMapping('challenge','$/row/candidate/reason/support/*/quote').destination,'submission.answer/reason/support/*/quote');
 });
-test('OR graphs and AND support retain source identity and conjunctions', () => {
-  const b = pilot.find(b => b.family.causal_class === 'alternative_mediated') ?? pilot.find(b => b.support.checkpoints[0].acceptedGraphs.length === 2);
-  const a = adaptGenerator(b.family, b.gold, b.support, b.family.checkpoints[0].batch);
-  assert.equal(a.gold.reason.acceptedGraphs.length, 2);
-  const e = a.gold.reason.acceptedGraphs[0].edges[0];
-  assert.equal(e.support.length, 1); assert.equal(e.support[0].length, 1);
-  const s = a.gold.supportSpans.find(s => s.id === e.support[0][0]); assert.equal(s.text.length, s.end - s.start);
+test('complete quotation unions preserve serial, conjunctive and alternative private plans',()=>{
+ for(const style of ['serial','conjunctive','alternative']){
+  const {row,world}=a4Fixture();row.delivered.pop();
+  if(style==='conjunctive'){row.gold.acceptedGraphs[0].edges[1]={from:'B',to:'C'};row.gold.acceptedGraphs[0].edges[0]={from:'A',to:'C'};world.edge_support[0].to='C';}
+  if(style==='alternative')row.gold.acceptedGraphs.push({edges:[{from:'B',to:'C'}]});
+  world.gold=clone(row.gold);const a=adaptChallenge(row,world);assert.equal(score(a.gold,a.submission).scores.R,1);
+  if(style!=='alternative'){a.submission.answer.reason.support.pop();assert.notEqual(score(a.gold,a.submission).scores.R,1);}
+ }
 });
-test('gold citations, incompatible topology, source corruption and non-UTF16 offsets fail explicitly', () => {
-  const b = clone(pilot.find(b => b.support.checkpoints[0].acceptedGraphs.length)); const batch = b.family.checkpoints[0].batch;
-  const a = () => adaptGenerator(b.family, b.gold, b.support, batch);
-  const edge = b.support.checkpoints[0].acceptedGraphs[0].edges[0], span = edge.support[0][0];
-  span.offset_unit = 'utf8'; assert.throws(a, /offset unit/); span.offset_unit = 'utf16';
-  span.quote += 'corrupt'; assert.throws(a, /span mismatch/); span.quote = span.quote.slice(0, -7);
-  edge.to = 'bogus'; assert.throws(a, /graph mismatch/);
-  const row = clone(rows.find(r => r.gold.answer.reason.edges.length)); row.gold.answer.current.claims[0].citations.push(row.candidate.current.claims[0].citations[0]);
-  const world = clone(worlds.get(row.world_id)); world.gold = clone(row.gold);
-  assert.throws(() => adaptChallenge(row, world), /Gold citations/);
+test('source corruption, offset drift, topology mismatches and nonempty gold citations are rejected',()=>{
+ const b=clone(pilot.find(b=>b.support.checkpoints[0].acceptedGraphs.length)),batch=b.family.checkpoints[0].batch;
+ const a=()=>adaptGenerator(b.family,b.gold,b.support,batch),edge=b.support.checkpoints[0].acceptedGraphs[0].edges[0],span=edge.support[0][0];
+ span.offset_unit='utf8';assert.throws(a,/offset unit/);span.offset_unit='utf16';span.quote+='corrupt';assert.throws(a,/span mismatch/);span.quote=span.quote.slice(0,-7);
+ edge.to='bogus';assert.throws(a,/graph mismatch/);
+ const {row,world}=a4Fixture();row.gold.answer.current.rows[0].citations.push(row.candidate.reason.support[0]);world.gold=clone(row.gold);assert.throws(()=>adaptChallenge(row,world),/Gold citations/);
 });
-test('challenge gold redundant edge topology cannot silently disappear', () => {
-  const row = clone(rows.find(r => r.gold.answer.reason.edges.length)); const world = clone(worlds.get(row.world_id));
-  row.gold.answer.reason.edges[0].to = 'wrong'; world.gold = clone(row.gold);
-  assert.throws(() => adaptChallenge(row, world), /not an accepted graph/);
+test('superseded graph answers are rejected with no conversion fallback',()=>{
+ const row=Object.values(challenge.sets)[0][0],world=challenge.worlds.find(w=>w.id===row.world_id);assert.throws(()=>adaptChallenge(row,world),/A-4 slot answer/);
+ const f=a4Fixture();delete f.row.gold.private_causal;f.world.gold=clone(f.row.gold);assert.throws(()=>adaptChallenge(f.row,f.world),/Private causal/);
 });
-test('audit extension fields survive and checksum tampering is detected', () => {
-  const row = clone(rows[0]); row.newUnknownMetadata = { exact: ['字', '1.000'] };
-  const a = adapt(row); assert.deepEqual(restore(a).row.newUnknownMetadata, row.newUnknownMetadata);
-  assert.equal(fieldMapping('challenge', '$/row/newUnknownMetadata/exact/*').disposition, 'defect:no-scorer-metadata-slot');
-  a.audit.source.row.newUnknownMetadata.exact[1] = 'changed'; assert.throws(() => restore(a), /hash mismatch/);
+test('audit extension fields survive; checksum tampering is detected',()=>{
+ const {row,world}=a4Fixture();row.newUnknownMetadata={exact:['字','1.000']};const a=adaptChallenge(row,world);
+ assert.deepEqual(restore(a).row.newUnknownMetadata,row.newUnknownMetadata);assert.equal(fieldMapping('challenge','$/row/newUnknownMetadata/exact/*').disposition,'defect:no-scorer-metadata-slot');
+ a.audit.source.row.newUnknownMetadata.exact[1]='changed';assert.throws(()=>restore(a),/hash mismatch/);
 });
-test('five evidence variants follow submitted citations; negation is referred, never auto-accepted', () => {
-  const group = challenge.sets['evidence-contrasts.jsonl'].filter(r => r.world_id === challenge.sets['evidence-contrasts.jsonl'][0].world_id);
-  assert.equal(group.length, 5);
-  for (const row of group) {
-    const a = adapt(row), result = score(a.gold, a.submission);
-    if (row.evidence_variant === 'adequate') assert.ok([1, null].includes(result.scores.R));
-    else if (row.evidence_variant === 'negated') { assert.equal(result.reason.support, null); assert.ok(result.referrals.some(f => f.pass === 'support')); }
-    else assert.equal(result.reason.support, 0);
-    assert.deepEqual(a.submission.answer, row.candidate);
-  }
+test('removed, changed and endpoint-only delivery cannot establish a complete explanation',()=>{
+ for(const variant of ['adequate','removed','modified','endpoint']){
+  const {row,world}=a4Fixture();row.delivered.pop();
+  if(variant==='removed')row.delivered=[];
+  if(variant==='modified'){row.delivered[0].text='A does not cause B.';row.candidate.reason.support[0].quote=row.delivered[0].text;}
+  if(variant==='endpoint')row.candidate.reason.support.pop();
+  const a=adaptChallenge(row,world),r=score(a.gold,a.submission);assert.deepEqual(a.submission.answer,row.candidate);
+  if(variant==='adequate')assert.equal(r.scores.R,1);else assert.notEqual(r.scores.R,1);
+ }
 });
-test('referrals have pass-isolated allowlists and retain original citations', () => {
-  const row = challenge.sets['referral-candidates.jsonl'][0], a = adapt(row), result = score(a.gold, a.submission);
-  assert.ok(result.referrals.length);
-  for (const f of result.referrals) {
-    assert.equal(f.question, row.question); assert.ok(f.answer);
-    assert.ok(!Object.hasOwn(f, 'true_label')); assert.ok(!Object.hasOwn(f, 'language')); assert.ok(!Object.hasOwn(f, 'world_id'));
-    if (f.pass === 'correctness') { assert.ok(f.G_correct); assert.ok(!Object.hasOwn(f, 'delivered')); assert.ok(!stable(f.G_correct).includes('supportSpans')); }
-    else { assert.ok(f.delivered); assert.ok(!Object.hasOwn(f, 'G_correct')); for (const d of f.delivered) assert.deepEqual(Object.keys(d).sort(), ['aliases', 'intent', 'item', 'source', 'text', 'unit']); }
-  }
+test('unknown unit referrals keep correctness gold and support delivery isolated',()=>{
+ const {row,world}=a4Fixture();row.candidate.current.rows[0].cap.value.unit='unregistered-unit';const a=adaptChallenge(row,world),r=score(a.gold,a.submission);assert.ok(r.referrals.length);
+ for(const f of r.referrals){assert.equal(f.question,row.question);assert.ok(!Object.hasOwn(f,'true_label'));if(f.pass==='correctness'){assert.ok(f.G_correct);assert.ok(!Object.hasOwn(f,'delivered'));assert.ok(!stable(f.G_correct).includes('supportSpans'));}else {assert.ok(f.delivered);assert.ok(!Object.hasOwn(f,'G_correct'));}}
 });
 test('qualification counts only actual designated referrals, preserving frozen order', () => {
   const make = (id, yes) => ({ id, set: 'referral_candidates', language: 'en', style: 'terse', designated: ['C'], truth: { components: { C: false } }, scores: { C: yes ? null : 0 }, referrals: yes ? [{ components: ['C'] }] : [{ components: ['R'] }] });
@@ -182,41 +157,12 @@ test('gate thresholds detect false acceptance, support failures and style error 
 });
 
 
-test('revised E-1: trigger-only answers earn R=1; deadline mentions, uncited edges and not_stated do not',()=>{
-  let n=0;
-  for (const b of pilot.filter(b=>b.family.change_type==='expiry' && b.family.expiry_mode==='deadline')) for (const cp of b.family.checkpoints) {
-    const {gold}=adaptGenerator(b.family,b.gold,b.support,cp.batch);
-    const trigger=clone(gold);trigger.reason.acceptedGraphs=[gold.reason.acceptedGraphs.at(-1)];
-    const submission=goldWitness(trigger);
-    submission.answer.reason.nodes=submission.answer.reason.nodes.filter(n=>['deadline','decision'].includes(n.id));
-    assert.deepEqual(score(gold,submission).scores,{C:1,O:1,R:1,J:1});
-    const bare=clone(submission);bare.answer.reason.edges=[];
-    assert.equal(score(gold,bare).scores.R,0);
-    const uncited=clone(submission);uncited.answer.reason.edges[0].citations=[];
-    assert.equal(score(gold,uncited).scores.R,0);
-    const unstated=clone(submission);unstated.answer.reason={status:'not_stated',nodes:[],edges:[]};
-    assert.equal(score(gold,unstated).scores.R,0);
-    // A deadline fragment cannot support the submitted causal edge.
-    const fragment=clone(submission);
-    fragment.answer.reason.edges[0].citations[0].quote=submission.answer.reason.nodes.find(n=>n.id==='deadline').claim.value.iso;
-    assert.equal(score(gold,fragment).scores.R,0);n++;
-  }
-  assert.equal(n,4);
-});
 
-
-test('R3 expiry effective strata preserve genuine multi-hop and unstated gold without a deadline shortcut',()=>{
- let multi=0,unstated=0;
- for(const b of pilot.filter(b=>b.family.change_type==='expiry'&&b.family.expiry_mode!=='deadline')) for(const cp of b.family.checkpoints) {
-  const {gold}=adaptGenerator(b.family,b.gold,b.support,cp.batch);
-  const witness=goldWitness(gold);assert.equal(score(gold,witness).scores.R,1);
-  if(gold.reason.status==='not_stated'){unstated++;assert.equal(gold.reason.acceptedGraphs.length,0);}
-  else {
-   multi++;assert.ok(gold.reason.acceptedGraphs.every(g=>g.edges.length>1));
-   const shortcut=clone(witness);shortcut.answer.reason.edges=shortcut.answer.reason.edges.slice(-1);
-   const result=score(gold,shortcut);assert.notEqual(result.scores.R,1);
-   if(result.scores.R===null)assert.ok(result.referrals.some(r=>r.pass==='correctness'));
-  }
+test('deadline and effective expiry witnesses use selected quotations; incomplete selections fail',()=>{
+ let n=0;
+ for(const b of pilot.filter(b=>b.family.change_type==='expiry'))for(const cp of b.family.checkpoints){
+  const {gold}=adaptGenerator(b.family,b.gold,b.support,cp.batch),w=goldWitness(gold);assert.equal(score(gold,w).scores.R,1);
+  if(gold.reason.status==='stated'){w.answer.reason.support=[];assert.notEqual(score(gold,w).scores.R,1);}else assert.equal(gold.reason.acceptedGraphs.length,0);n++;
  }
- assert.equal(multi,16);assert.equal(unstated,4);
+ assert.equal(n,24);
 });

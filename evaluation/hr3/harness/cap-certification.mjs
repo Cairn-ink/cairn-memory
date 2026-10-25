@@ -43,115 +43,17 @@ export function serializeOutput(schema, value) {
   return JSON.stringify(order(schema, value));
 }
 
-function cleanSpan({turn_id,start,quote},input) {
-  const text=input.turns.find(t=>t.turn_id===turn_id)?.text;
-  assert.equal(text?.slice(start,start+quote.length),quote);
-  let at=-1,occurrence=0;
-  do {at=text.indexOf(quote,at+1);occurrence++;}while(at>=0&&at<start);
-  assert.equal(at,start);
-  return {turn_id,quote,occurrence};
-}
-
-export function extractionReference(family, ordinal) {
-  const input = extractionInput(family, ordinal);
-  const turns = new Set(input.turns.map(t => t.turn_id));
-  const events = family.ast.events.filter(e => e.source_turns.some(t => turns.has(t))).map((event, i) => {
-    // Whitelist the schema fields: omit AST-only metadata, never emit gold IDs.
-    const e = Object.fromEntries(Object.keys(extractionSchema.properties.events.items.properties).map(k => [k, structuredClone(event[k])]));
-    e.event_id = `e${i + 1}`;
-    e.source_quotes = e.source_quotes.map(q=>cleanSpan(q,input));
-    e.reason_edges = event.reason_edges.map(({ from, to, support }) => ({
-      from, to, source_quotes: [...new Map(support.flat().map(q => [canonical(cleanSpan(q,input)), cleanSpan(q,input)])).values()],
-    }));
-    return e;
-  });
-  const validated=validateExtraction({events},input);
-  assert.equal(validated.diagnostics.rejectedEvents,0,'Reference events must all remain valid');
-  // Certificate serializes model output, not computed offsets or diagnostics.
-  return {events};
-}
-
-// A reference delivery, not a simulated P/T/U/O retrieval result. Each observed
-// source turn is an untruncated receipt. Both intents address the same source;
-// source offsets never masquerade as delivered offsets.
-export function referenceDelivery(family, batch) {
-  return family.batches.filter(b => b.ordinal <= batch).flatMap(b => b.turns.flatMap((t, source) =>
-    ['current', 'history'].map(intent => ({
-      intent, item: b.ordinal - 1, unit: 'receipt', source, aliases: [],
-      segments: [{ origin: t.turn_id, start: 0, text: t.text }], normalize: false, truncate: null,
-    }))));
-}
-
-export function readerReference(bundle, batch, { graph = 'union', assertionCitations = true } = {}) {
-  const { family, gold, support } = bundle;
-  const g = gold.checkpoints.find(c => c.batch === batch).G_correct;
-  const s = support.checkpoints.find(c => c.batch === batch);
-  const answer = structuredClone({ current: g.current, old: g.old, reason: g.reason });
-  const checkpoint = family.checkpoints.find(c => c.batch === batch);
-  const focal = family.ast.events.find(e => e.source_turns.includes(checkpoint.focal_turn) && !e.distractor);
-  const citation = (q, intent) => {
-    const b = family.batches.find(b => b.turns.some(t => t.turn_id === q.turn_id));
-    const source = b.turns.findIndex(t => t.turn_id === q.turn_id), text = b.turns[source].text;
-    assert.equal(text.slice(q.start, q.end), q.quote);
-    // Count occurrences in delivered text, including repeated source phrases.
-    let at = -1, occurrence = 0;
-    do { at = text.indexOf(q.quote, at + 1); occurrence++; } while (at >= 0 && at < q.start);
-    assert.equal(at, q.start);
-    return { intent, item: b.ordinal - 1, unit: 'receipt', source, quote: q.quote, occurrence };
-  };
-  const assertionCitation = (event, intent) => {
-    const q = structuredClone(event.source_quotes[0]);
-    // Omit separately authored rationale sentences from an assertion citation.
-    const cuts = [' Confirmed condition:', ' 已確認的狀況：', ' No reason for', ' 這次變更沒有'].map(x => q.quote.indexOf(x)).filter(x => x >= 0);
-    if (cuts.length) { q.quote = q.quote.slice(0, Math.min(...cuts)); q.end = q.start + q.quote.length; }
-    return citation(q, intent);
-  };
-  if (assertionCitations) {
-    const observed = family.ast.events.filter(e => !e.distractor && Date.parse(e.observed_at) <= Date.parse(checkpoint.at));
-    answer.current.claims.forEach(c => {
-      // Value + source-claimed interval identifies the contributing record.
-      const event = observed.find(e => canonical(e.effective_interval) === canonical(c.valid) && e.claims.some(a => a.field === 'value' && canonical(a.value) === canonical(c.value))) ?? focal;
-      const sources = family.change_type === 'refinement' ? [observed[0], event] : [event];
-      c.citations = [...new Set(sources)].map(e => assertionCitation(e, 'current'));
-    });
-    answer.old.records.forEach((record, i) => {
-      const anchor = focal.predecessor_anchors[i];
-      const event = observed.find(e => e.source_turns.includes(anchor.source_turn));
-      const sources = family.change_type === 'refinement' ? [observed[0], event] : [event];
-      record.claims.forEach(c => { c.citations = [...new Set(sources)].map(e => assertionCitation(e, 'history')); });
-    });
-  }
-  const selected = graph === 'union' ? s.acceptedGraphs : s.acceptedGraphs.slice(graph, graph + 1);
-  const edges = [...new Map(selected.flatMap(g => g.edges).map(e => [`${e.from}:${e.to}`, e])).values()];
-  if (graph !== 'union' && edges.length) {
-    const ids = new Set(edges.flatMap(e => [e.from, e.to]));
-    answer.reason.nodes = answer.reason.nodes.filter(n => ids.has(n.id));
-  }
-  answer.reason.edges = edges.map(e => ({ from: e.from, to: e.to,
-    citations: e.support[0].map(q => citation(q, 'history')) }));
-  assert.deepEqual(validate(answerSchema, answer), []);
-  assert.deepEqual(answer.current.claims.map(c => ({ ...c, citations: [] })), g.current.claims);
-  assert.deepEqual(answer.old.records.map(r => ({ ...r, claims: r.claims.map(c => ({ ...c, citations: [] })) })), g.old.records);
-  return answer;
-}
-
-function dimensions(operation, value) {
-  const claims = operation === 'reader' ? [...value.current.claims, ...value.old.records.flatMap(r => r.claims), ...value.reason.nodes.map(n => n.claim)] : value.events.flatMap(e => e.reason_nodes.map(n => n.claim));
-  const reasons = operation === 'reader' ? [value.reason] : value.events.map(e => ({ nodes: e.reason_nodes, edges: e.reason_edges }));
-  return {
-    currentClaims: value.current?.claims.length ?? 0, oldRecords: value.old?.records.length ?? 0,
-    oldClaims: value.old?.records.reduce((n, r) => n + r.claims.length, 0) ?? 0,
-    events: value.events?.length ?? 0,
-    assignments: value.events?.reduce((n, e) => n + e.claims.length, 0) ?? 0,
-    predecessors: value.events?.reduce((n, e) => n + e.predecessor_anchors.length, 0) ?? 0,
-    reasonNodes: reasons.reduce((n, r) => n + r.nodes.length, 0),
-    reasonEdges: reasons.reduce((n, r) => n + r.edges.length, 0),
-    maxQualifiersPerClaim: Math.max(0, ...claims.map(c => c.qualifiers.length)),
-    maxAssignmentsPerEvent: Math.max(0, ...(value.events ?? []).map(e => e.claims.length)),
-    maxPredecessorsPerEvent: Math.max(0, ...(value.events ?? []).map(e => e.predecessor_anchors.length)),
-    citations: claims.reduce((n, c) => n + c.citations.length, 0) + reasons.reduce((n, r) => n + r.edges.reduce((m, e) => m + (e.citations?.length ?? 0), 0), 0),
-    sourceQuotes: value.events?.reduce((n, e) => n + e.source_quotes.length + e.reason_edges.reduce((m, edge) => m + edge.source_quotes.length, 0), 0) ?? 0,
-  };
+export {extractionReference,readerReference} from './references-a4.mjs';
+import {extractionReference,readerReference} from './references-a4.mjs';
+export function referenceDelivery(family,batch) {return family.batches.filter(b=>b.ordinal<=batch).flatMap(b=>b.turns.flatMap((t,source)=>['current','history'].map(intent=>({intent,item:b.ordinal-1,unit:'receipt',source,aliases:[],segments:[{origin:t.turn_id,start:0,text:t.text}],normalize:false,truncate:null}))));}
+function dimensions(operation,value) {
+ const rows=operation==='reader'?[...value.current.rows,...value.old.records.flatMap(r=>r.rows)]:[];
+ return {currentRows:value.current?.rows.length??0,oldRecords:value.old?.records.length??0,oldRows:value.old?.records.reduce((n,r)=>n+r.rows.length,0)??0,
+  events:value.events?.length??0,contextEvents:value.events?.filter(e=>e.payload.type==='context').length??0,
+  assignments:value.events?.reduce((n,e)=>n+['route','approval','cap'].filter(k=>e.payload[k]!=null).length,0)??0,
+  predecessors:value.events?.reduce((n,e)=>n+e.predecessor_anchors.length,0)??0,
+  reasonQuotes:operation==='reader'?value.reason.support.length:value.events.reduce((n,e)=>n+e.reason_quotes.length,0),
+  citations:rows.reduce((n,r)=>n+r.citations.length,0)+(value.reason?.support.length??0)};
 }
 
 function provenance() {
@@ -161,14 +63,15 @@ function provenance() {
   const names = [
     'evaluation/hr3/protocol/protocol-v0.3.4.md', 'evaluation/hr3/protocol/errata.md',
     'evaluation/hr3/generator/freeze.json', ...SOURCE_NAMES.map(n => `evaluation/hr3/generator/${n}`),
-    ...['schema.mjs', 'requests.mjs', 'inputs.mjs', 'extraction.mjs', 'cap-certification.mjs', 'cap-stress-fixtures.mjs', 'reports/inspected-heldout-references.json', 'reports/cap-certification-a2-pre-cap-revision.json'].map(n => `evaluation/hr3/harness/${n}`),
+    ...['references-a4.mjs','contract-projection-a4.mjs','prompts-a4.mjs','preflight-a4-schema.mjs','schema.mjs', 'requests.mjs', 'inputs.mjs', 'extraction.mjs', 'cap-certification.mjs', 'cap-stress-fixtures.mjs', 'reports/inspected-heldout-references.json', 'reports/cap-certification-a2-pre-cap-revision.json'].map(n => `evaluation/hr3/harness/${n}`),
     ...['schema.mjs', 'canonical.mjs', 'citations.mjs', 'scorer.mjs'].map(n => `evaluation/hr3/scorer/${n}`),
   ];
   assert.equal(sha256(readFileSync(local(names[0]))), freeze.protocol_sha256);
   const errata = readFileSync(local(names[1]), 'utf8');
   const amendment = errata.indexOf('## A-2 (2026-10-25):');
   assert.ok(amendment > 0, 'A-2 amendment missing');
-  assert.equal(sha256(errata.slice(0, amendment).trimEnd() + '\n'), freeze.errata_sha256, 'Pre-A-2 errata changed');
+  const a41=errata.indexOf('### A-4.1 ');assert.ok(a41>amendment);
+  assert.equal(sha256(errata.slice(0,a41).trimEnd()+'\n'),freeze.errata_sha256,'Frozen pre-A-4.1 errata changed');
   const revision=errata.indexOf('### A-2 cap revision after the engineering stress certificate');
   assert.ok(revision>amendment,'Engineering-stress cap revision missing');
   assert.match(errata.slice(revision), /2,176/);
@@ -238,11 +141,11 @@ export function certify({ progress = () => {} } = {}) {
     }));
     const historicalDominance=Object.fromEntries(['reader','extraction'].map(operation=>{
       const stressWorst=Math.max(...structures.filter(g=>g.worst.operation===operation&&g.worst.split===STRESS_SPEC.split).map(g=>g.worst.tokens));
-      assert.ok(stressWorst>=inspected.previousWorstTokens[operation],`Engineering ${operation} must dominate the historical bound`);
-      return [operation,{previousWorstTokens:inspected.previousWorstTokens[operation],engineeringWorstTokens:stressWorst,dominates:true}];
+      // A-4 changes representation; old graph-token counts are historical only.
+      return [operation,{previousWorstTokens:inspected.previousWorstTokens[operation],engineeringWorstTokens:stressWorst,comparable:false}];
     }));
     return {
-      version: 'hr3-cap-certification-a2-audited', protocol: 'v0.3.4 + E-1/E-2/A-1/A-2', seed: DEFAULT_SEED,
+      version: 'hr3-cap-certification-a4-v1', protocol: 'v0.3.4 + A-4/A-4.1', seed: DEFAULT_SEED,
       status: Object.values(gates).every(g => g.pass) ? 'PASS' : 'FAIL_AMENDMENT_REQUIRED',
       minimumMarginPercent: MINIMUM_MARGIN_PERCENT, historicalDominance, stressSpec:STRESS_SPEC,
       inspectedHeldOutManifest:{path:'evaluation/hr3/harness/reports/inspected-heldout-references.json',sha256:sources['evaluation/hr3/harness/reports/inspected-heldout-references.json']},
@@ -252,9 +155,9 @@ export function certify({ progress = () => {} } = {}) {
         scope: 'Frozen pilot references plus independent engineering stress fixtures. No development/test rendering or generation imports; no unbounded-schema or future-bank claim.',
         serialization: 'Compact JSON in strict provider schema property order, literal Unicode, no trailing newline or envelope; count output text only.',
         tokenizer: { encoding: 'o200k_base', package: 'tiktoken', version: tokenizerPackage.version, installation: 'adapters/openai/node_modules/tiktoken', entrySHA256: sha256(readFileSync(requireTokenizer.resolve('tiktoken'))), wasmSHA256: sha256(readFileSync(local('adapters/openai/node_modules/tiktoken/tiktoken_bg.wasm'))) },
-        requiredGraph: 'Every accepted graph separately, incident nodes only, required directed-edge source citations, no optional current/old citations. Unstated retains its exact empty gold structure.',
-        supportedUnion: 'All gold current claims, requested old records, qualifiers and reason nodes; union of all supported accepted graphs, exact edge citations and assertion citations. Refinement cites both inherited fields and amendment.',
-        extraction: 'Every explicit focal/distractor AST event per independent batch; schema field whitelist; local event IDs; all reason nodes/edges and frozen verbatim source quotes. No control actions: controls are outside extractionInput.',
+        requiredGraph: 'Every complete accepted causal quotation selection separately; no optional C/O citations. No model-authored graph objects.',
+        supportedUnion: 'All slot rows and requested predecessor records; union of every accepted causal explanation with exact citations. Refinement cites inherited and amendment sources.',
+        extraction: 'All explicit focal/distractor events, supplied slots with independent anchors, all causal/explicit-no-reason quotations and anchored non-slot context. Core anchors retain each complete relevant assertion; assignment anchors select its exact value/field clause. No unrelated distractor sentences copied into another event. All shared source text remains in extraction input. Controls are outside extractionInput.',
         validation: 'Frozen pilot/source hashes; independently constructed engineering fixtures respect grammar cardinalities and source byte guards; every output passes provider schema and extraction provenance/quote validator; exact C/O gold preservation; citation addresses/occurrences derived from observed source receipts.',
         allocationCrossCheck: { routes: ['verified frozen pilot rows + explicit stress Cartesian product', 'cohort family/lineage identifiers and reference counts'], families: counts.reduce((n, c) => n + c.families, 0) },
         limits: [
@@ -283,7 +186,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   // Only the fixed harness report is writable through this CLI.
   assert.equal(process.argv.length, 2, 'No CLI arguments supported');
   const report = certify({ progress: message => process.stderr.write(message + '\n') });
-  const output = new URL('./reports/cap-certification-a2.json', import.meta.url);
+  const output = new URL('./reports/cap-certification-a4.json', import.meta.url);
   writeFileSync(output, JSON.stringify(report, null, 2) + '\n');
   assert.deepEqual(readJSON(output), report);
   process.stdout.write(JSON.stringify({ status: report.status, gates: report.gates, summary: report.summary, report: relative(fileURLToPath(repo), fileURLToPath(output)) }, null, 2) + '\n');

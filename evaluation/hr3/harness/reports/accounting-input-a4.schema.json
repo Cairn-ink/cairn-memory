@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "A-4 complete accounting source input v1",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": "hr3-a4-accounting-input-v1"
+    },
+    "baseManifest": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository-relative path; no parent traversal or absolute local path."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "thirdPilotLedger": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository-relative path; no parent traversal or absolute local path."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "thirdPilotRun": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository-relative path; no parent traversal or absolute local path."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "thirdPilotSummary": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository-relative path; no parent traversal or absolute local path."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "additionalPreparationReceipts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Repository-relative path; no parent traversal or absolute local path."
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "preparationComplete": {
+      "const": true
+    },
+    "attestation": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Primary attestation of the complete preparation inventory; never infer this from rounded settled spending."
+    }
+  },
+  "required": [
+    "version",
+    "baseManifest",
+    "thirdPilotLedger",
+    "thirdPilotRun",
+    "thirdPilotSummary",
+    "additionalPreparationReceipts",
+    "preparationComplete",
+    "attestation"
+  ],
+  "additionalProperties": false
+}

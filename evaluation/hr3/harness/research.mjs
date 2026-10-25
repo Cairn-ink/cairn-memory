@@ -25,11 +25,12 @@ export function resolveLinks(events) {
     prior.push(event);return event;
   });
 }
-function evidence(events) {return events.flatMap(e=>e.source_quotes.map(q=>({...q,event_id:e.event_id})));}
+export function distinctQuotes(events) {return [...new Map(events.flatMap(e=>(e.source_quotes??[]).map(q=>[canonical([q.turn_id,q.start,q.end]),q]))).values()];}
+function evidence(events) {return distinctQuotes(events);}
 function record(e,fields=e.claims,scope=e.scope,status='active',support=[e]) {
-  return {id:e.event_id,subject:e.subject,predicate:e.predicate,scope,fields,valid:e.effective_interval,status,change_type:e.change_type,commitment:e.commitment,unresolved:e.unresolved,link_errors:e.link_errors,predecessors:e.targets,reason_nodes:e.reason_nodes,reason_edges:e.reason_edges,supporting_events:support.map(x=>x.event_id),receipts:evidence(support)};
+  return {id:e.event_id,subject:e.subject,predicate:e.predicate,scope,fields,valid:e.effective_interval,status,change_type:e.change_type,commitment:e.commitment,unresolved:e.unresolved,link_errors:e.link_errors,predecessors:e.targets,context:e.context??null,kind:e.kind,supporting_events:support.map(x=>x.event_id),receipts:evidence(support)};
 }
-export function materialize(arm,raw,atISO) {
+function materializeSlots(arm,raw,atISO) {
   if(!['T','U','O'].includes(arm))throw Error('unknown_arm');
   const at=Date.parse(atISO),events=resolveLinks(raw.filter(e=>Date.parse(e.observed_at)<=at)),committed=events.filter(adopted),active=committed.filter(e=>eligible(e,at)&&!e.unresolved);
   const unresolved=events.filter(e=>e.commitment==='unresolved'||adopted(e)&&e.unresolved).map(e=>record(e,e.claims,e.scope,'unresolved'));
@@ -52,10 +53,13 @@ export function materialize(arm,raw,atISO) {
       const k=address(e,c),existing=grid.get(k),fields=new Map(existing?.fields??[]);
       const affected=predecessors.filter(p=>p.cells.has(canonical(c)));
       const entire=e.replacement_extent==='entire_predecessor';
+      // A predecessor snapshot owns inherited fields too. Clear only fields
+      // still carrying that snapshot's provenance; independent later writes survive.
+      const selectedField=(field,value)=>affected.some(p=>p.cells.get(canonical(c)).fields.get(field)?.event.event_id===value.event.event_id);
       if(e.change_type==='expiry') {
-        for(const [field,value]of fields)if(!e.targets.length||e.targets.includes(value.event.event_id)||value.support.some(x=>e.targets.includes(x.event_id)))fields.delete(field);
+        for(const [field,value]of fields)if(!e.targets.length||selectedField(field,value))fields.delete(field);
       } else {
-        if(entire&&e.change_type!=='initial')for(const [field,value]of fields)if(affected.length&&value.support.some(x=>e.targets.includes(x.event_id)))fields.delete(field);
+        if(entire&&e.change_type!=='initial')for(const [field,value]of fields)if(selectedField(field,value))fields.delete(field);
         // Patches inherit unspecified fields and provenance from their named predecessor in this cell.
         if(!entire&&affected.length)for(const p of affected)for(const [field,value]of p.cells.get(canonical(c)).fields)if(!fields.has(field))fields.set(field,value);
         if(e.change_type==='initial')fields.clear();
@@ -93,13 +97,50 @@ export function materialize(arm,raw,atISO) {
   }
   return {arm,at:atISO,current:[...current,...unresolved],history,pending:committed.filter(e=>!eligible(e,at)).map(e=>record(e)),events};
 }
-// Frozen serializer: body indexes interpretations; receipts are separate assembly units.
+export function ingestionLosses(raw,atISO) {
+  const linked=resolveLinks(raw);
+  return linked.map((e,i)=>{const prior=linked.slice(0,i),anchors=e.predecessor_anchors.map(a=>{
+    const matches=prior.filter(p=>p.source_turns.includes(a.source_turn)&&normalize(p.subject)===normalize(a.subject)&&normalize(p.predicate)===normalize(a.predicate));
+    const p=matches.length===1?matches[0]:null;
+    return {source_turn:a.source_turn,record_name:a.record_name,missing:matches.length===0,nonunique:matches.length>1,
+      incompatible:p?!adopted(p)||p.unresolved||!cells(p.scope).some(c=>cells(e.scope).some(d=>canonical(c)===canonical(d))):null,
+      historical:p?prior.some(z=>!z.unresolved&&adopted(z)&&['correction','reversal','expiry'].includes(z.change_type)&&z.replacement_extent==='entire_predecessor'&&z.targets.includes(p.event_id)&&intervalStart(z)<=Date.parse(e.observed_at)):null};
+  });return {event:e.event_id,source_turns:e.source_turns,anchors,link_errors:e.link_errors,
+    commitment_filtered:e.commitment!=='adopted'&&e.commitment!=='unresolved',unresolved_extent:e.replacement_extent==='unresolved',
+    outcome:e.unresolved?'unresolved_record':e.commitment==='adopted'?'retained':'commitment_filter',at:atISO};});
+}
+export function materialize(arm,raw,atISO) {
+  const isContext=e=>e.payload?.type==='context'||!!e.context;
+  const slots=raw.filter(e=>!isContext(e)),context=raw.filter(isContext).filter(e=>Date.parse(e.observed_at)<=Date.parse(atISO));
+  const state=materializeSlots(arm,slots,atISO),at=Date.parse(atISO),linked=resolveLinks(context),eligibleContext=linked.filter(e=>adopted(e)&&eligible(e,at)&&!e.unresolved);
+  const groups=new Map();for(const e of eligibleContext){const k=key(e);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(e);}
+  const heads=[...groups.values()].map(es=>es.sort(arm==='U'?effectiveOrder:orderEvents).at(-1)),headIds=new Set(heads.map(e=>e.event_id));
+  state.current.push(...heads.map(e=>record(e,[],e.scope,live(e,at)?'active':'no_active_decision')),
+    ...linked.filter(e=>e.commitment==='unresolved'||adopted(e)&&e.unresolved).map(e=>record(e,[],e.scope,'unresolved')));
+  if(arm!=='O')state.history.push(...eligibleContext.filter(e=>!headIds.has(e.event_id)||!live(e,at)).map(e=>record(e,[],e.scope,live(e,at)?'historical':'expired')));
+  state.pending.push(...linked.filter(e=>adopted(e)&&!eligible(e,at)).map(e=>record(e,[],e.scope,'pending')));
+  if(arm!=='O')state.events=resolveLinks(raw.filter(e=>Date.parse(e.observed_at)<=at));
+  state.ingestionLosses=ingestionLosses(raw,atISO).map(row=>({...row,arm}));return state;
+}
+export function compactSlots(fields) {
+  return Object.fromEntries(fields.map(({field,value})=>[field==='value'?'route':field,value.type==='Text'?value.text:value.type==='Boolean'?value.value:value.type==='Quantity'?{decimal:value.decimal,unit:value.unit}:value]));
+}
+// Quotes appear once, as receipt assembly units. Bodies index assignments/context
+// and public state metadata only; provenance offsets never enter reader bodies.
 export function serializeRecord(r,aliases) {
-  const {receipts,...record}=r;
-  const body={...record,id:aliases.id(r.id),predecessors:r.predecessors?.map(id=>aliases.id(id)),supporting_events:r.supporting_events?.map(id=>aliases.id(id)),
-    reason_nodes:r.reason_nodes?.map(n=>({...n,id:aliases.node(r.id,n.id)})),reason_edges:r.reason_edges?.map(e=>({...e,from:aliases.node(r.id,e.from),to:aliases.node(r.id,e.to)}))};
-  for(const k of Object.keys(body))if(body[k]===false||body[k]===undefined||Array.isArray(body[k])&&!body[k].length)delete body[k];
-  return {id:aliases.id(r.id)+':'+canonical(r.scope),body:canonical(body),receipts:receipts.map(q=>({text:q.quote,origin:q.turn_id,start:q.start,normalize:false,truncate:null}))};
+  const body={record:aliases.id(r.id),subject:r.subject,predicate:r.predicate,kind:r.context?'context':'slots',
+    ...(r.context?{}:{slots:compactSlots(r.fields)}),scope:r.scope,valid:r.valid,status:r.status,
+    change_type:r.change_type,commitment:r.commitment,predecessors:r.predecessors?.map(id=>aliases.id(id)),
+    sources:[...new Set(r.receipts.map(q=>q.turn_id))]};
+  // Context text is itself its admitted quotation; carry its source association
+  // in a receipt. The receipt is an alias of body only when actually delivered.
+  for(const k of Object.keys(body))if(body[k]===undefined||Array.isArray(body[k])&&!body[k].length)delete body[k];
+  const contextQuote=r.context?.anchors?.find(q=>q.quote===r.context.text);
+  const header=canonical(body),bodyText=header+(contextQuote?'\n'+contextQuote.quote:'');
+  const receipts=[...new Map(r.receipts.filter(q=>!contextQuote||canonical([q.turn_id,q.start,q.end])!==canonical([contextQuote.turn_id,contextQuote.start,contextQuote.end])).map(q=>[canonical([q.turn_id,q.start,q.end]),q])).values()];
+  return {id:aliases.id(r.id)+':'+canonical(r.scope),body:bodyText,
+    ...(contextQuote?{bodySegments:[{origin:'research-format',start:0,text:header+'\n'},{origin:contextQuote.turn_id,start:contextQuote.start,text:contextQuote.quote}]}:{}),
+    receipts:receipts.map(q=>({text:q.quote,origin:q.turn_id,start:q.start,normalize:false,truncate:null}))};
 }
 const STOP=new Set(('a an and are as at be been being but by can could did do does doing for from had has have he her hers him his how i if in into is it its me my no nor not of on or our ours she so than that the their theirs them then there these they this those to too us was we were what when where which who why will with would you your yours').split(' '));
 export function tokenizeT1(text) {
@@ -130,16 +171,16 @@ export async function retrieve(state,{query,embedder,counter,controls=[],aliases
       semantic.sort((a,b)=>b.score-a.score||compare(a.id,b.id));semantic.splice(24);
     }
     const fused=new Map();for(const channel of [lexical,semantic])channel.forEach((r,i)=>fused.set(r.id,(fused.get(r.id)??0)+.5/(10+i+1)));
-    const ranked=[...fused].sort((a,b)=>b[1]-a[1]||compare(a[0],b[0])).slice(0,12),selected=[];
+    const dropped=[];const ranked=[...fused].sort((a,b)=>b[1]-a[1]||compare(a[0],b[0])).slice(0,12),selected=[];
     const wire=items=>canonical({intent,items});
     for(const [id]of ranked) {
-      const r=records.find(r=>r.id===id),candidate={body:r.body,sources:r.receipts.map((q,index)=>({index,excerpt:q.text}))};
-      if(counter.countTokens(wire([...selected,candidate]))>2000)continue;
+      const r=records.find(r=>r.id===id),candidate={body:r.body,sources:r.receipts.map((q,index)=>({index,source_turn:q.origin,excerpt:q.text}))};
+      if(counter.countTokens(wire([...selected,candidate]))>2000){dropped.push({id,reason:'whole_record_budget',tokens:counter.countTokens(wire([candidate]))});continue;}
       const item=selected.length;selected.push(candidate);
-      delivered.push(unit(intent,item,'body',null,r.body,`research:${r.id}`,0));
+      delivered.push({...unit(intent,item,'body',null,r.body,`research:${r.id}`,0),...(r.bodySegments?{segments:r.bodySegments}:{})});
       r.receipts.forEach((q,index)=>delivered.push(unit(intent,item,'receipt',index,q.text,q.origin,q.start,q.normalize,q.truncate)));
     }
-    blocks[intent]=wire(selected);diagnostics[intent]={lexical,semantic,fused:ranked,tokens:counter.countTokens(blocks[intent]),selected:selected.length};
+    blocks[intent]=wire(selected);diagnostics[intent]={lexical,semantic,fused:ranked,tokens:counter.countTokens(blocks[intent]),selected:selected.length,dropped};
   }
   return {blocks,delivered,diagnostics};
 }

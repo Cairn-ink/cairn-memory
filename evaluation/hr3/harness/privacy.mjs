@@ -1,3 +1,4 @@
+import {isContractProjection} from './contract-projection-a4.mjs';
 import {canonical,hash,fail} from './common.mjs';
 
 import {readFileSync} from 'node:fs';
@@ -18,7 +19,7 @@ export function sourceOrderAliases(events=[]) {
   return {register,id,node,diagnostics:()=>[...records].map(([internal_key,reader_id])=>({internal_key,reader_id,nodes:[...nodes.get(internal_key)].map(([private_id,reader_id])=>({private_id,reader_id}))}))};
 }
 
-export const PRIVATE_FIELD_INVENTORY=JSON.parse(readFileSync(new URL('./reports/private-field-inventory-a3.json',import.meta.url)));
+export const PRIVATE_FIELD_INVENTORY=JSON.parse(readFileSync(new URL('./reports/private-field-inventory-a4.json',import.meta.url)));
 const privateFieldNames=new Set(PRIVATE_FIELD_INVENTORY.fields.flatMap(f=>f.variants).map(name=>name.replace(/[^a-z0-9]/gi,'').toLowerCase()));
 const privateField=key=>privateFieldNames.has(key.replace(/[^a-z0-9]/gi,'').toLowerCase());
 const identifierPatterns=[
@@ -47,6 +48,17 @@ export function findPrivateLabels(value,labels=[]) {
     for(const [kind,pattern] of identifierPatterns){const match=text.match(pattern);if(match)add(kind,match[0],path);}
   }
   function add(kind,label,path){const key=canonical([kind,label,path]);if(!seen.has(key)){seen.add(key);hits.push({kind,label,path});}}
+  // A-4 contract metadata is public only at this explicit boundary and only
+  // after exact deterministic re-projection. No global key exemption is added.
+  function publicView(v,depth=0) {
+    if(depth>20)fail('private_label_scan_depth');
+    if(typeof v==='string'&&v.includes('\nCURRENT\n')){const at=v.indexOf('\nCURRENT\n');try{return JSON.stringify(publicView(JSON.parse(v.slice(0,at)),depth+1))+v.slice(at);}catch(error){if(error.code)throw error;}}
+    if(typeof v==='string'&&/^[\s]*[\[{]/.test(v)){try{return JSON.stringify(publicView(JSON.parse(v),depth+1));}catch(error){if(error.code)throw error;}}
+    if(Array.isArray(v))return v.map(x=>publicView(x,depth+1));
+    if(v&&typeof v==='object')return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,k==='public_contract'&&isContractProjection(x)?{}:publicView(x,depth+1)]));
+    return v;
+  }
+  value=publicView(value);
   inspect(typeof value==='string'?value:JSON.stringify(value),'$wire');
   function visit(v,path,depth=0) {
     if(depth>20)fail('private_label_scan_depth');
@@ -67,7 +79,7 @@ export class PrivacyGuard {
     if(hits.length)fail('private_label_leak:'+kind);
     return value;
   }
-  report(){return {version:'hr3-private-label-scan-v2',inventorySHA256:hash(PRIVATE_FIELD_INVENTORY),scans:this.scans.length,hits:this.scans.reduce((n,r)=>n+r.hits.length,0),records:this.scans};}
+  report(){return {version:'hr3-private-label-scan-a4-v1',inventorySHA256:hash(PRIVATE_FIELD_INVENTORY),scans:this.scans.length,hits:this.scans.reduce((n,r)=>n+r.hits.length,0),records:this.scans};}
 }
 
 // These are authored control assertions, not redactions of P's returned text.

@@ -1,0 +1,36 @@
+START strict-schema
+EXIT strict-schema 0
+START published-schemas
+EXIT published-schemas 0
+START private-field-inventory
+EXIT private-field-inventory 0
+START inspected-references
+EXIT inspected-references 0
+START cap-certificate
+EXIT cap-certificate 0
+START request-certificate
+EXIT request-certificate 0
+START accounting
+EXIT accounting 0
+START projection-schema
+EXIT projection-schema 0
+START budget
+EXIT budget 0
+START continuation-projection
+EXIT continuation-projection 0
+START generator-tests
+EXIT generator-tests 0
+START scorer-tests
+EXIT scorer-tests 0
+START integration-tests
+EXIT integration-tests 0
+START harness-tests
+EXIT harness-tests 0
+START pilot-inputs
+EXIT pilot-inputs 0
+START fake-pilot
+EXIT fake-pilot 0
+START leak-scan
+EXIT leak-scan 0
+START bound-report
+EXIT bound-report 0

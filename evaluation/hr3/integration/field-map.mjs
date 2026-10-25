@@ -1,27 +1,21 @@
-// Every observed source leaf pattern receives a destination/disposition. The
-// private sidecar retains all originals, including fields with no scorer slot.
+// Closed A-4 answer fields only. Private graphs have gold-only destinations.
 export function fieldMapping(kind, path) {
-  let p = path;
   if (kind === 'generator') {
-    if (p === '$/batch') return { destination: 'audit.source.batch', disposition: 'defect:no-scorer-metadata-slot' };
-    if (p.startsWith('$/family/checkpoints/*/question')) return { destination: 'gold.question (selected batch)', disposition: 'mapped' };
-    if (p.startsWith('$/goldRow/checkpoints/*/G_correct/')) p = p.replace('$/goldRow/checkpoints/*/G_correct/', 'answer/');
-    else if (p.startsWith('$/supportRow/checkpoints/*/acceptedGraphs/')) return { destination: p.replace('$/supportRow/checkpoints/*/acceptedGraphs/', 'gold.reason.acceptedGraphs/').replace('/support/*/*/', '/support/*/* -> gold.supportSpans/'), disposition: 'mapped:verified-source-span-interning' };
-    else if (p.startsWith('$/supportRow/checkpoints/*/assertion_spans/*/spans/')) return { destination: 'gold.supportSpans/{origin=turn_id,start,end,text=quote}; offset_unit checked utf16', disposition: 'mapped:verified-source-span-interning' };
-    else return { destination: `audit.source${path.slice(1)}`, disposition: 'defect:no-scorer-metadata-slot' };
-  } else {
-    if (p === '$/row/question') return { destination: 'gold.question', disposition: 'mapped' };
-    if (p.startsWith('$/row/candidate/')) return { destination: p.replace('$/row/candidate/', 'submission.answer/'), disposition: 'mapped:identity' };
-    if (p.startsWith('$/row/gold/answer/')) p = p.replace('$/row/gold/answer/', 'answer/');
-    else if (p.startsWith('$/row/gold/acceptedGraphs/')) return { destination: p.replace('$/row/gold/acceptedGraphs/', 'gold.reason.acceptedGraphs/*/edges/'), disposition: 'mapped:graph-nesting;[[]]->[]' };
-    else if (p.startsWith('$/row/delivered/')) return { destination: p.endsWith('/text') ? 'submission.delivered/*/segments/0/text' : p.replace('$/row/delivered/', 'submission.delivered/'), disposition: 'mapped:already-delivered-text-identity-map;provenance-defect-reported' };
-    else if (p.startsWith('$/world/edge_support/')) return { destination: 'gold.reason.acceptedGraphs/*/edges/*/support -> gold.supportSpans; exact source citation verified', disposition: 'mapped:OR-AND-preserved' };
-    else if (p.startsWith('$/world/delivered/')) return { destination: 'gold.supportSpans context span; only edge_support licenses causal support', disposition: 'mapped:local-source-registry' };
-    else if (p.startsWith('$/world/claims_support/*/citation/')) return { destination: 'submission.delivered address intent (authored harness plan)', disposition: 'mapped:address-plan' };
-    else return { destination: `audit.source${path.slice(1)}`, disposition: 'defect:no-scorer-metadata-slot' };
+    if (path.startsWith('$/family/checkpoints/*/question')) return { destination: 'gold.question (selected batch)', disposition: 'mapped' };
+    if (path.startsWith('$/goldRow/checkpoints/*/G_correct/acceptedGraphs')) return { destination: 'gold.reason.acceptedGraphs topology cross-check', disposition: 'mapped:verified-topology' };
+    if (path.startsWith('$/goldRow/checkpoints/*/G_correct/')) return { destination: path.replace('$/goldRow/checkpoints/*/G_correct/', 'gold/'), disposition: path.endsWith('/citations') || path.endsWith('/support') ? 'mapped:empty-gold-placeholder-checked' : 'mapped:slot-identity' };
+    if (path.startsWith('$/goldRow/checkpoints/*/private_causal/reason/nodes/')) return { destination: 'gold.reason.nodes (private only)', disposition: 'mapped:private-causal-nodes' };
+    if (path.startsWith('$/supportRow/checkpoints/*/acceptedGraphs/')) return { destination: 'gold.reason.acceptedGraphs.edges.support -> gold.supportSpans', disposition: 'mapped:verified-source-span-interning' };
+    if (path.startsWith('$/supportRow/checkpoints/*/assertion_spans/*/spans/')) return { destination: 'gold.supportSpans; verified utf16 source turn/offset/quote', disposition: 'mapped:verified-source-span-interning' };
+  } else if (kind === 'challenge') {
+    if (path === '$/row/question') return { destination: 'gold.question', disposition: 'mapped' };
+    if (path.startsWith('$/row/candidate/')) return { destination: path.replace('$/row/candidate/', 'submission.answer/'), disposition: 'mapped:slot-quotation-identity' };
+    if (path.startsWith('$/row/gold/answer/')) return { destination: path.replace('$/row/gold/answer/', 'gold/'), disposition: 'mapped:slot-identity-empty-citations-checked' };
+    if (path.startsWith('$/row/gold/private_causal/reason/nodes/')) return { destination: 'gold.reason.nodes (private only)', disposition: 'mapped:private-causal-nodes' };
+    if (path.startsWith('$/row/gold/acceptedGraphs/') || path.startsWith('$/world/edge_support/')) return { destination: 'gold.reason.acceptedGraphs.edges.support -> gold.supportSpans', disposition: 'mapped:OR-AND-preserved' };
+    if (path.startsWith('$/row/delivered/')) return { destination: 'submission.delivered; exact text, modified origin if changed', disposition: 'mapped:authored-address-and-text' };
+    if (path.startsWith('$/world/row_support/')) return { destination: 'submission.delivered address intent (authored)', disposition: 'mapped:address-plan' };
+    if (path.startsWith('$/world/delivered/')) return { destination: 'gold.supportSpans (context only)', disposition: 'mapped:local-source-registry' };
   }
-  if (p.endsWith('/citations')) return { destination: 'audit.source + reversible empty constant', disposition: 'mapped:empty-gold-placeholder-checked' };
-  if (p.startsWith('answer/acceptedGraphs/')) return { destination: 'gold.reason.acceptedGraphs topology cross-checked against support', disposition: 'mapped' };
-  if (p.startsWith('answer/reason/edges')) return { destination: 'audit.source; empty generator placeholder / redundant challenge topology checked', disposition: 'mapped:redundant-checked' };
-  return { destination: p.replace(/^answer\//, 'gold/'), disposition: 'mapped:identity' };
+  return { destination: `audit.source${path.slice(1)}`, disposition: 'defect:no-scorer-metadata-slot' };
 }

@@ -1,0 +1,248 @@
+TAP version 13
+# Subtest: all 120 pilot slot checkpoints validate, restore exactly and earn witnessed full credit
+not ok 1 - all 120 pilot slot checkpoints validate, restore exactly and earn witnessed full credit
+  ---
+  duration_ms: 23.461637
+  type: 'test'
+  location: 'evaluation/hr3/integration/test/integration.test.mjs:17:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      {
+        C: 1,
+    +   J: null,
+    -   J: 1,
+        O: 1,
+    +   R: null
+    -   R: 1
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    C: 1
+    O: 1
+    R: 1
+    J: 1
+  actual:
+    C: 1
+    O: 1
+    R: ~
+    J: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/integration/test/integration.test.mjs:22:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: independent A-4 challenge slots, predecessor identities and selected quotations pass unchanged
+not ok 2 - independent A-4 challenge slots, predecessor identities and selected quotations pass unchanged
+  ---
+  duration_ms: 10.627455
+  type: 'test'
+  location: 'evaluation/hr3/integration/test/integration.test.mjs:26:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      {
+        C: 1,
+    +   J: null,
+    -   J: 1,
+        O: 1,
+    +   R: null
+    -   R: 1
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    C: 1
+    O: 1
+    R: 1
+    J: 1
+  actual:
+    C: 1
+    O: 1
+    R: ~
+    J: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/integration/test/integration.test.mjs:29:9)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: complete quotation unions preserve serial, conjunctive and alternative private plans
+not ok 3 - complete quotation unions preserve serial, conjunctive and alternative private plans
+  ---
+  duration_ms: 9.86183
+  type: 'test'
+  location: 'evaluation/hr3/integration/test/integration.test.mjs:32:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    null !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: ~
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/integration/test/integration.test.mjs:37:71)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: source corruption, offset drift, topology mismatches and nonempty gold citations are rejected
+ok 4 - source corruption, offset drift, topology mismatches and nonempty gold citations are rejected
+  ---
+  duration_ms: 1.009849
+  type: 'test'
+  ...
+# Subtest: superseded graph answers are rejected with no conversion fallback
+ok 5 - superseded graph answers are rejected with no conversion fallback
+  ---
+  duration_ms: 0.339256
+  type: 'test'
+  ...
+# Subtest: audit extension fields survive; checksum tampering is detected
+ok 6 - audit extension fields survive; checksum tampering is detected
+  ---
+  duration_ms: 1.682991
+  type: 'test'
+  ...
+# Subtest: removed, changed and endpoint-only delivery cannot establish a complete explanation
+not ok 7 - removed, changed and endpoint-only delivery cannot establish a complete explanation
+  ---
+  duration_ms: 10.065614
+  type: 'test'
+  location: 'evaluation/hr3/integration/test/integration.test.mjs:57:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    null !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: ~
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/integration/test/integration.test.mjs:64:34)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: unknown unit referrals keep correctness gold and support delivery isolated
+ok 8 - unknown unit referrals keep correctness gold and support delivery isolated
+  ---
+  duration_ms: 10.586072
+  type: 'test'
+  ...
+# Subtest: qualification counts only actual designated referrals, preserving frozen order
+ok 9 - qualification counts only actual designated referrals, preserving frozen order
+  ---
+  duration_ms: 0.482419
+  type: 'test'
+  ...
+# Subtest: confusion keeps pending distinct from reject and splits truth
+ok 10 - confusion keeps pending distinct from reject and splits truth
+  ---
+  duration_ms: 0.371377
+  type: 'test'
+  ...
+# Subtest: gate remains incomplete with absent judgments and never uses truth as a verdict
+ok 11 - gate remains incomplete with absent judgments and never uses truth as a verdict
+  ---
+  duration_ms: 1.14559
+  type: 'test'
+  ...
+# Subtest: two isolated matching judgments resolve; missing quotas still block pass
+ok 12 - two isolated matching judgments resolve; missing quotas still block pass
+  ---
+  duration_ms: 0.664642
+  type: 'test'
+  ...
+# Subtest: disagreement and nulls require a third independent session; agreement computed before resolution
+ok 13 - disagreement and nulls require a third independent session; agreement computed before resolution
+  ---
+  duration_ms: 0.587301
+  type: 'test'
+  ...
+# Subtest: gate rejects stale payloads, reused sessions, duplicates and malformed findings
+ok 14 - gate rejects stale payloads, reused sessions, duplicates and malformed findings
+  ---
+  duration_ms: 0.198294
+  type: 'test'
+  ...
+# Subtest: mechanically forced zero does not excuse unresolved support pass
+ok 15 - mechanically forced zero does not excuse unresolved support pass
+  ---
+  duration_ms: 0.186463
+  type: 'test'
+  ...
+# Subtest: complete synthetic gate fixture passes all thresholds without treating reused worlds as independent
+ok 16 - complete synthetic gate fixture passes all thresholds without treating reused worlds as independent
+  ---
+  duration_ms: 30.303673
+  type: 'test'
+  ...
+# Subtest: gate thresholds detect false acceptance, support failures and style error concentration
+ok 17 - gate thresholds detect false acceptance, support failures and style error concentration
+  ---
+  duration_ms: 26.22195
+  type: 'test'
+  ...
+# Subtest: deadline and effective expiry witnesses use selected quotations; incomplete selections fail
+not ok 18 - deadline and effective expiry witnesses use selected quotations; incomplete selections fail
+  ---
+  duration_ms: 10.439989
+  type: 'test'
+  location: 'evaluation/hr3/integration/test/integration.test.mjs:160:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    null !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: ~
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/integration/test/integration.test.mjs:163:94)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 13
+# fail 5
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1556.424102

@@ -1,3 +1,31 @@
+# A-4 / A-4.1 / A-4.2 harness status
+
+The active runtime uses supplied route/approval/cap slots, independent assignment and quotation admission, anchored non-slot context, compact T/U/O and P serialization, and the closed slot-plus-quoted-explanation reader. Model requests contain complete deterministic projections of generator/public-contract.json. Extraction reservations are 20,480; reader reservation ceilings are T/U/P 40,960 and O 32,768 under A-4.2. The cumulative pilot ledger cap is $50. No paid readiness is claimed.
+
+P: **Pinned product + frozen public-operation agent + shared research extraction + slot reader.** This describes product update/retrieval under shared extraction, not native capture/extraction accuracy.
+
+Run the attended offline sequence from the repository root:
+
+```sh
+node evaluation/hr3/harness/verify-a4.mjs
+```
+
+This records every actual child exit code and continues safe independent checks after a failed gate. It never changes a limit, truncates evidence or retries for quality. A failed input certificate blocks paid execution; a failed fake pilot cannot receive a completed-pilot leak certificate. The bound report can describe a partial run. The final freeze command is recorded for the primary and is not executed by this verifier:
+
+```sh
+node evaluation/hr3/harness/freeze-a4.mjs
+```
+
+See [A-4 report](REPORT-A4.md) and [ordered verification](reports/a4-verification.json). The new public-contract boundary accepts metadata keys only after exact re-projection; the same names remain private elsewhere. The inventory and all active certificate/schema/budget artifacts carry A-4 versions. The original carry-forward manifest and historical journals/reports are preserved. Historical A-3 replay is hash-verified diagnostic readback; its graph wire format is never admitted by A-4 extraction or delivered to readers.
+
+A-4's prospective schema permits all well-shaped Value variants, then admission rejects incompatible slot domains independently. Core metadata failures exclude the event; a bad reason quote excludes only that quote. Derived field masks contain admitted assignments only. Non-expiry slot events need at least one; expiry needs event evidence; context needs exact anchored extracted text and never enacts slot updates. Research retains its prior unresolved-record behavior, while P logs and filters non-adopted/unresolved mappings. Each arm retains its existing eligibility and whole-record retrieval budget.
+
+The primary-supplied `reports/accounting-input-a4.json` hash-pins the complete third-pilot ledger/run/summary and preparation attestation. `node evaluation/hr3/harness/accounting-a4.mjs` verifies the exact inherited snapshot and prepares the supplemental `a4-carry-forward.json`. Verified exposure is $2.136861040, including all unknown reservations; research/P embedding counters are 954729/211608. Historical manifests and journals remain unchanged. Budget and run gates consume the supplemental chain; real execution also verifies the regenerated budget against current source hashes before opening a journal. Offline verification uses the supplemental carry with explicitly simulated new usage. Fake results never become billing or paid readiness.
+
+The files and instructions below document earlier engineering versions. Their numerical limits and graph schemas are historical; use the A-4 commands and versioned reports above for the current candidate.
+
+---
+
 # HR-3 offline execution harness
 
 Node 22.16+ ESM, built-ins and the product's existing MCP/tiktoken dependencies.

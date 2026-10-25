@@ -1,0 +1,118 @@
+TAP version 13
+# Subtest: all 120 pilot slot checkpoints validate, restore exactly and earn witnessed full credit
+ok 1 - all 120 pilot slot checkpoints validate, restore exactly and earn witnessed full credit
+  ---
+  duration_ms: 1460.195389
+  type: 'test'
+  ...
+# Subtest: independent A-4 challenge slots, predecessor identities and selected quotations pass unchanged
+ok 2 - independent A-4 challenge slots, predecessor identities and selected quotations pass unchanged
+  ---
+  duration_ms: 10.041712
+  type: 'test'
+  ...
+# Subtest: complete quotation unions preserve serial, conjunctive and alternative private plans
+ok 3 - complete quotation unions preserve serial, conjunctive and alternative private plans
+  ---
+  duration_ms: 40.715044
+  type: 'test'
+  ...
+# Subtest: source corruption, offset drift, topology mismatches and nonempty gold citations are rejected
+ok 4 - source corruption, offset drift, topology mismatches and nonempty gold citations are rejected
+  ---
+  duration_ms: 1.014729
+  type: 'test'
+  ...
+# Subtest: superseded graph answers are rejected with no conversion fallback
+ok 5 - superseded graph answers are rejected with no conversion fallback
+  ---
+  duration_ms: 0.370177
+  type: 'test'
+  ...
+# Subtest: audit extension fields survive; checksum tampering is detected
+ok 6 - audit extension fields survive; checksum tampering is detected
+  ---
+  duration_ms: 1.669611
+  type: 'test'
+  ...
+# Subtest: removed, changed and endpoint-only delivery cannot establish a complete explanation
+ok 7 - removed, changed and endpoint-only delivery cannot establish a complete explanation
+  ---
+  duration_ms: 34.579124
+  type: 'test'
+  ...
+# Subtest: unknown unit referrals keep correctness gold and support delivery isolated
+ok 8 - unknown unit referrals keep correctness gold and support delivery isolated
+  ---
+  duration_ms: 9.522644
+  type: 'test'
+  ...
+# Subtest: qualification counts only actual designated referrals, preserving frozen order
+ok 9 - qualification counts only actual designated referrals, preserving frozen order
+  ---
+  duration_ms: 0.639522
+  type: 'test'
+  ...
+# Subtest: confusion keeps pending distinct from reject and splits truth
+ok 10 - confusion keeps pending distinct from reject and splits truth
+  ---
+  duration_ms: 0.316706
+  type: 'test'
+  ...
+# Subtest: gate remains incomplete with absent judgments and never uses truth as a verdict
+ok 11 - gate remains incomplete with absent judgments and never uses truth as a verdict
+  ---
+  duration_ms: 1.09286
+  type: 'test'
+  ...
+# Subtest: two isolated matching judgments resolve; missing quotas still block pass
+ok 12 - two isolated matching judgments resolve; missing quotas still block pass
+  ---
+  duration_ms: 0.637692
+  type: 'test'
+  ...
+# Subtest: disagreement and nulls require a third independent session; agreement computed before resolution
+ok 13 - disagreement and nulls require a third independent session; agreement computed before resolution
+  ---
+  duration_ms: 0.654152
+  type: 'test'
+  ...
+# Subtest: gate rejects stale payloads, reused sessions, duplicates and malformed findings
+ok 14 - gate rejects stale payloads, reused sessions, duplicates and malformed findings
+  ---
+  duration_ms: 0.244014
+  type: 'test'
+  ...
+# Subtest: mechanically forced zero does not excuse unresolved support pass
+ok 15 - mechanically forced zero does not excuse unresolved support pass
+  ---
+  duration_ms: 0.197854
+  type: 'test'
+  ...
+# Subtest: complete synthetic gate fixture passes all thresholds without treating reused worlds as independent
+ok 16 - complete synthetic gate fixture passes all thresholds without treating reused worlds as independent
+  ---
+  duration_ms: 29.821777
+  type: 'test'
+  ...
+# Subtest: gate thresholds detect false acceptance, support failures and style error concentration
+ok 17 - gate thresholds detect false acceptance, support failures and style error concentration
+  ---
+  duration_ms: 27.028644
+  type: 'test'
+  ...
+# Subtest: deadline and effective expiry witnesses use selected quotations; incomplete selections fail
+ok 18 - deadline and effective expiry witnesses use selected quotations; incomplete selections fail
+  ---
+  duration_ms: 259.275007
+  type: 'test'
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 18
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3232.86552

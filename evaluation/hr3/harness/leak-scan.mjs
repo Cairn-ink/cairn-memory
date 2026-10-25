@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+import {projectContract,familyContractContext} from './contract-projection-a4.mjs';
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync} from 'node:fs';
+import {readFileSync,writeFileSync,existsSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {PrivacyGuard,PRIVATE_FIELD_INVENTORY} from './privacy.mjs';
@@ -8,29 +9,31 @@ import {verifiedInputs} from './inputs.mjs';
 import {responseRequest} from './requests.mjs';
 import {canonical,hash} from './common.mjs';
 
-export function scanRunPrivacy(stageDirectory,inputs) {
+export function scanRunPrivacy(stageDirectory,inputs,{allowPartial=false}={}) {
   const read=name=>readFileSync(join(stageDirectory,name)),json=name=>JSON.parse(read(name));
   const manifestBytes=read('manifest.json'),manifest=JSON.parse(manifestBytes);
   for(const [name,entry] of Object.entries(manifest.files)) {
     assert.ok(!name.startsWith('/')&&!name.split('/').includes('..'));
     const bytes=read(name);assert.equal(hash(bytes),entry.sha256);assert.equal(bytes.length,entry.bytes);
   }
-  const run=json('run.json'),summary=json('summary.json');assert.equal(summary.complete,true);assert.equal(run.stage,'pilot');
+  const run=json('run.json'),summary=json('summary.json');if(!allowPartial)assert.equal(summary.complete,true);assert.equal(run.stage,'pilot');
   const {families}=verifiedInputs(inputs);assert.equal(families.length,60);
   assert.deepEqual(run.families,families.map(f=>f.family_id));
   const readers=[],product=[],failures=[];
   for(const f of families) {
-    const guard=new PrivacyGuard(f),state=json('states/'+f.family_id+'-P-final.json');
+    const statePath='states/'+f.family_id+'-P-final.json';if(allowPartial&&!existsSync(join(stageDirectory,statePath)))continue;
+    const guard=new PrivacyGuard(f),state=json(statePath);
     for(const op of state.operations.filter(o=>['core','mcp','constructor'].includes(o.surface))) {
       assert.ok(op.input,'Every P public-operation payload must be recorded, including refresh');
       try {guard.check('product-payload',op.input,{surface:op.surface,method:op.method});}catch(e){failures.push(e.message);}
     }
     const returned=state.operations.filter(o=>o.surface==='mcp'&&o.method==='read_memory_context');
-    assert.equal(returned.length,4,'Both intents must be independently returned at each checkpoint');
+    if(summary.complete)assert.equal(returned.length,4,'Both intents must be independently returned at each checkpoint');else assert.ok(returned.length<=4&&returned.length%2===0);
     for(const [index,cp] of f.checkpoints.entries())for(const arm of ['U','T','O','P']) {
       const name=f.family_id+'-'+arm+'-'+cp.batch;
+      if(allowPartial&&!existsSync(join(stageDirectory,'answers/'+name+'.json')))continue;
       const saved=json('answers/'+name+'.json'),delivery=json('deliveries/'+name+'.json');
-      const expected=responseRequest('reader',{question:cp.question,checkpoint:cp.batch,focal_turn:cp.focal_turn,requested_predecessor_turns:cp.requested_predecessor_turns,delivered:delivery.blocks});
+      const expected=responseRequest('reader',{public_contract:projectContract('reader',familyContractContext(f,cp.question)),question:cp.question,checkpoint:cp.batch,focal_turn:cp.focal_turn,requested_predecessor_turns:cp.requested_predecessor_turns,delivered:delivery.blocks});
       assert.equal(canonical(saved.body),canonical(expected),'Scan the exact request, including complete evidence and schema');
       if(arm==='P')for(const [i,intent] of ['current','history'].entries()) {
         const raw=returned[index*2+i].result.content.filter(c=>c.type==='text').map(c=>c.text).join('\n');
@@ -43,16 +46,16 @@ export function scanRunPrivacy(stageDirectory,inputs) {
   }
   const hits=rows=>rows.reduce((n,r)=>n+r.hits.length,0);
   const byArm=Object.fromEntries(['U','T','O','P'].map(arm=>[arm,{requests:readers.filter(r=>r.arm===arm).length,hits:hits(readers.filter(r=>r.arm===arm))}]));
-  for(const row of Object.values(byArm))assert.equal(row.requests,120);
-  const sources=Object.fromEntries(['privacy.mjs','reports/private-field-inventory-a3.json','leak-scan.mjs','research.mjs','product.mjs','runner.mjs'].map(n=>['evaluation/hr3/harness/'+n,hash(readFileSync(new URL(n,import.meta.url)))]));
-  return {version:'hr3-exact-reader-privacy-scan-v1',status:failures.length?'FAIL':'PASS',completedStageManifestSHA256:hash(manifestBytes),
-    readerRequests:{total:readers.length,hits:hits(readers),byArm},productPayloads:{total:product.length,hits:hits(product)},
+  for(const row of Object.values(byArm))if(summary.complete)assert.equal(row.requests,120);else assert.ok(row.requests<=120);
+  const sources=Object.fromEntries(['privacy.mjs','reports/private-field-inventory-a4.json','leak-scan.mjs','research.mjs','product.mjs','runner.mjs'].map(n=>['evaluation/hr3/harness/'+n,hash(readFileSync(new URL(n,import.meta.url)))]));
+  return {version:'hr3-exact-reader-privacy-scan-a4-v1',status:failures.length?'FAIL_PRIVACY':summary.complete?'PASS':'PASS_OBSERVED_PARTIAL_ONLY',completePilot:summary.complete,completedStageManifestSHA256:hash(manifestBytes),
+    readerRequests:{planned:480,missing:480-readers.length,total:readers.length,hits:hits(readers),byArm},productPayloads:{total:product.length,hits:hits(product)},
     inventory:{sha256:hash(PRIVATE_FIELD_INVENTORY),fields:PRIVATE_FIELD_INVENTORY.fields.length,variants:new Set(PRIVATE_FIELD_INVENTORY.fields.flatMap(f=>f.variants)).size},pReturnedContextUnchanged:true,readers,product,sources};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href) {
-  const [stageDirectory,inputs]=process.argv.slice(2);assert.ok(stageDirectory&&inputs&&process.argv.length===4);
-  const report=scanRunPrivacy(stageDirectory,inputs);
-  writeFileSync(new URL('./reports/privacy-scan-a3.json',import.meta.url),JSON.stringify(report,null,2)+'\n');
+  const [stageDirectory,inputs,mode]=process.argv.slice(2);assert.ok(stageDirectory&&inputs&&(!mode||mode==='--partial')&&process.argv.length===(mode?5:4));
+  const report=scanRunPrivacy(stageDirectory,inputs,{allowPartial:mode==='--partial'});
+  writeFileSync(new URL('./reports/privacy-scan-a4.json',import.meta.url),JSON.stringify(report,null,2)+'\n');
   process.stdout.write(JSON.stringify({status:report.status,readerRequests:report.readerRequests,productPayloads:report.productPayloads,pReturnedContextUnchanged:report.pReturnedContextUnchanged})+'\n');
   process.exitCode=report.status==='PASS'?0:1;
 }

@@ -37,7 +37,7 @@ export function createEmbedder(guarded,{channel='research',prefix='embedding'}={
     return response.vectors.map(v=>{const norm=Math.hypot(...v);return v.map(x=>x/norm);});
   }};
 }
-export const emptyAnswer=()=>({current:{status:'unresolved',claims:[]},old:{status:'unavailable',records:[]},reason:{status:'unavailable',nodes:[],edges:[]}});
+export const emptyAnswer=()=>({current:{status:'unresolved',rows:[]},old:{status:'unavailable',records:[]},reason:{status:'unavailable',support:[]}});
 export class FakeTransport {
   constructor({modes=[],replies={}}={}){this.modes=[...modes];this.replies=replies;this.calls=[];}
   async send(request) {
@@ -56,7 +56,7 @@ function fakeVector(text) {
 }
 // Deliberately weak source-only fake. It makes no semantic-quality claim and never reads AST/gold.
 function fakeExtract(input) {
-  const turn=input.turns.find(t=>/^b\d-focal$/.test(t.turn_id));if(!turn||!/[ABCD]/.test(turn.text))return {events:[]};
+  const turn=input.turns.find(t=>/^b\d-focal$/.test(t.turn_id));if(!turn)return {events:[]};
   const text=turn.text,content=text.slice(0,100);
   const kind=/^Correct record|^更正紀錄/u.test(text)?'correction':/^We withdraw|^我們完整撤回/u.test(text)?'reversal':/^For records|^針對紀錄/u.test(text)?'refinement':/^Adopt record|^採用紀錄/u.test(text)?'scope_change':/reaches its explicit deadline|已到明確期限/u.test(text)?'expiry':'initial';
   const names=(kind==='correction'?text.match(/^(?:Correct record|更正紀錄) ([A-D, ]+)/u):kind==='reversal'?text.match(/^(?:We withdraw records|我們完整撤回紀錄) ([A-D, ]+)/u):kind==='refinement'?text.match(/^(?:For records|針對紀錄) ([A-D, ]+)/u):kind==='scope_change'?text.match(/(?:of records|只把紀錄) ([A-D, ]+)/u):kind==='expiry'?text.match(/(?:Record|紀錄) ([A-D, ]+)/u):null)?.[1]?.match(/[A-D]/g)??[];
@@ -65,5 +65,5 @@ function fakeExtract(input) {
   const claims=[...(route?[{field:'value',value:{type:'Text',text:route}}]:[]),...(/(?:approval required|需經核准) = /u.test(text)?[{field:'approval',value:{type:'Boolean',value:true}}]:[]),...(cap?[{field:'cap',value:{type:'Quantity',decimal:cap[1],unit:cap[2]}}]:[])];
   const countries=text.match(/country = ([A-Z/]+)/u)?.[1]?.split('/');
   return {events:[{event_id:turn.turn_id,source_turns:[turn.turn_id],observed_at:input.observed_at,kind:'decision',commitment:'adopted',change_type:kind,subject:input.public_header.subject,predicate:input.public_header.predicate,
-    claims,scope:{any:[{all:countries?[{field:'country',values:countries}]:[]}]},effective_interval:{from:range?.[1]??deadline??input.observed_at,to:range&&/^\d{4}-/.test(range[2])?range[2]:null},predecessor_anchors:names.map(name=>({source_turn:`b${name.charCodeAt(0)-64}-focal`,record_name:name,subject:input.public_header.subject,predicate:input.public_header.predicate})),replacement_extent:['refinement','scope_change'].includes(kind)?'partial':'entire_predecessor',field_mask:claims.map(c=>c.field),reason_nodes:[],reason_edges:[],source_quotes:[{turn_id:turn.turn_id,quote:content,occurrence:1}]}]};
+    payload:{type:'slots',route:null,approval:null,cap:null,...Object.fromEntries(claims.map(c=>[c.field==='value'?'route':c.field,{value:c.value,anchors:[{turn_id:turn.turn_id,quote:content,occurrence:1}]}]))},scope:{any:[{all:countries?[{field:'country',values:countries}]:[]}]},effective_interval:{from:range?.[1]??deadline??input.observed_at,to:range&&/^\d{4}-/.test(range[2])?range[2]:null},predecessor_anchors:names.map(name=>({source_turn:`b${name.charCodeAt(0)-64}-focal`,record_name:name,subject:input.public_header.subject,predicate:input.public_header.predicate})),replacement_extent:['refinement','scope_change'].includes(kind)?'partial':'entire_predecessor',reason_quotes:[],source_quotes:[{turn_id:turn.turn_id,quote:content,occurrence:1}]}]};
 }

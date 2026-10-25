@@ -22,5 +22,5 @@ export function scorerGold(family,checkpoint,goldRow,supportRow) {
   const acceptedGraphs=s.acceptedGraphs.map(graph=>({edges:graph.edges.map(edge=>({from:edge.from,to:edge.to,support:edge.support.map(alt=>alt.map(q=>{
     const key=canonical(q);if(!bySpan.has(key)){const id='s'+bySpan.size;bySpan.set(key,id);spans.push({id,origin:q.turn_id,start:q.start,end:q.end,text:q.quote});}return bySpan.get(key);
   }))}))}));
-  return {question:checkpoint.question,current:{status:g.current.status,claims:g.current.claims.map(strip)},old:{status:g.old.status,records:g.old.records.map(r=>({status:r.status,claims:r.claims.map(strip)}))},reason:{status:g.reason.status,nodes:g.reason.nodes.map(n=>({id:n.id,claim:strip(n.claim)})),acceptedGraphs},supportSpans:spans};
+  return {question:checkpoint.question,current:{status:g.current.status,rows:g.current.rows.map(strip)},old:{status:g.old.status,records:g.old.records.map(r=>({predecessor_turn:r.predecessor_turn,status:r.status,rows:r.rows.map(strip)}))},reason:{status:g.reason.status,nodes:(goldRow.checkpoints.find(c=>c.batch===checkpoint.batch).private_causal??g).reason.nodes.map(n=>({id:n.id,claim:strip(n.claim)})),acceptedGraphs},supportSpans:spans};
 }

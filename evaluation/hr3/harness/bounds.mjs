@@ -77,7 +77,7 @@ export function buildBoundReport({ families, observations, metadata }) {
     }
     return { family:o.family, lineage:f.lineage_id, changeType:f.change_type, arm:o.arm,
       checkpoint:o.batch === 2 ? 'intermediate' : 'final', batch:o.batch, validCompletion:o.valid,
-      bounds, referrals:o.referrals.map(({key, pass, components}) => ({key, pass, components})) };
+      bounds,reasonStratum:o.reasonStratum??null, referrals:o.referrals.map(({key, pass, components}) => ({key, pass, components})) };
   }).sort((a, b) => `${a.family}/${a.arm}/${a.batch}`.localeCompare(`${b.family}/${b.arm}/${b.batch}`, 'en'));
   const tables = [];
   for (const arm of ARMS) for (const batch of [2, 4]) for (const type of ['overall', ...TYPES]) {
@@ -118,9 +118,9 @@ export function buildBoundReport({ families, observations, metadata }) {
       jointUnresolved:share(rows.filter(r => r.bounds.J[0] !== r.bounds.J[1])),
       anyReferredComponent:share(rows.filter(r => r.referrals.length)) });
   }
-  return { version:'hr3-a1-bounds-v2', label:LABEL, stage:'pilot', adjudication:false,
+  return { version:'hr3-a4-bounds-v1', label:LABEL, stage:'pilot', adjudication:false,
     stageStatus:metadata?.stageStatus ?? {complete:false,stopReason:null},
-    continuationApproval:false,
+    continuationApproval:false,productHeadline:'Pinned product + frozen public-operation agent + shared research extraction + slot reader.',
     interpretation:'Conservative score bounds conditional on frozen mechanical decisions; not certified factual-accuracy bounds, not confidence intervals; endpoints need not be jointly attainable.',
     samplingConfidenceIntervals:'deferred under A-1', use:'Descriptive engineering pilot only; cannot produce an Advance/Keep decision or enter development/test estimates.',
     aggregation:'J endpoints are products within each family/arm/checkpoint, then frozen-weight lineage means. Aggregate component rates are never multiplied. Failed attempts stay scored; unexecuted cases are listed and excluded from observed denominators.',
@@ -129,7 +129,7 @@ export function buildBoundReport({ families, observations, metadata }) {
     metadata, denominators:{planned:480, attempted:perFamily.length, validCompletion:perFamily.filter(r => r.validCompletion).length,
       failedAttempt:perFamily.filter(r => !r.validCompletion).length, unexecuted:480-perFamily.length,
       plannedFamilies:60, plannedLineages:30, representedFamilies:unique(perFamily.map(r => r.family)).length, representedLineages:unique(perFamily.map(r => r.lineage)).length},
-    outstandingReferrals:referralCounts(perFamily), tables, perFamily };
+    reasonStrata:{notStated:{denominator:perFamily.filter(r=>r.reasonStratum?.stratum==='not_stated').length,support:'not_applicable',noEvidenceBaseline:{status:'not_stated',support:[],correct:perFamily.filter(r=>r.reasonStratum?.stratum==='not_stated').length}},stated:{denominator:perFamily.filter(r=>r.reasonStratum?.stratum==='stated').length,noEvidenceBaselineCorrect:0}},outstandingReferrals:referralCounts(perFamily), tables, perFamily };
 }
 
 export function writeBoundReport({ stageDirectory, inputs, out }) {
@@ -151,13 +151,13 @@ export function writeBoundReport({ stageDirectory, inputs, out }) {
     check(!name.startsWith('/') && !name.split('/').includes('..'), 'invalid_input_path');
     const bytes = readFileSync(join(inputs, name));check(bytes.length === entry.bytes && hash(bytes) === entry.sha256, 'input_hash_mismatch:' + name);
   }
-  check(inputManifest.split === 'pilot' && inputManifest.seed === 'hr3-worlds-v1', 'input_split_or_seed');
+  check(inputManifest.split === 'pilot' && inputManifest.seed === readJSON(new URL('../generator/freeze.json',import.meta.url)).seed, 'input_split_or_seed');
   const jsonl = path => readFileSync(path, 'utf8').split('\n').filter(Boolean).map(JSON.parse);
   const families = jsonl(join(inputs, 'families.jsonl')), observations = jsonl(join(stageDirectory, 'scored.jsonl'));
   check(canonical(run.families) === canonical(families.map(f => f.family_id)), 'stage_family_plan');
   check(summary.attempted === observations.length, 'summary_denominator_mismatch');
   check(typeof run.offline === 'boolean' && Number.isSafeInteger(summary.ledger.total) && summary.ledger.total >= 0, 'spend_metadata');
-  check(observations.every(o => o.version === 'hr3-scorer-v1' && o.protocol === 'v0.3.4'), 'scorer_version');
+  check(observations.every(o => o.version === 'hr3-scorer-a4-v2' && o.protocol === 'v0.3.4+A-4'), 'scorer_version');
   const ledgerEvents=jsonl(join(stageDirectory,'ledger.jsonl'));
   const billing = verifiedBilling(ledgerEvents);
   if(ledgerEvents[0].configuration?.carryForward)check(canonical(run.carryForward)===canonical(ledgerEvents[0].configuration.carryForward),'carry_forward_metadata');
@@ -167,7 +167,7 @@ export function writeBoundReport({ stageDirectory, inputs, out }) {
     observedCohort:summary.complete && observations.length === 480 ? 'completed-pilot cohort' : 'partial observed cohort; not completed-pilot bounds'};
   const carried=billing.carried;
   const actualKnown=(run.offline?carried.unsettled.length===0:billing.unsettled.length===0)&&(!run.carryForward||run.carryForward.preparationComplete);
-  const metadata = { protocol:'v0.3.4', errata:run.protocol?.includes('A-3')?'revised E-1; E-2/A-1/A-2/A-3 (2026-10-25)':'revised E-1 and A-1 (2026-10-25); E-2', scorer:'hr3-scorer-v1',
+  const metadata = { protocol:'v0.3.4', errata:run.protocol?.includes('A-3')?'revised E-1; E-2/A-1/A-2/A-3 (2026-10-25)':'revised E-1 and A-1 (2026-10-25); E-2', scorer:'hr3-scorer-a4-v2',
     offline:run.offline, stageStatus,
     actualSpendUSD:actualKnown?(run.offline?carried.settled:billing.settled)/1e9:null,
     actualSpendKnown:actualKnown,

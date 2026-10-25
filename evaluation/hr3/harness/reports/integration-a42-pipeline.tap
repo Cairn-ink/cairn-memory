@@ -1,0 +1,146 @@
+TAP version 13
+# Subtest: independent source admission, T/U/O updates and delivery preserve intended differences
+ok 1 - independent source admission, T/U/O updates and delivery preserve intended differences
+  ---
+  duration_ms: 22.074809
+  type: 'test'
+  ...
+# Subtest: independent admitted input uses actual P public writes, logs missing anchors and has no fallback archive
+not ok 2 - independent admitted input uses actual P public writes, logs missing anchors and has no fallback archive
+  ---
+  duration_ms: 731.386675
+  type: 'test'
+  location: 'evaluation/hr3/integration/test/pipeline-a4.test.mjs:40:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+    
+      assert.ok(p.log.some(l=>l.reason==='missing_target'||l.reason==='unresolved_anchor'||l.status==='skipped'))
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/integration/test/pipeline-a4.test.mjs:46:39)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: all 120 pilot slot checkpoints validate, restore exactly and earn witnessed full credit
+ok 3 - all 120 pilot slot checkpoints validate, restore exactly and earn witnessed full credit
+  ---
+  duration_ms: 1476.217736
+  type: 'test'
+  ...
+# Subtest: independent A-4 challenge slots, predecessor identities and selected quotations pass unchanged
+ok 4 - independent A-4 challenge slots, predecessor identities and selected quotations pass unchanged
+  ---
+  duration_ms: 9.031294
+  type: 'test'
+  ...
+# Subtest: complete quotation unions preserve serial, conjunctive and alternative private plans
+ok 5 - complete quotation unions preserve serial, conjunctive and alternative private plans
+  ---
+  duration_ms: 40.349418
+  type: 'test'
+  ...
+# Subtest: source corruption, offset drift, topology mismatches and nonempty gold citations are rejected
+ok 6 - source corruption, offset drift, topology mismatches and nonempty gold citations are rejected
+  ---
+  duration_ms: 0.980128
+  type: 'test'
+  ...
+# Subtest: superseded graph answers are rejected with no conversion fallback
+ok 7 - superseded graph answers are rejected with no conversion fallback
+  ---
+  duration_ms: 0.360437
+  type: 'test'
+  ...
+# Subtest: audit extension fields survive; checksum tampering is detected
+ok 8 - audit extension fields survive; checksum tampering is detected
+  ---
+  duration_ms: 1.557139
+  type: 'test'
+  ...
+# Subtest: removed, changed and endpoint-only delivery cannot establish a complete explanation
+ok 9 - removed, changed and endpoint-only delivery cannot establish a complete explanation
+  ---
+  duration_ms: 35.341885
+  type: 'test'
+  ...
+# Subtest: unknown unit referrals keep correctness gold and support delivery isolated
+ok 10 - unknown unit referrals keep correctness gold and support delivery isolated
+  ---
+  duration_ms: 9.674558
+  type: 'test'
+  ...
+# Subtest: qualification counts only actual designated referrals, preserving frozen order
+ok 11 - qualification counts only actual designated referrals, preserving frozen order
+  ---
+  duration_ms: 0.486779
+  type: 'test'
+  ...
+# Subtest: confusion keeps pending distinct from reject and splits truth
+ok 12 - confusion keeps pending distinct from reject and splits truth
+  ---
+  duration_ms: 0.127903
+  type: 'test'
+  ...
+# Subtest: gate remains incomplete with absent judgments and never uses truth as a verdict
+ok 13 - gate remains incomplete with absent judgments and never uses truth as a verdict
+  ---
+  duration_ms: 1.11698
+  type: 'test'
+  ...
+# Subtest: two isolated matching judgments resolve; missing quotas still block pass
+ok 14 - two isolated matching judgments resolve; missing quotas still block pass
+  ---
+  duration_ms: 0.627301
+  type: 'test'
+  ...
+# Subtest: disagreement and nulls require a third independent session; agreement computed before resolution
+ok 15 - disagreement and nulls require a third independent session; agreement computed before resolution
+  ---
+  duration_ms: 0.55761
+  type: 'test'
+  ...
+# Subtest: gate rejects stale payloads, reused sessions, duplicates and malformed findings
+ok 16 - gate rejects stale payloads, reused sessions, duplicates and malformed findings
+  ---
+  duration_ms: 0.298635
+  type: 'test'
+  ...
+# Subtest: mechanically forced zero does not excuse unresolved support pass
+ok 17 - mechanically forced zero does not excuse unresolved support pass
+  ---
+  duration_ms: 0.206974
+  type: 'test'
+  ...
+# Subtest: complete synthetic gate fixture passes all thresholds without treating reused worlds as independent
+ok 18 - complete synthetic gate fixture passes all thresholds without treating reused worlds as independent
+  ---
+  duration_ms: 30.184267
+  type: 'test'
+  ...
+# Subtest: gate thresholds detect false acceptance, support failures and style error concentration
+ok 19 - gate thresholds detect false acceptance, support failures and style error concentration
+  ---
+  duration_ms: 28.107795
+  type: 'test'
+  ...
+# Subtest: deadline and effective expiry witnesses use selected quotations; incomplete selections fail
+ok 20 - deadline and effective expiry witnesses use selected quotations; incomplete selections fail
+  ---
+  duration_ms: 266.987272
+  type: 'test'
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 19
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3991.580548

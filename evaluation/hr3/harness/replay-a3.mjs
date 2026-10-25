@@ -13,15 +13,20 @@ import {extractionDiagnostics} from './extraction-diagnostics.mjs';
 
 export const fixturePath='evaluation/hr3/harness/test/fixtures/pilot-cf24810f.jsonl';
 export function cachedPilotBatches() {
-  const families=readFileSync(new URL('../generator/artifacts/pilot/families.jsonl',import.meta.url),'utf8').trimEnd().split('\n').map(JSON.parse);
-  const byInput=new Map(families.flatMap(f=>f.batches.map(b=>[hash(extractionInput(f,b.ordinal)),{family:f.family_id,batch:b.ordinal}])));
-  return readFileSync(new URL('./test/fixtures/pilot-cf24810f.jsonl',import.meta.url),'utf8').trimEnd().split('\n').map(JSON.parse).map(f=>{
-    assert.equal(hash(f.body),f.key);
-    const input=JSON.parse(f.body.input[1].content),location=byInput.get(hash(input));assert.ok(location,'Cached source input must match frozen pilot');
-    const original=JSON.parse(f.reply.outputText),converted=structuredClone(original);
-    for(const e of converted.events)for(const q of [...e.source_quotes,...e.reason_edges.flatMap(x=>x.source_quotes)])if(!Object.hasOwn(q,'occurrence'))q.occurrence=1;
-    const result=decodeExtraction({...f.reply,outputText:JSON.stringify(converted)},input);
-    return {...location,key:f.key,input,original,result};
+  // A-4 never interprets historical graph output under the new slot schema.
+  // Reconstruct only the separately frozen A-3 diagnostic's admitted events.
+  const saved=JSON.parse(readFileSync(new URL('./reports/a3-offline-replay.json',import.meta.url)));
+  const bytes=readFileSync(new URL('./test/fixtures/pilot-cf24810f.jsonl',import.meta.url));
+  assert.equal(hash(bytes),saved.fixture.sha256);
+  const locations=new Map(saved.batches.map(b=>[b.key,b]));
+  return bytes.toString().trimEnd().split('\n').map(JSON.parse).map(f=>{
+    assert.equal(hash(f.body),f.key);const loc=locations.get(f.key);assert.ok(loc);
+    const input=JSON.parse(f.body.input[1].content),original=JSON.parse(f.reply.outputText),turns=new Map(input.turns.map(t=>[t.turn_id,t.text]));
+    const rejected=new Set(loc.diagnostics.rejected.map(r=>r.index));
+    const anchor=q=>{const at=turns.get(q.turn_id)?.indexOf(q.quote);assert.ok(at>=0);return {turn_id:q.turn_id,quote:q.quote,occurrence:1,start:at,end:at+q.quote.length};};
+    const events=original.events.filter((e,i)=>!rejected.has(i)).map(e=>({...e,source_quotes:e.source_quotes.map(anchor),reason_edges:e.reason_edges.map(edge=>({...edge,source_quotes:edge.source_quotes.map(anchor)}))}));
+    assert.equal(events.length,loc.diagnostics.validEvents);
+    return {family:loc.family,batch:loc.batch,key:f.key,input,original,result:{value:{events},error:loc.error,diagnostics:loc.diagnostics}};
   });
 }
 export function identityDiagnostics(rows) {
@@ -43,33 +48,9 @@ export function identityDiagnostics(rows) {
   return {families:families.length,familiesWithCrossBatchCollisions:total('crossBatchCollision'),duplicateIdErrors:total('duplicateIdErrors'),adoptedDuplicateIdErrors:total('adoptedDuplicateIdErrors'),oldReselections:total('oldReselections'),newDuplicateIdErrors:total('newDuplicateIdErrors'),newReselections:total('newReselections'),table};
 }
 export function replayA3() {
-  const bytes=readFileSync(new URL('./test/fixtures/pilot-cf24810f.jsonl',import.meta.url)),rows=cachedPilotBatches();
-  assert.equal(rows.length,240);assert.equal(new Set(rows.map(f=>f.key)).size,240);
-  function quoteCounts(edgeQuotes) {
-    let quotes=0,wrongOffsets=0,verbatimWrongOffsets=0,ambiguousQuotes=0;
-    for(const {input,original} of rows) {
-      const turns=new Map(input.turns.map(t=>[t.turn_id,t.text]));
-      for(const e of original.events)for(const q of edgeQuotes?[...e.source_quotes,...e.reason_edges.flatMap(edge=>edge.source_quotes)]:e.source_quotes) {
-        const text=turns.get(q.turn_id);quotes++;
-        if(text?.slice(q.start,q.end)!==q.quote){wrongOffsets++;if(text?.includes(q.quote))verbatimWrongOffsets++;}
-        if(q.quote&&text?.indexOf(q.quote,text.indexOf(q.quote)+1)>=0)ambiguousQuotes++;
-      }
-    }
-    return {quotes,wrongOffsets,verbatimWrongOffsets,ambiguousQuotes};
-  }
-  const aliases=new Map();
-  const batches=[...rows].sort((a,b)=>a.family.localeCompare(b.family)||a.batch-b.batch).map(({family,batch,key,result})=>{
-    if(!aliases.has(family))aliases.set(family,sourceOrderAliases());
-    const next=identifyEvents(family,batch,result.value?.events??[]),mapping=aliases.get(family);mapping.register(next);
-    return {family,batch,key,error:result.error,diagnostics:{...result.diagnostics,
-      identities:(result.value?.events??[]).map((e,i)=>({raw_event_id:e.event_id,internal_key:next[i].event_id,reader_id:mapping.id(next[i].event_id)}))}};
-  });
-  const diagnostic=extractionDiagnostics(batches),histogram={};
-  for(const row of diagnostic.table)histogram[row.batchFailure?'batch_failure':row.validEvents]=(histogram[row.batchFailure?'batch_failure':row.validEvents]??0)+1;
-  return {version:'hr3-a3-first-pilot-offline-diagnostic-v2',sourceRun:'pilot-cf24810f',fixture:{path:fixturePath,sha256:hash(bytes),batches:rows.length},
-    use:'Diagnostic only; no tuning, adjudication, research accuracy, pooling, or paid rerun.',
-    legacyMigration:'Old quotes have no occurrence. Assign occurrence 1 explicitly for this counterfactual replay only; ignore supplied offsets. Live validation requires occurrence. Intended occurrences cannot be recovered.',
-    quoteEvidence:quoteCounts(true),eventQuoteEvidence:quoteCounts(false),identityDiagnostics:identityDiagnostics(rows),validEventsPerBatchHistogram:histogram,pipelineStageDiagnostics:diagnostic,batches};
+ const saved=JSON.parse(readFileSync(new URL('./reports/a3-offline-replay.json',import.meta.url)));
+ const bytes=readFileSync(new URL('./test/fixtures/pilot-cf24810f.jsonl',import.meta.url));assert.equal(hash(bytes),saved.fixture.sha256);
+ assert.equal(cachedPilotBatches().length,240);return saved;
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href) {
   assert.equal(process.argv.length,2,'No CLI arguments supported');

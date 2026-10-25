@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import { canonical, hash, fail } from './common.mjs';
 import {loadCarryForward,verifyCarrySnapshot} from './accounting.mjs';
 import { validateRequest } from './requests.mjs';
-export const CAPS={smoke:24,pilot:24,development:46,test:345,alternative:45,embeddings:2.56};
+export const CAPS={smoke:50,pilot:50,development:46,test:345,alternative:45,embeddings:2.56};
 const NANO=1e9;
 // A durable append-only journal, serialized by an exclusive directory lock.
 // Stale locks and partial records fail closed; the operator must reconcile them.
@@ -16,7 +16,7 @@ export class Ledger {
     if(limits.embeddingUnits&&['research','product'].some(k=>!Number.isSafeInteger(limits.embeddingUnits[k])||limits.embeddingUnits[k]<0||limits.embeddingUnits[k]>64000000))fail('embedding_allowance_increase');
     if(['operational','authorization'].some(k=>limits[k]!==undefined&&(!Number.isFinite(limits[k])||limits[k]<0)))fail('invalid_cap');
     for(const k of Object.keys(stageLimits))if(!(stageLimits[k]>=0&&stageLimits[k]<=CAPS[k]))fail('cap_increase');
-    this.configuration={plan,limits:{stages:Object.fromEntries(Object.entries(stageLimits).map(([s,v])=>[s,Math.round(v*NANO)])),operational:Math.round(Math.min(limits.operational??450,450)*NANO),authorization:Math.round(Math.min(limits.authorization??500,500)*NANO),embeddingUnits:limits.embeddingUnits??{research:64000000,product:64000000}},...(carryForward?{carryForward:loadCarryForward(carryForward)}:{})};
+    this.configuration={version:'hr3-ledger-a4-v1',plan,limits:{stages:Object.fromEntries(Object.entries(stageLimits).map(([s,v])=>[s,Math.round(v*NANO)])),operational:Math.round(Math.min(limits.operational??450,450)*NANO),authorization:Math.round(Math.min(limits.authorization??500,500)*NANO),embeddingUnits:limits.embeddingUnits??{research:64000000,product:64000000}},...(carryForward?{carryForward:loadCarryForward(carryForward)}:{})};
     const carried=verifyCarrySnapshot(this.configuration.carryForward);
     if(carried.total>this.configuration.limits.operational||carried.total>this.configuration.limits.authorization-50*NANO||Object.entries(carried.byStage).some(([s,n])=>n>(this.configuration.limits.stages[s]??0))||['research','product'].some(k=>carried.embedding[k]>this.configuration.limits.embeddingUnits[k]))fail('carried_exposure_exceeds_cap');
     mkdirSync(dirname(path),{recursive:true,mode:0o700});

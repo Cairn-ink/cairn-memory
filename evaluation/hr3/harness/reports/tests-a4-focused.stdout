@@ -1,0 +1,922 @@
+TAP version 13
+# Subtest: exact rational conversions and independent domain/anchor exclusions derive only admitted masks
+ok 1 - exact rational conversions and independent domain/anchor exclusions derive only admitted masks
+  ---
+  duration_ms: 2.70555
+  type: 'test'
+  ...
+# Subtest: core metadata precedence, exact source-turn anchors and explicit expiry remain independent
+ok 2 - core metadata precedence, exact source-turn anchors and explicit expiry remain independent
+  ---
+  duration_ms: 0.812235
+  type: 'test'
+  ...
+# Subtest: non-slot context admits only anchored extracted text and never changes decision cells
+ok 3 - non-slot context admits only anchored extracted text and never changes decision cells
+  ---
+  duration_ms: 6.312106
+  type: 'test'
+  ...
+# Subtest: research serializations retain source associations and deduplicate per record without O archives
+ok 4 - research serializations retain source associations and deduplicate per record without O archives
+  ---
+  duration_ms: 0.491469
+  type: 'test'
+  ...
+# Subtest: P context eligibility, absence/refusal logging, exact formatter quotations and current-event-only writes
+ok 5 - P context eligibility, absence/refusal logging, exact formatter quotations and current-event-only writes
+  ---
+  duration_ms: 130.955143
+  type: 'test'
+  ...
+# Subtest: reader contracts are identical across arms; private contract extensions cannot evade the inventory
+ok 6 - reader contracts are identical across arms; private contract extensions cannot evade the inventory
+  ---
+  duration_ms: 36.286943
+  type: 'test'
+  ...
+# Subtest: projection preserves every relevant name, field and semantic rule without private inputs
+ok 7 - projection preserves every relevant name, field and semantic rule without private inputs
+  ---
+  duration_ms: 2.625648
+  type: 'test'
+  ...
+# Subtest: prospective strict wire schema has slot/context branches and no extracted masks or graphs
+ok 8 - prospective strict wire schema has slot/context branches and no extracted masks or graphs
+  ---
+  duration_ms: 1.052009
+  type: 'test'
+  ...
+# Subtest: both complete prospective requests preserve input exactly and expose only public contract data
+ok 9 - both complete prospective requests preserve input exactly and expose only public contract data
+  ---
+  duration_ms: 2.983675
+  type: 'test'
+  ...
+# Subtest: saved failure certificate independently reproduces sizes, hashes, thresholds and unchanged carry bytes
+ok 10 - saved failure certificate independently reproduces sizes, hashes, thresholds and unchanged carry bytes
+  ---
+  duration_ms: 7.275522
+  type: 'test'
+  ...
+# Subtest: both provider schemas type plain nodes, isolate refs, allow untyped unions and close objects
+ok 11 - both provider schemas type plain nodes, isolate refs, allow untyped unions and close objects
+  ---
+  duration_ms: 1.958866
+  type: 'test'
+  ...
+# Subtest: strict checker rejects the observed const-without-type and type-beside-ref failures
+ok 12 - strict checker rejects the observed const-without-type and type-beside-ref failures
+  ---
+  duration_ms: 0.998048
+  type: 'test'
+  ...
+# Subtest: A-4 prompts announce supplied slots, anchored context and complete quoted explanations
+ok 13 - A-4 prompts announce supplied slots, anchored context and complete quoted explanations
+  ---
+  duration_ms: 0.117022
+  type: 'test'
+  ...
+# Subtest: all 240 first-pilot bodies/replies replay reproducibly as a separate engineering diagnostic
+ok 14 - all 240 first-pilot bodies/replies replay reproducibly as a separate engineering diagnostic
+  ---
+  duration_ms: 47.235542
+  type: 'test'
+  ...
+# Subtest: pipeline diagnostics count shared batches once and separate empty extractions from batch failures
+ok 15 - pipeline diagnostics count shared batches once and separate empty extractions from batch failures
+  ---
+  duration_ms: 0.362236
+  type: 'test'
+  ...
+# Subtest: cached corpus reproduces 55 collision families, 257 ID errors and 68 P reselections; internal keys remove all
+ok 16 - cached corpus reproduces 55 collision families, 257 ID errors and 68 P reselections; internal keys remove all
+  ---
+  duration_ms: 90.087647
+  type: 'test'
+  ...
+# Subtest: extraction overlaps are supported while reader overlap ambiguity remains unchanged
+ok 17 - extraction overlaps are supported while reader overlap ambiguity remains unchanged
+  ---
+  duration_ms: 0.54824
+  type: 'test'
+  ...
+# Subtest: hash-verified first-pilot ledger reproduces exact settlement and consumed embedding units
+ok 18 - hash-verified first-pilot ledger reproduces exact settlement and consumed embedding units
+  ---
+  duration_ms: 45.841178
+  type: 'test'
+  ...
+# Subtest: second paid-attempt reservation and archived ancestry are carried exactly once with complete preparation
+ok 19 - second paid-attempt reservation and archived ancestry are carried exactly once with complete preparation
+  ---
+  duration_ms: 66.376323
+  type: 'test'
+  ...
+# Subtest: fresh ledger and restarts preserve settled charges, outstanding reservations and embedding counters
+ok 20 - fresh ledger and restarts preserve settled charges, outstanding reservations and embedding counters
+  ---
+  duration_ms: 89.476755
+  type: 'test'
+  ...
+# Subtest: exact remaining stage/global/embedding allowances stop before dispatch at a one-nanodollar boundary
+ok 21 - exact remaining stage/global/embedding allowances stop before dispatch at a one-nanodollar boundary
+  ---
+  duration_ms: 168.662307
+  type: 'test'
+  ...
+# Subtest: carry input rejects changed hashes, broken arithmetic, duplicate sources and overlapping ancestry
+ok 22 - carry input rejects changed hashes, broken arithmetic, duplicate sources and overlapping ancestry
+  ---
+  duration_ms: 132.984756
+  type: 'test'
+  ...
+# Subtest: hash-verified exact preparation receipts participate in cumulative spending and units
+ok 23 - hash-verified exact preparation receipts participate in cumulative spending and units
+  ---
+  duration_ms: 53.260423
+  type: 'test'
+  ...
+# Subtest: complete request certificate covers auditor U/T requests, all provider framing and maximal structures
+not ok 24 - complete request certificate covers auditor U/T requests, all provider framing and maximal structures
+  ---
+  duration_ms: 11.758436
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/a3-audit.test.mjs:114:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'FAIL_INPUT_MARGIN'
+    - 'PASS'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'PASS'
+  actual: 'FAIL_INPUT_MARGIN'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/a3-audit.test.mjs:116:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+{"aliasAttack":{"families":1890,"rawIds":54,"candidates":408240,"events":605,"oldRecoveries":605,"newRecoveries":0,"possibleFamiliesPerFirstAlias":1890}}
+{"privateInventory":{"fields":60,"variants":312,"injectionChecks":6360,"hitsMissed":0}}
+# Subtest: real execution refuses missing or incomplete carry-forward input before any dispatch
+ok 25 - real execution refuses missing or incomplete carry-forward input before any dispatch
+  ---
+  duration_ms: 89.185535
+  type: 'test'
+  ...
+# Subtest: classified reader input ceilings used by the pilot budget are enforced before dispatch
+ok 26 - classified reader input ceilings used by the pilot budget are enforced before dispatch
+  ---
+  duration_ms: 4.268727
+  type: 'test'
+  ...
+# Subtest: reader IDs and every record/graph reference use source order while semantic content is preserved
+ok 27 - reader IDs and every record/graph reference use source order while semantic content is preserved
+  ---
+  duration_ms: 0.928316
+  type: 'test'
+  ...
+# Subtest: all control branches author neutral content/action IDs/namespaces before ingestion
+ok 28 - all control branches author neutral content/action IDs/namespaces before ingestion
+  ---
+  duration_ms: 7.043349
+  type: 'test'
+  ...
+# Subtest: exact reader requests for every arm and P payloads fail closed on private label injection
+ok 29 - exact reader requests for every arm and P payloads fail closed on private label injection
+  ---
+  duration_ms: 39.037158
+  type: 'test'
+  ...
+# Subtest: preparation inventory contains all four accepted probes, free and rejected dispatches, and both holds
+ok 30 - preparation inventory contains all four accepted probes, free and rejected dispatches, and both holds
+  ---
+  duration_ms: 21.745792
+  type: 'test'
+  ...
+# Subtest: preparation usage arithmetic is verified even when file hashes are recomputed
+ok 31 - preparation usage arithmetic is verified even when file hashes are recomputed
+  ---
+  duration_ms: 22.970929
+  type: 'test'
+  ...
+# Subtest: complete request certificate scans every arm and P ingestion without private labels
+not ok 32 - complete request certificate scans every arm and P ingestion without private labels
+  ---
+  duration_ms: 10.594985
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/privacy.test.mjs:77:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'FAIL_INPUT_MARGIN'
+    - 'PASS'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'PASS'
+  actual: 'FAIL_INPUT_MARGIN'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/privacy.test.mjs:79:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: detector reproduces the audited leak counts on preserved pre-isolation request bodies
+ok 33 - detector reproduces the audited leak counts on preserved pre-isolation request bodies
+  ---
+  duration_ms: 0.243315
+  type: 'test'
+  ...
+# Subtest: engineering reference questions are authored without private fixture labels
+ok 34 - engineering reference questions are authored without private fixture labels
+  ---
+  duration_ms: 825.452704
+  type: 'test'
+  ...
+# Subtest: full private-ID dictionary attack cannot recover source-order aliases
+ok 35 - full private-ID dictionary attack cannot recover source-order aliases
+  ---
+  duration_ms: 723.541083
+  type: 'test'
+  ...
+# Subtest: source-order mapping stays identical across private-label renaming, arms, checkpoints and references
+ok 36 - source-order mapping stays identical across private-label renaming, arms, checkpoints and references
+  ---
+  duration_ms: 3.494974
+  type: 'test'
+  ...
+# Subtest: frozen inventory matches authoring metadata and run routing; every variant rejects in every arm and P including nested JSON
+ok 37 - frozen inventory matches authoring metadata and run routing; every variant rejects in every arm and P including nested JSON
+  ---
+  duration_ms: 7509.645577
+  type: 'test'
+  ...
+# Subtest: all authored pilot and engineering source language remains acceptable to the expanded scanner
+ok 38 - all authored pilot and engineering source language remains acceptable to the expanded scanner
+  ---
+  duration_ms: 825.983586
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=0 O=0 R=0
+ok 39 - A-1 component states C=0 O=0 R=0
+  ---
+  duration_ms: 813.93384
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=0 O=0 R=1
+ok 40 - A-1 component states C=0 O=0 R=1
+  ---
+  duration_ms: 0.198294
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=0 O=0 R=null
+ok 41 - A-1 component states C=0 O=0 R=null
+  ---
+  duration_ms: 0.058551
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=0 O=1 R=0
+ok 42 - A-1 component states C=0 O=1 R=0
+  ---
+  duration_ms: 0.031721
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=0 O=1 R=1
+ok 43 - A-1 component states C=0 O=1 R=1
+  ---
+  duration_ms: 0.02236
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=0 O=1 R=null
+ok 44 - A-1 component states C=0 O=1 R=null
+  ---
+  duration_ms: 0.0263
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=0 O=null R=0
+ok 45 - A-1 component states C=0 O=null R=0
+  ---
+  duration_ms: 0.01634
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=0 O=null R=1
+ok 46 - A-1 component states C=0 O=null R=1
+  ---
+  duration_ms: 0.01613
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=0 O=null R=null
+ok 47 - A-1 component states C=0 O=null R=null
+  ---
+  duration_ms: 0.02013
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=1 O=0 R=0
+ok 48 - A-1 component states C=1 O=0 R=0
+  ---
+  duration_ms: 0.023331
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=1 O=0 R=1
+ok 49 - A-1 component states C=1 O=0 R=1
+  ---
+  duration_ms: 0.01731
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=1 O=0 R=null
+ok 50 - A-1 component states C=1 O=0 R=null
+  ---
+  duration_ms: 0.020541
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=1 O=1 R=0
+ok 51 - A-1 component states C=1 O=1 R=0
+  ---
+  duration_ms: 0.01466
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=1 O=1 R=1
+ok 52 - A-1 component states C=1 O=1 R=1
+  ---
+  duration_ms: 0.043221
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=1 O=1 R=null
+ok 53 - A-1 component states C=1 O=1 R=null
+  ---
+  duration_ms: 0.01543
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=1 O=null R=0
+ok 54 - A-1 component states C=1 O=null R=0
+  ---
+  duration_ms: 0.014571
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=1 O=null R=1
+ok 55 - A-1 component states C=1 O=null R=1
+  ---
+  duration_ms: 0.0144
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=1 O=null R=null
+ok 56 - A-1 component states C=1 O=null R=null
+  ---
+  duration_ms: 0.01547
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=null O=0 R=0
+ok 57 - A-1 component states C=null O=0 R=0
+  ---
+  duration_ms: 0.015
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=null O=0 R=1
+ok 58 - A-1 component states C=null O=0 R=1
+  ---
+  duration_ms: 0.01396
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=null O=0 R=null
+ok 59 - A-1 component states C=null O=0 R=null
+  ---
+  duration_ms: 0.01372
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=null O=1 R=0
+ok 60 - A-1 component states C=null O=1 R=0
+  ---
+  duration_ms: 0.01502
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=null O=1 R=1
+ok 61 - A-1 component states C=null O=1 R=1
+  ---
+  duration_ms: 0.01381
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=null O=1 R=null
+ok 62 - A-1 component states C=null O=1 R=null
+  ---
+  duration_ms: 0.013121
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=null O=null R=0
+ok 63 - A-1 component states C=null O=null R=0
+  ---
+  duration_ms: 0.01369
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=null O=null R=1
+ok 64 - A-1 component states C=null O=null R=1
+  ---
+  duration_ms: 0.01388
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=null O=null R=null
+ok 65 - A-1 component states C=null O=null R=null
+  ---
+  duration_ms: 0.013371
+  type: 'test'
+  ...
+# Subtest: frozen aggregation computes family J first, with all 48 arm/type/checkpoint rows
+ok 66 - frozen aggregation computes family J first, with all 48 arm/type/checkpoint rows
+  ---
+  duration_ms: 2.799841
+  type: 'test'
+  ...
+# Subtest: partial attempts preserve frozen lineage weights, failures, unexecuted IDs and separate referral/score counts
+ok 67 - partial attempts preserve frozen lineage weights, failures, unexecuted IDs and separate referral/score counts
+  ---
+  duration_ms: 0.943188
+  type: 'test'
+  ...
+# Subtest: unresolved J and correctness/support referral applications are distinct and deduplicated per pass
+ok 68 - unresolved J and correctness/support referral applications are distinct and deduplicated per pass
+  ---
+  duration_ms: 0.52068
+  type: 'test'
+  ...
+# Subtest: invalid states, duplicate/foreign observations and inconsistent J fail explicitly
+ok 69 - invalid states, duplicate/foreign observations and inconsistent J fail explicitly
+  ---
+  duration_ms: 0.273705
+  type: 'test'
+  ...
+# Subtest: completed-stage report requires execution hashes, checks artifact bytes, and never overwrites output
+ok 70 - completed-stage report requires execution hashes, checks artifact bytes, and never overwrites output
+  ---
+  duration_ms: 88.044279
+  type: 'test'
+  ...
+# Subtest: reservation is durable before dispatch, settlement releases only known usage by request ID
+ok 71 - reservation is durable before dispatch, settlement releases only known usage by request ID
+  ---
+  duration_ms: 22.582211
+  type: 'test'
+  ...
+# Subtest: stage, operational and unavailable authorization headroom deny before dispatch
+ok 72 - stage, operational and unavailable authorization headroom deny before dispatch
+  ---
+  duration_ms: 36.988537
+  type: 'test'
+  ...
+# Subtest: unsettled reservations survive restart and charge the full bound
+ok 73 - unsettled reservations survive restart and charge the full bound
+  ---
+  duration_ms: 11.43401
+  type: 'test'
+  ...
+# Subtest: one transport retry, cumulative third failure stops, no quality retries
+ok 74 - one transport retry, cumulative third failure stops, no quality retries
+  ---
+  duration_ms: 67.220078
+  type: 'test'
+  ...
+# Subtest: model mismatch, unexplained usage, duplicate provider IDs and unknown contract failures stop
+ok 75 - model mismatch, unexplained usage, duplicate provider IDs and unknown contract failures stop
+  ---
+  duration_ms: 86.76988
+  type: 'test'
+  ...
+# Subtest: five-minute lack of progress and dispatch timeout are supervised
+ok 76 - five-minute lack of progress and dispatch timeout are supervised
+  ---
+  duration_ms: 50.154321
+  type: 'test'
+  ...
+# Subtest: strict body models, no tools/prior state, caps and byte/embed bounds
+ok 77 - strict body models, no tools/prior state, caps and byte/embed bounds
+  ---
+  duration_ms: 9.487558
+  type: 'test'
+  ...
+# Subtest: unlisted calls, embedding unit allowances and corrupt journals fail closed
+ok 78 - unlisted calls, embedding unit allowances and corrupt journals fail closed
+  ---
+  duration_ms: 17.164924
+  type: 'test'
+  ...
+# Subtest: stage transitions share one operational ledger and preserve stage totals
+ok 79 - stage transitions share one operational ledger and preserve stage totals
+  ---
+  duration_ms: 20.410958
+  type: 'test'
+  ...
+# Subtest: A-2 reserves and settles the exact new output ceiling at A-3 input bounds and unchanged prices
+ok 80 - A-2 reserves and settles the exact new output ceiling at A-3 input bounds and unchanged prices
+  ---
+  duration_ms: 42.209442
+  type: 'test'
+  ...
+# Subtest: typed correction is erroneous; U generic links retain uninterpreted labels; O removes history
+ok 81 - typed correction is erroneous; U generic links retain uninterpreted labels; O removes history
+  ---
+  duration_ms: 0.923828
+  type: 'test'
+  ...
+# Subtest: typed refinement inherits only unspecified fields; U/O do not merge
+ok 82 - typed refinement inherits only unspecified fields; U/O do not merge
+  ---
+  duration_ms: 0.585841
+  type: 'test'
+  ...
+# Subtest: overlapping scopes produce residual cells only in T; U/O expose exact scope heads
+ok 83 - overlapping scopes produce residual cells only in T; U/O expose exact scope heads
+  ---
+  duration_ms: 0.655022
+  type: 'test'
+  ...
+# Subtest: future updates stay pending; retroactive corrections use observed information only
+ok 84 - future updates stay pending; retroactive corrections use observed information only
+  ---
+  duration_ms: 1.148701
+  type: 'test'
+  ...
+# Subtest: expiry never falls back, and explicit adoption can reactivate
+ok 85 - expiry never falls back, and explicit adoption can reactivate
+  ---
+  duration_ms: 0.784904
+  type: 'test'
+  ...
+# Subtest: complete multiple predecessor sets validate atomically and resolve in source order
+ok 86 - complete multiple predecessor sets validate atomically and resolve in source order
+  ---
+  duration_ms: 0.56661
+  type: 'test'
+  ...
+# Subtest: missing, nonunique, incompatible and historical anchors never enact; nonadopted never enacts
+ok 87 - missing, nonunique, incompatible and historical anchors never enact; nonadopted never enacts
+  ---
+  duration_ms: 1.048809
+  type: 'test'
+  ...
+# Subtest: literal queries and T1 Han bigrams/no English stopwords match frozen settings
+ok 88 - literal queries and T1 Han bigrams/no English stopwords match frozen settings
+  ---
+  duration_ms: 0.492759
+  type: 'test'
+  ...
+# Subtest: reducer/serializer/retrieval determinism and whole-record assembly budget
+ok 89 - reducer/serializer/retrieval determinism and whole-record assembly budget
+  ---
+  duration_ms: 2.402704
+  type: 'test'
+  ...
+# Subtest: hand-worked outputs and serializer bytes remain frozen for ten temporal/link cases
+not ok 90 - hand-worked outputs and serializer bytes remain frozen for ten temporal/link cases
+  ---
+  duration_ms: 6.243855
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/research.test.mjs:55:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    ... Skipped lines
+    
+      {
+        arm: 'O',
+        at: '2031-01-02T00:00:00.000Z',
+        current: [
+          {
+    ...
+        ],
+    +   events: undefined,
+        history: [],
+        pending: []
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    arm: 'O'
+    at: '2031-01-02T00:00:00.000Z'
+    current:
+      0:
+        change_type: 'correction'
+        commitment: 'adopted'
+        fields:
+          0:
+            field: 'value'
+            value:
+              text: '2'
+              type: 'Text'
+        id: 'e2'
+        link_errors:
+        predecessors:
+          0: 'e1'
+        predicate: 'route'
+        receipts:
+          0:
+            end: 1
+            quote: '2'
+            start: 0
+            turn_id: 't2'
+        scope:
+          any:
+            0:
+              all:
+        status: 'active'
+        subject: 'service'
+        supporting_events:
+          0: 'e2'
+        unresolved: false
+        valid:
+          from: '2031-01-02T00:00:00.000Z'
+          to: ~
+    history:
+    pending:
+  actual:
+    arm: 'O'
+    at: '2031-01-02T00:00:00.000Z'
+    current:
+      0:
+        id: 'e2'
+        subject: 'service'
+        predicate: 'route'
+        scope:
+          any:
+            0:
+              all:
+        fields:
+          0:
+            field: 'value'
+            value:
+              type: 'Text'
+              text: '2'
+        valid:
+          from: '2031-01-02T00:00:00.000Z'
+          to: ~
+        status: 'active'
+        change_type: 'correction'
+        commitment: 'adopted'
+        unresolved: false
+        link_errors:
+        predecessors:
+          0: 'e1'
+        supporting_events:
+          0: 'e2'
+        receipts:
+          0:
+            turn_id: 't2'
+            start: 0
+            end: 1
+            quote: '2'
+    history:
+    pending:
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/research.test.mjs:61:72)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: hosted RRF uses normalized equal .5 channel weights and frozen k=10
+ok 91 - hosted RRF uses normalized equal .5 channel weights and frozen k=10
+  ---
+  duration_ms: 0.276275
+  type: 'test'
+  ...
+# Subtest: four source-only independent requests; strict caps, no private family fields or previous state
+ok 92 - four source-only independent requests; strict caps, no private family fields or previous state
+  ---
+  duration_ms: 6.024909
+  type: 'test'
+  ...
+# Subtest: cached valid replies replay with no dispatch; corrupted replay fails closed
+ok 93 - cached valid replies replay with no dispatch; corrupted replay fails closed
+  ---
+  duration_ms: 32.146227
+  type: 'test'
+  ...
+# Subtest: malformed and truncated replies are cached failures, never quality retried
+ok 94 - malformed and truncated replies are cached failures, never quality retried
+  ---
+  duration_ms: 58.012009
+  type: 'test'
+  ...
+# Subtest: event defects are excluded independently; schema defects still poison the batch
+ok 95 - event defects are excluded independently; schema defects still poison the batch
+  ---
+  duration_ms: 1.006629
+  type: 'test'
+  ...
+# Subtest: fake replies are deterministic, schema-valid and can be malformed on demand
+ok 96 - fake replies are deterministic, schema-valid and can be malformed on demand
+  ---
+  duration_ms: 58.063701
+  type: 'test'
+  ...
+# Subtest: provider quote fixtures stay separate from internal offset fixtures
+ok 97 - provider quote fixtures stay separate from internal offset fixtures
+  ---
+  duration_ms: 0.198613
+  type: 'test'
+  ...
+# Subtest: exact quote anchoring counts overlapping occurrences and UTF-16; supplied offsets never affect validity
+ok 98 - exact quote anchoring counts overlapping occurrences and UTF-16; supplied offsets never affect validity
+  ---
+  duration_ms: 0.981302
+  type: 'test'
+  ...
+# Subtest: independent assignment/quote admission keeps valid facts, derives masks and overlaps core reasons
+ok 99 - independent assignment/quote admission keeps valid facts, derives masks and overlaps core reasons
+  ---
+  duration_ms: 0.56507
+  type: 'test'
+  ...
+# Subtest: zero valid events is an empty extraction; schema/unparseable/status failures stay batch failures
+ok 100 - zero valid events is an empty extraction; schema/unparseable/status failures stay batch failures
+  ---
+  duration_ms: 0.404568
+  type: 'test'
+  ...
+# Subtest: cached exclusions retain diagnostics and an empty batch never dispatches a quality retry
+ok 101 - cached exclusions retain diagnostics and an empty batch never dispatches a quality retry
+  ---
+  duration_ms: 31.951444
+  type: 'test'
+  ...
+# Subtest: P imports only the public product entrypoints, has no SQL/storage/archive access
+ok 102 - P imports only the public product entrypoints, has no SQL/storage/archive access
+  ---
+  duration_ms: 0.316176
+  type: 'test'
+  ...
+# Subtest: P corrects at inspected revision through MCP and actually loses old text/receipts
+ok 103 - P corrects at inspected revision through MCP and actually loses old text/receipts
+  ---
+  duration_ms: 114.284073
+  type: 'test'
+  ...
+# Subtest: partial amendments preserve predecessor, whole reversal supersedes it, ambiguous mapping logs
+ok 104 - partial amendments preserve predecessor, whole reversal supersedes it, ambiguous mapping logs
+  ---
+  duration_ms: 126.547358
+  type: 'test'
+  ...
+# Subtest: future activation and adapter scheduled expiry use public operations without fallback
+ok 105 - future activation and adapter scheduled expiry use public operations without fallback
+  ---
+  duration_ms: 120.708756
+  type: 'test'
+  ...
+# Subtest: isolated file stores and all E-2 Card branches use real public revisions; unauthorized controls refuse
+ok 106 - isolated file stores and all E-2 Card branches use real public revisions; unauthorized controls refuse
+  ---
+  duration_ms: 2867.6057
+  type: 'test'
+  ...
+# Subtest: named forgetting suppresses replay, keeps independent copy, excludes foreign namespace
+ok 107 - named forgetting suppresses replay, keeps independent copy, excludes foreign namespace
+  ---
+  duration_ms: 250.996712
+  type: 'test'
+  ...
+# Subtest: P pin hashes cover the current public product implementation
+ok 108 - P pin hashes cover the current public product implementation
+  ---
+  duration_ms: 2.126948
+  type: 'test'
+  ...
+# Subtest: P freshness uses internal keys and never reprocesses an already ingested event
+ok 109 - P freshness uses internal keys and never reprocesses an already ingested event
+  ---
+  duration_ms: 109.498303
+  type: 'test'
+  ...
+# Subtest: P refuses private-label payloads before public ingestion and preserves returned context verbatim
+ok 110 - P refuses private-label payloads before public ingestion and preserves returned context verbatim
+  ---
+  duration_ms: 187.444379
+  type: 'test'
+  ...
+# Subtest: full offline fake pilot: frozen inputs, 240 extractions, 480 stateless scored answers across four arms
+not ok 111 - full offline fake pilot: frozen inputs, 240 extractions, 480 stateless scored answers across four arms
+  ---
+  duration_ms: 2305.375303
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/runner.test.mjs:16:1'
+  failureType: 'testCodeFailure'
+  error: 'request_byte_bound'
+  code: 'request_byte_bound'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    validateRequest (evaluation/hr3/harness/requests.mjs:38:45)
+    GuardedTransport.send (evaluation/hr3/harness/transport.mjs:15:88)
+    run (evaluation/hr3/harness/runner.mjs:68:39)
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/runner.test.mjs:18:212)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# scored 4/480
+# Subtest: independent fake smoke runs have identical research artifacts and all-arm scores
+not ok 112 - independent fake smoke runs have identical research artifacts and all-arm scores
+  ---
+  duration_ms: 2250.082794
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/runner.test.mjs:41:1'
+  failureType: 'testCodeFailure'
+  error: 'request_byte_bound'
+  code: 'request_byte_bound'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    validateRequest (evaluation/hr3/harness/requests.mjs:38:45)
+    GuardedTransport.send (evaluation/hr3/harness/transport.mjs:15:88)
+    run (evaluation/hr3/harness/runner.mjs:68:39)
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/runner.test.mjs:43:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a transport stop preserves and scores completed reader attempts without zero-filling unexecuted arms
+ok 113 - a transport stop preserves and scores completed reader attempts without zero-filling unexecuted arms
+  ---
+  duration_ms: 1623.213907
+  type: 'test'
+  ...
+# official CLI accepted actual interrupted pilot: 2 attempted, 478 unexecuted, 3 outstanding reservations; exit 0
+# Subtest: A-2 retains an incomplete reader reply as a scored failure without a quality retry
+not ok 114 - A-2 retains an incomplete reader reply as a scored failure without a quality retry
+  ---
+  duration_ms: 2251.282835
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/runner.test.mjs:68:1'
+  failureType: 'testCodeFailure'
+  error: 'request_byte_bound'
+  code: 'request_byte_bound'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    validateRequest (evaluation/hr3/harness/requests.mjs:38:45)
+    GuardedTransport.send (evaluation/hr3/harness/transport.mjs:15:88)
+    run (evaluation/hr3/harness/runner.mjs:68:39)
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/runner.test.mjs:75:15)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: A-4 certificate reproduces all 240 pilot/engineering families without held-out rendering
+ok 115 - A-4 certificate reproduces all 240 pilot/engineering families without held-out rendering
+  ---
+  duration_ms: 3445.789835
+  type: 'test'
+  ...
+# Subtest: every maximal serialized output recounts under the actual tokenizer and closed schemas
+ok 116 - every maximal serialized output recounts under the actual tokenizer and closed schemas
+  ---
+  duration_ms: 520.674693
+  type: 'test'
+  ...
+# Subtest: slot references preserve complete C/O and causal selection with no known false R claim
+ok 117 - slot references preserve complete C/O and causal selection with no known false R claim
+  ---
+  duration_ms: 1397.416181
+  type: 'test'
+  ...
+# Subtest: maximal slot/context branches admit; a bad quote cannot discard an independently supported assignment
+ok 118 - maximal slot/context branches admit; a bad quote cannot discard an independently supported assignment
+  ---
+  duration_ms: 1302.395578
+  type: 'test'
+  ...
+# Subtest: certifier import graph forbids held-out generation and retains negative-control blocking
+ok 119 - certifier import graph forbids held-out generation and retains negative-control blocking
+  ---
+  duration_ms: 3537.662961
+  type: 'test'
+  ...
+# Subtest: A-4.1 complete retry arithmetic, cumulative pilot cap and historical carry hashes are reproducible
+ok 120 - A-4.1 complete retry arithmetic, cumulative pilot cap and historical carry hashes are reproducible
+  ---
+  duration_ms: 26.202137
+  type: 'test'
+  ...
+# Subtest: regenerated continuation preserves paid-usage prerequisite, full test, outstanding reservations and global stops
+ok 121 - regenerated continuation preserves paid-usage prerequisite, full test, outstanding reservations and global stops
+  ---
+  duration_ms: 0.584951
+  type: 'test'
+  ...
+1..121
+# tests 121
+# suites 0
+# pass 115
+# fail 6
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 34965.080263

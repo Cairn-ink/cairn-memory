@@ -1,0 +1,88 @@
+{
+  "version": "hr3-a42-postflight-v1",
+  "status": "PASS",
+  "orderedVerifierExitCode": 0,
+  "childExitFilesAndLogHashes": {
+    "commands": 18,
+    "exitCode": 0
+  },
+  "certificateSourceChecks": [
+    {
+      "report": "evaluation/hr3/harness/reports/cap-certification-a4.json",
+      "sourceHashes": 39,
+      "exitCode": 0
+    },
+    {
+      "report": "evaluation/hr3/harness/reports/request-certification-a4.json",
+      "sourceHashes": 23,
+      "exitCode": 0
+    },
+    {
+      "report": "evaluation/hr3/harness/reports/privacy-scan-a4.json",
+      "sourceHashes": 6,
+      "exitCode": 0
+    },
+    {
+      "report": "evaluation/hr3/harness/reports/budget-a4.json",
+      "sourceHashes": 14,
+      "exitCode": 0
+    },
+    {
+      "report": "evaluation/hr3/harness/reports/continuation-a4.json",
+      "sourceHashes": 14,
+      "exitCode": 0
+    }
+  ],
+  "gitDiffCheck": {
+    "command": "git diff --check",
+    "exitCode": 0
+  },
+  "authoredWhitespaceDiagnostics": 0,
+  "absoluteLocalPathHits": [],
+  "syntax": {
+    "report": "evaluation/hr3/harness/reports/syntax-a42.json",
+    "files": 51,
+    "exitCode": 0
+  },
+  "changedFileCrossCheck": {
+    "manifest": "evaluation/hr3/harness/reports/a42-changes.json",
+    "candidateFiles": 5295,
+    "continuationDeltaFiles": 4631,
+    "exitCode": 0
+  },
+  "priorPublicationAttempt": {
+    "exitCode": 1,
+    "reason": "Legacy absolute temporary-path examples in modified integration README",
+    "resolution": "Examples made repository-relative; full checks rerun"
+  },
+  "outsideScopeStatusUnchanged": [
+    " M evaluation/hr3/protocol/errata.md"
+  ],
+  "primarySuppliedAccountingInputsUnchanged": [
+    {
+      "path": "evaluation/hr3/harness/reports/accounting-input-a4.json",
+      "sha256": "3245a85bf8437f89b60111044a20ee629eca5ccb962b15554bd785bf5ef4c118"
+    },
+    {
+      "path": "evaluation/hr3/harness/reports/a4-carry-forward.json",
+      "sha256": "f110569bb55808e6f40e6cc5dec8d5ca1a91d9e64eb74f25336b6a293cdf92b6"
+    },
+    {
+      "path": "evaluation/hr3/harness/test/fixtures/pilot3-de178399-ledger.jsonl",
+      "sha256": "433d0c74002b96ce1319e5a14891e03e2bb47125c5381acb5edfba8e143a501e"
+    },
+    {
+      "path": "evaluation/hr3/harness/test/fixtures/pilot3-de178399-run.json",
+      "sha256": "e1246c22adae8be30d339b4c03d0f483a497f7e7080d8a3f39bcbd06ec5878dc"
+    },
+    {
+      "path": "evaluation/hr3/harness/test/fixtures/pilot3-de178399-summary.json",
+      "sha256": "a512843d40e82816fa9130e67289e1063102699a5740a43a75d2d45ce8ca98df"
+    }
+  ],
+  "historicalCarryUnchanged": true,
+  "freeze": "PENDING_PRIMARY",
+  "networkCalls": 0,
+  "paidCalls": 0,
+  "commits": 0
+}

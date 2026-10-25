@@ -16,7 +16,7 @@ test('P imports only the public product entrypoints, has no SQL/storage/archive 
 });
 test('P corrects at inspected revision through MCP and actually loses old text/receipts',async t=>{
  const p=await fixture(t);await p.ingest([event(1)],date(1));const before=p.refs.get('e1');
- await p.ingest([event(2,{change_type:'correction'})],date(2));const after=p.inspect(before.id);assert.equal(after.ok,true);assert.equal(after.value.memory.revision,2);assert.equal(after.value.memory.content.includes('"2"'),true);assert.equal(after.value.receipts.length,1);assert.match(after.value.receipts[0].excerpt,/service route/);
+ await p.ingest([event(2,{change_type:'correction'})],date(2));const after=p.inspect(before.id);assert.equal(after.ok,true);assert.equal(after.value.memory.revision,2);assert.equal(after.value.memory.content.includes('"2"'),true);assert.equal(after.value.receipts.length,1);assert.match(after.value.receipts[0].excerpt,/\"subject\":\"service\"/);
  assert.ok(p.log.some(l=>l.surface==='mcp'&&l.method==='correct_memory'));assert.equal(p.refs.get('e2').id,before.id);
 });
 test('partial amendments preserve predecessor, whole reversal supersedes it, ambiguous mapping logs',async t=>{

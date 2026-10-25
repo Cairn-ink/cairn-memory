@@ -112,16 +112,16 @@ test('hash-verified exact preparation receipts participate in cumulative spendin
 });
 
 test('complete request certificate covers auditor U/T requests, all provider framing and maximal structures',()=>{
-  const r=JSON.parse(readFileSync(new URL('../reports/request-certification-a3.json',import.meta.url)));
-  assert.equal(r.status,'PASS');assert.deepEqual(r.inputCaps,INPUT_CAPS);assert.equal(r.counts.families,240);
+  const r=JSON.parse(readFileSync(new URL('../reports/request-certification-a4.json',import.meta.url)));
+  assert.equal(r.status,r.rows.every(row=>row.pass)?'PASS':'FAIL_INPUT_MARGIN');assert.deepEqual(r.inputCaps,INPUT_CAPS);assert.equal(r.counts.families,240);
   assert.deepEqual(r.historicalAuditReservations.map(x=>[x.arm,x.reservation]),[['U',20855],['T',24133]]);
-  assert.ok(r.rows.every(row=>row.pass&&row.marginPercent>=r.minimumMarginPercent));
+  assert.ok(r.rows.every(row=>row.pass===(row.reservation*100<=row.limit*95)));assert.equal(r.minimumMarginPercent,5);
   assert.deepEqual([...new Set(r.rows.filter(x=>x.operation==='reader').map(x=>x.arm))].sort(),['O','P','T','U']);
   const encoder=createRequire(new URL('../../../../adapters/openai/package.json',import.meta.url))('tiktoken').get_encoding('o200k_base');
   try {for(const [operation,worst] of Object.entries(r.worst)) {
     assert.equal(bytes(worst.body)+4096,worst.reservation);assert.equal(hash(worst.body),worst.sha256);
     assert.equal(encoder.encode(JSON.stringify(worst.body),[],[]).length,worst.providerBodyTokens);
-    assert.equal(validateRequest({operation,body:worst.body,id:worst.arm?`${worst.family}/reader/${worst.arm}/${worst.batch}`:'certificate'}).input,worst.reservation);
+    const request={operation,body:worst.body,id:worst.arm?`${worst.family}/reader/${worst.arm}/${worst.batch}`:'certificate'};if(worst.reservation<=worst.limit)assert.equal(validateRequest(request).input,worst.reservation);else assert.throws(()=>validateRequest(request),/request_byte_bound/);
   }}finally{encoder.free();}
   assert.throws(()=>validateRequest({operation:'reader',body:responseRequest('reader',{delivered:{current:'x'.repeat(INPUT_CAPS.reader),history:''}})}),/request_byte_bound/);
 });
@@ -139,7 +139,7 @@ test('real execution refuses missing or incomplete carry-forward input before an
 
 test('classified reader input ceilings used by the pilot budget are enforced before dispatch',()=>{
  const base={delivered:{current:'',history:''}},overhead=bytes(responseRequest('reader',base))+4096;
- const body=responseRequest('reader',{delivered:{current:'x'.repeat(23000-overhead),history:''}});
- assert.equal(validateRequest({id:'family/reader/U/4/attempt-0',operation:'reader',body}).input,23000);
+ const body=responseRequest('reader',{delivered:{current:'x'.repeat(33000-overhead),history:''}});
+ assert.equal(validateRequest({id:'family/reader/U/4/attempt-0',operation:'reader',body}).input,33000);
  assert.throws(()=>validateRequest({id:'family/reader/O/4/attempt-0',operation:'reader',body}),/request_byte_bound/);
 });

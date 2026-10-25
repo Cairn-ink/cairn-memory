@@ -1,0 +1,76 @@
+TAP version 13
+# Subtest: cached corpus reproduces 55 collision families, 257 ID errors and 68 P reselections; internal keys remove all
+ok 1 - cached corpus reproduces 55 collision families, 257 ID errors and 68 P reselections; internal keys remove all
+  ---
+  duration_ms: 89.968313
+  type: 'test'
+  ...
+# Subtest: extraction overlaps are supported while reader overlap ambiguity remains unchanged
+ok 2 - extraction overlaps are supported while reader overlap ambiguity remains unchanged
+  ---
+  duration_ms: 0.456868
+  type: 'test'
+  ...
+# Subtest: hash-verified first-pilot ledger reproduces exact settlement and consumed embedding units
+ok 3 - hash-verified first-pilot ledger reproduces exact settlement and consumed embedding units
+  ---
+  duration_ms: 50.836636
+  type: 'test'
+  ...
+# Subtest: second paid-attempt reservation and archived ancestry are carried exactly once with complete preparation
+ok 4 - second paid-attempt reservation and archived ancestry are carried exactly once with complete preparation
+  ---
+  duration_ms: 66.93795
+  type: 'test'
+  ...
+# Subtest: fresh ledger and restarts preserve settled charges, outstanding reservations and embedding counters
+ok 5 - fresh ledger and restarts preserve settled charges, outstanding reservations and embedding counters
+  ---
+  duration_ms: 105.34289
+  type: 'test'
+  ...
+# Subtest: exact remaining stage/global/embedding allowances stop before dispatch at a one-nanodollar boundary
+ok 6 - exact remaining stage/global/embedding allowances stop before dispatch at a one-nanodollar boundary
+  ---
+  duration_ms: 226.702218
+  type: 'test'
+  ...
+# Subtest: carry input rejects changed hashes, broken arithmetic, duplicate sources and overlapping ancestry
+ok 7 - carry input rejects changed hashes, broken arithmetic, duplicate sources and overlapping ancestry
+  ---
+  duration_ms: 153.43834
+  type: 'test'
+  ...
+# Subtest: hash-verified exact preparation receipts participate in cumulative spending and units
+ok 8 - hash-verified exact preparation receipts participate in cumulative spending and units
+  ---
+  duration_ms: 57.694407
+  type: 'test'
+  ...
+# Subtest: complete request certificate covers auditor U/T requests, all provider framing and maximal structures
+ok 9 - complete request certificate covers auditor U/T requests, all provider framing and maximal structures
+  ---
+  duration_ms: 183.560688
+  type: 'test'
+  ...
+# Subtest: real execution refuses missing or incomplete carry-forward input before any dispatch
+ok 10 - real execution refuses missing or incomplete carry-forward input before any dispatch
+  ---
+  duration_ms: 70.274276
+  type: 'test'
+  ...
+# Subtest: classified reader input ceilings used by the pilot budget are enforced before dispatch
+ok 11 - classified reader input ceilings used by the pilot budget are enforced before dispatch
+  ---
+  duration_ms: 4.608224
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1045.662888

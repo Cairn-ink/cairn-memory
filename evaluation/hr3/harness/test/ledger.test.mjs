@@ -54,9 +54,9 @@ test('stage transitions share one operational ledger and preserve stage totals',
  const development=new Ledger(path,{stage:'development',plan});const second=development.reserve(request('dev-one'));
  assert.equal(development.snapshot().total,first.reserved+second.reserved);assert.equal(development.snapshot().byStage.pilot,first.reserved);assert.equal(development.snapshot().byStage.development,second.reserved);
 });
-test('A-2 reserves and settles the exact new output ceiling at A-3 input bounds and unchanged prices',t=>{
+test('A-4.2 reserves and settles unchanged output ceilings at amended input bounds and unchanged prices',t=>{
  const {ledger}=fixture(t);
- for(const [operation,alternative,output,inputCeiling,inputRate,outputRate] of [['reader',false,2176,30000,400,1600],['extraction',false,4352,16384,400,1600],['extraction',true,4352,16384,750,4500]]){
+ for(const [operation,alternative,output,inputCeiling,inputRate,outputRate] of [['reader',false,2176,40960,400,1600],['extraction',false,4352,20480,400,1600],['extraction',true,4352,20480,750,4500]]){
   const body=responseRequest(operation,{}, {alternative}),id=operation+'-'+alternative;
   const reservation=ledger.reserve({id,operation,body});
   assert.equal(reservation.bound.output,output);assert.ok(reservation.bound.input<=inputCeiling);

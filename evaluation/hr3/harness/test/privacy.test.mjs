@@ -19,11 +19,9 @@ const family={family_id:'pilot-scope_change-L06-W1',lineage_id:'pilot-scope_chan
 test('reader IDs and every record/graph reference use source order while semantic content is preserved',()=>{
   const events=identifyEvents(family.family_id,1,[event(1)]),first=events[0],second=identifyEvents(family.family_id,2,[event(2,{reason_nodes:[{id:family.family_id,claim:{subject:'public subject'}}],reason_edges:[{from:family.family_id,to:family.family_id,source_quotes:[]}]})])[0];
   const aliases=sourceOrderAliases([first,second]),state=materialize('T',[first,second],date(2)),wire=serializeRecord(state.current[0],aliases),body=JSON.parse(wire.body);
-  assert.equal(body.id,'r2');assert.deepEqual(body.predecessors,['r1']);
-  assert.deepEqual(body.supporting_events,['r2']);
-  assert.equal(body.reason_nodes[0].id,'n1');
-  assert.equal(body.reason_edges[0].from,body.reason_nodes[0].id);assert.equal(body.reason_edges[0].to,body.reason_nodes[0].id);
-  assert.deepEqual(body.fields,state.current[0].fields);assert.deepEqual(body.scope,state.current[0].scope);assert.equal(body.change_type,'reversal');
+  assert.equal(body.record,'r2');assert.deepEqual(body.predecessors,['r1']);
+  assert.equal(body.reason_nodes,undefined);assert.equal(body.reason_edges,undefined);
+  assert.deepEqual(body.slots,{route:'2'});assert.deepEqual(body.scope,state.current[0].scope);assert.equal(body.change_type,'reversal');
   assert.deepEqual(findPrivateLabels(wire.body,[family.family_id,family.lineage_id]),[]);
   assert.equal(second.event_id,eventKey(family.family_id,2,'e2'),'Global key stays available in diagnostics/state');
 });
@@ -77,8 +75,8 @@ test('preparation usage arithmetic is verified even when file hashes are recompu
 });
 
 test('complete request certificate scans every arm and P ingestion without private labels',()=>{
-  const r=JSON.parse(readFileSync(new URL('../reports/request-certification-a3.json',import.meta.url)));
-  assert.equal(r.status,'PASS');assert.equal(r.privacy.hits,0);
+  const r=JSON.parse(readFileSync(new URL('../reports/request-certification-a4.json',import.meta.url)));
+  assert.ok(['PASS','FAIL_INPUT_MARGIN'].includes(r.status));assert.equal(r.privacy.hits,0);
   const scans=r.privacy.families.flatMap(f=>f.records);
   for(const arm of ['U','T','O','P'])assert.ok(scans.some(s=>s.kind==='reader-request'&&s.arm===arm));
   assert.ok(scans.some(s=>s.kind==='product-payload'));

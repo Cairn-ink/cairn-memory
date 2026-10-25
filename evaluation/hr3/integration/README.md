@@ -1,3 +1,15 @@
+# HR-3 A-4 integration
+
+The active adapters accept closed slot answers and selected explanation quotations. Generator slot gold is joined to private causal nodes and exact UTF-16 support spans. No graph-answer conversion or fallback is implemented. Requested predecessor identities, slot states, scope and intervals survive the projection. Audit sidecars retain original metadata with hash-verified restoration; scoring and referral bundles receive closed projections only.
+
+`node --test --experimental-test-isolation=none evaluation/hr3/integration/test/integration.test.mjs` runs all pilot checkpoints, independent A-4 adapter and admitted-input/P-operation witnesses, and gate arithmetic tests. The synthetic gate tests use historical label strata only to check arithmetic; they do not certify calibration v2. Independent adapter tests retain genuine support referrals when extra delivery context is outside mechanically recognized causal licenses.
+
+`adaptChallenge` requires an A-4 candidate, `gold.answer`, `gold.private_causal.reason.nodes`, private accepted graph topology, explicit `world.row_support` delivery addresses and `world.edge_support` plans. Modified delivered text receives a distinct origin. The superseded challenge bank is rejected until its owner supplies calibration v2; the legacy mechanical CLI cannot certify that bank under A-4. No generator/scorer gold or tests are changed.
+
+`goldWitness` is a diagnostic source-span witness. It delivers only the causal licensed spans and selects a complete first path/union. It is never used by the live reader, extraction, policy or P agent. Every one of the 120 frozen pilot checkpoints earns full witnessed credit under this restricted diagnostic delivery.
+
+Historical integration documentation follows; its old challenge/calibration artifacts are not A-4 certification.
+
 # HR-3 integration
 
 Offline Node >=22.16 ESM, built-ins only. The scorer schema is canonical. Authority:
@@ -9,7 +21,7 @@ node evaluation/hr3/integration/cli.mjs mechanical --out evaluation/hr3/integrat
 node --test --experimental-test-isolation=none evaluation/hr3/integration/test/integration.test.mjs
 node evaluation/hr3/integration/cli.mjs gate \
   --index evaluation/hr3/integration/artifacts/NEW_RUN/private-index.json \
-  --judgments /tmp/judgments.jsonl --out /tmp/new-gate.json
+  --judgments evaluation/hr3/integration/artifacts/judgments.jsonl --out evaluation/hr3/integration/artifacts/new-gate.json
 ```
 
 `mechanical` requires a new directory and exits 0 when all source records were
@@ -19,9 +31,9 @@ calibration failures as data, so exit 0 does **not** mean calibration passed.
 2 for pending with no failed gate. Output files must not already exist.
 Only the integration test file is run; no broad or sibling suites.
 
-`reproduce.mjs` invokes the generator's actual pilot CLI in `/tmp`. Because the
+`reproduce.mjs` invokes the generator's actual pilot CLI in the configured temporary directory. Because the
 challenge CLI hardcodes its output directory, it copies exactly the frozen
-challenge sources to `/tmp` and invokes that CLI there. It verifies regenerated
+challenge sources to the configured temporary directory and invokes that CLI there. It verifies regenerated
 pilot bytes against `generator/freeze.json` (including the pilot manifest), all
 13 challenge artifacts against `challenge/manifest.json`, original source
 hashes, and both protocol hashes: 43 checks. It records actual child exit codes.

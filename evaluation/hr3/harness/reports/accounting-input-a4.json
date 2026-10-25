@@ -1,0 +1,10 @@
+{
+  "version": "hr3-a4-accounting-input-v1",
+  "baseManifest": { "path": "evaluation/hr3/harness/reports/a3-carry-forward.json", "sha256": "8a133069ea1851e49f75db199253ec3a5576be33ac58ff0a089afffe24745e28" },
+  "thirdPilotLedger": { "path": "evaluation/hr3/harness/test/fixtures/pilot3-de178399-ledger.jsonl", "sha256": "433d0c74002b96ce1319e5a14891e03e2bb47125c5381acb5edfba8e143a501e" },
+  "thirdPilotRun": { "path": "evaluation/hr3/harness/test/fixtures/pilot3-de178399-run.json", "sha256": "e1246c22adae8be30d339b4c03d0f483a497f7e7080d8a3f39bcbd06ec5878dc" },
+  "thirdPilotSummary": { "path": "evaluation/hr3/harness/test/fixtures/pilot3-de178399-summary.json", "sha256": "a512843d40e82816fa9130e67289e1063102699a5740a43a75d2d45ce8ca98df" },
+  "additionalPreparationReceipts": [],
+  "preparationComplete": true,
+  "attestation": "Primary attests completeness through the completed pilot3-de178399 run on 2026-10-25. Pilot3 ran against the base carry-forward manifest (digest 841682216046a10e74575abf4eda8ebd74b492e36020f8ba30844930cf5e66d6), whose receipts already include every schema probe and rejection before it. After pilot3 no further paid model or embedding call, probe or model lookup was made; its diagnosis was offline only."
+}

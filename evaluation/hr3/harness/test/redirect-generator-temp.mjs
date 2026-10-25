@@ -6,5 +6,7 @@ import {fileURLToPath} from 'node:url';
 const original=fs.promises.mkdtemp;
 const prefix=fileURLToPath(new URL('../../generator/test/.cli-',import.meta.url));
 const target=fileURLToPath(new URL('../artifacts/a3-generator-cli-',import.meta.url));
-fs.promises.mkdtemp=(path,...args)=>original(path===prefix?target:path,...args);
+const scorerPrefix=fileURLToPath(new URL('../../scorer/.test-contract-',import.meta.url));
+const scorerTarget=fileURLToPath(new URL('../artifacts/a4-scorer-contract-',import.meta.url));
+fs.promises.mkdtemp=(path,...args)=>original(path===prefix?target:path===scorerPrefix?scorerTarget:path,...args);
 syncBuiltinESMExports();

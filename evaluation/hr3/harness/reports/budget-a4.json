@@ -1,0 +1,109 @@
+{
+  "version": "hr3-budget-a4.2-v1",
+  "status": "PASS_CUMULATIVE_PILOT_BOUND",
+  "paidReadiness": false,
+  "cumulativePilotCapUSD": 50,
+  "inputCaps": {
+    "reader": 40960,
+    "extraction": 20480
+  },
+  "readerInputCaps": {
+    "U": 40960,
+    "T": 40960,
+    "O": 32768,
+    "P": 40960
+  },
+  "outputCaps": {
+    "reader": 2176,
+    "extraction": 4352
+  },
+  "attemptsPerCall": 2,
+  "extractionNanodollars": 7274496000,
+  "readerNanodollars": 18284544000,
+  "entireEmbeddingNanodollars": 2560000000,
+  "incrementalConservativeNanodollars": 28119040000,
+  "carryForward": {
+    "path": "evaluation/hr3/harness/reports/a4-carry-forward.json",
+    "sha256": "f110569bb55808e6f40e6cc5dec8d5ca1a91d9e64eb74f25336b6a293cdf92b6",
+    "preparationComplete": true,
+    "settledNanodollars": 2102137440,
+    "outstandingNanodollars": 34723600,
+    "embedding": {
+      "research": 954729,
+      "product": 211608
+    },
+    "exposureNanodollars": 2136861040
+  },
+  "cumulativePilotBoundNanodollars": 30232574300,
+  "availableCarryCombinedNanodollars": 30232574300,
+  "availableCarryFits": true,
+  "remainingEmbeddingNanodollars": 2536673260,
+  "accountingGate": {
+    "status": "COMPLETE_VERIFIED_CHAIN",
+    "completeThirdPilotMerged": true,
+    "manifestUnchanged": true,
+    "availableSnapshotIsFullA4Exposure": true
+  },
+  "hypotheticalFullPriorPilotCapNanodollars": 52119040000,
+  "stages": [
+    {
+      "stage": "pilot",
+      "extractionCalls": 240,
+      "readerCalls": 480,
+      "forecastNanodollars": 5262336000,
+      "allMaximumRetryNanodollars": 26345472000,
+      "unchangedLaterStageLimitUSD": 50
+    },
+    {
+      "stage": "development",
+      "extractionCalls": 800,
+      "readerCalls": 1600,
+      "forecastNanodollars": 17541120000,
+      "allMaximumRetryNanodollars": 87818240000,
+      "unchangedLaterStageLimitUSD": 46
+    },
+    {
+      "stage": "test",
+      "extractionCalls": 6400,
+      "readerCalls": 12800,
+      "forecastNanodollars": 140328960000,
+      "allMaximumRetryNanodollars": 702545920000,
+      "unchangedLaterStageLimitUSD": 345
+    },
+    {
+      "stage": "alternative",
+      "extractionCalls": 800,
+      "readerCalls": 800,
+      "forecastNanodollars": 25172480000,
+      "allMaximumRetryNanodollars": 87695360000,
+      "unchangedLaterStageLimitUSD": 45
+    }
+  ],
+  "global": {
+    "operationalStopUSD": 450,
+    "authorizationUSD": 500,
+    "unavailableHeadroomUSD": 50,
+    "embeddingUnits": {
+      "research": 64000000,
+      "product": 64000000
+    }
+  },
+  "laterStageCapsChanged": false,
+  "uncoveredAllMaximumRetryEnvelopeNanodollars": 906964992000,
+  "sources": {
+    "evaluation/hr3/harness/requests.mjs": "4dc437ac903778a8207120ac055381d8f50e9ae37c8345eb7fc4e7c140cfe3de",
+    "evaluation/hr3/harness/ledger.mjs": "c1bb83ff0189c9818d5eb2f384ef4afae57d082a34ec934c004a07ed28f1aa7a",
+    "evaluation/hr3/harness/budget-a4.mjs": "071ad6e9d87dc876d21654b2fed03178e6aab5feb83ce12df3b5535a2119abc5",
+    "evaluation/hr3/harness/accounting.mjs": "8432123e2812b17033803c2ca633d0cab4933e781c1b0107bbcfbb7ee132258b",
+    "evaluation/hr3/harness/accounting-a4.mjs": "617901e3063c35c1cd1696fc5a8b69b9d1388daa0503eea4ef557d46f55e1354",
+    "evaluation/hr3/harness/projection-schema.mjs": "00d60c5c1f845652b62383ebb1ce84ace6b663672a9ffda2471b3c0fae09accf",
+    "evaluation/hr3/harness/reports/a3-carry-forward.json": "8a133069ea1851e49f75db199253ec3a5576be33ac58ff0a089afffe24745e28",
+    "evaluation/hr3/harness/reports/accounting-input-a4.schema.json": "506d3779c76893d4017ce4802805a8a259bc367673e93ea35002b6584ae1d4bf",
+    "evaluation/hr3/harness/reports/accounting-input-a4.json": "3245a85bf8437f89b60111044a20ee629eca5ccb962b15554bd785bf5ef4c118",
+    "evaluation/hr3/harness/reports/a4-carry-forward.json": "f110569bb55808e6f40e6cc5dec8d5ca1a91d9e64eb74f25336b6a293cdf92b6",
+    "evaluation/hr3/harness/test/fixtures/pilot3-de178399-ledger.jsonl": "433d0c74002b96ce1319e5a14891e03e2bb47125c5381acb5edfba8e143a501e",
+    "evaluation/hr3/harness/test/fixtures/pilot3-de178399-run.json": "e1246c22adae8be30d339b4c03d0f483a497f7e7080d8a3f39bcbd06ec5878dc",
+    "evaluation/hr3/harness/test/fixtures/pilot3-de178399-summary.json": "a512843d40e82816fa9130e67289e1063102699a5740a43a75d2d45ce8ca98df",
+    "evaluation/hr3/protocol/errata.md": "e43a5bcfec9a605ed3f9a55570969b1fd8cb11425d1749cc3222fe8e635b057a"
+  }
+}

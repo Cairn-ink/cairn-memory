@@ -530,3 +530,19 @@ Append A-4 to `protocol/errata.md` and regenerate applicable freeze/certificate 
 | **No new unresolved-source fallback or native-capture arm** | Avoids adding capabilities, arms or paid calls unrelated to the immediate contrast. Exposes existing policy/product retention limits. |
 
 A-4 deliberately narrows answering to structured decision recovery and quotation selection. Results will not establish free-form explanation quality, arbitrary-schema competence or native product capture accuracy. Public aliases make lexical correspondence explicit; synthetic grammar and calibrated model judgment remain limitations. Real extraction errors still affect every arm, and stage diagnostics must accompany the accuracy results.
+
+### A-4.1 (2026-10-25): extraction input reservation ceiling (numerical amendment under A-4 §8)
+
+- **Measurement.** The lossless public-contract projection fails the unchanged extraction input ceiling. All 1,920 certified extraction requests exceed 16,384 with the required 5% headroom. The worst complete reservation is 18,480, so the ceiling must be at least 19,453.
+- **Change.** The extraction input reservation ceiling rises from **16,384** to **20,480**, giving about 9.8% headroom over the measured worst. No evidence, contract content or requirement is removed.
+- **Unchanged.** Output caps, reader ceilings, models and every other rule.
+- **Cost.** The incremental conservative pilot bound becomes approximately US$23.92 (previously US$23.14), within A-4's US$50 cumulative engineering-pilot exposure cap.
+- **Review.** This amendment goes to non-author review together with the A-4 implementation before any paid run.
+
+### A-4.2 (2026-10-25): reader input reservation ceilings (numerical amendment under A-4 §8)
+
+- **Measurement.** Complete A-4 reader bodies fail the unchanged reader ceilings with the required 5% headroom. Worst complete reservations: U 33,526, T 29,331, O 28,022, P 34,965 (minimum ceilings at 5%: 35,291, 30,875, 29,497, 36,806).
+- **Change.** The reader input reservation ceiling rises from **30,000 to 40,960 for T, U and P**, and from **22,000 to 32,768 for O**. This gives about 14.6% headroom over the measured worst for P and O. No evidence, contract content or requirement is removed. Arms still differ only in what they contain, never in truncation.
+- **Unchanged.** Output caps, the extraction ceiling of 20,480 from A-4.1, models and every other rule.
+- **Cost.** The reader bound becomes `240 × ((3×40,960+32,768)×0.40 + 4×2,176×1.60)/1M` = US$18.284544 (previously US$14.094336). The incremental conservative pilot bound becomes approximately US$28.12. With the verified carried exposure of US$2.136861040 through pilot3, the cumulative bound is approximately US$30.26, within A-4's US$50 cumulative engineering-pilot exposure cap.
+- **Review.** This amendment goes to non-author review together with the A-4 implementation and A-4.1 before any paid run.

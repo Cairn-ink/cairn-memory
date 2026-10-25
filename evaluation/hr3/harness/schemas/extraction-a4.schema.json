@@ -1,0 +1,411 @@
+{
+  "type": "object",
+  "properties": {
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string"
+          },
+          "source_turns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "observed_at": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "commitment": {
+            "type": "string"
+          },
+          "change_type": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "predicate": {
+            "type": "string"
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "slots"
+                  },
+                  "route": {
+                    "$ref": "#/$defs/Supplied"
+                  },
+                  "approval": {
+                    "$ref": "#/$defs/Supplied"
+                  },
+                  "cap": {
+                    "$ref": "#/$defs/Supplied"
+                  }
+                },
+                "required": [
+                  "type",
+                  "route",
+                  "approval",
+                  "cap"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "context"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "anchors": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/Anchor"
+                    }
+                  }
+                },
+                "required": [
+                  "type",
+                  "text",
+                  "anchors"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "scope": {
+            "$ref": "#/$defs/Scope"
+          },
+          "effective_interval": {
+            "$ref": "#/$defs/Interval"
+          },
+          "predecessor_anchors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "source_turn": {
+                  "type": "string"
+                },
+                "record_name": {
+                  "type": "string"
+                },
+                "subject": {
+                  "type": "string"
+                },
+                "predicate": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source_turn",
+                "record_name",
+                "subject",
+                "predicate"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "replacement_extent": {
+            "type": "string"
+          },
+          "reason_quotes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Anchor"
+            }
+          },
+          "source_quotes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Anchor"
+            }
+          }
+        },
+        "required": [
+          "event_id",
+          "source_turns",
+          "observed_at",
+          "kind",
+          "commitment",
+          "change_type",
+          "subject",
+          "predicate",
+          "payload",
+          "scope",
+          "effective_interval",
+          "predecessor_anchors",
+          "replacement_extent",
+          "reason_quotes",
+          "source_quotes"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "events"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "Anchor": {
+      "type": "object",
+      "properties": {
+        "turn_id": {
+          "type": "string"
+        },
+        "quote": {
+          "type": "string"
+        },
+        "occurrence": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "turn_id",
+        "quote",
+        "occurrence"
+      ],
+      "additionalProperties": false
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "any": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "all": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string"
+                    },
+                    "values": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "field",
+                    "values"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "all"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "any"
+      ],
+      "additionalProperties": false
+    },
+    "Interval": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "Value": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "Text"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "Boolean"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "Quantity"
+            },
+            "decimal": {
+              "type": "string",
+              "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)$"
+            },
+            "unit": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "decimal",
+            "unit"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "Instant"
+            },
+            "iso": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "iso"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "Range"
+            },
+            "lower": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "upper": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "lowerClosed": {
+              "type": "boolean"
+            },
+            "upperClosed": {
+              "type": "boolean"
+            },
+            "unit": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "lower",
+            "upper",
+            "lowerClosed",
+            "upperClosed",
+            "unit"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Supplied": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "value": {
+              "$ref": "#/$defs/Value"
+            },
+            "anchors": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Anchor"
+              }
+            }
+          },
+          "required": [
+            "value",
+            "anchors"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

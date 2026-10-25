@@ -7,5 +7,5 @@ export function artifactManifest(root,written) {
   visit(root);const expected=[...new Set(written)].sort();disk.sort();
   if(canonical(expected)!==canonical(disk))fail('artifact_inventory_mismatch');
   const files=Object.fromEntries(disk.map(path=>{const data=readFileSync(join(root,path));return [path,{bytes:data.length,sha256:hash(data)}];}));
-  const manifest={count:disk.length,routes:['explicit artifact write log','recursive filesystem enumeration + byte readback'],files};atomicJSON(join(root,'manifest.json'),manifest);return manifest;
+  const manifest={version:'hr3-artifacts-a4-v1',count:disk.length,routes:['explicit artifact write log','recursive filesystem enumeration + byte readback'],files};atomicJSON(join(root,'manifest.json'),manifest);return manifest;
 }
