@@ -1,0 +1,7 @@
+Loaded 0 datasets; 6 pending; 1 workers; certificationEligible=false.
+checkpoint power-d0-q0.5-icc0.1-benign/0: primary=0.233s lineage=0.069s
+checkpoint power-d0.05-q0.3-icc0-benign/0: primary=0.292s lineage=0.078s
+checkpoint power-d0.08-q0.5-icc0.3-harm/0: primary=0.290s lineage=0.074s
+checkpoint coverage-pilot-heteroscedastic-normal/0: primary=0.055s lineage=0.000s
+checkpoint coverage-development-heteroscedastic-normal/0: primary=0.120s lineage=0.000s
+checkpoint coverage-test-heteroscedastic-normal/0: primary=0.812s lineage=0.000s

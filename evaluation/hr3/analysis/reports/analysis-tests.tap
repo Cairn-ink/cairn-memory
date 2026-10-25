@@ -1,0 +1,78 @@
+TAP version 13
+# Subtest: §15 precursor: 128 mixed-m=2/4/8 direct/count parity checks at 1e-12, including guard weights
+ok 1 - §15 precursor: 128 mixed-m=2/4/8 direct/count parity checks at 1e-12, including guard weights
+  ---
+  duration_ms: 6.764023
+  type: 'test'
+  ...
+# Subtest: real packed count hot loop equals direct shared-draw route at 1e-12
+ok 2 - real packed count hot loop equals direct shared-draw route at 1e-12
+  ---
+  duration_ms: 23.838858
+  type: 'test'
+  ...
+# Subtest: §15 precursor: 100000 draws per split reproduce corrected/analytic variance and shared covariance
+ok 3 - §15 precursor: 100000 draws per split reproduce corrected/analytic variance and shared covariance
+  ---
+  duration_ms: 7428.831109
+  type: 'test'
+  ...
+# [{"split":"pilot","draws":100000,"correctedVarianceRatios":[0.9947404822485073,0.999336555997448,0.992461143948004],"sharedCovarianceRatio":0.9924512123847233,"ordinaryVarianceRatio":0.49737024112425365},{"split":"development","draws":100000,"correctedVarianceRatios":[1.0007209967516073,1.001672480064146,0.9948282015157348],"sharedCovarianceRatio":1.000371358996937,"ordinaryVarianceRatio":0.7505407475637055},{"split":"test","draws":100000,"correctedVarianceRatios":[0.9997158514059253,0.9949135907750949,0.996747936717154],"sharedCovarianceRatio":0.9910542207895883,"ordinaryVarianceRatio":0.8747513699801847}]
+# Subtest: §12 ICC mixture preserves J margins, discordance and component ICC for rho=0/.1/.3
+ok 4 - §12 ICC mixture preserves J margins, discordance and component ICC for rho=0/.1/.3
+  ---
+  duration_ms: 297.404693
+  type: 'test'
+  ...
+# [{"rho":0,"guardHarm":false,"meanT":0.474875,"meanU":0.40385,"discordance":0.496125,"observedICC":[-0.0005852538577988599,0.00045469112446513076,0.006415687947375088]},{"rho":0,"guardHarm":true,"meanT":0.48575,"meanU":0.396475,"discordance":0.499325,"observedICC":[-0.006178204479939854,-0.010012176017646857,0.005165959812455828]},{"rho":0.1,"guardHarm":false,"meanT":0.483425,"meanU":0.40005,"discordance":0.500075,"observedICC":[0.09294110811122792,0.09792490456450723,0.09388023002583684]},{"rho":0.1,"guardHarm":true,"meanT":0.478575,"meanU":0.39935,"discordance":0.504725,"observedICC":[0.10067511229566478,0.09892729284247806,0.11211148565876793]},{"rho":0.3,"guardHarm":false,"meanT":0.4787,"meanU":0.3998,"discordance":0.49885,"observedICC":[0.2993801347664513,0.30294301879473545,0.2951855525404565]},{"rho":0.3,"guardHarm":true,"meanT":0.47585,"meanU":0.396,"discordance":0.4975,"observedICC":[0.30014011738785,0.30257308159082247,0.3013508652150132]}]
+# Subtest: grid: exactly 60 power and 12 coverage cells, actual allocations and coverage weights
+ok 5 - grid: exactly 60 power and 12 coverage cells, actual allocations and coverage weights
+  ---
+  duration_ms: 25.76896
+  type: 'test'
+  ...
+# Subtest: decision uses raw intervals, four conjunctive guards, strict boundaries and all completion gates
+ok 6 - decision uses raw intervals, four conjunctive guards, strict boundaries and all completion gates
+  ---
+  duration_ms: 0.765254
+  type: 'test'
+  ...
+# Subtest: boundary supplements, display clipping and Monte Carlo uncertainty retain raw tails
+ok 7 - boundary supplements, display clipping and Monte Carlo uncertainty retain raw tails
+  ---
+  duration_ms: 0.420428
+  type: 'test'
+  ...
+# Subtest: judgment upper bounds and integer budgets use all eligible keys, unsupported strata rate=1
+ok 8 - judgment upper bounds and integer budgets use all eligible keys, unsupported strata rate=1
+  ---
+  duration_ms: 0.213514
+  type: 'test'
+  ...
+# Subtest: judgment exact assignments recenter separately, propagate keys and parent scenarios
+ok 9 - judgment exact assignments recenter separately, propagate keys and parent scenarios
+  ---
+  duration_ms: 0.926627
+  type: 'test'
+  ...
+# Subtest: conservative envelope includes negative replicate coefficients and all exact assignments
+ok 10 - conservative envelope includes negative replicate coefficients and all exact assignments
+  ---
+  duration_ms: 0.928887
+  type: 'test'
+  ...
+# Subtest: lineage sensitivity is separate, paired and deterministic
+ok 11 - lineage sensitivity is separate, paired and deterministic
+  ---
+  duration_ms: 0.721623
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7800.668661

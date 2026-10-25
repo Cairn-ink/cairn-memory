@@ -1,0 +1,179 @@
+{
+  "design": {
+    "kind": "coverage",
+    "split": "development",
+    "distribution": "heteroscedastic-normal",
+    "id": "coverage-development-heteroscedastic-normal"
+  },
+  "plannedDatasets": 1,
+  "completedDatasets": 1,
+  "status": "complete",
+  "independentConditionalCoverageBenchmark": true,
+  "decisions": null,
+  "coverage": [
+    {
+      "name": "P absolute C",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ],
+      "auditFlag": null
+    },
+    {
+      "name": "P absolute O",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ],
+      "auditFlag": null
+    },
+    {
+      "name": "P absolute R",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ],
+      "auditFlag": null
+    },
+    {
+      "name": "P absolute J",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ],
+      "auditFlag": null
+    },
+    {
+      "name": "P within-type correction C",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ],
+      "auditFlag": null
+    },
+    {
+      "name": "P within-type correction O",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ],
+      "auditFlag": null
+    },
+    {
+      "name": "P within-type correction R",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ],
+      "auditFlag": null
+    },
+    {
+      "name": "P within-type correction J",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ],
+      "auditFlag": null
+    },
+    {
+      "name": "J(T)-J(U)",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ],
+      "auditFlag": null
+    },
+    {
+      "name": "C(T)-C(U)",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ],
+      "auditFlag": null
+    },
+    {
+      "name": "O(T)-O(U)",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ],
+      "auditFlag": null
+    },
+    {
+      "name": "R(T)-R(U)",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ],
+      "auditFlag": null
+    },
+    {
+      "name": "multihop R(T)-R(U)",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ],
+      "auditFlag": null
+    }
+  ],
+  "lineageCoverage": null,
+  "datasets": [
+    {
+      "index": 0,
+      "artifact": "datasets/coverage-development-heteroscedastic-normal/0000.json",
+      "replicateSHA256": "1761dc77c9921d9151406d6fa6fa9b522819a8034e53c2689862e5104ede0899"
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+[
+  {
+    "node": "22.16.0",
+    "testFile": "evaluation/hr3/analysis/test/analysis.test.mjs",
+    "exitCode": 0,
+    "tap": "evaluation/hr3/analysis/reports/analysis-tests.tap",
+    "totals": [
+      "# tests 11",
+      "# pass 11",
+      "# fail 0"
+    ],
+    "counts": {
+      "tests": 11,
+      "pass": 11,
+      "fail": 0
+    }
+  },
+  {
+    "node": "22.16.0",
+    "testFile": "evaluation/hr3/analysis/test/adapter.test.mjs",
+    "exitCode": 0,
+    "tap": "evaluation/hr3/analysis/reports/adapter-tests.tap",
+    "totals": [
+      "# tests 6",
+      "# pass 6",
+      "# fail 0"
+    ],
+    "counts": {
+      "tests": 6,
+      "pass": 6,
+      "fail": 0
+    }
+  },
+  {
+    "node": "22.16.0",
+    "testFile": "evaluation/hr3/analysis/test/runner.test.mjs",
+    "exitCode": 0,
+    "tap": "evaluation/hr3/analysis/reports/runner-tests.tap",
+    "totals": [
+      "tests 2",
+      "pass 2",
+      "fail 0"
+    ],
+    "counts": {
+      "tests": 2,
+      "pass": 2,
+      "fail": 0
+    }
+  },
+  {
+    "node": "24.15.0",
+    "testFile": "evaluation/hr3/analysis/test/analysis.test.mjs",
+    "exitCode": 0,
+    "tap": "evaluation/hr3/analysis/reports/analysis-tests-node24.tap",
+    "totals": [],
+    "counts": {
+      "tests": 11,
+      "pass": 11,
+      "fail": 0
+    }
+  },
+  {
+    "node": "24.15.0",
+    "testFile": "evaluation/hr3/analysis/test/adapter.test.mjs",
+    "exitCode": 0,
+    "tap": "evaluation/hr3/analysis/reports/adapter-tests-node24.tap",
+    "totals": [],
+    "counts": {
+      "tests": 6,
+      "pass": 6,
+      "fail": 0
+    }
+  },
+  {
+    "node": "24.15.0",
+    "testFile": "evaluation/hr3/analysis/test/runner.test.mjs",
+    "exitCode": 0,
+    "tap": "evaluation/hr3/analysis/reports/runner-tests-node24.tap",
+    "totals": [
+      "tests 2",
+      "pass 2",
+      "fail 0"
+    ],
+    "counts": {
+      "tests": 2,
+      "pass": 2,
+      "fail": 0
+    }
+  }
+]

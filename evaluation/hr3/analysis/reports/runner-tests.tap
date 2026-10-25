@@ -1,0 +1,22 @@
+TAP version 13
+# Subtest: runner refuses reduced/modified grids unless explicit engineering smoke and limits workers to four
+ok 1 - runner refuses reduced/modified grids unless explicit engineering smoke and limits workers to four
+  ---
+  duration_ms: 3.403652
+  type: 'test'
+  ...
+# Subtest: seeded determinism, checkpoint resume, worker-count independence and tamper refusal
+ok 2 - seeded determinism, checkpoint resume, worker-count independence and tamper refusal
+  ---
+  duration_ms: 274.206463
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 280.436657

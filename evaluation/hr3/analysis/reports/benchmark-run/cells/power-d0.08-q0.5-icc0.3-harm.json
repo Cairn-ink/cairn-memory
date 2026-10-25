@@ -1,0 +1,173 @@
+{
+  "design": {
+    "kind": "power",
+    "split": "test",
+    "effect": 0.08,
+    "discordance": 0.5,
+    "icc": 0.3,
+    "guardHarm": true,
+    "id": "power-d0.08-q0.5-icc0.3-harm"
+  },
+  "plannedDatasets": 1,
+  "completedDatasets": 1,
+  "status": "complete",
+  "independentConditionalCoverageBenchmark": false,
+  "decisions": {
+    "Advance": {
+      "successes": 0,
+      "n": 1,
+      "estimate": 0,
+      "mcse": 0,
+      "wilson95": [
+        0,
+        0.7934506856227626
+      ]
+    },
+    "Keep U": {
+      "successes": 0,
+      "n": 1,
+      "estimate": 0,
+      "mcse": 0,
+      "wilson95": [
+        0,
+        0.7934506856227626
+      ]
+    },
+    "Inconclusive": {
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ]
+    }
+  },
+  "coverage": [
+    {
+      "name": "J(T)-J(U)",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ],
+      "auditFlag": null
+    },
+    {
+      "name": "C(T)-C(U)",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ],
+      "auditFlag": null
+    },
+    {
+      "name": "O(T)-O(U)",
+      "successes": 0,
+      "n": 1,
+      "estimate": 0,
+      "mcse": 0,
+      "wilson95": [
+        0,
+        0.7934506856227626
+      ],
+      "auditFlag": "investigate-undercoverage"
+    },
+    {
+      "name": "R(T)-R(U)",
+      "successes": 0,
+      "n": 1,
+      "estimate": 0,
+      "mcse": 0,
+      "wilson95": [
+        0,
+        0.7934506856227626
+      ],
+      "auditFlag": "investigate-undercoverage"
+    },
+    {
+      "name": "multihop R(T)-R(U)",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ],
+      "auditFlag": null
+    }
+  ],
+  "lineageCoverage": [
+    {
+      "name": "J(T)-J(U)",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ]
+    },
+    {
+      "name": "C(T)-C(U)",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ]
+    },
+    {
+      "name": "O(T)-O(U)",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ]
+    },
+    {
+      "name": "R(T)-R(U)",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ]
+    },
+    {
+      "name": "multihop R(T)-R(U)",
+      "successes": 1,
+      "n": 1,
+      "estimate": 1,
+      "mcse": 0,
+      "wilson95": [
+        0.20654931437723745,
+        1
+      ]
+    }
+  ],
+  "datasets": [
+    {
+      "index": 0,
+      "artifact": "datasets/power-d0.08-q0.5-icc0.3-harm/0000.json",
+      "replicateSHA256": "b94f9ef126d43a1ba05afae3217ee6b0300213986c9230c8cf718448f33af716"
+    }
+  ]
+}

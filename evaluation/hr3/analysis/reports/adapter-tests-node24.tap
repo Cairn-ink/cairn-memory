@@ -1,0 +1,14 @@
+✔ A-4 scorer outputs map C/O/R/J without changing component validity or citation semantics (24.390506ms)
+✔ real integration A-4 adapter referrals retain pass keys and parent-rule identities (13.782112ms)
+✔ forced-J-zero still requires resolution, malformed attempts stay zero, unexecuted never zero-filled (10.884468ms)
+✔ not_stated empty-delivery factual R is retained separately from stated supported R (7.529141ms)
+✔ score vectors use planned allocations, paired family J, guard/type weights, missing data fail closed (2.457625ms)
+✔ A-1.1 blocks engineering-pilot intervals; calibrated analysis derives O completion rather than trusting a claimed gate (16.396811ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 79.98364

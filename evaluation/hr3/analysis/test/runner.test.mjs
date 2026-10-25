@@ -1,0 +1,37 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { ROOT } from '../storage.mjs';
+import { run, configuration, parseArgs } from '../runner.mjs';
+import { powerCells } from '../design.mjs';
+test('runner refuses reduced/modified grids unless explicit engineering smoke and limits workers to four', () => {
+  assert.throws(() => configuration({ datasets: 1 }), /engineering-smoke/);
+  assert.throws(() => configuration({ draws: 10 }), /engineering-smoke/);
+  assert.throws(() => configuration({ cells: [powerCells()[0].id] }), /engineering-smoke/);
+  assert.throws(() => configuration({ workers: 5 }), /maximum 4/);
+  assert.throws(() => configuration({ out: '/tmp/disallowed-analysis-output' }), /below analysis/);
+  assert.equal(configuration().cells.length, 72);
+  assert.deepEqual(parseArgs(['--engineering-smoke', '--draws', '128', '--stop-after', '1']), { engineeringSmoke: true, draws: 128, stopAfter: 1 });
+});
+test('seeded determinism, checkpoint resume, worker-count independence and tamper refusal', async t => {
+  const dir = await mkdtemp(join(ROOT, 'reports', 'runner-test-')); t.after(() => rm(dir, { recursive: true, force: true }));
+  const common = { engineeringSmoke: true, cells: [powerCells()[0].id], datasets: 3, draws: 32 };
+  const resumed = join(dir, 'resumed'), straight = join(dir, 'straight');
+  const first = await run({ ...common, out: resumed, stopAfter: 1 }, () => {});
+  assert.equal(first.status, 'incomplete'); assert.equal(first.cells[0].completedDatasets, 1); assert.equal(first.certificationEligible, false);
+  const final = await run({ ...common, out: resumed, workers: 2 }, () => {});
+  const oneShot = await run({ ...common, out: straight }, () => {});
+  assert.equal(final.status, 'complete');
+  assert.deepEqual(final.cells, oneShot.cells);
+  const finalCell = JSON.parse(await readFile(join(resumed, final.cells[0].resultArtifact), 'utf8'));
+  const straightCell = JSON.parse(await readFile(join(straight, oneShot.cells[0].resultArtifact), 'utf8'));
+  const a = await readFile(join(resumed, finalCell.datasets[0].artifact), 'utf8');
+  const b = await readFile(join(straight, straightCell.datasets[0].artifact), 'utf8');
+  const strip = x => { const r = JSON.parse(x); delete r.timings; delete r.checkpointSHA256; return r; };
+  assert.deepEqual(strip(a), strip(b));
+  await assert.rejects(run({ ...common, out: resumed, seed: 'changed' }, () => {}), /hash mismatch/);
+  const artifact = JSON.parse(a).replicateArtifact.path;
+  await writeFile(join(resumed, artifact), Buffer.alloc(8));
+  await assert.rejects(run({ ...common, out: resumed }, () => {}), /Corrupt/);
+});

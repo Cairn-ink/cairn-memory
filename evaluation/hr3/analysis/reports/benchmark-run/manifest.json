@@ -1,0 +1,1584 @@
+{
+  "version": "hr3-analysis-v1",
+  "implementation": {
+    "sha256": "72eb59258e9b7ea87f970bae14f1f3617dfa1cb91ff45349cacbe589adc3e1df",
+    "files": {
+      "adapter.mjs": "6b595be5c5087b21b24482b4b63e361e5881e4b8134b3d93483762d7634f771e",
+      "analyze.mjs": "3aa2c44422978657a5704e313a34b62091bccd323d584a8c4ff8f0357f2303ee",
+      "benchmark.mjs": "2c4d3f38895aa21a1d6dd099ccd81d12ab019c4be8fff12719f1c0fb191857c0",
+      "bootstrap.mjs": "53e2eb636565e9703692b7363f05b80882619c25c0c950f0b2c268dfb022b093",
+      "boundary.mjs": "10336b471c29f938a3ec62366652903eb9e2232edc762495b2fa26d90113603b",
+      "decision.mjs": "c07da9c67f3e59649de431c66738ce06fb982994b4d97666900bdb585cc7c281",
+      "design.mjs": "9ab0bbfcf2e9b14644fce83d454f2e16e77070023b28ff93c2a7aebcd28f338b",
+      "judgment.mjs": "51c280f44b24a07321291f04993a9abc25d91cf5ed6646c55f46501c61c0b990",
+      "random.mjs": "33ae0d4b04466add9d3e9840154cd2b5d72f06bb889d29018de7a45e469b0d4a",
+      "runner.mjs": "7e99f2055fe9996fb7c74be0dce19e054f40952dfc18f1834668f9c47255549f",
+      "simulation.mjs": "7f34c4490a7bd1087094bad73c4fd917f39d2a7b26b6f21d1ac5c93c24b64039",
+      "statistics.mjs": "57b52c22201febf0f9c00b001702e4f2560c5abf6d4911ef390a64bd0f795973",
+      "storage.mjs": "94a23b4205e7995cddb147cf26e37492e92efeb89ff3fbcfa250f85cdcdab58c",
+      "test/adapter.test.mjs": "5b8fb2065223a9007b70c301e75f4e77d20d171daf509d5f23bb350b452d0e84",
+      "test/analysis.test.mjs": "0f9d15fe2dfafc70a2254f76f7b43e73719f337eb0e2bd71053f6382f31eb700",
+      "test/runner.test.mjs": "07971eb013a04f581583a93f0292630195ce6929a28dbd4cf76e21fd8726f3a2",
+      "worker.mjs": "cd67d2df90b1fde66ab6deba97449b72e83e65f964fa3e4211dac5475269bfbc",
+      "../generator/public-contract.json": "61c12011183d82c2a9fcba3c3e666bbc65da96125a6436de3e96019801ae8a23",
+      "../integration/adapters.mjs": "58d1982cf277af0aae7c2b008ca5b8d37114514b62a196f692235d51b77e8cfe",
+      "../integration/cli.mjs": "fa258ac86e4c5a674de17f2ff75940ad2270332b708757e71b69da3ed7d63e96",
+      "../integration/delivery.json": "404b45490cc1f8f7a0fd823069b02e6319ea7ac20b249fffd437f8ca9af50e6d",
+      "../integration/field-map.mjs": "345d2093f62eb811d66e193021ff073773819345d78896215aa4eeaf2734b1ad",
+      "../integration/gate.mjs": "f8ca201644269c6158e0da90ab2279246dcf3cef70eeae87798d5e21fb1261cc",
+      "../integration/mechanical-results.json": "0470b2f4fc635cddffee64b98cce0101120947a6a023030af89f5f8760e07ec8",
+      "../integration/mechanical.mjs": "75ea3f683b5760c758e9d2f9f0abeedde5bb27a51ebdfa6651ce0ad92f3de771",
+      "../integration/reconciliation-fields.json": "7c433dc2ce250c08ddff10cc05d5b1e8b168cee090ef5e5e8aa004fa5dfa54fd",
+      "../integration/reproduce.mjs": "fb813634ccb7e5051ca86ad026c0b8c26408f0f549830c1509f3dbd7f43761f9",
+      "../integration/test/fixtures-a4.mjs": "99cfd76c9089ca4edced3396519a08024f2c45b84d011a97de71ae1546ea73fc",
+      "../integration/test/integration.test.mjs": "6fd4d6b0726cf1e066e97e2c506ec18e1073d5c3948a3430a0baf88b374d7e24",
+      "../integration/test/pipeline-a4.test.mjs": "d7a299af9b96f78f807a07462a26094fdfb860d3c47d061e35ae7055edf64606",
+      "../protocol/errata.md": "7dea0aa1382fa772f4e88570c701cd8caa3a41f9fae0b1e7e6faea875423ffd5",
+      "../protocol/protocol-v0.3.4.md": "639c55edb6633186580af434ee2fe3ed39bffc2bf36a9292dac03b7a1b20b3cc",
+      "../scorer/answer.schema.json": "d463c1e9ec75404da89f5ba09910aea645b129733cd2b78d52c7a3c923f4e4ce",
+      "../scorer/canonical.mjs": "d71a2203a6de43f64fc2bd44a1394a017345858e7a3c37511b135913f05add3f",
+      "../scorer/citations.mjs": "89e3144f326904cf11ec58d945338491577838e32827ebb6a88de4fcc10ae77b",
+      "../scorer/cli.mjs": "7fdc7f7d2ed1654d843a6ee6a59fe679cfcf3e9fb38c3216cddb93b97bce6f47",
+      "../scorer/contract.mjs": "eeb939d7b320a9579f5ccaad81206af508a47a6e531b42fc8b6b76a04145ed43",
+      "../scorer/gold.schema.json": "099a9880b5ae82c19da20c9404c7afa81777afd13bc71c6f112493f906e3ee18",
+      "../scorer/schema.mjs": "5ac7a7fe80de0605cc8d9de3e845b8fa4463ccdf041b1cd613c649281e34979d",
+      "../scorer/scorer.mjs": "4b23f23152932e6aa50388b9f1d2872f970cd126751d6146e515a8fe0ca4fd9b",
+      "../scorer/slots.mjs": "c325261845baa158bbd9c4e7c2c64c51cf889fee45482a8d793a28e0480c0217",
+      "../scorer/submission.schema.json": "e8376dc4797a47db56ec2a21ea44ff22a1491e5c58bbe0a3e5a0a0957fd0eb72",
+      "../scorer/test/canonical.test.mjs": "85c67ee9c0b3b094ccabeb3a1cb6d53b5705dddb2de901adac8a3624fda82dc1",
+      "../scorer/test/citations.test.mjs": "af96f27e060ced2c82b2fb9cb5b874e8bddf932c5f6b5f738e0b7999624a17e9",
+      "../scorer/test/contract.test.mjs": "e37b00d62c720da86d2a8c48cf9b4132a30868489274314aaf460f52dfa6e51b",
+      "../scorer/test/fixtures.mjs": "76ba9e6fb066608abf01bf1fa805353597f733572805369b4b71d6e8b7687c01",
+      "../scorer/test/schema-cli.test.mjs": "a34b5ff27b0d098b9e9fc0fecb2aa1f1a6a840298d213447f3a6f5e0d570f091",
+      "../scorer/test/scorer.test.mjs": "d9b35880da4040ec4d2fbd5f7d80c5b4f6517dc3b4ed4fa50e142c361b78dde6"
+    }
+  },
+  "engineeringSmoke": true,
+  "datasets": 1,
+  "draws": 10000,
+  "cells": [
+    {
+      "design": {
+        "kind": "power",
+        "split": "test",
+        "effect": 0,
+        "discordance": 0.5,
+        "icc": 0.1,
+        "guardHarm": false,
+        "id": "power-d0-q0.5-icc0.1-benign"
+      },
+      "plannedDatasets": 1,
+      "completedDatasets": 1,
+      "status": "complete",
+      "independentConditionalCoverageBenchmark": false,
+      "decisions": {
+        "Advance": {
+          "successes": 0,
+          "n": 1,
+          "estimate": 0,
+          "mcse": 0,
+          "wilson95": [
+            0,
+            0.7934506856227626
+          ]
+        },
+        "Keep U": {
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ]
+        },
+        "Inconclusive": {
+          "successes": 0,
+          "n": 1,
+          "estimate": 0,
+          "mcse": 0,
+          "wilson95": [
+            0,
+            0.7934506856227626
+          ]
+        }
+      },
+      "coverage": [
+        {
+          "name": "J(T)-J(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "C(T)-C(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "O(T)-O(U)",
+          "successes": 0,
+          "n": 1,
+          "estimate": 0,
+          "mcse": 0,
+          "wilson95": [
+            0,
+            0.7934506856227626
+          ],
+          "auditFlag": "investigate-undercoverage"
+        },
+        {
+          "name": "R(T)-R(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "multihop R(T)-R(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        }
+      ],
+      "lineageCoverage": [
+        {
+          "name": "J(T)-J(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ]
+        },
+        {
+          "name": "C(T)-C(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ]
+        },
+        {
+          "name": "O(T)-O(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ]
+        },
+        {
+          "name": "R(T)-R(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ]
+        },
+        {
+          "name": "multihop R(T)-R(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ]
+        }
+      ],
+      "resultArtifact": "cells/power-d0-q0.5-icc0.1-benign.json",
+      "resultSHA256": "d3bdd8b340aa45de549b0dce8a2a595fabd4fd8c36643431ab99deba895a7f8e"
+    },
+    {
+      "design": {
+        "kind": "power",
+        "split": "test",
+        "effect": 0.05,
+        "discordance": 0.3,
+        "icc": 0,
+        "guardHarm": false,
+        "id": "power-d0.05-q0.3-icc0-benign"
+      },
+      "plannedDatasets": 1,
+      "completedDatasets": 1,
+      "status": "complete",
+      "independentConditionalCoverageBenchmark": true,
+      "decisions": {
+        "Advance": {
+          "successes": 0,
+          "n": 1,
+          "estimate": 0,
+          "mcse": 0,
+          "wilson95": [
+            0,
+            0.7934506856227626
+          ]
+        },
+        "Keep U": {
+          "successes": 0,
+          "n": 1,
+          "estimate": 0,
+          "mcse": 0,
+          "wilson95": [
+            0,
+            0.7934506856227626
+          ]
+        },
+        "Inconclusive": {
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ]
+        }
+      },
+      "coverage": [
+        {
+          "name": "J(T)-J(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "C(T)-C(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "O(T)-O(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "R(T)-R(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "multihop R(T)-R(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        }
+      ],
+      "lineageCoverage": [
+        {
+          "name": "J(T)-J(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ]
+        },
+        {
+          "name": "C(T)-C(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ]
+        },
+        {
+          "name": "O(T)-O(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ]
+        },
+        {
+          "name": "R(T)-R(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ]
+        },
+        {
+          "name": "multihop R(T)-R(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ]
+        }
+      ],
+      "resultArtifact": "cells/power-d0.05-q0.3-icc0-benign.json",
+      "resultSHA256": "202a317f281aa58e398ace5aa19e11e3a4c937462bffabd7aa51b45d92828352"
+    },
+    {
+      "design": {
+        "kind": "power",
+        "split": "test",
+        "effect": 0.08,
+        "discordance": 0.5,
+        "icc": 0.3,
+        "guardHarm": true,
+        "id": "power-d0.08-q0.5-icc0.3-harm"
+      },
+      "plannedDatasets": 1,
+      "completedDatasets": 1,
+      "status": "complete",
+      "independentConditionalCoverageBenchmark": false,
+      "decisions": {
+        "Advance": {
+          "successes": 0,
+          "n": 1,
+          "estimate": 0,
+          "mcse": 0,
+          "wilson95": [
+            0,
+            0.7934506856227626
+          ]
+        },
+        "Keep U": {
+          "successes": 0,
+          "n": 1,
+          "estimate": 0,
+          "mcse": 0,
+          "wilson95": [
+            0,
+            0.7934506856227626
+          ]
+        },
+        "Inconclusive": {
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ]
+        }
+      },
+      "coverage": [
+        {
+          "name": "J(T)-J(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "C(T)-C(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "O(T)-O(U)",
+          "successes": 0,
+          "n": 1,
+          "estimate": 0,
+          "mcse": 0,
+          "wilson95": [
+            0,
+            0.7934506856227626
+          ],
+          "auditFlag": "investigate-undercoverage"
+        },
+        {
+          "name": "R(T)-R(U)",
+          "successes": 0,
+          "n": 1,
+          "estimate": 0,
+          "mcse": 0,
+          "wilson95": [
+            0,
+            0.7934506856227626
+          ],
+          "auditFlag": "investigate-undercoverage"
+        },
+        {
+          "name": "multihop R(T)-R(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        }
+      ],
+      "lineageCoverage": [
+        {
+          "name": "J(T)-J(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ]
+        },
+        {
+          "name": "C(T)-C(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ]
+        },
+        {
+          "name": "O(T)-O(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ]
+        },
+        {
+          "name": "R(T)-R(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ]
+        },
+        {
+          "name": "multihop R(T)-R(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ]
+        }
+      ],
+      "resultArtifact": "cells/power-d0.08-q0.5-icc0.3-harm.json",
+      "resultSHA256": "188a5db2b1b082cbd474f6b4a142d74b0ffe63a22df056bab7785576f7895e77"
+    },
+    {
+      "design": {
+        "kind": "coverage",
+        "split": "pilot",
+        "distribution": "heteroscedastic-normal",
+        "id": "coverage-pilot-heteroscedastic-normal"
+      },
+      "plannedDatasets": 1,
+      "completedDatasets": 1,
+      "status": "complete",
+      "independentConditionalCoverageBenchmark": true,
+      "decisions": null,
+      "coverage": [
+        {
+          "name": "P absolute C",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "P absolute O",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "P absolute R",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "P absolute J",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "P within-type correction C",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "P within-type correction O",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "P within-type correction R",
+          "successes": 0,
+          "n": 1,
+          "estimate": 0,
+          "mcse": 0,
+          "wilson95": [
+            0,
+            0.7934506856227626
+          ],
+          "auditFlag": "investigate-undercoverage"
+        },
+        {
+          "name": "P within-type correction J",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "J(T)-J(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "C(T)-C(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "O(T)-O(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "R(T)-R(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "multihop R(T)-R(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        }
+      ],
+      "lineageCoverage": null,
+      "resultArtifact": "cells/coverage-pilot-heteroscedastic-normal.json",
+      "resultSHA256": "b86e8b184b1ac15ba4a0387559404ba3d7491591d39645c4963a1b6e764aae17"
+    },
+    {
+      "design": {
+        "kind": "coverage",
+        "split": "development",
+        "distribution": "heteroscedastic-normal",
+        "id": "coverage-development-heteroscedastic-normal"
+      },
+      "plannedDatasets": 1,
+      "completedDatasets": 1,
+      "status": "complete",
+      "independentConditionalCoverageBenchmark": true,
+      "decisions": null,
+      "coverage": [
+        {
+          "name": "P absolute C",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "P absolute O",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "P absolute R",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "P absolute J",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "P within-type correction C",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "P within-type correction O",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "P within-type correction R",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "P within-type correction J",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "J(T)-J(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "C(T)-C(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "O(T)-O(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "R(T)-R(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "multihop R(T)-R(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        }
+      ],
+      "lineageCoverage": null,
+      "resultArtifact": "cells/coverage-development-heteroscedastic-normal.json",
+      "resultSHA256": "484abd3a5e90dd6e78f471e2ca3c9bf4f1d23651c6b8bbc091fcd79e99a2daf8"
+    },
+    {
+      "design": {
+        "kind": "coverage",
+        "split": "test",
+        "distribution": "heteroscedastic-normal",
+        "id": "coverage-test-heteroscedastic-normal"
+      },
+      "plannedDatasets": 1,
+      "completedDatasets": 1,
+      "status": "complete",
+      "independentConditionalCoverageBenchmark": true,
+      "decisions": null,
+      "coverage": [
+        {
+          "name": "P absolute C",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "P absolute O",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "P absolute R",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "P absolute J",
+          "successes": 0,
+          "n": 1,
+          "estimate": 0,
+          "mcse": 0,
+          "wilson95": [
+            0,
+            0.7934506856227626
+          ],
+          "auditFlag": "investigate-undercoverage"
+        },
+        {
+          "name": "P within-type correction C",
+          "successes": 0,
+          "n": 1,
+          "estimate": 0,
+          "mcse": 0,
+          "wilson95": [
+            0,
+            0.7934506856227626
+          ],
+          "auditFlag": "investigate-undercoverage"
+        },
+        {
+          "name": "P within-type correction O",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "P within-type correction R",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "P within-type correction J",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "J(T)-J(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "C(T)-C(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "O(T)-O(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "R(T)-R(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        },
+        {
+          "name": "multihop R(T)-R(U)",
+          "successes": 1,
+          "n": 1,
+          "estimate": 1,
+          "mcse": 0,
+          "wilson95": [
+            0.20654931437723745,
+            1
+          ],
+          "auditFlag": null
+        }
+      ],
+      "lineageCoverage": null,
+      "resultArtifact": "cells/coverage-test-heteroscedastic-normal.json",
+      "resultSHA256": "b0a9f8caac6bdd78ffa9c2885e3edcb3e69436541fecff277fce51a528f202df"
+    }
+  ],
+  "seed": "hr3-validation-v1",
+  "bootstrapSeed": "hr3-bootstrap-v1",
+  "frozen": {
+    "datasets": 2000,
+    "draws": 10000,
+    "effects": [
+      0,
+      0.03,
+      0.05,
+      0.08,
+      0.1
+    ],
+    "discordance": [
+      0.3,
+      0.5
+    ],
+    "icc": [
+      0,
+      0.1,
+      0.3
+    ],
+    "baseline": 0.4,
+    "guardHarmShare": 0.3,
+    "estimateThreshold": 0.05,
+    "guardThreshold": -0.05,
+    "bootstrapSeed": "hr3-bootstrap-v1"
+  },
+  "allocations": {
+    "pilot": {
+      "lineages": 30,
+      "m": 2,
+      "perType": 6,
+      "multiPerType": 4
+    },
+    "development": {
+      "lineages": 50,
+      "m": 4,
+      "perType": 10,
+      "multiPerType": 6
+    },
+    "test": {
+      "lineages": 200,
+      "m": 8,
+      "perType": 40,
+      "multiPerType": 20
+    }
+  },
+  "candidateChoices": {
+    "status": "REQUIRES-PROSPECTIVE-NONAUTHOR-REVIEW",
+    "failureSelection": "one independently uniform C/O/R failure per failed arm; independent across arms except guard-harm override",
+    "guardHarm": "in 30% of both-failure pairs set U failure R and T failure C",
+    "sensitivity": "whole lineages within type and equal-weight/multihop strata, percentile intervals, no finite-family rescale",
+    "coverage": {
+      "homogeneousP": 0.4,
+      "heterogeneousP": [
+        0.2,
+        0.3,
+        0.4,
+        0.5,
+        0.6
+      ],
+      "normalMean": 0.4,
+      "homogeneousSD": 0.2,
+      "heterogeneousSD": [
+        0.1,
+        0.15,
+        0.2,
+        0.25,
+        0.3
+      ]
+    },
+    "coverageDependence": "independent components/arms/families conditional on fixed lineage; normal P and contrasts are linear score analogues",
+    "materialUndercoverage": "not specified: report Wilson upper bound below .95 as an audit flag, never automatic acceptance",
+    "decisionPrecedence": "validity gates, T hard violation, judgment robustness, Keep U statistical conditions, Advance, otherwise Inconclusive",
+    "randomStreams": "SHA256-seeded xoshiro128**, planned lineage order, fixed primary draws reused across datasets/assignments; separate lineage stream; interpolated (B-1)*p quantiles",
+    "boundaryProbabilities": [
+      0,
+      0.001,
+      0.01,
+      0.99,
+      0.999,
+      1
+    ]
+  },
+  "identitySHA256": "d9fad1227fb043f094db7f7eb0b5e90bf8c94e57dc9d5995fb5a1766d8b06f40",
+  "certificationEligible": false,
+  "certificationBlockers": [
+    "Candidate design choices require prospective review; full §15 acceptance and material-undercoverage review remain external gates.",
+    "ENGINEERING SMOKE: reduced or explicitly non-certifying run."
+  ],
+  "status": "complete",
+  "started": "2026-10-25T06:35:18.627Z",
+  "updated": "2026-10-25T06:35:20.735Z",
+  "runtime": {
+    "node": "v22.16.0",
+    "workers": 1,
+    "timings": {
+      "fingerprintMs": 22.993855999999997,
+      "checkpointScanMs": 0.7879950000000022,
+      "datasetIOMs": 27.097596000000124,
+      "manifestIOMs": 12.857991000000084,
+      "workerStartupMs": 19.119619999999998
+    }
+  },
+  "boundarySupplements": {
+    "method": "analytic-boundary-supplements-only",
+    "candidateProbabilities": [
+      0,
+      0.001,
+      0.01,
+      0.99,
+      0.999,
+      1
+    ],
+    "uncertainty": "No Monte Carlo error: all probabilities below are analytic.",
+    "cells": [
+      {
+        "split": "pilot",
+        "n": 60,
+        "allFailureInterval": [
+          0,
+          0.05962949228616692
+        ],
+        "allSuccessInterval": [
+          0.9403705077138331,
+          1
+        ],
+        "zeroHardViolationUpper": 0.048702913310097504,
+        "checks": [
+          {
+            "truth": 0,
+            "allFailureProbability": 1,
+            "allSuccessProbability": 0,
+            "allFailureCovers": true,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 0
+          },
+          {
+            "truth": 0.001,
+            "allFailureProbability": 0.9417362622231682,
+            "allSuccessProbability": 1.0000000000000013e-180,
+            "allFailureCovers": true,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 1.0000000000000013e-180
+          },
+          {
+            "truth": 0.01,
+            "allFailureProbability": 0.5471566423907612,
+            "allSuccessProbability": 1.0000000000000012e-120,
+            "allFailureCovers": true,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 1.0000000000000012e-120
+          },
+          {
+            "truth": 0.99,
+            "allFailureProbability": 1.0000000000000533e-120,
+            "allSuccessProbability": 0.5471566423907612,
+            "allFailureCovers": false,
+            "allSuccessCovers": true,
+            "unconditionalNoncoverageContribution": 1.0000000000000533e-120
+          },
+          {
+            "truth": 0.999,
+            "allFailureProbability": 1.0000000000000533e-180,
+            "allSuccessProbability": 0.9417362622231682,
+            "allFailureCovers": false,
+            "allSuccessCovers": true,
+            "unconditionalNoncoverageContribution": 1.0000000000000533e-180
+          },
+          {
+            "truth": 1,
+            "allFailureProbability": 0,
+            "allSuccessProbability": 1,
+            "allFailureCovers": false,
+            "allSuccessCovers": true,
+            "unconditionalNoncoverageContribution": 0
+          }
+        ]
+      },
+      {
+        "split": "pilot",
+        "n": 12,
+        "allFailureInterval": [
+          0,
+          0.2646484693970512
+        ],
+        "allSuccessInterval": [
+          0.7353515306029488,
+          1
+        ],
+        "zeroHardViolationUpper": 0.2209221919455559,
+        "checks": [
+          {
+            "truth": 0,
+            "allFailureProbability": 1,
+            "allSuccessProbability": 0,
+            "allFailureCovers": true,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 0
+          },
+          {
+            "truth": 0.001,
+            "allFailureProbability": 0.9880657804942089,
+            "allSuccessProbability": 1.0000000000000003e-36,
+            "allFailureCovers": true,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 1.0000000000000003e-36
+          },
+          {
+            "truth": 0.01,
+            "allFailureProbability": 0.8863848717161291,
+            "allSuccessProbability": 1.0000000000000003e-24,
+            "allFailureCovers": true,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 1.0000000000000003e-24
+          },
+          {
+            "truth": 0.99,
+            "allFailureProbability": 1.0000000000000108e-24,
+            "allSuccessProbability": 0.8863848717161291,
+            "allFailureCovers": false,
+            "allSuccessCovers": true,
+            "unconditionalNoncoverageContribution": 1.0000000000000108e-24
+          },
+          {
+            "truth": 0.999,
+            "allFailureProbability": 1.0000000000000106e-36,
+            "allSuccessProbability": 0.9880657804942089,
+            "allFailureCovers": false,
+            "allSuccessCovers": true,
+            "unconditionalNoncoverageContribution": 1.0000000000000106e-36
+          },
+          {
+            "truth": 1,
+            "allFailureProbability": 0,
+            "allSuccessProbability": 1,
+            "allFailureCovers": false,
+            "allSuccessCovers": true,
+            "unconditionalNoncoverageContribution": 0
+          }
+        ]
+      },
+      {
+        "split": "development",
+        "n": 200,
+        "allFailureInterval": [
+          0,
+          0.018275340355136248
+        ],
+        "allSuccessInterval": [
+          0.9817246596448638,
+          1
+        ],
+        "zeroHardViolationUpper": 0.014867039231272057,
+        "checks": [
+          {
+            "truth": 0,
+            "allFailureProbability": 1,
+            "allSuccessProbability": 0,
+            "allFailureCovers": true,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 0
+          },
+          {
+            "truth": 0.001,
+            "allFailureProbability": 0.8186488294786356,
+            "allSuccessProbability": 0,
+            "allFailureCovers": true,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 0
+          },
+          {
+            "truth": 0.01,
+            "allFailureProbability": 0.13397967485796172,
+            "allSuccessProbability": 0,
+            "allFailureCovers": true,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 0
+          },
+          {
+            "truth": 0.99,
+            "allFailureProbability": 0,
+            "allSuccessProbability": 0.13397967485796172,
+            "allFailureCovers": false,
+            "allSuccessCovers": true,
+            "unconditionalNoncoverageContribution": 0
+          },
+          {
+            "truth": 0.999,
+            "allFailureProbability": 0,
+            "allSuccessProbability": 0.8186488294786356,
+            "allFailureCovers": false,
+            "allSuccessCovers": true,
+            "unconditionalNoncoverageContribution": 0
+          },
+          {
+            "truth": 1,
+            "allFailureProbability": 0,
+            "allSuccessProbability": 1,
+            "allFailureCovers": false,
+            "allSuccessCovers": true,
+            "unconditionalNoncoverageContribution": 0
+          }
+        ]
+      },
+      {
+        "split": "development",
+        "n": 40,
+        "allFailureInterval": [
+          0,
+          0.0880973028788024
+        ],
+        "allSuccessInterval": [
+          0.9119026971211976,
+          1
+        ],
+        "zeroHardViolationUpper": 0.07215752450551458,
+        "checks": [
+          {
+            "truth": 0,
+            "allFailureProbability": 1,
+            "allSuccessProbability": 0,
+            "allFailureCovers": true,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 0
+          },
+          {
+            "truth": 0.001,
+            "allFailureProbability": 0.9607702107358118,
+            "allSuccessProbability": 1.0000000000000008e-120,
+            "allFailureCovers": true,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 1.0000000000000008e-120
+          },
+          {
+            "truth": 0.01,
+            "allFailureProbability": 0.6689717585696803,
+            "allSuccessProbability": 1.0000000000000009e-80,
+            "allFailureCovers": true,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 1.0000000000000009e-80
+          },
+          {
+            "truth": 0.99,
+            "allFailureProbability": 1.0000000000000355e-80,
+            "allSuccessProbability": 0.6689717585696803,
+            "allFailureCovers": false,
+            "allSuccessCovers": true,
+            "unconditionalNoncoverageContribution": 1.0000000000000355e-80
+          },
+          {
+            "truth": 0.999,
+            "allFailureProbability": 1.0000000000000356e-120,
+            "allSuccessProbability": 0.9607702107358118,
+            "allFailureCovers": false,
+            "allSuccessCovers": true,
+            "unconditionalNoncoverageContribution": 1.0000000000000356e-120
+          },
+          {
+            "truth": 1,
+            "allFailureProbability": 0,
+            "allSuccessProbability": 1,
+            "allFailureCovers": false,
+            "allSuccessCovers": true,
+            "unconditionalNoncoverageContribution": 0
+          }
+        ]
+      },
+      {
+        "split": "test",
+        "n": 1600,
+        "allFailureInterval": [
+          0,
+          0.0023028939205774366
+        ],
+        "allSuccessInterval": [
+          0.9976971060794225,
+          1
+        ],
+        "zeroHardViolationUpper": 0.001870580949594798,
+        "checks": [
+          {
+            "truth": 0,
+            "allFailureProbability": 1,
+            "allSuccessProbability": 0,
+            "allFailureCovers": true,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 0
+          },
+          {
+            "truth": 0.001,
+            "allFailureProbability": 0.20173495769715533,
+            "allSuccessProbability": 0,
+            "allFailureCovers": true,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 0
+          },
+          {
+            "truth": 0.01,
+            "allFailureProbability": 1.0382725114012101e-7,
+            "allSuccessProbability": 0,
+            "allFailureCovers": false,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 1.0382725114012101e-7
+          },
+          {
+            "truth": 0.99,
+            "allFailureProbability": 0,
+            "allSuccessProbability": 1.0382725114012101e-7,
+            "allFailureCovers": false,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 1.0382725114012101e-7
+          },
+          {
+            "truth": 0.999,
+            "allFailureProbability": 0,
+            "allSuccessProbability": 0.20173495769715533,
+            "allFailureCovers": false,
+            "allSuccessCovers": true,
+            "unconditionalNoncoverageContribution": 0
+          },
+          {
+            "truth": 1,
+            "allFailureProbability": 0,
+            "allSuccessProbability": 1,
+            "allFailureCovers": false,
+            "allSuccessCovers": true,
+            "unconditionalNoncoverageContribution": 0
+          }
+        ]
+      },
+      {
+        "split": "test",
+        "n": 320,
+        "allFailureInterval": [
+          0,
+          0.011461558388074888
+        ],
+        "allSuccessInterval": [
+          0.9885384416119252,
+          1
+        ],
+        "zeroHardViolationUpper": 0.009317979408884075,
+        "checks": [
+          {
+            "truth": 0,
+            "allFailureProbability": 1,
+            "allSuccessProbability": 0,
+            "allFailureCovers": true,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 0
+          },
+          {
+            "truth": 0.001,
+            "allFailureProbability": 0.7260327850203405,
+            "allSuccessProbability": 0,
+            "allFailureCovers": true,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 0
+          },
+          {
+            "truth": 0.01,
+            "allFailureProbability": 0.040110887486875496,
+            "allSuccessProbability": 0,
+            "allFailureCovers": true,
+            "allSuccessCovers": false,
+            "unconditionalNoncoverageContribution": 0
+          },
+          {
+            "truth": 0.99,
+            "allFailureProbability": 0,
+            "allSuccessProbability": 0.040110887486875496,
+            "allFailureCovers": false,
+            "allSuccessCovers": true,
+            "unconditionalNoncoverageContribution": 0
+          },
+          {
+            "truth": 0.999,
+            "allFailureProbability": 0,
+            "allSuccessProbability": 0.7260327850203405,
+            "allFailureCovers": false,
+            "allSuccessCovers": true,
+            "unconditionalNoncoverageContribution": 0
+          },
+          {
+            "truth": 1,
+            "allFailureProbability": 0,
+            "allSuccessProbability": 1,
+            "allFailureCovers": false,
+            "allSuccessCovers": true,
+            "unconditionalNoncoverageContribution": 0
+          }
+        ]
+      }
+    ]
+  },
+  "interrupted": false
+}

@@ -1,0 +1,145 @@
+{
+  "status": "ENGINEERING THROUGHPUT ONLY; NOT A VALIDATION CERTIFICATE",
+  "measuredAt": "2026-10-25T06:35:20.808Z",
+  "implementationSHA256": "72eb59258e9b7ea87f970bae14f1f3617dfa1cb91ff45349cacbe589adc3e1df",
+  "node": "v22.16.0",
+  "nice": 10,
+  "workers": 1,
+  "peakRSSKiB": 111220,
+  "host": {
+    "logicalCPUs": 32,
+    "cpu": "AMD Ryzen 9 9950X 16-Core Processor",
+    "totalMemoryBytes": 42058170368
+  },
+  "wallMs": 2136.865014,
+  "measurements": [
+    {
+      "cell": {
+        "kind": "power",
+        "split": "test",
+        "effect": 0,
+        "discordance": 0.5,
+        "icc": 0.1,
+        "guardHarm": false,
+        "id": "power-d0-q0.5-icc0.1-benign"
+      },
+      "generationMs": 2.684869000000006,
+      "primaryMs": 233.240188,
+      "lineageMs": 69.44628700000004,
+      "bytes": 800000
+    },
+    {
+      "cell": {
+        "kind": "power",
+        "split": "test",
+        "effect": 0.05,
+        "discordance": 0.3,
+        "icc": 0,
+        "guardHarm": false,
+        "id": "power-d0.05-q0.3-icc0-benign"
+      },
+      "generationMs": 0.8001049999999736,
+      "primaryMs": 292.03360899999996,
+      "lineageMs": 77.78391999999997,
+      "bytes": 800000
+    },
+    {
+      "cell": {
+        "kind": "power",
+        "split": "test",
+        "effect": 0.08,
+        "discordance": 0.5,
+        "icc": 0.3,
+        "guardHarm": true,
+        "id": "power-d0.08-q0.5-icc0.3-harm"
+      },
+      "generationMs": 0.7826649999999518,
+      "primaryMs": 289.89604399999996,
+      "lineageMs": 74.318986,
+      "bytes": 800000
+    },
+    {
+      "cell": {
+        "kind": "coverage",
+        "split": "pilot",
+        "distribution": "heteroscedastic-normal",
+        "id": "coverage-pilot-heteroscedastic-normal"
+      },
+      "generationMs": 0.7187830000000304,
+      "primaryMs": 55.03487300000006,
+      "lineageMs": 0.0021099999999023566,
+      "bytes": 1040000
+    },
+    {
+      "cell": {
+        "kind": "coverage",
+        "split": "development",
+        "distribution": "heteroscedastic-normal",
+        "id": "coverage-development-heteroscedastic-normal"
+      },
+      "generationMs": 1.0405190000001312,
+      "primaryMs": 119.79081399999995,
+      "lineageMs": 0.0013899999999011925,
+      "bytes": 1040000
+    },
+    {
+      "cell": {
+        "kind": "coverage",
+        "split": "test",
+        "distribution": "heteroscedastic-normal",
+        "id": "coverage-test-heteroscedastic-normal"
+      },
+      "generationMs": 4.542666999999938,
+      "primaryMs": 812.046143,
+      "lineageMs": 0.003030000000308064,
+      "bytes": 1040000
+    }
+  ],
+  "measuredRuntime": {
+    "fingerprintMs": 22.993855999999997,
+    "checkpointScanMs": 0.7879950000000022,
+    "datasetIOMs": 27.097596000000124,
+    "manifestIOMs": 13.798218000000134,
+    "workerStartupMs": 19.119619999999998
+  },
+  "judgmentOptimization": {
+    "wallMs": 64.15832900000032,
+    "keys": 8,
+    "budget": 1,
+    "assignments": 9,
+    "parentScenarios": 1,
+    "drawsPerAssignment": 10000,
+    "note": "Synthetic exact-optimization throughput only; exponential key-space scaling forbids a production projection without a frozen key registry."
+  },
+  "observedMeansMs": {
+    "correctedPower": 271.7232803333333,
+    "lineagePower": 73.849731,
+    "coverage": 328.9572766666667,
+    "overheadPerDataset": 17.116335333333343,
+    "steadyOverheadPerDataset": 10.097422666666679
+  },
+  "projection": {
+    "powerDatasets": 120000,
+    "primaryReplicates": 1200000000,
+    "lineageReplicates": 1200000000,
+    "coverageDatasets": 24000,
+    "coverageReplicates": 240000000,
+    "serialResamplingHours": 13.712148888888885,
+    "generationHours": 0.061422586666666126,
+    "ioAndRunnerHours": 0.4038969066666671,
+    "fixedStartupHours": 0.000011698187777777775,
+    "serialTotalHours": 14.177480080409996,
+    "planningHours": 36,
+    "fourWorkerIdealHours": 3.5443670955555544,
+    "retainedReplicateBytes": 120960000000,
+    "exclusions": [
+      "Production judgment-error optimization, adjudication/subscription benchmarking, audit/review, shared-machine contention; four-worker speedup is unmeasured."
+    ],
+    "caveats": [
+      "Six full-draw datasets, one per selected cell; noisy throughput, not full-cell validation.",
+      "Coverage projection uses three normal cells (one per allocation); binary distribution timing can differ.",
+      "Fixed fingerprint/worker startup separated from projected steady overhead; checkpoint scan and growing manifests on the full run can be slower.",
+      "I/O phases include encoding, hashing and filesystem calls; hot-cache microbenchmarks do not guarantee sustained disk throughput."
+    ]
+  }
+}
