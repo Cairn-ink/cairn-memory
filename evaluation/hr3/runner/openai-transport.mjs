@@ -54,7 +54,10 @@ export class OpenAITransport {
     try { body = await response.json(); } catch { throw new TransportError('unreadable_body'); }
     if (!response.ok) {
       // A 4xx other than 429 is a contract error: the harness stops rather than retrying.
-      const error = new Error(`provider_rejected_${response.status}`);
+      // The provider's message describes the request, never the key; keeping it
+      // makes a rejected run diagnosable without a further paid probe.
+      const detail = String(body?.error?.message ?? '').slice(0, 300);
+      const error = new Error(`provider_rejected_${response.status}${detail ? `: ${detail}` : ''}`);
       error.providerCode = body?.error?.code ?? body?.error?.type ?? null;
       throw error;
     }

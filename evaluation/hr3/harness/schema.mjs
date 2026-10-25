@@ -18,14 +18,15 @@ export function providerSchema(schema) {
   const out=JSON.parse(JSON.stringify(schema, (key,value)=>key==='$schema'||key==='title'?undefined:value));
   function visit(v) {if(!v||typeof v!=='object')return;if(v.oneOf){v.anyOf=v.oneOf;delete v.oneOf;}if(v.enum&&!v.type)v.type=typeof v.enum[0];if(Object.hasOwn(v,'const')&&!v.type)v.type=v.const===null?'null':Number.isInteger(v.const)?'integer':typeof v.const;for(const child of Object.values(v))visit(child);}
   visit(out);
-  // Annotate union and reference nodes too, without changing their alternatives.
+  // Annotate plain nodes only: OpenAI strict mode rejects `type` beside `$ref`
+  // and accepts `anyOf` unions without a top-level `type`.
   function types(node) {
     if(node.type)return Array.isArray(node.type)?node.type:[node.type];
     if(node.$ref)return types(out.$defs[node.$ref.split('/').at(-1)]);
     return [...new Set((node.anyOf??[]).flatMap(types))];
   }
   function annotate(node) {
-    if(!node.type){const inferred=types(node);if(!inferred.length)fail('provider_schema_type');node.type=inferred.length===1?inferred[0]:inferred;}
+    if(!node.type&&!node.$ref&&!node.anyOf){const inferred=types(node);if(!inferred.length)fail('provider_schema_type');node.type=inferred.length===1?inferred[0]:inferred;}
     for(const child of Object.values(node.properties??{}))annotate(child);
     if(node.items)annotate(node.items);
     for(const child of node.anyOf??[])annotate(child);

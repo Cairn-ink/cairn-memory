@@ -1,0 +1,30 @@
+{
+  "version": "hr3-preparation-charge-v1",
+  "stage": "pilot",
+  "embeddingUnits": {
+    "research": 0,
+    "product": 0
+  },
+  "source": "Primary attests this additional preparation inventory and observed usage on 2026-10-25; no dispatch by this offline recovery.",
+  "charge_id": "prep-rejected-probes-after-pilot2-2026-10-25",
+  "settledNanodollars": 0,
+  "outstandingNanodollars": 0,
+  "dispatches": [
+    {
+      "kind": "schema_rejection",
+      "purpose": "Schema probe before the successful acceptance probes",
+      "requests": 1,
+      "httpStatus": 400,
+      "unbilled": true,
+      "settledNanodollars": 0
+    },
+    {
+      "kind": "schema_rejection",
+      "purpose": "Schema probe before the successful acceptance probes",
+      "requests": 1,
+      "httpStatus": 400,
+      "unbilled": true,
+      "settledNanodollars": 0
+    }
+  ]
+}

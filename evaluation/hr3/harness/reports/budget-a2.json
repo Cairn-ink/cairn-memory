@@ -13,20 +13,20 @@
   "a3PilotRerun": {
     "carryForward": {
       "path": "evaluation/hr3/harness/reports/a3-carry-forward.json",
-      "sha256": "3627dec5c16ffdd79f782229d1ecc83f09bf69377d31f2791ce586902931e3b7"
+      "sha256": "8a133069ea1851e49f75db199253ec3a5576be33ac58ff0a089afffe24745e28"
     },
-    "priorSettledNanodollars": 835956660,
-    "priorOutstandingNanodollars": 12667200,
-    "priorExposureNanodollars": 848623860,
+    "priorSettledNanodollars": 836664260,
+    "priorOutstandingNanodollars": 25576400,
+    "priorExposureNanodollars": 862240660,
     "priorEmbeddingUnits": {
       "research": 174846,
       "product": 68457
     },
     "remainingEmbeddingNanodollars": 2555133940,
-    "remainingPilotAllowanceNanodollars": 23151376140,
+    "remainingPilotAllowanceNanodollars": 23137759340,
     "freshResponseCeilingNanodollars": 20582400000,
-    "combinedConservativeNanodollars": 23986157800,
-    "combinedConservativeUSD": 23.9861578,
+    "combinedConservativeNanodollars": 23999774600,
+    "combinedConservativeUSD": 23.9997746,
     "limitUSD": 24,
     "preparationComplete": true,
     "preparationDispatches": [
@@ -75,9 +75,64 @@
         "httpStatus": 400,
         "unbilled": true,
         "settledNanodollars": 0
+      },
+      {
+        "receipt": "prep-schema-probes-after-pilot2-2026-10-25",
+        "kind": "schema_probe",
+        "requests": 1,
+        "model": "gpt-4.1-mini-2025-04-14",
+        "max_output_tokens": 16,
+        "usage": {
+          "inputTokens": 934,
+          "outputTokens": 5
+        },
+        "inputRateNanodollars": 400,
+        "outputRateNanodollars": 1600,
+        "settledNanodollars": 381600
+      },
+      {
+        "receipt": "prep-schema-probes-after-pilot2-2026-10-25",
+        "kind": "schema_probe",
+        "requests": 1,
+        "model": "gpt-4.1-mini-2025-04-14",
+        "max_output_tokens": 16,
+        "usage": {
+          "inputTokens": 751,
+          "outputTokens": 16
+        },
+        "inputRateNanodollars": 400,
+        "outputRateNanodollars": 1600,
+        "settledNanodollars": 326000
+      },
+      {
+        "receipt": "prep-rejected-probes-after-pilot2-2026-10-25",
+        "kind": "schema_rejection",
+        "purpose": "Schema probe before the successful acceptance probes",
+        "requests": 1,
+        "httpStatus": 400,
+        "unbilled": true,
+        "settledNanodollars": 0
+      },
+      {
+        "receipt": "prep-rejected-probes-after-pilot2-2026-10-25",
+        "kind": "schema_rejection",
+        "purpose": "Schema probe before the successful acceptance probes",
+        "requests": 1,
+        "httpStatus": 400,
+        "unbilled": true,
+        "settledNanodollars": 0
+      },
+      {
+        "receipt": "prep-pilot2-rejection-2026-10-25",
+        "kind": "schema_rejection",
+        "purpose": "First request in pilot2-a142e20b",
+        "requests": 1,
+        "httpStatus": 400,
+        "unbilled": true,
+        "settledNanodollars": 0
       }
     ],
-    "preparationAttestation": "Primary attests completeness: two schema probes, three unbilled model-availability lookups, and the single unbilled rejection already represented by its carried reservation.",
+    "preparationAttestation": "Primary attests completeness through the pilot2-a142e20b recovery on 2026-10-25: four accepted schema probes with exact usage and two separate US$0.001 holds; two further HTTP 400 unbilled schema probes; three unbilled model-availability lookups; and both unbilled paid-attempt rejections, whose outstanding reservations remain carried in full. Earlier exposure and preparation receipts are inherited once through the hash-verified archived manifest.",
     "scope": "Complete verified prior exposure",
     "pass": true,
     "realRerunAllowed": true,
@@ -109,9 +164,9 @@
     "evaluation/hr3/protocol/protocol-v0.3.4.md": "639c55edb6633186580af434ee2fe3ed39bffc2bf36a9292dac03b7a1b20b3cc",
     "evaluation/hr3/protocol/errata.md": "758af3ad956f1187a8d34477e5c724e623fdebd097cb118c770e65d3fb1a26c9",
     "evaluation/hr3/harness/budget-a2.mjs": "3265337ff2c9b304f49a0ad1ac8417d69c2b9f1bae00e99ed5f2c8327781f989",
-    "evaluation/hr3/harness/accounting.mjs": "fffd4dad3f57d44a57879b5529d58f1323bd9945fba0d6b5bc942555d9617ea0",
-    "evaluation/hr3/harness/reports/a3-carry-forward.json": "3627dec5c16ffdd79f782229d1ecc83f09bf69377d31f2791ce586902931e3b7",
-    "evaluation/hr3/harness/reports/request-certification-a3.json": "fefccf0223e9851e278c452b586879a404c938cdd53e0a52e02ed6518da0938d",
+    "evaluation/hr3/harness/accounting.mjs": "8432123e2812b17033803c2ca633d0cab4933e781c1b0107bbcfbb7ee132258b",
+    "evaluation/hr3/harness/reports/a3-carry-forward.json": "8a133069ea1851e49f75db199253ec3a5576be33ac58ff0a089afffe24745e28",
+    "evaluation/hr3/harness/reports/request-certification-a3.json": "2d164c9def61cf381a067fd265085b5e2cb72f7c1f2d121014f77ae7472ce165",
     "evaluation/hr3/harness/requests.mjs": "6372f7ca96800a2ef409f892bd0674c76256361072afe3549f642eb33a22fd2b",
     "evaluation/hr3/harness/ledger.mjs": "aff48f3c4093c7de9e71031c2d976e033ff4599f2b9ee2972f71601c7a13bc4d",
     "evaluation/hr3/harness/projection-schema.mjs": "6d1c9e0f24674d74f96221086dffdb19cc9e20f959cfe2129e49c9428d6372cc",

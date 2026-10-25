@@ -1,0 +1,27 @@
+{
+  "version": "hr3-preparation-charge-v1",
+  "stage": "pilot",
+  "embeddingUnits": {
+    "research": 0,
+    "product": 0
+  },
+  "source": "Primary attests this additional preparation inventory and observed usage on 2026-10-25; no dispatch by this offline recovery.",
+  "charge_id": "prep-pilot2-rejection-2026-10-25",
+  "settledNanodollars": 0,
+  "outstandingNanodollars": 0,
+  "carriedReservation": {
+    "ledgerSHA256": "d79b12d2d4c24c4c2e129f3afbd19b349b44947aa870d436dcbc4a8643c24a19",
+    "reservationId": "pilot-correction-L01-W1/extract/1/attempt-0",
+    "accounting": "The full 11909200-nanodollar reservation is carried by the ledger; this unbilled receipt adds no duplicate charge or hold."
+  },
+  "dispatches": [
+    {
+      "kind": "schema_rejection",
+      "purpose": "First request in pilot2-a142e20b",
+      "requests": 1,
+      "httpStatus": 400,
+      "unbilled": true,
+      "settledNanodollars": 0
+    }
+  ]
+}

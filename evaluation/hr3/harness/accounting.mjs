@@ -79,6 +79,9 @@ function verifiedBytes(spec) {
 }
 
 export function loadCarryForward(path,active=new Set()) {
+  return loadManifest(path,active);
+}
+function loadManifest(path,active,historicalLocator=null) {
   const manifestBytes=readFileSync(path),manifestHash=hash(manifestBytes);
   check(!active.has(manifestHash),'source_cycle');active=new Set([...active,manifestHash]);
   const input=JSON.parse(manifestBytes);
@@ -98,9 +101,16 @@ export function loadCarryForward(path,active=new Set()) {
     const raw=verifiedBytes(spec),record=auditLedger(raw.toString());
     const carried=record.events[0].configuration.carryForward;
     if(carried){
-      const rebuilt=loadCarryForward(relativePath(carried.manifestPath),active);
+      // A later manifest may supersede the original locator. Verify immutable
+      // archived bytes against the ledger's pinned manifest hash, retaining its
+      // historical locator solely to reproduce the original snapshot exactly.
+      const ancestor=spec.inheritedManifest;
+      if(ancestor){verifiedBytes(ancestor);check(ancestor.sha256===carried.manifestSHA256,'inherited_manifest_hash');relativePath(carried.manifestPath);}
+      const rebuilt=ancestor?loadManifest(relativePath(ancestor.path),active,carried.manifestPath):loadManifest(relativePath(carried.manifestPath),active);
       check(canonical(rebuilt)===canonical(carried),'inherited_snapshot_mismatch');
-    }
+      check(!input.preparation.complete||rebuilt.preparationComplete,'incomplete_ancestor_preparation');
+      preparationDispatches.push(...rebuilt.preparationDispatches);
+    } else check(!spec.inheritedManifest,'unexpected_inherited_manifest');
     merge(record.exposure,spec.sha256);sources.push({...spec,kind:'ledger'});
   }
   for(const spec of input.preparation.receipts) {
@@ -135,7 +145,7 @@ export function loadCarryForward(path,active=new Set()) {
   exposure.total=sum([exposure.settled,exposure.outstanding]);exposure.sourceHashes=[...used].sort();
   // Keep only a repository-relative manifest locator in durable artifacts.
   const absolute=path instanceof URL?fileURLToPath(path):resolve(path);check(absolute.startsWith(resolve(repo)+'/'),'manifest_must_be_in_repository');
-  const relative=absolute.slice(resolve(repo).length+1);
+  const relative=historicalLocator??absolute.slice(resolve(repo).length+1);
   if(input.preparation.dispatchCount!==undefined)check(input.preparation.dispatchCount===sum(preparationDispatches.map(d=>d.requests)),'preparation_dispatch_count');
   const data={version:'hr3-carry-forward-snapshot-v1',manifestPath:relative,manifestSHA256:manifestHash,sources,preparationComplete:input.preparation.complete,
     preparationAttestation:input.preparation.attestation??null,preparationDispatches,exposure};

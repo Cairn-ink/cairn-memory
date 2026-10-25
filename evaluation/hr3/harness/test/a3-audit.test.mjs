@@ -44,11 +44,30 @@ test('extraction overlaps are supported while reader overlap ambiguity remains u
 });
 
 test('hash-verified first-pilot ledger reproduces exact settlement and consumed embedding units',()=>{
-  const m=JSON.parse(readFileSync(carryPath)),source=m.ledgers.find(s=>s.sha256===FIRST_PILOT_LEDGER_SHA256);assert.ok(source);
+  const m=JSON.parse(readFileSync('evaluation/hr3/harness/reports/a3-carry-forward-pre-pilot2.json')),source=m.ledgers.find(s=>s.sha256===FIRST_PILOT_LEDGER_SHA256);assert.ok(source);
   const raw=readFileSync(source.path),a=auditLedger(raw.toString());assert.equal(hash(raw),source.sha256);
   assert.equal(a.exposure.settled,835244260);assert.equal(a.exposure.outstanding,0);
   assert.deepEqual(a.exposure.embedding,{research:174846,product:68457});assert.equal(a.exposure.reservations,1985);
-  const c=loadCarryForward(carryPath);assert.equal(c.exposure.total,848623860);assert.equal(c.exposure.outstanding,12667200);
+  const c=loadCarryForward(carryPath);assert.equal(c.exposure.total,862240660);assert.equal(c.exposure.outstanding,25576400);
+});
+
+test('second paid-attempt reservation and archived ancestry are carried exactly once with complete preparation',t=>{
+  const m=JSON.parse(readFileSync(carryPath)),source=m.ledgers[0],raw=readFileSync(source.path),ledger=auditLedger(raw.toString());
+  assert.equal(hash(raw),'d79b12d2d4c24c4c2e129f3afbd19b349b44947aa870d436dcbc4a8643c24a19');
+  assert.equal(ledger.events.length,3);assert.equal(ledger.events[1].id,'pilot-correction-L01-W1/extract/1/attempt-0');
+  assert.equal(ledger.events[1].reserved,11909200);assert.equal(ledger.exposure.total,848623860+11909200);
+  assert.equal(hash(readFileSync(source.inheritedManifest.path)),ledger.events[0].configuration.carryForward.manifestSHA256);
+  const c=loadCarryForward(carryPath);
+  assert.equal(c.exposure.settled,835244260+712400+707600);
+  assert.equal(c.exposure.outstanding,11667200+11909200+2*1000000);
+  assert.equal(c.exposure.reservations,1987);assert.equal(c.exposure.unsettled.length,4);
+  assert.deepEqual(c.exposure.embedding,{research:174846,product:68457});
+  assert.equal(c.preparationDispatches.reduce((n,d)=>n+d.requests,0),11);
+  assert.equal(c.preparationDispatches.filter(d=>d.kind==='schema_rejection').reduce((n,d)=>n+d.requests,0),4);
+  const dir=scratch(t),bad=structuredClone(m);bad.ledgers[0].inheritedManifest.sha256='0'.repeat(64);
+  const badPath=join(dir,'bad-ancestor.json');save(badPath,bad);assert.throws(()=>loadCarryForward(badPath),/source_hash_mismatch/);
+  const old=JSON.parse(readFileSync(source.inheritedManifest.path));
+  assert.throws(()=>loadCarryForward(manifest(dir,[source,...old.ledgers])),/duplicate_or_overlapping/);
 });
 
 test('fresh ledger and restarts preserve settled charges, outstanding reservations and embedding counters',t=>{
@@ -88,7 +107,7 @@ test('carry input rejects changed hashes, broken arithmetic, duplicate sources a
 test('hash-verified exact preparation receipts participate in cumulative spending and units',t=>{
   const dir=scratch(t),receipt=join(dir,'receipt.json');save(receipt,{version:'hr3-preparation-charge-v1',charge_id:'synthetic-preparation-receipt',stage:'pilot',settledNanodollars:700001,outstandingNanodollars:321,embeddingUnits:{research:17,product:0}});
   const m=JSON.parse(readFileSync(carryPath)),path=manifest(dir,m.ledgers,{complete:true,receipts:[spec(receipt)]}),c=loadCarryForward(path);
-  assert.equal(c.preparationComplete,true);assert.equal(c.exposure.total,846911460+700001+321);assert.equal(c.exposure.embedding.research,174846+17);
+  assert.equal(c.preparationComplete,true);assert.equal(c.exposure.total,860533060+700001+321);assert.equal(c.exposure.embedding.research,174846+17);
   const l=new Ledger(join(dir,'ledger.jsonl'),{plan,carryForward:path});assert.equal(l.snapshot().total,c.exposure.total);
 });
 

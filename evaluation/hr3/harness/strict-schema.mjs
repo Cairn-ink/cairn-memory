@@ -10,15 +10,21 @@ export function checkStrictSchema(schema) {
   let nodes=0,objects=0;
   function visit(node,path) {
     nodes++;
-    const types=Array.isArray(node.type)?node.type:[node.type];
-    assert.ok(types.length&&types.every(t=>['object','array','string','integer','number','boolean','null'].includes(t)),`${path}: type required`);
+    assert.ok(node&&typeof node==='object'&&!Array.isArray(node),`${path}: schema object required`);
     assert.equal(node.oneOf,undefined,`${path}: use anyOf`);
-    if(types.includes('object')&&!node.$ref&&!node.anyOf) {
+    if(Object.hasOwn(node,'$ref')) {
+      assert.deepEqual(Object.keys(node),['$ref'],`${path}: $ref must have no sibling keywords`);
+      assert.ok(typeof node.$ref==='string'&&node.$ref.startsWith('#/$defs/')&&schema.$defs?.[node.$ref.slice(8)],`${path}: dangling ref`);
+      return;
+    }
+    const types=Array.isArray(node.type)?node.type:[node.type];
+    if(Object.hasOwn(node,'anyOf'))assert.ok(Array.isArray(node.anyOf)&&node.anyOf.length>0,`${path}: nonempty anyOf required`);
+    if(!node.anyOf||Object.hasOwn(node,'type'))assert.ok(types.length&&types.every(t=>['object','array','string','integer','number','boolean','null'].includes(t)),`${path}: type required`);
+    if(types.includes('object')) {
       objects++;
       assert.equal(node.additionalProperties,false,`${path}: closed object required`);
       assert.deepEqual([...(node.required??[])].sort(),Object.keys(node.properties??{}).sort(),`${path}: all properties required`);
     }
-    if(node.$ref)assert.ok(schema.$defs?.[node.$ref.split('/').at(-1)],`${path}: dangling ref`);
     for(const [key,child] of Object.entries(node.properties??{}))visit(child,`${path}/properties/${key}`);
     for(const [key,child] of Object.entries(node.$defs??{}))visit(child,`${path}/$defs/${key}`);
     if(node.items)visit(node.items,`${path}/items`);

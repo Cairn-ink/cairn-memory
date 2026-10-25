@@ -41,7 +41,7 @@ test('revised A-2 binds pilot fit while envelope coverage and later-stage feasib
  assert.equal(r.laterStageFeasibility.completionCeilingUSD,400);assert.equal(r.laterStageFeasibility.allStageLimitsRequired,true);
  assert.equal(r.stageLimitProposal.status,'deferred_to_continuation_projection');assert.equal(r.stageLimitProposal.applied,false);
  assert.equal(r.laterStageFeasibility.completeTestRequired,true);assert.equal(r.laterStageFeasibility.budgetExhaustionOutcome,'Inconclusive');
- assert.equal(r.a3PilotRerun.combinedConservativeUSD,23.9861578);assert.equal(r.a3PilotRerun.pass,true);assert.equal(r.a3PilotRerun.priorSettledNanodollars,835956660);assert.equal(r.a3PilotRerun.priorOutstandingNanodollars,12667200);assert.equal(r.a3PilotRerun.pooled,false);assert.equal(r.a3PilotRerun.realRerunAllowed,true);assert.equal(r.a3PilotRerun.preparationComplete,true);
+ assert.equal(r.a3PilotRerun.combinedConservativeUSD,23.9997746);assert.equal(r.a3PilotRerun.pass,true);assert.equal(r.a3PilotRerun.priorSettledNanodollars,836664260);assert.equal(r.a3PilotRerun.priorOutstandingNanodollars,25576400);assert.equal(r.a3PilotRerun.pooled,false);assert.equal(r.a3PilotRerun.realRerunAllowed,true);assert.equal(r.a3PilotRerun.preparationComplete,true);assert.equal(24000000000-r.a3PilotRerun.combinedConservativeNanodollars,225400);
  assert.equal(r.paidReadiness,false);assert.deepEqual(['pilot','development','test','alternative'].map(s=>CAPS[s]),[24,46,345,45]);
 });
 

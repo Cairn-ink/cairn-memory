@@ -2,7 +2,7 @@
 
 **Binding pre-pilot budget gate: PASS.** Pilot responses $20.582400 + the entire shared embedding allowance $2.560000 = **$23.142400**, below $24 by $0.857600. This is budget fit only; certification and other scientific/resource gates remain separate.
 
-**A-3 combined pilot ceiling (complete verified exposure):** settled 0.835956660 USD + outstanding 0.012667200 USD + fresh responses 20.582400000 USD + remaining shared embeddings 2.555133940 USD = **23.986157800 USD**, within the shared $24 cap. Preparation completeness: **verified**. All amounts derive from hash-verified ledger arithmetic, not the rounded $0.84. Embedding units already reserved are not restored. Runs are separate; this is not spending authorization.
+**A-3 combined pilot ceiling (complete verified exposure):** settled 0.836664260 USD + outstanding 0.025576400 USD + fresh responses 20.582400000 USD + remaining shared embeddings 2.555133940 USD = **23.999774600 USD**, within the shared $24 cap. Preparation completeness: **verified**. All amounts derive from hash-verified ledger arithmetic, not the rounded $0.84. Embedding units already reserved are not restored. Runs are separate; this is not spending authorization.
 
 | Stage | Calls extraction / reader | Planned cost | Theoretical all-maximum-plus-retry envelope | Existing stage limit |
 |---|---:|---:|---:|---:|

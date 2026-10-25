@@ -294,8 +294,11 @@ Prompt changes cover only revised E-1 and the extraction quote-format
 instruction; the stale request for model-computed offsets is removed. Models,
 output caps, policies,
 scorer, arms, and development/test materials retain their frozen definitions.
-`strict-schema.mjs` checks every schema node's type, closed concrete objects,
-required properties, references and `anyOf` offline; it makes no provider call.
+`strict-schema.mjs` requires types on plain schema nodes, pure `$ref` nodes
+without sibling keywords, closed objects and all properties required. `anyOf`
+unions may omit a top-level type; their alternatives are checked recursively.
+Regression tests cover the observed untyped-const and typed-ref rejections.
+This is an offline structural check; it makes no provider call.
 The A-3 combined pilot budget now uses exact hash-verified ledger exposure.
 
 `request-certification.mjs` certifies complete provider JSON bodies, including
@@ -430,3 +433,24 @@ renaming private labels leaves every arm's serialized evidence identical, and
 all family candidates at a fixed source position share the same alias. Source
 order is the only information exposed by these aliases. The internal state JSON
 in the hand-worked references remains identical; only serializer hashes change.
+
+The schema-rejected second attempt `pilot2-a142e20b` is retained byte-for-byte as
+`test/fixtures/pilot2-a142e20b-ledger.jsonl`. Its first-request reservation of
+11,909,200 nanodollars remains outstanding despite the primary's unbilled HTTP
+400 receipt. That ledger already includes the earlier carry-forward snapshot.
+The current manifest therefore carries this cumulative ledger once, with its
+`inheritedManifest` pointing to the hash-pinned
+`reports/a3-carry-forward-pre-pilot2.json`. The loader verifies the archived
+manifest against the immutable ledger configuration, rebuilds its historical
+snapshot exactly, and rejects overlapping ancestry. Earlier preparation
+receipts remain in the dispatch inventory without being charged a second time.
+
+The primary attests completeness through this recovery: four accepted schema
+probes, three unbilled availability lookups, two unbilled rejected schema probes,
+and both unbilled paid-attempt rejections. The newly accepted probes used input/
+output 934/5 and 751/16, costing exactly 707,600 nanodollars, plus a separate
+1,000,000-nanodollar hold. Both earlier holds/reservations remain carried.
+Combined settled exposure is 836,664,260 nanodollars and outstanding exposure
+is 25,576,400. The full response ceiling and remaining shared embedding allowance
+produce a combined ceiling of $23.999774600, leaving $0.000225400 below $24.
+No requirement, retry allowance, or reservation limit was reduced.

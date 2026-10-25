@@ -216,7 +216,7 @@
     "evaluation/hr3/generator/reason-strata.mjs": "11e2c8721122005b68e27c0e07ad92efdf77ce3fe212cc97f8f2577027f3f60a",
     "evaluation/hr3/generator/test/generator.test.mjs": "82751f09f3a9ded99e633be566e816d52f224213f89ed39c33be475c5eb443e6",
     "evaluation/hr3/generator/validate.mjs": "b5750ff19521a6a52aec558561decdb42e3480937bd1ceb11a9b18cba9f68dde",
-    "evaluation/hr3/harness/schema.mjs": "b18f970de887fbb50b50dad7d4db993dbb06e60cb0ae7779266555bed3985fab",
+    "evaluation/hr3/harness/schema.mjs": "332de0a284ea511f343f7ee2d4cc2d79103619a97ccf647f5a78c4a48b31b98d",
     "evaluation/hr3/harness/requests.mjs": "6372f7ca96800a2ef409f892bd0674c76256361072afe3549f642eb33a22fd2b",
     "evaluation/hr3/harness/inputs.mjs": "91979fe5de95a8e310cbef47542874edee824eb4ccbf2b4fdc0fd401acb1feb0",
     "evaluation/hr3/harness/extraction.mjs": "9e9b7d1a44c0427b5a8c0f4312bc20431ccb9fcb026c48fb3abb5315483caa29",

@@ -7,7 +7,7 @@ import {replayA3} from '../replay-a3.mjs';
 import {extractionDiagnostics} from '../extraction-diagnostics.mjs';
 import {EXTRACTION_PROMPT,READER_PROMPT} from '../requests.mjs';
 
-test('both provider schemas give every schema node a type and close every concrete object',()=>{
+test('both provider schemas type plain nodes, isolate refs, allow untyped unions and close objects',()=>{
   for(const schema of [extractionSchema,answerSchema]) {
     const before=structuredClone(schema),encoded=providerSchema(schema);
     assert.ok(checkStrictSchema(encoded).nodes>30);assert.deepEqual(schema,before);
@@ -16,6 +16,19 @@ test('both provider schemas give every schema node a type and close every concre
     const optional=structuredClone(encoded);optional.required=[];assert.throws(()=>checkStrictSchema(optional),/all properties required/);
   }
   assert.deepEqual(Object.keys(extractionSchema.properties.events.items.properties.source_quotes.items.properties),['turn_id','quote','occurrence']);
+});
+test('strict checker rejects the observed const-without-type and type-beside-ref failures',()=>{
+  assert.throws(()=>checkStrictSchema({const:'decision'}),/type required/);
+  assert.deepEqual(checkStrictSchema({type:'string',const:'decision'}),{nodes:1,objects:0});
+  const schema={type:'object',additionalProperties:false,required:['value'],properties:{value:{$ref:'#/$defs/value'}},$defs:{value:{type:'string'}}};
+  assert.doesNotThrow(()=>checkStrictSchema(schema));
+  for(const sibling of [{type:'string'},{description:'extra'},{anyOf:[{type:'string'}]}]) {
+    const bad=structuredClone(schema);Object.assign(bad.properties.value,sibling);
+    assert.throws(()=>checkStrictSchema(bad),/\$ref must have no sibling keywords/);
+  }
+  assert.doesNotThrow(()=>checkStrictSchema({anyOf:[{type:'string'},{type:'null'}]}));
+  assert.throws(()=>checkStrictSchema({anyOf:[{const:null}]}),/type required/);
+  assert.throws(()=>checkStrictSchema({anyOf:[{type:'object',properties:{},required:[]}]}),/closed object/);
 });
 test('prompt amendment replaces only E-1 and the extraction quote-format instruction',()=>{
   const fixture=JSON.parse(readFileSync(new URL('./fixtures/pilot-cf24810f.jsonl',import.meta.url),'utf8').split('\n')[0]);

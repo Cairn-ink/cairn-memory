@@ -2,30 +2,30 @@
   "version": "hr3-carry-forward-v1",
   "ledgers": [
     {
-      "path": "evaluation/hr3/harness/test/fixtures/pilot-cf24810f-ledger.jsonl",
-      "sha256": "785bd208619a9448f7e4d56c1aeb81bd775b487d4d3cb70af6a2e2244451a750"
-    },
-    {
-      "path": "evaluation/hr3/harness/test/fixtures/pilot-15b8f1a7-ledger.jsonl",
-      "sha256": "be4c7e9de1a58f6c66040cb16e6142d6d9c00bddbfe766b2bd1ace6aaa01d97f"
+      "path": "evaluation/hr3/harness/test/fixtures/pilot2-a142e20b-ledger.jsonl",
+      "sha256": "d79b12d2d4c24c4c2e129f3afbd19b349b44947aa870d436dcbc4a8643c24a19",
+      "inheritedManifest": {
+        "path": "evaluation/hr3/harness/reports/a3-carry-forward-pre-pilot2.json",
+        "sha256": "3627dec5c16ffdd79f782229d1ecc83f09bf69377d31f2791ce586902931e3b7"
+      }
     }
   ],
   "preparation": {
     "complete": true,
-    "attestation": "Primary attests completeness: two schema probes, three unbilled model-availability lookups, and the single unbilled rejection already represented by its carried reservation.",
-    "dispatchCount": 6,
+    "attestation": "Primary attests completeness through the pilot2-a142e20b recovery on 2026-10-25: four accepted schema probes with exact usage and two separate US$0.001 holds; two further HTTP 400 unbilled schema probes; three unbilled model-availability lookups; and both unbilled paid-attempt rejections, whose outstanding reservations remain carried in full. Earlier exposure and preparation receipts are inherited once through the hash-verified archived manifest.",
+    "dispatchCount": 11,
     "receipts": [
       {
-        "path": "evaluation/hr3/harness/test/fixtures/preparation-schema-probes.json",
-        "sha256": "23a2e30e98418b1f101e037308a26319c8878afb01643fea1d3416112b717848"
+        "path": "evaluation/hr3/harness/test/fixtures/preparation-schema-probes-after-pilot2.json",
+        "sha256": "23cb2dea0a6b84df726b5dcdf60a2cc81cc304b8631c9fc4addf3703405ed71e"
       },
       {
-        "path": "evaluation/hr3/harness/test/fixtures/preparation-model-check.json",
-        "sha256": "c6756a9dea714542ef502695bd7def8e9bdd8d33f813707dabb443496963a84f"
+        "path": "evaluation/hr3/harness/test/fixtures/preparation-rejected-probes-after-pilot2.json",
+        "sha256": "621f33d07807b2cd5511f8e241bfdba522f127def0337525336b16731efb9335"
       },
       {
-        "path": "evaluation/hr3/harness/test/fixtures/preparation-schema-rejection.json",
-        "sha256": "39b7c3d14dd314ff76b4ed23ecabba0f91f89118b6d89ae7e66a53f0e04257dc"
+        "path": "evaluation/hr3/harness/test/fixtures/preparation-pilot2-rejection.json",
+        "sha256": "55d705776a08101b68a074bb88f95cfb38ece1d0f1415bf56d97c3c3bcf921c6"
       }
     ]
   }

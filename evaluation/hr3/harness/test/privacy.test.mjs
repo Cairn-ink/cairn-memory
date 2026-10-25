@@ -55,16 +55,16 @@ test('exact reader requests for every arm and P payloads fail closed on private 
   assert.doesNotThrow(()=>new PrivacyGuard(family).check('reader-request',responseRequest('reader',{delivered:{current:'{"change_type":"correction","subject":"public service"}',history:'The explicitly stated deadline passed.'}})),'Public source-supported semantics are not author-assigned condition identifiers');
 });
 
-test('preparation inventory contains exact two-probe charges, three free lookups, rejection reference and additional hold',()=>{
+test('preparation inventory contains all four accepted probes, free and rejected dispatches, and both holds',()=>{
   const c=loadCarryForward('evaluation/hr3/harness/reports/a3-carry-forward.json');
   assert.equal(c.preparationComplete,true);assert.ok(c.preparationAttestation);
-  assert.equal(c.preparationDispatches.reduce((n,d)=>n+d.requests,0),6);
+  assert.equal(c.preparationDispatches.reduce((n,d)=>n+d.requests,0),11);
   const probes=c.preparationDispatches.filter(d=>d.kind==='schema_probe');
-  assert.deepEqual(probes.map(d=>[d.usage.inputTokens,d.usage.outputTokens,d.max_output_tokens]),[[946,5,16],[751,16,16]]);
-  assert.equal(probes.reduce((n,d)=>n+d.settledNanodollars,0),712400);
+  assert.deepEqual(probes.map(d=>[d.usage.inputTokens,d.usage.outputTokens,d.max_output_tokens]),[[946,5,16],[751,16,16],[934,5,16],[751,16,16]]);
+  assert.equal(probes.reduce((n,d)=>n+d.settledNanodollars,0),1420000);
   assert.equal(c.preparationDispatches.find(d=>d.kind==='models_check').requests,3);
   assert.equal(c.preparationDispatches.find(d=>d.kind==='schema_rejection').settledNanodollars,0);
-  assert.equal(c.exposure.settled,835244260+712400);assert.equal(c.exposure.outstanding,11667200+1000000);
+  assert.equal(c.exposure.settled,835244260+712400+707600);assert.equal(c.exposure.outstanding,11667200+11909200+2000000);
 });
 
 test('preparation usage arithmetic is verified even when file hashes are recomputed',t=>{

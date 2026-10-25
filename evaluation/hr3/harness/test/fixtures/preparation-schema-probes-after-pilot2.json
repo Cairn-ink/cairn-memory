@@ -1,0 +1,44 @@
+{
+  "version": "hr3-preparation-charge-v1",
+  "stage": "pilot",
+  "embeddingUnits": {
+    "research": 0,
+    "product": 0
+  },
+  "source": "Primary attests this additional preparation inventory and observed usage on 2026-10-25; no dispatch by this offline recovery.",
+  "charge_id": "prep-schema-probes-after-pilot2-2026-10-25",
+  "settledNanodollars": 707600,
+  "outstandingNanodollars": 1000000,
+  "hold": {
+    "nanodollars": 1000000,
+    "purpose": "Conservative additional hold for the two accepted schema probes, on top of exact charges and all prior holds."
+  },
+  "dispatches": [
+    {
+      "kind": "schema_probe",
+      "requests": 1,
+      "model": "gpt-4.1-mini-2025-04-14",
+      "max_output_tokens": 16,
+      "usage": {
+        "inputTokens": 934,
+        "outputTokens": 5
+      },
+      "inputRateNanodollars": 400,
+      "outputRateNanodollars": 1600,
+      "settledNanodollars": 381600
+    },
+    {
+      "kind": "schema_probe",
+      "requests": 1,
+      "model": "gpt-4.1-mini-2025-04-14",
+      "max_output_tokens": 16,
+      "usage": {
+        "inputTokens": 751,
+        "outputTokens": 16
+      },
+      "inputRateNanodollars": 400,
+      "outputRateNanodollars": 1600,
+      "settledNanodollars": 326000
+    }
+  ]
+}
