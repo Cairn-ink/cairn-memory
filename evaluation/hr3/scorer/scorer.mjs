@@ -1,74 +1,16 @@
 import { createHash } from 'node:crypto';
 import { answerSchema, goldSchema, submissionSchema, validate } from './schema.mjs';
-import { claim, stable, unique, knownAtom, UnknownEquivalence, DICTIONARY_VERSION } from './canonical.mjs';
+import { claim, stable, UnknownEquivalence, DICTIONARY_VERSION } from './canonical.mjs';
 import { deliveredIndex, resolveCitations, coveredSpans, covers, supportBundle } from './citations.mjs';
+import { conjunction as and, currentCorrect, oldCorrect, projectRows } from './slots.mjs';
+import { consumeContract } from './contract.mjs';
 
-export const SEED = 'hr3-scorer-v1'; // No stochastic decision or model invocation.
+export const SEED = 'hr3-scorer-a4-v2';
+export const KEY_VERSION = 'hr3-a4-slot-explanation-keys-v2';
 const digest = value => createHash('sha256').update(SEED + '\n' + stable(value)).digest('hex');
-const and = values => values.includes(0) ? 0 : values.includes(null) ? null : 1;
-const or = values => values.includes(1) ? 1 : values.includes(null) ? null : 0;
-const textEqual = (a, b) => a === b ? 1 : knownAtom(a) && knownAtom(b) ? 0 : null;
 
-function valueEqual(a, b) {
-  if (stable(a) === stable(b)) return 1;
-  if (a.type !== b.type) return 0;
-  if (a.type === 'Text') return textEqual(a.text, b.text);
-  if (a.dimension !== b.dimension && (a.dimension?.startsWith('unknown:') || b.dimension?.startsWith('unknown:'))) return null;
-  return 0;
-}
-
-// Set matching uses a bipartite perfect matching, never greedy pairing. Unknown
-// equivalences can only yield a referral; they cannot be used as full credit.
-function canMatch(rows, cols, compare, allowUnknown) {
-  if (rows.length !== cols.length) return false;
-  const assigned = new Map();
-  function augment(i, seen) {
-    for (let j = 0; j < cols.length; j++) {
-      const verdict = compare(rows[i], cols[j]);
-      if ((verdict !== 1 && !(allowUnknown && verdict === null)) || seen.has(j)) continue;
-      seen.add(j);
-      if (!assigned.has(j) || augment(assigned.get(j), seen)) { assigned.set(j, i); return true; }
-    }
-    return false;
-  }
-  return rows.every((_, i) => augment(i, new Set()));
-}
-function setEqual(a, b, compare) {
-  a = unique(a); b = unique(b);
-  if (canMatch(a, b, compare, false)) return 1;
-  if (canMatch(a, b, compare, true)) return null;
-  // Different counts might be equivalent duplicates unrecognized by the frozen
-  // dictionary. Missing/extra known content remains a definite failure.
-  if (a.length !== b.length && a.length && b.length) {
-    const left = a.every(x => b.some(y => compare(x, y) !== 0));
-    const right = b.every(y => a.some(x => compare(x, y) !== 0));
-    if (left && right && a.some(x => b.some(y => compare(x, y) === null))) return null;
-  }
-  return 0;
-}
-function claimEqual(a, b) {
-  return and([
-    textEqual(a.subject, b.subject), textEqual(a.predicate, b.predicate), valueEqual(a.value, b.value),
-    stable(a.scope) === stable(b.scope) ? 1 : 0,
-    stable(a.valid) === stable(b.valid) ? 1 : 0,
-    setEqual(a.qualifiers, b.qualifiers, (x, y) => and([textEqual(x.key, y.key), valueEqual(x.value, y.value)])),
-  ]);
-}
-// Equivalent audience partitions denote the same assertions. Expanding first
-// also preserves contradictory values on overlapping cells as separate claims.
-const expandClaims = claims => unique(claims.flatMap(c => c.scope.map(cell => ({ ...c, scope: [cell] }))));
-const claimsEqual = (a, b) => setEqual(expandClaims(a.map(claim)), expandClaims(b.map(claim)), claimEqual);
-function currentCorrect(answer, gold) {
-  return and([answer.status === gold.status ? 1 : 0, claimsEqual(answer.claims, gold.claims)]);
-}
-function oldCorrect(answer, gold) {
-  return and([answer.status === gold.status ? 1 : 0, setEqual(
-    answer.records.map(r => ({ status: r.status, claims: unique(r.claims.map(claim)) })),
-    gold.records.map(r => ({ status: r.status, claims: unique(r.claims.map(claim)) })),
-    (a, b) => and([a.status === b.status ? 1 : 0, setEqual(expandClaims(a.claims), expandClaims(b.claims), claimEqual)]),
-  )]);
-}
 export function correctnessGold(gold) {
+  // This projection is deliberately idempotent; never copy support properties.
   return {
     current: gold.current, old: gold.old,
     reason: { status: gold.reason.status, nodes: gold.reason.nodes,
@@ -77,145 +19,135 @@ export function correctnessGold(gold) {
 }
 export function correctnessBundle(question, answer, gold) {
   return { pass: 'correctness', question, answer, G_correct: correctnessGold(gold),
-    rubric: 'Judge semantic correspondence only, including status, scope, qualifications, time and accepted directed graph structure. Do not judge delivered support or repair the submitted answer. Unknown equivalences remain unresolved.' };
+    rubric: 'Judge complete current slots and exact requested predecessor slots/statuses/scope/source-claimed intervals. Judge selected quoted explanation against accepted causal structure, including intermediates and conjunctions. No source registry, hidden span licenses or delivery verdict is supplied. Do not add values, causal clauses or citations. Unknown correspondence remains unresolved.' };
 }
-
-function validateGraph(reason, isGold) {
-  const ids = new Set();
-  for (const n of reason.nodes) {
-    if (ids.has(n.id)) throw new RangeError('Duplicate reason node ID');
-    ids.add(n.id);
-  }
-  const graphs = isGold ? reason.acceptedGraphs : [{ edges: reason.edges }];
-  for (const g of graphs) {
-    for (const e of g.edges) if (!ids.has(e.from) || !ids.has(e.to)) throw new RangeError('Dangling causal endpoint');
-    if (reason.status !== 'stated' && g.edges.length) throw new RangeError('Non-stated reason must have no causal edges');
-  }
-  if (isGold && reason.status === 'stated' && !graphs.length) throw new RangeError('Stated gold requires accepted graphs');
+function anonymizedGold(gold) {
+  const out = structuredClone(correctnessGold(gold));
+  const names = new Map(out.reason.nodes.map((n, i) => [n.id, `n${i + 1}`]));
+  out.reason.nodes.forEach(n => { n.id = names.get(n.id); });
+  out.reason.acceptedGraphs.forEach(g => g.edges.forEach(e => { e.from = names.get(e.from); e.to = names.get(e.to); }));
+  return out;
 }
-
 export function validateGold(gold) {
   const errors = validate(goldSchema, gold);
   if (errors.length) throw new TypeError('Invalid gold: ' + errors.join('; '));
-  validateGraph(gold.reason, true);
-  [...gold.current.claims, ...gold.old.records.flatMap(r => r.claims), ...gold.reason.nodes.map(n => n.claim)].forEach(claim);
+  const ids = new Set();
+  for (const node of gold.reason.nodes) {
+    if (ids.has(node.id)) throw new RangeError('Duplicate reason node ID');
+    ids.add(node.id);
+    claim(node.claim);
+  }
+  if (gold.reason.status === 'stated' && !gold.reason.acceptedGraphs.length) throw new RangeError('Stated gold requires accepted graphs');
+  if (gold.reason.status !== 'stated' && gold.reason.acceptedGraphs.length) throw new RangeError('Non-stated gold must have no causal graphs');
+  if (gold.current.status === 'no_active_decision' && gold.current.rows.length) throw new RangeError('No active decision must have no rows');
+  projectRows(gold.current.rows);
+  gold.old.records.forEach(r => projectRows(r.rows));
+  const predecessors = gold.old.records.map(r => r.predecessor_turn);
+  if (new Set(predecessors).size !== predecessors.length) throw new RangeError('Duplicate requested predecessor');
   const spans = new Map();
   for (const span of gold.supportSpans) {
     if (spans.has(span.id) || span.start >= span.end || span.text.length !== span.end - span.start) throw new RangeError('Invalid/duplicate support span');
     spans.set(span.id, span);
   }
-  for (const g of gold.reason.acceptedGraphs) for (const e of g.edges) for (const alternative of e.support) for (const id of alternative) {
-    if (!spans.has(id)) throw new RangeError('Unknown support span ID');
+  for (const graph of gold.reason.acceptedGraphs) for (const edge of graph.edges) {
+    if (!ids.has(edge.from) || !ids.has(edge.to)) throw new RangeError('Dangling causal endpoint in gold');
+    for (const alternative of edge.support) for (const id of alternative) if (!spans.has(id)) throw new RangeError('Unknown support span ID');
   }
   return spans;
 }
 
-// Full-credit causal correspondence is evaluated on canonical endpoint claims,
-// not node identifiers. Alternative graphs can share or rename nodes.
-function causalContent(answer, gold) {
-  const answerNodes = new Map(answer.nodes.map(n => [n.id, claim(n.claim)]));
-  const goldNodes = new Map(gold.nodes.map(n => [n.id, claim(n.claim)]));
-  const accepted = gold.acceptedGraphs.flatMap(g => g.edges).map(e => ({ ...e, a: goldNodes.get(e.from), b: goldNodes.get(e.to) }));
-  const grouped = new Map();
-  for (const e of answer.edges) {
-    const a = answerNodes.get(e.from), b = answerNodes.get(e.to), key = stable([a, b]);
-    if (grouped.has(key)) grouped.get(key).citations.push(...e.citations);
-    else grouped.set(key, { ...e, citations: [...e.citations], a, b });
+const selectedPointsLicensed = (resolved, licenses) => resolved.every(r => r.unit.map.slice(r.start, r.end).every(point => (point.parts ?? [point]).every(part => licenses.some(s =>
+  s.origin === part.origin && part.start >= s.start && part.end <= s.end && s.text.slice(part.start - s.start, part.end - s.start) === part.rawText))));
+const contextLicensed = (delivery, licenses) => delivery.units.every(unit => selectedPointsLicensed([{ unit, start: 0, end: unit.map.length }], licenses));
+function reasonScore(reason, gold, spans, delivery) {
+  if (reason.status !== gold.status) return { correctness: 0, support: 'not_applicable', verdict: 0, valid: true, error: 'reason_status_mismatch' };
+  if (reason.status !== 'stated') {
+    const empty = reason.support.length === 0;
+    return { correctness: empty ? 1 : 0, support: 'not_applicable', verdict: empty ? 1 : 0, valid: empty,
+      error: empty ? null : 'non_stated_reason_has_selected_support' };
   }
-  const submitted = [...grouped.values()];
-  const equalEdge = (a, b) => and([claimEqual(a.a, b.a), claimEqual(a.b, b.b)]);
-  // Every node must belong to an accepted causal structure. Extra assertions
-  // are not rescued merely because one complete accepted graph is present.
-  const nodeVerdict = and([...answerNodes.values()].map(n => or([...goldNodes.values()].map(g => claimEqual(n, g)))));
-  const noExtras = and(submitted.map(e => or(accepted.map(g => equalEdge(e, g)))));
-  const complete = or(gold.acceptedGraphs.map(g => and(g.edges.map(e => or(submitted.map(a => equalEdge(a, { a: goldNodes.get(e.from), b: goldNodes.get(e.to) })))))));
-  const status = answer.status === gold.status ? 1 : 0;
-  const content = gold.status === 'stated' ? and([nodeVerdict, noExtras, complete])
-    : and([answer.edges.length ? 0 : 1, claimsEqual(answer.nodes.map(n => n.claim), gold.nodes.map(n => n.claim))]);
-  return { verdict: and([status, content]), edges: submitted.map(e => ({ submitted: e, matches: accepted.map(g => ({ edge: g, verdict: equalEdge(e, g) })).filter(m => m.verdict !== 0) })) };
+  const selected = resolveCitations(reason.support, delivery);
+  if (!selected.length || selected.some(c => !c.ok && !c.ambiguous)) return {
+    correctness: null, support: 0, verdict: 0, valid: false, error: 'missing_or_invalid_submitted_citation',
+  };
+  if (selected.some(c => c.ambiguous)) return { correctness: null, support: null, verdict: null, valid: true, error: 'ambiguous_overlapping_occurrence' };
+  const ranges = coveredSpans(selected);
+  const acceptedIds = new Set(gold.acceptedGraphs.flatMap(g => g.edges.flatMap(e => e.support.flat())));
+  const licenses = [...acceptedIds].map(id => spans.get(id));
+  const onlyAccepted = selectedPointsLicensed(selected, licenses);
+  const graphs = gold.acceptedGraphs.map(g => ({ edges: g.edges.map(e => ({
+    from: e.from, to: e.to,
+    covered: e.support.some(conjunction => conjunction.every(id => covers(spans.get(id), ranges))),
+  })) }));
+  const complete = graphs.some(g => g.edges.every(e => e.covered));
+  // Partial known support cannot supply omitted mediators/conjunctions. An
+  // unfamiliar clause might be equivalent, so never turn it into a false zero.
+  if (!complete && onlyAccepted) return { correctness: 0, support: 0, verdict: 0, valid: true, graphs, error: 'incomplete_required_support' };
+  // Extra fragmentary clauses do not become accepted explanations merely by
+  // sharing a source address with an accepted branch.
+  const fullyCovered = licenses.filter(s => covers(s, ranges));
+  const completeSelections = selectedPointsLicensed(selected, fullyCovered);
+  const correctness = complete && onlyAccepted && completeSelections ? 1 : null;
+  const support = correctness === 1 && contextLicensed(delivery, licenses) ? 1 : null;
+  return { correctness, support, verdict: and([correctness, support]), valid: true, graphs,
+    error: correctness !== 1 ? 'unrecognized_or_broad_causal_selection' : support !== 1 ? 'unrecognized_evidence_context' : null };
 }
-
-function edgeSupport(causal, spans, delivery) {
-  // Exact source licenses decide support only in a fully recognized context.
-  // Unlicensed surrounding/distractor text could negate or disambiguate a
-  // citation. Its semantics belong to the isolated, gold-blind support pass.
-  const contextLicensed = delivery.units.every(unit => unit.map.every(point => (point.parts ?? [point]).every(r => [...spans.values()].some(s => s.origin === r.origin && r.start >= s.start && r.end <= s.end && s.text.slice(r.start - s.start, r.end - s.start) === r.rawText))));
-  const details = causal.edges.map(({ submitted, matches }) => {
-    const citations = resolveCitations(submitted.citations, delivery);
-    if (!citations.length || citations.some(c => !c.ok && !c.ambiguous)) return { from: submitted.from, to: submitted.to, verdict: 0, error: 'missing_or_invalid_submitted_citation' };
-    if (citations.some(c => c.ambiguous)) return { from: submitted.from, to: submitted.to, verdict: null, error: 'ambiguous_overlapping_occurrence' };
-    const ranges = coveredSpans(citations);
-    const licensed = matches.filter(m => m.verdict === 1).some(m => m.edge.support.some(conjunction => conjunction.every(id => covers(spans.get(id), ranges))));
-    // A delivered citation outside the frozen accepted span alternatives might
-    // express an unrecognized causal equivalence; only §8 can decide it.
-    const knownSpans = matches.filter(m => m.verdict === 1).flatMap(m => m.edge.support.flatMap(ids => ids.map(id => spans.get(id))));
-    const onlyKnownFragments = matches.every(m => m.verdict === 1) && ranges.length > 0 && ranges.every(r => knownSpans.some(s => s.origin === r.origin && r.start >= s.start && r.end <= s.end));
-    return { from: submitted.from, to: submitted.to, verdict: licensed && contextLicensed ? 1 : !licensed && onlyKnownFragments ? 0 : null,
-      error: licensed && contextLicensed ? null : !licensed && onlyKnownFragments ? 'incomplete_required_support' : licensed ? 'unrecognized_evidence_context' : 'unrecognized_causal_support' };
-  });
-  return { verdict: and(details.map(d => d.verdict)), edges: details };
-}
-
 function citationDiagnostics(answer, delivery) {
-  const report = claims => claims.map(c => {
-    const citations = resolveCitations(c.citations, delivery);
+  const report = rows => rows.map(row => {
+    const citations = resolveCitations(row.citations, delivery);
     return { cited: citations.length > 0, resolved: citations.length > 0 && citations.every(c => c.ok), errors: citations.filter(c => !c.ok).map(c => c.error) };
   });
-  return { current: report(answer.current.claims), old: answer.old.records.map(r => report(r.claims)),
-    note: 'Citation resolution is reported separately from factual C/O and is not a semantic support verdict.' };
+  return { current: report(answer.current.rows), old: answer.old.records.map(r => report(r.rows)),
+    note: 'Citation resolution is separate from factual C/O and is not a semantic support verdict.' };
 }
-
-function anonymize(answer, gold) {
-  // Inputs carry no arm/lineage metadata. Replace arbitrary node and source
-  // identities with deterministic local identifiers before referral export.
-  const renamed = input => {
-    const out = structuredClone(input);
-    const names = new Map(out.reason.nodes.map((n, i) => [n.id, `n${i + 1}`]));
-    out.reason.nodes.forEach(n => { n.id = names.get(n.id); });
-    if (out.reason.edges) out.reason.edges.forEach(e => { e.from = names.get(e.from); e.to = names.get(e.to); });
-    if (out.reason.acceptedGraphs) out.reason.acceptedGraphs.forEach(g => g.edges.forEach(e => { e.from = names.get(e.from); e.to = names.get(e.to); }));
-    return out;
-  };
-  return { answer: renamed(answer), gold: renamed(correctnessGold(gold)) };
-}
-
-export function score(gold, submission) {
-  const spans = validateGold(gold); // Invalid authoring input is a CLI error.
-  const base = { version: 'hr3-scorer-v1', protocol: 'v0.3.4', seed: SEED, dictionary: DICTIONARY_VERSION };
+export function score(gold, submission, options = {}) {
+  const contract = consumeContract(options.contractPath);
+  const contractReport = { status: contract.status, ...(contract.status === 'validated' ? { version: contract.version, sha256: contract.sha256 } : {}) };
+  const spans = validateGold(gold);
+  const reasonStratum = { stratum: gold.reason.status, denominator: 1, noEvidenceBaseline: { status: 'not_stated', support: [], R: gold.reason.status === 'not_stated' ? 1 : 0 } };
+  const base = { reasonStratum, version: 'hr3-scorer-a4-v2', protocol: 'v0.3.4+A-4', seed: SEED, dictionary: DICTIONARY_VERSION, keyVersion: KEY_VERSION, contract: contractReport };
   const errors = validate(submissionSchema, submission);
-  if (errors.length) return { ...base, valid: false, errors, scores: { C: 0, O: 0, R: 0, J: 0 }, referrals: [] };
+  if (errors.length) return { ...base, valid: false, componentValidity: { C: false, O: false, R: false }, errors, scores: { C: 0, O: 0, R: 0, J: 0 }, referrals: [] };
   const answer = submission.answer;
+  // Preserve the existing factual shape rules for impossible scopes/intervals;
+  // unknown textual representations stay referrals, never malformed answers.
+  try { projectRows([...answer.current.rows, ...answer.old.records.flatMap(r => r.rows)], contract); }
+  catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    return { ...base, valid: false, componentValidity: { C: false, O: false, R: false }, errors: [error.message], scores: { C: 0, O: 0, R: 0, J: 0 }, referrals: [] };
+  }
   let delivery;
   try { delivery = deliveredIndex(submission.delivered); } catch (error) { throw new TypeError('Invalid delivery: ' + error.message); }
-  try {
-    validateGraph(answer.reason, false);
-    // Invalid source-claimed time/ranges or empty scopes are malformed answers.
-    for (const c of [...answer.current.claims, ...answer.old.records.flatMap(r => r.claims), ...answer.reason.nodes.map(n => n.claim)]) {
-      try { claim(c); } catch (e) { if (!(e instanceof UnknownEquivalence)) throw e; }
+  const validity = { C: true, O: true, R: true }, componentErrors = {};
+  const evaluate = (component, fn) => {
+    try { return fn(); } catch (error) {
+      if (error instanceof UnknownEquivalence) return null;
+      if (!(error instanceof RangeError)) throw error;
+      validity[component] = false; componentErrors[component] = error.message; return 0;
     }
-  } catch (error) { return { ...base, valid: false, errors: [error.message], scores: { C: 0, O: 0, R: 0, J: 0 }, referrals: [] }; }
-  const safely = fn => { try { return fn(); } catch (e) { if (e instanceof UnknownEquivalence) return null; throw e; } };
-  const C = safely(() => currentCorrect(answer.current, gold.current));
-  const O = safely(() => oldCorrect(answer.old, gold.old));
-  let causal = safely(() => causalContent(answer.reason, gold.reason));
-  if (causal === null) causal = { verdict: null, edges: answer.reason.edges.map(e => ({ submitted: e, matches: [] })) };
-  const support = edgeSupport(causal, spans, delivery);
-  const R = and([causal.verdict, support.verdict]);
+  };
+  const C = evaluate('C', () => currentCorrect(answer.current, gold.current, contract));
+  const O = evaluate('O', () => oldCorrect(answer.old, gold.old, contract));
+  const reason = reasonScore(answer.reason, gold.reason, spans, delivery);
+  validity.R = reason.valid;
+  const R = reason.verdict;
   const scores = { C, O, R, J: and([C, O, R]) };
-  const anonymous = anonymize(answer, gold);
   const referrals = [];
-  const correctnessComponents = [...(C === null ? ['C'] : []), ...(O === null ? ['O'] : []), ...(causal.verdict === null ? ['R'] : [])];
-  if (correctnessComponents.length) {
-    const bundle = correctnessBundle(gold.question, anonymous.answer, anonymous.gold);
-    referrals.push({ key: digest({ components: correctnessComponents, bundle }), components: correctnessComponents, ...bundle });
+  const correctnessComponents = [...(C === null ? ['C'] : []), ...(O === null ? ['O'] : []), ...(R === null && reason.correctness === null ? ['R'] : [])];
+  const provenance = { version: KEY_VERSION, contract: contractReport, dictionary: DICTIONARY_VERSION };
+  // Separate component keys allow the judgment-error adapter to propagate C/O/R
+  // consistently without making a sibling component's referral change identity.
+  for (const component of correctnessComponents) {
+    const bundle = correctnessBundle(gold.question, structuredClone(answer), anonymizedGold(gold));
+    referrals.push({ key: digest({ provenance, component, bundle }), parentRule: `a4.correctness.${component}`, components: [component], ...bundle });
   }
-  if (support.verdict === null) {
-    const bundle = supportBundle(gold.question, anonymous.answer, delivery);
-    referrals.push({ key: digest(bundle), components: ['R'], ...bundle });
+  if (R === null && reason.support === null) {
+    const bundle = supportBundle(gold.question, structuredClone(answer), delivery);
+    referrals.push({ key: digest({ provenance, component: 'R', bundle }), parentRule: 'a4.support.quoted_explanation', components: ['R'], ...bundle });
   }
-  return { ...base, valid: true, scores, pendingAdjudication: referrals.length > 0, mechanicallyForcedJZero: scores.J === 0,
-    reason: { correctness: causal.verdict, support: support.verdict, edges: support.edges },
+  return { ...base, valid: true, componentValidity: validity, componentErrors, scores,
+    pendingAdjudication: referrals.length > 0, mechanicallyForcedJZero: scores.J === 0,
+    reason: { ...reason, ...reasonStratum },
     deliveredSupport: citationDiagnostics(answer, delivery), referrals };
 }
-
 export { answerSchema };

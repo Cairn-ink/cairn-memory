@@ -2,6 +2,9 @@ import { reasonStratum } from './reason-strata.mjs';
 import { assert, canonical, CELLS, DOMAIN, cellsOf, scopeFromCells, claim, TYPES, CAUSES } from './common.mjs';
 import { SPLITS, GRAMMAR } from './inventory.mjs';
 import { canonicalGold } from './canonicalize.mjs';
+import { slotGold, slotRowsKey, slotHistoryKey } from './slots.mjs';
+import { HISTORICAL_LABELS, PUBLIC_CONTRACT } from './contract.mjs';
+import { namingPool } from './inventory.mjs';
 
 const VALUE_KEYS = {Text:['type','text'],Boolean:['type','value'],Quantity:['type','decimal','unit'],Instant:['type','iso'],Range:['type','lower','upper','lowerClosed','upperClosed','unit']};
 export function keys(value, required, code = 'closed_schema') {
@@ -63,7 +66,7 @@ export function validateClaim(c, gold = false) {
     assert(Number.isInteger(citation.item) && citation.item>=0 && (citation.source===null || Number.isInteger(citation.source) && citation.source>=0) && Number.isInteger(citation.occurrence) && citation.occurrence>0 && typeof citation.quote==='string' && citation.quote.length>0,'citation_schema');
   }
 }
-export function validateAnswer(answer, gold = false) {
+export function validateLegacyAnswer(answer, gold = false) {
   keys(answer,['current','old','reason']);
   keys(answer.current,['status','claims']); keys(answer.old,['status','records']); keys(answer.reason,['status','nodes','edges']);
   assert(['active','no_active_decision','unresolved'].includes(answer.current.status),'current_status');
@@ -80,8 +83,46 @@ export function validateAnswer(answer, gold = false) {
   if (answer.reason.status!=='stated') assert(!answer.reason.edges.length && !answer.reason.nodes.length,'unstated_edges');
 }
 
+export function validateAnswer(answer,gold=false) {
+  keys(answer,['current','old','reason']);
+  keys(answer.current,['status','rows']);keys(answer.old,['status','records']);keys(answer.reason,['status','support']);
+  assert(PUBLIC_CONTRACT.answer.current_statuses.includes(answer.current.status),'current_status');
+  assert(PUBLIC_CONTRACT.answer.old_statuses.includes(answer.old.status),'old_status');
+  assert(PUBLIC_CONTRACT.answer.reason_statuses.includes(answer.reason.status),'reason_status');
+  assert(Array.isArray(answer.current.rows)&&Array.isArray(answer.old.records)&&Array.isArray(answer.reason.support),'answer_arrays');
+  if(answer.current.status==='active')assert(answer.current.rows.length>0,'current_status_rows');
+  if(answer.current.status==='no_active_decision')assert(answer.current.rows.length===0,'current_status_rows');
+  if(answer.old.status==='none')assert(answer.old.records.length===0,'old_status_records');
+  if(answer.old.status==='available')assert(answer.old.records.length>0,'old_status_records');
+  const citation=c=> {
+    keys(c,['intent','item','unit','source','quote','occurrence']);
+    assert(['current','history'].includes(c.intent)&&Number.isInteger(c.item)&&c.item>=0&&Number.isInteger(c.occurrence)&&c.occurrence>0&&typeof c.quote==='string'&&c.quote.length>0,'citation_schema');
+    assert(c.unit==='body'?c.source===null:c.unit==='receipt'&&Number.isInteger(c.source)&&c.source>=0,'citation_schema');
+  };
+  const row=r=> {
+    keys(r,['scope','valid','route','approval','cap','citations']);validateScope(r.scope);validateInterval(r.valid);
+    for(const name of ['route','approval','cap']) {
+      const s=r[name]; keys(s,['state','value']);assert(PUBLIC_CONTRACT.values.slot_states.includes(s.state),'slot_state');
+      if(s.state!=='value') assert(s.value===null,'slot_null');
+      else if(name==='route')assert(typeof s.value==='string'&&s.value.length>0,'slot_type');
+      else if(name==='approval')assert(typeof s.value==='boolean','slot_type');
+      else {keys(s.value,['decimal','unit']);validateValue({type:'Quantity',...s.value});}
+    }
+    assert(Array.isArray(r.citations),'citation_schema');for(const c of r.citations)citation(c);
+    if(gold)assert(r.citations.length===0,'gold_citation_leak');
+  };
+  answer.current.rows.forEach(row);
+  const turns=new Set();
+  for(const record of answer.old.records) {
+    keys(record,['predecessor_turn','status','rows']);assert(typeof record.predecessor_turn==='string'&&record.predecessor_turn.length>0&&!turns.has(record.predecessor_turn),'predecessor_identity');turns.add(record.predecessor_turn);
+    assert(HISTORICAL_LABELS.includes(record.status)&&Array.isArray(record.rows),'history_label');record.rows.forEach(row);
+  }
+  for(const c of answer.reason.support)citation(c);
+  if(answer.reason.status!=='stated'||gold) assert(answer.reason.support.length===0,'reason_support');
+}
+
 export function validateInventory(inv) {
-  const ids = new Set(), banks = new Set(), aliases = new Set();
+  const ids = new Set(), banks = new Set(), aliases = new Map();
   assert(inv.lineages.length===310,'lineage_total');
   assert(Array.isArray(inv.retired_lineages),'retired_lineage_registry');
   const ancestryRows = [...inv.lineages,...inv.retired_lineages], byId = new Map();
@@ -108,7 +149,8 @@ export function validateInventory(inv) {
     }
     assert(!banks.has(a.bank_id),'bank_overlap');banks.add(a.bank_id);
     for(const value of [l.bank.subjectZh,l.bank.subjectEn,...l.bank.routes,...l.bank.reasons.flatMap(x=>[x.zh,x.en])]) {
-      assert(!aliases.has(value),'alias_overlap',value);aliases.add(value);
+      const shared=['engineering','pilot'].includes(l.split) && inv.lineages.includes(l) && [...namingPool(l.split).subjects.flatMap(s=>[s.en,s.zh]),...namingPool(l.split).routes].includes(value);
+      assert(!aliases.has(value) || (shared && aliases.get(value)===l.split),'alias_overlap',value);aliases.set(value,l.split);
     }
   }
   for (const l of inv.lineages) {
@@ -257,15 +299,24 @@ export function validateFamily(bundle, lineage) {
     assert(cp.at===f.batches[cp.batch-1].observed_at,'checkpoint_time');
     const g=gold.checkpoints.find(x=>x.batch===cp.batch), s=support.checkpoints.find(x=>x.batch===cp.batch);
     assert(g && s,'gold_checkpoint');
-    keys(g,['batch','G_correct']); keys(s,['batch','assertion_spans','acceptedGraphs']);
-    const {acceptedGraphs,...answer}=g.G_correct;
-    validateAnswer(answer,true);
+    keys(g,['batch','G_correct','private_causal']); keys(s,['batch','assertion_spans','acceptedGraphs']);
+    const {acceptedGraphs,...answer}=g.private_causal;
+    const {acceptedGraphs:slotGraphs,...slotAnswer}=g.G_correct;
+    validateAnswer(slotAnswer,true);
+    assert(canonical(slotGraphs)===canonical(acceptedGraphs),'graph_projection');
+    validateLegacyAnswer(answer,true);
     const focal=f.ast.events.find(e=>!e.distractor && e.source_turns.includes(cp.focal_turn));
     assert(focal && f.ast.focal_changes[cp.batch===2?0:1]===focal.event_id,'focal_change');
     assert(canonical(cp.requested_predecessor_turns)===canonical(focal.predecessor_anchors.map(a=>a.source_turn)),'requested_predecessor_set');
     const expected=canonicalGold({...semanticTruth(f,cp),reason:{nodes:[]}},lineage);
     assert(answer.current.status===expected.current.status && canonical(normalizeClaims(answer.current.claims))===canonical(normalizeClaims(expected.current.claims)),'semantic_current');
     assert(canonical(answer.old)===canonical(expected.old),'semantic_history');
+    const projected=slotGold(g.private_causal,cp.requested_predecessor_turns);
+    assert(slotRowsKey(g.G_correct.current.rows)===slotRowsKey(projected.current.rows) && g.G_correct.current.status===projected.current.status,'slot_semantic_current');
+    assert(slotHistoryKey(g.G_correct.old)===slotHistoryKey(projected.old),'slot_semantic_history');
+    assert(canonical(g.G_correct.reason)===canonical(projected.reason),'slot_semantic_reason');
+    for(const label of HISTORICAL_LABELS) assert(cp.question.includes(label),'question_label_vocabulary');
+    assert(['route','approval','cap',cp.focal_turn,...cp.requested_predecessor_turns].every(x=>cp.question.includes(x)),'question_public_contract');
     const expectedGraphs = topology(f.causal_class);
     if (f.change_type === 'expiry' && f.expiry_mode === 'deadline') expectedGraphs.push({edges:[{from:'deadline',to:'decision'}]});
     assert(canonical(acceptedGraphs)===canonical(expectedGraphs),'causal_topology');
@@ -307,7 +358,7 @@ export function validateFamily(bundle, lineage) {
     }
     for (const entry of s.assertion_spans) for (const span of entry.spans) checkSpan(span,turns,cp.batch);
     const forbiddenKeys=['quote','source_quotes','spans','support','delivered','delivery','event_id','turn_id'];
-    function visit(x) { if (!x || typeof x!=='object') return; for (const [key,value] of Object.entries(x)) { assert(!forbiddenKeys.includes(key),'correctness_gold_leakage',key); visit(value); } }
+    function visit(x) { if (!x || typeof x!=='object') return; for (const [key,value] of Object.entries(x)) { assert(!forbiddenKeys.includes(key) || (key==='support' && Array.isArray(value) && value.length===0),'correctness_gold_leakage',key); visit(value); } }
     visit(g.G_correct);
   }
   const member=lineage.members.find(m=>m.family_id===f.family_id);

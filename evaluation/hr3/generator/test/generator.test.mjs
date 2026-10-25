@@ -10,7 +10,11 @@ import { inventory, SPLITS } from '../inventory.mjs';
 import { reasonStratum } from '../reason-strata.mjs';
 import { generateFamily, correctnessOnly, extractionInput } from '../generate.mjs';
 import { generateSplit, SOURCE_NAMES } from '../deliver.mjs';
-import { validateInventory, validateFamily, validateValue, validateAnswer, validateScope } from '../validate.mjs';
+import { validateInventory, validateFamily, validateValue, validateAnswer, validateLegacyAnswer, validateScope } from '../validate.mjs';
+import { publicContract, validatePublicContract, HISTORICAL_LABELS } from '../contract.mjs';
+import { slotRowsKey, slotHistoryKey } from '../slots.mjs';
+import { leakageReport, matchedWorlds } from '../leakage.mjs';
+import { inspectedRegistry, assertUninspected } from '../exclusions.mjs';
 import { normalizeText, rational, valueKey, claimSetKey, taipeiBoundary } from '../canonicalize.mjs';
 
 const inv=inventory(), pilot=generateSplit('pilot'), engineering=generateSplit('engineering');
@@ -35,7 +39,7 @@ test('all 310 specifications: exact allocation, disclosed revisions and split-di
     assert.equal(ls.filter(l=>l.multi_hop).length,{engineering:20,pilot:20,development:30,test:100}[split]);
     for (const l of ls) {
       assert(!ids.has(l.lineage_id)); ids.add(l.lineage_id);
-      for (const alias of [l.bank.subjectZh,l.bank.subjectEn,...l.bank.routes,...l.bank.reasons.flatMap(r=>[r.en,r.zh])]) { assert(!aliases.has(alias),`alias collision ${alias}`); aliases.set(alias,split); }
+      for (const alias of [l.bank.subjectZh,l.bank.subjectEn,...l.bank.routes,...l.bank.reasons.flatMap(r=>[r.en,r.zh])]) { assert(!aliases.has(alias)||aliases.get(alias)===split,`cross-split alias collision ${alias}`); aliases.set(alias,split); }
     }
     for (const type of TYPES) {
       assert.equal(ls.filter(l=>l.type===type).length,n/5);
@@ -68,39 +72,39 @@ test('same seed has byte-identical families, gold, support and rejection log; wo
 
 test('hand-worked typed outcomes: erroneous history, partial field inheritance, scopes and no expiry fallback',()=>{
   const correction=choose('correction').bundle;
-  assert.equal(correction.gold.checkpoints[0].G_correct.old.records[0].status,'erroneous');
-  assert.equal(correction.gold.checkpoints[1].G_correct.old.records[0].claims[0].value.text,correction.family.ast.events.find(e=>e.record_name==='B').claims[0].value.text);
+  assert.equal(correction.gold.checkpoints[0].private_causal.old.records[0].status,'erroneous');
+  assert.equal(correction.gold.checkpoints[1].private_causal.old.records[0].claims[0].value.text,correction.family.ast.events.find(e=>e.source_turns[0]==='b2-focal' && !e.distractor).claims[0].value.text);
   const refinement=choose('refinement').bundle;
-  const initial=refinement.family.ast.events.find(e=>e.record_name==='A');
-  const refined=refinement.gold.checkpoints[1].G_correct.current.claims[0];
+  const initial=refinement.family.ast.events.find(e=>e.source_turns[0]==='b1-focal' && !e.distractor);
+  const refined=refinement.gold.checkpoints[1].private_causal.current.claims[0];
   assert.equal(refined.value.text,initial.claims[0].value.text);
   assert.equal(refined.qualifiers.find(q=>q.key==='cap').value.decimal,String(Number(initial.claims.find(x=>x.field==='cap').value.decimal)+40));
   const overlap=choose('scope_change').bundle;
-  const cp2=overlap.gold.checkpoints[0].G_correct, cp4=overlap.gold.checkpoints[1].G_correct;
+  const cp2=overlap.gold.checkpoints[0].private_causal, cp4=overlap.gold.checkpoints[1].private_causal;
   assert.equal(cp2.current.claims.length,2); assert.equal(cp2.old.records.length,1);
   assert.equal(cp4.current.claims.length,2); assert.equal(cp4.old.records.length,2);
   assert.deepEqual(cp4.current.claims.map(c=>cellsOf(c.scope).length),[8,4]);
   assert(cp4.current.claims[0].scope.any[0].all[0].values.includes('TW'));
   const expiry=choose('expiry').bundle;
-  for (const cp of expiry.gold.checkpoints) { assert.equal(cp.G_correct.current.status,'no_active_decision'); assert.equal(cp.G_correct.current.claims.length,0); assert.equal(cp.G_correct.old.records[0].status,'expired'); }
+  for (const cp of expiry.gold.checkpoints) { assert.equal(cp.private_causal.current.status,'no_active_decision'); assert.equal(cp.private_causal.current.claims.length,0); assert.equal(cp.private_causal.old.records[0].status,'expired'); }
   assert.equal(expiry.family.ast.events.filter(e=>!e.distractor && e.change_type==='initial').length,2,'later adoption must be explicit');
 });
 
 test('future writes stay pending at both probes; correction can apply retroactively',()=>{
   const future=choose('reversal','direct',1).bundle;
   const events=future.family.ast.events.filter(e=>!e.distractor);
-  assert.equal(future.gold.checkpoints[0].G_correct.current.claims[0].value.text,events[0].claims[0].value.text);
-  assert.equal(future.gold.checkpoints[1].G_correct.current.claims[0].value.text,events[1].claims[0].value.text);
+  assert.equal(future.gold.checkpoints[0].private_causal.current.claims[0].value.text,events[0].claims[0].value.text);
+  assert.equal(future.gold.checkpoints[1].private_causal.current.claims[0].value.text,events[1].claims[0].value.text);
   assert(Date.parse(events[2].effective_interval.from)>Date.parse(future.family.checkpoints[1].at));
   const retro=choose('correction','direct',1).bundle;
-  assert.equal(retro.family.ast.events.find(e=>e.record_name==='A').effective_interval.from,retro.gold.checkpoints[1].G_correct.current.claims[0].valid.from);
+  assert.equal(retro.family.ast.events.find(e=>e.source_turns[0]==='b1-focal' && !e.distractor).effective_interval.from,retro.gold.checkpoints[1].private_causal.current.claims[0].valid.from);
   assert.equal(taipeiBoundary('2031-03-02'),'2031-03-01T16:00:00.000Z');
   assert.equal(taipeiBoundary('2031-03-02',{through:true}),'2031-03-02T16:00:00.000Z');
 });
 
 test('causal classes encode AND/OR, serial paths, absent reasons, no implicit shortcuts',()=>{
   for (const cause of CAUSES) {
-    const {bundle}=choose('reversal',cause), gold=bundle.gold.checkpoints[1].G_correct, support=bundle.support.checkpoints[1];
+    const {bundle}=choose('reversal',cause), gold=bundle.gold.checkpoints[1].private_causal, support=bundle.support.checkpoints[1];
     assert.equal(gold.acceptedGraphs.length,cause==='unstated'?0:cause==='alternative_mediated'?2:1);
     const count={direct:1,unstated:0,two_edge_serial:2,three_edge_serial:3,conjunctive_mediated:3,alternative_mediated:2}[cause];
     for (const graph of gold.acceptedGraphs) assert.equal(graph.edges.length,count);
@@ -132,7 +136,7 @@ test('normalization, rational units, extensional scopes and equivalent duplicate
   assert.deepEqual(valueKey({type:'Quantity',decimal:'1.5',unit:'requests/hour'}),valueKey({type:'Quantity',decimal:'36.00',unit:'requests/day'}));
   assert.throws(()=>valueKey({type:'Quantity',decimal:'1',unit:'mystery'}),{code:'unknown_equivalence'});
   assert.deepEqual(scopeFromCells(CELLS),scope());
-  const {bundle,lineage}=choose('reversal'), c=bundle.gold.checkpoints[0].G_correct.current.claims[0];
+  const {bundle,lineage}=choose('reversal'), c=bundle.gold.checkpoints[0].private_causal.current.claims[0];
   const expanded=clone(c); expanded.scope={any:CELLS.map(cell=>({all:Object.entries(cell).map(([field,value])=>({field,values:[value]}))}))};
   assert.equal(claimSetKey([c,c],lineage),claimSetKey([expanded],lineage));
   const extra=clone(c); extra.value.text='contradictory route';
@@ -145,25 +149,25 @@ test('closed schema accepts all five Value variants and rejects extras, bad rang
   assert.throws(()=>validateValue({type:'Range',lower:'2',upper:'1',lowerClosed:true,upperClosed:true,unit:'x'}),{code:'range_order'});
   assert.throws(()=>validateScope({any:[]}),{code:'empty_scope'});
   assert.throws(()=>validateScope({any:[{all:[{field:'country',values:['ZZ']}]}]}),{code:'scope_value'});
-  const g=clone(choose('reversal').bundle.gold.checkpoints[0].G_correct); delete g.acceptedGraphs;
-  assert.doesNotThrow(()=>validateAnswer(g,true));
-  g.current.extra=1; assert.throws(()=>validateAnswer(g,true),{code:'closed_schema'});
+  const g=clone(choose('reversal').bundle.gold.checkpoints[0].private_causal); delete g.acceptedGraphs;
+  assert.doesNotThrow(()=>validateLegacyAnswer(g,true));
+  g.current.extra=1; assert.throws(()=>validateLegacyAnswer(g,true),{code:'closed_schema'});
 });
 
 const negativeCases=[
   ['observed_order','reversal','direct',b=>{b.family.batches[1].observed_at=b.family.batches[0].observed_at;}],
-  ['anchor_resolution','reversal','direct',b=>{b.family.ast.events.find(e=>e.record_name==='B').predecessor_anchors[0].source_turn='missing';}],
-  ['historical_anchor','reversal','direct',b=>{const a=b.family.ast.events.find(e=>e.record_name==='A'); const d=b.family.ast.events.find(e=>e.record_name==='D'); d.predecessor_anchors=[{source_turn:a.source_turns[0],record_name:a.record_name,subject:a.subject,predicate:a.predicate}];}],
-  ['empty_scope','scope_change','direct',b=>{b.family.ast.events.find(e=>e.record_name==='B').scope={any:[]};}],
+  ['anchor_resolution','reversal','direct',b=>{b.family.ast.events.find(e=>e.source_turns[0]==='b2-focal' && !e.distractor).predecessor_anchors[0].source_turn='missing';}],
+  ['historical_anchor','reversal','direct',b=>{const a=b.family.ast.events.find(e=>e.source_turns[0]==='b1-focal' && !e.distractor); const d=b.family.ast.events.find(e=>e.source_turns[0]==='b4-focal' && !e.distractor); const prior=d.predecessor_anchors[0].record_name; d.predecessor_anchors=[{source_turn:a.source_turns[0],record_name:a.record_name,subject:a.subject,predicate:a.predicate}]; const turn=b.family.batches[3].turns[0];turn.text=turn.text.replace(`records ${prior}`,`records ${a.record_name}`).replace(`紀錄 ${prior}`,`紀錄 ${a.record_name}`);d.source_quotes[0].quote=turn.text;}],
+  ['empty_scope','scope_change','direct',b=>{b.family.ast.events.find(e=>e.source_turns[0]==='b2-focal' && !e.distractor).scope={any:[]};}],
   ['span_quote','reversal','direct',b=>{b.support.checkpoints[0].acceptedGraphs[0].edges[0].support[0][0].quote='fabricated quote';}],
   ['batch_byte_limit','reversal','direct',b=>{b.family.batches[0].turns[0].text='a'.repeat(12289);}],
   ['gold_leakage','reversal','direct',b=>{b.family.batches[2].turns[0].text+=' G_correct';}],
-  ['semantic_current','refinement','direct',b=>{b.gold.checkpoints[1].G_correct.current.claims[0].value.text='wrong route';}],
-  ['semantic_history','correction','direct',b=>{b.gold.checkpoints[0].G_correct.old.records[0].status='previously_adopted';}],
-  ['causal_topology','reversal','three_edge_serial',b=>{b.gold.checkpoints[0].G_correct.acceptedGraphs[0].edges=[{from:'a',to:'decision'}];}],
+  ['semantic_current','refinement','direct',b=>{b.gold.checkpoints[1].private_causal.current.claims[0].value.text='wrong route';}],
+  ['semantic_history','correction','direct',b=>{b.gold.checkpoints[0].private_causal.old.records[0].status='previously_adopted';}],
+  ['causal_topology','reversal','three_edge_serial',b=>{b.gold.checkpoints[0].private_causal.acceptedGraphs[0].edges=[{from:'a',to:'decision'}];}],
   ['empty_edge_support','reversal','direct',b=>{b.support.checkpoints[0].acceptedGraphs[0].edges[0].support=[];}],
   ['requested_predecessor_set','scope_change','direct',b=>{b.family.checkpoints[1].requested_predecessor_turns.pop();}],
-  ['source_erroneous','correction','direct',b=>{const t=b.family.batches[1].turns[0]; t.text=t.text.replace(/never an adopted|從未是實際採用/,'previously adopted'); const e=b.family.ast.events.find(e=>e.record_name==='B'); e.source_quotes=[{turn_id:t.turn_id,start:0,end:t.text.length,quote:t.text,offset_unit:'utf16'}];}],
+  ['source_erroneous','correction','direct',b=>{const t=b.family.batches[1].turns[0]; t.text=t.text.replace(/never an adopted|從未是實際採用/,'previously adopted'); const e=b.family.ast.events.find(e=>e.source_turns[0]==='b2-focal' && !e.distractor); e.source_quotes=[{turn_id:t.turn_id,start:0,end:t.text.length,quote:t.text,offset_unit:'utf16'}];}],
 ];
 for (const [code,type,cause,mutate] of negativeCases) test(`validator rejects ${code}`,()=>{
   const {lineage,bundle}=choose(type,cause); mutate(bundle);
@@ -206,25 +210,27 @@ test('CLI writes deterministic complete bytes and disk-verified hashes; rejects 
 });
 
 test('frozen source delivery list cross-checks root and test directory enumeration',async()=>{
-  const rootNames=(await readdir(root)).filter(n=>n.endsWith('.mjs') || n==='answer.schema.json' || n==='README.md');
+  const rootNames=(await readdir(root)).filter(n=>n.endsWith('.mjs') || n==='answer.schema.json' || n==='README.md' || n==='public-contract.json' || n==='public-contract.schema.json');
   const tests=(await readdir(path.join(root,'test'))).filter(n=>n.endsWith('.mjs')).map(n=>`test/${n}`);
   assert.deepEqual([...SOURCE_NAMES].sort(),[...rootNames,...tests].sort());
   console.log(`Source manifest cross-check: ${SOURCE_NAMES.length} files (explicit delivery map vs filesystem directories).`);
   const schema=JSON.parse(await readFile(path.join(root,'answer.schema.json'),'utf8'));
   const walk=x=>{if (x && typeof x==='object') { if (x.type==='object') {assert.equal(x.additionalProperties,false); assert.deepEqual([...x.required].sort(),Object.keys(x.properties).sort());} for (const child of Object.values(x)) walk(child);}};
   walk(schema);
-  assert.equal(schema.$defs.Value.oneOf.length,5);
+  assert.deepEqual(schema.required,['current','old','reason']);
+  assert.deepEqual(schema.$defs.RouteSlot.properties.state.enum,['value','not_specified','unavailable','unresolved']);
 });
 
 test('correctness projection never adds support text, offsets, citations or delivery labels',()=>{
   const bundle=choose('reversal','alternative_mediated').bundle;
   const projection=correctnessOnly(bundle.gold.checkpoints[1]);
   assert(projection.acceptedGraphs.length===2);
-  assert(!/"(?:quote|support|turn_id|start|end|delivered|delivery)":/.test(canonical(projection)));
-  projection.current.claims[0].value.text='mutation';
-  assert.notEqual(bundle.gold.checkpoints[1].G_correct.current.claims[0].value.text,'mutation');
+  assert(!/"(?:quote|turn_id|start|end|delivered|delivery)":/.test(canonical(projection)));
+  assert.deepEqual(projection.reason.support,[]);
+  projection.current.rows[0].route.value='mutation';
+  assert.notEqual(bundle.gold.checkpoints[1].private_causal.current.claims[0].value.text,'mutation');
   const input=extractionInput(bundle.family,2);
-  assert.deepEqual(Object.keys(input).sort(),['observed_at','public_header','turns']);
+  assert.deepEqual(Object.keys(input).sort(),['observed_at','public_contract','public_header','turns']);
   assert(!/"(?:ast|change_type|causal_class|G_correct|expected|controls|acceptedGraphs)":/.test(canonical(input)));
   assert.throws(()=>extractionInput(bundle.family,5));
 });
@@ -238,12 +244,12 @@ test('semantic validator rejects reversed causal support even when offsets and q
   assert.equal(reversed.length,original.length);
   turn.text=turn.text.slice(0,span.start)+reversed+turn.text.slice(span.end);
   span.quote=reversed;
-  bundle.family.ast.events.find(e=>e.record_name==='B').source_quotes[0].quote=turn.text;
+  bundle.family.ast.events.find(e=>e.source_turns[0]==='b2-focal' && !e.distractor).source_quotes[0].quote=turn.text;
   assert.throws(()=>validateFamily(bundle,lineage),{code:'causal_direction_support'});
 });
 
 test('inventory validator rejects cross-lineage aliases and missing causal allocations',()=>{
-  const alias=clone(inv); alias.lineages[1].bank.routes[0]=alias.lineages[0].bank.routes[0];
+  const alias=clone(inv); alias.lineages[1].bank.reasons[0].en=alias.lineages[0].bank.reasons[0].en;
   assert.throws(()=>validateInventory(alias),{code:'alias_overlap'});
   const counts=clone(inv); const l=counts.lineages.find(l=>l.split==='test' && l.causal_class==='direct'); l.causal_class='unstated';
   assert.throws(()=>validateInventory(counts),{code:'causal_allocation'});
@@ -254,22 +260,22 @@ test('inventory validator rejects cross-lineage aliases and missing causal alloc
 test('R3 effective reason strata match frozen counts at both checkpoints, including expiry',()=>{
   for (const [split,run,multi,unstated] of [['engineering',engineering,20,5],['pilot',pilot,40,10]]) {
     for (const batch of [2,4]) {
-      const strata=run.bundles.map(b=>reasonStratum(b.gold.checkpoints.find(c=>c.batch===batch).G_correct));
+      const strata=run.bundles.map(b=>reasonStratum(b.gold.checkpoints.find(c=>c.batch===batch).private_causal));
       assert.equal(strata.filter(s=>s.multiHop).length,multi);
       assert.equal(strata.filter(s=>s.status==='not_stated').length,unstated);
     }
     for(const b of run.bundles) for(const cp of b.gold.checkpoints) {
-      const actual=reasonStratum(cp.G_correct);
+      const actual=reasonStratum(cp.private_causal);
       assert.deepEqual(b.family.reason_strata.find(s=>s.batch===cp.batch),{batch:cp.batch,...actual});
       assert.equal(b.family.multi_hop,actual.multiHop);
       if(b.family.change_type!=='expiry')continue;
-      const parent=b.family.ast.events.find(e=>e.record_name===(cp.batch===2?'A':'C'));
+      const parent=b.family.ast.events.find(e=>e.source_turns[0]===`b${cp.batch===2?1:3}-focal` && !e.distractor);
       if(b.family.expiry_mode==='deadline') {
-        assert.deepEqual(cp.G_correct.acceptedGraphs.at(-1),{edges:[{from:'deadline',to:'decision'}]});
+        assert.deepEqual(cp.private_causal.acceptedGraphs.at(-1),{edges:[{from:'deadline',to:'decision'}]});
         assert.ok(parent.effective_interval.to);
       } else {
         assert.equal(parent.effective_interval.to,null);
-        assert.ok(!cp.G_correct.reason.nodes.some(n=>n.id==='deadline'));
+        assert.ok(!cp.private_causal.reason.nodes.some(n=>n.id==='deadline'));
         assert.match(b.family.lineage_id,/-R3$/);
         assert.equal(actual.status,b.family.causal_class==='unstated'?'not_stated':'stated');
       }
@@ -287,8 +293,8 @@ test('R3 effective reason strata match frozen counts at both checkpoints, includ
 test('gold-derived guard rejects a shortcut even when legacy topology says multi-hop',()=>{
   const {lineage,bundle}=choose('expiry','two_edge_serial');
   const cp=bundle.gold.checkpoints[0];
-  cp.G_correct.acceptedGraphs.push({edges:[{from:'b',to:'decision'}]});
-  assert.equal(reasonStratum(cp.G_correct).multiHop,false);
+  cp.private_causal.acceptedGraphs.push({edges:[{from:'b',to:'decision'}]});
+  assert.equal(reasonStratum(cp.private_causal).multiHop,false);
   assert.throws(()=>validateFamily(bundle,lineage),{code:'causal_topology'});
 });
 
@@ -316,7 +322,8 @@ test('R3 revisions disclose retired same-split parents; held-out freshness remai
     assert.ok(parent);assert.equal(parent.split,l.split);assert.equal(parent.status,'retired');
     assert.equal(parent.lineage_id,l.lineage_id.replace('-R3',''));
     assert.deepEqual(parent.ancestry.derivatives,[l.lineage_id]);
-    assert.deepEqual(JSON.parse(JSON.stringify(l.bank).replaceAll('-R3','').replaceAll('R3','')),parent.bank);
+    if(['development','test'].includes(l.split))assert.deepEqual(JSON.parse(JSON.stringify(l.bank.reasons).replaceAll('-R3','').replaceAll('R3','')),parent.bank.reasons);
+    else assert.equal(l.fixture_amendment.amendment,'A-4');
   }
 });
 
@@ -354,4 +361,106 @@ test('8 development and 30 test replacements remain provisional; no fresh banks 
     const rows=inv.lineages.filter(l=>gate.lineages[split].includes(l.lineage_id));
     assert.equal(rows.length,count);assert.ok(rows.every(l=>l.freshness==='provisional_revision_fresh_bank_pending'&&l.multiplicity===multiplicity&&l.ancestry.parent));
   }
+});
+
+test('A-4 contract schema, bilingual aliases and fixed historical vocabulary have no answer mappings',()=>{
+  assert.equal(validatePublicContract(),true);
+  const contract=publicContract();
+  assert.deepEqual(contract.slots.map(s=>[s.name,s.type,s.unit]),[['route','string','literal identifier'],['approval','boolean','none'],['cap','quantity','requests/day']]);
+  assert.equal(contract.aliases.subjects.length,25);
+  for(const row of [...contract.aliases.subjects,...contract.aliases.predicates,...contract.aliases.fields]) {
+    for(const lang of ['zh-Hant','en','mixed'])assert(row[lang].length>0);
+  }
+  assert(!/"(?:lineage_id|change_type|expected|acceptedGraphs|event_id|causal_class)":/.test(canonical(contract)));
+  const bad=clone(contract);bad.hidden='answer';assert.throws(()=>validatePublicContract(bad),{code:'contract_schema'});
+  const badSlot=clone(contract);badSlot.slots[0].type='number';
+  // The published schema fixes slot domain definitions, not just object shape.
+  assert.throws(()=>validatePublicContract(badSlot),{code:'contract_schema'});
+});
+
+test('A-4 every question names slots, complete label vocabulary and exact predecessor turns',()=>{
+  for(const {family:f}of pilot.bundles)for(const cp of f.checkpoints){
+    for(const word of ['route','approval','cap',cp.focal_turn,...cp.requested_predecessor_turns,...HISTORICAL_LABELS])assert(cp.question.includes(word));
+    assert.deepEqual(cp.requested_predecessor_turns,pilot.bundles.find(b=>b.family===f).gold.checkpoints.find(g=>g.batch===cp.batch).G_correct.old.records.map(r=>r.predecessor_turn));
+  }
+  assert.equal(choose('scope_change').bundle.gold.checkpoints[1].G_correct.old.records.length,2);
+});
+
+test('A-4 slot rows agree with independently replayed private semantics; absent is not false or unavailable',()=>{
+  for(const {family,gold,support}of pilot.bundles){
+    for(const cp of gold.checkpoints){
+      const {acceptedGraphs,...answer}=cp.G_correct;
+      validateAnswer(answer,true);
+      assert.deepEqual(acceptedGraphs,cp.private_causal.acceptedGraphs);
+      assert.equal(cp.G_correct.reason.status,cp.private_causal.reason.status);
+      assert.deepEqual(cp.G_correct.reason.support,[]);
+      for(const row of answer.current.rows){
+        assert.equal(row.approval.value,true);
+        assert.equal(row.route.state,'value');
+        assert.equal(row.cap.state,family.change_type==='correction'?'not_specified':'value');
+      }
+      assert.equal(support.checkpoints.find(s=>s.batch===cp.batch).acceptedGraphs.length,acceptedGraphs.length);
+    }
+  }
+  const {acceptedGraphs,...answer}=clone(choose('correction').bundle.gold.checkpoints[0].G_correct);
+  const row=answer.current.rows[0];row.approval={state:'value',value:false};assert.doesNotThrow(()=>validateAnswer(answer));
+  row.cap={state:'unavailable',value:null};assert.doesNotThrow(()=>validateAnswer(answer));
+  row.cap.value={decimal:'0',unit:'requests/day'};assert.throws(()=>validateAnswer(answer),{code:'slot_null'});
+  row.cap={state:'not_specified',value:null};row.route.value=true;assert.throws(()=>validateAnswer(answer),{code:'slot_type'});
+});
+
+test('A-4 equivalent row partitions, exact quantity conversions and duplicates collapse without hiding contradictions',()=>{
+  const row=choose('reversal').bundle.gold.checkpoints[0].G_correct.current.rows[0];
+  const expanded=CELLS.map(cell=>({...clone(row),scope:{any:[{all:Object.entries(cell).map(([field,value])=>({field,values:[value]}))}]}}));
+  assert.equal(slotRowsKey([row,row]),slotRowsKey(expanded));
+  const a=clone(row),b=clone(row);a.cap.value={decimal:'48',unit:'requests/day'};b.cap.value={decimal:'2.00',unit:'requests/hour'};
+  assert.equal(slotRowsKey([a]),slotRowsKey([b]));
+  b.approval.value=false;assert.notEqual(slotRowsKey([a,b]),slotRowsKey([a]));
+});
+
+test('A-4 independent matched worlds make question/contract-only answers non-identifiable and names are balanced',()=>{
+  const report=leakageReport(pilot.bundles);
+  assert.equal(report.matchedPairs,18);assert.equal(report.questionContractOnlyDeterministicPairAccuracyUpperBound,0.5);
+  assert.deepEqual(report,leakageReport(generateSplit('pilot').bundles));
+  for(const pair of matchedWorlds()){
+    assert.notDeepEqual(pair.worlds[0].answer,pair.worlds[1].answer);
+    for(const world of pair.worlds){validateAnswer(world.answer);for(const c of world.answer.reason.support)assert(world.source.includes(c.quote));}
+  }
+  const wrong=clone(pilot.bundles);wrong[0].family.ast.events.filter(e=>!e.distractor)[0].claims[0].value.text='answer-encoded-route';
+  assert.throws(()=>leakageReport(wrong),{code:'literal_route'});
+});
+
+test('A-4 inspected registry excludes exact families, lineages, ancestors and both retained hash forms',()=>{
+  const {registry}=inspectedRegistry();assert.equal(registry.counts.cases,504);assert.equal(registry.counts.lineages,66);
+  assert.equal(registry.counts.developmentLineages,33);assert.equal(registry.counts.testLineages,33);
+  const example=registry.cases[0];
+  for(const candidate of [{lineage_id:example.lineageId},{family_id:example.familyId},{lineage_id:'fresh-name',ancestors:[example.lineageId]},{serializationSHA256:example.serializationSHA256},{referenceRowSHA256:example.referenceRowSHA256}])assert.throws(()=>assertUninspected(candidate,inv,registry),{code:'inspected_reference_exclusion'});
+  const revised=clone(inv);revised.retired_lineages.push({lineage_id:'independent-looking-child',ancestry:{parent:example.lineageId}});
+  assert.throws(()=>assertUninspected({lineage_id:'independent-looking-child'},revised,registry),{code:'inspected_reference_exclusion'});
+  for(const b of pilot.bundles)assert.equal(assertUninspected(b.family,inv,registry),true);
+  for(const split of ['development','test']) {
+    assert.throws(()=>generateSplit(split),{code:'heldout_freshness_gate'});
+    const l=inv.lineages.find(l=>l.split===split);assert.throws(()=>generateFamily(l,l.members[0]),{code:'heldout_freshness_gate'});
+  }
+});
+
+
+test('A-4 rejects slot errors independently of the retained private causal projection',()=>{
+  for(const [component,mutate]of [
+    ['current',b=>{b.gold.checkpoints[0].G_correct.current.rows[0].route.value='wrong';}],
+    ['history',b=>{b.gold.checkpoints[0].G_correct.old.records[0].status='erroneous';}],
+    ['reason',b=>{b.gold.checkpoints[0].G_correct.reason.status='not_stated';}],
+  ]){
+    const {lineage,bundle}=choose('reversal');mutate(bundle);
+    assert.throws(()=>validateFamily(bundle,lineage),{code:`slot_semantic_${component}`});
+  }
+});
+
+test('A-4 history scope partitions and requested-record ordering compare extensionally',()=>{
+  const {bundle,lineage}=choose('scope_change');
+  const cp=bundle.gold.checkpoints[1],original=slotHistoryKey(cp.G_correct.old);
+  cp.G_correct.old.records.reverse();
+  for(const r of cp.G_correct.old.records)r.rows=r.rows.flatMap(row=>cellsOf(row.scope).map(cell=>({...clone(row),scope:{any:[{all:Object.entries(cell).map(([field,value])=>({field,values:[value]}))}]}})));
+  assert.equal(slotHistoryKey(cp.G_correct.old),original);
+  assert.doesNotThrow(()=>validateFamily(bundle,lineage));
 });

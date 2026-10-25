@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "HR-3 v0.3.4 Gold (scorer interchange v1)",
+  "title": "HR-3 A-4 private gold v2",
   "type": "object",
   "properties": {
     "question": {
@@ -16,17 +16,17 @@
             "unresolved"
           ]
         },
-        "claims": {
+        "rows": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/GoldClaim"
+            "$ref": "#/$defs/GoldRow"
           },
           "minItems": 0
         }
       },
       "required": [
         "status",
-        "claims"
+        "rows"
       ],
       "additionalProperties": false
     },
@@ -45,24 +45,30 @@
           "items": {
             "type": "object",
             "properties": {
+              "predecessor_turn": {
+                "type": "string"
+              },
               "status": {
                 "enum": [
                   "previously_adopted",
                   "erroneous",
-                  "expired"
+                  "expired",
+                  "unavailable",
+                  "unresolved"
                 ]
               },
-              "claims": {
+              "rows": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/$defs/GoldClaim"
+                  "$ref": "#/$defs/GoldRow"
                 },
                 "minItems": 0
               }
             },
             "required": [
+              "predecessor_turn",
               "status",
-              "claims"
+              "rows"
             ],
             "additionalProperties": false
           },
@@ -202,6 +208,288 @@
   ],
   "additionalProperties": false,
   "$defs": {
+    "GoldRow": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "valid": {
+          "$ref": "#/$defs/Interval"
+        },
+        "route": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "value"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_specified",
+                    "unavailable",
+                    "unresolved"
+                  ]
+                },
+                "value": {
+                  "type": "null"
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "approval": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "value"
+                },
+                "value": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_specified",
+                    "unavailable",
+                    "unresolved"
+                  ]
+                },
+                "value": {
+                  "type": "null"
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "cap": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "value"
+                },
+                "value": {
+                  "type": "object",
+                  "properties": {
+                    "decimal": {
+                      "type": "string",
+                      "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)$"
+                    },
+                    "unit": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "decimal",
+                    "unit"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_specified",
+                    "unavailable",
+                    "unresolved"
+                  ]
+                },
+                "value": {
+                  "type": "null"
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "required": [
+        "scope",
+        "valid",
+        "route",
+        "approval",
+        "cap"
+      ],
+      "additionalProperties": false
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "any": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "all": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "enum": [
+                        "country",
+                        "plan",
+                        "channel"
+                      ]
+                    },
+                    "values": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "field",
+                    "values"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 0
+              }
+            },
+            "required": [
+              "all"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "any"
+      ],
+      "additionalProperties": false
+    },
+    "Interval": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "GoldClaim": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "string"
+        },
+        "predicate": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Value"
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "valid": {
+          "$ref": "#/$defs/Interval"
+        },
+        "qualifiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "$ref": "#/$defs/Value"
+              }
+            },
+            "required": [
+              "key",
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "subject",
+        "predicate",
+        "value",
+        "scope",
+        "valid",
+        "qualifiers"
+      ],
+      "additionalProperties": false
+    },
     "Value": {
       "oneOf": [
         {
@@ -322,359 +610,6 @@
           "additionalProperties": false
         }
       ]
-    },
-    "Scope": {
-      "type": "object",
-      "properties": {
-        "any": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "all": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "field": {
-                      "enum": [
-                        "country",
-                        "plan",
-                        "channel"
-                      ]
-                    },
-                    "values": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      },
-                      "minItems": 1
-                    }
-                  },
-                  "required": [
-                    "field",
-                    "values"
-                  ],
-                  "additionalProperties": false
-                },
-                "minItems": 0
-              }
-            },
-            "required": [
-              "all"
-            ],
-            "additionalProperties": false
-          },
-          "minItems": 1
-        }
-      },
-      "required": [
-        "any"
-      ],
-      "additionalProperties": false
-    },
-    "Interval": {
-      "type": "object",
-      "properties": {
-        "from": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "to": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "from",
-        "to"
-      ],
-      "additionalProperties": false
-    },
-    "Citation": {
-      "type": "object",
-      "properties": {
-        "intent": {
-          "enum": [
-            "current",
-            "history"
-          ]
-        },
-        "item": {
-          "type": "integer"
-        },
-        "unit": {
-          "enum": [
-            "body",
-            "receipt"
-          ]
-        },
-        "source": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "quote": {
-          "type": "string"
-        },
-        "occurrence": {
-          "type": "integer",
-          "minimum": 1
-        }
-      },
-      "required": [
-        "intent",
-        "item",
-        "unit",
-        "source",
-        "quote",
-        "occurrence"
-      ],
-      "additionalProperties": false
-    },
-    "Claim": {
-      "type": "object",
-      "properties": {
-        "subject": {
-          "type": "string"
-        },
-        "predicate": {
-          "type": "string"
-        },
-        "value": {
-          "$ref": "#/$defs/Value"
-        },
-        "scope": {
-          "$ref": "#/$defs/Scope"
-        },
-        "valid": {
-          "$ref": "#/$defs/Interval"
-        },
-        "qualifiers": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "key": {
-                "type": "string"
-              },
-              "value": {
-                "$ref": "#/$defs/Value"
-              }
-            },
-            "required": [
-              "key",
-              "value"
-            ],
-            "additionalProperties": false
-          },
-          "minItems": 0
-        },
-        "citations": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Citation"
-          },
-          "minItems": 0
-        }
-      },
-      "required": [
-        "subject",
-        "predicate",
-        "value",
-        "scope",
-        "valid",
-        "qualifiers",
-        "citations"
-      ],
-      "additionalProperties": false
-    },
-    "GoldClaim": {
-      "type": "object",
-      "properties": {
-        "subject": {
-          "type": "string"
-        },
-        "predicate": {
-          "type": "string"
-        },
-        "value": {
-          "$ref": "#/$defs/Value"
-        },
-        "scope": {
-          "$ref": "#/$defs/Scope"
-        },
-        "valid": {
-          "$ref": "#/$defs/Interval"
-        },
-        "qualifiers": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "key": {
-                "type": "string"
-              },
-              "value": {
-                "$ref": "#/$defs/Value"
-              }
-            },
-            "required": [
-              "key",
-              "value"
-            ],
-            "additionalProperties": false
-          },
-          "minItems": 0
-        }
-      },
-      "required": [
-        "subject",
-        "predicate",
-        "value",
-        "scope",
-        "valid",
-        "qualifiers"
-      ],
-      "additionalProperties": false
-    },
-    "DeliveredUnit": {
-      "type": "object",
-      "properties": {
-        "intent": {
-          "enum": [
-            "current",
-            "history"
-          ]
-        },
-        "item": {
-          "type": "integer"
-        },
-        "unit": {
-          "enum": [
-            "body",
-            "receipt"
-          ]
-        },
-        "source": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "aliases": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "intent": {
-                "enum": [
-                  "current",
-                  "history"
-                ]
-              },
-              "item": {
-                "type": "integer"
-              },
-              "unit": {
-                "enum": [
-                  "body",
-                  "receipt"
-                ]
-              },
-              "source": {
-                "anyOf": [
-                  {
-                    "type": "integer"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "intent",
-              "item",
-              "unit",
-              "source"
-            ],
-            "additionalProperties": false
-          },
-          "minItems": 0
-        },
-        "segments": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "origin": {
-                "type": "string"
-              },
-              "start": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "text": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "origin",
-              "start",
-              "text"
-            ],
-            "additionalProperties": false
-          },
-          "minItems": 1
-        },
-        "normalize": {
-          "type": "boolean"
-        },
-        "truncate": {
-          "anyOf": [
-            {
-              "type": "integer",
-              "minimum": 0
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "intent",
-        "item",
-        "unit",
-        "source",
-        "aliases",
-        "segments",
-        "normalize",
-        "truncate"
-      ],
-      "additionalProperties": false
     }
   }
 }

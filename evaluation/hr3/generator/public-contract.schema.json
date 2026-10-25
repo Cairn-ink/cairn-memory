@@ -1,0 +1,657 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "languages",
+    "slots",
+    "aliases",
+    "historical_labels",
+    "values",
+    "scope",
+    "updates",
+    "citations",
+    "answer",
+    "examples"
+  ],
+  "properties": {
+    "version": {
+      "const": "hr3-public-contract-a4-v1"
+    },
+    "languages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "slots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "type",
+          "unit",
+          "legacy_field",
+          "aliases"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "route",
+              "approval",
+              "cap"
+            ]
+          },
+          "type": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "legacy_field": {
+            "type": "string"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "const": [
+        {
+          "name": "route",
+          "type": "string",
+          "unit": "literal identifier",
+          "legacy_field": "value",
+          "aliases": [
+            "route",
+            "路線",
+            "value"
+          ]
+        },
+        {
+          "name": "approval",
+          "type": "boolean",
+          "unit": "none",
+          "legacy_field": "approval",
+          "aliases": [
+            "approval",
+            "approval required",
+            "需經核准"
+          ]
+        },
+        {
+          "name": "cap",
+          "type": "quantity",
+          "unit": "requests/day",
+          "legacy_field": "cap",
+          "aliases": [
+            "cap",
+            "daily request cap",
+            "每日請求上限"
+          ]
+        }
+      ]
+    },
+    "aliases": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subjects",
+        "predicates",
+        "fields",
+        "routes"
+      ],
+      "properties": {
+        "subjects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "canonical",
+              "zh-Hant",
+              "en",
+              "mixed"
+            ],
+            "properties": {
+              "canonical": {
+                "type": "string"
+              },
+              "zh-Hant": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "en": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "mixed": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "predicates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "canonical",
+              "zh-Hant",
+              "en",
+              "mixed"
+            ],
+            "properties": {
+              "canonical": {
+                "type": "string"
+              },
+              "zh-Hant": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "en": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "mixed": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "canonical",
+              "zh-Hant",
+              "en",
+              "mixed"
+            ],
+            "properties": {
+              "canonical": {
+                "type": "string"
+              },
+              "zh-Hant": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "en": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "mixed": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "routes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "historical_labels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "canonical",
+          "zh-Hant",
+          "en",
+          "mixed"
+        ],
+        "properties": {
+          "canonical": {
+            "type": "string",
+            "enum": [
+              "previously_adopted",
+              "erroneous",
+              "expired",
+              "unavailable",
+              "unresolved"
+            ]
+          },
+          "zh-Hant": {
+            "type": "string"
+          },
+          "en": {
+            "type": "string"
+          },
+          "mixed": {
+            "type": "string"
+          }
+        }
+      },
+      "const": [
+        {
+          "canonical": "previously_adopted",
+          "zh-Hant": "曾採用",
+          "en": "previously adopted",
+          "mixed": "曾採用 previously adopted"
+        },
+        {
+          "canonical": "erroneous",
+          "zh-Hant": "原斷言有誤且未曾採用",
+          "en": "erroneous, never adopted",
+          "mixed": "有誤 erroneous"
+        },
+        {
+          "canonical": "expired",
+          "zh-Hant": "已到期",
+          "en": "expired",
+          "mixed": "已到期 expired"
+        },
+        {
+          "canonical": "unavailable",
+          "zh-Hant": "證據不可得",
+          "en": "unavailable",
+          "mixed": "不可得 unavailable"
+        },
+        {
+          "canonical": "unresolved",
+          "zh-Hant": "無法確定",
+          "en": "unresolved",
+          "mixed": "未決 unresolved"
+        }
+      ]
+    },
+    "values": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "keys",
+        "normalization",
+        "routes",
+        "boolean_aliases",
+        "units",
+        "quantity",
+        "duplicates",
+        "supplied_null",
+        "slot_states",
+        "slot_state_rule"
+      ],
+      "properties": {
+        "keys": {
+          "type": "string"
+        },
+        "normalization": {
+          "type": "string"
+        },
+        "routes": {
+          "type": "string"
+        },
+        "boolean_aliases": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "true",
+            "false"
+          ],
+          "properties": {
+            "true": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "false": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "units": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "alias",
+              "canonical",
+              "numerator",
+              "denominator"
+            ],
+            "properties": {
+              "alias": {
+                "type": "string"
+              },
+              "canonical": {
+                "type": "string"
+              },
+              "numerator": {
+                "type": "string"
+              },
+              "denominator": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "quantity": {
+          "type": "string"
+        },
+        "duplicates": {
+          "type": "string"
+        },
+        "supplied_null": {
+          "type": "string"
+        },
+        "slot_states": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "slot_state_rule": {
+          "type": "string"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "domain",
+        "equality",
+        "time_zone",
+        "interval",
+        "expiry"
+      ],
+      "properties": {
+        "domain": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "country",
+            "plan",
+            "channel"
+          ],
+          "properties": {
+            "country": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "plan": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "channel": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "equality": {
+          "type": "string"
+        },
+        "time_zone": {
+          "type": "string"
+        },
+        "interval": {
+          "type": "string"
+        },
+        "expiry": {
+          "type": "string"
+        }
+      }
+    },
+    "updates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "correction",
+        "reversal",
+        "refinement",
+        "scope_change",
+        "complete_replacement",
+        "commitment"
+      ],
+      "properties": {
+        "correction": {
+          "type": "string"
+        },
+        "reversal": {
+          "type": "string"
+        },
+        "refinement": {
+          "type": "string"
+        },
+        "scope_change": {
+          "type": "string"
+        },
+        "complete_replacement": {
+          "type": "string"
+        },
+        "commitment": {
+          "type": "string"
+        }
+      }
+    },
+    "citations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "body",
+        "receipt",
+        "aliases",
+        "normalization",
+        "truncation",
+        "overlap",
+        "extraction_anchor"
+      ],
+      "properties": {
+        "body": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "intent",
+            "item",
+            "unit",
+            "source",
+            "quote",
+            "occurrence"
+          ],
+          "properties": {
+            "intent": {
+              "type": "string"
+            },
+            "item": {
+              "type": "string"
+            },
+            "unit": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "quote": {
+              "type": "string"
+            },
+            "occurrence": {
+              "type": "string"
+            }
+          }
+        },
+        "receipt": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "intent",
+            "item",
+            "unit",
+            "source",
+            "quote",
+            "occurrence"
+          ],
+          "properties": {
+            "intent": {
+              "type": "string"
+            },
+            "item": {
+              "type": "string"
+            },
+            "unit": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "quote": {
+              "type": "string"
+            },
+            "occurrence": {
+              "type": "string"
+            }
+          }
+        },
+        "aliases": {
+          "type": "string"
+        },
+        "normalization": {
+          "type": "string"
+        },
+        "truncation": {
+          "type": "string"
+        },
+        "overlap": {
+          "type": "string"
+        },
+        "extraction_anchor": {
+          "type": "string"
+        }
+      },
+      "const": {
+        "body": {
+          "intent": "current|history",
+          "item": "zero-based delivered item index",
+          "unit": "body",
+          "source": "null",
+          "quote": "verbatim nonempty delivered item.body substring",
+          "occurrence": "one-based exact occurrence"
+        },
+        "receipt": {
+          "intent": "current|history",
+          "item": "zero-based delivered item index",
+          "unit": "receipt",
+          "source": "zero-based source index i",
+          "quote": "verbatim nonempty item.sources[i].excerpt substring",
+          "occurrence": "one-based exact occurrence"
+        },
+        "aliases": "Resolve only legitimate delivered sameAs/sameAsBody aliases. Never substitute a different unit, source or occurrence.",
+        "normalization": "Use exactly the delivered body/excerpt, after any delivery normalization. A raw-source spelling absent from delivery cannot anchor a citation.",
+        "truncation": "Cite only the delivered substring; omitted text and its provenance are not evidence.",
+        "overlap": "Count exact matches at successive UTF-16 start positions including overlaps. Overlapping occurrence ambiguity requires existing contextual resolution, never an arbitrary substitute.",
+        "extraction_anchor": "{turn_id,quote,occurrence}; exact matching, one-based overlapping occurrences, harness-computed UTF-16 offsets; no fuzzy normalization."
+      }
+    },
+    "answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "form",
+        "current_statuses",
+        "old_statuses",
+        "reason_statuses",
+        "explanation",
+        "negative_reason"
+      ],
+      "properties": {
+        "form": {
+          "type": "string"
+        },
+        "current_statuses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "old_statuses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reason_statuses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "explanation": {
+          "type": "string"
+        },
+        "negative_reason": {
+          "type": "string"
+        }
+      }
+    },
+    "examples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "en",
+          "zh-Hant"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "en": {
+            "type": "string"
+          },
+          "zh-Hant": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hr3:public-contract:a4:v1"
+}

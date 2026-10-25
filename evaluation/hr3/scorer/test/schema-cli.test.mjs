@@ -29,26 +29,24 @@ test('all answer fields required; extra fields rejected at each object level', (
     }
   }
 });
-test('all five Value variants validate; numeric decimals and bad occurrence do not', () => {
+test('typed nullable slots and decimal strings; strict citation occurrence', () => {
   const { submission } = fixture();
-  const values = [
-    { type: 'Text', text: '文字' }, { type: 'Boolean', value: true },
-    { type: 'Quantity', decimal: '1.25', unit: 'm' }, { type: 'Instant', iso: '2026-10-25' },
-    { type: 'Range', lower: null, upper: '2', lowerClosed: false, upperClosed: false, unit: 'm' },
-  ];
-  for (const value of values) { submission.answer.current.claims[0].value = value; assert.deepEqual(validate(submissionSchema, submission), []); }
-  submission.answer.current.claims[0].value = { type: 'Quantity', decimal: 1.25, unit: 'm' };
+  submission.answer.current.rows[0].cap.value = { decimal: '1.25', unit: 'requests/day' };
+  assert.deepEqual(validate(submissionSchema, submission), []);
+  submission.answer.current.rows[0].cap.value.decimal = 1.25;
   assert(validate(submissionSchema, submission).length);
-  submission.answer.current.claims[0].value = values[0];
-  submission.answer.reason.edges[0].citations[0].occurrence = 0;
+  submission.answer.current.rows[0].cap.value.decimal = '1x25';
+  assert(validate(submissionSchema, submission).length);
+  submission.answer.current.rows[0].cap.value.decimal = '1.25';
+  submission.answer.reason.support[0].occurrence = 0;
   assert(validate(submissionSchema, submission).length);
 });
 test('gold schema excludes citations and embedded delivery labels', () => {
   const { gold } = fixture();
   assert.deepEqual(validate(goldSchema, gold), []);
-  gold.current.claims[0].citations = [];
+  gold.current.rows[0].citations = [];
   assert(validate(goldSchema, gold).length);
-  delete gold.current.claims[0].citations;
+  delete gold.current.rows[0].citations;
   gold.reason.acceptedGraphs[0].edges[0].delivered = true;
   assert(validate(goldSchema, gold).length);
 });

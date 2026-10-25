@@ -1,0 +1,589 @@
+{
+  "version": "hr3-public-contract-a4-v1",
+  "languages": [
+    "zh-Hant",
+    "en",
+    "mixed"
+  ],
+  "slots": [
+    {
+      "name": "route",
+      "type": "string",
+      "unit": "literal identifier",
+      "legacy_field": "value",
+      "aliases": [
+        "route",
+        "路線",
+        "value"
+      ]
+    },
+    {
+      "name": "approval",
+      "type": "boolean",
+      "unit": "none",
+      "legacy_field": "approval",
+      "aliases": [
+        "approval",
+        "approval required",
+        "需經核准"
+      ]
+    },
+    {
+      "name": "cap",
+      "type": "quantity",
+      "unit": "requests/day",
+      "legacy_field": "cap",
+      "aliases": [
+        "cap",
+        "daily request cap",
+        "每日請求上限"
+      ]
+    }
+  ],
+  "aliases": {
+    "subjects": [
+      {
+        "canonical": "pakui service",
+        "zh-Hant": [
+          "pakui服務"
+        ],
+        "en": [
+          "pakui service"
+        ],
+        "mixed": [
+          "pakui service 服務"
+        ]
+      },
+      {
+        "canonical": "vomai service",
+        "zh-Hant": [
+          "vomai服務"
+        ],
+        "en": [
+          "vomai service"
+        ],
+        "mixed": [
+          "vomai service 服務"
+        ]
+      },
+      {
+        "canonical": "nelii service",
+        "zh-Hant": [
+          "nelii服務"
+        ],
+        "en": [
+          "nelii service"
+        ],
+        "mixed": [
+          "nelii service 服務"
+        ]
+      },
+      {
+        "canonical": "tevoi service",
+        "zh-Hant": [
+          "tevoi服務"
+        ],
+        "en": [
+          "tevoi service"
+        ],
+        "mixed": [
+          "tevoi service 服務"
+        ]
+      },
+      {
+        "canonical": "sarui service",
+        "zh-Hant": [
+          "sarui服務"
+        ],
+        "en": [
+          "sarui service"
+        ],
+        "mixed": [
+          "sarui service 服務"
+        ]
+      },
+      {
+        "canonical": "lumii service",
+        "zh-Hant": [
+          "lumii服務"
+        ],
+        "en": [
+          "lumii service"
+        ],
+        "mixed": [
+          "lumii service 服務"
+        ]
+      },
+      {
+        "canonical": "neliu service",
+        "zh-Hant": [
+          "neliu服務"
+        ],
+        "en": [
+          "neliu service"
+        ],
+        "mixed": [
+          "neliu service 服務"
+        ]
+      },
+      {
+        "canonical": "tevou service",
+        "zh-Hant": [
+          "tevou服務"
+        ],
+        "en": [
+          "tevou service"
+        ],
+        "mixed": [
+          "tevou service 服務"
+        ]
+      },
+      {
+        "canonical": "vomau service",
+        "zh-Hant": [
+          "vomau服務"
+        ],
+        "en": [
+          "vomau service"
+        ],
+        "mixed": [
+          "vomau service 服務"
+        ]
+      },
+      {
+        "canonical": "saruu service",
+        "zh-Hant": [
+          "saruu服務"
+        ],
+        "en": [
+          "saruu service"
+        ],
+        "mixed": [
+          "saruu service 服務"
+        ]
+      },
+      {
+        "canonical": "lumiu service",
+        "zh-Hant": [
+          "lumiu服務"
+        ],
+        "en": [
+          "lumiu service"
+        ],
+        "mixed": [
+          "lumiu service 服務"
+        ]
+      },
+      {
+        "canonical": "pakuu service",
+        "zh-Hant": [
+          "pakuu服務"
+        ],
+        "en": [
+          "pakuu service"
+        ],
+        "mixed": [
+          "pakuu service 服務"
+        ]
+      },
+      {
+        "canonical": "pakui service Annex",
+        "zh-Hant": [
+          "pakui服務 Annex"
+        ],
+        "en": [
+          "pakui service Annex"
+        ],
+        "mixed": [
+          "pakui service 服務 Annex"
+        ]
+      },
+      {
+        "canonical": "vomai service Annex",
+        "zh-Hant": [
+          "vomai服務 Annex"
+        ],
+        "en": [
+          "vomai service Annex"
+        ],
+        "mixed": [
+          "vomai service 服務 Annex"
+        ]
+      },
+      {
+        "canonical": "nelii service Annex",
+        "zh-Hant": [
+          "nelii服務 Annex"
+        ],
+        "en": [
+          "nelii service Annex"
+        ],
+        "mixed": [
+          "nelii service 服務 Annex"
+        ]
+      },
+      {
+        "canonical": "tevoi service Annex",
+        "zh-Hant": [
+          "tevoi服務 Annex"
+        ],
+        "en": [
+          "tevoi service Annex"
+        ],
+        "mixed": [
+          "tevoi service 服務 Annex"
+        ]
+      },
+      {
+        "canonical": "sarui service Annex",
+        "zh-Hant": [
+          "sarui服務 Annex"
+        ],
+        "en": [
+          "sarui service Annex"
+        ],
+        "mixed": [
+          "sarui service 服務 Annex"
+        ]
+      },
+      {
+        "canonical": "lumii service Annex",
+        "zh-Hant": [
+          "lumii服務 Annex"
+        ],
+        "en": [
+          "lumii service Annex"
+        ],
+        "mixed": [
+          "lumii service 服務 Annex"
+        ]
+      },
+      {
+        "canonical": "neliu service Annex",
+        "zh-Hant": [
+          "neliu服務 Annex"
+        ],
+        "en": [
+          "neliu service Annex"
+        ],
+        "mixed": [
+          "neliu service 服務 Annex"
+        ]
+      },
+      {
+        "canonical": "tevou service Annex",
+        "zh-Hant": [
+          "tevou服務 Annex"
+        ],
+        "en": [
+          "tevou service Annex"
+        ],
+        "mixed": [
+          "tevou service 服務 Annex"
+        ]
+      },
+      {
+        "canonical": "vomau service Annex",
+        "zh-Hant": [
+          "vomau服務 Annex"
+        ],
+        "en": [
+          "vomau service Annex"
+        ],
+        "mixed": [
+          "vomau service 服務 Annex"
+        ]
+      },
+      {
+        "canonical": "saruu service Annex",
+        "zh-Hant": [
+          "saruu服務 Annex"
+        ],
+        "en": [
+          "saruu service Annex"
+        ],
+        "mixed": [
+          "saruu service 服務 Annex"
+        ]
+      },
+      {
+        "canonical": "lumiu service Annex",
+        "zh-Hant": [
+          "lumiu服務 Annex"
+        ],
+        "en": [
+          "lumiu service Annex"
+        ],
+        "mixed": [
+          "lumiu service 服務 Annex"
+        ]
+      },
+      {
+        "canonical": "pakuu service Annex",
+        "zh-Hant": [
+          "pakuu服務 Annex"
+        ],
+        "en": [
+          "pakuu service Annex"
+        ],
+        "mixed": [
+          "pakuu service 服務 Annex"
+        ]
+      },
+      {
+        "canonical": "engineering example",
+        "zh-Hant": [
+          "工程範例"
+        ],
+        "en": [
+          "engineering example"
+        ],
+        "mixed": [
+          "engineering 範例"
+        ]
+      }
+    ],
+    "predicates": [
+      {
+        "canonical": "dispatch configuration",
+        "zh-Hant": [
+          "派送設定"
+        ],
+        "en": [
+          "dispatch configuration"
+        ],
+        "mixed": [
+          "dispatch 設定",
+          "dispatch configuration 派送設定"
+        ]
+      }
+    ],
+    "fields": [
+      {
+        "canonical": "route",
+        "zh-Hant": [
+          "路線"
+        ],
+        "en": [
+          "route",
+          "value"
+        ],
+        "mixed": [
+          "route 路線"
+        ]
+      },
+      {
+        "canonical": "approval",
+        "zh-Hant": [
+          "需經核准"
+        ],
+        "en": [
+          "approval",
+          "approval required"
+        ],
+        "mixed": [
+          "approval 核准"
+        ]
+      },
+      {
+        "canonical": "cap",
+        "zh-Hant": [
+          "每日請求上限"
+        ],
+        "en": [
+          "cap",
+          "daily request cap"
+        ],
+        "mixed": [
+          "daily cap 每日請求上限"
+        ]
+      }
+    ],
+    "routes": []
+  },
+  "historical_labels": [
+    {
+      "canonical": "previously_adopted",
+      "zh-Hant": "曾採用",
+      "en": "previously adopted",
+      "mixed": "曾採用 previously adopted"
+    },
+    {
+      "canonical": "erroneous",
+      "zh-Hant": "原斷言有誤且未曾採用",
+      "en": "erroneous, never adopted",
+      "mixed": "有誤 erroneous"
+    },
+    {
+      "canonical": "expired",
+      "zh-Hant": "已到期",
+      "en": "expired",
+      "mixed": "已到期 expired"
+    },
+    {
+      "canonical": "unavailable",
+      "zh-Hant": "證據不可得",
+      "en": "unavailable",
+      "mixed": "不可得 unavailable"
+    },
+    {
+      "canonical": "unresolved",
+      "zh-Hant": "無法確定",
+      "en": "unresolved",
+      "mixed": "未決 unresolved"
+    }
+  ],
+  "values": {
+    "keys": "canonical English JSON keys; canonical fictional names from aliases; evidence quotes remain verbatim in delivered language",
+    "normalization": "NFKC; collapse whitespace and trim for names and scalar textual values only. Exact citation quotes are never normalized by the submitter.",
+    "routes": "Literal normalized identifiers; no route alias is declared. Never infer route names from subjects.",
+    "boolean_aliases": {
+      "true": [
+        "true",
+        "是",
+        "需要",
+        "yes"
+      ],
+      "false": [
+        "false",
+        "否",
+        "不需要",
+        "no"
+      ]
+    },
+    "units": [
+      {
+        "alias": "requests/day",
+        "canonical": "requests/day",
+        "numerator": "1",
+        "denominator": "1"
+      },
+      {
+        "alias": "requests/hour",
+        "canonical": "requests/day",
+        "numerator": "24",
+        "denominator": "1"
+      },
+      {
+        "alias": "requests/minute",
+        "canonical": "requests/day",
+        "numerator": "1440",
+        "denominator": "1"
+      }
+    ],
+    "quantity": "Exact decimal rational multiplied by the declared unit ratio; no floating-point rounding, fuzzy correction or missing-value completion.",
+    "duplicates": "Collapse extensionally identical assertions and equivalent duplicates; retain contradictory extras as errors.",
+    "supplied_null": "Extraction null means not supplied; never deletion, false, zero or inheritance.",
+    "slot_states": [
+      "value",
+      "not_specified",
+      "unavailable",
+      "unresolved"
+    ],
+    "slot_state_rule": "Only value has non-null content; not_specified asserts that the decision specifies no value, distinct from missing evidence."
+  },
+  "scope": {
+    "domain": {
+      "country": [
+        "TW",
+        "JP",
+        "US"
+      ],
+      "plan": [
+        "free",
+        "pro"
+      ],
+      "channel": [
+        "web",
+        "app"
+      ]
+    },
+    "equality": "Expand any/all partitions to the 12 Cartesian cells; compare extensionally.",
+    "time_zone": "Asia/Taipei",
+    "interval": "Source-claimed [from,to), not a query-time slice; null endpoint is unbounded. Bare dates start at local midnight; through a date ends at next local midnight.",
+    "expiry": "No successor or fallback to an older decision; last-known values belong to requested expired history."
+  },
+  "updates": {
+    "correction": "The predecessor assertion was erroneous and never adopted; replacement is adopted.",
+    "reversal": "Withdraw the whole predecessor and its fields, then adopt the replacement.",
+    "refinement": "Partial update inherits unspecified fields.",
+    "scope_change": "Preserve unaffected audience cells.",
+    "complete_replacement": "Clear all selected predecessor fields before installing supplied assignments.",
+    "commitment": "Proposed, rejected and quoted suggestions are not adopted decisions; never confuse rejection of the predecessor with rejection of the replacement."
+  },
+  "citations": {
+    "body": {
+      "intent": "current|history",
+      "item": "zero-based delivered item index",
+      "unit": "body",
+      "source": "null",
+      "quote": "verbatim nonempty delivered item.body substring",
+      "occurrence": "one-based exact occurrence"
+    },
+    "receipt": {
+      "intent": "current|history",
+      "item": "zero-based delivered item index",
+      "unit": "receipt",
+      "source": "zero-based source index i",
+      "quote": "verbatim nonempty item.sources[i].excerpt substring",
+      "occurrence": "one-based exact occurrence"
+    },
+    "aliases": "Resolve only legitimate delivered sameAs/sameAsBody aliases. Never substitute a different unit, source or occurrence.",
+    "normalization": "Use exactly the delivered body/excerpt, after any delivery normalization. A raw-source spelling absent from delivery cannot anchor a citation.",
+    "truncation": "Cite only the delivered substring; omitted text and its provenance are not evidence.",
+    "overlap": "Count exact matches at successive UTF-16 start positions including overlaps. Overlapping occurrence ambiguity requires existing contextual resolution, never an arbitrary substitute.",
+    "extraction_anchor": "{turn_id,quote,occurrence}; exact matching, one-based overlapping occurrences, harness-computed UTF-16 offsets; no fuzzy normalization."
+  },
+  "answer": {
+    "form": "{current:{status,rows},old:{status,records:[{predecessor_turn,status,rows}]},reason:{status,support}}; every key required; no extra properties. Rows contain scope, valid, route, approval, cap, citations. See answer.schema.json.",
+    "current_statuses": [
+      "active",
+      "no_active_decision",
+      "unresolved"
+    ],
+    "old_statuses": [
+      "available",
+      "unavailable",
+      "none"
+    ],
+    "reason_statuses": [
+      "stated",
+      "not_stated",
+      "unavailable"
+    ],
+    "explanation": "Select a complete causal explanation from delivered quotations: every serial link, all necessary conjunctive language, or one independently sufficient complete alternative. No graph IDs. Bare deadlines alone earn no reason credit unless their passage is stated to cause expiry.",
+    "negative_reason": "not_stated requires empty support and means no stated cause, not merely unavailable evidence."
+  },
+  "examples": [
+    {
+      "id": "adoption",
+      "en": "Record elm said route = qeta. Correction: elm was never adopted; adopt record fern with route = voxi. The old assertion is erroneous; fern is adopted. By contrast, “reject the proposal fern” adopts no replacement.",
+      "zh-Hant": "elm 曾記載路線 qeta。更正：elm 從未採用；採用 fern，路線 voxi。elm 有誤，fern 已採用。「否決 fern 提案」則不採用替代決定。"
+    },
+    {
+      "id": "partial_complete",
+      "en": "elm specifies route qeta, approval true, cap 72 requests/day. A partial cap-only update to 4 requests/hour inherits route and approval and yields cap 96 requests/day. A complete replacement supplying route voxi alone specifies neither approval nor cap.",
+      "zh-Hant": "elm 指定路線 qeta、需經核准、上限每日 72。僅部分更新上限為每小時 4，保留路線與核准，上限等於每日 96。完整替換若只供應路線 voxi，核准及上限皆為 not_specified。"
+    },
+    {
+      "id": "scope_expiry",
+      "en": "An update only for TW preserves JP and US. Through 2032-02-03 ends at 2032-02-03T16:00:00.000Z; its passage explicitly causes expiry, with no fallback.",
+      "zh-Hant": "只更新 TW，保留 JP、US。至 2032-02-03 當日含，終點為 2032-02-03T16:00:00.000Z。明說期限經過造成到期，且不恢復舊決定。"
+    },
+    {
+      "id": "commitment",
+      "en": "“Proposal: route voxi”, “rejected: route voxi” and “quotation only: route voxi” enact no update. “The old claim was wrong; we adopt route voxi” does enact a correction.",
+      "zh-Hant": "「提案：路線 voxi」、「否決路線 voxi」、「僅引述：路線 voxi」均不更新。「原斷言有誤；我們採用路線 voxi」則採用更正。"
+    },
+    {
+      "id": "citation",
+      "en": "For body text “abababa”, quote “aba” starts at UTF-16 positions 0, 2 and 4. occurrence 2 names position 2; overlapping ambiguity is not repaired by switching occurrences. For current item 0 body: {intent:\"current\",item:0,unit:\"body\",source:null,quote:\"aba\",occurrence:2}. A receipt uses unit:\"receipt\",source:0 and only that delivered excerpt.",
+      "zh-Hant": "本文 abababa 中 aba 從 UTF-16 位置 0、2、4 開始；occurrence 2 指位置 2。重疊歧義不以改換次數修補。receipt 必須指定 source:0 且只能引用已交付的該段節錄。"
+    },
+    {
+      "id": "normalization_alias",
+      "en": "The declared predicate alias dispatch 設定 equals dispatch configuration. NFKC maps full-width Ａ to A in scalar text. If delivered text is “A”, quote “Ａ” fails. If only “capacity fell” survived truncation, the omitted causal conclusion cannot be cited. A delivered sameAsBody may address that same body, never an absent receipt.",
+      "zh-Hant": "派送設定與 dispatch configuration 依公開表對應。純量文字以 NFKC 將 Ａ 轉 A；若交付文字為 A，引用 Ａ 無效。若截斷後只剩「容量下降」，不能引用未交付的因果結論。sameAsBody 僅能指向實際交付的本文。"
+    }
+  ]
+}

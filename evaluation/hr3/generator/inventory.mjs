@@ -1,4 +1,5 @@
-import { CAUSES, TYPES, DEFAULT_SEED, VERSION, shuffle } from './common.mjs';
+import { PUBLIC_CONTRACT } from './contract.mjs';
+import { CAUSES, TYPES, DEFAULT_SEED, ALLOCATION_SEED, VERSION, shuffle, sha256 } from './common.mjs';
 
 export const SPLITS = {
   engineering: { lineagesPerType: 6, multiplicity: 1, causalLineages: [1,1,1,1,1,1], languages: [10,10,10], cards: 20, safety: 10 },
@@ -36,14 +37,28 @@ function semanticBank(root, t, suffix, id) {
     routes:['A','B','C'].map(letter => `${root.en[t]}${suffix}-${letter}`),
     reasons:Array.from({length:4}, (_,i) => ({id:`${id}/reason${i+1}`, zh:`${root.reason[(t+i)%5]}，檢查點 ${suffix}.${i+1}`, en:`${root.reasonEn[(t+i)%5]} at station ${suffix}.${i+1}`})) };
 }
+export function namingPool(split) {
+  return {
+    subjects:PUBLIC_CONTRACT.aliases.subjects.slice(split==='engineering'?0:6,split==='engineering'?6:12).map(s=>({en:s.canonical,zh:s['zh-Hant'][0],mixed:s.mixed[0]})),
+    routes:shuffle(['r','s','t'].map(x=>`${x}-${split==='pilot'?'mavo':'keli'}`), `hr3-a4/${split}/route-lexicon`),
+  };
+}
+function publicBank(split,t,ordinal,legacy) {
+  const pool=namingPool(split);
+  const subject=shuffle(pool.subjects,`hr3-a4/${split}/subjects/${t}`)[ordinal-1];
+  const stations=shuffle(Array.from({length:30},(_,i)=>sha256(`hr3-a4/${split}/station/${i}`).slice(0,10)),`hr3-a4/${split}/stations`);
+  const station=stations[t*6+ordinal-1];
+  const reasons=legacy.reasons.map((r,i)=>{const tag=sha256(`${station}/${i}`).slice(0,10);return {...r,en:r.en.replace(/ at station .*/,` at station ${tag}`),zh:r.zh.replace(/，檢查點 .*/,`，站點 ${tag}`)};});
+  return {...legacy,reasons,subjectEn:subject.en,subjectZh:subject.zh,subjectMixed:subject.mixed,routes:pool.routes};
+}
 export function inventory(seed = DEFAULT_SEED) {
   const lineages = [], retired_lineages = [];
   for (const [split, spec] of Object.entries(SPLITS)) {
     const count = spec.lineagesPerType * 5 * spec.multiplicity;
-    const languages = shuffle(spec.languages.flatMap((n,i) => Array(n).fill(GRAMMAR.languages[i])), `${DEFAULT_SEED}/${split}/languages`);
+    const languages = shuffle(spec.languages.flatMap((n,i) => Array(n).fill(GRAMMAR.languages[i])), `${ALLOCATION_SEED}/${split}/languages`);
     const order = Array.from({length: count}, (_,i) => i);
-    const cards = new Set(shuffle(order, `${DEFAULT_SEED}/${split}/cards`).slice(0, spec.cards));
-    const safety = new Set(shuffle(order, `${DEFAULT_SEED}/${split}/safety`).slice(0, spec.safety));
+    const cards = new Set(shuffle(order, `${ALLOCATION_SEED}/${split}/cards`).slice(0, spec.cards));
+    const safety = new Set(shuffle(order, `${ALLOCATION_SEED}/${split}/safety`).slice(0, spec.safety));
     let index = 0, cardIndex = 0;
     for (let t = 0; t < TYPES.length; t++) {
       let ordinal = 0;
@@ -61,8 +76,9 @@ export function inventory(seed = DEFAULT_SEED) {
         lineages.push({ lineage_id:id, split, type:TYPES[t], causal_class:CAUSES[c], authored_rationale_topology:CAUSES[c], multi_hop:c >= 2,
           expiry_mode:TYPES[t] !== 'expiry' ? null : CAUSES[c] === 'direct' ? 'deadline' : CAUSES[c] === 'unstated' ? 'unexplained_lapse' : 'conditional_lapse',
           ancestry: { parent:renewed ? id.replace('-R3','') : null, relation:renewed ? 'revision' : 'root', derivatives:[], aliases:[], grammar:VERSION, bank_id:`bank/${id}` },
+          fixture_amendment:['engineering','pilot'].includes(split)?{amendment:'A-4',parent_bank:`bank/${id}`,relation:'same-lineage semantic fixture revision; fresh seed does not create a new independent root',previous_snapshot:'artifacts/previous-e5555ee3/pilot/lineage-inventory.json'}:null,
           freshness:renewed ? (['engineering','pilot'].includes(split) ? 'archived_fixture_revision' : 'provisional_revision_fresh_bank_pending') : 'original_root',
-          bank:semanticBank(root,t,suffix,id),
+          bank:['engineering','pilot'].includes(split) ? publicBank(split,t,ordinal,semanticBank(root,t,suffix,id)) : semanticBank(root,t,suffix,id),
           multiplicity:spec.multiplicity, rendered_world_audit_members:(split==='test'?members.slice(0,2):members).map(m=>m.family_id), members });
         if (renewed) {
           const retiredId = id.replace('-R3','');
@@ -74,7 +90,7 @@ export function inventory(seed = DEFAULT_SEED) {
       }
     }
   }
-  return { version:VERSION, seed, allocationSeed:DEFAULT_SEED, grammar:GRAMMAR, splits:SPLITS, lineages, retired_lineages,
+  return { version:VERSION, seed, allocationSeed:ALLOCATION_SEED, grammar:GRAMMAR, splits:SPLITS, lineages, retired_lineages,
     preDevelopmentGates:{freshAffectedHeldOutBanks:{status:'pending',after:'independent calibration v2 passes',before:'development and affected held-out generation',
       requirement:'Instantiate genuinely fresh semantic banks for the 8 development and 30 test replacements; preserve every frozen allocation and multiplicity; publish ancestry and allocation before generation. R3 revisions do not satisfy freshness.',
       lineages:Object.fromEntries(['development','test'].map(split=>[split,lineages.filter(l=>l.split===split && l.freshness==='provisional_revision_fresh_bank_pending').map(l=>l.lineage_id)]))}} };

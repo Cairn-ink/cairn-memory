@@ -1,3 +1,4 @@
+import { PUBLIC_CONTRACT } from './contract.mjs';
 import { canonical, cellsOf, scopeFromCells, assert } from './common.mjs';
 
 export const normalizeText = value => value.normalize('NFKC').replace(/\s+/gu,' ').trim();
@@ -9,7 +10,7 @@ export function rational(decimal) {
   numerator/=divisor; denominator/=divisor;
   return {numerator:numerator.toString(),denominator:denominator.toString()};
 }
-export const UNIT_DICTIONARY = {'requests/day':{canonical:'requests/day',numerator:'1',denominator:'1'},'requests/hour':{canonical:'requests/day',numerator:'24',denominator:'1'},'requests/minute':{canonical:'requests/day',numerator:'1440',denominator:'1'}};
+export const UNIT_DICTIONARY = Object.fromEntries(PUBLIC_CONTRACT.values.units.map(({alias,...unit})=>[alias,unit]));
 const UNITS = Object.fromEntries(Object.entries(UNIT_DICTIONARY).map(([name,unit])=>[name,{base:unit.canonical,multiplier:BigInt(unit.numerator)}]));
 export function valueKey(value, lineage) {
   if (value.type==='Text') {
@@ -35,7 +36,7 @@ export function valueKey(value, lineage) {
 }
 export function canonicalClaim(c,lineage) {
   const name=normalizeText(c.subject), predicate=normalizeText(c.predicate);
-  return {...c,subject:lineage && [lineage.bank.subjectZh,lineage.bank.subjectEn].map(normalizeText).includes(name)?lineage.bank.subjectEn:name,
+  return {...c,subject:lineage && [lineage.bank.subjectZh,lineage.bank.subjectEn,lineage.bank.subjectMixed].filter(Boolean).map(normalizeText).includes(name)?lineage.bank.subjectEn:name,
     predicate:lineage && [lineage.bank.predicateZh,lineage.bank.predicateEn].map(normalizeText).includes(predicate)?lineage.bank.predicateEn:predicate,
     value:c.value.type==='Text'?valueKey(c.value,lineage):c.value,
     scope:scopeFromCells(cellsOf(c.scope)),

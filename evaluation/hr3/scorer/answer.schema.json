@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "HR-3 v0.3.4 Answer",
+  "title": "HR-3 A-4 slot answer v2",
   "type": "object",
   "properties": {
     "current": {
@@ -13,17 +13,17 @@
             "unresolved"
           ]
         },
-        "claims": {
+        "rows": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Claim"
+            "$ref": "#/$defs/Row"
           },
           "minItems": 0
         }
       },
       "required": [
         "status",
-        "claims"
+        "rows"
       ],
       "additionalProperties": false
     },
@@ -42,24 +42,30 @@
           "items": {
             "type": "object",
             "properties": {
+              "predecessor_turn": {
+                "type": "string"
+              },
               "status": {
                 "enum": [
                   "previously_adopted",
                   "erroneous",
-                  "expired"
+                  "expired",
+                  "unavailable",
+                  "unresolved"
                 ]
               },
-              "claims": {
+              "rows": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/$defs/Claim"
+                  "$ref": "#/$defs/Row"
                 },
                 "minItems": 0
               }
             },
             "required": [
+              "predecessor_turn",
               "status",
-              "claims"
+              "rows"
             ],
             "additionalProperties": false
           },
@@ -82,59 +88,17 @@
             "unavailable"
           ]
         },
-        "nodes": {
+        "support": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "claim": {
-                "$ref": "#/$defs/Claim"
-              }
-            },
-            "required": [
-              "id",
-              "claim"
-            ],
-            "additionalProperties": false
-          },
-          "minItems": 0
-        },
-        "edges": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "from": {
-                "type": "string"
-              },
-              "to": {
-                "type": "string"
-              },
-              "citations": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/$defs/Citation"
-                },
-                "minItems": 0
-              }
-            },
-            "required": [
-              "from",
-              "to",
-              "citations"
-            ],
-            "additionalProperties": false
+            "$ref": "#/$defs/Citation"
           },
           "minItems": 0
         }
       },
       "required": [
         "status",
-        "nodes",
-        "edges"
+        "support"
       ],
       "additionalProperties": false
     }
@@ -146,126 +110,166 @@
   ],
   "additionalProperties": false,
   "$defs": {
-    "Value": {
-      "oneOf": [
-        {
-          "type": "object",
-          "properties": {
-            "type": {
-              "const": "Text"
-            },
-            "text": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "text"
-          ],
-          "additionalProperties": false
+    "Row": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/Scope"
         },
-        {
-          "type": "object",
-          "properties": {
-            "type": {
-              "const": "Boolean"
-            },
-            "value": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "type",
-            "value"
-          ],
-          "additionalProperties": false
+        "valid": {
+          "$ref": "#/$defs/Interval"
         },
-        {
-          "type": "object",
-          "properties": {
-            "type": {
-              "const": "Quantity"
-            },
-            "decimal": {
-              "type": "string",
-              "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)$"
-            },
-            "unit": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "decimal",
-            "unit"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "type": {
-              "const": "Instant"
-            },
-            "iso": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "iso"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "type": {
-              "const": "Range"
-            },
-            "lower": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)$"
+        "route": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "value"
                 },
-                {
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_specified",
+                    "unavailable",
+                    "unresolved"
+                  ]
+                },
+                "value": {
                   "type": "null"
                 }
-              ]
-            },
-            "upper": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)$"
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "approval": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "value"
                 },
-                {
+                "value": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_specified",
+                    "unavailable",
+                    "unresolved"
+                  ]
+                },
+                "value": {
                   "type": "null"
                 }
-              ]
-            },
-            "lowerClosed": {
-              "type": "boolean"
-            },
-            "upperClosed": {
-              "type": "boolean"
-            },
-            "unit": {
-              "type": "string"
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
             }
+          ]
+        },
+        "cap": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "value"
+                },
+                "value": {
+                  "type": "object",
+                  "properties": {
+                    "decimal": {
+                      "type": "string",
+                      "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)$"
+                    },
+                    "unit": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "decimal",
+                    "unit"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_specified",
+                    "unavailable",
+                    "unresolved"
+                  ]
+                },
+                "value": {
+                  "type": "null"
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Citation"
           },
-          "required": [
-            "type",
-            "lower",
-            "upper",
-            "lowerClosed",
-            "upperClosed",
-            "unit"
-          ],
-          "additionalProperties": false
+          "minItems": 0
         }
-      ]
+      },
+      "required": [
+        "scope",
+        "valid",
+        "route",
+        "approval",
+        "cap",
+        "citations"
+      ],
+      "additionalProperties": false
     },
     "Scope": {
       "type": "object",
@@ -357,7 +361,8 @@
           ]
         },
         "item": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
         },
         "unit": {
           "enum": [
@@ -368,7 +373,8 @@
         "source": {
           "anyOf": [
             {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0
             },
             {
               "type": "null"
@@ -390,233 +396,6 @@
         "source",
         "quote",
         "occurrence"
-      ],
-      "additionalProperties": false
-    },
-    "Claim": {
-      "type": "object",
-      "properties": {
-        "subject": {
-          "type": "string"
-        },
-        "predicate": {
-          "type": "string"
-        },
-        "value": {
-          "$ref": "#/$defs/Value"
-        },
-        "scope": {
-          "$ref": "#/$defs/Scope"
-        },
-        "valid": {
-          "$ref": "#/$defs/Interval"
-        },
-        "qualifiers": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "key": {
-                "type": "string"
-              },
-              "value": {
-                "$ref": "#/$defs/Value"
-              }
-            },
-            "required": [
-              "key",
-              "value"
-            ],
-            "additionalProperties": false
-          },
-          "minItems": 0
-        },
-        "citations": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Citation"
-          },
-          "minItems": 0
-        }
-      },
-      "required": [
-        "subject",
-        "predicate",
-        "value",
-        "scope",
-        "valid",
-        "qualifiers",
-        "citations"
-      ],
-      "additionalProperties": false
-    },
-    "GoldClaim": {
-      "type": "object",
-      "properties": {
-        "subject": {
-          "type": "string"
-        },
-        "predicate": {
-          "type": "string"
-        },
-        "value": {
-          "$ref": "#/$defs/Value"
-        },
-        "scope": {
-          "$ref": "#/$defs/Scope"
-        },
-        "valid": {
-          "$ref": "#/$defs/Interval"
-        },
-        "qualifiers": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "key": {
-                "type": "string"
-              },
-              "value": {
-                "$ref": "#/$defs/Value"
-              }
-            },
-            "required": [
-              "key",
-              "value"
-            ],
-            "additionalProperties": false
-          },
-          "minItems": 0
-        }
-      },
-      "required": [
-        "subject",
-        "predicate",
-        "value",
-        "scope",
-        "valid",
-        "qualifiers"
-      ],
-      "additionalProperties": false
-    },
-    "DeliveredUnit": {
-      "type": "object",
-      "properties": {
-        "intent": {
-          "enum": [
-            "current",
-            "history"
-          ]
-        },
-        "item": {
-          "type": "integer"
-        },
-        "unit": {
-          "enum": [
-            "body",
-            "receipt"
-          ]
-        },
-        "source": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "aliases": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "intent": {
-                "enum": [
-                  "current",
-                  "history"
-                ]
-              },
-              "item": {
-                "type": "integer"
-              },
-              "unit": {
-                "enum": [
-                  "body",
-                  "receipt"
-                ]
-              },
-              "source": {
-                "anyOf": [
-                  {
-                    "type": "integer"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "intent",
-              "item",
-              "unit",
-              "source"
-            ],
-            "additionalProperties": false
-          },
-          "minItems": 0
-        },
-        "segments": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "origin": {
-                "type": "string"
-              },
-              "start": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "text": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "origin",
-              "start",
-              "text"
-            ],
-            "additionalProperties": false
-          },
-          "minItems": 1
-        },
-        "normalize": {
-          "type": "boolean"
-        },
-        "truncate": {
-          "anyOf": [
-            {
-              "type": "integer",
-              "minimum": 0
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "intent",
-        "item",
-        "unit",
-        "source",
-        "aliases",
-        "segments",
-        "normalize",
-        "truncate"
       ],
       "additionalProperties": false
     }

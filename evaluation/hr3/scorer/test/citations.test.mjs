@@ -9,7 +9,8 @@ test('normalization maps fullwidth, ligatures, combining characters and whitespa
   const raw = '  Ａ\t\tcaused\nＢ.  ';
   unit.segments[0].text = raw;
   assert.equal(materializeUnit(unit).text, 'A caused B.');
-  const r = resolve(unit, 'Ａ caused Ｂ.');
+  assert.equal(resolve(unit, 'Ａ caused Ｂ.').ok, false);
+  const r = resolve(unit, 'A caused B.');
   assert.equal(r.start, 0);
   assert.equal(r.end, 11);
   assert(covers({ origin: 'turn-1', start: 2, end: raw.length - 2, text: raw.slice(2, -2) }, coveredSpans([r])));

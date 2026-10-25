@@ -1,14 +1,16 @@
-import { VERSION, DEFAULT_SEED, rng, text, bool, quantity, scope, scopeFromCells, cellsOf, CELLS, claim, cellKey } from './common.mjs';
+import { VERSION, DEFAULT_SEED, rng, shuffle, assert, text, bool, quantity, scope, scopeFromCells, cellsOf, CELLS, claim, cellKey } from './common.mjs';
 import { sentence, fieldText } from './bank.mjs';
 import { cardControl, safetyControl } from './controls.mjs';
 import { reasonStratum } from './reason-strata.mjs';
 import { canonicalGold } from './canonicalize.mjs';
+import { slotGold } from './slots.mjs';
+import { publicContract, HISTORICAL_LABELS } from './contract.mjs';
 
 const interval = (from,to = null) => ({from,to});
 const assignments = (route, cap, atomic = false) => [{field:'value',value:text(route)}, {field:'approval',value:bool(true)}, ...(atomic?[]:[{field:'cap',value:quantity(cap)}])];
 function phrases(lineage, language) {
   const zh = language === 'zh-Hant';
-  return {subject:zh?lineage.bank.subjectZh:lineage.bank.subjectEn,predicate:zh?lineage.bank.predicateZh:lineage.bank.predicateEn};
+  return {subject:zh?lineage.bank.subjectZh:language==='mixed'?(lineage.bank.subjectMixed??lineage.bank.subjectEn):lineage.bank.subjectEn,predicate:zh?lineage.bank.predicateZh:lineage.bank.predicateEn};
 }
 function scopeText(s, language) {
   const atoms = s.any.flatMap(x => x.all);
@@ -57,6 +59,7 @@ function addReasons(turn, event, lineage, language) {
 }
 
 export function generateFamily(lineage, member, seed = DEFAULT_SEED) {
+  assert(['engineering','pilot'].includes(lineage.split),'heldout_freshness_gate');
   const random = rng(`${seed}/${lineage.lineage_id}/${member.member}/world`);
   const cap = 100 + Math.floor(random() * 800), baseDay = 1 + Math.floor(random() * 15);
   const at = (batch,hour = '00') => `2031-03-${String(baseDay + batch - 1).padStart(2,'0')}T${hour}:00:00.000Z`;
@@ -70,11 +73,19 @@ export function generateFamily(lineage, member, seed = DEFAULT_SEED) {
     batches:Array.from({length:4},(_,i) => ({ordinal:i+1,observed_at:at(i+1,'02'),effective_at:effective(i+1),turns:[]})),
     checkpoints:[],controls:[],ast:{events:[],focal_changes:[],time_zone:'Asia/Taipei',interval_convention:'[from,to)',variant:{future_effective:type === 'reversal' && member.member%2 === 1,retroactive:type === 'correction' && member.member%2 === 1}}};
   const events = [], accepted = [];
-  const initialFields = assignments(lineage.bank.routes[0],cap,type === 'correction');
+  // All six permutations occur once per type at each member position. A separate
+  // stream assigns subjects, so neither identifier encodes type or version.
+  const perms=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+  const order=shuffle(perms,`${seed}/${lineage.split}/route-counterbalance`);
+  const ordinal=Number(lineage.lineage_id.match(/-L(\d+)/)[1])-1;
+  const routes=order[(ordinal+member.member)%6].map(i=>lineage.bank.routes[i]);
+  const records=shuffle(['kavo','zemi','hura','biso'],`${seed}/${lineage.split}/record-counterbalance`);
+  const recordOffset=(lineage.split==='engineering'?ordinal:ordinal*2+member.member)%4;
+  const initialFields = assignments(routes[0],cap,type === 'correction');
   function emit(batchNo, changeType, fields, audience, predecessorIndices, from, to = null) {
     const batch = family.batches[batchNo-1];
     const turn = {turn_id:`b${batchNo}-focal`,speaker:'user',text:''};
-    const record = String.fromCharCode(65 + batchNo-1);
+    const record = records[(batchNo-1+recordOffset)%4];
     const predecessors = predecessorIndices.map(i => events[i]);
     const predNames = predecessors.map(e => e.record_name).join(', ');
     const vars = {record,predecessors:predNames,subject,predicate,fields:fieldText(fields,language),scope:scopeText(audience,language),from,to:to??(language === 'zh-Hant'?'無上限（不含終點）':'unbounded (exclusive endpoint)')};
@@ -106,11 +117,11 @@ export function generateFamily(lineage, member, seed = DEFAULT_SEED) {
   let first, last;
   if (type === 'expiry') {
     first = emit(2,type,[],scope(),[0],effective(2));
-    emit(3,'initial',assignments(lineage.bank.routes[1],cap+20),scope(),[],effective(3),lineage.expiry_mode === 'deadline'?effective(4):null);
+    emit(3,'initial',assignments(routes[1],cap+20),scope(),[],effective(3),lineage.expiry_mode === 'deadline'?effective(4):null);
     last = emit(4,type,[],scope(),[2],effective(4));
   } else {
-    const firstFields = type === 'refinement'?[{field:'cap',value:quantity(cap+20)}]:assignments(lineage.bank.routes[1],cap+20,type === 'correction');
-    const finalFields = type === 'refinement'?[{field:'cap',value:quantity(cap+40)}]:assignments(lineage.bank.routes[2],cap+40,type === 'correction');
+    const firstFields = type === 'refinement'?[{field:'cap',value:quantity(cap+20)}]:assignments(routes[1],cap+20,type === 'correction');
+    const finalFields = type === 'refinement'?[{field:'cap',value:quantity(cap+40)}]:assignments(routes[2],cap+40,type === 'correction');
     const firstScope = type === 'scope_change'?scope(['TW']):scope(), finalScope = type === 'scope_change'?scope(['JP','TW']):scope();
     const start = batch => family.ast.variant.retroactive?effective(1):family.ast.variant.future_effective?effective(batch+1):effective(batch);
     first = emit(2,type,firstFields,firstScope,[0],start(2));
@@ -119,14 +130,14 @@ export function generateFamily(lineage, member, seed = DEFAULT_SEED) {
   }
   for (const batch of family.batches) {
     const distractLanguage = language === 'mixed' ? 'zh-Hant' : language;
-    const turn = {turn_id:`b${batch.ordinal}-distractor`,speaker:'user',text:sentence('distractor',distractLanguage,{subject,route:`unadopted-${lineage.bank.routes[0]}`,other:`rejected-${lineage.bank.routes[1]}`,collision:`${subject} Annex`,scope:'JP/pro/app',date:effective(4)})};
+    const turn = {turn_id:`b${batch.ordinal}-distractor`,speaker:'user',text:sentence('distractor',distractLanguage,{subject,route:routes[1],other:routes[2],collision:`${subject} Annex`,scope:'JP/pro/app',date:effective(4)})};
     batch.turns.push(turn);
     const variants = [
-      ['proposal','proposed',subject,scope(),`unadopted-${lineage.bank.routes[0]}`],
-      ['rejection','rejected',subject,scope(),`rejected-${lineage.bank.routes[1]}`],
-      ['quotation','quoted',subject,scope(),`unadopted-${lineage.bank.routes[0]}`],
-      ['subject_collision','adopted',`${subject} Annex`,scope(),`unadopted-${lineage.bank.routes[0]}`],
-      ['scope_date_collision','proposed',subject,{any:[{all:[{field:'country',values:['JP']},{field:'plan',values:['pro']},{field:'channel',values:['app']}]}]},`unadopted-${lineage.bank.routes[0]}`],
+      ['proposal','proposed',subject,scope(),routes[1]],
+      ['rejection','rejected',subject,scope(),routes[2]],
+      ['quotation','quoted',subject,scope(),routes[1]],
+      ['subject_collision','adopted',`${subject} Annex`,scope(),routes[1]],
+      ['scope_date_collision','proposed',subject,{any:[{all:[{field:'country',values:['JP']},{field:'plan',values:['pro']},{field:'channel',values:['app']}]}]},routes[1]],
       ['unsupported_cause','unresolved',subject,scope(),'paint colour'],
     ];
       for (const [tag,commitment,s,sc,value] of variants) family.ast.events.push(eventBase(`${family.family_id}/${batch.ordinal}/${tag}`,turn,batch,{kind:tag==='unsupported_cause'?'context':'decision',commitment,subject:s,predicate:tag==='unsupported_cause'?'speculative_cause':predicate,claims:[{field:'value',value:text(value)}],field_mask:['value'],scope:sc,effective_interval:interval(tag==='scope_date_collision'?effective(4):batch.effective_at),source_quotes:[sourceSpan(turn)],distractor:tag}));
@@ -136,7 +147,7 @@ export function generateFamily(lineage, member, seed = DEFAULT_SEED) {
   family.ast.focal_changes = [first.event_id,last.event_id];
   for (const [batch,event] of [[2,first],[4,last]]) {
     const languageForQuestion = language === 'mixed'?'zh-Hant':language;
-    const vars = {batch,at:family.batches[batch-1].observed_at,subject,predicate,scope:scopeText(scope(),languageForQuestion),turn:event.source_turns[0],predecessors:event.predecessor_anchors.map(x => x.record_name).join(', ')};
+    const vars = {batch,at:family.batches[batch-1].observed_at,subject,predicate,scope:scopeText(scope(),languageForQuestion),turn:event.source_turns[0],predecessors:event.predecessor_anchors.map(x => `${x.source_turn} (record ${x.record_name})`).join(', '),labels:HISTORICAL_LABELS.join(' | ')};
     const en = `${subject} ${predicate} ${family.header.scope_text} decision correction change reason`;
     const zh = `${subject} ${predicate} ${family.header.scope_text} 決定 修正 變更 原因`;
     family.checkpoints.push({batch,primary:batch===4,at:vars.at,focal_turn:vars.turn,requested_predecessor_turns:event.predecessor_anchors.map(x => x.source_turn),question:sentence('question',languageForQuestion,vars),query:language==='en'?en:language==='zh-Hant'?zh:`${en}\n${zh}`});
@@ -170,7 +181,8 @@ export function generateFamily(lineage, member, seed = DEFAULT_SEED) {
     const graph = accepted.find(x => x.event_id===focal.event_id).graphs;
     const answer = {current:{status:currentClaims.length?'active':'no_active_decision',claims:currentClaims},old:{status:'available',records:old},reason:{status:graph.length?'stated':'not_stated',nodes:focal.reason_nodes,edges:[]}};
     // Answer citations are deliberately empty here. These are semantic gold claims, not fabricated delivered citations.
-    gold.checkpoints.push({batch:checkpoint.batch,G_correct:canonicalGold({...answer,acceptedGraphs:graph.map(g => ({edges:g.edges.map(({from,to}) => ({from,to}))}))},lineage)});
+    const private_causal=canonicalGold({...answer,acceptedGraphs:graph.map(g => ({edges:g.edges.map(({from,to}) => ({from,to}))}))},lineage);
+    gold.checkpoints.push({batch:checkpoint.batch,G_correct:slotGold(private_causal,checkpoint.requested_predecessor_turns),private_causal});
     support.checkpoints.push({batch:checkpoint.batch,assertion_spans:events.filter(e => Date.parse(e.observed_at)<=Date.parse(checkpoint.at)).map(e => ({event_id:e.event_id,spans:e.source_quotes})),acceptedGraphs:graph});
   }
   family.reason_strata = gold.checkpoints.map(cp => ({batch:cp.batch,...reasonStratum(cp.G_correct)}));
@@ -185,5 +197,5 @@ export function correctnessOnly(goldCheckpoint) {
 export function extractionInput(family,batchOrdinal) {
   const batch=family.batches.find(b=>b.ordinal===batchOrdinal);
   if (!batch) throw new Error('Unknown batch ordinal');
-  return structuredClone({observed_at:batch.observed_at,public_header:family.header,turns:batch.turns});
+  return structuredClone({observed_at:batch.observed_at,public_header:family.header,public_contract:publicContract(),turns:batch.turns});
 }

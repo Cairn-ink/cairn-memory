@@ -1,0 +1,166 @@
+{
+  "version": "hr3-generator-a4-verification-v1",
+  "scope": "evaluation/hr3/generator/",
+  "base": {
+    "branch": "experiment/hr3-update-policy",
+    "head": "e5555ee3"
+  },
+  "committed": false,
+  "api_calls": 0,
+  "credentials_read": false,
+  "changed_files": [
+    "evaluation/hr3/generator/README.md",
+    "evaluation/hr3/generator/answer.schema.json",
+    "evaluation/hr3/generator/artifacts/pilot/manifest.json",
+    "evaluation/hr3/generator/artifacts/previous-e5555ee3/archive-manifest.json",
+    "evaluation/hr3/generator/artifacts/previous-e5555ee3/freeze.json",
+    "evaluation/hr3/generator/artifacts/previous-e5555ee3/pilot/manifest.json",
+    "evaluation/hr3/generator/artifacts/verification/a4-report.json",
+    "evaluation/hr3/generator/artifacts/verification/a4-tests.tap",
+    "evaluation/hr3/generator/bank.mjs",
+    "evaluation/hr3/generator/canonicalize.mjs",
+    "evaluation/hr3/generator/common.mjs",
+    "evaluation/hr3/generator/contract.mjs",
+    "evaluation/hr3/generator/deliver.mjs",
+    "evaluation/hr3/generator/exclusions.mjs",
+    "evaluation/hr3/generator/freeze.json",
+    "evaluation/hr3/generator/freeze.mjs",
+    "evaluation/hr3/generator/generate.mjs",
+    "evaluation/hr3/generator/inventory.mjs",
+    "evaluation/hr3/generator/leakage.mjs",
+    "evaluation/hr3/generator/public-contract.json",
+    "evaluation/hr3/generator/public-contract.schema.json",
+    "evaluation/hr3/generator/slots.mjs",
+    "evaluation/hr3/generator/test/generator.test.mjs",
+    "evaluation/hr3/generator/validate.mjs"
+  ],
+  "changed_file_cross_check": {
+    "routes": [
+      "git diff --name-only + git ls-files --others --exclude-standard",
+      "git status --porcelain=v1 -z --untracked-files=all"
+    ],
+    "count": 24,
+    "exit_codes": [
+      0,
+      0,
+      0
+    ]
+  },
+  "delivery_cross_check": {
+    "manifest": "freeze.json",
+    "routes": [
+      "explicit recursive filesystem walk",
+      "recursive readdir Dirent enumeration"
+    ],
+    "count": 91
+  },
+  "commands": [
+    {
+      "command": "node --test evaluation/hr3/generator/test/generator.test.mjs",
+      "exit_code": 1,
+      "result": "Isolated child runner exited without child diagnostics in this sandbox; rerun without test isolation."
+    },
+    {
+      "command": "node --test --experimental-test-isolation=none evaluation/hr3/generator/test/generator.test.mjs",
+      "exit_code": 0,
+      "result": "43 tests passed, 0 failed",
+      "log": "artifacts/verification/a4-tests.tap"
+    },
+    {
+      "command": "node evaluation/hr3/generator/cli.mjs --split pilot --out evaluation/hr3/generator/artifacts/pilot",
+      "exit_code": 0,
+      "result": "60 families; 0 rejected"
+    },
+    {
+      "command": "node evaluation/hr3/generator/cli.mjs --split pilot --out evaluation/hr3/generator/artifacts/.a4-final-render",
+      "exit_code": 0,
+      "result": "Final-source deterministic render: all 7 data-file hashes equal the active pilot; refreshed active source manifest and removed temporary output."
+    },
+    {
+      "command": "Offline readback integrity assertions",
+      "exit_code": 0,
+      "result": "7 pilot data files, 20 current source hashes, 9 archived files, 8 unchanged engineering files; no development/test directories."
+    },
+    {
+      "command": "git diff --check -- evaluation/hr3/generator",
+      "exit_code": 0
+    },
+    {
+      "command": "node evaluation/hr3/generator/freeze.mjs",
+      "exit_code": 0,
+      "result": "Recursive enumeration routes matched; initial count 90 before this report, final delivery count 91."
+    }
+  ],
+  "clauses": [
+    {
+      "a4": "2",
+      "covered": "Versioned machine-readable public slot/alias/history/citation contract plus schema; exact rational units, Boolean aliases, normalization, scopes/time/update semantics and independent bilingual examples. Independent subject/route streams, balanced subjects/routes/records, neutral station identifiers; 18 independently authored matched-world pairs."
+    },
+    {
+      "a4": "4",
+      "covered": "Every question names three slots, subject/predicate/scope/checkpoint, focal turn, exact predecessor turns and full shared five-label vocabulary, closed answer form and complete quoted causal explanation. Closed slot answer schema and executable checks."
+    },
+    {
+      "a4": "5",
+      "covered": "Gold slot projection with public predecessor identity; retained private canonical Claim/reason-node/causal graphs and original OR-of-AND support spans. Independent timeline evaluator and extensional partition/unit equivalence checks; private data excluded from public requests."
+    },
+    {
+      "a4": "7",
+      "covered": "Fresh deterministic A-4 pilot seed, unchanged allocation seed and same-root ancestry disclosures; preserved previous pilot, unchanged historical engineering delivery; both public generation entry points block held-out rendering; inspected-registry exclusion tests."
+    },
+    {
+      "a4": "10 generator row",
+      "covered": "Generator deliverables completed within the assigned directory; no sibling tests or files modified."
+    }
+  ],
+  "pilot": {
+    "seed": "hr3-worlds-a4-pilot-v1",
+    "allocation_seed": "hr3-worlds-v1",
+    "families": 60,
+    "lineages": 30,
+    "per_type": 12,
+    "languages": {
+      "zh-Hant": 33,
+      "en": 18,
+      "mixed": 9
+    },
+    "card_families": 40,
+    "safety_families": 20,
+    "multi_hop": 40,
+    "unstated": 10,
+    "rejected": 0,
+    "prior_snapshot": "artifacts/previous-e5555ee3/",
+    "heldout_rendered": false
+  },
+  "registry": {
+    "path": "evaluation/hr3/harness/reports/inspected-heldout-references.json",
+    "cases": 504,
+    "families": 77,
+    "lineages": 66,
+    "development_lineages": 33,
+    "test_lineages": 33,
+    "verified": "Counts, unique case identities, per-lineage case-set SHA-256, exclusion policy, family/lineage/ancestry/hash rejection."
+  },
+  "implementation_choices": [
+    "Complete shared historical vocabulary includes previously_adopted, erroneous, expired, unavailable and unresolved in every question; it never selects the correct status.",
+    "Private causal metadata property name is private_causal; G_correct contains slot rows and private acceptedGraphs topology. It is not a model response.",
+    "Public naming tables cover engineering/pilot names and their collision aliases; held-out replacement names are not instantiated.",
+    "Historical private allocation/ancestry IDs remain for reproducibility and exclusions; public questions and extraction inputs contain no family/lineage/event IDs.",
+    "A-4 naming/seed changes are same-root fixture revisions, not newly independent lineages."
+  ],
+  "unresolved_generator_semantic_ambiguities": [],
+  "request_size_observation": {
+    "public_contract_canonical_bytes": 12112,
+    "framing_units": 4096,
+    "contract_plus_framing": 16208,
+    "extraction_ceiling": 16384,
+    "required_input_headroom": "5%",
+    "conclusion": "The full canonical JSON projection already fails the 5% extraction headroom requirement before sources/schema. Harness must certify a smaller complete deterministic projection or obtain a further numerical amendment; no limits were changed and no dispatch occurred."
+  },
+  "pending_external_gates": [
+    "non-author review",
+    "harness complete-request/output/input/embedding/budget recertification",
+    "scorer/integration/calibration work in sibling directories"
+  ],
+  "paid_execution_authorized": false
+}

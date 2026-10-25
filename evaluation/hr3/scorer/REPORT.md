@@ -1,111 +1,139 @@
-# HR-3 scorer implementation report
+# A-4 scorer implementation report
 
-Implemented inside `evaluation/hr3/scorer/` on `experiment/hr3-update-policy`,
-whose checked HEAD is the pinned product
-`b2513501a6747a163ab1cefb7d37a16744c9621a`. No commit was made.
-The sole specification read was `../protocol/protocol-v0.3.4.md`; the concurrent
-generator and other workers' implementation files were not consulted.
+Scope: `evaluation/hr3/scorer/` only, on `experiment/hr3-update-policy`,
+starting HEAD `e5555ee3`. Authority: protocol v0.3.4 plus errata A-4, especially
+§§4–5. Read the supplied TRAPS; ran only scorer tests. No commit, network,
+API/model invocation, credential read, held-out rendering or paid execution.
+The concurrently published generator contract was read, never modified.
 
-## Coverage
+## Clauses covered
 
-- §6: closed typed Answer/Gold/submission schemas; required fields; NFKC and
-  whitespace normalization; frozen bilingual/alias dictionaries; exact rational
-  units; UTC instants and half-open/unbounded intervals; unordered sets and
-  extensional audience cells; duplicate collapse with contradictions retained.
-- §6: citation resolution against actual delivered units/aliases; maps across
-  normalization, UTF-16 truncation and elision; distinct gold-free support and
-  evidence-free correctness referral bundles. C/O remain factual measures;
-  citation resolution is reported separately.
-- §7: OR accepted graphs, AND required directed edges, OR-of-AND supporting
-  spans, supported unions, endpoint/shortcut rejection, exact C/O/R and
-  observation-level J; malformed/exhausted attempted answers score zero.
-- §8 interface: unresolved equivalence/support referrals, deterministic keys,
-  pass-specific rubric/bundles and preserved mechanically forced J=0. No
-  adjudication, mapping propagation, calibration or independent bilingual
-  challenge-set construction was performed.
-- §2 dependencies: the 12-cell domain, empty-scope rejection, Taipei date
-  boundaries and requested predecessor semantics.
+- **A-4 §2:** text-derived slot/public-label/legacy-field and naming-alias
+  interfaces; a consumer adapter for the published slot array and bilingual
+  alias tables; literal routes absent an explicit naming alias; exact rational
+  declared-unit conversion; 12-cell scopes and Taipei/source-claimed intervals.
+  Actual delivered body/receipt addresses, zero-based item/source, one-based
+  occurrence, explicit delivered aliases and verbatim delivered quotations.
+- **§4:** closed required slot answer schema; typed value/null states;
+  not_specified versus missing evidence; scope partition equivalence and
+  duplicate collapse; contradictory extras; exact public predecessor turns and
+  historical labels; no-active/expired-history semantics; reason evidence
+  selections replace model-authored graphs and dangling causal endpoints.
+- **§5 C/O/J:** exact statuses, complete slot assertions, scope, validity and
+  requested predecessor sets; factual C/O independent of citation quality;
+  original citation diagnostics retained; conjunction computed per observation.
+- **§5 R items 1–5:** resolved submitted provenance, complete accepted graph
+  with OR-of-AND edge support, no skipped serial intermediates/conjunctions,
+  complete sufficient alternatives and accepted unions; broad/unfamiliar,
+  negated/speculative/wrong-change selections cannot mechanically pass;
+  unfamiliar delivery context refers separately. No uncited substitute support.
+- **§5 negative R:** factual matching not_stated with empty support can pass
+  empty delivery; stated R cannot. Negative support is `not_applicable`.
+  Every attempted observation retains gold-status stratum, denominator 1 and
+  deterministic no-evidence baseline R, including malformed attempts.
+- **§5 referral correction:** public canonicalization and atomic slot
+  projection precede matching. Unknown unit/scope/time correspondence refers
+  affected C/O; representation-dependent count/type differences do not force
+  zero. Independent contradictions/omissions can determine zero. C/O referrals
+  remain separate from R even when J is forced zero.
+- **§5 validity/boundaries:** schema-malformed whole answers score zero;
+  invalid reason selections or citation semantics leave valid C/O intact.
+  Impossible scopes/intervals retain existing malformed-answer semantics.
+  Correctness sees original slot answer plus support-registry-free G_correct;
+  support sees original answer plus actual delivery and no gold/findings.
+  Versioned component dependence keys include contract/dictionary and contextual
+  inputs; parent rules separate C, O, R correspondence and R support.
 
-## Interface decisions and unresolved ambiguities
+## Interface decisions and ambiguities
 
-See [README.md](README.md#canonicalization-and-protocol-ambiguities) for the
-complete eight-item integration record: Value tags/decimal strings; Gold graph
-and span encoding; dictionary contents; equivalent scope partitions; time
-representations; overlapping occurrence ambiguity; trusted delivery/failure
-envelope; and unrecognized semantic entailment/context. Representational
-choices are explicit in the JSON schemas. Unknown semantics are referred,
-never self-adjudicated. Overlapping-occurrence and daylight-saving gap/fold
-conventions remain unresolved by the protocol and receive no mechanical
-credit. In particular, an arbitrary unlicensed context containing a negation
-cannot silently receive support from an otherwise matching quotation.
+A-4 does not prescribe the private gold/envelope wire format. The existing
+scorer interchange now uses citation-free slot rows for C/O and retains its
+private causal nodes, accepted graphs and exact source-span registry for R.
+The compatibility helpers compare legacy bundled/decomposed fields without
+expanding the closed reader answer. Unknown field/type correspondence returns
+null, not a representation-dependent zero. They are not full Claim scorers or
+an adapter from any worker's private gold archive.
 
-The generator must conform to this derived interchange or explicitly reconcile
-representation differences before artifact freeze. Runtime dictionaries and
-map provenance still require the protocol's independent audit/calibration.
-No packaging manifest was edited: this is a research scorer, and the user's
-write scope prohibits changes outside this directory.
+The public contract's language-indexed wire table initially differed from the
+text-derived local interface. That mismatch was reported by the consumer;
+`contractProjection` now adapts it without changing the declared meanings.
+The final published executable slot/alias/unit/status/scope projection validates
+with **no remaining mismatch**. Each score reports the consumed version/hash;
+missing contract is explicit, mismatch is an input error, and no publication is
+cached across calls. The final version observed during verification was `hr3-public-contract-a4-v1`, hash
+`61c12011183d82c2a9fcba3c3e666bbc65da96125a6436de3e96019801ae8a23`.
 
-## Verification commands and actual exit codes
+A-4's verbatim-delivery rule and the contract's independent fullwidth example
+resolve the old resolver's quote-normalization issue: raw-source fullwidth
+quotes cannot match normalized ASCII delivery. Normalization provenance and
+citation diagnostics remain intact. The existing decimal schema escape defect
+was also corrected; malformed numeric spellings are structurally rejected.
 
-Node: `v22.16.0`. Only this directory's test files were run (TRAPS item 11).
+Unfamiliar entailment, negation, broad citations and unknown correspondences
+remain referrals, not invented licenses or finalized judgments. Reader overlap
+ambiguity is explicitly retained by A-4, while the contract also describes
+successive overlapping start positions: cases where interpretations differ
+remain referred. Nonexistent/ambiguous Taipei midnight likewise remains a
+referral. Private span entailment still requires independent authoring audit.
+No new execution, calibration, complete-request/cap certificate or analysis
+acceptance is claimed; those remain the relevant owners' freeze obligations.
+
+## Verification and actual exit codes
+
+Node `v22.16.0`. Every exit was captured from the actual process; no test
+success was inferred from a pipe's final command or from a stdout tail.
 
 | Command | Actual exit | Result |
 |---|---:|---|
-| `node evaluation/hr3/scorer/test/canonical.test.mjs` | 0 | 7 tests passed |
-| `node evaluation/hr3/scorer/test/citations.test.mjs` | 0 | 7 tests passed |
-| `node evaluation/hr3/scorer/test/schema-cli.test.mjs` | 0 | 7 tests passed |
-| `node evaluation/hr3/scorer/test/scorer.test.mjs` | 0 | 32 tests passed |
-| `node --test evaluation/hr3/scorer/test/*.test.mjs` | 0 | All 4 test files passed |
+| `node evaluation/hr3/scorer/test/canonical.test.mjs` | 0 | 7 tests |
+| `node evaluation/hr3/scorer/test/citations.test.mjs` | 0 | 7 tests |
+| `node evaluation/hr3/scorer/test/contract.test.mjs` | 0 | 5 tests |
+| `node evaluation/hr3/scorer/test/schema-cli.test.mjs` | 0 | 7 tests |
+| `node evaluation/hr3/scorer/test/scorer.test.mjs` | 0 | 26 tests |
+| `node --test evaluation/hr3/scorer/test/*.test.mjs` | 0 | 5 test files |
+| `node --check FILE` for every scorer `.mjs` | 0 each | 13 files |
+| Public contract consumer validation | 0 | no semantic projection mismatches |
+| `git diff --check -- evaluation/hr3/scorer` | 0 | no tracked whitespace errors |
+| Recursive filesystem whitespace/path scan | 0 | includes untracked files |
+| Independent changed-file enumeration/diff | 0 | 15 files, 0 differences |
 
-The 53 individual tests include schema closure/required fields, every Value
-variant, current qualifications/scope/time/status, all historical labels,
-requested predecessor sets, expiry, OR/AND graphs/support, unions, direction,
-shortcuts, missing edges, endpoint-only/uncited evidence, truncation, source
-substitution, external negation referral, aliases, Unicode maps, equivalent
-dates/partitions, bilingual values, unknown paraphrases and pass isolation.
-CLI tests exercise deterministic atomic output, malformed reader JSON, failure
-zeros, and expected exit-1 usage/authoring/I/O errors. Test-created temporary
-files are cleaned; the final tests keep temporary files in this directory.
+There are **52 individual tests** across five scorer test files. Negative
+coverage includes bilingual aliases, bundled/decomposed fields and unknown
+type correspondence, representation-dependent partition counts, wrong
+unit/source/occurrence and dangling delivered addresses, dangling private
+graph/span references, obsolete answer endpoints, conjunctive/serial omission,
+partial alternative splicing, unrelated over-citation, absent evidence,
+not_stated/unavailable confusion, schema closure, pass isolation and keys.
+The CLI's expected usage/authoring/I/O failures assert exit 1 explicitly.
 
-One intermediate combined test run and its focused diagnostic exited **1**:
-a new historical-date test assumed 1979-07-01 had a Taipei midnight. It is a
-daylight-saving gap. The fixture was corrected to expect referral on that date
-and to test the +09:00 offset on 1979-07-02. Subsequent focused/combined runs
-exited **0**, as reported above. No failing tests were hidden by a pipeline.
+An intermediate combined run and direct diagnostic runs exited 1 when the
+concurrently published contract first appeared in its different wire shape.
+After adding the semantic projection adapter, focused tests passed. This was
+an interface mismatch, not a hidden successful test run. No broad repository
+suite was run and no process remains unattended.
 
-The early read-only parent-directory discovery command was interrupted with
-exit **130**; subsequent instruction discovery used explicit ancestor paths.
-No long-running process was left unattended. No network/API/model calls were
-made, no credentials were read, and no broad repository suite was run.
+## Changed files, independently cross-checked
 
-## Syntax, whitespace and file cross-check
-
-All 10 JavaScript files passed individual `node --check FILE` commands with
-actual exit **0**. A recursive filesystem whitespace scan checked all 15 files
-(including untracked files) and returned **0** errors, exit **0**.
-`git diff --check -- evaluation/hr3/scorer` exited **0**; its tracked-only
-coverage is supplemented by that filesystem scan.
-
-File enumeration route A combines scoped `git diff --name-only -z` with
-`git ls-files --others --exclude-standard -z`; route B independently runs
-`find evaluation/hr3/scorer -type f -print0`. Each command exited **0**.
-The sorted lists were diffed in both directions: **15 files** on each
-route, **0** differences. The lists were re-derived after this report update.
-
-Files written (paths relative to this scorer directory):
+Route A: scoped `git diff --name-only -z` plus
+`git ls-files --others --exclude-standard -z`.
+Route B: independent `find` enumeration, comparing each file's bytes to
+`git show HEAD:path` (and accounting for deleted tracked files).
+The sorted lists were diffed: **15 versus 15, zero differences**. The final
+filesystem scan covers all 18 scorer files, including untracked additions.
+Paths below are relative to this directory and mechanically enumerated:
 
 - `README.md`
 - `REPORT.md`
 - `answer.schema.json`
-- `canonical.mjs`
 - `citations.mjs`
-- `cli.mjs`
+- `contract.mjs`
 - `gold.schema.json`
 - `schema.mjs`
 - `scorer.mjs`
+- `slots.mjs`
 - `submission.schema.json`
-- `test/canonical.test.mjs`
 - `test/citations.test.mjs`
+- `test/contract.test.mjs`
 - `test/fixtures.mjs`
 - `test/schema-cli.test.mjs`
 - `test/scorer.test.mjs`

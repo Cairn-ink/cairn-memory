@@ -1,136 +1,116 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:hr3:answer:v1",
-  "$comment": "Executable cross-field invariants, finite-domain nonempty scopes and interval/range ordering are additionally checked by validate.mjs. No network resolution.",
-  "title": "HR-3 protocol v0.3.4 closed answer schema",
-  "$ref": "#/$defs/Answer",
-  "$defs": {
-    "Value": {
-      "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "type",
-            "text"
-          ],
-          "properties": {
-            "type": {
-              "const": "Text"
-            },
-            "text": {
-              "type": "string",
-              "minLength": 1
-            }
-          }
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "current",
+    "old",
+    "reason"
+  ],
+  "properties": {
+    "current": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "rows"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "no_active_decision",
+            "unresolved"
+          ]
         },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "type",
-            "value"
-          ],
-          "properties": {
-            "type": {
-              "const": "Boolean"
-            },
-            "value": {
-              "type": "boolean"
-            }
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Row"
           }
+        }
+      }
+    },
+    "old": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "records"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "available",
+            "unavailable",
+            "none"
+          ]
         },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "type",
-            "decimal",
-            "unit"
-          ],
-          "properties": {
-            "type": {
-              "const": "Quantity"
-            },
-            "decimal": {
-              "type": "string",
-              "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$"
-            },
-            "unit": {
-              "type": "string",
-              "minLength": 1
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "type",
-            "iso"
-          ],
-          "properties": {
-            "type": {
-              "const": "Instant"
-            },
-            "iso": {
-              "type": "string",
-              "format": "date-time",
-              "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "type",
-            "lower",
-            "upper",
-            "lowerClosed",
-            "upperClosed",
-            "unit"
-          ],
-          "properties": {
-            "type": {
-              "const": "Range"
-            },
-            "lower": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$"
-                },
-                {
-                  "type": "null"
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "predecessor_turn",
+              "status",
+              "rows"
+            ],
+            "properties": {
+              "predecessor_turn": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "previously_adopted",
+                  "erroneous",
+                  "expired",
+                  "unavailable",
+                  "unresolved"
+                ]
+              },
+              "rows": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Row"
                 }
-              ]
-            },
-            "upper": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "lowerClosed": {
-              "type": "boolean"
-            },
-            "upperClosed": {
-              "type": "boolean"
-            },
-            "unit": {
-              "type": "string",
-              "minLength": 1
+              }
             }
           }
         }
-      ]
+      }
     },
+    "reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "support"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "stated",
+            "not_stated",
+            "unavailable"
+          ]
+        },
+        "support": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Citation"
+          }
+        }
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hr3:slot-answer:a4:v1",
+  "$defs": {
     "Scope": {
       "type": "object",
       "additionalProperties": false,
@@ -298,15 +278,11 @@
           ]
         },
         "source": {
-          "anyOf": [
-            {
-              "type": "integer",
-              "minimum": 0
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
         },
         "quote": {
           "type": "string",
@@ -318,55 +294,126 @@
         }
       }
     },
-    "Claim": {
+    "RouteSlot": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "subject",
-        "predicate",
-        "value",
+        "state",
+        "value"
+      ],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "value",
+            "not_specified",
+            "unavailable",
+            "unresolved"
+          ]
+        },
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "ApprovalSlot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "value"
+      ],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "value",
+            "not_specified",
+            "unavailable",
+            "unresolved"
+          ]
+        },
+        "value": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "CapSlot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "value"
+      ],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "value",
+            "not_specified",
+            "unavailable",
+            "unresolved"
+          ]
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "decimal",
+                "unit"
+              ],
+              "properties": {
+                "decimal": {
+                  "type": "string",
+                  "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$"
+                },
+                "unit": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "Row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
         "scope",
         "valid",
-        "qualifiers",
+        "route",
+        "approval",
+        "cap",
         "citations"
       ],
       "properties": {
-        "subject": {
-          "type": "string",
-          "minLength": 1
-        },
-        "predicate": {
-          "type": "string",
-          "minLength": 1
-        },
-        "value": {
-          "$ref": "#/$defs/Value"
-        },
         "scope": {
           "$ref": "#/$defs/Scope"
         },
         "valid": {
           "$ref": "#/$defs/Interval"
         },
-        "qualifiers": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "key",
-              "value"
-            ],
-            "properties": {
-              "key": {
-                "type": "string",
-                "minLength": 1
-              },
-              "value": {
-                "$ref": "#/$defs/Value"
-              }
-            }
-          }
+        "route": {
+          "$ref": "#/$defs/RouteSlot"
+        },
+        "approval": {
+          "$ref": "#/$defs/ApprovalSlot"
+        },
+        "cap": {
+          "$ref": "#/$defs/CapSlot"
         },
         "citations": {
           "type": "array",
@@ -375,153 +422,7 @@
           }
         }
       }
-    },
-    "Answer": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "current",
-        "old",
-        "reason"
-      ],
-      "properties": {
-        "current": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "status",
-            "claims"
-          ],
-          "properties": {
-            "status": {
-              "type": "string",
-              "enum": [
-                "active",
-                "no_active_decision",
-                "unresolved"
-              ]
-            },
-            "claims": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/Claim"
-              }
-            }
-          }
-        },
-        "old": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "status",
-            "records"
-          ],
-          "properties": {
-            "status": {
-              "type": "string",
-              "enum": [
-                "available",
-                "unavailable",
-                "none"
-              ]
-            },
-            "records": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "status",
-                  "claims"
-                ],
-                "properties": {
-                  "status": {
-                    "type": "string",
-                    "enum": [
-                      "previously_adopted",
-                      "erroneous",
-                      "expired"
-                    ]
-                  },
-                  "claims": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/$defs/Claim"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "reason": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "status",
-            "nodes",
-            "edges"
-          ],
-          "properties": {
-            "status": {
-              "type": "string",
-              "enum": [
-                "stated",
-                "not_stated",
-                "unavailable"
-              ]
-            },
-            "nodes": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "id",
-                  "claim"
-                ],
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "claim": {
-                    "$ref": "#/$defs/Claim"
-                  }
-                }
-              }
-            },
-            "edges": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "from",
-                  "to",
-                  "citations"
-                ],
-                "properties": {
-                  "from": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "to": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "citations": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/$defs/Citation"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
     }
-  }
+  },
+  "$comment": "Provider closed structural schema. validateAnswer additionally enforces state/value coupling, address source coupling, valid enums/scopes/times and status/row semantics."
 }

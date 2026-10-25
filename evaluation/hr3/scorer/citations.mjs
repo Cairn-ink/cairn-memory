@@ -45,10 +45,12 @@ export function materializeUnit(unit) {
   points = points.slice(0, limit);
   return { ...unit, text: points.map(p => p.char).join(''), map: points, fullMap };
 }
+const validAddress = a => Number.isSafeInteger(a.item) && a.item >= 0 && (a.unit === 'body' ? a.source === null : a.unit === 'receipt' && Number.isSafeInteger(a.source) && a.source >= 0);
 export function deliveredIndex(units) {
   const index = new Map();
   const materialized = units.map(materializeUnit);
   for (const unit of materialized) for (const alias of [unit, ...unit.aliases]) {
+    if (!validAddress(alias)) throw new RangeError('Invalid body/receipt source address');
     const key = address(alias);
     if (index.has(key)) throw new RangeError('Ambiguous delivered address/alias');
     index.set(key, unit);
@@ -56,9 +58,10 @@ export function deliveredIndex(units) {
   return { index, units: materialized };
 }
 export function resolveCitation(citation, delivery) {
+  if (!validAddress(citation)) return { ok: false, error: 'invalid_unit_source' };
   const unit = delivery.index.get(address(citation));
   if (!unit) return { ok: false, error: 'not_delivered' };
-  const quote = unit.normalize ? normalizeText(citation.quote) : citation.quote;
+  const quote = citation.quote; // A-4: verbatim delivered-language substring.
   if (!quote.length) return { ok: false, error: 'empty_quote' };
   function locate(overlap) {
     let start = -1;
@@ -118,6 +121,6 @@ export function supportBundle(question, answer, delivery) {
   return {
     pass: 'support', question, answer,
     delivered: delivery.units.map(u => ({ intent: u.intent, item: u.item, unit: u.unit, source: u.source, aliases: u.aliases, text: u.text })),
-    rubric: 'Follow submitted citations only. Other delivered context can disambiguate or negate but cannot substitute uncited support. Require directed causality, not endpoint mentions. Do not add nodes, edges or citations. Return unresolved if undecidable.',
+    rubric: 'Follow submitted citations only. Other delivered context can disambiguate or negate but cannot substitute uncited support. Require a complete quoted causal explanation: serial intermediates, conjunction language and sufficient alternatives; reject unrelated, speculative, negated or wrong-change clauses and broad over-citation. A bare deadline is insufficient without an explicit expiry cause. Do not add values, causal clauses or citations. Return unresolved if undecidable.',
   };
 }
