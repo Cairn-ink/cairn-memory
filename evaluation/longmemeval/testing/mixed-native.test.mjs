@@ -22,6 +22,58 @@ import { reportSnapshot } from '../mixed-validation.mjs';
 import { PUBLIC_ANSWER_INSTRUCTION } from '../public-comparison.mjs';
 import { evaluatorRow, fakeMixedHttp, sourceRow,
   syntheticMixedFixture } from './mixed-fixture.mjs';
+import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
+import { createMixedResultJournal, inspectMixedResultJournal } from '../mixed-result-journal.mjs';
+import { interruption, syntheticNativeDescriptors } from './result-journal-fixture.mjs';
+
+test('RD8 actual native generation interruption retains settled answer', t => interruption(t, 'generation', true));
+test('RD8 actual native scoring interruption retains settled judgment', t => interruption(t, 'scoring', true));
+
+for (const order of [['cairn', 'mem0'], ['mem0', 'cairn']]) {
+  test(`RD2/RD5/RD8 actual native journal completes both phases in ${order.join('/')} order`, async t => {
+    const workspace = createTestWorkspace(t, { prefix: 'cairn-journal-native-' });
+    const descriptors = syntheticNativeDescriptors(workspace.path, true);
+    const fake = fakeMixedHttp();
+    const fixture = syntheticMixedFixture(null, { ...descriptors, sourceCases: [sourceRow()],
+      armOrders: [order], fetchImpl: fake.fetchImpl, workspace });
+    const directory = join(workspace.path, 'journal');
+    const resultJournal = createMixedResultJournal({ directory, prepared: fixture.prepared });
+    const generation = await runMixedGeneration({ prepared: fixture.prepared, guard: fixture.guard,
+      apiKey: 'JOURNAL_KEY_CANARY', cairnStoreRoot: fixture.root, resultJournal });
+    assert.ok(generation.cases[0].arms.every(arm => arm.status === 'completed'), JSON.stringify(generation));
+    const scored = await scoreMixedGeneration({ generationReport: generation,
+      evaluatorRows: [evaluatorRow()], referenceRenderings: undefined,
+      guard: fixture.guard, apiKey: 'JOURNAL_KEY_CANARY', resultJournal });
+    const observed = inspectMixedResultJournal({ directory });
+    assert.deepEqual(observed.phases.generation.completion.report, generation);
+    assert.deepEqual(observed.phases.scoring.completion.report, scored);
+    for (const phase of ['generation', 'scoring']) {
+      assert.deepEqual(observed.phases[phase].arms.map(arm => arm.name), order);
+      assert.ok(observed.phases[phase].arms.every(arm => arm.state === 'terminal'));
+    }
+    assert.equal(scored.summary.commonResolvedN, 1);
+    await workspace.cleanup();
+    assert.equal(existsSync(workspace.path), false);
+  });
+}
+
+test('RD2/RD8 actual Cairn ingestion failure and native answer remain durable', async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-journal-native-failure-' });
+  const descriptors = syntheticNativeDescriptors(workspace.path, true);
+  const fake = fakeMixedHttp((url, body) => url.endsWith('/responses')
+    ? indexedResponse(body, { items: [{ content: 'bad', kind: 'context', confidence: 1,
+      sourceIndices: [999] }] }) : undefined);
+  const fixture = syntheticMixedFixture(null, { ...descriptors, sourceCases: [sourceRow()],
+    armOrders: [['cairn', 'mem0']], fetchImpl: fake.fetchImpl, workspace });
+  const directory = join(workspace.path, 'journal');
+  const resultJournal = createMixedResultJournal({ directory, prepared: fixture.prepared });
+  const generation = await runMixedGeneration({ prepared: fixture.prepared, guard: fixture.guard,
+    apiKey: 'JOURNAL_KEY_CANARY', cairnStoreRoot: fixture.root, resultJournal });
+  assert.deepEqual(generation.cases[0].arms.map(arm => arm.status), ['failed', 'completed']);
+  const observed = inspectMixedResultJournal({ directory });
+  assert.equal(observed.phases.generation.arms[0].result.reason, 'ingestion_incomplete');
+  assert.equal(observed.phases.generation.arms[1].result.answer.text, 'Synthetic memory fact.');
+});
 
 const nativeRequire = createRequire(new URL('../../../adapters/openai/package.json', import.meta.url));
 const nativeEncoder = nativeRequire('tiktoken').get_encoding('cl100k_base');

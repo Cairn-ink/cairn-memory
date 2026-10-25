@@ -25,6 +25,8 @@ import { MixedComparisonError, canonical, dense, exact, fail, freeze, hash,
   reportSnapshot, sourceSnapshot, wellFormed } from './mixed-validation.mjs';
 import { authenticateLocalUnknown, completionOnce, trackedTransport,
   unknownCurrentAttempt } from './mixed-transport.mjs';
+import { completeMixedJournalPhase, enterMixedJournalArm, recordMixedJournalArm,
+  startMixedJournalPhase } from './mixed-result-journal.mjs';
 
 const requireFromAdapter = createRequire(new URL('../../adapters/openai/package.json', import.meta.url));
 const nativeEncoder = requireFromAdapter('tiktoken').get_encoding('cl100k_base');
@@ -371,8 +373,10 @@ async function nativeCase({ guard, apiKey, plan, nativeArtifact, nativeConfigura
 }
 
 export async function runMixedGeneration(options) {
-  const { prepared, guard, apiKey, cairnStoreRoot } = ownOptions(options,
-    ['prepared', 'guard', 'apiKey', 'cairnStoreRoot'], 'invalid_mixed_generation');
+  const journalDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'resultJournal');
+  const { prepared, guard, apiKey, cairnStoreRoot, resultJournal } = ownOptions(options,
+    ['prepared', 'guard', 'apiKey', 'cairnStoreRoot', ...(journalDescriptor ? ['resultJournal'] : [])],
+    'invalid_mixed_generation');
   const privateData = PREPARED.get(prepared);
   if (!privateData || USED.has(prepared)) fail('prepared_identity_required');
   USED.add(prepared);
@@ -380,6 +384,7 @@ export async function runMixedGeneration(options) {
   assertGuard(prepared, privateData, guard);
   assertNative(prepared, privateData, guard);
   const root = rootPath(cairnStoreRoot);
+  if (journalDescriptor) startMixedJournalPhase(resultJournal, 'generation', prepared);
   const cases = privateData.sourceCases.map((row, index) => ({
     questionId: row.question.question_id,
     question: { text: row.question.text,
@@ -400,6 +405,8 @@ export async function runMixedGeneration(options) {
       if (guard.isHalted() || unknownCurrentAttempt(guard, allowedLocalOrdinals)) {
         haltReason = 'global_accounting_unsettled'; break;
       }
+      const journalOrdinal = index * 2 + prepared.roster[index].armOrder.indexOf(name);
+      if (journalDescriptor) enterMixedJournalArm(resultJournal, 'generation', journalOrdinal);
       const transport = trackedTransport();
       let outcome, local = null, entered = false, workSettled = false, ownedCore = null;
       try {
@@ -456,12 +463,16 @@ export async function runMixedGeneration(options) {
         resultArm.diagnostics = { ...resultArm.diagnostics,
           stage: local?.diagnostics?.stage ?? 'preflight' };
       }
+      if (journalDescriptor) recordMixedJournalArm(resultJournal, 'generation', journalOrdinal,
+        cases[index], resultArm);
     }
   }
   if (haltReason) for (const item of cases) for (const resultArm of item.arms) {
     if (resultArm.reason === 'not_started') resultArm.reason = haltReason;
   }
-  return freeze(reportSnapshot({ schemaVersion: MIXED_GENERATION_VERSION, manifest: prepared.manifest,
+  const report = freeze(reportSnapshot({ schemaVersion: MIXED_GENERATION_VERSION, manifest: prepared.manifest,
     roster: prepared.roster, manifestDigest: privateData.manifestDigest,
     rosterDigest: privateData.rosterDigest, cases, halted: haltReason !== null, haltReason }));
+  if (journalDescriptor) completeMixedJournalPhase(resultJournal, 'generation', report);
+  return report;
 }
