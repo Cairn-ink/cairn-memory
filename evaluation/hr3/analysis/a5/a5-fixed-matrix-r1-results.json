@@ -1,0 +1,88 @@
+{
+  "method": "Large synthetic probes using the actual frozen resampling-index matrices.\n\nInteger-valued float32 GEMM computes sampled-success counts exactly. An explicit\n1e-10 endpoint enclosure allows arithmetic reordering relative to JS. This is\ntargeted simulation with MC uncertainty, not an exact coverage theorem/full grid.\n",
+  "datasets_per_case": 100000,
+  "rows": [
+    {
+      "id": "development-within-homogeneous-C",
+      "n": 40,
+      "m": 4,
+      "datasets": 100000,
+      "lower_coverage_estimate": 0.92924,
+      "upper_coverage_estimate": 0.92924,
+      "mc95_enclosure": [
+        0.9276341563023385,
+        0.9308128668087712
+      ],
+      "frozen_index_sha256": "1a0fcf9e96f6a7c09298bd573a55afe731828f7e0f88f853b31279e29c397b91"
+    },
+    {
+      "id": "development-within-correction-C",
+      "n": 40,
+      "m": 4,
+      "datasets": 100000,
+      "lower_coverage_estimate": 0.92759,
+      "upper_coverage_estimate": 0.92759,
+      "mc95_enclosure": [
+        0.9259672264937375,
+        0.9291799233806439
+      ],
+      "frozen_index_sha256": "1a0fcf9e96f6a7c09298bd573a55afe731828f7e0f88f853b31279e29c397b91"
+    },
+    {
+      "id": "development-within-reversal-C",
+      "n": 40,
+      "m": 4,
+      "datasets": 100000,
+      "lower_coverage_estimate": 0.92117,
+      "upper_coverage_estimate": 0.92117,
+      "mc95_enclosure": [
+        0.9194835934698526,
+        0.9228240496288944
+      ],
+      "frozen_index_sha256": "1a0fcf9e96f6a7c09298bd573a55afe731828f7e0f88f853b31279e29c397b91"
+    },
+    {
+      "id": "development-within-scope-C",
+      "n": 40,
+      "m": 4,
+      "datasets": 100000,
+      "lower_coverage_estimate": 0.92478,
+      "upper_coverage_estimate": 0.92478,
+      "mc95_enclosure": [
+        0.9231289482430654,
+        0.9263984175130087
+      ],
+      "frozen_index_sha256": "1a0fcf9e96f6a7c09298bd573a55afe731828f7e0f88f853b31279e29c397b91"
+    },
+    {
+      "id": "development-overall-homogeneous-J",
+      "n": 200,
+      "m": 4,
+      "datasets": 100000,
+      "lower_coverage_estimate": 0.92641,
+      "upper_coverage_estimate": 0.92641,
+      "mc95_enclosure": [
+        0.9247752681717497,
+        0.9280119723575772
+      ],
+      "frozen_index_sha256": "1a0fcf9e96f6a7c09298bd573a55afe731828f7e0f88f853b31279e29c397b91"
+    },
+    {
+      "id": "test-within-reversal-J",
+      "n": 320,
+      "m": 8,
+      "datasets": 100000,
+      "lower_coverage_estimate": 0.92793,
+      "upper_coverage_estimate": 0.92793,
+      "mc95_enclosure": [
+        0.926310694986524,
+        0.929516428766941
+      ],
+      "frozen_index_sha256": "4c03789b0a77b1c06031a2318fc4ce6dbf99589b7f41801a562124b4905542ff"
+    }
+  ],
+  "epsilon": 1e-10,
+  "script_sha256": "b7933d7707509142b242d78ea753d6b433f4af9d6df5752ea181a98cb607ac3e",
+  "elapsed_seconds": 78.90458191299695,
+  "complete": true
+}

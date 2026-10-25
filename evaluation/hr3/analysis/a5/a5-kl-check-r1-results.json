@@ -1,0 +1,204 @@
+{
+  "script_sha256": "3a7804d537bf900e62eddfcea1109749c8ae109b0eb1f11d54151a6314758849",
+  "method": "Poisson-binomial count DP numeric check; >=.95 guarantee follows separately from Chernoff/AM-GM proof, not these floating values",
+  "rows": [
+    {
+      "id": "development-00",
+      "n": 40,
+      "truth": "2/5",
+      "carrier_coverage_enumerated_binary64": 0.9945956945883553,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "development-01",
+      "n": 40,
+      "truth": "8/125",
+      "carrier_coverage_enumerated_binary64": 0.9965943451949225,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "development-02",
+      "n": 200,
+      "truth": "2/5",
+      "carrier_coverage_enumerated_binary64": 0.9939838323006545,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "development-03",
+      "n": 200,
+      "truth": "8/125",
+      "carrier_coverage_enumerated_binary64": 0.9941502411097832,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "development-04",
+      "n": 40,
+      "truth": "1/5",
+      "carrier_coverage_enumerated_binary64": 0.9891216653755575,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "development-05",
+      "n": 40,
+      "truth": "1/125",
+      "carrier_coverage_enumerated_binary64": 0.9959445723897756,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "development-06",
+      "n": 40,
+      "truth": "3/10",
+      "carrier_coverage_enumerated_binary64": 0.9950197440319566,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "development-07",
+      "n": 40,
+      "truth": "27/1000",
+      "carrier_coverage_enumerated_binary64": 0.9957021580512442,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "development-08",
+      "n": 40,
+      "truth": "1/2",
+      "carrier_coverage_enumerated_binary64": 0.9935734239043086,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "development-09",
+      "n": 40,
+      "truth": "1/8",
+      "carrier_coverage_enumerated_binary64": 0.9924661432598919,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "development-10",
+      "n": 40,
+      "truth": "3/5",
+      "carrier_coverage_enumerated_binary64": 0.9945956945883553,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "development-11",
+      "n": 40,
+      "truth": "27/125",
+      "carrier_coverage_enumerated_binary64": 0.9933734138384794,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "development-12",
+      "n": 200,
+      "truth": "2/5",
+      "carrier_coverage_enumerated_binary64": 0.9958766661375631,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "development-13",
+      "n": 200,
+      "truth": "11/125",
+      "carrier_coverage_enumerated_binary64": 0.9959595290092786,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "test-00",
+      "n": 320,
+      "truth": "2/5",
+      "carrier_coverage_enumerated_binary64": 0.9938815768770702,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "test-01",
+      "n": 320,
+      "truth": "8/125",
+      "carrier_coverage_enumerated_binary64": 0.9941941284266014,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "test-02",
+      "n": 1600,
+      "truth": "2/5",
+      "carrier_coverage_enumerated_binary64": 0.9931724622743873,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "test-03",
+      "n": 1600,
+      "truth": "8/125",
+      "carrier_coverage_enumerated_binary64": 0.9942265405007894,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "test-04",
+      "n": 320,
+      "truth": "1/5",
+      "carrier_coverage_enumerated_binary64": 0.9935738274840977,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "test-05",
+      "n": 320,
+      "truth": "1/125",
+      "carrier_coverage_enumerated_binary64": 0.9953187177979388,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "test-06",
+      "n": 320,
+      "truth": "3/10",
+      "carrier_coverage_enumerated_binary64": 0.9928191074062499,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "test-07",
+      "n": 320,
+      "truth": "27/1000",
+      "carrier_coverage_enumerated_binary64": 0.9891831963867452,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "test-08",
+      "n": 320,
+      "truth": "1/2",
+      "carrier_coverage_enumerated_binary64": 0.9939278656279763,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "test-09",
+      "n": 320,
+      "truth": "1/8",
+      "carrier_coverage_enumerated_binary64": 0.9934175863376116,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "test-10",
+      "n": 320,
+      "truth": "3/5",
+      "carrier_coverage_enumerated_binary64": 0.9938815768770701,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "test-11",
+      "n": 320,
+      "truth": "27/125",
+      "carrier_coverage_enumerated_binary64": 0.9935598281880773,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "test-12",
+      "n": 1600,
+      "truth": "2/5",
+      "carrier_coverage_enumerated_binary64": 0.9952774280673232,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    },
+    {
+      "id": "test-13",
+      "n": 1600,
+      "truth": "11/125",
+      "carrier_coverage_enumerated_binary64": 0.9947520612112057,
+      "analytic_independent_bernoulli_guarantee": 0.95
+    }
+  ],
+  "minimum_numeric_carrier_coverage": 0.9891216653755575,
+  "complete": true
+}

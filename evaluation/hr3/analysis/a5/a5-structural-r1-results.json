@@ -1,0 +1,1869 @@
+{
+  "purpose": "synthetic design check only; no pilot observations or research results",
+  "script_sha256": "9dfdd8dfb3051d387391fc5c7717fe024ef1fb9bdc69c536a1fa5ab029a42226",
+  "python": "3.11.7",
+  "numpy": "1.24.3",
+  "scipy": "1.11.4",
+  "pilot_independent_check": {
+    "ordered_datasets": 4096,
+    "failure_exact": "1147657/9765625",
+    "coverage_cap": "0.8824799232"
+  },
+  "cases": [
+    {
+      "id": "pilot-00",
+      "split": "pilot",
+      "L": 6,
+      "m": 2,
+      "labels": [
+        "homogeneous/within-correction/C,O,R",
+        "homogeneous/within-reversal/C,O,R",
+        "homogeneous/within-refinement/C,O,R",
+        "homogeneous/within-scope_change/C,O,R",
+        "homogeneous/within-expiry/C,O,R",
+        "heterogeneous/within-refinement/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "2/5",
+          "lineages": 6
+        }
+      ],
+      "truth": "2/5",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "1147657/9765625",
+        "failure_lower": "0.1175200768",
+        "failure_upper": "0.1175200768",
+        "coverage_cap_upper": "0.8824799232",
+        "states": 28,
+        "cap_below_93": true
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.87363,
+        "coverage_estimate_upper": 0.87363,
+        "mc95_enclosure": [
+          0.8715562697559059,
+          0.8756750256615854
+        ],
+        "rao_blackwell_lower": 0.8736299999155928,
+        "rao_blackwell_upper": 0.8736299999411621,
+        "boundary_samples": 201,
+        "fft_negative_roundoff_min": -1.0355380808674344e-15,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/pilot-00"
+      }
+    },
+    {
+      "id": "pilot-01",
+      "split": "pilot",
+      "L": 6,
+      "m": 2,
+      "labels": [
+        "homogeneous/within-correction/J",
+        "homogeneous/within-reversal/J",
+        "homogeneous/within-refinement/J",
+        "homogeneous/within-scope_change/J",
+        "homogeneous/within-expiry/J",
+        "heterogeneous/within-refinement/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "8/125",
+          "lineages": 6
+        }
+      ],
+      "truth": "8/125",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "348933551942301039496576/14551915228366851806640625",
+        "failure_lower": "0.023978531105108803897993571583655936",
+        "failure_upper": "0.023978531105108803897993571583655936",
+        "coverage_cap_upper": "0.976021468894891196102006428416344064",
+        "states": 28,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.97488,
+        "coverage_estimate_upper": 0.97488,
+        "mc95_enclosure": [
+          0.9738916909001668,
+          0.9758318258620263
+        ],
+        "rao_blackwell_lower": 0.9748799999911554,
+        "rao_blackwell_upper": 0.97487999999383,
+        "boundary_samples": 45166,
+        "fft_negative_roundoff_min": -3.7470027081099033e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/pilot-01"
+      }
+    },
+    {
+      "id": "pilot-02",
+      "split": "pilot",
+      "L": 30,
+      "m": 2,
+      "labels": [
+        "homogeneous/overall/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "2/5",
+          "lineages": 30
+        }
+      ],
+      "truth": "2/5",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "22941964338859535631282654615648225337/34694469519536141888238489627838134765625",
+        "failure_lower": "0.0006612571011048640786824184023798455961305878668381257728",
+        "failure_upper": "0.0006612571011048640786824184023798455961305878668381257728",
+        "coverage_cap_upper": "0.9993387428988951359213175815976201544038694121331618742272",
+        "states": 496,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.94376,
+        "coverage_estimate_upper": 0.94404,
+        "mc95_enclosure": [
+          0.9423149671912778,
+          0.9454475823741633
+        ],
+        "rao_blackwell_lower": 0.9436765994103394,
+        "rao_blackwell_upper": 0.9439169516352252,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -5.682777924446991e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/pilot-02"
+      }
+    },
+    {
+      "id": "pilot-03",
+      "split": "pilot",
+      "L": 30,
+      "m": 2,
+      "labels": [
+        "homogeneous/overall/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "8/125",
+          "lineages": 30
+        }
+      ],
+      "truth": "8/125",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "64941068295422978350722513931939023154381672963795410318043277267700305418800113506649819807108900222467494948377612737894577/652530446799852452671029410925654755570116425806896654775863645546972324459748622722289612685386828161426819860935211181640625",
+        "failure_lower": "0.0995218975818028642228940564929802785577430020351137417992496198331558339901067007490113630",
+        "failure_upper": "0.0995218975818028642228940564929802785577430020351137417992496198331558339901067007490113630",
+        "coverage_cap_upper": "0.900478102418197135777105943507019721442256997964886258200750380166844166009893299250988637",
+        "states": 496,
+        "cap_below_93": true
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.89461,
+        "coverage_estimate_upper": 0.89461,
+        "mc95_enclosure": [
+          0.8926917045855394,
+          0.8964979790177479
+        ],
+        "rao_blackwell_lower": 0.8946128944640186,
+        "rao_blackwell_upper": 0.8946206240197883,
+        "boundary_samples": 1839,
+        "fft_negative_roundoff_min": -2.6625806194064483e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/pilot-03"
+      }
+    },
+    {
+      "id": "pilot-04",
+      "split": "pilot",
+      "L": 6,
+      "m": 2,
+      "labels": [
+        "heterogeneous/within-correction/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "1/5",
+          "lineages": 6
+        }
+      ],
+      "truth": "1/5",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "11491921/244140625",
+        "failure_lower": "0.047070908416",
+        "failure_upper": "0.047070908416",
+        "coverage_cap_upper": "0.952929091584",
+        "states": 28,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.95186,
+        "coverage_estimate_upper": 0.95186,
+        "mc95_enclosure": [
+          0.9505158089459226,
+          0.953169476355974
+        ],
+        "rao_blackwell_lower": 0.9518599999676606,
+        "rao_blackwell_upper": 0.9518599999774482,
+        "boundary_samples": 6844,
+        "fft_negative_roundoff_min": -6.44099427885575e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/pilot-04"
+      }
+    },
+    {
+      "id": "pilot-05",
+      "split": "pilot",
+      "L": 6,
+      "m": 2,
+      "labels": [
+        "heterogeneous/within-correction/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "1/125",
+          "lineages": 6
+        }
+      ],
+      "truth": "1/125",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "5587041448682803411441/14551915228366851806640625",
+        "failure_lower": "0.000383938564855825646875781235736576",
+        "failure_upper": "0.000383938564855825646875781235736576",
+        "coverage_cap_upper": "0.999616061435144174353124218764263424",
+        "states": 28,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.99959,
+        "coverage_estimate_upper": 0.99959,
+        "mc95_enclosure": [
+          0.9994438792675947,
+          0.9996977391185745
+        ],
+        "rao_blackwell_lower": 0.99959,
+        "rao_blackwell_upper": 0.99959,
+        "boundary_samples": 90851,
+        "fft_negative_roundoff_min": -1.6306400674181987e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/pilot-05"
+      }
+    },
+    {
+      "id": "pilot-06",
+      "split": "pilot",
+      "L": 6,
+      "m": 2,
+      "labels": [
+        "heterogeneous/within-reversal/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "3/10",
+          "lineages": 6
+        }
+      ],
+      "truth": "3/10",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "595588793/5000000000",
+        "failure_lower": "0.1191177586",
+        "failure_upper": "0.1191177586",
+        "coverage_cap_upper": "0.8808822414",
+        "states": 28,
+        "cap_below_93": true
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.85926,
+        "coverage_estimate_upper": 0.85926,
+        "mc95_enclosure": [
+          0.8570908401819154,
+          0.8614015592284315
+        ],
+        "rao_blackwell_lower": 0.859260000000022,
+        "rao_blackwell_upper": 0.8592600000000368,
+        "boundary_samples": 1406,
+        "fft_negative_roundoff_min": -9.853229343548264e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/pilot-06"
+      }
+    },
+    {
+      "id": "pilot-07",
+      "split": "pilot",
+      "L": 6,
+      "m": 2,
+      "labels": [
+        "heterogeneous/within-reversal/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "27/1000",
+          "lineages": 6
+        }
+      ],
+      "truth": "27/1000",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "4366034377667968117715702398752111/1000000000000000000000000000000000000",
+        "failure_lower": "0.004366034377667968117715702398752111",
+        "failure_upper": "0.004366034377667968117715702398752111",
+        "coverage_cap_upper": "0.995633965622332031882284297601247889",
+        "states": 28,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.9957,
+        "coverage_estimate_upper": 0.9957,
+        "mc95_enclosure": [
+          0.9952749676105811,
+          0.9960869496296042
+        ],
+        "rao_blackwell_lower": 0.9956999999997599,
+        "rao_blackwell_upper": 0.9956999999998324,
+        "boundary_samples": 71970,
+        "fft_negative_roundoff_min": -2.0950007950944306e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/pilot-07"
+      }
+    },
+    {
+      "id": "pilot-08",
+      "split": "pilot",
+      "L": 6,
+      "m": 2,
+      "labels": [
+        "heterogeneous/within-scope_change/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "1/2",
+          "lineages": 6
+        }
+      ],
+      "truth": "1/2",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "77/1024",
+        "failure_lower": "0.0751953125",
+        "failure_upper": "0.0751953125",
+        "coverage_cap_upper": "0.9248046875",
+        "states": 28,
+        "cap_below_93": true
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.84693,
+        "coverage_estimate_upper": 0.84693,
+        "mc95_enclosure": [
+          0.8446850736450375,
+          0.8491482730326656
+        ],
+        "rao_blackwell_lower": 0.8469300000000991,
+        "rao_blackwell_upper": 0.846930000000162,
+        "boundary_samples": 53,
+        "fft_negative_roundoff_min": -1.0355380808674344e-15,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/pilot-08"
+      }
+    },
+    {
+      "id": "pilot-09",
+      "split": "pilot",
+      "L": 6,
+      "m": 2,
+      "labels": [
+        "heterogeneous/within-scope_change/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "1/8",
+          "lineages": 6
+        }
+      ],
+      "truth": "1/8",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "4357423183/68719476736",
+        "failure_lower": "0.063408852773136459290981292724609375",
+        "failure_upper": "0.063408852773136459290981292724609375",
+        "coverage_cap_upper": "0.936591147226863540709018707275390625",
+        "states": 28,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.92868,
+        "coverage_estimate_upper": 0.92868,
+        "mc95_enclosure": [
+          0.9270683827844985,
+          0.9302586833492972
+        ],
+        "rao_blackwell_lower": 0.9286800023399909,
+        "rao_blackwell_upper": 0.9286800030995002,
+        "boundary_samples": 20227,
+        "fft_negative_roundoff_min": -4.85722573273506e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/pilot-09"
+      }
+    },
+    {
+      "id": "pilot-10",
+      "split": "pilot",
+      "L": 6,
+      "m": 2,
+      "labels": [
+        "heterogeneous/within-expiry/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "3/5",
+          "lineages": 6
+        }
+      ],
+      "truth": "3/5",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "1147657/9765625",
+        "failure_lower": "0.1175200768",
+        "failure_upper": "0.1175200768",
+        "coverage_cap_upper": "0.8824799232",
+        "states": 28,
+        "cap_below_93": true
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.8734,
+        "coverage_estimate_upper": 0.8734,
+        "mc95_enclosure": [
+          0.8713246768444344,
+          0.8754466362430885
+        ],
+        "rao_blackwell_lower": 0.8733999999193951,
+        "rao_blackwell_upper": 0.8733999999438129,
+        "boundary_samples": 223,
+        "fft_negative_roundoff_min": -1.0355380808674344e-15,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/pilot-10"
+      }
+    },
+    {
+      "id": "pilot-11",
+      "split": "pilot",
+      "L": 6,
+      "m": 2,
+      "labels": [
+        "heterogeneous/within-expiry/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "27/125",
+          "lineages": 6
+        }
+      ],
+      "truth": "27/125",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "3364561135894877144335089/14551915228366851806640625",
+        "failure_lower": "0.231210880704977744461713262723989504",
+        "failure_upper": "0.231210880704977744461713262723989504",
+        "coverage_cap_upper": "0.768789119295022255538286737276010496",
+        "states": 28,
+        "cap_below_93": true
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.76565,
+        "coverage_estimate_upper": 0.76565,
+        "mc95_enclosure": [
+          0.7630144247450321,
+          0.7682651663682527
+        ],
+        "rao_blackwell_lower": 0.7656499999544099,
+        "rao_blackwell_upper": 0.7656499999682123,
+        "boundary_samples": 5462,
+        "fft_negative_roundoff_min": -6.44099427885575e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/pilot-11"
+      }
+    },
+    {
+      "id": "pilot-12",
+      "split": "pilot",
+      "L": 30,
+      "m": 2,
+      "labels": [
+        "heterogeneous/overall/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "1/5",
+          "lineages": 6
+        },
+        {
+          "p": "3/10",
+          "lineages": 6
+        },
+        {
+          "p": "2/5",
+          "lineages": 6
+        },
+        {
+          "p": "1/2",
+          "lineages": 6
+        },
+        {
+          "p": "3/5",
+          "lineages": 6
+        }
+      ],
+      "truth": "2/5",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "48369760396822311812673507350491687391/59604644775390625000000000000000000000000",
+        "failure_lower": "0.000811509918045733638900574970296786745563283456",
+        "failure_upper": "0.000811509918045733638900574970296786745563283456",
+        "coverage_cap_upper": "0.999188490081954266361099425029703213254436716544",
+        "states": 496,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.94344,
+        "coverage_estimate_upper": 0.9436,
+        "mc95_enclosure": [
+          0.9419911661857472,
+          0.9450128548130354
+        ],
+        "rao_blackwell_lower": 0.9432010203074572,
+        "rao_blackwell_upper": 0.9434296277916494,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -6.253710126364366e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/pilot-12"
+      }
+    },
+    {
+      "id": "pilot-13",
+      "split": "pilot",
+      "L": 30,
+      "m": 2,
+      "labels": [
+        "heterogeneous/overall/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "1/125",
+          "lineages": 6
+        },
+        {
+          "p": "27/1000",
+          "lineages": 6
+        },
+        {
+          "p": "8/125",
+          "lineages": 6
+        },
+        {
+          "p": "1/8",
+          "lineages": 6
+        },
+        {
+          "p": "27/125",
+          "lineages": 6
+        }
+      ],
+      "truth": "11/125",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "78704950561956478443468761493494366174154978617962716859599039264363316328574321180125952177334409028346261151008483/807793566946316088741610050849573099185363389551639556884765625000000000000000000000000000000000000000000000000000000",
+        "failure_lower": "0.0974320095906223152679034992917878051756243445046808143608852776560775687386840967552370587",
+        "failure_upper": "0.0974320095906223152679034992917878051756243445046808143608852776560775687386840967552370587",
+        "coverage_cap_upper": "0.902567990409377684732096500708212194824375655495319185639114722343922431261315903244762941",
+        "states": 496,
+        "cap_below_93": true
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.88141,
+        "coverage_estimate_upper": 0.88143,
+        "mc95_enclosure": [
+          0.8793915026819227,
+          0.8834190480254828
+        ],
+        "rao_blackwell_lower": 0.8814610781868926,
+        "rao_blackwell_upper": 0.881481967976181,
+        "boundary_samples": 334,
+        "fft_negative_roundoff_min": -5.18377893022616e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/pilot-13"
+      }
+    },
+    {
+      "id": "development-00",
+      "split": "development",
+      "L": 10,
+      "m": 4,
+      "labels": [
+        "homogeneous/within-correction/C,O,R",
+        "homogeneous/within-reversal/C,O,R",
+        "homogeneous/within-refinement/C,O,R",
+        "homogeneous/within-scope_change/C,O,R",
+        "homogeneous/within-expiry/C,O,R",
+        "heterogeneous/within-refinement/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "2/5",
+          "lineages": 10
+        }
+      ],
+      "truth": "2/5",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "98016570999386668976813/1818989403545856475830078125",
+        "failure_lower": "0.000053885179764278755752165071015378944",
+        "failure_upper": "0.000053885179764278755752165071015378944",
+        "coverage_cap_upper": "0.999946114820235721244247834928984621056",
+        "states": 176,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.92885,
+        "coverage_estimate_upper": 0.92911,
+        "mc95_enclosure": [
+          0.9272401324325146,
+          0.9306842196336372
+        ],
+        "rao_blackwell_lower": 0.928976013091622,
+        "rao_blackwell_upper": 0.9291899032684658,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -2.8074737630154334e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/development-00"
+      }
+    },
+    {
+      "id": "development-01",
+      "split": "development",
+      "L": 10,
+      "m": 4,
+      "labels": [
+        "homogeneous/within-correction/J",
+        "homogeneous/within-reversal/J",
+        "homogeneous/within-refinement/J",
+        "homogeneous/within-scope_change/J",
+        "homogeneous/within-expiry/J",
+        "heterogeneous/within-refinement/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "8/125",
+          "lineages": 10
+        }
+      ],
+      "truth": "8/125",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "126200625097637620762045204836764703856895312658008822418189462177523013697839104/752316384526264005099991383822237233803945956334136013765601092018187046051025390625",
+        "failure_lower": "0.000167749403965336407691622053940020797752608722120758382010381826348166200277560527797958697",
+        "failure_upper": "0.000167749403965336407691622053940020797752608722120758382010381826348166200277560527797958697",
+        "coverage_cap_upper": "0.999832250596034663592308377946059979202247391277879241617989618173651833799722439472202041",
+        "states": 176,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.99584,
+        "coverage_estimate_upper": 0.99587,
+        "mc95_enclosure": [
+          0.9954215830313436,
+          0.9962488889808758
+        ],
+        "rao_blackwell_lower": 0.9958565097079317,
+        "rao_blackwell_upper": 0.9958640847975755,
+        "boundary_samples": 7196,
+        "fft_negative_roundoff_min": -2.6625806194064483e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/development-01"
+      }
+    },
+    {
+      "id": "development-02",
+      "split": "development",
+      "L": 50,
+      "m": 4,
+      "labels": [
+        "homogeneous/overall/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "2/5",
+          "lineages": 50
+        }
+      ],
+      "truth": "2/5",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "806283083788495848681424068997792844618567035337275883085336865380708173326721297277037658779849713353939279619142466636333/12446030555722283414288128107560248481180504337442334266202233229579397668070766882367889646251427233913933179110244964249432086944580078125",
+        "failure_lower": "6.47823480891096553408726510682746405994762056317439962351066053327788179316120016430028278E-17",
+        "failure_upper": "6.47823480891096553408726510682746405994762056317439962351066053327788179316120016430028278E-17",
+        "coverage_cap_upper": "0.999999999999999935217651910890344659127348931725359400523794368256003764893394667221182068",
+        "states": 3876,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.94301,
+        "coverage_estimate_upper": 0.94319,
+        "mc95_enclosure": [
+          0.941556078830781,
+          0.944607745775751
+        ],
+        "rao_blackwell_lower": 0.9430996272674067,
+        "rao_blackwell_upper": 0.9433133290241531,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -3.0329878148924183e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/development-02"
+      }
+    },
+    {
+      "id": "development-03",
+      "split": "development",
+      "L": 50,
+      "m": 4,
+      "labels": [
+        "homogeneous/overall/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "8/125",
+          "lineages": 50
+        }
+      ],
+      "truth": "8/125",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "11155395154776525475118661703364210154867208285236574686042548862390199360570497709064652586035084626560445240432220717741784932903839388425256295483434617800779247287944591494462261170083043907086843096669899944674494156082983670576058610262932673604965077609532866210716400690658193170656028014487209173745153217594940483338142642772493432716752768329272771028577809522112153721842619992694813533588844311101169901/48198397302057682354815000694250178728620099090197959436605999543176077057205220749513631953908301578082687446576250249157212539699862131630126075104029735284452286528596022363524029701950139835904212225817652407893772037543422685307744524825048563511634145797505562042441375742925755698593222535027263603253957819987312878935793439166225012367152702065168684660982371361349321965683589752416082774288952350616455078125",
+        "failure_lower": "0.000231447429358823933003675172963060513015689740284074930157620068515559710506733808648448257",
+        "failure_upper": "0.000231447429358823933003675172963060513015689740284074930157620068515559710506733808648448257",
+        "coverage_cap_upper": "0.999768552570641176066996324827036939486984310259715925069842379931484440289493266191351552",
+        "states": 3876,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.92701,
+        "coverage_estimate_upper": 0.92714,
+        "mc95_enclosure": [
+          0.9253813333608838,
+          0.9287345327968284
+        ],
+        "rao_blackwell_lower": 0.9269504095769355,
+        "rao_blackwell_upper": 0.9270730593785431,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -1.5667811770664582e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/development-03"
+      }
+    },
+    {
+      "id": "development-04",
+      "split": "development",
+      "L": 10,
+      "m": 4,
+      "labels": [
+        "heterogeneous/within-correction/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "1/5",
+          "lineages": 10
+        }
+      ],
+      "truth": "1/5",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "3727778216542225393699501/1818989403545856475830078125",
+        "failure_lower": "0.002049367747429128226432010399554469888",
+        "failure_upper": "0.002049367747429128226432010399554469888",
+        "coverage_cap_upper": "0.997950632252570871773567989600445530112",
+        "states": 176,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.92858,
+        "coverage_estimate_upper": 0.92892,
+        "mc95_enclosure": [
+          0.9269673548072466,
+          0.9304961940542473
+        ],
+        "rao_blackwell_lower": 0.9282737257139002,
+        "rao_blackwell_upper": 0.9286205123856389,
+        "boundary_samples": 16,
+        "fft_negative_roundoff_min": -2.7681036716270535e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/development-04"
+      }
+    },
+    {
+      "id": "development-05",
+      "split": "development",
+      "L": 10,
+      "m": 4,
+      "labels": [
+        "heterogeneous/within-correction/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "1/125",
+          "lineages": 10
+        }
+      ],
+      "truth": "1/125",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "30814878542215928093621696863392319352958143786977995077286082574448941730849/752316384526264005099991383822237233803945956334136013765601092018187046051025390625",
+        "failure_lower": "4.09599992450252882463371492102551812984581510640827814083045167625664111253596293577033153E-8",
+        "failure_upper": "4.09599992450252882463371492102551812984581510640827814083045167625664111253596293577033153E-8",
+        "coverage_cap_upper": "0.999999959040000754974711753662850789744818701541848935917218591695483237433588874640370642",
+        "states": 176,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.99889,
+        "coverage_estimate_upper": 0.99889,
+        "mc95_enclosure": [
+          0.998663571801901,
+          0.9990781003626259
+        ],
+        "rao_blackwell_lower": 0.9988899947638603,
+        "rao_blackwell_upper": 0.998890054386679,
+        "boundary_samples": 72697,
+        "fft_negative_roundoff_min": -1.3238960852951184e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/development-05"
+      }
+    },
+    {
+      "id": "development-06",
+      "split": "development",
+      "L": 10,
+      "m": 4,
+      "labels": [
+        "heterogeneous/within-reversal/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "3/10",
+          "lineages": 10
+        }
+      ],
+      "truth": "3/10",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "77160977118799992964032992185892083/250000000000000000000000000000000000000",
+        "failure_lower": "0.000308643908475199971856131968743568332",
+        "failure_upper": "0.000308643908475199971856131968743568332",
+        "coverage_cap_upper": "0.999691356091524800028143868031256431668",
+        "states": 176,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.92338,
+        "coverage_estimate_upper": 0.92359,
+        "mc95_enclosure": [
+          0.921715110493055,
+          0.9252202814101012
+        ],
+        "rao_blackwell_lower": 0.9232130678283931,
+        "rao_blackwell_upper": 0.923449776358009,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -3.0503181089932413e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/development-06"
+      }
+    },
+    {
+      "id": "development-07",
+      "split": "development",
+      "L": 10,
+      "m": 4,
+      "labels": [
+        "heterogeneous/within-reversal/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "27/1000",
+          "lineages": 10
+        }
+      ],
+      "truth": "27/1000",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "5314397290688869694461995883947736002443520935880325859645049053571914349565280345902699570404073241093513947841439/1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "failure_lower": "0.00000531439729068886969446199588394773600244352093588032585964504905357191434956528034590269957",
+        "failure_upper": "0.00000531439729068886969446199588394773600244352093588032585964504905357191434956528034590269957",
+        "coverage_cap_upper": "0.999994685602709311130305538004116052263997556479064119674140354950946428085650434719654097",
+        "states": 176,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.9959,
+        "coverage_estimate_upper": 0.99592,
+        "mc95_enclosure": [
+          0.995484452634887,
+          0.9962964864574985
+        ],
+        "rao_blackwell_lower": 0.9960415556271172,
+        "rao_blackwell_upper": 0.9960704853962704,
+        "boundary_samples": 33676,
+        "fft_negative_roundoff_min": -1.695692197767329e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/development-07"
+      }
+    },
+    {
+      "id": "development-08",
+      "split": "development",
+      "L": 10,
+      "m": 4,
+      "labels": [
+        "heterogeneous/within-scope_change/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "1/2",
+          "lineages": 10
+        }
+      ],
+      "truth": "1/2",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "5523263/274877906944",
+        "failure_lower": "0.00002009351373999379575252532958984375",
+        "failure_upper": "0.00002009351373999379575252532958984375",
+        "coverage_cap_upper": "0.99997990648626000620424747467041015625",
+        "states": 176,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.92354,
+        "coverage_estimate_upper": 0.92376,
+        "mc95_enclosure": [
+          0.9218766837067515,
+          0.9253885937910247
+        ],
+        "rao_blackwell_lower": 0.923626015240385,
+        "rao_blackwell_upper": 0.9238679944249882,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -2.8074737630154334e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/development-08"
+      }
+    },
+    {
+      "id": "development-09",
+      "split": "development",
+      "L": 10,
+      "m": 4,
+      "labels": [
+        "heterogeneous/within-scope_change/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "1/8",
+          "lineages": 10
+        }
+      ],
+      "truth": "1/8",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "801831316035031943478034230560513/20769187434139310514121985316880384",
+        "failure_lower": "0.0386067735474823301653171167695065498110994994899254673291006026087307046248953135147985449",
+        "failure_upper": "0.0386067735474823301653171167695065498110994994899254673291006026087307046248953135147985449",
+        "coverage_cap_upper": "0.961393226452517669834682883230493450188900500510074532670899397391269295375104686485201455",
+        "states": 176,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.94138,
+        "coverage_estimate_upper": 0.94203,
+        "mc95_enclosure": [
+          0.9399070009297014,
+          0.9434614705894875
+        ],
+        "rao_blackwell_lower": 0.9417451878127401,
+        "rao_blackwell_upper": 0.9424618866561876,
+        "boundary_samples": 461,
+        "fft_negative_roundoff_min": -2.6625806194064483e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/development-09"
+      }
+    },
+    {
+      "id": "development-10",
+      "split": "development",
+      "L": 10,
+      "m": 4,
+      "labels": [
+        "heterogeneous/within-expiry/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "3/5",
+          "lineages": 10
+        }
+      ],
+      "truth": "3/5",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "98016570999386668976813/1818989403545856475830078125",
+        "failure_lower": "0.000053885179764278755752165071015378944",
+        "failure_upper": "0.000053885179764278755752165071015378944",
+        "coverage_cap_upper": "0.999946114820235721244247834928984621056",
+        "states": 176,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.92919,
+        "coverage_estimate_upper": 0.92936,
+        "mc95_enclosure": [
+          0.9275836396428498,
+          0.9309316166692503
+        ],
+        "rao_blackwell_lower": 0.9293372761505928,
+        "rao_blackwell_upper": 0.9295410095647625,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -3.703634621210483e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/development-10"
+      }
+    },
+    {
+      "id": "development-11",
+      "split": "development",
+      "L": 10,
+      "m": 4,
+      "labels": [
+        "heterogeneous/within-expiry/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "27/125",
+          "lineages": 10
+        }
+      ],
+      "truth": "27/125",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "354033631775768843914552093369427570975909660076726595492519721092281638238421613/150463276905252801019998276764447446760789191266827202753120218403637409210205078125",
+        "failure_lower": "0.00235295707402880063551295318479875590385223256562309987087144146709776028446867536576932094",
+        "failure_upper": "0.00235295707402880063551295318479875590385223256562309987087144146709776028446867536576932094",
+        "coverage_cap_upper": "0.997647042925971199364487046815201244096147767434376900129128558532902239715531324634230679",
+        "states": 176,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.9285,
+        "coverage_estimate_upper": 0.92862,
+        "mc95_enclosure": [
+          0.9268865330786114,
+          0.9301993048541675
+        ],
+        "rao_blackwell_lower": 0.9284792917335906,
+        "rao_blackwell_upper": 0.9285604791445797,
+        "boundary_samples": 6,
+        "fft_negative_roundoff_min": -2.7058298093449173e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/development-11"
+      }
+    },
+    {
+      "id": "development-12",
+      "split": "development",
+      "L": 50,
+      "m": 4,
+      "labels": [
+        "heterogeneous/overall/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "1/5",
+          "lineages": 10
+        },
+        {
+          "p": "3/10",
+          "lineages": 10
+        },
+        {
+          "p": "2/5",
+          "lineages": 10
+        },
+        {
+          "p": "1/2",
+          "lineages": 10
+        },
+        {
+          "p": "3/5",
+          "lineages": 10
+        }
+      ],
+      "truth": "2/5",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "4948735398552743462467870024086676749043073128614353417149510221066361475006362108046238835263589935671010677219365396159/8271806125530276748714086920699628535658121109008789062500000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "failure_lower": "5.98265399775130395891257720863344453762061946508578190737699730445057263990966202412070664E-16",
+        "failure_upper": "5.98265399775130395891257720863344453762061946508578190737699730445057263990966202412070664E-16",
+        "coverage_cap_upper": "0.999999999999999401734600224869604108742279136655546237938053491421809262300269554942736009",
+        "states": 3876,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.94325,
+        "coverage_estimate_upper": 0.94344,
+        "mc95_enclosure": [
+          0.9417989154340969,
+          0.9448547659929651
+        ],
+        "rao_blackwell_lower": 0.9431537840179737,
+        "rao_blackwell_upper": 0.9433370285522711,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -3.478696551737631e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/development-12"
+      }
+    },
+    {
+      "id": "development-13",
+      "split": "development",
+      "L": 50,
+      "m": 4,
+      "labels": [
+        "heterogeneous/overall/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "1/125",
+          "lineages": 10
+        },
+        {
+          "p": "27/1000",
+          "lineages": 10
+        },
+        {
+          "p": "8/125",
+          "lineages": 10
+        },
+        {
+          "p": "1/8",
+          "lineages": 10
+        },
+        {
+          "p": "27/125",
+          "lineages": 10
+        }
+      ],
+      "truth": "11/125",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "39077089082171975947884603552778453589052211061742202067156988661137277636373518192346089524214991336490588790183683482806805085164903575982648926983274539420629074178775768241006270142226731646992439438320209328489839328931266787763831866141477401873727402996480086583600712219066562142673092381446697257822118363065360853923819436560332680832281486059908058899904465574019925638556688391/804305873354379518459211277104951401345059309567909816747876207359935324933605925922422437320676467061093756365231206975597431785131985945035983228782012572017148799297103778371820226311683654785156250000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "failure_lower": "0.0000485848610295482652677653510906368635412167626892473896757302515322558178853369279235185587",
+        "failure_upper": "0.0000485848610295482652677653510906368635412167626892473896757302515322558178853369279235185587",
+        "coverage_cap_upper": "0.999951415138970451734732234648909363136458783237310752610324269748467744182114663072076481",
+        "states": 3876,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.94386,
+        "coverage_estimate_upper": 0.94406,
+        "mc95_enclosure": [
+          0.9424161576609249,
+          0.9454673421330645
+        ],
+        "rao_blackwell_lower": 0.9439225315417636,
+        "rao_blackwell_upper": 0.9441661528773507,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -2.030471570073833e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/development-13"
+      }
+    },
+    {
+      "id": "test-00",
+      "split": "test",
+      "L": 40,
+      "m": 8,
+      "labels": [
+        "homogeneous/within-correction/C,O,R",
+        "homogeneous/within-reversal/C,O,R",
+        "homogeneous/within-refinement/C,O,R",
+        "homogeneous/within-scope_change/C,O,R",
+        "homogeneous/within-expiry/C,O,R",
+        "heterogeneous/within-refinement/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "2/5",
+          "lineages": 40
+        }
+      ],
+      "truth": "2/5",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "251861541874914826921099663025720604500348410071103155768141691104364870191200448932988111776671586683225605285280383689120112804245345741943716059161896609643502229272554822942496038334249/1872670541876879330862339765543470627966009335517673326534862181544153310669599859794654039015705853377221516252568007855670134967965972481844907693523011570836298166068978091636254047769316599669764400459825992584228515625",
+        "failure_lower": "1.34493247072967373828225717789664182874838131487209416864569527750627419373150384250807283E-34",
+        "failure_upper": "1.34493247072967373828225717789664182874838131487209416864569527750627419373150384250807283E-34",
+        "coverage_cap_upper": "0.999999999999999999999999999999999865506752927032626171774282210335817125161868512790583135",
+        "states": 5781,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.95546,
+        "coverage_estimate_upper": 0.95561,
+        "mc95_enclosure": [
+          0.9541638246722633,
+          0.9568691239970593
+        ],
+        "rao_blackwell_lower": 0.9553074716594327,
+        "rao_blackwell_upper": 0.9554881195015853,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -3.118872720579268e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/test-00"
+      }
+    },
+    {
+      "id": "test-01",
+      "split": "test",
+      "L": 40,
+      "m": 8,
+      "labels": [
+        "homogeneous/within-correction/J",
+        "homogeneous/within-reversal/J",
+        "homogeneous/within-refinement/J",
+        "homogeneous/within-scope_change/J",
+        "homogeneous/within-expiry/J",
+        "heterogeneous/within-refinement/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "8/125",
+          "lineages": 40
+        }
+      ],
+      "truth": "8/125",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "1077747562466420113852383784201118953414133148910877685725598521613568898768260451468971279701105969899801315616523043015198111551132027038515157405104680191950445298252056485574070267272063621106942412798233705510576023105723763671160665974875296329676948294379451554074189290106307399504055440519717750122124716916505119365764936104448301186286657679659115801688108282850907007322488981405942303153871332788994224971710747286588561734520841977173163700324788165467928630063648578956422403380567143860545766351433330669397970589295454766952652836092536692585472278961555041939402012060434104932695566353066484308612272877179301685599798369280075648562586475877673/4104536801298376249336029289165131874087621227323211597220890481538979016027238193372643335033796531743630247481540547324902130238373550872134544397101134602931550126999225479824480553599470923168439161794055843623509588288847105787176495290299882480938387980390379193594351944674605348588088796502736892157918282142353370590250852785706146645297185463414511355885178589486051575212307597571641508465699142544431211141657602036371348667215561393398251655986623279154848050769183619109432381788384851770130811857459811370557289893326022812996899000184837048515354831681034817316047475253073029503197252354896966846971029520851925211089028522337684989906847476959228515625",
+        "failure_lower": "2.62574710531404992159437961537746524099892458406778296327477744572204597537407633006502536E-7",
+        "failure_upper": "2.62574710531404992159437961537746524099892458406778296327477744572204597537407633006502536E-7",
+        "coverage_cap_upper": "0.999999737425289468595007840562038462253475900107541593221703672522255427795402462592366993",
+        "states": 5781,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.95841,
+        "coverage_estimate_upper": 0.95857,
+        "mc95_enclosure": [
+          0.9571548664241424,
+          0.959787630443344
+        ],
+        "rao_blackwell_lower": 0.9585597577117603,
+        "rao_blackwell_upper": 0.9587218961781603,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -2.223021029409966e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/test-01"
+      }
+    },
+    {
+      "id": "test-02",
+      "split": "test",
+      "L": 200,
+      "m": 8,
+      "labels": [
+        "homogeneous/overall/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "2/5",
+          "lineages": 200
+        }
+      ],
+      "truth": "2/5",
+      "structural": {
+        "method": "full state DP with conservative IEEE-754 error enclosure",
+        "failure_lower": "4.54125175840489590936044291216906764473241185513107024365931209604363367758168905841549210E-164",
+        "failure_upper": "4.54125214629679382650538612630931096462068637167578903143710833815219277012191358870774977E-164",
+        "coverage_cap_upper": "1.000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "scalar_operations_bound": 769351602,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.95048,
+        "coverage_estimate_upper": 0.9506,
+        "mc95_enclosure": [
+          0.9491179581502913,
+          0.9519258833451787
+        ],
+        "rao_blackwell_lower": 0.9504179616711209,
+        "rao_blackwell_upper": 0.9506039051902097,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -6.099314846588766e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/test-02"
+      }
+    },
+    {
+      "id": "test-03",
+      "split": "test",
+      "L": 200,
+      "m": 8,
+      "labels": [
+        "homogeneous/overall/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "8/125",
+          "lineages": 200
+        }
+      ],
+      "truth": "8/125",
+      "structural": {
+        "method": "full state DP with conservative IEEE-754 error enclosure",
+        "failure_lower": "9.78045348115473331433476935650143382334201230264527150774094467517172376510141501841663456E-30",
+        "failure_upper": "9.78045431655406044347098629018401507106644594408558698681318171234511118608353513234582189E-30",
+        "coverage_cap_upper": "0.999999999999999999999999999990219546518845266685665230643498566176657987698",
+        "scalar_operations_bound": 769351602,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.94548,
+        "coverage_estimate_upper": 0.94562,
+        "mc95_enclosure": [
+          0.9440556224977575,
+          0.9470084439514632
+        ],
+        "rao_blackwell_lower": 0.945505062864453,
+        "rao_blackwell_upper": 0.9456906902177031,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -2.8812722948554137e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/test-03"
+      }
+    },
+    {
+      "id": "test-04",
+      "split": "test",
+      "L": 40,
+      "m": 8,
+      "labels": [
+        "heterogeneous/within-correction/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "1/5",
+          "lineages": 40
+        }
+      ],
+      "truth": "1/5",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "1311258990207202098561746951596137962803289684726129841480493190541686293591330981912638232720852038703192421946370188162077437529175356279648607885239938452973133638488923856568491967491051344848561433549/9363352709384396654311698827717353139830046677588366632674310907720766553347999298973270195078529266886107581262840039278350674839829862409224538467615057854181490830344890458181270238846582998348822002299129962921142578125",
+        "failure_lower": "1.40041610190866363543280554033950335645943401425381314478017392913173900102102597676163765E-19",
+        "failure_upper": "1.40041610190866363543280554033950335645943401425381314478017392913173900102102597676163765E-19",
+        "coverage_cap_upper": "0.999999999999999999859958389809133636456719445966049664354056598574618685521982607086826100",
+        "states": 5781,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.9397,
+        "coverage_estimate_upper": 0.9399,
+        "mc95_enclosure": [
+          0.9382076700116013,
+          0.9413562500817988
+        ],
+        "rao_blackwell_lower": 0.9397345183213073,
+        "rao_blackwell_upper": 0.9399414171827196,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -2.963395587946005e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/test-04"
+      }
+    },
+    {
+      "id": "test-05",
+      "split": "test",
+      "L": 40,
+      "m": 8,
+      "labels": [
+        "heterogeneous/within-correction/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "1/125",
+          "lineages": 40
+        }
+      ],
+      "truth": "1/125",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "68862700495331916255554609173581555408035535847792380447004058229684353305916354541533798199919132285636616396387491019510793322625283560463872535734059692715279563479176791048178802256373641360636201197060544710659661868236858604894900132108791678330014429550256587386499497235901836134883635992303737987022607704031899266724342998796326856662218517221041080919600972881187993039580776630399242697415771508315062099694934233161365278518025955188267391367324644380686574601120167868834412779336722280086581221007468755627502130545700913010413677536553764796727342095146528833826147442673585193410435899515364635867944260498038470851386345601994376907641089/102613420032459406233400732229128296852190530683080289930522262038474475400680954834316083375844913293590756187038513683122553255959338771803363609927528365073288753174980636995612013839986773079210979044851396090587739707221177644679412382257497062023459699509759479839858798616865133714702219912568422303947957053558834264756271319642653666132429636585362783897129464737151289380307689939291037711642478563610780278541440050909283716680389034834956291399665581978871201269229590477735809544709621294253270296436495284263932247333150570324922475004620926212883870792025870432901186881326825737579931308872424171174275738021298130277225713058442124747671186923980712890625",
+        "failure_lower": "6.71088639999999780449518165688366656980850752087470654707821383061968673429233798098953921E-16",
+        "failure_upper": "6.71088639999999780449518165688366656980850752087470654707821383061968673429233798098953921E-16",
+        "coverage_cap_upper": "0.999999999999999328911360000000219550481834311633343019149247912529345292178616938031326571",
+        "states": 5781,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.98494,
+        "coverage_estimate_upper": 0.98502,
+        "mc95_enclosure": [
+          0.984166298274801,
+          0.9857544662281194
+        ],
+        "rao_blackwell_lower": 0.984938062733591,
+        "rao_blackwell_upper": 0.9850045397753714,
+        "boundary_samples": 7638,
+        "fft_negative_roundoff_min": -1.200999297460528e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/test-05"
+      }
+    },
+    {
+      "id": "test-06",
+      "split": "test",
+      "L": 40,
+      "m": 8,
+      "labels": [
+        "heterogeneous/within-reversal/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "3/10",
+          "lineages": 40
+        }
+      ],
+      "truth": "3/10",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "142188876409540041685171873769905058073350637504385944253713434217602595513532403710869781843508537279838418680159342175273597414070402150166867230437803241495935235922652625778039147431636767324730198319906429189613473314043152831417544465127376140257157626308326877723516938963289975769071/100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "failure_lower": "1.42188876409540041685171873769905058073350637504385944253713434217602595513532403710869782E-27",
+        "failure_upper": "1.42188876409540041685171873769905058073350637504385944253713434217602595513532403710869782E-27",
+        "coverage_cap_upper": "0.999999999999999999999999998578111235904599583148281262300949419266493624956140557462865658",
+        "states": 5781,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.94995,
+        "coverage_estimate_upper": 0.95023,
+        "mc95_enclosure": [
+          0.9485811798282128,
+          0.9515606549700668
+        ],
+        "rao_blackwell_lower": 0.9496949897401911,
+        "rao_blackwell_upper": 0.9500672465942867,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -2.739007031097684e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/test-06"
+      }
+    },
+    {
+      "id": "test-07",
+      "split": "test",
+      "L": 40,
+      "m": 8,
+      "labels": [
+        "heterogeneous/within-reversal/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "27/1000",
+          "lineages": 40
+        }
+      ],
+      "truth": "27/1000",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "662155875677664719774815390622214287923416923230947907733253696962856778758463429490579030439948224101220830664825801879724988274104598613989670554630771796075178101319451072734285902274179372555643277001486472973821945182880003348603363370522239521379022664795784958873827136878582859643850958545814822151370286586686565996893511302784798907361381107064772248917293556773971351867949905298267314364218835188124565794641773438729364392478981878611644578955905164666759757838468331826792317471233808690130953991601205359468697704977682479221745973672221658370438370775043349345789232625366952303306153621412668906219362813480650304985350899739000504946840737959349790248635837420844238049497452897323855706451359537373012879724887838430664174508162889459033803009171558314619342463751892238223398395319093152808219821917099684944743789784011515988694278892320314107175611380028133597202072659221583294676268732072945673131199876381754782898093584156232173/390625000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "failure_lower": "0.00169511904173482168262352739999286857708394732347122664379712946422491335362166637949588232",
+        "failure_upper": "0.00169511904173482168262352739999286857708394732347122664379712946422491335362166637949588232",
+        "coverage_cap_upper": "0.998304880958265178317376472600007131422916052676528773356202870535775086646378333620504118",
+        "states": 5781,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.92755,
+        "coverage_estimate_upper": 0.92755,
+        "mc95_enclosure": [
+          0.9259268191134159,
+          0.9291403338340144
+        ],
+        "rao_blackwell_lower": 0.9275394840060098,
+        "rao_blackwell_upper": 0.9275465214696255,
+        "boundary_samples": 10,
+        "fft_negative_roundoff_min": -1.6421955820522175e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/test-07"
+      }
+    },
+    {
+      "id": "test-08",
+      "split": "test",
+      "L": 40,
+      "m": 8,
+      "labels": [
+        "heterogeneous/within-scope_change/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "1/2",
+          "lineages": 40
+        }
+      ],
+      "truth": "1/2",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "349070273898157010751028771977901253598769059941190394163/533996758980227520598755426542388028650676130589163192486760401955554931445160137505740521734144",
+        "failure_lower": "6.53693618973972376425821452700118678547932771326279327115110832114778639392088958933968729E-40",
+        "failure_upper": "6.53693618973972376425821452700118678547932771326279327115110832114778639392088958933968729E-40",
+        "coverage_cap_upper": "0.999999999999999999999999999999999999999346306381026027623574178547299881321452067228673721",
+        "states": 5781,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.95448,
+        "coverage_estimate_upper": 0.95469,
+        "mc95_enclosure": [
+          0.9531705377544638,
+          0.9559616969354148
+        ],
+        "rao_blackwell_lower": 0.9544613291279983,
+        "rao_blackwell_upper": 0.9546651605406872,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -3.565921887063511e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/test-08"
+      }
+    },
+    {
+      "id": "test-09",
+      "split": "test",
+      "L": 40,
+      "m": 8,
+      "labels": [
+        "heterogeneous/within-scope_change/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "1/8",
+          "lineages": 40
+        }
+      ],
+      "truth": "1/8",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "434979148209451249908568879842188909964034501499480770784365178936267137119786195626722331505117083370566417144866836150243986389357742049293074628242888305702806081147431884132060664245126309813914432751902002458836541648113854437724050233038007608497970119525329808877501579/1218164251424999885044172798484398538859528357199375940858488307151618586345803262808201883235251282403163114528926083522932396233150386755822248412039081677441409712494559128733848706936256706044099949184902297359210699740674359368218295451933620701603467350388034693385228573748989263872",
+        "failure_lower": "3.57077584324622671609457143365233655437340157735766920341965018765125566769837499962575611E-13",
+        "failure_upper": "3.57077584324622671609457143365233655437340157735766920341965018765125566769837499962575611E-13",
+        "coverage_cap_upper": "0.999999999999642922415675377328390542856634766344562659842264233079658034981234874433230163",
+        "states": 5781,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.94494,
+        "coverage_estimate_upper": 0.94501,
+        "mc95_enclosure": [
+          0.9435090963291125,
+          0.9464058714060737
+        ],
+        "rao_blackwell_lower": 0.9448545232614883,
+        "rao_blackwell_upper": 0.9449672194134631,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -2.925990612995255e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/test-09"
+      }
+    },
+    {
+      "id": "test-10",
+      "split": "test",
+      "L": 40,
+      "m": 8,
+      "labels": [
+        "heterogeneous/within-expiry/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "3/5",
+          "lineages": 40
+        }
+      ],
+      "truth": "3/5",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "251861541874914826921099663025720604500348410071103155768141691104364870191200448932988111776671586683225605285280383689120112804245345741943716059161896609643502229272554822942496038334249/1872670541876879330862339765543470627966009335517673326534862181544153310669599859794654039015705853377221516252568007855670134967965972481844907693523011570836298166068978091636254047769316599669764400459825992584228515625",
+        "failure_lower": "1.34493247072967373828225717789664182874838131487209416864569527750627419373150384250807283E-34",
+        "failure_upper": "1.34493247072967373828225717789664182874838131487209416864569527750627419373150384250807283E-34",
+        "coverage_cap_upper": "0.999999999999999999999999999999999865506752927032626171774282210335817125161868512790583135",
+        "states": 5781,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.95394,
+        "coverage_estimate_upper": 0.95418,
+        "mc95_enclosure": [
+          0.9526232869155601,
+          0.9554586036581457
+        ],
+        "rao_blackwell_lower": 0.9538302593593442,
+        "rao_blackwell_upper": 0.9540096963274338,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -6.838063101866076e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/test-10"
+      }
+    },
+    {
+      "id": "test-11",
+      "split": "test",
+      "L": 40,
+      "m": 8,
+      "labels": [
+        "heterogeneous/within-expiry/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "27/125",
+          "lineages": 40
+        }
+      ],
+      "truth": "27/125",
+      "structural": {
+        "method": "exact integer state enumeration",
+        "failure_fraction": "2112377647673693454438618046738629428564852662983064934589239203981031416239801025039712275277345258152851122179854114902200618656705357626287393705335710117295362628912075975009580575365331345343186548393925644464085154741186085562498432054327770934614212066282308694161412344286320961632559270076466384646600700929613638426968588608797444446297029292120031099851589718743156617288817988872367105800472760986213492469973178797168030147894798893198242582790132151366947314915996510958162710532336755131828542434896474698280852923409048611638526019043053574855734829472924548143925220992284618431603237557943439291066209018070901858567706631988385468673/102613420032459406233400732229128296852190530683080289930522262038474475400680954834316083375844913293590756187038513683122553255959338771803363609927528365073288753174980636995612013839986773079210979044851396090587739707221177644679412382257497062023459699509759479839858798616865133714702219912568422303947957053558834264756271319642653666132429636585362783897129464737151289380307689939291037711642478563610780278541440050909283716680389034834956291399665581978871201269229590477735809544709621294253270296436495284263932247333150570324922475004620926212883870792025870432901186881326825737579931308872424171174275738021298130277225713058442124747671186923980712890625",
+        "failure_lower": "2.05857834872426154940881731695659903757328628750674154850570562820664712932318221256812946E-20",
+        "failure_upper": "2.05857834872426154940881731695659903757328628750674154850570562820664712932318221256812946E-20",
+        "coverage_cap_upper": "0.999999999999999999979414216512757384505911826830434009624267137124932584514942943717933529",
+        "states": 5781,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.94949,
+        "coverage_estimate_upper": 0.94964,
+        "mc95_enclosure": [
+          0.9481153308019408,
+          0.9509782212118119
+        ],
+        "rao_blackwell_lower": 0.9495692671516366,
+        "rao_blackwell_upper": 0.9497904495895062,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -2.999445310181148e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/test-11"
+      }
+    },
+    {
+      "id": "test-12",
+      "split": "test",
+      "L": 200,
+      "m": 8,
+      "labels": [
+        "heterogeneous/overall/C,O,R"
+      ],
+      "probability_groups": [
+        {
+          "p": "1/5",
+          "lineages": 40
+        },
+        {
+          "p": "3/10",
+          "lineages": 40
+        },
+        {
+          "p": "2/5",
+          "lineages": 40
+        },
+        {
+          "p": "1/2",
+          "lineages": 40
+        },
+        {
+          "p": "3/5",
+          "lineages": 40
+        }
+      ],
+      "truth": "2/5",
+      "structural": {
+        "method": "full state DP with conservative IEEE-754 error enclosure",
+        "failure_lower": "2.92082847080149734783668371054140710906179928971192277882011078344786386603856127684402462E-142",
+        "failure_upper": "2.92082872028462651651693731683834922883376343867860931280250502555666366849371339255324789E-142",
+        "coverage_cap_upper": "1.000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "scalar_operations_bound": 769351602,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.95135,
+        "coverage_estimate_upper": 0.95149,
+        "mc95_enclosure": [
+          0.9499991775188611,
+          0.9528043198719001
+        ],
+        "rao_blackwell_lower": 0.9513862897818585,
+        "rao_blackwell_upper": 0.9515670226785571,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -6.564437578585047e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/test-12"
+      }
+    },
+    {
+      "id": "test-13",
+      "split": "test",
+      "L": 200,
+      "m": 8,
+      "labels": [
+        "heterogeneous/overall/J"
+      ],
+      "probability_groups": [
+        {
+          "p": "1/125",
+          "lineages": 40
+        },
+        {
+          "p": "27/1000",
+          "lineages": 40
+        },
+        {
+          "p": "8/125",
+          "lineages": 40
+        },
+        {
+          "p": "1/8",
+          "lineages": 40
+        },
+        {
+          "p": "27/125",
+          "lineages": 40
+        }
+      ],
+      "truth": "11/125",
+      "structural": {
+        "method": "full state DP with conservative IEEE-754 error enclosure",
+        "failure_lower": "2.36689741217582553086227713112200042949517729013357199578196381315629551612118057158252732E-40",
+        "failure_upper": "2.36689761434482611200170623389876871227177675914786501962403985327743138720155223348145427E-40",
+        "coverage_cap_upper": "0.999999999999999999999999999999999999999763310258782417446913772286887799958",
+        "scalar_operations_bound": 769351602,
+        "cap_below_93": false
+      },
+      "targeted": {
+        "datasets": 100000,
+        "bootstrap_draws_per_conceptual_dataset": 10000,
+        "method": "targeted marginal finite-B coverage enclosure; FFT CDF plus necessary/sufficient order-statistic probabilities; fresh resampling, NOT the frozen matrix",
+        "coverage_estimate_lower": 0.94997,
+        "coverage_estimate_upper": 0.95013,
+        "mc95_enclosure": [
+          0.9486014348479342,
+          0.9514619410498771
+        ],
+        "rao_blackwell_lower": 0.9500207277488787,
+        "rao_blackwell_upper": 0.9501612358739381,
+        "boundary_samples": 0,
+        "fft_negative_roundoff_min": -3.9795110593982244e-16,
+        "seed_namespace": "hr3-a5-structural-r1-targeted-v1/test-13"
+      }
+    }
+  ],
+  "elapsed_seconds": 46.32108269102173,
+  "complete": true,
+  "cases_with_cap_below_93": [
+    "pilot-00",
+    "pilot-03",
+    "pilot-06",
+    "pilot-08",
+    "pilot-10",
+    "pilot-11",
+    "pilot-13"
+  ]
+}

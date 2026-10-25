@@ -1,0 +1,5 @@
+a5-structural-r1.py final exit 0
+a5-percentile-bound-r1.py initial exit 1: mpz-to-Decimal conversion
+a5-percentile-bound-r1.py corrected final exit 0
+a5-fixed-matrix-r1.py final exit 0
+a5-kl-check-r1.py final exit 0
