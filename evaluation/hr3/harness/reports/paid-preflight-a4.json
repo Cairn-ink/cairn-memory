@@ -1,0 +1,122 @@
+{
+  "version": "hr3-paid-preflight-a4-v2",
+  "stage": "pilot",
+  "scope": "one_uncalibrated_60_family_pilot",
+  "requirements": {
+    "semanticInventory": [
+      "A-4 status",
+      "A-4 §7.1"
+    ],
+    "output": [
+      "A-4 §4 recertification",
+      "A-4 §7.3",
+      "A-4 §8",
+      "A-2 certification scope"
+    ],
+    "requests": [
+      "A-4 §2",
+      "A-4 §7.3",
+      "A-4 §8",
+      "A-4.1",
+      "A-4.2"
+    ],
+    "embeddings": [
+      "A-4 §7.3",
+      "A-4 §8"
+    ],
+    "privacy": [
+      "A-4 §2 leakage recertification",
+      "A-4 §7.3",
+      "A-3 public/private separation"
+    ],
+    "conformance": [
+      "A-4 §3",
+      "A-4 §5 recertification",
+      "A-4 §6",
+      "A-4 §7.3"
+    ],
+    "allocation": [
+      "A-4 §2 fresh banks",
+      "A-4 §7.5",
+      "A-2 inspected-reference exclusions"
+    ],
+    "accounting": [
+      "A-4 §7.4",
+      "A-4 §8",
+      "A-4.1",
+      "A-4.2"
+    ],
+    "supervision": [
+      "A-1.1 unchanged pilot requirements",
+      "protocol §15 run supervision and stop rules"
+    ],
+    "freshRun": [
+      "A-4 §7.6",
+      "A-4 §8",
+      "A-1 reporting restrictions"
+    ],
+    "freeze": [
+      "A-4 status",
+      "A-4 §7.2",
+      "protocol §13.5"
+    ],
+    "review": [
+      "A-1.1 non-author confirmation",
+      "A-4 status",
+      "A-4 §7.1",
+      "A-4.1 Review",
+      "A-4.2 Review",
+      "protocol §16"
+    ]
+  },
+  "evidence": {
+    "semanticInventory": {
+      "path": "evaluation/hr3/harness/reports/a4-semantic-inventory.json",
+      "sha256": "310a205d9004aab536f60bc86014f7763b07d68f0d06c10113a351b4572b9783"
+    },
+    "output": {
+      "path": "evaluation/hr3/harness/reports/cap-certification-a4.json",
+      "sha256": "0757c92f9c6d6ef957ffafb9bfa59dad0fcfc128bb1a6d3cad46eaa6525ddbec"
+    },
+    "requests": {
+      "path": "evaluation/hr3/harness/reports/request-certification-a4.json",
+      "sha256": "10ea00c1f521ff79556b45ea0052941555fbd119ea6bcb7d138e0b57844ccdce"
+    },
+    "embeddings": {
+      "path": "evaluation/hr3/harness/reports/embedding-certification-a4.json",
+      "sha256": "4301f444eb9d4c5b555cff467eec47d35e478ae4c51cd5abf4e143d2b69a2755"
+    },
+    "privacy": {
+      "path": "evaluation/hr3/harness/reports/privacy-scan-a4.json",
+      "sha256": "89e7dfc08d352ccfcc201f4f55c86491dd9e352997caaa47a8ac58d97d2386f7"
+    },
+    "conformance": {
+      "path": "evaluation/hr3/harness/reports/conformance-certification-a4.json",
+      "sha256": "e4a4d9b6a8ff1509865fb61c0fe6d2fa11019b1fa6ac5d723569c56395adbbca"
+    },
+    "allocation": {
+      "path": "evaluation/hr3/harness/reports/allocation-certification-a4.json",
+      "sha256": "9d23d2674df28b3ab132ccd65565cd067f30a5ee3c9194c3cea614cfedc8a5a1"
+    },
+    "accounting": {
+      "path": "evaluation/hr3/harness/reports/primary-a4/accounting.json",
+      "sha256": "d26d05a4f9137b1e8058ed66de5fde8954d49bbbb71951f33d253ea01a821b13"
+    },
+    "supervision": {
+      "path": "evaluation/hr3/harness/reports/primary-a4/supervision.json",
+      "sha256": "7359f25b2344cbb18aab601399a764dd6c91417ea070f4b1c20cf7ca4e89cc34"
+    },
+    "freshRun": {
+      "path": "evaluation/hr3/harness/reports/primary-a4/fresh-run.json",
+      "sha256": "5aae660a844e6a996c370bfac379104fda380e8286301532312e8055e6009534"
+    },
+    "freeze": {
+      "path": "evaluation/hr3/harness/freeze.json",
+      "sha256": "8c92e28351958b9290f3abbf1d59e7430167ede364db7693569ffaea0d4359b9"
+    },
+    "review": {
+      "path": "evaluation/hr3/harness/reports/primary-a4/review.json",
+      "sha256": "75ddbfc9165ecc483f9f132efbb04cb2a1e14855ec1f54a90e2cbf2595b3f8fd"
+    }
+  }
+}

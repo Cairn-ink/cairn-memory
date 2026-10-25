@@ -1,0 +1,14 @@
+{
+  "version": "hr3-a4-primary-supervision-v1",
+  "status": "PASS",
+  "suppliedBy": "primary",
+  "completed": true,
+  "attended": true,
+  "progressChecksAtLeastEveryMinute": true,
+  "stopRulesAccepted": true,
+  "plan": "Primary streams the runner progress output with a monitor and inspects progress, unsettled requests, errors and throughput at least every minute; stops on accounting/model mismatch, unexplained usage, authorization exposure, three transport failures or five minutes without progress (protocol section 15).",
+  "runtimeClosureSHA256": "62dc9118549641993f2d1bd64c8f02808dc979f8045f68ddfd493a18afd53223",
+  "sources": {
+    "evaluation/hr3/protocol/errata.md": "7dea0aa1382fa772f4e88570c701cd8caa3a41f9fae0b1e7e6faea875423ffd5"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "version": "hr3-a4-primary-fresh-run-v1",
+  "status": "PASS",
+  "suppliedBy": "primary",
+  "outputDirectory": "evaluation/hr3/harness/artifacts/paid-pilot4-3aef2f02",
+  "freshCachesAndStores": true,
+  "noPriorAnswers": true,
+  "noPooling": true,
+  "noQualityRetries": true,
+  "noUnlistedCalls": true,
+  "extractionCalls": 240,
+  "readerCalls": 480,
+  "transportRetries": 1,
+  "reporting": "Uncalibrated engineering pilot — mechanical score bounds; no adjudication.",
+  "runtimeClosureSHA256": "62dc9118549641993f2d1bd64c8f02808dc979f8045f68ddfd493a18afd53223",
+  "sources": {
+    "evaluation/hr3/harness/reports/allocation-certification-a4.json": "9d23d2674df28b3ab132ccd65565cd067f30a5ee3c9194c3cea614cfedc8a5a1"
+  }
+}

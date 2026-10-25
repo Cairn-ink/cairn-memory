@@ -1,0 +1,67 @@
+{
+  "version": "hr3-a4-primary-review-attestation-v1",
+  "status": "PASS",
+  "suppliedBy": "primary",
+  "nonAuthor": true,
+  "reviewer": "Non-author Codex auditor (gpt-6.1-sol, xhigh), audit thread for A-4 implementation: initial audit of dd01b643 and rechecks of feb05af6, 3e49f0a4, 2221f923, d5ab6bd3, 3aef2f02; final verdict on 3aef2f02 \"A-4 implementation acceptable for the paid pilot — yes\". A-1.1 confirmed acceptable in the feb05af6 recheck.",
+  "decision": "acceptable_for_paid_pilot",
+  "amendments": [
+    "A-4",
+    "A-4.1",
+    "A-4.2",
+    "A-1.1"
+  ],
+  "freezeSHA256": "8c92e28351958b9290f3abbf1d59e7430167ede364db7693569ffaea0d4359b9",
+  "closureSHA256": "62dc9118549641993f2d1bd64c8f02808dc979f8045f68ddfd493a18afd53223",
+  "evidenceBindings": {
+    "semanticInventory": {
+      "path": "evaluation/hr3/harness/reports/a4-semantic-inventory.json",
+      "sha256": "310a205d9004aab536f60bc86014f7763b07d68f0d06c10113a351b4572b9783"
+    },
+    "output": {
+      "path": "evaluation/hr3/harness/reports/cap-certification-a4.json",
+      "sha256": "0757c92f9c6d6ef957ffafb9bfa59dad0fcfc128bb1a6d3cad46eaa6525ddbec"
+    },
+    "requests": {
+      "path": "evaluation/hr3/harness/reports/request-certification-a4.json",
+      "sha256": "10ea00c1f521ff79556b45ea0052941555fbd119ea6bcb7d138e0b57844ccdce"
+    },
+    "embeddings": {
+      "path": "evaluation/hr3/harness/reports/embedding-certification-a4.json",
+      "sha256": "4301f444eb9d4c5b555cff467eec47d35e478ae4c51cd5abf4e143d2b69a2755"
+    },
+    "privacy": {
+      "path": "evaluation/hr3/harness/reports/privacy-scan-a4.json",
+      "sha256": "89e7dfc08d352ccfcc201f4f55c86491dd9e352997caaa47a8ac58d97d2386f7"
+    },
+    "conformance": {
+      "path": "evaluation/hr3/harness/reports/conformance-certification-a4.json",
+      "sha256": "e4a4d9b6a8ff1509865fb61c0fe6d2fa11019b1fa6ac5d723569c56395adbbca"
+    },
+    "allocation": {
+      "path": "evaluation/hr3/harness/reports/allocation-certification-a4.json",
+      "sha256": "9d23d2674df28b3ab132ccd65565cd067f30a5ee3c9194c3cea614cfedc8a5a1"
+    },
+    "accounting": {
+      "path": "evaluation/hr3/harness/reports/primary-a4/accounting.json",
+      "sha256": "d26d05a4f9137b1e8058ed66de5fde8954d49bbbb71951f33d253ea01a821b13"
+    },
+    "supervision": {
+      "path": "evaluation/hr3/harness/reports/primary-a4/supervision.json",
+      "sha256": "7359f25b2344cbb18aab601399a764dd6c91417ea070f4b1c20cf7ca4e89cc34"
+    },
+    "freshRun": {
+      "path": "evaluation/hr3/harness/reports/primary-a4/fresh-run.json",
+      "sha256": "5aae660a844e6a996c370bfac379104fda380e8286301532312e8055e6009534"
+    },
+    "freeze": {
+      "path": "evaluation/hr3/harness/freeze.json",
+      "sha256": "8c92e28351958b9290f3abbf1d59e7430167ede364db7693569ffaea0d4359b9"
+    }
+  },
+  "runtimeClosureSHA256": "62dc9118549641993f2d1bd64c8f02808dc979f8045f68ddfd493a18afd53223",
+  "sources": {
+    "evaluation/hr3/harness/freeze.json": "8c92e28351958b9290f3abbf1d59e7430167ede364db7693569ffaea0d4359b9",
+    "evaluation/hr3/protocol/errata.md": "7dea0aa1382fa772f4e88570c701cd8caa3a41f9fae0b1e7e6faea875423ffd5"
+  }
+}

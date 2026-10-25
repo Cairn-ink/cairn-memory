@@ -1,0 +1,14 @@
+{
+  "version": "hr3-a4-primary-accounting-evidence-v1",
+  "status": "PASS",
+  "suppliedBy": "primary",
+  "carrySHA256": "f110569bb55808e6f40e6cc5dec8d5ca1a91d9e64eb74f25336b6a293cdf92b6",
+  "completeThirdPilotMerged": true,
+  "cumulativePilotBoundNanodollars": 30232574300,
+  "runtimeClosureSHA256": "62dc9118549641993f2d1bd64c8f02808dc979f8045f68ddfd493a18afd53223",
+  "sources": {
+    "evaluation/hr3/harness/reports/budget-a4.json": "1bb2926761d8fbf9239e9800f89db47548a14dda70ba70eaf30efb4945de8965",
+    "evaluation/hr3/harness/reports/accounting-a4.json": "455a7c42c52371861bb58f16bb516ed4a0903293bb51f8497194c82ca8b35ef0",
+    "evaluation/hr3/harness/reports/a4-carry-forward.json": "f110569bb55808e6f40e6cc5dec8d5ca1a91d9e64eb74f25336b6a293cdf92b6"
+  }
+}
