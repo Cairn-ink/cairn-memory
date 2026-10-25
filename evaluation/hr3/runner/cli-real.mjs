@@ -4,7 +4,7 @@
 import { useInstalledDependencies } from '../harness/dependencies.mjs';
 import { OpenAITransport } from './openai-transport.mjs';
 const args = process.argv.slice(2), options = {};
-const allowed = ['--stage', '--inputs', '--out', '--key-file', '--mcp-dependencies', '--tokenizer-dependencies'];
+const allowed = ['--stage', '--inputs', '--out', '--key-file', '--carry-forward', '--mcp-dependencies', '--tokenizer-dependencies'];
 try {
   for (let i = 0; i < args.length; i += 2) {
     if (!allowed.includes(args[i]) || !args[i + 1] || Object.hasOwn(options, args[i])) throw Error('Invalid option');
@@ -16,6 +16,7 @@ try {
   const { run } = await import('../harness/runner.mjs');
   const transport = new OpenAITransport({ keyFile: options['--key-file'] });
   const result = await run({ stage: options['--stage'], inputs: options['--inputs'], out: options['--out'], transport,
+    carryForward: options['--carry-forward'] ?? null,
     progress: p => process.stdout.write(JSON.stringify({ progress: p.family, batch: p.batch, scored: p.observations }) + '\n') });
   process.stdout.write(JSON.stringify({ complete: true, observations: result.observations.length, ledger: result.ledger }) + '\n');
 } catch (error) {
