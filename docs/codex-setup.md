@@ -17,9 +17,11 @@ npx @cairn-ink/memory uninstall --local
 發布前可用 `node packages/setup/bin/memory.mjs setup --local`。第一次互動
 安裝不加旗標時會問一次本機或雲端；非互動時請指定 `--local`／`--cloud`，
 既有雲端使用者維持原流程。本機模式透過 CLI 為 Codex 與 Claude Code 註冊
-`cairn-local` stdio MCP server，共用 `~/.cairn-memory/data/memory.sqlite`；
-也可用絕對路徑的 `CAIRN_MEMORY_HOME` 指定根目錄。初次安裝引擎相依套件
-需要 npm registry 或已備妥的快取，安裝後可使用不需模型的離線工具。
+`cairn-local` stdio MCP server，預設共用
+`~/.cairn-memory/data/memory.sqlite`，也可用絕對路徑的 `CAIRN_MEMORY_HOME`
+指定根目錄；外部資料庫可在首次安裝時用 `setup --local --db <absolute path>`
+指定。初次安裝引擎相依套件需要 npm registry 或已備妥的快取，安裝後可使用
+不需模型的離線工具。
 
 本機模式使用五個明確呼叫的 MCP 工具，不啟用下文的自動保存、提問回想或
 格式驗收流程。語意回想需要模型金鑰，沒有時回報 `model_not_configured`；

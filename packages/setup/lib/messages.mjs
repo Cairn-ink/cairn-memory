@@ -1621,6 +1621,7 @@ Object.assign(messages, {
   "local_registration_unknown": {"zh": "無法確認", "en": "unknown"},
   "local_status_unverified": {"zh": "  尚未啟動引擎檢查連線。", "en": "  The engine was not started to test the connection."},
   "local_status_detached": {"zh": "  本機記憶已解除連接，資料目錄保留。", "en": "  Local memory is detached; the data directory is kept."},
+  "local_status_stale_registration": {"zh": "  本機紀錄為已解除安裝：setup --local 接管；uninstall --local 解除連接。", "en": "  Local record uninstalled: setup --local re-adopts; uninstall --local detaches."},
   "local_status_data": {"zh": "  資料：~/.cairn-memory/data", "en": "  Data: ~/.cairn-memory/data"},
   "local_status_data_private": {"zh": "  資料：自訂目錄（完整路徑請用 --verbose）", "en": "  Data: custom directory (use --verbose for the full path)"},
   "local_status_failed_dirs": {"zh": "  保留的失敗安裝：", "en": "  Retained failed installations:"},

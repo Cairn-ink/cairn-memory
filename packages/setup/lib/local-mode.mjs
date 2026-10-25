@@ -302,13 +302,17 @@ export async function localStatus(detection, { write, t, verbose }) {
   const { descriptor, root, states } = detection;
   if (detection.descriptorError) { refusal(detection.descriptorError.key, detection, { write, t }); return; }
   if (!descriptor && (detection.orphanEngine || Object.values(states).some(state => state.entry))) { refusal('local_orphan', detection, { write, t }); return; }
-  for (const client of clientNames) if (states[client].local || states[client].entry) {
+  const uninstalled = descriptor?.state === 'uninstalled';
+  const registration = state => state.unknown || !state.available ? 'unknown' : state.entry ? 'registered' : 'missing';
+  for (const client of clientNames) if (states[client].local || states[client].entry ||
+      (uninstalled && registration(states[client]) === 'unknown')) {
     write(t('local_status_client', { client: client === 'claude' ? 'Claude Code' : 'Codex' }));
-    const state = states[client].unknown ? 'unknown' : states[client].entry ? 'registered' : 'missing';
+    const state = registration(states[client]);
     write(t('local_status_registration', { state: t('local_registration_' + state) }));
   }
   if (!descriptor) return;
-  if (descriptor.state === 'uninstalled') write(t('local_status_detached'));
+  if (uninstalled) write(t(clientNames.every(client => registration(states[client]) === 'missing') ?
+    'local_status_detached' : 'local_status_stale_registration'));
   else {
     write(t(descriptor.engine && await exists(executableFor(root, descriptor.engine.id)) ? 'local_status_engine' : 'local_status_unverified', { version: descriptor.installerVersion }));
     let nodeOK = false;

@@ -570,6 +570,8 @@ lines above them are unchanged, including their legacy `oldMCP` call. Tests asse
 registered entry pointing at a nonexistent database leaves it nonexistent,
 and that the installer spawned only the allowlisted probe commands.
 
+For an `uninstalled` descriptor, show detached only after observed absence in every client; observed or unknown registrations keep their diagnostics and add `local_status_stale_registration` with `setup --local` / `uninstall --local` hints.
+
 `uninstall --local`:
 
 1. Two paths:
@@ -746,7 +748,8 @@ absolute local paths in committed files.
 `local_manual_claude`, `local_manual_codex`, `local_registered`, `local_done`,
 `local_status_client`, `local_status_engine`, `local_status_node_ok`,
 `local_status_node_missing`, `local_status_registration`,
-`local_status_unverified`, `local_status_detached`, `local_status_data`,
+`local_status_unverified`, `local_status_detached`,
+`local_status_stale_registration`, `local_status_data`,
 `local_status_data_private`, `local_status_failed_dirs`,
 `local_operation_pending`, `codex_lock_stale`,
 `local_dry_run`, `local_uninstall_plan`, `local_uninstall_confirm`,

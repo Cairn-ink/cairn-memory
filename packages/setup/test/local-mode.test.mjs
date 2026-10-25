@@ -673,13 +673,18 @@ test('L13 Codex native verification mismatch leaves the written entry and prints
   assert.match(result.display, /codex_mcp_unverified/); assert.ok(result.literals.includes('[mcp_servers."cairn-local"]'));
   assert.match(await readFile(join(f.codexHome, 'config.toml'), 'utf8'), /synthetic\/new-node/);
 });
-for (const state of ['none', 'cloud', 'local', 'mixed', 'unknown', 'missing-node', 'failed', 'uninstalled']) for (const lang of ['zh', 'en'])
+for (const state of ['none', 'cloud', 'local', 'mixed', 'unknown', 'missing-node', 'failed', 'uninstalled', 'uninstalled-drift']) for (const lang of ['zh', 'en'])
 test('L14 status snapshot ' + state + ' ' + lang, async t => {
   const f = await localFixture(t);
-  if (state === 'uninstalled') {
-    const { d } = await seed(f, { state: 'pending', register: false });
+  if (['uninstalled', 'uninstalled-drift'].includes(state)) {
+    const { d, vector } = await seed(f, { state: 'pending', register: false });
     Object.assign(d, { state: 'uninstalled', engine: null, node: null, operation: null });
     await withLocalLock(f.root, () => writeDescriptor(f.root, d));
+    if (state === 'uninstalled-drift') {
+      const added = spawnSync(join(f.bin, 'claude'), claudeAddArguments(f.root, vector),
+        { env: f.env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 10000 });
+      assert.equal(added.status, 0, added.stderr);
+    }
   } else if (!['none', 'cloud'].includes(state)) {
     const { d } = await seed(f);
     const executable = executableFor(f.root, engineId);
@@ -705,6 +710,20 @@ test('L14 status snapshot ' + state + ' ' + lang, async t => {
   const path = new URL('./snapshots/local-status-' + state + '-' + lang + '.txt', import.meta.url);
   if (process.env.UPDATE_SETUP_SNAPSHOTS === '1') await writeFile(path, screen);
   assert.equal(screen, await readFile(path, 'utf8'));
+});
+for (const unavailable of [false, true]) test('L14 uninstalled record cannot claim detachment without observed absence: ' + unavailable, async t => {
+  const f = await localFixture(t);
+  const { d } = await seed(f, { state: 'pending', register: false });
+  Object.assign(d, { state: 'uninstalled', engine: null, node: null, operation: null });
+  await withLocalLock(f.root, () => writeDescriptor(f.root, d));
+  if (unavailable) await rm(join(f.bin, 'codex'));
+  else await f.claudeConfig('{bad');
+  const before = await f.inventory(), result = await f.run(['status']);
+  assert.equal(result.code, 0, result.display);
+  assert.match(result.display, /Registration: unknown/u);
+  assert.match(result.display, /Local record uninstalled: setup --local re-adopts; uninstall --local detaches\./u);
+  assert.doesNotMatch(result.display, /Local memory is detached/u);
+  assert.deepEqual(await f.inventory(), before);
 });
 test('L23 recovery rm command round-trips with shell metacharacters', async t => {
   const f = await localFixture(t, { suffix: ' space $ ` " \' \\' }); await mkdir(f.root, { mode: 0o700 });
