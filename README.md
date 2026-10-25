@@ -116,15 +116,20 @@ and forget. Its recall step reports `model_not_configured`.
 
 ## Install
 
-For **Claude Code and Codex automatic memory**, run the one-command installer:
+For **Claude Code and Codex**, run the one-command installer:
 
 ```sh
 npx @cairn-ink/memory setup
 ```
 
-This checkout prepares installer **0.5.3**; publication is a separate step.
+A fresh interactive install asks once: local MCP memory tools on this computer,
+or cloud automatic memory with cairn.ink sign-in; choose directly with
+`setup --local` or `setup --cloud`. Fresh non-interactive runs need `--local`
+or `--cloud`; local mode has no automatic capture or recall in 0.6.0.
+
+This checkout prepares installer **0.6.0**; publication is a separate step.
 Try it with `node packages/setup/bin/memory.mjs setup`. The plugin stays 0.3.2.
-Requires Node ≥22.16 and at least one CLI on PATH. Setup asks about new tools,
+Requires Node ≥22.16 and at least one CLI on PATH. Cloud setup asks about new tools,
 updates connected tools, and uses one browser sign-in when connecting both.
 The default server is cairn.ink. Conflicting servers or memory IDs present a
 choice; non-interactive conflicts change nothing. Codex must pass format

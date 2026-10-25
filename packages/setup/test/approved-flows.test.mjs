@@ -23,7 +23,7 @@ async function twoKeys(t,options={}) {
 
 const displayScreen = result => result.stdout.split('\n').map(line=>line.startsWith('{"prompt":')?JSON.parse(line).prompt:line).join('\n');
 function screen(result) {
-  return displayScreen(result).replace(/[ \t]+$/gmu,'').replace(/127\.0\.0\.1:\d+/gu,'cairn.ink').replace(/https?:\/\/cairn\.ink/gu,'https://cairn.ink')
+  return displayScreen(result).replace(/(Cairn\.ink Memory(?: (?:setup|安裝程式))? )\d+\.\d+\.\d+(?:-[\w.]+)?/gu,'$1<version>').replace(/[ \t]+$/gmu,'').replace(/127\.0\.0\.1:\d+/gu,'cairn.ink').replace(/https?:\/\/cairn\.ink/gu,'https://cairn.ink')
     .replace(/\d{1,2}\/\d{1,2}\/\d{4}/gu,'<date>').replace(/\d{4}\/\d{1,2}\/\d{1,2}/gu,'<date>')
     .replace(/(project-key\.backup-[\w-]+)\n  ([\w-]+)/gu,'$1$2')
     .replace(/project-key\.backup-[\w-]+/gu,'project-key.backup-<stamp>');

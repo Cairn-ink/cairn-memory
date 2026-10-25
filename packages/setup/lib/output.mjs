@@ -33,8 +33,14 @@ export function terminalWriter(write) {
   writer.literal = write.literal ?? write;
   return writer;
 }
-export const technical = new Set(['authorization_shared','codex_hooks_dry','codex_startup_gate',
+export const technical = new Set(['local_status_failed_dirs', 'engine_bundle_stale','engine_bundle_sha_drift',
+  'authorization_shared','codex_hooks_dry','codex_startup_gate',
   'claude_available','codex_available','marketplace_ready','marketplace_status','endpoint_flag',
   'endpoint_config','endpoint_default','endpoint_prompt_source','codex_user_status',
   'codex_connection','codex_enabled','codex_credential','codex_runtime_version',
   'codex_shared_pause_availability']);
+
+// JSON string grammar is a subset of TOML basic strings, except DEL, which
+// TOML requires escaped as well. Shell quoting must never be used for TOML.
+export const tomlString = value => JSON.stringify(String(value)).replace(/\x7f/gu, '\\u007f');
+export const argvDisplay = argv => JSON.stringify(argv);

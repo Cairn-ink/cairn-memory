@@ -10,7 +10,7 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
 - [ ] Review delivered patches and recorded checks; approve the release before
   merging or publishing. Confirm npm scope access and `@cairn-ink/memory`.
   Unscoped `cairn-memory` is owned by someone else.
-- [ ] Confirm installer version **0.5.3** (0.5.2 was published on 2026-10-13) in
+- [ ] Confirm installer version **0.6.0** (0.5.2 was published on 2026-10-13) in
   `packages/setup/package.json`. Future releases explicitly bump this version.
   It is independent of plugin versions. Plugin 0.3.2 includes the required
   hook credential-state fix. If plugin changes ship too, bump plugin,
@@ -32,6 +32,70 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
   npm run test:artifact
   ```
 
+- [ ] Run the 0.6.0 setup gates on **both Node versions**, first from the checkout
+  for source-only documentation/build checks, then against the installed packed
+  installer. The builder reads the adapter lockfiles; isolated `npm ci` alone
+  does not prime the nested-shrinkwrap engine cache. In a network-enabled phase:
+
+  ```sh
+  CAIRN_SETUP_TEST_NETWORK=1 node packages/setup/test/engine-cache.mjs "$release_cache"
+  node packages/setup/build-runtime.mjs --check
+  ```
+
+  Use an absolute private `release_cache` directory. Pack with prepack enabled,
+  install the installer tarball with `npm install --offline --ignore-scripts
+  --cache "$release_cache" --prefix "$release_install" <tarball>`, and run the suite from the checkout
+  harness with `CAIRN_SETUP_TEST_PACKAGE` pointing at
+  `$release_install/node_modules/@cairn-ink/memory`, `CAIRN_SETUP_NPM_CACHE` pointing
+  at the primed cache, and `CAIRN_SETUP_NPM_OFFLINE=1`. Also set
+  `CX5_PACKED_PACKAGE` to that installed package for the hosted packed-runtime
+  gate. Record actual exit codes and skip reasons. Installed engine/MCP cases
+  must run with the cache, not count cache-gated skips as acceptance.
+- [ ] After priming, repeat the packed installer tests in a **no-network phase**
+  with the same cache and offline flags. Confirm no auth/provider connections
+  for local setup and keyless lifecycle tests. E01's synthetic key/provider
+  preload must capture exactly its four fixture requests with nothing reaching
+  the network. Do not use a real key. `--offline` constrains npm; use the release
+  environment's network isolation to verify the broader no-network boundary.
+- [ ] Record installer tarball packed/unpacked bytes, file count and SHA-256;
+  compare with the previous release and explain the bundled engine size increase.
+  For E02, diff `tar -tzf` against `runtime/engine/manifest.json`'s file list;
+  independently derive the list from `packaging/artifact-files.json` plus builder
+  extras/generated files. Verify every `sourceHashes` entry against source and
+  every `generatedHashes` entry against extracted files; print both counts.
+  E03 must compare installer npm JSON, package `files` plus disk, and tar listing,
+  including all `runtime/` files. Require prepack `--check` to pass, the re-gzipped
+  identical-archive drift warning to pass, and stale SHA/bytes/source hash to fail.
+- [ ] Verify the fresh local/cloud question in both languages, client consent,
+  explicit flags, and no writes for a fresh non-TTY run without a mode. Review
+  keyless tools and the disclosures: no automatic local capture/recall; semantic
+  recall needs a key; a tool environment's `OPENAI_API_KEY` is used by the engine
+  and selected text goes to the provider. Setup's bounded Claude registration
+  read extracts only named MCP registration fields, without credential-store
+  access or use of authentication fields. Check `storage_busy` is described as
+  retryable. Keep all engine opt-ins off.
+- [ ] Run L06 against the immutable 0.5.3 git baseline (`b2513501`), including the
+  injected-unrelated-difference normalizer regression. Normalize only installer
+  versions and version-derived hosted runtime names/digests; copied runtime file
+  contents and all other bytes/mutating-call order must still match.
+- [ ] Verify local/cloud/mixed/unknown conflicts (including `--client` checking
+  both tools), ordered hosted detach commands, orphan/invalid-descriptor
+  recovery, interrupted setup, changed client homes, and missing Node repair.
+  Check local status/dry-run do not start the engine. Exercise confirmed local
+  uninstall, `--yes`, scoped uninstall with the other client retained,
+  pending-setup scoped refusal, and `--purge-config` restrictions. Data must stay;
+  retain engines when detachment of every recorded client cannot be proven.
+- [ ] **M01 is manual release work:** install the packed 0.6.0 with real Claude
+  Code and real Codex in a fresh private temporary `HOME`/`CODEX_HOME`. Run
+  `setup --local`, call `remember_memory` from one tool and `inspect_memory` from
+  the other, and record the same memory ID in the PR. With no model key,
+  `recall_memory` must report `model_not_configured`. Record client versions and
+  results; fake-CLI success does not replace this step. Linux/WSL are tested;
+  macOS remains untested and native Windows local setup must refuse.
+- [ ] The hosted `codex-hooks.test.mjs` suite has a known timing flake under load.
+  Run serially with private scratch; retain the failing case, actual exit code
+  and load evidence. Re-run that single test only after investigating it; do not
+  drop the hosted gate or label an unexplained failure as a local-mode pass.
 - [ ] Resolve any failed or environment-limited checks before release.
 - [ ] Verify all setup cases in private temporary homes: both tools, Claude-only,
   Codex-only, neither, declining either/both, non-TTY, rerun adding the other in
@@ -83,7 +147,7 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
   npm publish --access public
   ```
 
-- [ ] After successful 0.5.0 publication, remove its awaiting-publication caveats
+- [ ] After successful 0.6.0 publication, remove its awaiting-publication caveats
   from root, plugin and package READMEs. Verify registry name/version and smoke-test
   `npx @cairn-ink/memory setup --dry-run` in a clean temporary profile. This does
   not publish the local SQLite preview under `packaging/`.

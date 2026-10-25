@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — installer 0.6.0: local mode
+
+- Add local SQLite memory with a one-time storage question on fresh installs and
+  explicit `--local` / `--cloud` choices. Existing cloud users keep their flow.
+- Register the `cairn-local` stdio MCP server for Claude Code and Codex, with shared
+  local storage, status and local uninstall that keeps memory data.
+- Local mode uses explicit MCP tools; automatic capture and recall are not
+  included yet. Semantic recall needs a model key and sends selected text to
+  the provider.
+
 ## Unreleased — bounded topic member pages (E1-M)
 
 - Add `openMemoryReader(...).readTopicMembers(...)` for complete, bounded member lists of an L1/L2 MOC or the unfiled region. The reader is read-only and asynchronous, takes no writer slot, and returns refs only, with no bodies.

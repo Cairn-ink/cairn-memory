@@ -4,9 +4,52 @@ Use only after the owner approves the channel and release. Re-check the linked
 candidate, install command and quality status before posting. No star request,
 benchmark superiority or time/token savings claim is supported by this draft.
 
+## Installer 0.6.0 local mode / 本機模式
+
+```sh
+npx @cairn-ink/memory setup --local
+npx @cairn-ink/memory status
+npx @cairn-ink/memory uninstall --local
+```
+
+This checkout prepares 0.6.0; before publication use
+`node packages/setup/bin/memory.mjs setup --local`. A fresh interactive `setup`
+asks once for local or cloud storage; non-interactive runs need `--local` or
+`--cloud`. Existing cloud users keep their flow. Local mode registers
+`cairn-local` stdio MCP for Claude Code and Codex, sharing a database by default
+at `~/.cairn-memory/data/memory.sqlite` (or an absolute `CAIRN_MEMORY_HOME`
+root). For an external database, use `setup --local --db <absolute path>` on
+the first installation. Initial engine installation needs npm registry access
+or a populated cache.
+It exposes the five explicit memory tools, with no automatic capture or recall
+and no engine opt-ins enabled. Without a model key, semantic recall returns
+`model_not_configured`; if the tool environment has `OPENAI_API_KEY`, the engine
+uses it and sends selected text to the provider. Setup reads a bounded Claude
+registration configuration file and extracts only the named MCP registration
+fields; it does not access credential stores or use authentication fields.
+`status` does not start the local engine; local uninstall keeps memory data
+(use `--yes` for non-interactive confirmation). `storage_busy` means retry when
+the tools share the database. Conflicts require ordered detachment, with no
+cloud/local data migration. Linux/WSL are tested, macOS is untested, and native
+Windows local setup is refused. See the [installer guide](../packages/setup/README.md).
+
+這份原始碼準備 0.6.0，發布前可用上方原始碼指令。第一次互動安裝會問一次
+本機或雲端，非互動時需用 `--local`／`--cloud`，既有雲端使用者維持原流程。
+本機模式為 Claude Code、Codex 註冊 `cairn-local` stdio MCP，預設共用上述
+SQLite 路徑，也能用絕對路徑的 `CAIRN_MEMORY_HOME` 指定根目錄；外部資料庫
+可在首次安裝時用 `setup --local --db <absolute path>` 指定。第一次安裝引擎
+需要 npm registry 或已備妥的快取，不會開啟引擎選用功能、自動保存或回想。
+語意回想沒有金鑰時回報 `model_not_configured`；若工具
+環境已有 `OPENAI_API_KEY`，引擎會使用它，並把選取的文字傳給模型供應商。
+安裝器讀取有大小上限的 Claude 註冊設定，只取出指定 MCP 註冊欄位，
+不存取憑證儲存區或使用驗證欄位。`status` 不啟動本機引擎，解除安裝保留
+資料，非互動確認請加 `--yes`。共用資料庫遇到 `storage_busy` 請重試；
+衝突要依畫面順序解除連接，兩種模式不會搬移資料。Linux／WSL 已測試，
+macOS 尚未測試，Windows 原生環境會拒絕本機安裝。
+
 ## Shared quickstart
 
-From a source checkout, run the one-command installer with a final target that
+For the separate source-preview operator path, choose a final target that
 does not exist yet, under an already existing real parent directory you control:
 
 ```sh

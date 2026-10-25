@@ -87,7 +87,7 @@ function automaticStatus(write, t) {
   write(t('codex_explicit_only'));
 }
 
-async function snapshot(path) {
+export async function snapshot(path) {
   try {
     const stat = await lstat(path);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 ||
@@ -99,18 +99,18 @@ async function snapshot(path) {
   }
 }
 
-function unchanged(before, after) {
+export function unchanged(before, after) {
   return before.text === after.text && (before.stat === null ? after.stat === null :
     after.stat !== null && ['dev', 'ino', 'size', 'mtimeMs', 'ctimeMs'].every(key => before.stat[key] === after.stat[key]));
 }
 
-async function privateWrite(path, text) {
+export async function privateWrite(path, text) {
   const file = await open(path, 'wx', 0o600);
   try { await file.writeFile(text, 'utf8'); await file.sync(); }
   finally { await file.close(); }
 }
 
-function runCodex(args, { env = process.env, cwd } = {}) {
+export function runCodex(args, { env = process.env, cwd } = {}) {
   return new Promise(resolveResult => {
     const child = spawn('codex', args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, env, cwd });
     let stdout = '', stderr = '', error, escalation;
@@ -365,5 +365,43 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     automaticStatus(write, t);
     write(t('codex_restart'));
     return 0;
+  } finally { await rm(neutral, { recursive: true, force: true }); }
+}
+
+// Local-mode inspection shares the hosted file checks, isolated HOME and CLI
+// runner. Native parsing is authoritative; no TOML text matching participates.
+export const codexHome = (env = process.env) => resolve(env.CODEX_HOME || join(env.HOME || homedir(), '.codex'));
+export async function inspectCodexServers({ home = codexHome(), env = process.env } = {}) {
+  const before = await snapshot(join(home, 'config.toml'));
+  const neutral = await realpath(await mkdtemp(join(env.TMPDIR || tmpdir(), 'cairn-codex-inspect-')));
+  try {
+    for (let directory = neutral; ; directory = dirname(directory)) {
+      try { await lstat(join(directory, '.codex/config.toml')); throw new Error('codex_tmpdir'); }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
+      if (directory === dirname(directory)) break;
+    }
+    for (const path of ['/etc/codex/config.toml', '/etc/codex/managed_config.toml']) {
+      try { await lstat(path); throw new Error('codex_managed'); }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
+    }
+    const inspectionHome = join(neutral, 'user-file'); await mkdir(inspectionHome, { mode: 0o700 });
+    if (before.stat) await privateWrite(join(inspectionHome, 'config.toml'), before.text);
+    const path = env.PATH?.split(delimiter).map(directory => resolve(directory || '.')).join(delimiter);
+    const result = await runCodex(['mcp', 'list', '--json'], { cwd: neutral,
+      env: { ...env, CODEX_HOME: inspectionHome, ...(path === undefined ? {} : { PATH: path }) } });
+    if (result.error || result.status !== 0) throw new Error('codex_inspection');
+    let entries;
+    try { entries = JSON.parse(result.stdout); } catch { throw new Error('codex_inspection'); }
+    if (!Array.isArray(entries) || entries.some(entry => !entry || typeof entry.name !== 'string' ||
+        typeof entry.enabled !== 'boolean' || !entry.transport ||
+        !['stdio', 'streamable_http'].includes(entry.transport.type) ||
+        (entry.transport.type === 'stdio' && (typeof entry.transport.command !== 'string' || !Array.isArray(entry.transport.args) || entry.transport.args.some(arg => typeof arg !== 'string')))) ||
+        new Set(entries.map(entry => entry.name)).size !== entries.length) throw new Error('codex_inspection');
+    // Discard all fields that might carry authentication material.
+    return entries.filter(entry => ['cairn', 'cairn-local'].includes(entry.name)).map(entry => ({
+      name: entry.name, type: entry.transport.type,
+      command: entry.transport.type === 'stdio' ? entry.transport.command : undefined,
+      args: entry.transport.type === 'stdio' ? entry.transport.args : undefined,
+    }));
   } finally { await rm(neutral, { recursive: true, force: true }); }
 }

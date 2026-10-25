@@ -1,20 +1,33 @@
-import './review-fixes.test.mjs';
-import './approved-flows.test.mjs';
-import './device-ui.test.mjs';
-import './clients.test.mjs';
-import './authorization.test.mjs';
+const setupTestGroup = process.env.CAIRN_SETUP_TEST_GROUP;
+if (setupTestGroup && !['local', 'cloud-baseline', 'hosted', 'source'].includes(setupTestGroup)) throw new Error('Unknown setup test group');
+if (setupTestGroup === 'local') await import('./local-mode.test.mjs');
+else if (setupTestGroup === 'cloud-baseline') await import('./local-cloud-unchanged.test.mjs');
+else if (setupTestGroup === 'hosted') { await import('./approved-flows.test.mjs'); await import('./codex.test.mjs'); }
+else if (setupTestGroup === 'source') await import('./authorization.test.mjs');
+else {
+  await import('./local-mode.test.mjs');
+  await import('./local-cloud-unchanged.test.mjs');
+  await import('./local-engine.test.mjs');
+  await import('./review-fixes.test.mjs');
+  await import('./approved-flows.test.mjs');
+  await import('./device-ui.test.mjs');
+  await import('./clients.test.mjs');
+  await import('./authorization.test.mjs');
+  await import('./codex.test.mjs');
+  await import('./codex-hooks.test.mjs');
+}
 import { PassThrough, Writable } from 'node:stream';
 import { detectLanguage, messages, translator } from '../lib/messages.mjs';
 import { selectEndpoint } from '../lib/options.mjs';
-import './codex.test.mjs';
-import './codex-hooks.test.mjs';
-import test from 'node:test';
+import runTest from 'node:test';
+const testGroup = process.env.CAIRN_SETUP_TEST_GROUP;
+const test = testGroup ? () => {} : runTest;
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { scryptSync } from 'node:crypto';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { supportedNode, validEndpoint, browserCommand, ask } from '../lib/setup.mjs';
 import { requestJSON, proxyFor } from '../lib/transport.mjs';
@@ -22,13 +35,14 @@ import { fakeAuthServer, secret } from './fake-auth-server.mjs';
 import { safeHostname, browserAuthorize } from '../lib/auth.mjs';
 import { wireChild, localWireRequest } from './http-wire.mjs';
 
-const moduleURL = new URL('../lib/setup.mjs', import.meta.url).href;
+const testedVersion = JSON.parse(readFileSync(process.env.CAIRN_SETUP_TEST_PACKAGE ? join(process.env.CAIRN_SETUP_TEST_PACKAGE, 'package.json') : new URL('../package.json', import.meta.url))).version;
+const moduleURL = process.env.CAIRN_SETUP_TEST_MODULE || (process.env.CAIRN_SETUP_TEST_PACKAGE ? pathToFileURL(join(process.env.CAIRN_SETUP_TEST_PACKAGE, 'lib/setup.mjs')).href : new URL('../lib/setup.mjs', import.meta.url).href);
 const secretURL = new URL('./fake-auth-server.mjs', import.meta.url).href;
-const transportURL = new URL('../lib/transport.mjs', import.meta.url).href;
-const errorURL = new URL('../lib/errors.mjs', import.meta.url).href;
+const transportURL = new URL('./transport.mjs', moduleURL).href;
+const errorURL = new URL('./errors.mjs', moduleURL).href;
 const wireURL = new URL('./http-wire.mjs', import.meta.url).href;
-const deviceURL = new URL('../lib/device-ui.mjs', import.meta.url).href;
-const bin = fileURLToPath(new URL('../bin/memory.mjs', import.meta.url));
+const deviceURL = new URL('./device-ui.mjs', moduleURL).href;
+const bin = process.env.CAIRN_SETUP_TEST_PACKAGE ? join(process.env.CAIRN_SETUP_TEST_PACKAGE, 'bin/memory.mjs') : fileURLToPath(new URL('../bin/memory.mjs', import.meta.url));
 const command = call => call.args.join(' ');
 const saved = result => result.calls.find(call => call.args.includes('--values-stdin'));
 
@@ -69,7 +83,7 @@ async function fixture(t, state = {}, options = {}) {
     const latency = ${JSON.stringify(options.latency ?? {})};
     const answers = [${JSON.stringify(options.endpoint ?? server.endpoint)}, ${options.invalidToken ? "secret + '\\n'" : 'secret'},
       ${JSON.stringify(options.mcpAnswer ?? '')}];
-    process.exitCode = await main(process.argv.slice(2), {
+    process.exitCode = await main(process.argv.slice(2), { disableLocalMode: true,
       interactive: ${options.interactive ?? true}, nodeVersion: ${JSON.stringify(options.nodeVersion ?? process.versions.node)},
       ...( ${options.locale !== undefined} ? { locale: ${JSON.stringify(options.locale ?? 'en-US')} } : {} ),
       authOptions: {
@@ -176,7 +190,7 @@ test('browser happy path uses S256, safe stdin, credential check then ACK and re
   assert.deepEqual(r.browses, [`${r.server.endpoint}/device`]);
   assert.deepEqual(r.server.requests.map(r => r.route), ['device-authorizations', 'token', 'token', 'credential', 'ack']);
   assert.equal(r.server.grant.state, 'delivered');
-  assert.match(r.stdout, /plugin (?:updated to )?0\.3\.1/); assert.match(r.stdout, /Cairn.ink Memory setup 0\.5\.3/);
+  assert.match(r.stdout, /plugin (?:updated to )?0\.3\.1/); assert.ok(r.stdout.includes('Cairn.ink Memory setup ' + testedVersion));
   assert.match(r.stdout, /Signed in to Cairn, valid until/);
   const second = await localWireRequest(r.server.server, requestJSON, new URL('/api/cli-auth/v1/token', r.server.endpoint),
     { body: r.server.lastProof, env: {} });

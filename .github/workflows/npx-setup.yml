@@ -14,10 +14,45 @@ jobs:
       matrix:
         node: [22.16.0, 24.15.0]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ matrix.node }}
-      - run: npm run test:setup
+      - name: Install isolated maintainer dependencies
+        run: |
+          for directory in adapters/mcp/node_modules adapters/openai/node_modules; do
+            if [ -e "$directory" ] || [ -L "$directory" ]; then ls -ld "$directory"; fi
+          done
+          npm ci --prefix adapters/mcp
+          npm ci --prefix adapters/openai
+      - name: Prime engine dependency cache (network phase)
+        env:
+          CAIRN_SETUP_TEST_NETWORK: '1'
+        run: node packages/setup/test/engine-cache.mjs "$RUNNER_TEMP/setup-engine-cache"
+      - name: Verify committed runtime bundles
+        run: node packages/setup/build-runtime.mjs --check
+      - name: Check source-only documentation
+        env:
+          CAIRN_SETUP_TEST_GROUP: source
+          CAIRN_SETUP_REQUIRE_BASELINE: '1'
+        run: node tools/testing/run.mjs --script packages/setup/test/setup.test.mjs
       - run: npm pack --ignore-scripts --json --pack-destination "$RUNNER_TEMP"
         working-directory: packages/setup
+      - name: Install packed installer (offline phase)
+        env:
+          npm_config_cache: ${{ runner.temp }}/setup-engine-cache
+        run: |
+          npm install --prefix "$RUNNER_TEMP/setup-installed" --offline --ignore-scripts --no-audit --no-fund "$RUNNER_TEMP/cairn-ink-memory-0.6.0.tgz"
+      - name: Require primed engine cache (no network)
+        run: node packages/setup/test/engine-cache.mjs --assert "$RUNNER_TEMP/setup-engine-cache"
+      - name: Test packed installer (offline phase)
+        env:
+          CAIRN_SETUP_TEST_PACKAGE: ${{ runner.temp }}/setup-installed/node_modules/@cairn-ink/memory
+          CX5_PACKED_PACKAGE: ${{ runner.temp }}/setup-installed/node_modules/@cairn-ink/memory
+          CAIRN_SETUP_NPM_CACHE: ${{ runner.temp }}/setup-engine-cache
+          CAIRN_SETUP_NPM_OFFLINE: '1'
+          CAIRN_SETUP_REQUIRE_BASELINE: '1'
+          CAIRN_SETUP_REQUIRE_CACHE: '1'
+        run: node tools/testing/run.mjs --script packages/setup/test/setup.test.mjs

@@ -1,10 +1,41 @@
 # Codex 安裝與自動記憶：CX-5
 
-2026-10-14 更新。Installer 0.5.2 已於 2026-10-13 發布；這份原始碼準備 **installer 0.5.3，尚未發布**。配套 plugin 維持 0.3.2、protocol 維持 0.3.0。0.5.3 修正 setup、resume 之後新開的 Codex 對話，第一段內容被當成暫停邊界跳過的問題。0.5.2 只調整安裝畫面裡說明自動工作的兩句話，行為不變。0.5.1 修正互動 TUI 對話沒有被記下的問題，並只納入互動的 app-server 用戶端；0.5.0 更新了安裝流程、預設每日上限與 exec 自動工作的保存設定。A7 framing 與 certificate inputs 保持原樣。
+2026-10-14 更新。Installer 0.5.2 已於 2026-10-13 發布；這份原始碼準備 **installer 0.6.0，尚未發布**。配套 plugin 維持 0.3.2、protocol 維持 0.3.0。0.5.3 修正 setup、resume 之後新開的 Codex 對話，第一段內容被當成暫停邊界跳過的問題。0.5.2 只調整安裝畫面裡說明自動工作的兩句話，行為不變。0.5.1 修正互動 TUI 對話沒有被記下的問題，並只納入互動的 app-server 用戶端；0.5.0 更新了安裝流程、預設每日上限與 exec 自動工作的保存設定。A7 framing 與 certificate inputs 保持原樣。
 
 本機是 **codex-cli 0.160.1**。CX-5 已接上 browser credential、私有 runtime、四個 user hooks、Stop／PreCompact capture，以及 SessionStart pause EOF boundary。UserPromptSubmit recall 注入已通過 [A7 pinned-host adversarial evaluation](../evaluation/codex-a7/RESULTS.md)，**在格式合格的 host 預設開啟**，可用 kill switch 關閉。MCP recall 仍可使用。
 
 格式驗收只讀安裝的 binary 與本機 repo refs，使用自製 synthetic sessions，沒有讀真實對話。A7 另經 chichi 授權，以真實模型跑在隔離的 disposable CODEX_HOME／repo 與本機 fake Cairn 上；沒有遠端 Cairn 查詢、production 操作或發布。
+
+## Installer 0.6.0 本機模式
+
+```sh
+npx @cairn-ink/memory setup --local
+npx @cairn-ink/memory status
+npx @cairn-ink/memory uninstall --local
+```
+
+發布前可用 `node packages/setup/bin/memory.mjs setup --local`。第一次互動
+安裝不加旗標時會問一次本機或雲端；非互動時請指定 `--local`／`--cloud`，
+既有雲端使用者維持原流程。本機模式透過 CLI 為 Codex 與 Claude Code 註冊
+`cairn-local` stdio MCP server，預設共用
+`~/.cairn-memory/data/memory.sqlite`，也可用絕對路徑的 `CAIRN_MEMORY_HOME`
+指定根目錄；外部資料庫可在首次安裝時用 `setup --local --db <absolute path>`
+指定。初次安裝引擎相依套件需要 npm registry 或已備妥的快取，安裝後可使用
+不需模型的離線工具。
+
+本機模式使用五個明確呼叫的 MCP 工具，不啟用下文的自動保存、提問回想或
+格式驗收流程。語意回想需要模型金鑰，沒有時回報 `model_not_configured`；
+若工具環境已有 `OPENAI_API_KEY`，引擎會用它回想，並把選取的文字傳給
+模型供應商。安裝器讀取有大小上限的 Claude 註冊設定，只取出指定 MCP
+項目的註冊欄位，不存取憑證儲存區或使用驗證欄位。
+
+`status` 不啟動本機引擎；`uninstall --local` 解除連接並保留資料，非互動
+移除需加 `--yes`。兩個工具同時使用資料庫時，`storage_busy` 請重試，不能
+當成沒有記憶。遇到雲端衝突，請依畫面順序先解除 Codex hooks、移除 `cairn`
+MCP，再移除 Claude 外掛與舊 MCP，最後重跑本機安裝；切回雲端則先解除
+本機連接，再跑 `setup --cloud`，不會搬移資料。Linux／WSL 已測試，macOS
+尚未測試，Windows 原生環境會拒絕本機安裝。完整步驟見
+[安裝器 README](../packages/setup/README.md#local-mode--本機模式)。以下說明雲端模式。
 
 ## 版本與格式證據
 
@@ -39,14 +70,14 @@ Capture creator 接受已凍結的 `0.157.1`、`0.160.1`、`0.161.0`、`0.162.0`
 ## 使用方式
 
 ```sh
-# 0.5.3 未發布，先從 source 執行
+# 0.6.0 未發布，先從 source 執行
 node packages/setup/bin/memory.mjs setup
 node packages/setup/bin/memory.mjs status
 node packages/setup/bin/memory.mjs setup --client codex
 node packages/setup/bin/memory.mjs status --client codex
 node packages/setup/bin/memory.mjs setup --client codex --dry-run
 
-# 發布後使用 0.5.3；發布前請用上面的原始碼指令
+# 發布後使用 0.6.0；發布前請用上面的原始碼指令
 npx @cairn-ink/memory@latest setup --client codex
 ```
 
@@ -104,7 +135,7 @@ exec 設定同時控制保存與提問回想，重跑會保留；只有開啟時
 | `$CODEX_HOME/hooks.json` | 四個 user command hooks；只含固定 node/runtime/config 路徑與事件名，不含 token；重跑與卸載辨識自己的 command 形狀／installation 路徑，清除所有舊 node／digest handlers |
 | `$CODEX_HOME/cairn/installation.json` | 0600，固定 endpoint／binding／cap／runtime metadata |
 | `$CODEX_HOME/cairn/credential.json` | 0600，memory-scoped browser credential；所在目錄 0700，明文私有檔，非 keyring |
-| `$CODEX_HOME/cairn/runtime/0.5.3-<manifest-hash>/` | runtime 目錄 0700、檔案 0600；從 npm 包的 frozen hash manifest 複製，不依賴 npx cache，不在原路徑覆寫不同程式 |
+| `$CODEX_HOME/cairn/runtime/0.6.0-<manifest-hash>/` | runtime 目錄 0700、檔案 0600；從 npm 包的 frozen hash manifest 複製，不依賴 npx cache，不在原路徑覆寫不同程式 |
 | `$CODEX_HOME/cairn/qualification/` | 0700；binary identity verdict、pending lock 與最後觀察的 CLI／app-server descriptor 為 0600，不含 token／transcript |
 | 共享 private root | identity、control generation、endpoint quota、usage、Codex-only daily cap policy 與 hosted-pause 最後觀察／availability；Codex cursor 與 Claude cursor 分開；Codex 的 tripwire：`paused` 懸空 symlink、暫停時才出現的 `.paused-tripwire`，以及只含隨機 token 的 `codex-tripwire.json` |
 
@@ -145,7 +176,7 @@ UserPromptSubmit port 有同一 2 s budget、redacted 4,000-unit query、project
 | LAC／HMA | 不在此次 hosted runtime scope | 原設計契約的 model isolation／usage／latency gates；沒有宣稱 local adapter 已完成 |
 | App-server 用戶端範圍 | 0.5.1 只把 `codex-tui`、`codex_vscode`、`Codex Desktop` 的 `vscode` thread 當互動，其他 originator 需 exec opt-in。TUI 經 daemon 由合成 native header probe 與 installed-hook 測試驗證；`codex_vscode` 另有 extension 原始碼與實際 header metadata 佐證 | `Codex Desktop` 只來自 binary 字串與合成 probe，尚未觀察到實際 session；VS Code extension 與桌面 app 的實際 hook delivery 未驗證；originator 由用戶端自報，冒用互動名稱的自動化無法區分。詳見 [limitations](limitations.md#codex-app-server-client-scope-installer-051) |
 | 新 session 邊界 | 0.5.3：第一次觀察即 boundary，UserPromptSubmit（Codex 記錄 prompt 之前）就是第一次觀察，第一輪由 Stop 記下；legacy marker 由 tripwire 偵測，不論順序都不送暫停期間的文字；Codex 不寫 `control.json`。以 worker 不變式測試（含先前版本會失敗的情境：lock 被占用、沒被觀察到的 marker、沒有 `control.json` 的 root）與 fake endpoint 的 installed-hook 測試驗證 | Hook 依序（先寫 header、後記錄 prompt）來自 Codex 原始碼，沒有在實際 TUI 上觀察 hook delivery。手動刪掉或改動 `.paused-tripwire`／`codex-tripwire.json` 不在保護範圍。詳見 [limitations](limitations.md#codex-new-session-boundary-installer-053) |
-| 發布 | Installer 0.5.2 已發布；0.5.3 尚未發布 | chichi 審核 patch groups、更新 Claude bundle 與 release gates 後發布 |
+| 發布 | Installer 0.5.2 已發布；0.6.0 尚未發布 | chichi 審核 patch groups、更新 Claude bundle 與 release gates 後發布 |
 
 ## 驗證與剩餘限制
 
