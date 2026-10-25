@@ -25,8 +25,9 @@ test('E1M-09 installed offline archive, exact manifest/closure bytes, physical v
       mkdirSync(dirname(join(cache,suffix)),{recursive:true});copyFileSync(join(sourceCache,suffix),join(cache,suffix));
     }
   }
+  const registryKeys=[];
   for(const name of ['@modelcontextprotocol/server','@modelcontextprotocol/core','zod','tiktoken']) {
-    const url='https://registry.npmjs.org/'+name.replace('/','%2f');
+    const url='https://registry.npmjs.org/'+name.replaceAll('/','%2f');
     const key='make-fetch-happen:request-cache:'+url;
     const digest=createHash('sha256').update(key).digest('hex');
     const suffix=join('_cacache','index-v5',digest.slice(0,2),digest.slice(2,4),digest.slice(4));
@@ -34,7 +35,9 @@ test('E1M-09 installed offline archive, exact manifest/closure bytes, physical v
     if(!existsSync(source))continue;
     mkdirSync(dirname(join(cache,suffix)),{recursive:true});copyFileSync(source,join(cache,suffix));
     const entries=readFileSync(source,'utf8').split('\n').filter(line=>line.includes('\t')).map(line=>JSON.parse(line.slice(line.indexOf('\t')+1)));
-    for(const entry of entries.filter(entry=>entry.key===key&&entry.integrity)) {
+    const matching=entries.filter(entry=>entry.key===key&&entry.integrity);
+    assert.ok(matching.length,'npm registry URL cache key: '+key);registryKeys.push(key);
+    for(const entry of matching) {
       const hex=Buffer.from(entry.integrity.slice('sha512-'.length),'base64').toString('hex');
       const content=join('_cacache','content-v2','sha512',hex.slice(0,2),hex.slice(2,4),hex.slice(4));
       if(existsSync(join(sourceCache,content))){mkdirSync(dirname(join(cache,content)),{recursive:true});copyFileSync(join(sourceCache,content),join(cache,content));}
@@ -45,6 +48,10 @@ test('E1M-09 installed offline archive, exact manifest/closure bytes, physical v
     if(result.error||result.status!==0)throw Error(JSON.stringify({exe,args,code:result.error?.code,error:result.error?.message,exitCode:result.status,stderr:result.stderr}));
     return result.stdout;
   };
+  const cached=command('npm',['cache','ls','--offline'],ws.path,join(ws.path,'empty.npmrc')).trim().split('\n');
+  // npm ci may cache only pinned tarballs. When registry metadata is present,
+  // npm itself must find every copied index entry under the exact request key.
+  for(const key of registryKeys)assert.ok(cached.includes(key),'npm finds the exact copied cache key: '+key);
   let artifactDirectory;
   const artifact=buildArtifact({runCommand:command,ownDirectory:directory=>{artifactDirectory=directory;ws.defer(()=>rmSync(directory,{recursive:true,force:true}));}});
   writeFileSync(join(ws.path,'package.json'),JSON.stringify({name:'synthetic-installed-members',private:true}));
@@ -70,6 +77,6 @@ test('E1M-09 installed offline archive, exact manifest/closure bytes, physical v
     ws.path,artifact.userconfig,{HOME:home,NODE_NO_WARNINGS:'1',NODE_DISABLE_COMPILE_CACHE:'1'});
   assert.equal(child.error,undefined);assert.equal(child.signal,null);assert.equal(child.status,0,child.stderr);
   const report=JSON.parse(child.stdout);assert.equal(report.importedCore,join(installed,'core/index.mjs'));assert.equal(report.workersClosed,true);assert.equal(report.outcomes.length,4);
-  t.diagnostic(JSON.stringify({...report,childCode:child.status,childSignal:child.signal,archiveFiles:archived.length,closureFiles:graph.required.length,memberModules:modules.length,docs:docs.length,setDifferences:[]}));
+  t.diagnostic(JSON.stringify({...report,childCode:child.status,childSignal:child.signal,archiveFiles:archived.length,closureFiles:graph.required.length,memberModules:modules.length,docs:docs.length,registryCacheKeys:registryKeys,setDifferences:[]}));
   await ws.cleanup();assert.equal(existsSync(ws.path),false);assert.equal(existsSync(artifactDirectory),false);
 });

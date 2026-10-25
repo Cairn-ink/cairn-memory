@@ -118,7 +118,7 @@ const errorClasses = [
   ['unexpected', {}],
 ];
 test('spec/standards P2: Legacy error classification is only partial — differential against main b2513501', async t => {
-  const f = memberFixture(t), oldOpen = await baselineReader(f.workspace), setFault = faultWorkers(t);
+  const f = memberFixture(t), oldOpen = await baselineReader(f.workspace, message => t.diagnostic(message)), setFault = faultWorkers(t);
   let comparisons = 0;
   async function compare(label, path = f.path, input = { namespace }) {
     const options = { path, ownerId: namespace.ownerId }, old = oldOpen(options), current = openMemoryReader(options);

@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { chmodSync, mkdirSync, openSync, closeSync, readFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, openSync, closeSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { join, dirname } from 'node:path';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import threads from 'node:worker_threads';
 import { syncBuiltinESMExports } from 'node:module';
 import { STORAGE_BUSY_TIMEOUT_MS } from '../database.mjs';
@@ -29,17 +30,39 @@ export function withoutPrimary(sql) {
   return sql.replace(/\bid TEXT PRIMARY KEY\b/, 'id TEXT UNIQUE').replace(/PRIMARY KEY\s*\(([^)]+)\)/, 'UNIQUE ($1)')
     .replace(/(CREATE TABLE[^ (]+|CREATE TABLE\s+[^ (]+)\s*\(/, '$1 (surrogate INTEGER PRIMARY KEY,');
 }
-export async function baselineReader(workspace) {
+export async function baselineReader(workspace, diagnostic = () => {}) {
+  const fixture = new URL('../test/fixtures/topic-overview-b2513501/', import.meta.url);
+  const manifest = JSON.parse(readFileSync(new URL('manifest.json', fixture)));
+  assert.equal(manifest.revision, 'b2513501');
   const directory = join(workspace.path, 'b2513501'); mkdirSync(directory);
-  const archive = join(workspace.path, 'baseline.tar'), error = join(workspace.path, 'git-stderr');
-  const out = openSync(archive, 'w'), err = openSync(error, 'w');
-  let result;
-  try { result = spawnSync('git', ['archive', '--format=tar', 'b2513501'], { stdio: ['ignore', out, err] }); }
-  finally { closeSync(out); closeSync(err); }
-  assert.equal(result.error, undefined); assert.equal(result.status, 0, readFileSync(error, 'utf8'));
-  const extract = spawnSync('tar', ['-xf', archive, '-C', directory], { stdio: 'ignore' });
-  assert.equal(extract.error, undefined); assert.equal(extract.status, 0);
-  return (await import(pathToFileURL(join(directory, 'core/memory-reader.mjs')).href)).openMemoryReader;
+  const output = join(workspace.path, 'git-stdout'), error = join(workspace.path, 'git-stderr');
+  function git(args) {
+    const out = openSync(output, 'w'), err = openSync(error, 'w');
+    let result;
+    try { result = spawnSync('git', args, { cwd: fileURLToPath(new URL('../../', import.meta.url)),
+      stdio: ['ignore', out, err] }); }
+    finally { closeSync(out); closeSync(err); }
+    return { ...result, stdout: readFileSync(output), stderr: readFileSync(error, 'utf8') };
+  }
+  // History only strengthens provenance. Missing git or a shallow checkout must
+  // still execute the entire differential against the frozen, hashed baseline.
+  const history = git(['cat-file', '-e', manifest.revision + '^{commit}']);
+  if (history.error) assert.equal(history.error.code, 'ENOENT', history.error.message);
+  else assert.ok(history.status === 0 || history.status === 128, history.stderr);
+  const historyAvailable = !history.error && history.status === 0;
+  for (const [path, sha256] of Object.entries(manifest.files)) {
+    const bytes = readFileSync(new URL(path, fixture));
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), sha256, 'frozen baseline hash: ' + path);
+    if (historyAvailable) {
+      const original = git(['show', manifest.revision + ':' + path]);
+      assert.equal(original.error, undefined); assert.equal(original.status, 0, original.stderr);
+      assert.deepEqual(bytes, original.stdout, 'frozen baseline equals git show: ' + path);
+    }
+    const target = join(directory, path); mkdirSync(dirname(target), { recursive: true }); writeFileSync(target, bytes);
+  }
+  diagnostic(JSON.stringify({ baseline: manifest.revision, vendoredFiles: Object.keys(manifest.files).length,
+    historyAvailable, differentialSource: 'vendored fixture' }));
+  return (await import(pathToFileURL(join(directory, manifest.entry)).href)).openMemoryReader;
 }
 export function faultWorkers(t) {
   const NativeWorker = threads.Worker;
