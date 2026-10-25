@@ -122,9 +122,10 @@ For **Claude Code and Codex**, run the one-command installer:
 npx @cairn-ink/memory setup
 ```
 
-A fresh install asks once: local MCP memory tools on this computer, or cloud
-automatic memory with cairn.ink sign-in; choose directly with `setup --local` or
-`setup --cloud`. Local mode has no automatic capture or recall in 0.6.0.
+A fresh interactive install asks once: local MCP memory tools on this computer,
+or cloud automatic memory with cairn.ink sign-in; choose directly with
+`setup --local` or `setup --cloud`. Fresh non-interactive runs need `--local`
+or `--cloud`; local mode has no automatic capture or recall in 0.6.0.
 
 This checkout prepares installer **0.6.0**; publication is a separate step.
 Try it with `node packages/setup/bin/memory.mjs setup`. The plugin stays 0.3.2.

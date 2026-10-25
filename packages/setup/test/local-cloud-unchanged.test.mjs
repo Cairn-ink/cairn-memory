@@ -34,6 +34,23 @@ function historicalInstaller() {
     } catch { return { skip: 'Historical 0.5.3 comparison requires git object b2513501 and working git/tar child pipes.' }; }
   })();
 }
+function acceptBaseline(t, historical, required = process.env.CAIRN_SETUP_REQUIRE_BASELINE === '1') {
+  if (historical.module) return historical;
+  const reason = historical.skip ?? 'Historical 0.5.3 installer is unavailable.';
+  assert.ok(!required, 'CAIRN_SETUP_REQUIRE_BASELINE=1: ' + reason);
+  t.skip(reason);
+  return null;
+}
+const baselineForTest = async t => acceptBaseline(t, await historicalInstaller());
+test('L06 unavailable baseline fails when required and never falls back to current code', () => {
+  let skipped = false;
+  const context = { skip: () => { skipped = true; } };
+  assert.equal(acceptBaseline(context, { skip: 'baseline unavailable' }, false), null);
+  assert.equal(skipped, true);
+  skipped = false;
+  assert.throws(() => acceptBaseline(context, { skip: 'baseline unavailable' }, true), /CAIRN_SETUP_REQUIRE_BASELINE=1/u);
+  assert.equal(skipped, false);
+});
 const scenarios = ['both configured', 'Claude only', 'Codex qualified', 'Codex fallback',
   'Claude unconfigured', 'Claude disabled', 'legacy cairn', 'Claude no endpoint', 'Claude inspection failure'];
 const actions = [['setup'], ['setup', '--client', 'codex'], ['status'], ['setup', '--dry-run'],
@@ -46,7 +63,7 @@ function assertProbeDelta(baseline, current, client, home) {
     // The old hosted schema probe creates a fresh private scratch directory on
     // every invocation. Its generated output pathname is not a client mutation.
     return call.args.length === 4 && call.args.slice(0, 3).join(' ') === 'app-server generate-json-schema --out' ?
-      [...call.args.slice(0, 3), '<schema-output>'] : call.args.map(normalizeRuntime);
+      [...call.args.slice(0, 3), '<schema-output>'] : call.args.map(arg => normalizeRuntime(arg, home));
   };
   let index = 0;
   for (const call of current) {
@@ -57,32 +74,75 @@ function assertProbeDelta(baseline, current, client, home) {
   }
   assert.equal(index, baseline.length, 'Existing native calls must remain in order');
 }
-// v0.10 permits only installer versions and hosted runtime directory names.
-// Runtime payloads stay raw: normalizing source contents would hide regressions.
-const normalizeRuntime = text => text.replace(/(?<=\/runtime\/)\d+\.\d+\.\d+(?:-[\w.]+)?-[a-f0-9]{12}(?=\/|[\s'"\\]|$)/gu, '<version>-<digest>');
-const normalizeFile = (name, bytes) => {
-  let text = bytes.toString();
-  if (name === '.codex/hooks.json') {
-    text = text.replace(/("command"\s*:\s*)("(?:[^"\\]|\\.)*")/gu,
-      (_match, field, command) => field + normalizeRuntime(command));
-  } else if (name === '.codex/cairn/installation.json') {
-    text = text.replace(/("runtime"\s*:\s*)("(?:[^"\\]|\\.)*")/gu,
-      (_match, field, runtime) => field + normalizeRuntime(runtime))
-      .replace(/("installerVersion"\s*:\s*")\d+\.\d+\.\d+(?:-[\w.]+)?"/gu, '$1<version>"');
-  } else return bytes;
-  return Buffer.from(text);
-};
-const normalizedCall = call => ({ ...call, args: call.args.map(normalizeRuntime) });
-function fileInventory(entries, normalize) {
-  const result = {};
+// Normalize only this fixture's managed hosted runtime, never another /runtime.
+const runtimeId = String.raw`\d+\.\d+\.\d+(?:-[\w.]+)?-[a-f0-9]{12}`;
+const escapePattern = text => text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+const normalizeRuntime = (text, home) => text.replace(new RegExp(
+  '(^|[\\s\'"=])(' + escapePattern(home + '/cairn/runtime/') + ')' + runtimeId + '(?=/|[\\s\'"\\\\]|$)', 'gu'),
+'$1$2<version>-<digest>');
+const generationPath = new RegExp('^\\.codex/cairn/runtime/(' + runtimeId + ')(/.*)?$', 'u');
+
+// Walk JSON token positions so only exact field paths change, retaining every
+// whitespace byte and string escape elsewhere. Hosted installation.json has no
+// installerVersion field; its schema version and every nested field stay raw.
+function normalizeFile(name, bytes, home) {
+  const installation = name === '.codex/cairn/installation.json';
+  if (!installation && name !== '.codex/hooks.json') return bytes;
+  const text = bytes.toString();
+  JSON.parse(text);
+  const tokens = [...text.matchAll(/"(?:[^"\\]|\\.)*"|[{}\[\]:,]|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null/gu)];
+  let at = 0;
+  const edits = [];
+  function value(path) {
+    const token = tokens[at++], raw = token[0];
+    if (raw === '{') {
+      if (tokens[at][0] === '}') { at++; return; }
+      for (;;) {
+        const key = JSON.parse(tokens[at++][0]); at++; // colon
+        value([...path, key]);
+        if (tokens[at++][0] === '}') return;
+      }
+    } else if (raw === '[') {
+      if (tokens[at][0] === ']') { at++; return; }
+      for (let index = 0; ; index++) {
+        value([...path, index]);
+        if (tokens[at++][0] === ']') return;
+      }
+    } else if (raw.startsWith('"')) {
+      const managedField = installation ? path.length === 1 && path[0] === 'runtime' :
+        path.length === 6 && path[0] === 'hooks' &&
+        ['SessionStart', 'UserPromptSubmit', 'Stop', 'PreCompact'].includes(path[1]) &&
+        Number.isInteger(path[2]) && path[3] === 'hooks' && Number.isInteger(path[4]) && path[5] === 'command';
+      if (managedField) {
+        const replacement = normalizeRuntime(raw, JSON.stringify(home).slice(1, -1));
+        if (replacement !== raw) edits.push([token.index, raw.length, replacement]);
+      }
+    }
+  }
+  value([]);
+  let result = text;
+  for (const [index, length, replacement] of edits.reverse()) result = result.slice(0, index) + replacement + result.slice(index + length);
+  return Buffer.from(result);
+}
+const normalizedCall = (call, home) => ({ ...call, args: call.args.map(arg => normalizeRuntime(arg, home)) });
+function fileInventory(entries, normalize, home) {
+  const result = {}, generations = new Map();
   for (const [name, bytes] of entries) {
-    const key = normalize ? normalizeRuntime('/' + name).slice(1) : name;
-    const hash = createHash('sha256').update(normalize ? normalizeFile(name, bytes) : bytes).digest('hex');
-    // Two version-derived names can collapse after an upgrade, but every copy
-    // must contain identical bytes; a second generation cannot hide drift.
+    const generation = generationPath.exec(name);
+    const hash = bytes === null ? '<directory>' : createHash('sha256')
+      .update(normalize ? normalizeFile(name, bytes, home) : bytes).digest('hex');
+    if (normalize && generation) {
+      if (!generations.has(generation[1])) generations.set(generation[1], {});
+      generations.get(generation[1])[generation[2] ?? '/'] = hash;
+    }
+    const key = normalize && generation ? '.codex/cairn/runtime/<version>-<digest>' + (generation[2] ?? '') : name;
     if (Object.hasOwn(result, key)) assert.equal(result[key], hash, name);
     result[key] = hash;
   }
+  // Compare whole generations before accepting collapsed paths. An older tree
+  // cannot supply files that a new, incomplete generation is missing.
+  const complete = [...generations.values()];
+  for (const generation of complete.slice(1)) assert.deepEqual(generation, complete[0], 'Every hosted runtime generation must have the same complete inventory and bytes');
   return result;
 }
 async function inventory(root, normalize = false) {
@@ -91,50 +151,61 @@ async function inventory(root, normalize = false) {
     try {
       for (const entry of await readdir(directory, { withFileTypes: true })) {
         const path = join(directory, entry.name), name = prefix + entry.name;
-        if (entry.isDirectory()) result.push(...await entries(path, name + '/'));
-        else result.push([name, await readFile(path)]);
+        if (entry.isDirectory()) {
+          if (generationPath.test(name)) result.push([name + '/', null]);
+          result.push(...await entries(path, name + '/'));
+        } else result.push([name, await readFile(path)]);
       }
     } catch (error) { if (error.code !== 'ENOENT') throw error; }
     return result;
   }
-  return fileInventory(await entries(root), normalize);
+  return fileInventory(await entries(root), normalize, join(root, '.codex'));
 }
-const normalized = text => normalizeRuntime(text.replace(/(Cairn\.ink Memory(?: setup| status| 安裝程式)? )\d+\.\d+\.\d+(?:-[\w.]+)?/gu, '$1<version>'));
-test('L06 version normalization preserves unrelated bytes and runtime payloads', () => {
-  const oldRuntime = '/synthetic/.codex/cairn/runtime/0.5.3-0123456789ab';
-  const newRuntime = '/synthetic/.codex/cairn/runtime/0.6.0-abcdef012345';
-  const before = Buffer.from(`{ "installerVersion": "0.5.3", "runtime": "${oldRuntime}", "dailyCap": 200 }\n`);
-  const after = Buffer.from(`{ "installerVersion": "0.6.0", "runtime": "${newRuntime}", "dailyCap": 200 }\n`);
+const normalized = (text, home) => normalizeRuntime(text.replace(/(Cairn\.ink Memory(?: setup| status| 安裝程式)? )\d+\.\d+\.\d+(?:-[\w.]+)?/gu, '$1<version>'), home);
+test('L06 version normalization preserves unrelated bytes and complete runtime generations', () => {
+  const home = '/synthetic/.codex';
+  const oldRuntime = home + '/cairn/runtime/0.5.3-0123456789ab';
+  const newRuntime = home + '/cairn/runtime/0.6.0-abcdef012345';
+  const before = Buffer.from(`{ "version": 1, "runtime": "${oldRuntime}", "dailyCap": 200 }\n`);
+  const after = Buffer.from(`{ "version": 1, "runtime": "${newRuntime}", "dailyCap": 200 }\n`);
   const name = '.codex/cairn/installation.json';
-  assert.deepEqual(normalizeFile(name, before), normalizeFile(name, after));
-  for (const changed of [after.toString().replace('200', '201'), after.toString().replace('{ ', '{  ')]) {
-    assert.throws(() => assert.deepEqual(normalizeFile(name, before), normalizeFile(name, Buffer.from(changed))));
+  const equalFile = (path, first, second) => assert.deepEqual(normalizeFile(path, first, home), normalizeFile(path, second, home));
+  equalFile(name, before, after);
+  for (const changed of [after.toString().replace('200', '201'), after.toString().replace('{ ', '{  ')])
+    assert.throws(() => equalFile(name, before, Buffer.from(changed)));
+  const hooks = runtime => Buffer.from(JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: `node ${runtime}/hook.mjs` }] }] } }));
+  equalFile('.codex/hooks.json', hooks(oldRuntime), hooks(newRuntime));
+  const unrelated = version => hooks(`/unrelated/runtime/${version}`);
+  assert.throws(() => equalFile('.codex/hooks.json', unrelated('0.5.3-0123456789ab'), unrelated('0.6.0-abcdef012345')));
+  assert.throws(() => equalFile('.codex/hooks.json', hooks('/unrelated' + oldRuntime), hooks('/unrelated' + newRuntime)));
+  for (const path of [name, '.codex/hooks.json']) {
+    for (const field of ['runtime', 'command', 'installerVersion']) {
+      const nested = runtime => Buffer.from(JSON.stringify({ nested: { [field]: runtime } }));
+      assert.throws(() => equalFile(path, nested(oldRuntime), nested(newRuntime)));
+    }
   }
-  const hooks = runtime => Buffer.from(`{"hooks":{"Stop":[{"command":"node ${runtime}/entry.mjs"}]}}`);
-  assert.deepEqual(normalizeFile('.codex/hooks.json', hooks(oldRuntime)), normalizeFile('.codex/hooks.json', hooks(newRuntime)));
-  assert.throws(() => assert.deepEqual(normalizeFile('.codex/hooks.json', hooks(oldRuntime)),
-    normalizeFile('.codex/hooks.json', Buffer.from(hooks(newRuntime).toString().replace('Stop', 'Start')))));
+  assert.throws(() => equalFile(name, Buffer.from('{"installerVersion":"0.5.3"}'), Buffer.from('{"installerVersion":"0.6.0"}')));
+  assert.throws(() => equalFile('.codex/hooks.json', hooks(oldRuntime), Buffer.from(hooks(newRuntime).toString().replace('Stop', 'Start'))));
   for (const path of ['.codex/config.toml', '.codex/cairn/runtime/0.6.0-abcdef012345/entry.mjs']) {
-    assert.deepEqual(normalizeFile(path, after), after, 'Other files, including runtime sources, are byte-identical');
-    assert.throws(() => assert.deepEqual(normalizeFile(path, before), normalizeFile(path, after)));
+    assert.deepEqual(normalizeFile(path, after, home), after);
+    assert.throws(() => equalFile(path, before, after));
   }
   const payload = Buffer.from('runtime payload 0.5.3 stays literal');
   const oldName = '.codex/cairn/runtime/0.5.3-0123456789ab/entry.mjs';
   const newName = '.codex/cairn/runtime/0.6.0-abcdef012345/entry.mjs';
-  assert.deepEqual(fileInventory([[oldName, payload]], true), fileInventory([[newName, payload]], true));
-  assert.throws(() => fileInventory([[oldName, payload], [newName, Buffer.from('changed source')]], true));
-  assert.throws(() => assert.deepEqual(fileInventory([[oldName, payload]], true),
-    fileInventory([[newName, payload], [newName.replace('entry.mjs', 'extra.mjs'), payload]], true)));
-  for (const path of ['.codex/hooks.json', name]) {
-    const oldExtra = Buffer.from(`{"unrelated":"${oldRuntime}"}`);
-    const newExtra = Buffer.from(`{"unrelated":"${newRuntime}"}`);
-    assert.throws(() => assert.deepEqual(normalizeFile(path, oldExtra), normalizeFile(path, newExtra)));
-  }
-  assert.equal(normalizeRuntime(oldRuntime + '/entry.mjs'), normalizeRuntime(newRuntime + '/entry.mjs'));
-  assert.deepEqual(normalizedCall({ args: ['configure', oldRuntime + '/entry.mjs'], keys: ['0.5.3'] }),
-    { args: ['configure', normalizeRuntime(newRuntime + '/entry.mjs')], keys: ['0.5.3'] });
-  assert.notEqual(normalized('Cairn.ink Memory setup 0.6.0\nunrelated 0.6.0'),
-    normalized('Cairn.ink Memory setup 0.5.3\nunrelated 0.5.3'));
+  const files = entries => fileInventory(entries, true, home);
+  assert.deepEqual(files([[oldName, payload]]), files([[newName, payload]]));
+  assert.throws(() => files([[oldName, payload], [newName, Buffer.from('changed source')]]));
+  const secondFile = oldName.replace('entry.mjs', 'second.mjs');
+  assert.throws(() => files([[oldName, payload], [secondFile, payload], [newName, payload]]));
+  assert.throws(() => files([[oldName, payload], [newName.replace('/entry.mjs', '/'), null]]));
+  assert.throws(() => assert.deepEqual(files([[oldName, payload]]), files([[newName, payload], [newName.replace('entry.mjs', 'extra.mjs'), payload]])));
+  assert.equal(normalizeRuntime(oldRuntime + '/entry.mjs', home), normalizeRuntime(newRuntime + '/entry.mjs', home));
+  assert.notEqual(normalizeRuntime(oldRuntime, '/other/.codex'), normalizeRuntime(newRuntime, '/other/.codex'));
+  assert.deepEqual(normalizedCall({ args: ['configure', oldRuntime + '/entry.mjs'], keys: ['0.5.3'] }, home),
+    { args: ['configure', normalizeRuntime(newRuntime + '/entry.mjs', home)], keys: ['0.5.3'] });
+  assert.notEqual(normalized('Cairn.ink Memory setup 0.6.0\nunrelated 0.6.0', home),
+    normalized('Cairn.ink Memory setup 0.5.3\nunrelated 0.5.3', home));
 });
 for (const lang of ['zh', 'en']) test(`L02 fresh cloud choice preserves hosted flow (${lang})`, async t => {
   const baselineFixture = await fixture(t), routedFixture = await fixture(t);
@@ -148,6 +219,8 @@ for (const lang of ['zh', 'en']) test(`L02 fresh cloud choice preserves hosted f
   await assert.rejects(readdir(join(routedFixture.home, 'local-memory')), { code: 'ENOENT' });
 });
 for (const scenario of scenarios) for (const args of actions) test(`L06 hosted baseline: ${scenario}; ${args.join(' ')}`, async t => {
+  const historical = await baselineForTest(t);
+  if (!historical) return;
   const f = await fixture(t, { claude: scenario !== 'Codex qualified' && scenario !== 'Codex fallback',
     codex: scenario !== 'Claude only', qualified: scenario !== 'Codex fallback' });
   // Seed known identities/credentials once so both comparison runs begin from
@@ -176,27 +249,26 @@ for (const scenario of scenarios) for (const args of actions) test(`L06 hosted b
     assert.deepEqual((await f.orderedCalls()).slice(calls).filter(callsThatMutate), []);
   }
   const beforeCalls = await f.calls(), beforeOrdered = (await f.orderedCalls()).length;
-  const historical = await historicalInstaller();
   const baseline = await f.run({ args, choices, fixedNow, disableLocalMode: true, module: historical.module });
   const baselineFiles = await inventory(f.home, true), baselineCalls = await f.calls();
   const mutating = (all, start) => Object.fromEntries(['claude', 'codex'].map(client => [client,
-    all[client].slice(start[client].length).filter(callsThatMutate).map(call => ({ args: call.args.map(normalizeRuntime), keys: call.keys, endpoint: call.endpoint, pairingRecord: call.pairingRecord }))]));
+    all[client].slice(start[client].length).filter(callsThatMutate).map(call => ({ args: call.args.map(arg => normalizeRuntime(arg, f.codexHome)), keys: call.keys, endpoint: call.endpoint, pairingRecord: call.pairingRecord }))]));
   const mutations = mutating(baselineCalls, beforeCalls);
-  const orderedMutations = (await f.orderedCalls()).slice(beforeOrdered).filter(callsThatMutate).map(normalizedCall);
+  const orderedMutations = (await f.orderedCalls()).slice(beforeOrdered).filter(callsThatMutate).map(call => normalizedCall(call, f.codexHome));
   const restore = async () => {
     await rm(f.home, { recursive: true }); await cp(saved, f.home, { recursive: true });
     await writeFile(join(f.scratch, 'claude.json'), nativeState); await writeFile(join(f.scratch, 'codex.json'), codexState);
   };
-  await t.test('immutable 0.5.3 versus current hosted-only path', { skip: historical.skip }, async () => {
+  await t.test('immutable 0.5.3 versus current hosted-only path', async () => {
     await restore(); const start = await f.calls(), orderedStart = (await f.orderedCalls()).length;
     const disabled = await f.run({ args, choices, fixedNow, disableLocalMode: true });
     assert.equal(disabled.code, baseline.code, disabled.stdout);
-    assert.equal(normalized(disabled.stdout), normalized(baseline.stdout));
+    assert.equal(normalized(disabled.stdout, f.codexHome), normalized(baseline.stdout, f.codexHome));
     assert.deepEqual(disabled.prompts, baseline.prompts);
     const disabledCalls = await f.calls();
     assert.deepEqual(mutating(disabledCalls, start), mutations);
     for (const client of ['claude', 'codex']) assertProbeDelta(baselineCalls[client].slice(beforeCalls[client].length), disabledCalls[client].slice(start[client].length), client, f.codexHome);
-    assert.deepEqual((await f.orderedCalls()).slice(orderedStart).filter(callsThatMutate).map(normalizedCall), orderedMutations);
+    assert.deepEqual((await f.orderedCalls()).slice(orderedStart).filter(callsThatMutate).map(call => normalizedCall(call, f.codexHome)), orderedMutations);
     assert.deepEqual(await inventory(f.home, true), baselineFiles);
     await assert.rejects(readdir(join(f.home, 'local-memory')), { code: 'ENOENT' });
   });
@@ -204,10 +276,10 @@ for (const scenario of scenarios) for (const args of actions) test(`L06 hosted b
   const beforeRouted = await f.calls(), routedOrdered = (await f.orderedCalls()).length;
   const routed = await f.run({ args, choices, fixedNow, disableLocalMode: false });
   assert.equal(routed.code, baseline.code, routed.stdout);
-  assert.equal(normalized(routed.stdout), normalized(baseline.stdout));
+  assert.equal(normalized(routed.stdout, f.codexHome), normalized(baseline.stdout, f.codexHome));
   assert.deepEqual(routed.prompts, baseline.prompts);
   assert.deepEqual(mutating(await f.calls(), beforeRouted), mutations);
-  assert.deepEqual((await f.orderedCalls()).slice(routedOrdered).filter(callsThatMutate).map(normalizedCall), orderedMutations);
+  assert.deepEqual((await f.orderedCalls()).slice(routedOrdered).filter(callsThatMutate).map(call => normalizedCall(call, f.codexHome)), orderedMutations);
   assert.deepEqual(await inventory(f.home, true), baselineFiles);
   await assert.rejects(readdir(join(f.home, 'local-memory')), { code: 'ENOENT' });
   const routedCalls = await f.calls();
@@ -218,7 +290,9 @@ for (const scenario of scenarios) for (const args of actions) test(`L06 hosted b
 
 for (const lang of ['zh', 'en']) for (const flags of [['--codex-capture-exec', 'on'], ['--codex-daily-cap', '100']])
 test('L06 pre-header Claude option error: ' + lang + ' ' + flags[0], async t => {
-  const f = await fixture(t), historical = await historicalInstaller();
+  const historical = await baselineForTest(t);
+  if (!historical) return;
+  const f = await fixture(t);
   const args = ['setup', '--lang', lang, '--client', 'claude', ...flags];
   const before = await inventory(f.home), calls = (await f.orderedCalls()).length;
   const baseline = await f.run({ args, module: historical.module });
@@ -228,7 +302,7 @@ test('L06 pre-header Claude option error: ' + lang + ' ' + flags[0], async t => 
   assert.equal(baseline.code, 2); assert.equal(disabled.code, 2); assert.equal(routed.code, 2);
   assert.equal(cloud.code, 2); assert.equal(cloud.stdout, baseline.stdout);
   assert.equal(routed.stdout, disabled.stdout);
-  await t.test('immutable 0.5.3 error output', { skip: historical.skip }, () => assert.equal(routed.stdout, baseline.stdout));
+  await t.test('immutable 0.5.3 error output', () => assert.equal(routed.stdout, baseline.stdout));
   assert.doesNotMatch(routed.stdout, /Memory setup|記憶設定/u);
   assert.deepEqual(await inventory(f.home), before);
   assert.deepEqual((await f.orderedCalls()).slice(calls).filter(callsThatMutate), []);

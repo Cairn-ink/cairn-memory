@@ -1,7 +1,9 @@
 # @cairn-ink/memory
 
-Set up Cairn memory for Claude Code and Codex: local MCP tools or cloud automatic memory.
-Requires Node ≥22.16 and the selected CLI on PATH; the installer itself has no runtime dependencies.
+Set up Cairn memory for Claude Code and Codex: local MCP tools or cloud
+automatic memory.
+Requires Node ≥22.16 and the selected CLI on PATH. The installer itself has no
+runtime dependencies.
 This checkout prepares **installer 0.6.0**. The Claude plugin stays **0.3.2**.
 The release must be published before `npx` can use these new flows.
 
@@ -14,11 +16,13 @@ node packages/setup/bin/memory.mjs setup
 ```
 
 On a fresh interactive install, setup asks once where memory should live:
-**1. Local** keeps data on this computer, free and usable offline after installation,
-without sync across computers; **2. Cloud** shares memory across computers and tools
-with cairn.ink sign-in. Existing cloud users keep their flow without a new question.
-Use `setup --local` or `setup --cloud` to choose directly. A fresh non-interactive
-run without either flag writes nothing and prints both rerun commands.
+**1. Local** keeps data on this computer, free and usable offline after
+installation, without sync across computers; **2. Cloud** shares memory across
+computers and tools with cairn.ink sign-in. Existing cloud users keep their
+flow without a new question.
+Use `setup --local` or `setup --cloud` to choose directly. A fresh
+non-interactive run without either flag writes nothing and prints both rerun
+commands.
 
 第一次互動安裝會先問一次記憶要存在哪裡：**1. 本機**把資料留在這台電腦，
 免費、安裝後可離線使用，無法跨電腦同步；**2. 雲端**透過 cairn.ink 登入，
@@ -37,9 +41,10 @@ npx @cairn-ink/memory uninstall --local
 npx @cairn-ink/memory uninstall --local --yes
 ```
 
-No Cairn account or sign-in is needed. Local mode uses one private root, `~/.cairn-memory`, or an absolute
-`CAIRN_MEMORY_HOME`. It keeps the installation record in `installation.json`,
-engine generations and the npm cache in `engine/`, and memory in
+No Cairn account or sign-in is needed. Local mode uses one private root,
+`~/.cairn-memory`, or an absolute `CAIRN_MEMORY_HOME`. It keeps the installation
+record in `installation.json`,
+engine generations and the npm cache in `engine/`, and memory by default in
 `data/memory.sqlite` (created on first engine use). Initial engine dependency
 installation needs npm registry access unless its cache is already populated.
 Setup registers a `cairn-local` stdio MCP server through each client's own CLI:
@@ -47,9 +52,11 @@ user scope for Claude Code, and `$CODEX_HOME/config.toml` (default `~/.codex`)
 for Codex. Both use the same database and owner, with an absolute Node path.
 Restart the tools after setup. If Node moves, rerun `setup --local`.
 
-本機模式不需要 Cairn 帳號或登入，共用一個私有目錄，預設為 `~/.cairn-memory`，也可用絕對路徑的
-`CAIRN_MEMORY_HOME` 指定。`installation.json` 保存安裝紀錄，`engine/` 放引擎
-版本與 npm 快取，`data/memory.sqlite` 保存記憶，第一次使用引擎時才建立資料庫。
+本機模式不需要 Cairn 帳號或登入，共用一個私有目錄，預設為
+`~/.cairn-memory`，也可用絕對路徑的 `CAIRN_MEMORY_HOME` 指定。
+`installation.json` 保存安裝紀錄，`engine/` 放引擎
+版本與 npm 快取，預設在 `data/memory.sqlite` 保存記憶，第一次使用引擎時
+才建立資料庫。
 第一次安裝引擎相依套件需要連到 npm registry，除非快取已備妥。
 安裝器透過各工具的 CLI 註冊 `cairn-local` stdio MCP server：Claude Code
 使用 user scope，Codex 使用 `$CODEX_HOME/config.toml`，預設在 `~/.codex`。
@@ -83,10 +90,11 @@ registration, engine and Node state without starting the local engine or testing
 a live connection. `--verbose` adds private paths, owner, engine ID and retained
 failed installations. Uninstall detaches selected registrations and removes
 `engine/` only when all clients are proven detached; **memory data is kept**.
-`--client claude|codex` limits registration or detachment, not conflict detection.
+`--client claude|codex` limits registration or detachment, not conflict
+detection.
 `uninstall --local --purge-config` also removes the descriptor and `.npmrc`,
-never data; it cannot be combined with `--client`. An interrupted setup resumes
-with `setup --local`; a pending setup must be uninstalled without `--client`.
+never data; it cannot be combined with `--client`. A pending setup must be
+uninstalled without `--client`.
 
 兩個工具共用資料庫時，`storage_busy` 是暫時忙碌，請重試該操作，不能當成
 沒有記憶。`status` 顯示註冊、引擎與 Node 狀態，不啟動本機引擎或測試實際
@@ -94,8 +102,49 @@ with `setup --local`; a pending setup must be uninstalled without `--client`.
 解除安裝會移除所選工具的連接，確認全部解除後才移除 `engine/`，**記憶資料
 會保留**。`--client claude|codex` 只限制註冊或解除的工具，衝突仍檢查兩邊。
 `uninstall --local --purge-config` 會加刪安裝紀錄與 `.npmrc`，不刪資料，
-不能搭配 `--client`。安裝中斷後可重跑 `setup --local` 接續；尚未完成的安裝
-若要移除，不能只選單一工具。
+不能搭配 `--client`。尚未完成的安裝若要移除，不能只選單一工具。
+
+### Local options / 本機選項
+
+| Option | Local-mode behavior |
+| --- | --- |
+| `--owner ID` | `setup --local` only, with no descriptor. Otherwise setup generates and persists an owner. |
+| `--db ABS` | `setup --local` only, with no descriptor. Requires an absolute path; supports an external database. Default: `~/.cairn-memory/data/memory.sqlite`, under the selected root's `data/`. |
+| `--project ID` | `setup --local` only, with no descriptor or an `uninstalled` descriptor. Active/pending installations reject changes. |
+| `--yes` | Confirms `uninstall --local` without a prompt; required for non-interactive uninstall. |
+| `--purge-config` | With `uninstall --local`, removes the descriptor and `.npmrc` after detachment, keeping data. Cannot be used with `--client`. |
+| `--dry-run` | With local setup, shows the plan without changing settings, starting the engine or resuming a pending operation. |
+| Hosted setup options | `--endpoint`, `--reauthorize`, `--manual-token`, `--no-browser`, `--no-clipboard`, `--codex-daily-cap`, `--codex-capture-exec` are rejected with `local_option_invalid`. |
+| Hosted controls | `disable`, `pause`, `resume`, `prompt-recall-on`, `prompt-recall-off`, `config` are rejected on local-only installations with `local_control_unsupported`. |
+
+| 選項 | 本機模式行為 |
+| --- | --- |
+| `--owner ID` | 只用於 `setup --local`，且不能已有安裝紀錄；省略時會產生並保存 owner。 |
+| `--db ABS` | 只用於 `setup --local`，且不能已有安裝紀錄；須為絕對路徑，可用外部資料庫。預設為所選根目錄下的 `data/memory.sqlite`，一般是 `~/.cairn-memory/data/memory.sqlite`。 |
+| `--project ID` | 只用於 `setup --local`，沒有安裝紀錄或紀錄為 `uninstalled` 時才接受；安裝中或使用中不能改。 |
+| `--yes` | 略過 `uninstall --local` 的確認問題，非互動移除時必須指定。 |
+| `--purge-config` | 搭配 `uninstall --local`，解除連接後加刪安裝紀錄與 `.npmrc`，保留資料，不能搭配 `--client`。 |
+| `--dry-run` | 本機安裝預演，不改設定、不啟動引擎，也不接續尚未完成的操作。 |
+| 雲端安裝選項 | `--endpoint`、`--reauthorize`、`--manual-token`、`--no-browser`、`--no-clipboard`、`--codex-daily-cap`、`--codex-capture-exec` 會回報 `local_option_invalid`。 |
+| 雲端控制 | 本機模式使用 `disable`、`pause`、`resume`、`prompt-recall-on`、`prompt-recall-off`、`config` 會回報 `local_control_unsupported`。 |
+
+If `claude mcp` or `codex mcp` lacks the required subcommands, setup prints a
+manual registration snippet, marks that client `manual`, and exits 1. Follow
+the snippet; this result does not prove an active connection.
+
+If setup is killed, it leaves `.setup.lock`. Recovery is blocked while setup
+or its npm child is still running. Once both have stopped, the next run prints
+the stale-lock check and exact `rm` command. Confirm no install is running,
+then use that command to remove only the stale lock. Rerun `setup --local` to
+resume the recorded operation. The lock is never auto-removed.
+
+若 `claude mcp` 或 `codex mcp` 缺少所需子指令，安裝器會印出手動註冊片段，
+把該工具標為 `manual`，並以 exit 1 結束。請依片段操作，這個結果不代表已連線。
+
+若安裝程序被強制結束，會留下 `.setup.lock`。安裝程序或 npm 子程序仍在執行
+時不能恢復；兩者都停止後，下次執行會顯示過期鎖檢查提示與完整 `rm` 指令。
+先確認沒有安裝仍在執行，再用該指令移除過期鎖，之後重跑 `setup --local`
+才會接續紀錄中的操作。安裝器不會自動刪鎖。
 
 Local and cloud cannot be mixed across these clients. A conflict or unreadable
 configuration refuses setup without writes. To switch from cloud, follow the
@@ -110,8 +159,10 @@ printed commands in order, only for entries that exist:
 
 To switch to cloud, run `npx @cairn-ink/memory uninstall --local`, then
 `npx @cairn-ink/memory setup --cloud`. There is no data migration between modes.
-If Claude shows two `cairn-local` servers, check `claude mcp list`: project/local
-scope can shadow user scope, which setup does not detect. Linux/WSL are tested;
+If Claude shows two `cairn-local` servers, check `claude mcp list`:
+project/local
+scope can shadow user scope, which setup does not detect. Linux/WSL are
+tested;
 macOS uses the same path but is untested; native Windows local setup is refused
 (use WSL). Engine opt-in features are not enabled by setup.
 

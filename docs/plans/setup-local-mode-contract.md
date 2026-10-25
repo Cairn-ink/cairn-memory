@@ -649,15 +649,18 @@ fixtures (recorded fake `claude` argv list, `config.toml`, `hooks.json`,
 only additional calls are from the allowlist of new read-only probes
 (the `~/.claude.json` read, `claude plugin list --json` when it was not
 already called at that point, the Codex inspection copy); output identical
-after normalizing the version string and the runtime directory digest
-(`codex-runtime.mjs:90`); no file under `CAIRN_MEMORY_HOME`; no new prompt.
+after normalizing the installer version string in output and the managed
+hosted runtime directory name/digest (`codex-runtime.mjs:90`); no file under
+`CAIRN_MEMORY_HOME`; no new prompt.
 
 **Version normalization (v0.10).** The 0.5.3 baseline is generated from the
 git object store (`b2513501`) and run through the same fakes. Once the
 package version is 0.6.0, exactly these version-derived differences are
 normalized before comparison, and nothing else: the installer version string
-in output and in `installation.json`; the hosted runtime directory name
-`runtime/<version>-<digest>` (`codex-runtime.mjs:86–92`) wherever it appears
+in output (hosted `installation.json` has schema `version: 1` and no
+`installerVersion` field); the managed hosted runtime directory name
+`$CODEX_HOME/cairn/runtime/<version>-<digest>` (`codex-runtime.mjs:86–92`)
+wherever it appears
 (hook command strings in `hooks.json`, `installation.json`, the recorded argv
 of fake calls); the runtime manifest hash inside that name. File **contents**
 copied into the runtime directory must still be byte-identical to the

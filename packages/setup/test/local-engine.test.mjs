@@ -8,7 +8,7 @@ import { delimiter, dirname, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
-import { engineCacheComplete, primeEngineCache } from './engine-cache.mjs';
+import { engineCacheComplete, primeEngineCache, assertEngineCache, skipMissingEngineCache } from './engine-cache.mjs';
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url));
 const sourceSetup = join(repo, 'packages', 'setup');
@@ -417,13 +417,26 @@ test('referenced broken tree remains untouched while a fresh repair generation f
   assert.equal(existsSync(join(root, 'engine', id + '-r2')), false);
 });
 
+test('required engine cache fails without network; ordinary developer runs skip', () => {
+  let skipped = false;
+  const context = { skip: () => { skipped = true; } };
+  assert.equal(skipMissingEngineCache(context, 'missing fixture cache', false), false);
+  assert.equal(skipped, true);
+  skipped = false;
+  assert.throws(() => skipMissingEngineCache(context, 'missing fixture cache', true), /CAIRN_SETUP_REQUIRE_CACHE=1/u);
+  assert.equal(skipped, false);
+  assert.throws(() => assertEngineCache(undefined), /No network was attempted/u);
+});
+
 const skipReason = 'Set CAIRN_SETUP_TEST_NETWORK=1 for the network phase, or supply a complete CAIRN_SETUP_NPM_CACHE.';
 // Packed-runtime case: install and verify the engine shipped by the installer.
 test('offline install verifies the tree, exact child environment, check JSON, and npm-free repeat', async t => {
   const directory = workspace(t);
   const cache = process.env.CAIRN_SETUP_NPM_CACHE || join(directory, 'cache');
+  if (!engineCacheComplete(cache) && process.env.CAIRN_SETUP_REQUIRE_CACHE === '1')
+    skipMissingEngineCache(t, skipReason);
   if (!engineCacheComplete(cache) && (process.env.CAIRN_SETUP_TEST_NETWORK !== '1' ||
-      process.env.CAIRN_SETUP_NPM_OFFLINE === '1')) { t.skip(skipReason); return; }
+      process.env.CAIRN_SETUP_NPM_OFFLINE === '1')) { skipMissingEngineCache(t, skipReason); return; }
   await primeEngineCache(cache);
   const root = rootAt(directory), recording = join(directory, 'npm-env.json');
   let npmCLI;

@@ -7,7 +7,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { join, dirname, delimiter } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
-import { engineCacheComplete } from './engine-cache.mjs';
+import { engineCacheComplete, skipMissingEngineCache } from './engine-cache.mjs';
 
 runTest('local mode contract', async parent => {
 const pending = [];
@@ -27,7 +27,7 @@ const manifestBytes = await readFile(join(packageRoot, 'runtime/engine/manifest.
 const manifest = JSON.parse(manifestBytes), engineId = engineIdFor(version, manifestBytes);
 const engine = { id: engineId, package: manifest.package.name, packageVersion: manifest.package.version, sha256: manifest.sha256 };
 const cacheSkip = 'Engine install requires a primed CAIRN_SETUP_NPM_CACHE; no network is used by local-mode tests.';
-const needCache = t => { if (!engineCacheComplete(process.env.CAIRN_SETUP_NPM_CACHE)) { t.skip(cacheSkip); return false; } return true; };
+const needCache = t => { if (!engineCacheComplete(process.env.CAIRN_SETUP_NPM_CACHE)) { return skipMissingEngineCache(t, cacheSkip); } return true; };
 const json = async path => JSON.parse(await readFile(path, 'utf8'));
 async function files(root) {
   const result = {};
@@ -804,7 +804,8 @@ test('L10 SIGKILL during npm retains child ownership and quarantines a fresh gen
     try { return await readFile(join(f.root, 'engine', name, 'interrupted-npm'), 'utf8'); }
     catch (error) { if (error.code === 'ENOENT') return null; throw error; }
   }))).filter(value => value === 'incomplete generation').length, 1);
-  await t.test('completion with the primed real npm cache', { skip: primed ? false : cacheSkip }, async () => {
+  await t.test('completion with the primed real npm cache', async child => {
+    if (!needCache(child)) return;
     const current = await f.descriptor(); assert.equal(current.state, 'installed'); assert.equal(current.engine.id, engineId);
     for (const client of ['claude', 'codex']) assert.equal(current.clients[client].vector.engineId, engineId);
   });
@@ -817,9 +818,8 @@ test('L10 manifest-digest upgrade installs beside the published generation', asy
   await writeFile(join(copy, 'runtime/engine/manifest.json'), changedBytes);
   const nextId = engineIdFor(version, changedBytes); assert.notEqual(nextId, engineId);
   const copyVersion = JSON.parse(await readFile(join(copy, 'package.json'))).version; assert.equal(copyVersion, version);
-  await t.test('both registrations move to the changed manifest generation', {
-    skip: engineCacheComplete(process.env.CAIRN_SETUP_NPM_CACHE) ? false : cacheSkip,
-  }, async () => {
+  await t.test('both registrations move to the changed manifest generation', async child => {
+    if (!needCache(child)) return;
     // Switch the package bytes while preserving the same fixture and client homes.
     const f = await localFixture(t); const first = await f.run(); assert.equal(first.code, 0, first.display);
     const old = await f.descriptor(), oldTree = await files(join(f.root, 'engine', old.engine.id));

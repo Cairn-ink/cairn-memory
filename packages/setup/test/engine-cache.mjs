@@ -34,6 +34,18 @@ export function engineCacheComplete(cacheDir) {
   } catch { return false; }
 }
 
+export function assertEngineCache(cacheDir) {
+  if (!engineCacheComplete(cacheDir)) throw new Error('Engine cache is incomplete: provide a primed CAIRN_SETUP_NPM_CACHE (four pinned dependency tarballs). No network was attempted.');
+}
+
+// Ordinary developer runs keep explicit skips; CI opts into a missing-cache
+// failure in every installed case, including nested local-mode subtests.
+export function skipMissingEngineCache(t, reason, required = process.env.CAIRN_SETUP_REQUIRE_CACHE === '1') {
+  if (required) throw new Error('CAIRN_SETUP_REQUIRE_CACHE=1: ' + reason);
+  t.skip(reason);
+  return false;
+}
+
 export async function primeEngineCache(cacheDir) {
   if (typeof cacheDir !== 'string' || !isAbsolute(cacheDir) || cacheDir.includes('\0')) {
     throw new Error('invalid_engine_cache_directory');
@@ -59,6 +71,7 @@ export async function primeEngineCache(cacheDir) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  await primeEngineCache(process.argv[2] ?? process.env.CAIRN_SETUP_NPM_CACHE);
+  if (process.argv[2] === '--assert') assertEngineCache(process.argv[3] ?? process.env.CAIRN_SETUP_NPM_CACHE);
+  else await primeEngineCache(process.argv[2] ?? process.env.CAIRN_SETUP_NPM_CACHE);
   console.log('Engine dependency cache is complete (4 tarballs).');
 }
