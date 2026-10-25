@@ -105,7 +105,7 @@ test('diagnostics: extraction validation reports fixed content-free rejection ca
   const cases = [
     [null, 'invalid_extraction_output_shape'],
     [{ items: [{ ...valid, extra: true }] }, 'invalid_extraction_item_shape'],
-    [{ items: [{ ...valid, content: ' ' }] }, 'invalid_extraction_text'],
+    [{ items: [{ ...valid, content: ' ' }] }, 'invalid_extraction_text_empty'],
     [{ items: [{ ...valid, confidence: 2 }] }, 'invalid_extraction_value'],
     [{ items: [{ ...valid, sourceIndices: [] }] }, 'invalid_extraction_source_shape'],
     [{ items: [{ ...valid, sourceIndices: [0, 0] }] }, 'invalid_extraction_source_duplicate'],

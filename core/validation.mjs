@@ -34,11 +34,21 @@ export function identifier(value) {
   return value;
 }
 
-export function boundedText(value, max, truncate = false) {
-  if (typeof value !== "string" || value.length > 20_000) fail("invalid_text");
+export function boundedText(value, max, truncate = false, onInvalid) {
+  // Internal observation of existing checks only; never pass text or lengths.
+  const reject = (reason) => {
+    try {
+      if (typeof onInvalid === 'function') Promise.resolve(onInvalid(reason)).catch(() => {});
+    } catch { /* Observation cannot replace invalid_text. */ }
+    fail("invalid_text");
+  };
+  if (typeof value !== "string") reject('type');
+  if (value.length > 20_000) reject('raw_bounds');
   const clean = redactSecrets(value.normalize("NFKC")).replace(/\s+/gu, " ").trim();
-  if (!clean || clean === "[REDACTED]" || clean.includes("\0")) fail("invalid_text");
-  if (!truncate && clean.length > max) fail("invalid_text");
+  if (!clean) reject('empty');
+  if (clean === "[REDACTED]") reject('redacted');
+  if (clean.includes("\0")) reject('nul');
+  if (!truncate && clean.length > max) reject('normalized_bounds');
   let result = "";
   for (const point of clean) {
     if (result.length + point.length > max) break;
