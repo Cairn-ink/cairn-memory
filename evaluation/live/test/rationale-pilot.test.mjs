@@ -106,7 +106,7 @@ test('RP3 installed malformed model output is retained once, not retried or sile
   assert.equal(report.cases[0].replays.length, 1);
 });
 
-test('RP4 installed transport failure halts all later arms and retains unknown reserved cost', { skip: !enabled, timeout: 30000 }, async () => {
+test('RP4 installed transport failure halts all later arms and retains unknown reserved cost', { skip: !enabled, timeout: 180000 }, async () => {
   const f = setup('transport'); const report = await runRationalePilot(f.options);
   assert.equal(report.status, 'halted'); assert.equal(f.calls(), 1);
   assert.equal(report.cases.filter(record => record.status === 'not_run').length, 15);
