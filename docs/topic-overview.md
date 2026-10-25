@@ -32,7 +32,7 @@ Worker. The first asynchronous read opens an existing permission-safe regular
 file with native `readOnly`, `query_only`, `trusted_schema=OFF` and zero busy
 timeout. It rejects symlinks, missing files, unsupported application/layouts and
 missing or malformed required indexes. Supported existing schemas are exactly
-18, 20, 21, 22, 23 and 29; intermediate Raw layouts 24–28 are not accepted.
+18, 20, 21, 22, 23, 29, 30, 31, 32 and 33; intermediate Raw layouts 24–28 are not accepted.
 It never creates, migrates or changes journal mode. Validation covers consumed
 Memory/index metadata and access paths, not the integrity of every Raw, Card or
 local-authority table. The ordinary write opener and its migration behavior
@@ -145,3 +145,124 @@ re-enablement are separate integration work. See the
 [original E1 acceptance](plans/topic-overview-read.md),
 [schema 29 compatibility contract](plans/topic-overview-raw29.md) and
 [retained limitations](limitations.md).
+
+## Exact bounded member pages (E1-M)
+
+`reader.readTopicMembers` enumerates refs in one exact namespace. Select a
+Memory MOC with `{type:'moc',mocId,revision,level:'L1'|'L2'}`, or select the
+namespace's `{type:'unfiled'}` set. L2 pages deduplicate shared children and
+attribute each Memory to the smallest valid L1 ID in unsigned UTF-8 order.
+Unfiled means no valid L1 placement anywhere in that namespace.
+
+```js
+const issued = await reader.readTopicOverview({
+  namespace, snapshotVersion: 'topic-snapshot-v1',
+});
+if (!issued.ok) throw new Error(issued.error.code);
+// Finish overview continuations with the same snapshotVersion for exact counts.
+const expectedSnapshot = JSON.parse(JSON.stringify(issued.value.snapshot));
+const input = {
+  namespace, selection: { type: 'unfiled' }, accessRevision: 'host-access-4',
+  expectedSnapshot, limit: 100,
+};
+let cursor;
+do {
+  const result = await reader.readTopicMembers({ ...input, ...(cursor ? { cursor } : {}) });
+  if (!result.ok) throw new Error(result.error.code);
+  const page = result.value;
+  console.log(page.items);
+  if (!page.nextCursor && !page.coverage.complete) throw new Error(page.coverage.reason);
+  cursor = page.nextCursor;
+} while (cursor);
+```
+
+`accessRevision` is a required host-supplied identifier for effective access
+configuration. It is a fence, not a credential. The host authenticates callers,
+changes this revision when access changes, and closes the reader on revocation.
+One pending call is shared across overview/member methods; independent handles
+and writers remain independent. Member and overview traversals are retained
+separately. A fresh traversal replaces only that method's cursor state.
+
+| Member option | Default | Allowed |
+| --- | --- | --- |
+| `kind` | `null` (all) | `fact`, `preference`, `decision`, `instruction`, `context`, or `null` |
+| `order` | `id_asc` | `id_asc` only |
+| `limit` | 100 | 1–100 |
+| `workLimit` | 5000 | 16–50000 |
+| `maxBytes` | 65536 | 4096–262144 |
+| `deadlineMs` | 1000 | 50–5000 |
+
+Every success has `version:'topic-members-v1'`, `status`, `namespace`,
+`selection`, `snapshot`, `kind`, `order`, `items`, `coverage` and `nextCursor`.
+The snapshot contains `indexRevision`, `generation`, `originToken`,
+`accessRevision`, and `configuration:'topic-members-v1'`. Each item is exactly
+`{type:'memory',namespace,id,revision,kind,label:{text:id,source:'identifier'},reportedUnder}`.
+`reportedUnder` is `{type:'l1',mocId,revision}` for filed selections and `null`
+for unfiled. No body, preview, semantic label, total or token packing is read
+or returned. Existing overview samples retain `{memoryId,revision}`.
+
+`status:'page'` with `coverage:{complete:true,reason:null}` and a null cursor
+proves EOF. A nonfinal normal page has reason `limit`, with charged lookahead
+proving another eligible ref. `status:'partial'` has reason `work_limit`,
+`byte_limit`, or `deadline` and a continuation; empty items mean bounded
+progress, not exact zero. Terminal `state_limit` returns no items or cursor
+and never claims completion. Bounds cover complete UTF-8 envelopes and
+physical validation work. Native SQLite operations can overrun a quantum;
+the watchdog cancels requests that cannot safely validate within their budget.
+
+Overview requests opt into transportable snapshot provenance with exactly
+`snapshotVersion:'topic-snapshot-v1'`; omission/undefined retains the legacy
+two-field snapshot. Repeat the version with overview continuations. Pass all
+three issued fields as member `expectedSnapshot` to pair counts and lists.
+JSON copies and structured clones preserve validity. A member snapshot can be
+reused by selecting only its three common fields. Omission captures a new
+member snapshot without asserting consistency with earlier overview counts.
+
+Origin tokens and member cursors are opaque, signed with ephemeral Worker
+keys, and bound to the store/file, namespace, schema and snapshot. Origin
+tokens expire absolutely after 60 seconds, even on an active reader; reads
+and replay do not renew them. Continuations repeat every normalized input.
+Latest continuation replay is byte-identical after fence validation; older
+sequences are stale. On `cursor_stale`, discard paired caches, issue a fresh
+opt-in overview and restart. Changed placement invalidates even when a Memory
+revision is unchanged. Close, idle expiry, Worker restart and file replacement
+also invalidate tokens. Missing/foreign/Card MOCs return `moc_not_found`;
+visible revision mismatches return `revision_conflict`, wrong levels `invalid_ref`.
+Failures contain only `{ok:false,error:{code}}`.
+
+Member reads use the existing read-only opener and E1-C lock policy without
+another retry layer. Lock refusal is `storage_busy`; deadline cancellation is
+`read_timeout`. Retry busy explicitly with the same acknowledged cursor.
+Deferred transactions commit between bounded quanta and before emission.
+No writer slot or migration is used, including on physical schema 18.
+Supported layouts are 18, 20, 21, 22, 23, 29, 30, 31, 32 and 33.
+See the [frozen member contract](plans/topic-overview-member-pages.md).
+
+Performance/overlap measurements are opt-in: `npm run measure:topic-members`.
+The primary schedules them serially on Node 22.16.0 and 24.15.0 and records
+E1-C's chosen lock policy and thresholds before performance acceptance.
+
+
+Member and opt-in snapshot reads require UTF-8 database encoding and BINARY
+comparison semantics on the consumed namespace and identifier columns. Other
+encodings or comparison collations return `unsupported_database`; legacy
+overview opening is unchanged. Initialization walks schema metadata with a
+bounded keyset checkpoint and checks column declarations through direct result
+metadata, without scanning a table's column inventory. Index metadata uses
+capped batches whose entire row cost is charged before reading, followed by
+bounded in-memory checks under `workLimit`. A work-only page can therefore
+represent initialization progress before member enumeration begins. It never
+implies an empty selection.
+
+Initialization also verifies the declared primary-key columns and order for
+every consumed table. It reads table declarations in indexed, 256-byte schema
+fragments and charges each read and bounded parser step. A UNIQUE constraint
+does not substitute for the required primary key.
+
+Default overview requests retain main's legacy error classification, including
+`unsupported_database` for statement-construction failures. Member and opt-in
+requests retain their specified error codes and storage-busy behavior.
+
+Cached member replay must finish its fence and delivery checks within the
+call deadline. A call that cannot advance a checkpoint before its deadline
+returns `read_timeout` instead of minting another unchanged deadline cursor.

@@ -77,9 +77,10 @@ function productionLock(manifest) {
   return { name: manifest.name, version: manifest.version, lockfileVersion: 3, requires: true, packages };
 }
 
-export function buildArtifact({ version = packageVersion, runCommand = command } = {}) {
+export function buildArtifact({ version = packageVersion, runCommand = command, ownDirectory = () => {} } = {}) {
   if (!/^0\.0\.0-preview\.[1-9]\d*$/.test(version)) throw new Error('invalid_preview_version');
   const directory = mkdtempSync(join(tmpdir(), 'cairn-local-artifact-'));
+  ownDirectory(directory);
   const stagingPath = join(directory, 'staging');
   mkdirSync(stagingPath);
   const userconfig = join(directory, 'empty.npmrc');

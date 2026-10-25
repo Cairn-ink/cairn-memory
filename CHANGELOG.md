@@ -10,6 +10,12 @@
   included yet. Semantic recall needs a model key and sends selected text to
   the provider.
 
+## Unreleased — bounded topic member pages (E1-M)
+
+- Add `openMemoryReader(...).readTopicMembers(...)` for complete, bounded member lists of an L1/L2 MOC or the unfiled region. The reader is read-only and asynchronous, takes no writer slot, and returns refs only, with no bodies.
+- Results are ordered by `id_asc`, de-duplicated across L1, and carry an opaque cursor bound to a snapshot. The opt-in `topic-snapshot-v1` overview snapshot adds an `originToken`, so overview counts and member lists come from the same snapshot. `cursor_stale` and `storage_busy` are typed outcomes, and `storage_busy` never means empty.
+- Reads schema 18 and current stores without migrating them, under both DELETE and WAL. Legacy `readTopicOverview` output is unchanged; a differential test against `b2513501` covers every error class. Contract: `docs/plans/topic-overview-member-pages.md`.
+
 ## Unreleased — optional local bge-m3 embedder (contract §20)
 
 - **New opt-in local embedder.** It uses the bge-m3 model (`--context-embedder local --context-embed-model bge-m3`) and is an alternative to the OpenAI default, which is unchanged.

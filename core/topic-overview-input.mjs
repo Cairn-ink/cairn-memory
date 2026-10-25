@@ -21,7 +21,8 @@ export function readerOptions(input) {
   return { path: resolve(value.path), ownerId: id(value.ownerId) };
 }
 export function overviewInput(input, ownerId) {
-  const value = ownData(input, ['namespace', 'nodeLimit', 'maxBytes', 'workLimit', 'memberLimit', 'cursor']);
+  const value = ownData(input, ['namespace', 'nodeLimit', 'maxBytes', 'workLimit', 'memberLimit', 'cursor', 'snapshotVersion']);
+  if (value.snapshotVersion !== undefined && value.snapshotVersion !== 'topic-snapshot-v1') fail('invalid_input');
   const namespace = ownData(value.namespace, ['ownerId', 'scope', 'projectId']);
   if (id(namespace.ownerId) !== ownerId || !Object.hasOwn(namespace, 'projectId')) fail('invalid_input');
   if (namespace.scope === 'personal' && namespace.projectId === null) namespace.projectId = '';
@@ -37,16 +38,19 @@ export function overviewInput(input, ownerId) {
   if (value.cursor !== undefined && (typeof value.cursor !== 'string' ||
       !/^e1\.[A-Za-z0-9_-]{43}$/.test(value.cursor))) fail('invalid_cursor');
   return { namespace: { ownerId: namespace.ownerId, scope: namespace.scope, projectId: namespace.projectId },
-    ...bounds, ...(value.cursor === undefined ? {} : { cursor: value.cursor }) };
+    ...bounds, ...(value.snapshotVersion === undefined ? {} : { snapshotVersion: value.snapshotVersion }), ...(value.cursor === undefined ? {} : { cursor: value.cursor }) };
 }
 
 export const readerFailure = code => ({ ok: false, error: { code } });
-const safeCodes = new Set(['invalid_input', 'invalid_cursor', 'cursor_stale', 'index_unavailable',
+const legacyCodes = new Set(['invalid_input', 'invalid_cursor', 'cursor_stale', 'index_unavailable',
   'unsafe_database_file', 'unsupported_database', 'database_not_found', 'storage_busy',
   'state_limit', 'context_item_too_large', 'store_closed']);
-export function safeReaderFailure(error) {
+const safeCodes = new Set([...legacyCodes, 'moc_not_found', 'revision_conflict', 'invalid_ref', 'read_timeout']);
+function classifiedFailure(error, codes) {
   if (error?.code === 'ERR_SQLITE_ERROR' && Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 255)) {
     return readerFailure('storage_busy');
   }
-  return readerFailure(safeCodes.has(error?.code) ? error.code : 'reader_failed');
+  return readerFailure(codes.has(error?.code) ? error.code : 'reader_failed');
 }
+export const safeReaderFailure = error => classifiedFailure(error, safeCodes);
+export const safeLegacyReaderFailure = error => classifiedFailure(error, legacyCodes);
