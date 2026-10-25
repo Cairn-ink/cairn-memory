@@ -673,10 +673,14 @@ test('L13 Codex native verification mismatch leaves the written entry and prints
   assert.match(result.display, /codex_mcp_unverified/); assert.ok(result.literals.includes('[mcp_servers."cairn-local"]'));
   assert.match(await readFile(join(f.codexHome, 'config.toml'), 'utf8'), /synthetic\/new-node/);
 });
-for (const state of ['none', 'cloud', 'local', 'mixed', 'unknown', 'missing-node', 'failed']) for (const lang of ['zh', 'en'])
+for (const state of ['none', 'cloud', 'local', 'mixed', 'unknown', 'missing-node', 'failed', 'uninstalled']) for (const lang of ['zh', 'en'])
 test('L14 status snapshot ' + state + ' ' + lang, async t => {
   const f = await localFixture(t);
-  if (!['none', 'cloud'].includes(state)) {
+  if (state === 'uninstalled') {
+    const { d } = await seed(f, { state: 'pending', register: false });
+    Object.assign(d, { state: 'uninstalled', engine: null, node: null, operation: null });
+    await withLocalLock(f.root, () => writeDescriptor(f.root, d));
+  } else if (!['none', 'cloud'].includes(state)) {
     const { d } = await seed(f);
     const executable = executableFor(f.root, engineId);
     await mkdir(dirname(executable), { recursive: true, mode: 0o700 });

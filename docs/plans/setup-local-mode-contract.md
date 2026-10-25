@@ -556,6 +556,7 @@ Claude Code: 本機記憶（cairn-local）           / local memory (cairn-local
 Codex: 本機記憶（cairn-local）
   引擎：已安裝 0.6.0                            / engine: installed 0.6.0
   Node：可用 | 找不到，請重跑 setup --local      / node: available | missing, rerun setup --local
+  本機記憶已解除連接，資料目錄保留。            / Local memory is detached; the data directory is kept. (uninstalled: replaces engine/Node lines)
   資料：~/.cairn-memory/data                     (--verbose: full paths, owner, engine id, .failed-* dirs)
 ```
 
@@ -742,7 +743,8 @@ absolute local paths in committed files.
 `local_manual_claude`, `local_manual_codex`, `local_registered`, `local_done`,
 `local_status_client`, `local_status_engine`, `local_status_node_ok`,
 `local_status_node_missing`, `local_status_registration`,
-`local_status_unverified`, `local_status_data`, `local_status_failed_dirs`,
+`local_status_unverified`, `local_status_detached`, `local_status_data`,
+`local_status_data_private`, `local_status_failed_dirs`,
 `local_operation_pending`, `codex_lock_stale`,
 `local_dry_run`, `local_uninstall_plan`, `local_uninstall_confirm`,
 `local_uninstall_done`, `local_uninstall_receipt`, `local_uninstall_retained`,

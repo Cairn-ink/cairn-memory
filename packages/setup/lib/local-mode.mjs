@@ -308,10 +308,13 @@ export async function localStatus(detection, { write, t, verbose }) {
     write(t('local_status_registration', { state: t('local_registration_' + state) }));
   }
   if (!descriptor) return;
-  write(t(descriptor.engine && await exists(executableFor(root, descriptor.engine.id)) ? 'local_status_engine' : 'local_status_unverified', { version: descriptor.installerVersion }));
-  let nodeOK = false;
-  if (descriptor.node) { try { await access(descriptor.node, constants.X_OK); nodeOK = (await stat(descriptor.node)).isFile(); } catch { /* Missing or non-executable Node. */ } }
-  write(t(nodeOK ? 'local_status_node_ok' : 'local_status_node_missing'));
+  if (descriptor.state === 'uninstalled') write(t('local_status_detached'));
+  else {
+    write(t(descriptor.engine && await exists(executableFor(root, descriptor.engine.id)) ? 'local_status_engine' : 'local_status_unverified', { version: descriptor.installerVersion }));
+    let nodeOK = false;
+    if (descriptor.node) { try { await access(descriptor.node, constants.X_OK); nodeOK = (await stat(descriptor.node)).isFile(); } catch { /* Missing or non-executable Node. */ } }
+    write(t(nodeOK ? 'local_status_node_ok' : 'local_status_node_missing'));
+  }
   write(t(descriptor.database.external || root !== join(detection.destinations.claude, '.cairn-memory') ? 'local_status_data_private' : 'local_status_data'));
   if (verbose) {
     for (const value of [descriptor.database.path, descriptor.node, descriptor.engine ? executableFor(root, descriptor.engine.id) : null, descriptor.ownerId, descriptor.engine?.id]) if (value) write.literal(shellArgument(value));
