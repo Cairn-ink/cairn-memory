@@ -1,0 +1,106 @@
+TAP version 13
+# Subtest: recheck ledger deleted stops before reservation and dispatch
+ok 1 - recheck ledger deleted stops before reservation and dispatch
+  ---
+  duration_ms: 49.900452
+  type: 'test'
+  ...
+# Subtest: recheck ledger empty stops before reservation and dispatch
+ok 2 - recheck ledger empty stops before reservation and dispatch
+  ---
+  duration_ms: 43.346507
+  type: 'test'
+  ...
+# Subtest: recheck ledger valid-prefix stops before reservation and dispatch
+ok 3 - recheck ledger valid-prefix stops before reservation and dispatch
+  ---
+  duration_ms: 41.566845
+  type: 'test'
+  ...
+# Subtest: recheck ledger configuration-replaced stops before reservation and dispatch
+ok 4 - recheck ledger configuration-replaced stops before reservation and dispatch
+  ---
+  duration_ms: 43.422838
+  type: 'test'
+  ...
+# Subtest: recheck ledger configuration-missing stops before reservation and dispatch
+ok 5 - recheck ledger configuration-missing stops before reservation and dispatch
+  ---
+  duration_ms: 41.573876
+  type: 'test'
+  ...
+# Subtest: recheck ledger durable head rejects a valid-prefix rollback after restart
+ok 6 - recheck ledger durable head rejects a valid-prefix rollback after restart
+  ---
+  duration_ms: 39.814368
+  type: 'test'
+  ...
+# Subtest: recheck ledger head-missing cannot clear an accepted stop
+ok 7 - recheck ledger head-missing cannot clear an accepted stop
+  ---
+  duration_ms: 42.261186
+  type: 'test'
+  ...
+# Subtest: recheck ledger head-stale cannot clear an accepted stop
+ok 8 - recheck ledger head-stale cannot clear an accepted stop
+  ---
+  duration_ms: 40.781636
+  type: 'test'
+  ...
+# Subtest: recheck ledger restored-after-rejection cannot clear an accepted stop
+ok 9 - recheck ledger restored-after-rejection cannot clear an accepted stop
+  ---
+  duration_ms: 40.542841
+  type: 'test'
+  ...
+# Subtest: recheck ledger valid forward progress survives restart with the same durable head
+ok 10 - recheck ledger valid forward progress survives restart with the same durable head
+  ---
+  duration_ms: 46.757095
+  type: 'test'
+  ...
+# Subtest: recheck dependencies: unapproved mcp installation is rejected before import or journal
+ok 11 - recheck dependencies: unapproved mcp installation is rejected before import or journal
+  ---
+  duration_ms: 23.952553
+  type: 'test'
+  ...
+# Subtest: recheck dependencies: unapproved tokenizer installation is rejected before import or journal
+ok 12 - recheck dependencies: unapproved tokenizer installation is rejected before import or journal
+  ---
+  duration_ms: 22.411819
+  type: 'test'
+  ...
+# Subtest: recheck dependencies: runner rejects a foreign resolver before creating its output directory
+ok 13 - recheck dependencies: runner rejects a foreign resolver before creating its output directory
+  ---
+  duration_ms: 103.772737
+  type: 'test'
+  ...
+# Subtest: recheck dependencies: execution and closure use the same approved configuration
+ok 14 - recheck dependencies: execution and closure use the same approved configuration
+  ---
+  duration_ms: 932.483595
+  type: 'test'
+  ...
+# Subtest: recheck context embeddings: all nine cases measure and validate both channels
+ok 15 - recheck context embeddings: all nine cases measure and validate both channels
+  ---
+  duration_ms: 3138.841142
+  type: 'test'
+  ...
+# Subtest: recheck context embeddings: context samples participate in every maximum and cumulative projection
+ok 16 - recheck context embeddings: context samples participate in every maximum and cumulative projection
+  ---
+  duration_ms: 0.860365
+  type: 'test'
+  ...
+1..16
+# tests 16
+# suites 0
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4677.78812

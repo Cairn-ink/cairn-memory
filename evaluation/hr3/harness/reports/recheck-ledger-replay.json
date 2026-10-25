@@ -1,0 +1,61 @@
+{
+  "status": "PASS",
+  "baseline": "feb05af6",
+  "baselineSourceSHA256": "c1bb83ff0189c9818d5eb2f384ef4afae57d082a34ec934c004a07ed28f1aa7a",
+  "validStubReplies": true,
+  "networkCalls": 0,
+  "paidCalls": 0,
+  "results": [
+    {
+      "defect": "deleted",
+      "feb05af6": {
+        "beforeExposure": 2150310240,
+        "dispatches": 1,
+        "error": null,
+        "afterExposure": 2000,
+        "journalUnchanged": false
+      },
+      "fixed": {
+        "beforeExposure": 2150310240,
+        "dispatches": 0,
+        "error": "accounting_mismatch:ledger_journal_missing",
+        "afterExposure": null,
+        "journalUnchanged": true
+      }
+    },
+    {
+      "defect": "valid-prefix",
+      "feb05af6": {
+        "beforeExposure": 2150310240,
+        "dispatches": 1,
+        "error": null,
+        "afterExposure": 2136863040,
+        "journalUnchanged": false
+      },
+      "fixed": {
+        "beforeExposure": 2150310240,
+        "dispatches": 0,
+        "error": "accounting_mismatch:ledger_history_rollback",
+        "afterExposure": null,
+        "journalUnchanged": true
+      }
+    },
+    {
+      "defect": "configuration-replaced",
+      "feb05af6": {
+        "beforeExposure": 2150310240,
+        "dispatches": 1,
+        "error": null,
+        "afterExposure": 13451200,
+        "journalUnchanged": false
+      },
+      "fixed": {
+        "beforeExposure": 2150310240,
+        "dispatches": 0,
+        "error": "accounting_mismatch:ledger_configuration_mismatch",
+        "afterExposure": null,
+        "journalUnchanged": true
+      }
+    }
+  ]
+}

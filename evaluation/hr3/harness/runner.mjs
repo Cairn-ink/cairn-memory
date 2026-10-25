@@ -18,7 +18,7 @@ import { responseRequest } from './requests.mjs';
 import { verifyProductPin } from './pin.mjs';
 import { artifactManifest } from './artifacts.mjs';
 import { frozenArtifacts } from './bounds.mjs';
-import { tokenCounter } from './dependencies.mjs';
+import { tokenCounter,verifyInstalledDependencies } from './dependencies.mjs';
 import { validate, answerSchema } from '../scorer/schema.mjs';
 import { score } from '../scorer/scorer.mjs';
 export function planFor(families) {
@@ -36,6 +36,7 @@ export function verifyA4RunAccounting(carryForward) {
   return carried;
 }
 export async function run({stage='smoke',inputs,out,transport=new FakeTransport(),counter,carryForward=null,paidPreflight=PAID_PREFLIGHT_PATH,progress=()=>{}}) {
+  const dependencyConfiguration=verifyInstalledDependencies();
   const root=resolve(out);mkdirSync(root,{recursive:true,mode:0o700});if(readdirSync(root).length)fail('output_not_empty');
   const data=verifiedInputs(inputs),families=stage==='smoke'?data.families.slice(0,2):data.families;
   const productVerification=verifyProductPin();
@@ -50,9 +51,9 @@ export async function run({stage='smoke',inputs,out,transport=new FakeTransport(
   const {ProductAgent}=await import('./product.mjs');
   let ownedCounter=false;if(!counter){counter=await tokenCounter();ownedCounter=true;}if(counter.id!=='tiktoken-o200k_base')fail('actual_tokenizer_required');
   for(const directory of ['extractions','states','deliveries','answers','scores'])mkdirSync(join(root,directory),{mode:0o700});
-  const observations=[],extractionSummary=[],privacyReports=[],written=['ledger.jsonl'];let stopped=null;
+  const observations=[],extractionSummary=[],privacyReports=[],written=['ledger.jsonl','ledger.jsonl.head.json'];let stopped=null;
   const persist=(path,value)=>{atomicJSON(path,value);written.push(path.slice(root.length+1));};
-  persist(join(root,'run.json'),{stage,carryForward:ledger.configuration.carryForward??null,offline:transport instanceof FakeTransport,transport:transport.constructor.name,version:'hr3-run-a4-audit-v2',productHeadline:'Pinned product + frozen public-operation agent + shared research extraction + slot reader.',protocol:'v0.3.4+E-1+E-2+A-1+A-2+A-3+A-4+A-4.1+A-4.2+A-1.1',productPin:'b2513501a6747a163ab1cefb7d37a16744c9621a',families:families.map(f=>f.family_id),inputVerification:data.verification,frozenArtifacts:frozenArtifacts(inputs),productVerification,tokenizer:counter.id,readiness:transport instanceof FakeTransport?'offline exercise only; paid gates pending':'paid engineering pilot under A-1: mechanical scoring only, referrals unresolved'});
+  persist(join(root,'run.json'),{stage,carryForward:ledger.configuration.carryForward??null,offline:transport instanceof FakeTransport,transport:transport.constructor.name,version:'hr3-run-a4-recheck-v3',dependencyConfiguration,productHeadline:'Pinned product + frozen public-operation agent + shared research extraction + slot reader.',protocol:'v0.3.4+E-1+E-2+A-1+A-2+A-3+A-4+A-4.1+A-4.2+A-1.1',productPin:'b2513501a6747a163ab1cefb7d37a16744c9621a',families:families.map(f=>f.family_id),inputVerification:data.verification,frozenArtifacts:frozenArtifacts(inputs),productVerification,tokenizer:counter.id,readiness:transport instanceof FakeTransport?'offline exercise only; paid gates pending':'paid engineering pilot under A-1: mechanical scoring only, referrals unresolved'});
   guarded.startSupervision(progress);
   try {
     for(const family of families) {

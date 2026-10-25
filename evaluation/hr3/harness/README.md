@@ -1,3 +1,11 @@
+# A-4 audit recheck repairs
+
+The ledger now pins its accepted configuration and history in memory and in a separately fsynced `ledger.jsonl.head.json`. Missing/empty journals, changed configuration and valid-prefix rollback stop before reservation/dispatch. Checkpoint mismatches require reconciliation; historical journals are never reinitialized or migrated. New run manifests include the checkpoint.
+
+Only the approved MCP and tokenizer installations are accepted, including when CLI options are omitted. Options are validated before package imports; runner entry verifies actual resolution before creating output or a journal. The runtime closure records that same dependency configuration. Context-case embeddings now use the shared request/body/unit instrumentation and enter maxima and cumulative projections before certification.
+
+See [recheck report](REPORT-A4-RECHECK.md) for findings, regression evidence and verification. Freeze and all primary attestations remain primary-only. The real CLI is unchanged.
+
 # A-4 implementation-audit repair
 
 The repaired runtime canonicalizes predecessor aliases, resolves identities once on the common admitted slot/context set, uses delivered-array citation positions for P, recursively inventories private authoring metadata, and scans complete extraction bodies before dispatch. Actual P blocks remain unchanged. A-4.1/A-4.2 ceilings and all other limits remain fixed.

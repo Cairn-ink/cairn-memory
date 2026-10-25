@@ -1,0 +1,205 @@
+TAP version 13
+# Subtest: recheck ledger deleted stops before reservation and dispatch
+not ok 1 - recheck ledger deleted stops before reservation and dispatch
+  ---
+  duration_ms: 33.31563
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/recheck-a4.test.mjs:13:105'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /accounting_mismatch:ledger_/. Input:
+    
+    "TypeError: Cannot read properties of undefined (reading 'find')"
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: "Cannot read properties of undefined (reading 'find')"
+  name: 'TypeError'
+  stack: |-
+    fakeExtract (evaluation/hr3/harness/transport.mjs:74:26)
+    FakeTransport.send (evaluation/hr3/harness/transport.mjs:62:84)
+    Object.send (evaluation/hr3/harness/test/recheck-a4.test.mjs:26:85)
+    GuardedTransport.send (evaluation/hr3/harness/transport.mjs:34:103)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/recheck-a4.test.mjs:27:29)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/recheck-a4.test.mjs:27:2)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: recheck ledger empty stops before reservation and dispatch
+not ok 2 - recheck ledger empty stops before reservation and dispatch
+  ---
+  duration_ms: 30.11375
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/recheck-a4.test.mjs:13:105'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /accounting_mismatch:ledger_/. Input:
+    
+    "TypeError: Cannot read properties of undefined (reading 'find')"
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: "Cannot read properties of undefined (reading 'find')"
+  name: 'TypeError'
+  stack: |-
+    fakeExtract (evaluation/hr3/harness/transport.mjs:74:26)
+    FakeTransport.send (evaluation/hr3/harness/transport.mjs:62:84)
+    Object.send (evaluation/hr3/harness/test/recheck-a4.test.mjs:26:85)
+    GuardedTransport.send (evaluation/hr3/harness/transport.mjs:34:103)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/recheck-a4.test.mjs:27:29)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/recheck-a4.test.mjs:27:2)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: recheck ledger valid-prefix stops before reservation and dispatch
+not ok 3 - recheck ledger valid-prefix stops before reservation and dispatch
+  ---
+  duration_ms: 25.938838
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/recheck-a4.test.mjs:13:105'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /accounting_mismatch:ledger_/. Input:
+    
+    "TypeError: Cannot read properties of undefined (reading 'find')"
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: "Cannot read properties of undefined (reading 'find')"
+  name: 'TypeError'
+  stack: |-
+    fakeExtract (evaluation/hr3/harness/transport.mjs:74:26)
+    FakeTransport.send (evaluation/hr3/harness/transport.mjs:62:84)
+    Object.send (evaluation/hr3/harness/test/recheck-a4.test.mjs:26:85)
+    GuardedTransport.send (evaluation/hr3/harness/transport.mjs:34:103)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/recheck-a4.test.mjs:27:29)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/recheck-a4.test.mjs:27:2)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: recheck ledger configuration-replaced stops before reservation and dispatch
+not ok 4 - recheck ledger configuration-replaced stops before reservation and dispatch
+  ---
+  duration_ms: 25.176816
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/recheck-a4.test.mjs:13:105'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /accounting_mismatch:ledger_/. Input:
+    
+    "TypeError: Cannot read properties of undefined (reading 'find')"
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: "Cannot read properties of undefined (reading 'find')"
+  name: 'TypeError'
+  stack: |-
+    fakeExtract (evaluation/hr3/harness/transport.mjs:74:26)
+    FakeTransport.send (evaluation/hr3/harness/transport.mjs:62:84)
+    Object.send (evaluation/hr3/harness/test/recheck-a4.test.mjs:26:85)
+    GuardedTransport.send (evaluation/hr3/harness/transport.mjs:34:103)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/recheck-a4.test.mjs:27:29)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/recheck-a4.test.mjs:27:2)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: recheck ledger configuration-missing stops before reservation and dispatch
+not ok 5 - recheck ledger configuration-missing stops before reservation and dispatch
+  ---
+  duration_ms: 24.581617
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/recheck-a4.test.mjs:13:105'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /accounting_mismatch:ledger_/. Input:
+    
+    "TypeError: Cannot read properties of undefined (reading 'find')"
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: "Cannot read properties of undefined (reading 'find')"
+  name: 'TypeError'
+  stack: |-
+    fakeExtract (evaluation/hr3/harness/transport.mjs:74:26)
+    FakeTransport.send (evaluation/hr3/harness/transport.mjs:62:84)
+    Object.send (evaluation/hr3/harness/test/recheck-a4.test.mjs:26:85)
+    GuardedTransport.send (evaluation/hr3/harness/transport.mjs:34:103)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/recheck-a4.test.mjs:27:29)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/recheck-a4.test.mjs:27:2)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: recheck ledger durable head rejects a valid-prefix rollback after restart
+not ok 6 - recheck ledger durable head rejects a valid-prefix rollback after restart
+  ---
+  duration_ms: 13.040035
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/recheck-a4.test.mjs:32:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/recheck-a4.test.mjs:35:9)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 0
+# fail 6
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 181.721305

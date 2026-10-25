@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {verifyCarrySnapshot} from './accounting.mjs';
 import { extractionDiagnostics } from './extraction-diagnostics.mjs';
+import {verifyJournalCheckpoint} from './ledger.mjs';
 import { canonical, hash, fail } from './common.mjs';
 
 export const LABEL = 'Uncalibrated engineering pilot — mechanical score bounds; no adjudication.';
@@ -169,6 +170,10 @@ export function writeBoundReport({ stageDirectory, inputs, out }) {
   check(typeof run.offline === 'boolean' && Number.isSafeInteger(summary.ledger.total) && summary.ledger.total >= 0, 'spend_metadata');
   check(observations.every(o => o.version === 'hr3-scorer-a4-v2' && o.protocol === 'v0.3.4+A-4'), 'scorer_version');
   const ledgerEvents=jsonl(join(stageDirectory,'ledger.jsonl'));
+  if(ledgerEvents[0]?.configuration?.version==='hr3-ledger-a4-v2'){
+    check(Object.hasOwn(manifest.files,'ledger.jsonl.head.json'),'missing_journal_head');
+    verifyJournalCheckpoint(ledgerEvents,readFileSync(join(stageDirectory,'ledger.jsonl')).length,readJSON(join(stageDirectory,'ledger.jsonl.head.json')));
+  }
   const billing = verifiedBilling(ledgerEvents);
   if(ledgerEvents[0].configuration?.carryForward)check(canonical(run.carryForward)===canonical(ledgerEvents[0].configuration.carryForward),'carry_forward_metadata');
   check(billing.total === summary.ledger.total && canonical(billing.unsettled) === canonical(summary.ledger.unsettled) && billing.stopped === summary.ledger.stopped, 'ledger_summary_mismatch');

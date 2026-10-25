@@ -1,3 +1,5 @@
+Latest recheck repairs, rollback replay and 291-test verification: [REPORT-A4-RECHECK.md](REPORT-A4-RECHECK.md). The original audit and A-1.1 records below are historical.
+
 # A-4 implementation audit repair
 
 All five P1 findings and the P2 code gap are repaired. The complete ordered offline verifier passes: **21 commands, root exit 0**, including **269/269 harness tests**, a **480/480** fake pilot, the complete leak scan and bound report. **143 audit/amendment regressions** are included (the original 56 cases, expanded for stage-specific gates and supervision). No network, key access, paid calls or commit occurred. Generator/scorer gold and their tests, the real runner directory and pinned product modules were read-only.

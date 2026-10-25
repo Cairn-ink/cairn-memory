@@ -20,7 +20,7 @@ test('full offline fake pilot: frozen inputs, 240 extractions, 480 stateless sco
  for(const arm of ['U','T','O','P'])assert.deepEqual(summary.arms[arm],{attempted:120,valid:120});
  const scores=readFileSync(join(root,'scored.jsonl'),'utf8').trim().split('\n').map(JSON.parse);assert.equal(scores.length,480);assert.equal(readdirSync(join(root,'scores')).length,480);
  const journal=readFileSync(join(root,'ledger.jsonl'),'utf8').trim().split('\n').map(JSON.parse);assert.equal(journal.filter(e=>e.type==='reserve'&&e.operation==='extraction').length,240);assert.equal(journal.filter(e=>e.type==='reserve'&&e.operation==='reader').length,480);
- const manifest=JSON.parse(readFileSync(join(root,'manifest.json')));assert.equal(manifest.count,2226);assert.equal(Object.keys(manifest.files).length,2226);
+ const manifest=JSON.parse(readFileSync(join(root,'manifest.json')));assert.equal(manifest.count,2227);assert.equal(Object.keys(manifest.files).length,2227);
  const extractions=readdirSync(join(root,'extractions'));assert.equal(extractions.length,240);
  for(const file of extractions){const e=JSON.parse(readFileSync(join(root,'extractions',file)));assert.equal(e.error,null);const input=JSON.parse(e.body.input[1].content);assert.ok(e.value.events.every(event=>Array.isArray(event.field_mask)));assert.deepEqual(Object.keys(input).sort(),['observed_at','public_contract','public_header','turns']);}
  for(const file of readdirSync(join(root,'answers'))){const a=JSON.parse(readFileSync(join(root,'answers',file)));assert.deepEqual(validate(answerSchema,a.answer),[]);assert.equal(a.body.input.length,2);assert.equal(a.body.max_output_tokens,2176);assert.equal(a.body.store,false);assert.equal(a.body.tools,undefined);assert.equal(a.body.previous_response_id,undefined);}

@@ -1,0 +1,130 @@
+TAP version 13
+# Subtest: recheck ledger deleted stops before reservation and dispatch
+ok 1 - recheck ledger deleted stops before reservation and dispatch
+  ---
+  duration_ms: 47.696901
+  type: 'test'
+  ...
+# Subtest: recheck ledger empty stops before reservation and dispatch
+ok 2 - recheck ledger empty stops before reservation and dispatch
+  ---
+  duration_ms: 47.266165
+  type: 'test'
+  ...
+# Subtest: recheck ledger valid-prefix stops before reservation and dispatch
+ok 3 - recheck ledger valid-prefix stops before reservation and dispatch
+  ---
+  duration_ms: 41.63822
+  type: 'test'
+  ...
+# Subtest: recheck ledger configuration-replaced stops before reservation and dispatch
+ok 4 - recheck ledger configuration-replaced stops before reservation and dispatch
+  ---
+  duration_ms: 43.287251
+  type: 'test'
+  ...
+# Subtest: recheck ledger configuration-missing stops before reservation and dispatch
+ok 5 - recheck ledger configuration-missing stops before reservation and dispatch
+  ---
+  duration_ms: 41.868935
+  type: 'test'
+  ...
+# Subtest: recheck ledger durable head rejects a valid-prefix rollback after restart
+ok 6 - recheck ledger durable head rejects a valid-prefix rollback after restart
+  ---
+  duration_ms: 39.939164
+  type: 'test'
+  ...
+# Subtest: recheck ledger head-missing cannot clear an accepted stop
+ok 7 - recheck ledger head-missing cannot clear an accepted stop
+  ---
+  duration_ms: 40.312279
+  type: 'test'
+  ...
+# Subtest: recheck ledger head-stale cannot clear an accepted stop
+ok 8 - recheck ledger head-stale cannot clear an accepted stop
+  ---
+  duration_ms: 40.375182
+  type: 'test'
+  ...
+# Subtest: recheck ledger restored-after-rejection cannot clear an accepted stop
+ok 9 - recheck ledger restored-after-rejection cannot clear an accepted stop
+  ---
+  duration_ms: 40.661514
+  type: 'test'
+  ...
+# Subtest: recheck ledger valid forward progress survives restart with the same durable head
+ok 10 - recheck ledger valid forward progress survives restart with the same durable head
+  ---
+  duration_ms: 45.957833
+  type: 'test'
+  ...
+# Subtest: recheck dependencies: unapproved mcp installation is rejected before import or journal
+ok 11 - recheck dependencies: unapproved mcp installation is rejected before import or journal
+  ---
+  duration_ms: 25.406621
+  type: 'test'
+  ...
+# Subtest: recheck dependencies: unapproved tokenizer installation is rejected before import or journal
+ok 12 - recheck dependencies: unapproved tokenizer installation is rejected before import or journal
+  ---
+  duration_ms: 23.274356
+  type: 'test'
+  ...
+# Subtest: recheck dependencies: runner rejects a foreign resolver before creating its output directory
+ok 13 - recheck dependencies: runner rejects a foreign resolver before creating its output directory
+  ---
+  duration_ms: 50.11654
+  type: 'test'
+  ...
+# Subtest: recheck dependencies: execution and closure use the same approved configuration
+ok 14 - recheck dependencies: execution and closure use the same approved configuration
+  ---
+  duration_ms: 433.349312
+  type: 'test'
+  ...
+# Subtest: recheck context embeddings: all nine cases measure and validate both channels
+ok 15 - recheck context embeddings: all nine cases measure and validate both channels
+  ---
+  duration_ms: 3057.749121
+  type: 'test'
+  ...
+# Subtest: recheck context embeddings: context samples participate in every maximum and cumulative projection
+ok 16 - recheck context embeddings: context samples participate in every maximum and cumulative projection
+  ---
+  duration_ms: 0.969667
+  type: 'test'
+  ...
+# Subtest: recheck freeze output: original producer omits runtime members while current output hashes their actual bytes
+not ok 17 - recheck freeze output: original producer omits runtime members while current output hashes their actual bytes
+  ---
+  duration_ms: 469.688561
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/recheck-a4.test.mjs:113:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    evaluation/hr3/harness/reports/private-field-inventory-a4.json
+    + actual - expected
+    
+    + 'a3471800f21a62f714dc474c350b64285c377e80b4d8a11afbc91c0ab52fef92'
+    - '61b87ea898bc0b792b2d20c37e58a9ecae65958b342cba0920fa0d080df56b27'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '61b87ea898bc0b792b2d20c37e58a9ecae65958b342cba0920fa0d080df56b27'
+  actual: 'a3471800f21a62f714dc474c350b64285c377e80b4d8a11afbc91c0ab52fef92'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/recheck-a4.test.mjs:119:60)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..17
+# tests 17
+# suites 0
+# pass 16
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4513.454113

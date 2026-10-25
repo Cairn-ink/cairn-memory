@@ -1,0 +1,35 @@
+{
+  "version": "hr3-a4-recheck-regressions-v1",
+  "status": "PASS",
+  "count": 22,
+  "names": [
+    "recheck ledger deleted stops before reservation and dispatch",
+    "recheck ledger empty stops before reservation and dispatch",
+    "recheck ledger valid-prefix stops before reservation and dispatch",
+    "recheck ledger configuration-replaced stops before reservation and dispatch",
+    "recheck ledger configuration-missing stops before reservation and dispatch",
+    "recheck ledger durable head rejects a valid-prefix rollback after restart",
+    "recheck ledger head-missing cannot clear an accepted stop",
+    "recheck ledger head-stale cannot clear an accepted stop",
+    "recheck ledger restored-after-rejection cannot clear an accepted stop",
+    "recheck ledger valid forward progress survives restart with the same durable head",
+    "recheck dependencies: unapproved mcp installation is rejected before import or journal",
+    "recheck dependencies: unapproved tokenizer installation is rejected before import or journal",
+    "recheck dependencies: runner rejects a foreign resolver before creating its output directory",
+    "recheck dependencies: execution and closure use the same approved configuration",
+    "recheck context embeddings: all nine cases measure and validate both channels",
+    "recheck context embeddings: context samples participate in every maximum and cumulative projection",
+    "recheck freeze output: original producer omits runtime members while current output hashes their actual bytes",
+    "recheck ledger carried exposure cannot disappear with the journal",
+    "recheck ledger memory anchor rejects rewinding both files within the process",
+    "recheck ledger uncheckpointed complete append stops instead of replaying after restart",
+    "recheck embedding certificate: context requests are merged before maxima and cumulative projections",
+    "recheck baseline snapshots match pinned committed producer bytes"
+  ],
+  "baselineEvidence": {
+    "ledger": "recheck-ledger-red.tap: 0/6, exit 1; exact feb05af6 ledger bytes verified",
+    "dependencies": "recheck-dependencies-red-behavioral.tap: 0/2, exit 1; executes pinned feb05af6 resolver",
+    "context": "recheck-context-red-behavioral.tap: 0/1, exit 1; executes pinned feb05af6 context producer",
+    "freeze": "recheck-freeze-output.json: actual dd01b643/current producers; in-memory output comparison, no primary freeze"
+  }
+}

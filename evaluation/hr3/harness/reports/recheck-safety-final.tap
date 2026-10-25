@@ -1,0 +1,124 @@
+TAP version 13
+# Subtest: recheck ledger deleted stops before reservation and dispatch
+ok 1 - recheck ledger deleted stops before reservation and dispatch
+  ---
+  duration_ms: 49.939147
+  type: 'test'
+  ...
+# Subtest: recheck ledger empty stops before reservation and dispatch
+ok 2 - recheck ledger empty stops before reservation and dispatch
+  ---
+  duration_ms: 43.92423
+  type: 'test'
+  ...
+# Subtest: recheck ledger valid-prefix stops before reservation and dispatch
+ok 3 - recheck ledger valid-prefix stops before reservation and dispatch
+  ---
+  duration_ms: 43.154743
+  type: 'test'
+  ...
+# Subtest: recheck ledger configuration-replaced stops before reservation and dispatch
+ok 4 - recheck ledger configuration-replaced stops before reservation and dispatch
+  ---
+  duration_ms: 43.958236
+  type: 'test'
+  ...
+# Subtest: recheck ledger configuration-missing stops before reservation and dispatch
+ok 5 - recheck ledger configuration-missing stops before reservation and dispatch
+  ---
+  duration_ms: 42.942649
+  type: 'test'
+  ...
+# Subtest: recheck ledger durable head rejects a valid-prefix rollback after restart
+ok 6 - recheck ledger durable head rejects a valid-prefix rollback after restart
+  ---
+  duration_ms: 40.456837
+  type: 'test'
+  ...
+# Subtest: recheck ledger head-missing cannot clear an accepted stop
+ok 7 - recheck ledger head-missing cannot clear an accepted stop
+  ---
+  duration_ms: 41.878086
+  type: 'test'
+  ...
+# Subtest: recheck ledger head-stale cannot clear an accepted stop
+ok 8 - recheck ledger head-stale cannot clear an accepted stop
+  ---
+  duration_ms: 42.821778
+  type: 'test'
+  ...
+# Subtest: recheck ledger restored-after-rejection cannot clear an accepted stop
+ok 9 - recheck ledger restored-after-rejection cannot clear an accepted stop
+  ---
+  duration_ms: 40.9937
+  type: 'test'
+  ...
+# Subtest: recheck ledger valid forward progress survives restart with the same durable head
+ok 10 - recheck ledger valid forward progress survives restart with the same durable head
+  ---
+  duration_ms: 48.674993
+  type: 'test'
+  ...
+# Subtest: recheck dependencies: unapproved mcp installation is rejected before import or journal
+ok 11 - recheck dependencies: unapproved mcp installation is rejected before import or journal
+  ---
+  duration_ms: 24.569268
+  type: 'test'
+  ...
+# Subtest: recheck dependencies: unapproved tokenizer installation is rejected before import or journal
+ok 12 - recheck dependencies: unapproved tokenizer installation is rejected before import or journal
+  ---
+  duration_ms: 23.038401
+  type: 'test'
+  ...
+# Subtest: recheck dependencies: runner rejects a foreign resolver before creating its output directory
+ok 13 - recheck dependencies: runner rejects a foreign resolver before creating its output directory
+  ---
+  duration_ms: 51.014262
+  type: 'test'
+  ...
+# Subtest: recheck dependencies: execution and closure use the same approved configuration
+ok 14 - recheck dependencies: execution and closure use the same approved configuration
+  ---
+  duration_ms: 459.499076
+  type: 'test'
+  ...
+# Subtest: recheck freeze output: original producer omits runtime members while current output hashes their actual bytes
+ok 15 - recheck freeze output: original producer omits runtime members while current output hashes their actual bytes
+  ---
+  duration_ms: 479.124713
+  type: 'test'
+  ...
+# Subtest: recheck ledger carried exposure cannot disappear with the journal
+ok 16 - recheck ledger carried exposure cannot disappear with the journal
+  ---
+  duration_ms: 102.774544
+  type: 'test'
+  ...
+# Subtest: recheck ledger memory anchor rejects rewinding both files within the process
+ok 17 - recheck ledger memory anchor rejects rewinding both files within the process
+  ---
+  duration_ms: 42.686233
+  type: 'test'
+  ...
+# Subtest: recheck ledger uncheckpointed complete append stops instead of replaying after restart
+ok 18 - recheck ledger uncheckpointed complete append stops instead of replaying after restart
+  ---
+  duration_ms: 39.028625
+  type: 'test'
+  ...
+# Subtest: recheck baseline snapshots match pinned committed producer bytes
+ok 19 - recheck baseline snapshots match pinned committed producer bytes
+  ---
+  duration_ms: 0.229834
+  type: 'test'
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1687.751655

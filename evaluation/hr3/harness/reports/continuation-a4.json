@@ -59,7 +59,7 @@
   },
   "sources": {
     "evaluation/hr3/harness/requests.mjs": "4dc437ac903778a8207120ac055381d8f50e9ae37c8345eb7fc4e7c140cfe3de",
-    "evaluation/hr3/harness/ledger.mjs": "c1bb83ff0189c9818d5eb2f384ef4afae57d082a34ec934c004a07ed28f1aa7a",
+    "evaluation/hr3/harness/ledger.mjs": "5970aa55fef9e12ba470bc7efeb7b61c1cd4d68655fd3f42b8d4eecc7afdee6b",
     "evaluation/hr3/harness/budget-a4.mjs": "071ad6e9d87dc876d21654b2fed03178e6aab5feb83ce12df3b5535a2119abc5",
     "evaluation/hr3/harness/accounting.mjs": "8432123e2812b17033803c2ca633d0cab4933e781c1b0107bbcfbb7ee132258b",
     "evaluation/hr3/harness/accounting-a4.mjs": "617901e3063c35c1cd1696fc5a8b69b9d1388daa0503eea4ef557d46f55e1354",

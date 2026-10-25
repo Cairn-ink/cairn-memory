@@ -25,7 +25,7 @@ export class GuardedTransport {
   async send(request,{signal}={}) {
     for(let attempt=0;attempt<2;attempt++) {
       this.checkProgress();
-      const call={...request,logicalId:request.id,id:request.id+`/attempt-${attempt}`};validateRequest(call);this.ledger.reserve(call);
+      const call={...request,logicalId:request.id,id:request.id+`/attempt-${attempt}`};validateRequest(call);this.ledger.reserve(call);this.checkProgress();
       let reply;
       const controller=new AbortController();this.activeController=controller;const abort=()=>controller.abort();signal?.addEventListener('abort',abort,{once:true});
       let timer;

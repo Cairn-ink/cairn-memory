@@ -1,0 +1,8 @@
+{
+  "commit": "feb05af6",
+  "file": "evaluation/hr3/harness/ledger.mjs",
+  "sha256": "c1bb83ff0189c9818d5eb2f384ef4afae57d082a34ec934c004a07ed28f1aa7a",
+  "byteIdenticalBeforeFix": true,
+  "regressions": 6,
+  "redExitCode": 1
+}

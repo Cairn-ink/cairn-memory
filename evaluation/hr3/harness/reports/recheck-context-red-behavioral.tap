@@ -1,0 +1,32 @@
+TAP version 13
+# Subtest: recheck context embeddings: all nine cases measure and validate both channels
+not ok 1 - recheck context embeddings: all nine cases measure and validate both channels
+  ---
+  duration_ms: 3115.024242
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/recheck-a4.test.mjs:85:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+    
+      assert.ok(r.embeddingMeasurements?.length>0)
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/recheck-a4.test.mjs:86:670)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3142.336492

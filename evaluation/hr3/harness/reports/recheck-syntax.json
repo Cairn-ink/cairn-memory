@@ -1,0 +1,90 @@
+{
+  "status": "PASS",
+  "commands": [
+    {
+      "command": "node --check evaluation/hr3/harness/artifacts.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/bounds.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/certification-bundle-a4.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/context-certification.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/dependencies.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/embedding-measurement-a4.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/freeze-a4.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/ledger.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/paid-preflight.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/request-certification.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/runner.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/runtime-closure.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/test.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/test/probe-ledger-recheck.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/test/recheck-a4.test.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/test/runner.test.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/transport.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    }
+  ]
+}

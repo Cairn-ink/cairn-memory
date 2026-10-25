@@ -1,0 +1,70 @@
+{
+  "status": "PASS",
+  "verification": "evaluation/hr3/harness/artifacts/a4-verification-kQQNtI",
+  "orderedCommands": 21,
+  "allChildExits": 0,
+  "sourceAndLogBindings": "PASS",
+  "runtimeClosureSHA256": "cfa208ba9e808e2eb6d36374fe062cdcab6b599a5c38a9133a07e4c39540266f",
+  "dependencyConfiguration": {
+    "mcp": "adapters/mcp/node_modules",
+    "tokenizer": "adapters/openai/node_modules"
+  },
+  "closureModules": 195,
+  "boundFiles": 1480,
+  "externalFiles": 1240,
+  "completedPilot": 480,
+  "checkpoint": {
+    "status": "PASS",
+    "artifactBound": true,
+    "records": 5325
+  },
+  "pilotInference": "NONE; actual report recursive check PASS",
+  "paidReadiness": false,
+  "primaryFreeze": "PENDING",
+  "networkCalls": 0,
+  "paidCalls": 0,
+  "commits": 0,
+  "changedFileCrossCheck": {
+    "status": "PASS",
+    "counts": {
+      "total": 2381,
+      "gitVisible": 80,
+      "ignoredArtifacts": 2301,
+      "sourceDocsTestsFixtures": 26
+    },
+    "routes": [
+      "Git tracked differences + all untracked paths including ignored, compared with task-entry content SHA",
+      "Independent recursive filesystem content SHA inventory"
+    ],
+    "exitCode": 0,
+    "preexistingArtifactsUnchanged": 57069,
+    "historicalFixturesCarryAndFreezeUnchanged": true
+  },
+  "additionalCommands": {
+    "syntax": {
+      "count": 17,
+      "allExitCodes": 0
+    },
+    "independentLedgerReplay": {
+      "exitCode": 0,
+      "oldDispatches": [
+        1,
+        1,
+        1
+      ],
+      "fixedDispatches": [
+        0,
+        0,
+        0
+      ]
+    },
+    "portableDiagnostics": {
+      "exitCode": 0,
+      "newLogsNormalized": 6,
+      "scientificArtifactsChanged": 0
+    },
+    "certificateRebindExitCode": 0,
+    "bindingReadbackExitCode": 0,
+    "gitDiffCheckExitCode": 0
+  }
+}

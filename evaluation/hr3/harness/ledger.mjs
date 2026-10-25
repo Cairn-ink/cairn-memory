@@ -1,35 +1,74 @@
 import { mkdirSync, readFileSync, openSync, closeSync, writeSync, fsyncSync, rmdirSync, existsSync, statSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { canonical, hash, fail } from './common.mjs';
+import { canonical, hash, fail, atomicJSON } from './common.mjs';
 import {loadCarryForward,verifyCarrySnapshot} from './accounting.mjs';
 import { validateRequest } from './requests.mjs';
 export const CAPS={smoke:50,pilot:50,development:46,test:345,alternative:45,embeddings:2.56};
 const NANO=1e9;
+export function journalCheckpoint(events,bytes) {
+  return {version:'hr3-ledger-head-v1',records:events.length,bytes,head:events.at(-1)?.digest,configurationSHA256:hash(events[0]?.configuration??null)};
+}
+export function verifyJournalCheckpoint(events,bytes,checkpoint) {
+  if(checkpoint?.blockedReason)fail(checkpoint.blockedReason);
+  if(canonical(checkpoint)!==canonical(journalCheckpoint(events,bytes)))fail('ledger_head_mismatch');
+}
 // A durable append-only journal, serialized by an exclusive directory lock.
 // Stale locks and partial records fail closed; the operator must reconcile them.
 export class Ledger {
   constructor(path,{stage='pilot',plan,limits={},carryForward=null}={}) {
-    this.path=path;this.lock=path+'.lock';this.stage=stage==='smoke'?'pilot':stage;
+    this.path=path;this.lock=path+'.lock';this.headPath=path+'.head.json';this.stage=stage==='smoke'?'pilot':stage;
     if(!CAPS[stage]||!Array.isArray(plan)||!plan.length||plan.some(p=>!['extraction','reader','research-embedding','product-embedding'].includes(p.operation)||!Number.isSafeInteger(p.maxDispatches)||p.maxDispatches<1||typeof p.ids!=='string'||!p.ids.startsWith('^')||!p.ids.endsWith('$')))fail('invalid_plan');
     if(limits.operational>450||limits.authorization>500)fail('cap_increase');
     const stageLimits={...CAPS,...limits.stages};
     if(limits.embeddingUnits&&['research','product'].some(k=>!Number.isSafeInteger(limits.embeddingUnits[k])||limits.embeddingUnits[k]<0||limits.embeddingUnits[k]>64000000))fail('embedding_allowance_increase');
     if(['operational','authorization'].some(k=>limits[k]!==undefined&&(!Number.isFinite(limits[k])||limits[k]<0)))fail('invalid_cap');
     for(const k of Object.keys(stageLimits))if(!(stageLimits[k]>=0&&stageLimits[k]<=CAPS[k]))fail('cap_increase');
-    this.configuration={version:'hr3-ledger-a4-v1',plan,limits:{stages:Object.fromEntries(Object.entries(stageLimits).map(([s,v])=>[s,Math.round(v*NANO)])),operational:Math.round(Math.min(limits.operational??450,450)*NANO),authorization:Math.round(Math.min(limits.authorization??500,500)*NANO),embeddingUnits:limits.embeddingUnits??{research:64000000,product:64000000}},...(carryForward?{carryForward:loadCarryForward(carryForward)}:{})};
+    this.configuration={version:'hr3-ledger-a4-v2',plan,limits:{stages:Object.fromEntries(Object.entries(stageLimits).map(([s,v])=>[s,Math.round(v*NANO)])),operational:Math.round(Math.min(limits.operational??450,450)*NANO),authorization:Math.round(Math.min(limits.authorization??500,500)*NANO),embeddingUnits:limits.embeddingUnits??{research:64000000,product:64000000}},...(carryForward?{carryForward:loadCarryForward(carryForward)}:{})};
+    this.configurationSHA256=hash(this.configuration);
     const carried=verifyCarrySnapshot(this.configuration.carryForward);
     if(carried.total>this.configuration.limits.operational||carried.total>this.configuration.limits.authorization-50*NANO||Object.entries(carried.byStage).some(([s,n])=>n>(this.configuration.limits.stages[s]??0))||['research','product'].some(k=>carried.embedding[k]>this.configuration.limits.embeddingUnits[k]))fail('carried_exposure_exceeds_cap');
     mkdirSync(dirname(path),{recursive:true,mode:0o700});
-    this.transaction(events=>{if(!events.length)this.append(events,{type:'configuration',configuration:this.configuration});else if(canonical(events[0].configuration)!==canonical(this.configuration))fail('ledger_configuration_mismatch');});
+    this.initializing=true;
+    try{this.transaction(events=>{if(!events.length)this.append(events,{type:'configuration',configuration:this.configuration});});}
+    finally{this.initializing=false;}
+  }
+  reject(reason) {
+    this.hardStop=reason;
+    // Preserve the last trusted position separately from damaged journal bytes.
+    // Failure to persist this stop still throws; it never permits dispatch.
+    if(this.acceptedHead)atomicJSON(this.headPath,{...this.acceptedHead,blockedReason:reason});
+    fail(reason);
   }
   read() {
-    if(!existsSync(this.path))return [];
-    const stat=statSync(this.path,{bigint:true}),stamp=[stat.ino,stat.size,stat.mtimeNs].join(':');
-    if(this.cachedStamp===stamp)return this.cachedEvents;
-    const raw=readFileSync(this.path,'utf8');if(raw&&!raw.endsWith('\n'))fail('ledger_incomplete');
-    const events=raw.trim()?raw.trimEnd().split('\n').map(JSON.parse):[];
-    let prior='';for(const e of events){const {digest,...data}=e;if(data.prior!==prior||hash(data)!==digest)fail('ledger_corrupt');prior=digest;}
-    this.cachedStamp=stamp;this.cachedEvents=events;return events;
+    if(this.hardStop)fail(this.hardStop);
+    if(hash(this.configuration)!==this.configurationSHA256)return this.reject('ledger_configuration_mismatch');
+    let head;
+    if(existsSync(this.headPath)){
+      try{head=JSON.parse(readFileSync(this.headPath));}catch{return this.reject('ledger_head_corrupt');}
+      if(head.blockedReason)fail(head.blockedReason);
+      if(head.version!=='hr3-ledger-head-v1'||!Number.isSafeInteger(head.records)||head.records<1||!Number.isSafeInteger(head.bytes)||head.bytes<1||typeof head.head!=='string'||typeof head.configurationSHA256!=='string')return this.reject('ledger_head_corrupt');
+    }
+    if(!existsSync(this.path)){
+      if(this.initializing&&!head&&!this.acceptedHead)return [];
+      this.acceptedHead??=head;return this.reject('ledger_journal_missing');
+    }
+    const stat=statSync(this.path,{bigint:true}),stamp=[stat.ino,stat.size,stat.mtimeNs,stat.ctimeNs].join(':');
+    if(!stat.size){this.acceptedHead??=head;return this.reject('ledger_journal_empty');}
+    let events;
+    if(this.cachedStamp===stamp)events=this.cachedEvents;
+    else {
+      const raw=readFileSync(this.path,'utf8');if(!raw.endsWith('\n'))return this.reject('ledger_incomplete');
+      try{events=raw.trimEnd().split('\n').map(JSON.parse);}catch{return this.reject('ledger_corrupt');}
+      let prior='';for(const e of events){const {digest,...data}=e;if(data.prior!==prior||hash(data)!==digest)return this.reject('ledger_corrupt');prior=digest;}
+    }
+    if(events[0]?.type!=='configuration'||!events[0].configuration||events.filter(e=>e.type==='configuration').length!==1)return this.reject('ledger_configuration_missing');
+    if(head&&hash(events[0].configuration)!==head.configurationSHA256){this.acceptedHead??=head;return this.reject('ledger_configuration_mismatch');}
+    if(hash(events[0].configuration)!==this.configurationSHA256)return this.reject('ledger_configuration_mismatch');
+    if(!head)return this.reject('ledger_head_missing');
+    if(this.acceptedHead&&(head.records<this.acceptedHead.records||head.bytes<this.acceptedHead.bytes||events[this.acceptedHead.records-1]?.digest!==this.acceptedHead.head))return this.reject('ledger_history_rollback');
+    this.acceptedHead??=head;
+    try{verifyJournalCheckpoint(events,Number(stat.size),head);}catch{return this.reject('ledger_head_mismatch');}
+    this.acceptedHead=head;this.cachedStamp=stamp;this.cachedEvents=events;return events;
   }
   transaction(fn) {
     try {mkdirSync(this.lock,{mode:0o700});}catch {fail('ledger_locked');}
@@ -39,7 +78,12 @@ export class Ledger {
     const data={...event,prior:events.at(-1)?.digest??''}, record={...data,digest:hash(data)};
     const fd=openSync(this.path,'a',0o600);try {const data=Buffer.from(canonical(record)+'\n');let offset=0;while(offset<data.length)offset+=writeSync(fd,data,offset,data.length-offset);fsyncSync(fd);}finally{closeSync(fd);}
     const parent=openSync(dirname(this.path),'r');try{fsyncSync(parent);}finally{closeSync(parent);}
-    events.push(record);const stat=statSync(this.path,{bigint:true});this.cachedStamp=[stat.ino,stat.size,stat.mtimeNs].join(':');this.cachedEvents=events;return record;
+    events.push(record);const stat=statSync(this.path,{bigint:true});
+    const head=journalCheckpoint(events,Number(stat.size));
+    // Journal fsync precedes checkpoint replacement and directory fsync. A crash
+    // between them is a hard mismatch requiring reconciliation, never a replay.
+    atomicJSON(this.headPath,head);this.acceptedHead=head;
+    this.cachedStamp=[stat.ino,stat.size,stat.mtimeNs,stat.ctimeNs].join(':');this.cachedEvents=events;return record;
   }
   snapshot(events=this.read()) {
     const seed=verifyCarrySnapshot(events[0]?.configuration?.carryForward);

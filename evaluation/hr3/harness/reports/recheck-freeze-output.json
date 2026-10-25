@@ -1,0 +1,20 @@
+{
+  "status": "PASS",
+  "method": "Execute actual old/current freeze producers in an isolated VM with identical read-only inputs and an in-memory output sink; never run primary freeze or write freeze.json.",
+  "originalCommit": "dd01b643",
+  "originalSourceSHA256": "137fb95d7f3238b135930d43daa78684c8f315f74e1e563bffded537917d6fb9",
+  "currentSourceSHA256": "92b9dac8a989a5aa46fdccf8b7d04482e3e559d6d2a95c85a948814e224ea153",
+  "oldHashCount": 2,
+  "newHashCount": 1481,
+  "previouslyOmittedMembers": [
+    "evaluation/hr3/scorer/slots.mjs",
+    "evaluation/hr3/scorer/contract.mjs",
+    "evaluation/hr3/generator/slots.mjs",
+    "evaluation/hr3/runner/cli-real.mjs",
+    "evaluation/hr3/runner/openai-transport.mjs",
+    "core/context-read-assembly.mjs",
+    "adapters/mcp/server.mjs",
+    "adapters/openai/node_modules/tiktoken/lite/tiktoken_bg.wasm"
+  ],
+  "allRuntimeBytesVerified": 1480
+}

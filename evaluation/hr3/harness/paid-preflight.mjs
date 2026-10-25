@@ -45,6 +45,7 @@ export function verifyPaidPreflight({path=PAID_PREFLIGHT_PATH,carry,inputs,out,s
  check(supervision.suppliedBy==='primary'&&supervision.completed===true&&supervision.attended===true&&supervision.progressChecksAtLeastEveryMinute===true&&supervision.stopRulesAccepted===true&&supervision.testOnly!==true,'supervision');
  check(out&&!isAbsolute(out)&&!out.split(/[\\/]/).includes('..')&&freshRun.outputDirectory===out,'run_output_binding');
  check(freshRun.freshCachesAndStores===true&&freshRun.noPriorAnswers===true&&freshRun.noPooling===true&&freshRun.noQualityRetries===true&&freshRun.noUnlistedCalls===true&&freshRun.extractionCalls===240&&freshRun.readerCalls===480&&freshRun.transportRetries===1&&freshRun.reporting==='Uncalibrated engineering pilot — mechanical score bounds; no adjudication.','fresh_run');
+ check(freeze.runtimeClosure?.dependencyConfiguration&&canonical(freeze.runtimeClosure.dependencyConfiguration)===canonical(closure.dependencyConfiguration),'freeze_dependency_configuration');
  check(freeze.runtimeClosure&&canonical(freeze.runtimeClosure.files)===canonical(closure.files)&&canonical(freeze.runtimeClosure.externalFiles)===canonical(closure.externalFiles),'freeze_closure');
  check(freeze.errataSHA256===hash(readFileSync('evaluation/hr3/protocol/errata.md')),'freeze_errata');
  for(const [p,spec]of Object.entries(freeze.hashes??{}))check(existsSync(p)&&hash(readFileSync(p))===spec.sha256,'stale_freeze_file');

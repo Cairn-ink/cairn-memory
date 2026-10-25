@@ -1,7 +1,7 @@
 {
-  "version": "hr3-a4-context-conformance-v1",
+  "version": "hr3-a4-context-conformance-v2",
   "status": "PASS",
-  "runtimeClosureSHA256": "da297112b46280badda0fd6f06796d5532c2abae4f3bd6acf31066b899983aa7",
+  "runtimeClosureSHA256": "cfa208ba9e808e2eb6d36374fe062cdcab6b599a5c38a9133a07e4c39540266f",
   "adoptedContexts": 6,
   "unresolvedContexts": 3,
   "sharedTurnAmbiguities": 3,
@@ -1147,7 +1147,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "7aa0aa0e4c233f4aa915b28b4d31f336c4f17ee05d04dc13749c5f699970bda9"
+      "sha256": "50ea7299e320c75d428ded4af3265a1641de72a56ca1392c0bfddbda47a86305"
     },
     {
       "operation": "extraction",
@@ -1219,7 +1219,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "abda520bb008c08244f0ce4e97235cd8260e22700eb1a37ea27a40d2da3f8b10"
+      "sha256": "0745fda2f3de0ead9bf8aea695059120a1eeafc415d84d81705418f583d1c322"
     },
     {
       "operation": "extraction",
@@ -1291,7 +1291,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "2445ad97c02bf11cbcb1995d055fca2cde86d1cdd774eea8d8c08a3036f669bb"
+      "sha256": "a3666096603cca8317c7427a88b7713b98845c9252dae9e7f95faccfd90d2610"
     },
     {
       "operation": "extraction",
@@ -1363,7 +1363,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "2d19481cb7fc22c304c5d53654cbe960fa07d352e1c5365c96c77ec4abee009a"
+      "sha256": "01ac7e82734171a7ab765891a241ea2e186f83000ee0d90024075034e2967eda"
     },
     {
       "operation": "extraction",
@@ -1435,7 +1435,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "9066bd34048993be7f0852f6f7a76bafbaef49f926582a7da1e84b983aa773cd"
+      "sha256": "4aa08cbbb4240edfe90aaf61741c6e8f0ee4880808d45e3be1eb3eaf94dcf1c2"
     },
     {
       "operation": "extraction",
@@ -1507,7 +1507,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "81eefb02f021c4ce20ffcd94bfae47d8c7082618c2f05f92033fbc3557c5e45c"
+      "sha256": "81ebf39e1009be771c96146148466cd7bda5df13434c2681a1b71b65b39dc60c"
     },
     {
       "operation": "extraction",
@@ -1579,7 +1579,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "2d8fb55a76ee87a31babccd85bc49690226f4dc378d60f50773ebea625fbbd6e"
+      "sha256": "ed98370b3100fd8787a8d8b2a9ca342909fa5bd96db6faf8d1ea2abe9e3776fc"
     },
     {
       "operation": "extraction",
@@ -1651,7 +1651,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "53a890a27c78a052e96c721441fac1123478918a8235926286e06a30644ee3aa"
+      "sha256": "3f16f10ad1d0752158548dc97201a71f5deb2e70af728aca3a8fe166084ac00f"
     },
     {
       "operation": "extraction",
@@ -1723,11 +1723,2132 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "c61466b9cd0da44e97c34f1c29a5d392d04361fb818b89ae0035b83b0fbfd36b"
+      "sha256": "7bb7b05c327f70289ce2cfe946474ca6a44fe557b2732f7f2ef69ebce79e9fc1"
+    }
+  ],
+  "embeddingMeasurements": [
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        273
+      ],
+      "units": 582,
+      "maxInputUnits": 309,
+      "requestBytes": 743,
+      "bodySHA256": "0dd6925d6988bd7fe677a97049f41c82e9537c340afb002e9a064475517cc7fd"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        287
+      ],
+      "units": 287,
+      "maxInputUnits": 287,
+      "requestBytes": 412,
+      "bodySHA256": "4954e37d458a02386909edc60f996cedc7bc75e5550ff2c4b4fd756fdadf6539"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        273
+      ],
+      "units": 582,
+      "maxInputUnits": 309,
+      "requestBytes": 743,
+      "bodySHA256": "0dd6925d6988bd7fe677a97049f41c82e9537c340afb002e9a064475517cc7fd"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        288
+      ],
+      "units": 288,
+      "maxInputUnits": 288,
+      "requestBytes": 413,
+      "bodySHA256": "bac0ef87bdc67f48ad12ea58bb384bc028d42ed054c0ca05d55b451548e9c438"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        273
+      ],
+      "units": 582,
+      "maxInputUnits": 309,
+      "requestBytes": 743,
+      "bodySHA256": "0dd6925d6988bd7fe677a97049f41c82e9537c340afb002e9a064475517cc7fd"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 2,
+      "inputUnits": [
+        214,
+        274
+      ],
+      "units": 488,
+      "maxInputUnits": 274,
+      "requestBytes": 620,
+      "bodySHA256": "9394ee18af0779a12d3f92779b5258268a3a2086c2587ab35ebb207c3be35ef9"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 2,
+      "inputUnits": [
+        214,
+        274
+      ],
+      "units": 488,
+      "maxInputUnits": 274,
+      "requestBytes": 620,
+      "bodySHA256": "9394ee18af0779a12d3f92779b5258268a3a2086c2587ab35ebb207c3be35ef9"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        280
+      ],
+      "units": 589,
+      "maxInputUnits": 309,
+      "requestBytes": 750,
+      "bodySHA256": "f7772bd71da8adca57930594dfcaa27eddf17594cbac30c9b37825bd4d183be1"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        287
+      ],
+      "units": 287,
+      "maxInputUnits": 287,
+      "requestBytes": 412,
+      "bodySHA256": "4954e37d458a02386909edc60f996cedc7bc75e5550ff2c4b4fd756fdadf6539"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        280
+      ],
+      "units": 589,
+      "maxInputUnits": 309,
+      "requestBytes": 750,
+      "bodySHA256": "f7772bd71da8adca57930594dfcaa27eddf17594cbac30c9b37825bd4d183be1"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        288
+      ],
+      "units": 288,
+      "maxInputUnits": 288,
+      "requestBytes": 413,
+      "bodySHA256": "bac0ef87bdc67f48ad12ea58bb384bc028d42ed054c0ca05d55b451548e9c438"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        280
+      ],
+      "units": 589,
+      "maxInputUnits": 309,
+      "requestBytes": 750,
+      "bodySHA256": "f7772bd71da8adca57930594dfcaa27eddf17594cbac30c9b37825bd4d183be1"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        274
+      ],
+      "units": 274,
+      "maxInputUnits": 274,
+      "requestBytes": 387,
+      "bodySHA256": "3301e2111536a3646b6f11ac74aaa7d5c6d31c1c37b51e3a771aa347a53d1594"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        274
+      ],
+      "units": 274,
+      "maxInputUnits": 274,
+      "requestBytes": 387,
+      "bodySHA256": "3301e2111536a3646b6f11ac74aaa7d5c6d31c1c37b51e3a771aa347a53d1594"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 3,
+      "inputUnits": [
+        284,
+        291,
+        279
+      ],
+      "units": 854,
+      "maxInputUnits": 291,
+      "requestBytes": 1048,
+      "bodySHA256": "cae087a4c475bceffda724116f545bb806918733c7ed8ba0a5523383abfbf174"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 3,
+      "inputUnits": [
+        284,
+        291,
+        279
+      ],
+      "units": 854,
+      "maxInputUnits": 291,
+      "requestBytes": 1048,
+      "bodySHA256": "cae087a4c475bceffda724116f545bb806918733c7ed8ba0a5523383abfbf174"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        291
+      ],
+      "units": 291,
+      "maxInputUnits": 291,
+      "requestBytes": 416,
+      "bodySHA256": "367e406bea85b79cb0137d3baa7d0ca7c0fc6dbe795cebef214f56f260621e2e"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 3,
+      "inputUnits": [
+        284,
+        291,
+        279
+      ],
+      "units": 854,
+      "maxInputUnits": 291,
+      "requestBytes": 1048,
+      "bodySHA256": "cae087a4c475bceffda724116f545bb806918733c7ed8ba0a5523383abfbf174"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 2,
+      "inputUnits": [
+        218,
+        242
+      ],
+      "units": 460,
+      "maxInputUnits": 242,
+      "requestBytes": 592,
+      "bodySHA256": "d5fd1151957ff2a1bc7c3b1615831caad433830832273f2adf8eed08628548ff"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 2,
+      "inputUnits": [
+        218,
+        242
+      ],
+      "units": 460,
+      "maxInputUnits": 242,
+      "requestBytes": 592,
+      "bodySHA256": "d5fd1151957ff2a1bc7c3b1615831caad433830832273f2adf8eed08628548ff"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        278
+      ],
+      "units": 587,
+      "maxInputUnits": 309,
+      "requestBytes": 748,
+      "bodySHA256": "c164d3f6e10b277450fa97c07dc842aeee8ae599d73ec0c737aadec078d31c5b"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        287
+      ],
+      "units": 287,
+      "maxInputUnits": 287,
+      "requestBytes": 412,
+      "bodySHA256": "4954e37d458a02386909edc60f996cedc7bc75e5550ff2c4b4fd756fdadf6539"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        278
+      ],
+      "units": 587,
+      "maxInputUnits": 309,
+      "requestBytes": 748,
+      "bodySHA256": "c164d3f6e10b277450fa97c07dc842aeee8ae599d73ec0c737aadec078d31c5b"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        288
+      ],
+      "units": 288,
+      "maxInputUnits": 288,
+      "requestBytes": 413,
+      "bodySHA256": "bac0ef87bdc67f48ad12ea58bb384bc028d42ed054c0ca05d55b451548e9c438"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        278
+      ],
+      "units": 587,
+      "maxInputUnits": 309,
+      "requestBytes": 748,
+      "bodySHA256": "c164d3f6e10b277450fa97c07dc842aeee8ae599d73ec0c737aadec078d31c5b"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 2,
+      "inputUnits": [
+        274,
+        219
+      ],
+      "units": 493,
+      "maxInputUnits": 274,
+      "requestBytes": 625,
+      "bodySHA256": "e61e598ab279fd4d1504f97d6afbb252216303b140ffb83be6d635988ab71fe9"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 2,
+      "inputUnits": [
+        274,
+        219
+      ],
+      "units": 493,
+      "maxInputUnits": 274,
+      "requestBytes": 625,
+      "bodySHA256": "e61e598ab279fd4d1504f97d6afbb252216303b140ffb83be6d635988ab71fe9"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        285
+      ],
+      "units": 594,
+      "maxInputUnits": 309,
+      "requestBytes": 755,
+      "bodySHA256": "b84d6523382c9ae9981a925741fc318afa54c71a2e3c114b01eedac47f428481"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        287
+      ],
+      "units": 287,
+      "maxInputUnits": 287,
+      "requestBytes": 412,
+      "bodySHA256": "4954e37d458a02386909edc60f996cedc7bc75e5550ff2c4b4fd756fdadf6539"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        285
+      ],
+      "units": 594,
+      "maxInputUnits": 309,
+      "requestBytes": 755,
+      "bodySHA256": "b84d6523382c9ae9981a925741fc318afa54c71a2e3c114b01eedac47f428481"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        288
+      ],
+      "units": 288,
+      "maxInputUnits": 288,
+      "requestBytes": 413,
+      "bodySHA256": "bac0ef87bdc67f48ad12ea58bb384bc028d42ed054c0ca05d55b451548e9c438"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        285
+      ],
+      "units": 594,
+      "maxInputUnits": 309,
+      "requestBytes": 755,
+      "bodySHA256": "b84d6523382c9ae9981a925741fc318afa54c71a2e3c114b01eedac47f428481"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        274
+      ],
+      "units": 274,
+      "maxInputUnits": 274,
+      "requestBytes": 387,
+      "bodySHA256": "3301e2111536a3646b6f11ac74aaa7d5c6d31c1c37b51e3a771aa347a53d1594"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        274
+      ],
+      "units": 274,
+      "maxInputUnits": 274,
+      "requestBytes": 387,
+      "bodySHA256": "3301e2111536a3646b6f11ac74aaa7d5c6d31c1c37b51e3a771aa347a53d1594"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 3,
+      "inputUnits": [
+        284,
+        291,
+        282
+      ],
+      "units": 857,
+      "maxInputUnits": 291,
+      "requestBytes": 1051,
+      "bodySHA256": "9d21ac712abff1dea4cab28e1acf9f3317ef69377bde114ef08a68992241ca80"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 3,
+      "inputUnits": [
+        284,
+        291,
+        282
+      ],
+      "units": 857,
+      "maxInputUnits": 291,
+      "requestBytes": 1051,
+      "bodySHA256": "9d21ac712abff1dea4cab28e1acf9f3317ef69377bde114ef08a68992241ca80"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        291
+      ],
+      "units": 291,
+      "maxInputUnits": 291,
+      "requestBytes": 416,
+      "bodySHA256": "367e406bea85b79cb0137d3baa7d0ca7c0fc6dbe795cebef214f56f260621e2e"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 3,
+      "inputUnits": [
+        284,
+        291,
+        282
+      ],
+      "units": 857,
+      "maxInputUnits": 291,
+      "requestBytes": 1051,
+      "bodySHA256": "9d21ac712abff1dea4cab28e1acf9f3317ef69377bde114ef08a68992241ca80"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 2,
+      "inputUnits": [
+        221,
+        245
+      ],
+      "units": 466,
+      "maxInputUnits": 245,
+      "requestBytes": 598,
+      "bodySHA256": "dcbfbe4108f7e7336558c3131a95622bdb5e38c009b6a33a39e2424e64d1c392"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 2,
+      "inputUnits": [
+        221,
+        245
+      ],
+      "units": 466,
+      "maxInputUnits": 245,
+      "requestBytes": 598,
+      "bodySHA256": "dcbfbe4108f7e7336558c3131a95622bdb5e38c009b6a33a39e2424e64d1c392"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        268
+      ],
+      "units": 577,
+      "maxInputUnits": 309,
+      "requestBytes": 738,
+      "bodySHA256": "5f62f52df8987e87e58d28ae88e9df08fdee3ddb25b158bcf556ba266164c246"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        287
+      ],
+      "units": 287,
+      "maxInputUnits": 287,
+      "requestBytes": 412,
+      "bodySHA256": "4954e37d458a02386909edc60f996cedc7bc75e5550ff2c4b4fd756fdadf6539"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        268
+      ],
+      "units": 577,
+      "maxInputUnits": 309,
+      "requestBytes": 738,
+      "bodySHA256": "5f62f52df8987e87e58d28ae88e9df08fdee3ddb25b158bcf556ba266164c246"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        288
+      ],
+      "units": 288,
+      "maxInputUnits": 288,
+      "requestBytes": 413,
+      "bodySHA256": "bac0ef87bdc67f48ad12ea58bb384bc028d42ed054c0ca05d55b451548e9c438"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        268
+      ],
+      "units": 577,
+      "maxInputUnits": 309,
+      "requestBytes": 738,
+      "bodySHA256": "5f62f52df8987e87e58d28ae88e9df08fdee3ddb25b158bcf556ba266164c246"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 2,
+      "inputUnits": [
+        209,
+        274
+      ],
+      "units": 483,
+      "maxInputUnits": 274,
+      "requestBytes": 615,
+      "bodySHA256": "95f0ebada55fb310097633f0a22d564b550ad02e551cc93427d2e9f9102526b0"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 2,
+      "inputUnits": [
+        209,
+        274
+      ],
+      "units": 483,
+      "maxInputUnits": 274,
+      "requestBytes": 615,
+      "bodySHA256": "95f0ebada55fb310097633f0a22d564b550ad02e551cc93427d2e9f9102526b0"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        275
+      ],
+      "units": 584,
+      "maxInputUnits": 309,
+      "requestBytes": 745,
+      "bodySHA256": "be5efac44432c27dd3c3628dbd94363af6ecef9fda8f694faf5564002c81c9bf"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        287
+      ],
+      "units": 287,
+      "maxInputUnits": 287,
+      "requestBytes": 412,
+      "bodySHA256": "4954e37d458a02386909edc60f996cedc7bc75e5550ff2c4b4fd756fdadf6539"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        275
+      ],
+      "units": 584,
+      "maxInputUnits": 309,
+      "requestBytes": 745,
+      "bodySHA256": "be5efac44432c27dd3c3628dbd94363af6ecef9fda8f694faf5564002c81c9bf"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        288
+      ],
+      "units": 288,
+      "maxInputUnits": 288,
+      "requestBytes": 413,
+      "bodySHA256": "bac0ef87bdc67f48ad12ea58bb384bc028d42ed054c0ca05d55b451548e9c438"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        275
+      ],
+      "units": 584,
+      "maxInputUnits": 309,
+      "requestBytes": 745,
+      "bodySHA256": "be5efac44432c27dd3c3628dbd94363af6ecef9fda8f694faf5564002c81c9bf"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        274
+      ],
+      "units": 274,
+      "maxInputUnits": 274,
+      "requestBytes": 387,
+      "bodySHA256": "3301e2111536a3646b6f11ac74aaa7d5c6d31c1c37b51e3a771aa347a53d1594"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        274
+      ],
+      "units": 274,
+      "maxInputUnits": 274,
+      "requestBytes": 387,
+      "bodySHA256": "3301e2111536a3646b6f11ac74aaa7d5c6d31c1c37b51e3a771aa347a53d1594"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 3,
+      "inputUnits": [
+        284,
+        291,
+        296
+      ],
+      "units": 871,
+      "maxInputUnits": 296,
+      "requestBytes": 1065,
+      "bodySHA256": "38d286588f3f98d2c6c01427e1a6c8fd1a19a99d60ea7949056e1a83a7bea51b"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 3,
+      "inputUnits": [
+        284,
+        291,
+        296
+      ],
+      "units": 871,
+      "maxInputUnits": 296,
+      "requestBytes": 1065,
+      "bodySHA256": "38d286588f3f98d2c6c01427e1a6c8fd1a19a99d60ea7949056e1a83a7bea51b"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        291
+      ],
+      "units": 291,
+      "maxInputUnits": 291,
+      "requestBytes": 416,
+      "bodySHA256": "367e406bea85b79cb0137d3baa7d0ca7c0fc6dbe795cebef214f56f260621e2e"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 3,
+      "inputUnits": [
+        284,
+        291,
+        296
+      ],
+      "units": 871,
+      "maxInputUnits": 296,
+      "requestBytes": 1065,
+      "bodySHA256": "38d286588f3f98d2c6c01427e1a6c8fd1a19a99d60ea7949056e1a83a7bea51b"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 2,
+      "inputUnits": [
+        233,
+        257
+      ],
+      "units": 490,
+      "maxInputUnits": 257,
+      "requestBytes": 622,
+      "bodySHA256": "5efac5e6f4e20b37ce05db289ba268a6a38b6faf48d5179dc34c36d0352c9988"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 2,
+      "inputUnits": [
+        233,
+        257
+      ],
+      "units": 490,
+      "maxInputUnits": 257,
+      "requestBytes": 622,
+      "bodySHA256": "5efac5e6f4e20b37ce05db289ba268a6a38b6faf48d5179dc34c36d0352c9988"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
     }
   ],
   "sources": {
-    "evaluation/hr3/harness/context-certification.mjs": "8a2cb2d845952590af5df7d0ac551d74c59bf3558f7dfbffb16b47f1d4b9dc69",
+    "evaluation/hr3/harness/context-certification.mjs": "9b489eeff61fadca3650c2d44c672d9aa45ca429147a06b773e4d5f17c4d35e1",
+    "evaluation/hr3/harness/embedding-measurement-a4.mjs": "adf9c89003f4288b1a30d4cb3aae7a907961f4a199d785d8f7d542dfbf9658ec",
     "evaluation/hr3/harness/schema.mjs": "a39e28e52824ed40385f04230f0380484d2ed35dea17bf5ac2bb236710c015be",
     "evaluation/hr3/harness/research.mjs": "3c665423b7e7a6b96730046e0fc6822ca51668fded92b24856554130664533de",
     "evaluation/hr3/harness/product.mjs": "7ec4bc429f26e997b07ddac1eda9753b1ad0e85771a84ccdc940c7c022bdb96f",
