@@ -5,6 +5,7 @@ import {pathToFileURL} from 'node:url';
 import {resolve} from 'node:path';
 import {hash,atomicJSON} from './common.mjs';
 import {decodeExtraction} from './extraction.mjs';
+import {readerId} from './privacy.mjs';
 import {identifyEvents,freshEvents} from './event-identity.mjs';
 import {resolveLinks} from './research.mjs';
 import {extractionInput} from './extraction.mjs';
@@ -57,7 +58,7 @@ export function replayA3() {
     return {quotes,wrongOffsets,verbatimWrongOffsets,ambiguousQuotes};
   }
   const batches=rows.map(({family,batch,key,result})=>({family,batch,key,error:result.error,diagnostics:{...result.diagnostics,
-    identities:(result.value?.events??[]).map(e=>({raw_event_id:e.event_id,internal_key:identifyEvents(family,batch,[e])[0].event_id}))}}));
+    identities:(result.value?.events??[]).map(e=>({raw_event_id:e.event_id,internal_key:identifyEvents(family,batch,[e])[0].event_id,reader_id:readerId(identifyEvents(family,batch,[e])[0].event_id)}))}}));
   const diagnostic=extractionDiagnostics(batches),histogram={};
   for(const row of diagnostic.table)histogram[row.batchFailure?'batch_failure':row.validEvents]=(histogram[row.batchFailure?'batch_failure':row.validEvents]??0)+1;
   return {version:'hr3-a3-first-pilot-offline-diagnostic-v2',sourceRun:'pilot-cf24810f',fixture:{path:fixturePath,sha256:hash(bytes),batches:rows.length},

@@ -1,3 +1,4 @@
+import {readerId,readerNodeId} from './privacy.mjs';
 import { canonical, normalize, compare, cells, scopeOf, intervalStart, intervalEnd, orderEvents, effectiveOrder } from './common.mjs';
 const key=e=>canonical([normalize(e.subject),normalize(e.predicate),cells(e.scope)]);
 const adopted=e=>e.commitment==='adopted';
@@ -94,8 +95,11 @@ export function materialize(arm,raw,atISO) {
 }
 // Frozen serializer: body indexes interpretations; receipts are separate assembly units.
 export function serializeRecord(r) {
-  const {receipts,...body}=r;for(const k of Object.keys(body))if(body[k]===false||body[k]===undefined||Array.isArray(body[k])&&!body[k].length)delete body[k];
-  return {id:r.id+':'+canonical(r.scope),body:canonical(body),receipts:receipts.map(q=>({text:q.quote,origin:q.turn_id,start:q.start,normalize:false,truncate:null}))};
+  const {receipts,...record}=r;
+  const body={...record,id:readerId(r.id),predecessors:r.predecessors?.map(readerId),supporting_events:r.supporting_events?.map(readerId),
+    reason_nodes:r.reason_nodes?.map(n=>({...n,id:readerNodeId(r.id,n.id)})),reason_edges:r.reason_edges?.map(e=>({...e,from:readerNodeId(r.id,e.from),to:readerNodeId(r.id,e.to)}))};
+  for(const k of Object.keys(body))if(body[k]===false||body[k]===undefined||Array.isArray(body[k])&&!body[k].length)delete body[k];
+  return {id:readerId(r.id)+':'+canonical(r.scope),body:canonical(body),receipts:receipts.map(q=>({text:q.quote,origin:q.turn_id,start:q.start,normalize:false,truncate:null}))};
 }
 const STOP=new Set(('a an and are as at be been being but by can could did do does doing for from had has have he her hers him his how i if in into is it its me my no nor not of on or our ours she so than that the their theirs them then there these they this those to too us was we were what when where which who why will with would you your yours').split(' '));
 export function tokenizeT1(text) {

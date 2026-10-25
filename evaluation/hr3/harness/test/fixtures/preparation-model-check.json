@@ -1,0 +1,23 @@
+{
+  "version": "hr3-preparation-charge-v1",
+  "stage": "pilot",
+  "embeddingUnits": {
+    "research": 0,
+    "product": 0
+  },
+  "source": "Complete preparation inventory and observed usage supplied by primary on 2026-10-25; no new dispatch.",
+  "charge_id": "prep-model-availability-2026-10-25",
+  "settledNanodollars": 0,
+  "outstandingNanodollars": 0,
+  "dispatches": [
+    {
+      "kind": "models_check",
+      "requests": 3,
+      "method": "GET",
+      "path": "/v1/models/{id}",
+      "modelIds": "Not specified in supplied receipt; exactly three availability lookups.",
+      "unbilled": true,
+      "settledNanodollars": 0
+    }
+  ]
+}

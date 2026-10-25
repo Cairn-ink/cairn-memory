@@ -65,3 +65,15 @@ test('P freshness uses internal keys and never reprocesses an already ingested e
  const selections=p.log.filter(x=>x.method==='receipt_selection').length;
  await p.ingest(first,date(3));assert.equal(p.events.length,2);assert.equal(p.log.filter(x=>x.method==='receipt_selection').length,selections);
 });
+
+
+test('P refuses private-label payloads before public ingestion and preserves returned context verbatim',async t=>{
+ const p=await fixture(t),before=p.log.length;
+ assert.throws(()=>p.call('admit',{namespace,memory:{content:'pilot-correction-L01-W1',kind:'context'},receipts:[]}),/private_label_leak/);
+ assert.equal(p.log.length,before);
+ await p.ingest([event(1)],date(1));
+ const delivery=await p.retrieve('service');
+ for(const op of p.log.filter(o=>o.surface==='core'||o.surface==='mcp'||o.surface==='constructor'))assert.ok(op.input,'Every public-operation argument is recorded for the independent scan');
+ const raw=p.log.filter(o=>o.surface==='mcp'&&o.method==='read_memory_context');
+ for(const [i,intent] of ['current','history'].entries())assert.equal(delivery.blocks[intent],raw[i].result.content.filter(c=>c.type==='text').map(c=>c.text).join('\n'));
+});

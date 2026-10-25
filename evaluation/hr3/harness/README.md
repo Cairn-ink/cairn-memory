@@ -245,8 +245,8 @@ Schema-invalid or unparseable output fails the batch. Otherwise every event is
 checked independently; valid events survive, and zero survivors is a successful
 empty extraction. Within-batch duplicate event IDs exclude all events sharing
 that ID. Before arm fan-out, `event-identity.mjs` replaces retained provider IDs
-with canonical JSON keys `[family_id, batch_ordinal, raw_event_id]`. Raw IDs and
-internal keys are recorded in extraction diagnostics. Source-turn predecessor
+with canonical JSON keys `[family_id, batch_ordinal, raw_event_id]`. Raw IDs,
+internal keys, and opaque reader aliases are recorded in extraction diagnostics. Source-turn predecessor
 anchors and semantic fields are preserved. P selects only newly received keys,
 including when an already received batch is submitted again.
 Cached records and `extraction-summary.json` retain event indices/IDs, all
@@ -280,7 +280,8 @@ exclusion manifest, projection schema, output certificate, complete-request
 certificate, and budget in that order. It then runs all generator tests, all integration tests, and
 all harness tests, in that order. The harness suite includes its own full fake
 pilot. After the suites pass, the sequence generates only pilot inputs, runs
-a separate full fake CLI pilot, and writes a bound report.
+a separate full fake CLI pilot, independently scans its exact reader bodies
+and P ingestion payloads with `leak-scan.mjs`, and writes a bound report.
 `freeze-a3.mjs` runs last, preserving the prior freeze in
 `reports/freeze-pre-a3.json`. The first failed verification is retained as
 `reports/a3-verification-first-failure.json`. Every child exit code and log hash
@@ -345,14 +346,19 @@ authorization and shared embedding limits apply to cumulative exposure before
 any new dispatch. Carrying prior exposure grants no ability to settle old
 reservations from a new journal.
 
-The committed manifest preserves the exact first-pilot ledger and the earlier
-schema-rejection ledger, whose reservation has no settlement. Exact records for
-the two preparation probes are not present in the supplied evidence, so
-`preparation.complete` is false. The budget reports a conditional ceiling for
-known exposure, and real execution refuses missing/incomplete preparation input
-or omission of the first pilot. An explicit fake carry-forward run exercises the
-same accounting without spending. A final real-rerun feasibility decision needs
-all exact preparation receipts and any reconciliation of the old reservation.
+The manifest preserves the exact first-pilot ledger and the earlier
+schema-rejection ledger, whose reservation remains carried in full. Preparation
+receipts now record the complete primary-attested inventory: two schema probes
+(input/output 946/5 and 751/16 at the frozen prices, 712,400 nanodollars total),
+three unbilled model availability lookups, and the single HTTP 400 unbilled
+rejection already covered by the old ledger. The probe receipt adds a separate
+1,000,000-nanodollar conservative hold. Completeness is true; receipts are pinned
+by hash and probe usage arithmetic is checked. The rejection receipt references
+the existing reservation without duplicating it or silently releasing it.
+
+A combined ceiling above $24 or incomplete preparation accounting makes the
+budget command fail before tests or another fake pilot. The existing retries,
+output requirements and resource allowances are unchanged.
 
 The source-only occurrence-1 replay separately reproduces 730/725/723 event
 quote counts and 973/968/965 including edge quotes; 605 of 728 events remain
@@ -360,3 +366,44 @@ formally valid. It reproduces 55 families with cross-batch ID collisions,
 257 duplicate-ID errors (56 adopted), and 68 eligible earlier adopted events
 reselected by P's former filter. The shared internal-key boundary eliminates
 these identifier errors and reselections without changing extraction semantics.
+
+## Private-label isolation after the A-3 recheck
+
+Global keys and original fixture labels remain private diagnostics. The research
+serializer uses 128-bit opaque record aliases consistently for record IDs,
+predecessors and supporting-event references, and record-local opaque aliases
+for reason-node IDs and edge endpoints. Claims, scope, intervals, source quotes,
+causal direction and update policies are preserved. Internal reducer-state
+fixtures stay unchanged; only their serializer hash expectations change.
+
+Controls are authored neutrally in the harness before public P ingestion:
+invoice titles and assertions, edits, replay content, action IDs, and namespace
+aliases contain no family or lineage markers. Dependency revisions, authoring
+paths, authorized/unauthorized operations, named forgetting, independent copies
+and foreign isolation retain their behavior. Generator controls remain private
+fixture specifications; `generator/` and its frozen pilot are untouched.
+P's returned context text is never redacted or rewritten.
+
+`privacy.mjs` checks the complete exact reader request body before dispatch and
+checks actual P public-operation arguments before ingestion. It rejects known
+family/lineage/namespace identifiers, split and condition identifiers, private
+metadata fields, seeds, schema labels and additional declared private labels,
+including escaped nested JSON. Source-supported semantic terms such as the
+extractor's `change_type: correction` and the frozen reader prompt's expiry rule
+remain public semantics; they are not author-assigned fixture identifiers.
+
+`privacy-scan.json` retains execution-time hashes and scan results as private run
+diagnostics. `reports/privacy-scan-a3.json` is the independent full-pilot recheck:
+120 exact requests per arm, every recorded P public-operation payload, and byte
+comparisons between both saved P delivery blocks and the corresponding raw MCP
+responses. Any label hit fails verification. The complete-request certificate
+uses the same isolation and guards before measuring framing bounds. Its
+historical audit reservation figures retain the old finding; current regression
+rows and worst-body measurements are recertified with the opaque aliases.
+
+The first privacy-guarded request certification stopped on the administrative
+"Engineering stress" prefix in independently authored reference questions.
+Those questions now use the neutral "At this checkpoint" prefix before request
+construction. Requested answer content and source structures are unchanged.
+The stopped verification record is retained in
+`reports/a3-privacy-first-failure.json`; the guard was not weakened.

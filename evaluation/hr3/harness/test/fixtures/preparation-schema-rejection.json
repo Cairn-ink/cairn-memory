@@ -1,0 +1,26 @@
+{
+  "version": "hr3-preparation-charge-v1",
+  "stage": "pilot",
+  "embeddingUnits": {
+    "research": 0,
+    "product": 0
+  },
+  "source": "Complete preparation inventory and observed usage supplied by primary on 2026-10-25; no new dispatch.",
+  "charge_id": "prep-schema-rejection-2026-10-25",
+  "settledNanodollars": 0,
+  "outstandingNanodollars": 0,
+  "carriedReservation": {
+    "ledgerSHA256": "be4c7e9de1a58f6c66040cb16e6142d6d9c00bddbfe766b2bd1ace6aaa01d97f",
+    "reservationId": "pilot-correction-L01-W1/extract/1/attempt-0",
+    "accounting": "Already carried in full from the rejected-attempt ledger; no duplicate charge or hold here."
+  },
+  "dispatches": [
+    {
+      "kind": "schema_rejection",
+      "requests": 1,
+      "httpStatus": 400,
+      "unbilled": true,
+      "settledNanodollars": 0
+    }
+  ]
+}

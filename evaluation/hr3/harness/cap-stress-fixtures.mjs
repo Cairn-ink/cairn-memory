@@ -87,7 +87,7 @@ function engineeringFixture(type,cause,language,boundary) {
   const gold={family_id:id,checkpoints:[]},support={family_id:id,checkpoints:[]};
   for(const n of [2,4]) {
     const e=focal.find(e=>e.source_turns[0]===`b${n}-focal`),graphs=accepted.get(n),isFinal=n===4;
-    family.checkpoints.push({batch:n,at:family.batches[n-1].observed_at,focal_turn:e.source_turns[0],question:'Engineering stress: current decision, specified predecessors, and complete directed causal explanation.'});
+    family.checkpoints.push({batch:n,at:family.batches[n-1].observed_at,focal_turn:e.source_turns[0],question:'At this checkpoint: current decision, specified predecessors, and complete directed causal explanation.'});
     const merged=event=>initial.map(f=>f.field==='cap'?event.claims[0]:f);
     let current=[];
     if(type==='scope_change')current=[claim(focal[0],focal[0].claims,scope(isFinal?['US']:['JP','US'])),claim(e,e.claims,scope(isFinal?['JP','TW']:['TW']))];

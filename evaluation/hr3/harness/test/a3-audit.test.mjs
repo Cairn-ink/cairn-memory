@@ -48,7 +48,7 @@ test('hash-verified first-pilot ledger reproduces exact settlement and consumed 
   const raw=readFileSync(source.path),a=auditLedger(raw.toString());assert.equal(hash(raw),source.sha256);
   assert.equal(a.exposure.settled,835244260);assert.equal(a.exposure.outstanding,0);
   assert.deepEqual(a.exposure.embedding,{research:174846,product:68457});assert.equal(a.exposure.reservations,1985);
-  const c=loadCarryForward(carryPath);assert.equal(c.exposure.total,846911460);assert.equal(c.exposure.outstanding,11667200);
+  const c=loadCarryForward(carryPath);assert.equal(c.exposure.total,848623860);assert.equal(c.exposure.outstanding,12667200);
 });
 
 test('fresh ledger and restarts preserve settled charges, outstanding reservations and embedding counters',t=>{
@@ -95,7 +95,7 @@ test('hash-verified exact preparation receipts participate in cumulative spendin
 test('complete request certificate covers auditor U/T requests, all provider framing and maximal structures',()=>{
   const r=JSON.parse(readFileSync(new URL('../reports/request-certification-a3.json',import.meta.url)));
   assert.equal(r.status,'PASS');assert.deepEqual(r.inputCaps,INPUT_CAPS);assert.equal(r.counts.families,240);
-  assert.deepEqual(r.auditRegressions.map(x=>[x.arm,x.reservation]),[['U',20855],['T',24133]]);
+  assert.deepEqual(r.historicalAuditReservations.map(x=>[x.arm,x.reservation]),[['U',20855],['T',24133]]);
   assert.ok(r.rows.every(row=>row.pass&&row.marginPercent>=r.minimumMarginPercent));
   assert.deepEqual([...new Set(r.rows.filter(x=>x.operation==='reader').map(x=>x.arm))].sort(),['O','P','T','U']);
   const encoder=createRequire(new URL('../../../../adapters/openai/package.json',import.meta.url))('tiktoken').get_encoding('o200k_base');

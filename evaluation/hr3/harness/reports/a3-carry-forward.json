@@ -11,7 +11,22 @@
     }
   ],
   "preparation": {
-    "complete": false,
-    "receipts": []
+    "complete": true,
+    "attestation": "Primary attests completeness: two schema probes, three unbilled model-availability lookups, and the single unbilled rejection already represented by its carried reservation.",
+    "dispatchCount": 6,
+    "receipts": [
+      {
+        "path": "evaluation/hr3/harness/test/fixtures/preparation-schema-probes.json",
+        "sha256": "23a2e30e98418b1f101e037308a26319c8878afb01643fea1d3416112b717848"
+      },
+      {
+        "path": "evaluation/hr3/harness/test/fixtures/preparation-model-check.json",
+        "sha256": "c6756a9dea714542ef502695bd7def8e9bdd8d33f813707dabb443496963a84f"
+      },
+      {
+        "path": "evaluation/hr3/harness/test/fixtures/preparation-schema-rejection.json",
+        "sha256": "39b7c3d14dd314ff76b4ed23ecabba0f91f89118b6d89ae7e66a53f0e04257dc"
+      }
+    ]
   }
 }

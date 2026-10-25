@@ -75,14 +75,14 @@ export function budgetA2() {
   const remainingEmbeddingNanodollars=(128000000-carry.exposure.embedding.research-carry.exposure.embedding.product)*20;
   const combined=carry.exposure.total+stages[0].worstNanodollars+remainingEmbeddingNanodollars;
   return {
-    version: 'hr3-budget-a2-audited-v2', status: stages[0].worstNanodollars + embeddingNanodollars < 24e9 ? 'PASS_PILOT_BUDGET' : 'FAIL_PILOT_BUDGET',
-    bindingPrePilotCriterion:'pilotFit',
+    version: 'hr3-budget-a2-audited-v2', status: carry.preparationComplete&&combined<=24e9?'PASS_PILOT_BUDGET':'FAIL_COMBINED_PILOT_BUDGET',
+    bindingPrePilotCriterion:'combinedPilotFit',
     pilotFit:{pass:stages[0].worstNanodollars + embeddingNanodollars < 24e9,responsesUSD:usd(stages[0].worstNanodollars),sharedEmbeddingsUSD:usd(embeddingNanodollars),conservativeTotalUSD:usd(stages[0].worstNanodollars + embeddingNanodollars),limitUSD:24,marginUSD:usd(24e9-stages[0].worstNanodollars-embeddingNanodollars)},
     a3PilotRerun:{carryForward:{path:'evaluation/hr3/harness/reports/a3-carry-forward.json',sha256:carry.manifestSHA256},
       priorSettledNanodollars:carry.exposure.settled,priorOutstandingNanodollars:carry.exposure.outstanding,priorExposureNanodollars:carry.exposure.total,
       priorEmbeddingUnits:carry.exposure.embedding,remainingEmbeddingNanodollars,remainingPilotAllowanceNanodollars:24000000000-carry.exposure.total,
       freshResponseCeilingNanodollars:stages[0].worstNanodollars,combinedConservativeNanodollars:combined,combinedConservativeUSD:usd(combined),limitUSD:24,
-      preparationComplete:carry.preparationComplete,scope:carry.preparationComplete?'Complete verified prior exposure':'Known verified exposure only; exact preparation receipts still pending',
+      preparationComplete:carry.preparationComplete,preparationDispatches:carry.preparationDispatches,preparationAttestation:carry.preparationAttestation,scope:carry.preparationComplete?'Complete verified prior exposure':'Known verified exposure only; exact preparation receipts still pending',
       pass:combined<=24000000000,realRerunAllowed:carry.preparationComplete&&combined<=24000000000,pooled:false,paidAuthorization:false},
     theoreticalEnvelope:{covered:worstNanodollars<=450e9,totalUSD:usd(worstNanodollars),operationalStopUSD:450,blockingBeforePilot:false,interpretation:'Informational all-maximum-plus-retry envelope, superseded as a feasibility gate by revised A-2. It is not spending authorization.'},
     laterStageFeasibility:{status:'pending_paid_pilot_projection',computed:false,bindingBeforeDevelopment:true,completionCeilingUSD:400,allStageLimitsRequired:true,projectionInputSchema:{path:'evaluation/hr3/harness/reports/pre-development-projection.schema.json',sha256:hash(readFileSync(new URL('./reports/pre-development-projection.schema.json',import.meta.url)))},completeTestRequired:true,budgetExhaustionOutcome:'Inconclusive'},
@@ -124,9 +124,9 @@ export function markdownSummary(report) {
   const money = x => '$' + x.toFixed(6);
   return `# A-2 budget after non-author audit (offline)
 
-**Binding pre-pilot budget gate: ${report.pilotFit.pass?'PASS':'FAIL'}.** Pilot responses ${money(report.pilotFit.responsesUSD)} + the entire shared embedding allowance ${money(report.pilotFit.sharedEmbeddingsUSD)} = **${money(report.pilotFit.conservativeTotalUSD)}**, below $24 by ${money(report.pilotFit.marginUSD)}. This is budget fit only; certification and other scientific/resource gates remain separate.
+**Binding pre-pilot budget gate: ${report.status==='PASS_PILOT_BUDGET'?'PASS':'FAIL'}.** Pilot responses ${money(report.pilotFit.responsesUSD)} + the entire shared embedding allowance ${money(report.pilotFit.sharedEmbeddingsUSD)} = **${money(report.pilotFit.conservativeTotalUSD)}**, below $24 by ${money(report.pilotFit.marginUSD)}. This is budget fit only; certification and other scientific/resource gates remain separate.
 
-**A-3 combined pilot ceiling (known verified exposure):** settled ${(report.a3PilotRerun.priorSettledNanodollars/1e9).toFixed(9)} USD + outstanding ${(report.a3PilotRerun.priorOutstandingNanodollars/1e9).toFixed(9)} USD + fresh responses ${(report.a3PilotRerun.freshResponseCeilingNanodollars/1e9).toFixed(9)} USD + remaining shared embeddings ${(report.a3PilotRerun.remainingEmbeddingNanodollars/1e9).toFixed(9)} USD = **${(report.a3PilotRerun.combinedConservativeNanodollars/1e9).toFixed(9)} USD**, within the shared $24 cap. Preparation completeness: **${report.a3PilotRerun.preparationComplete?'verified':'PENDING exact receipts; real rerun blocked'}**. All amounts derive from hash-verified ledger arithmetic, not the rounded $0.84. Embedding units already reserved are not restored. Runs are separate; this is not spending authorization.
+**A-3 combined pilot ceiling (complete verified exposure):** settled ${(report.a3PilotRerun.priorSettledNanodollars/1e9).toFixed(9)} USD + outstanding ${(report.a3PilotRerun.priorOutstandingNanodollars/1e9).toFixed(9)} USD + fresh responses ${(report.a3PilotRerun.freshResponseCeilingNanodollars/1e9).toFixed(9)} USD + remaining shared embeddings ${(report.a3PilotRerun.remainingEmbeddingNanodollars/1e9).toFixed(9)} USD = **${(report.a3PilotRerun.combinedConservativeNanodollars/1e9).toFixed(9)} USD**, within the shared $24 cap. Preparation completeness: **${report.a3PilotRerun.preparationComplete?'verified':'PENDING exact receipts; real rerun blocked'}**. All amounts derive from hash-verified ledger arithmetic, not the rounded $0.84. Embedding units already reserved are not restored. Runs are separate; this is not spending authorization.
 
 | Stage | Calls extraction / reader | Planned cost | Theoretical all-maximum-plus-retry envelope | Existing stage limit |
 |---|---:|---:|---:|---:|
@@ -150,5 +150,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   writeFileSync(new URL('./reports/budget-a2.md', import.meta.url), markdownSummary(report));
   assert.deepEqual(JSON.parse(readFileSync(output, 'utf8')), report);
   process.stdout.write(JSON.stringify({ status: report.status, totals: report.totals, stageLimitProposal: report.stageLimitProposal }, null, 2) + '\n');
-  process.exitCode = report.pilotFit.pass ? 0 : 1;
+  process.exitCode = report.pilotFit.pass&&report.a3PilotRerun.realRerunAllowed ? 0 : 1;
 }

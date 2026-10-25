@@ -30,6 +30,7 @@ const steps=[
   node('harness-tests',h+'/test.mjs',...dependencies),
   node('pilot-inputs','evaluation/hr3/generator/cli.mjs','--split','pilot','--out',artifacts+'/inputs'),
   node('fake-pilot',h+'/cli.mjs','--stage','pilot','--inputs',artifacts+'/inputs','--out',artifacts+'/pilot','--carry-forward',h+'/reports/a3-carry-forward.json',...dependencies),
+  node('leak-scan',h+'/leak-scan.mjs',artifacts+'/pilot',artifacts+'/inputs'),
   node('bound-report',h+'/cli.mjs','--bound-report',artifacts+'/pilot','--inputs',artifacts+'/inputs','--out',artifacts+'/bounds.json'),
 ];
 const verification={version:'hr3-a3-audited-offline-verification-v3',status:'RUNNING',networkCalls:0,paidCalls:0,commands:[]};

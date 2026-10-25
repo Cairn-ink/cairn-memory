@@ -6,6 +6,7 @@ import { mkdtempSync, chmodSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { canonical, normalize, hash, orderEvents, intervalStart } from './common.mjs';
+import {PrivacyGuard,readerId,neutralControl,namespaceAliases} from './privacy.mjs';
 import { freshEvents } from './event-identity.mjs';
 import { resolveLinks, unit } from './research.mjs';
 const ok=r=>{if(!r.ok)throw Object.assign(Error(r.error.code),{code:r.error.code});return r.value;};
@@ -19,10 +20,10 @@ export function formatEvent(e) {
   return `${e.subject} ${e.predicate}; scope=${canonical(e.scope)}; valid=${canonical(e.effective_interval)}; ${e.claims.map(x=>`${x.field}=${canonical(x.value)}`).join('; ')}${e.reason_edges.length?' Reasons: '+e.reason_edges.flatMap(x=>x.source_quotes.map(q=>q.quote)).join(' '):''}`;
 }
 export class ProductAgent {
-  static async open({namespace,embedder,counter,tempRoot=tmpdir(),onAuthorizationExposure=()=>{}}) {
-    const self=new ProductAgent();self.namespace=namespace;self.embedder=embedder;counter={id:counter.id,countTokens:counter.countTokens};self.counter=counter;
+  static async open({namespace,embedder,counter,tempRoot=tmpdir(),onAuthorizationExposure=()=>{},privacy=new PrivacyGuard()}={}) {
+    const self=new ProductAgent();self.namespaceAliases=namespaceAliases(namespace);namespace=self.namespaceAliases.own;self.namespace=namespace;self.privacy=privacy;self.embedder=embedder;counter={id:counter.id,countTokens:counter.countTokens};self.counter=counter;
     self.directory=mkdtempSync(join(tempRoot,'hr3-p-'));chmodSync(self.directory,0o700);self.path=join(self.directory,'store.sqlite');
-    self.onAuthorizationExposure=onAuthorizationExposure;self.log=[];self.events=[];self.refs=new Map();self.pending=[];self.schedules=new Map();self.contentOrigins=new Map();self.receiptOrigins=new Map();self.symbols={};self.controlRecords=[];self.forgottenIds=new Set();
+    self.onAuthorizationExposure=onAuthorizationExposure;self.privacy.check('product-payload',{namespace},{surface:'constructor',method:'namespace'});self.log=[{surface:'constructor',method:'namespace',input:{namespace}}];self.events=[];self.refs=new Map();self.pending=[];self.schedules=new Map();self.contentOrigins=new Map();self.receiptOrigins=new Map();self.symbols={};self.controlRecords=[];self.forgottenIds=new Set();
     const allowed=new Set([canonical(namespace)]);
     const authority={authorize(request,token){if(!token||!allowed.has(canonical(request.namespace)))return null;const {input,...grant}=request;return {...grant,accessGeneration:1};},isCurrent(grant){return grant;}};
     const policy={family:'hosted',maxRequests:100000,maxUsd:2.56,maxConcurrent:1,estimateUsd:texts=>texts.reduce((n,t)=>n+Buffer.byteLength(t)+16,0)*.02/1000000};
@@ -32,9 +33,11 @@ export class ProductAgent {
     try {await self.server.connect(a);await self.client.connect(b);return self;}catch(e){await self.close();throw e;}
   }
   call(method,input,authority=TOKEN) {
+    input=this.namespaceAliases.payload(input);this.privacy.check('product-payload',input,{surface:'core',method});
     const result=this.core[method](input,authority);this.log.push({surface:'core',method,input:structuredClone(input),result:structuredClone(result)});return result;
   }
   async tool(name,input) {
+    input=this.namespaceAliases.payload(input);this.privacy.check('product-payload',input,{surface:'mcp',method:name});
     const result=await this.client.callTool({name,arguments:input});this.log.push({surface:'mcp',method:name,input:structuredClone(input),result:structuredClone(result)});return result;
   }
   async toolEnvelope(name,input) {const result=await this.tool(name,input);try {return JSON.parse(result.content[0].text);}catch {return {ok:false,error:{code:'invalid_mcp_reply'}};}}
@@ -43,7 +46,7 @@ export class ProductAgent {
     const quotes=[...e.source_quotes].sort((a,b)=>e.source_turns.indexOf(a.turn_id)-e.source_turns.indexOf(b.turn_id)||a.start-b.start);
     this.log.push({surface:'agent',method:'receipt_selection',event:e.event_id,omitted:quotes.slice(4)});
     return quotes.slice(0,4).map((q,i)=>{
-      const excerpt=normalize(q.quote).slice(0,800),receipt={client:'hr3',sessionId:'hr3-public-agent',eventId:`${e.event_id}/${i}`,role:'user',excerpt};
+      const excerpt=normalize(q.quote).slice(0,800),receipt={client:'hr3',sessionId:'hr3-public-agent',eventId:`${readerId(e.event_id)}/${i}`,role:'user',excerpt};
       this.receiptOrigins.set(excerpt,{segments:[{origin:q.turn_id,start:q.start,text:q.quote}],normalize:true,truncate:800});return receipt;
     });
   }
@@ -118,7 +121,8 @@ export class ProductAgent {
     }
   }
   async controls(controls,batch) {
-    for(const control of controls) {
+    for(const raw of controls) {
+      const control=this.namespaceAliases.payload(neutralControl(raw));
       if(control.kind==='card')await this.cardControl(control,batch);
       else if(control.kind==='named_forget_replay_foreign')await this.safetyControl(control,batch);
     }
@@ -178,7 +182,7 @@ export class ProductAgent {
     const delivered=[],blocks={},diagnostics={};
     for(const intent of ['current','history']) {
       const refresh=[];
-      for(let i=0;i<4;i++){const result=await this.core.refreshContextIndex({readSet:[this.namespace],types:['memory','card'],intent,budget:{maxItems:128,maxMs:5000}},TOKEN);refresh.push(result);this.log.push({surface:'core',method:'refreshContextIndex',intent,result});if(!result.ok||result.value.status==='complete')break;}
+      for(let i=0;i<4;i++){const input={readSet:[this.namespace],types:['memory','card'],intent,budget:{maxItems:128,maxMs:5000}};this.privacy.check('product-payload',input,{surface:'core',method:'refreshContextIndex'});const result=await this.core.refreshContextIndex(input,TOKEN);refresh.push(result);this.log.push({surface:'core',method:'refreshContextIndex',input:structuredClone(input),intent,result});if(!result.ok||result.value.status==='complete')break;}
       const candidates=await this.toolEnvelope('find_memory_candidates',{query,types:['memory','card'],intent,semantic:true,limit:24,deadlineMs:5000});
       const response=await this.tool('read_memory_context',{query,types:['memory','card'],intent,semantic:true,maxTokens:2000,maxItems:12,deadlineMs:5000});
       diagnostics[intent]={refresh,candidates,metadata:response._meta??null,error:response.isError??false};
@@ -202,6 +206,6 @@ export class ProductAgent {
     }
     return {blocks,delivered,diagnostics};
   }
-  state() {return {pending:this.pending.map(e=>e.event_id),schedules:[...this.schedules.values()].map(({event,...s})=>({...s,event_id:event.event_id})),refs:[...this.refs],controls:this.controlSnapshot(),operations:this.log};}
+  state() {return {namespaceAliases:this.namespaceAliases.diagnostics(),pending:this.pending.map(e=>e.event_id),schedules:[...this.schedules.values()].map(({event,...s})=>({...s,event_id:event.event_id})),refs:[...this.refs],controls:this.controlSnapshot(),operations:this.log};}
   async close() {try{await this.client?.close();await this.server?.close();}finally{this.core?.close();if(this.directory)rmSync(this.directory,{recursive:true,force:true});}}
 }

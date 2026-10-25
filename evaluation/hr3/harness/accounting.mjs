@@ -84,7 +84,7 @@ export function loadCarryForward(path,active=new Set()) {
   const input=JSON.parse(manifestBytes);
   check(input.version==='hr3-carry-forward-v1'&&Array.isArray(input.ledgers)&&Array.isArray(input.preparation?.receipts)&&typeof input.preparation.complete==='boolean','manifest_shape');
   check(Object.keys(input).every(k=>['version','ledgers','preparation'].includes(k)),'manifest_extra_fields');
-  const exposure=emptyExposure(),used=new Set(),sources=[];
+  const exposure=emptyExposure(),used=new Set(),sources=[],preparationDispatches=[];
   function merge(e,sha) {
     const hashes=[sha,...e.sourceHashes];check(new Set(hashes).size===hashes.length&&hashes.every(h=>!used.has(h)),'duplicate_or_overlapping_sources');
     for(const h of hashes)used.add(h);
@@ -107,6 +107,27 @@ export function loadCarryForward(path,active=new Set()) {
     const receipt=JSON.parse(verifiedBytes(spec));
     check(receipt.version==='hr3-preparation-charge-v1'&&typeof receipt.charge_id==='string'&&receipt.charge_id&&stages.includes(receipt.stage),'preparation_shape');
     check(integer(receipt.settledNanodollars)&&integer(receipt.outstandingNanodollars)&&receipt.embeddingUnits&&['research','product'].every(k=>integer(receipt.embeddingUnits[k])),'preparation_amounts');
+    if(receipt.dispatches) {
+      check(Array.isArray(receipt.dispatches),'preparation_dispatches');
+      for(const d of receipt.dispatches) {
+        check(integer(d.requests)&&d.requests>0&&integer(d.settledNanodollars),'preparation_dispatch_amounts');
+        if(d.kind==='schema_probe') {
+          check(d.requests===1&&d.model==='gpt-4.1-mini-2025-04-14'&&d.max_output_tokens===16,'schema_probe_shape');
+          check(d.usage&&integer(d.usage.inputTokens)&&integer(d.usage.outputTokens)&&d.usage.outputTokens<=16,'schema_probe_usage');
+          check(d.inputRateNanodollars===400&&d.outputRateNanodollars===1600&&d.settledNanodollars===d.usage.inputTokens*400+d.usage.outputTokens*1600,'schema_probe_arithmetic');
+        } else if(d.kind==='models_check')check(d.method==='GET'&&d.path==='/v1/models/{id}'&&d.unbilled===true&&d.settledNanodollars===0,'models_check_receipt');
+        else if(d.kind==='schema_rejection')check(d.httpStatus===400&&d.unbilled===true&&d.settledNanodollars===0,'schema_rejection_receipt');
+        else fail('carry_forward:unknown_preparation_dispatch');
+        preparationDispatches.push({receipt:receipt.charge_id,...d});
+      }
+      check(sum(receipt.dispatches.map(d=>d.settledNanodollars))===receipt.settledNanodollars,'preparation_dispatch_total');
+      if(receipt.hold)check(receipt.hold.nanodollars===receipt.outstandingNanodollars,'preparation_hold');
+      if(receipt.carriedReservation) {
+        const source=input.ledgers.find(l=>l.sha256===receipt.carriedReservation.ledgerSHA256);
+        check(source&&auditLedger(verifiedBytes(source).toString()).events.some(e=>e.type==='reserve'&&e.id===receipt.carriedReservation.reservationId),'rejected_reservation_reference');
+        check(receipt.outstandingNanodollars===0,'duplicate_rejected_request_hold');
+      }
+    }
     const e=emptyExposure();e.settled=receipt.settledNanodollars;e.outstanding=receipt.outstandingNanodollars;e.total=sum([e.settled,e.outstanding]);
     e.embedding=receipt.embeddingUnits;e.byStage={[receipt.stage]:e.total};e.requestIds=[receipt.charge_id];
     if(e.outstanding)e.unsettled=[receipt.charge_id];merge(e,spec.sha256);sources.push({...spec,kind:'preparation'});
@@ -115,6 +136,8 @@ export function loadCarryForward(path,active=new Set()) {
   // Keep only a repository-relative manifest locator in durable artifacts.
   const absolute=path instanceof URL?fileURLToPath(path):resolve(path);check(absolute.startsWith(resolve(repo)+'/'),'manifest_must_be_in_repository');
   const relative=absolute.slice(resolve(repo).length+1);
-  const data={version:'hr3-carry-forward-snapshot-v1',manifestPath:relative,manifestSHA256:manifestHash,sources,preparationComplete:input.preparation.complete,exposure};
+  if(input.preparation.dispatchCount!==undefined)check(input.preparation.dispatchCount===sum(preparationDispatches.map(d=>d.requests)),'preparation_dispatch_count');
+  const data={version:'hr3-carry-forward-snapshot-v1',manifestPath:relative,manifestSHA256:manifestHash,sources,preparationComplete:input.preparation.complete,
+    preparationAttestation:input.preparation.attestation??null,preparationDispatches,exposure};
   return {...data,digest:hash(data)};
 }

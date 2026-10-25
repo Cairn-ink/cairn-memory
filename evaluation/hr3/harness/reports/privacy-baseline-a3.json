@@ -1,0 +1,25 @@
+{
+  "version": "hr3-pre-isolation-reader-leak-baseline-v1",
+  "sourceStage": "evaluation/hr3/harness/artifacts/a3-verification-2yhaO7/pilot",
+  "sourceManifestSHA256": "543e713eaa8cc11db415531a8294be2efb5784df9abde7d1d92596d11db5a89c",
+  "byArm": {
+    "U": {
+      "requests": 120,
+      "requestsWithLeaks": 120
+    },
+    "T": {
+      "requests": 120,
+      "requestsWithLeaks": 120
+    },
+    "O": {
+      "requests": 120,
+      "requestsWithLeaks": 120
+    },
+    "P": {
+      "requests": 120,
+      "requestsWithLeaks": 90
+    }
+  },
+  "detectorSHA256": "93c962c3fa385bde89da6055c06d15d92f24e15e149286879557d11ea8732580",
+  "use": "Private diagnostics only; exact preserved pre-isolation requests, no rerun, repair, tuning or pooling."
+}

@@ -221,7 +221,7 @@
     "evaluation/hr3/harness/inputs.mjs": "91979fe5de95a8e310cbef47542874edee824eb4ccbf2b4fdc0fd401acb1feb0",
     "evaluation/hr3/harness/extraction.mjs": "9e9b7d1a44c0427b5a8c0f4312bc20431ccb9fcb026c48fb3abb5315483caa29",
     "evaluation/hr3/harness/cap-certification.mjs": "d01f71d1828979d0b0d6f58677aedfc12a71d18cc089a9e0e1335e4a2874f977",
-    "evaluation/hr3/harness/cap-stress-fixtures.mjs": "649bd7176107e19514ef95acfa79f84a5b765b9d4e3ae262c013bca488116e14",
+    "evaluation/hr3/harness/cap-stress-fixtures.mjs": "c1eef36b796b00c840de2040b7546a4ffe842557d0d178b03a10b95a28573b16",
     "evaluation/hr3/harness/reports/inspected-heldout-references.json": "92df9c67373a8859afe6714ab41ab8b43e5899e05fa23c405ef76a2faab09ae6",
     "evaluation/hr3/harness/reports/cap-certification-a2-pre-cap-revision.json": "4d75c09649fbe82318b7a05b83eb2e1674f82f63da977ae3f07d972f00c8ef3f",
     "evaluation/hr3/scorer/schema.mjs": "da864e622d6f7aeea610ba41ef1c560dd112505aa7726d2d44799425c35e4656",

@@ -8,16 +8,17 @@ import {hash,atomicJSON} from './common.mjs';
 const root=fileURLToPath(new URL('.',import.meta.url)),repo=resolve(root,'../../..');
 const read=name=>readFileSync(join(root,name)),json=name=>JSON.parse(read(name));
 const verification=json('reports/a3-verification.json');
-assert.equal(verification.status,'PASS');assert.ok(verification.commands.length>=13);
+assert.equal(verification.status,'PASS');assert.ok(verification.commands.length>=14);
 for(const command of verification.commands) {
   assert.equal(command.exitCode,0,command.command);
   for(const [stream,digest] of Object.entries(command.logs))assert.equal(hash(readFileSync(join(repo,stream))),digest);
 }
 const errataSHA256=hash(readFileSync(new URL('../protocol/errata.md',import.meta.url)));
 const certificate=json('reports/cap-certification-a2.json'),budget=json('reports/budget-a2.json'),requestCertificate=json('reports/request-certification-a3.json');
-assert.equal(requestCertificate.status,'PASS');
-assert.equal(certificate.status,'PASS');assert.equal(budget.status,'PASS_PILOT_BUDGET');assert.equal(budget.a3PilotRerun.pass,true);
-for(const report of [certificate,budget,requestCertificate])for(const [path,digest] of Object.entries(report.sources))assert.equal(hash(readFileSync(join(repo,path))),digest,path);
+assert.equal(requestCertificate.status,'PASS');assert.equal(requestCertificate.privacy.hits,0);
+const privacyReport=json('reports/privacy-scan-a3.json');assert.equal(privacyReport.status,'PASS');assert.equal(privacyReport.readerRequests.total,480);assert.equal(privacyReport.productPayloads.hits,0);assert.equal(privacyReport.pReturnedContextUnchanged,true);
+assert.equal(certificate.status,'PASS');assert.equal(budget.status,'PASS_PILOT_BUDGET');assert.equal(budget.a3PilotRerun.pass,true);assert.equal(budget.a3PilotRerun.realRerunAllowed,true);
+for(const report of [certificate,budget,requestCertificate,privacyReport])for(const [path,digest] of Object.entries(report.sources))assert.equal(hash(readFileSync(join(repo,path))),digest,path);
 assert.equal(certificate.sources['evaluation/hr3/protocol/errata.md'],errataSHA256);
 assert.equal(json('reports/inspected-heldout-references.json').errataSHA256,errataSHA256);
 assert.equal(json('reports/pre-development-projection.schema.json').properties.errataSHA256.const,errataSHA256);

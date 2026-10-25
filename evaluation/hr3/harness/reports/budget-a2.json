@@ -1,7 +1,7 @@
 {
   "version": "hr3-budget-a2-audited-v2",
   "status": "PASS_PILOT_BUDGET",
-  "bindingPrePilotCriterion": "pilotFit",
+  "bindingPrePilotCriterion": "combinedPilotFit",
   "pilotFit": {
     "pass": true,
     "responsesUSD": 20.5824,
@@ -13,25 +13,74 @@
   "a3PilotRerun": {
     "carryForward": {
       "path": "evaluation/hr3/harness/reports/a3-carry-forward.json",
-      "sha256": "9d9b8c43eec335f0f95f0160e6f21383e577f10180704204e3b6c5483c47e691"
+      "sha256": "3627dec5c16ffdd79f782229d1ecc83f09bf69377d31f2791ce586902931e3b7"
     },
-    "priorSettledNanodollars": 835244260,
-    "priorOutstandingNanodollars": 11667200,
-    "priorExposureNanodollars": 846911460,
+    "priorSettledNanodollars": 835956660,
+    "priorOutstandingNanodollars": 12667200,
+    "priorExposureNanodollars": 848623860,
     "priorEmbeddingUnits": {
       "research": 174846,
       "product": 68457
     },
     "remainingEmbeddingNanodollars": 2555133940,
-    "remainingPilotAllowanceNanodollars": 23153088540,
+    "remainingPilotAllowanceNanodollars": 23151376140,
     "freshResponseCeilingNanodollars": 20582400000,
-    "combinedConservativeNanodollars": 23984445400,
-    "combinedConservativeUSD": 23.9844454,
+    "combinedConservativeNanodollars": 23986157800,
+    "combinedConservativeUSD": 23.9861578,
     "limitUSD": 24,
-    "preparationComplete": false,
-    "scope": "Known verified exposure only; exact preparation receipts still pending",
+    "preparationComplete": true,
+    "preparationDispatches": [
+      {
+        "receipt": "prep-schema-probes-2026-10-25",
+        "kind": "schema_probe",
+        "requests": 1,
+        "model": "gpt-4.1-mini-2025-04-14",
+        "max_output_tokens": 16,
+        "usage": {
+          "inputTokens": 946,
+          "outputTokens": 5
+        },
+        "inputRateNanodollars": 400,
+        "outputRateNanodollars": 1600,
+        "settledNanodollars": 386400
+      },
+      {
+        "receipt": "prep-schema-probes-2026-10-25",
+        "kind": "schema_probe",
+        "requests": 1,
+        "model": "gpt-4.1-mini-2025-04-14",
+        "max_output_tokens": 16,
+        "usage": {
+          "inputTokens": 751,
+          "outputTokens": 16
+        },
+        "inputRateNanodollars": 400,
+        "outputRateNanodollars": 1600,
+        "settledNanodollars": 326000
+      },
+      {
+        "receipt": "prep-model-availability-2026-10-25",
+        "kind": "models_check",
+        "requests": 3,
+        "method": "GET",
+        "path": "/v1/models/{id}",
+        "modelIds": "Not specified in supplied receipt; exactly three availability lookups.",
+        "unbilled": true,
+        "settledNanodollars": 0
+      },
+      {
+        "receipt": "prep-schema-rejection-2026-10-25",
+        "kind": "schema_rejection",
+        "requests": 1,
+        "httpStatus": 400,
+        "unbilled": true,
+        "settledNanodollars": 0
+      }
+    ],
+    "preparationAttestation": "Primary attests completeness: two schema probes, three unbilled model-availability lookups, and the single unbilled rejection already represented by its carried reservation.",
+    "scope": "Complete verified prior exposure",
     "pass": true,
-    "realRerunAllowed": false,
+    "realRerunAllowed": true,
     "pooled": false,
     "paidAuthorization": false
   },
@@ -59,10 +108,10 @@
   "sources": {
     "evaluation/hr3/protocol/protocol-v0.3.4.md": "639c55edb6633186580af434ee2fe3ed39bffc2bf36a9292dac03b7a1b20b3cc",
     "evaluation/hr3/protocol/errata.md": "758af3ad956f1187a8d34477e5c724e623fdebd097cb118c770e65d3fb1a26c9",
-    "evaluation/hr3/harness/budget-a2.mjs": "4736dc4d71f6f0d638efc12a1162739955f63a0c865b5f3e8be0a74be934d828",
-    "evaluation/hr3/harness/accounting.mjs": "ef81b7e1515e36aaef57753e415bf605bfa904ec75530846836ba0fd9567432c",
-    "evaluation/hr3/harness/reports/a3-carry-forward.json": "9d9b8c43eec335f0f95f0160e6f21383e577f10180704204e3b6c5483c47e691",
-    "evaluation/hr3/harness/reports/request-certification-a3.json": "c9680454ce3b0ad25c5209f732cbd7c0643da552e11dd8fbe4a7da1b32995ccb",
+    "evaluation/hr3/harness/budget-a2.mjs": "3265337ff2c9b304f49a0ad1ac8417d69c2b9f1bae00e99ed5f2c8327781f989",
+    "evaluation/hr3/harness/accounting.mjs": "fffd4dad3f57d44a57879b5529d58f1323bd9945fba0d6b5bc942555d9617ea0",
+    "evaluation/hr3/harness/reports/a3-carry-forward.json": "3627dec5c16ffdd79f782229d1ecc83f09bf69377d31f2791ce586902931e3b7",
+    "evaluation/hr3/harness/reports/request-certification-a3.json": "bf2ff8fff1e0397e45e5b5c14d3a7746c87388fc0f981e965df162fa45b4ecc9",
     "evaluation/hr3/harness/requests.mjs": "6372f7ca96800a2ef409f892bd0674c76256361072afe3549f642eb33a22fd2b",
     "evaluation/hr3/harness/ledger.mjs": "aff48f3c4093c7de9e71031c2d976e033ff4599f2b9ee2972f71601c7a13bc4d",
     "evaluation/hr3/harness/projection-schema.mjs": "6d1c9e0f24674d74f96221086dffdb19cc9e20f959cfe2129e49c9428d6372cc",

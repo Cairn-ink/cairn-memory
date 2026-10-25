@@ -4,6 +4,7 @@ import {readFileSync,mkdirSync,mkdtempSync,rmSync,writeFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {resolve,join} from 'node:path';
+import {PrivacyGuard} from './privacy.mjs';
 import {useInstalledDependencies} from './dependencies.mjs';
 import {pilotReferenceBundles,extractionReference} from './cap-certification.mjs';
 import {engineeringStressFixtures} from './cap-stress-fixtures.mjs';
@@ -33,10 +34,11 @@ export async function certifyRequests({progress=()=>{}}={}) {
   const encoder=createRequire(local('adapters/openai/package.json'))('tiktoken').get_encoding('o200k_base');
   const counter={id:'tiktoken-o200k_base',countTokens:text=>encoder.encode(text,[],[]).length};
   const root=fileURLToPath(new URL('./artifacts/',import.meta.url));mkdirSync(root,{recursive:true});const temp=mkdtempSync(join(root,'request-certificate-'));
-  const rows=[],worst={},audit=[];
+  const rows=[],worst={},audit=[],privacyReports=[];let currentPrivacy=null;
   function measure(operation,input,metadata) {
     const body=responseRequest(operation,input,{alternative:metadata.alternative??false});
     const id=metadata.arm?`${metadata.family}/reader/${metadata.arm}/${metadata.batch}`:'certificate';
+    if(operation==='reader')currentPrivacy.check('reader-request',body,{arm:metadata.arm,checkpoint:metadata.batch});
     const reservation=bytes(body)+4096,limit=inputLimit(operation,id);
     const row={...metadata,operation,requestBytes:bytes(body),reservation,limit,margin:limit-reservation,marginPercent:(limit-reservation)/limit*100,
       providerBodyTokens:counter.countTokens(JSON.stringify(body)),sha256:hash(body),pass:reservation*100<=limit*(100-INPUT_MARGIN_PERCENT)};
@@ -47,14 +49,14 @@ export async function certifyRequests({progress=()=>{}}={}) {
     for(const cohort of [{split:'pilot',bundles:pilotReferenceBundles()},{split:'engineering-stress',bundles:engineeringStressFixtures()}]) {
       let n=0;
       for(const {family} of cohort.bundles) {
-        const meta={split:cohort.split,family:family.family_id};
+        const meta={split:cohort.split,family:family.family_id};currentPrivacy=new PrivacyGuard(family);
         for(const b of family.batches)for(const alternative of [false,true])measure('extraction',extractionInput(family,b.ordinal),{...meta,batch:b.ordinal,alternative});
         // Every pilot P case, plus independent maximal graph/language/time
         // structures: alternative has the largest union, direct expiry adds
         // its distinct supported deadline-trigger graph. Other research arms
         // still cover the full 180-case engineering Cartesian product.
         const productCase=cohort.split==='pilot'||family.causal_class==='alternative_mediated'||family.change_type==='expiry'&&family.causal_class==='direct';
-        const product=productCase?await ProductAgent.open({namespace:family.namespace??{ownerId:'hr3-request-certificate',scope:'personal',projectId:null},embedder:certificateEmbedder(),counter,tempRoot:temp}):null;
+        const product=productCase?await ProductAgent.open({privacy:currentPrivacy,namespace:family.namespace??{ownerId:'hr3-request-certificate',scope:'personal',projectId:null},embedder:certificateEmbedder(),counter,tempRoot:temp}):null;
         const events=[];
         try {
           for(const b of family.batches) {
@@ -84,15 +86,16 @@ export async function certifyRequests({progress=()=>{}}={}) {
             audit.push(row);
           }
         }
+        privacyReports.push({family:family.family_id,...currentPrivacy.report()});
         if(++n%20===0)progress(`${cohort.split}: complete provider requests ${n}/${cohort.bundles.length}`);
       }
     }
-    const sources=Object.fromEntries(['requests.mjs','schema.mjs','event-identity.mjs','request-certification.mjs','research.mjs','product.mjs','cap-certification.mjs','cap-stress-fixtures.mjs'].map(name=>['evaluation/hr3/harness/'+name,hash(readFileSync(new URL(name,import.meta.url)))]));
+    const sources=Object.fromEntries(['privacy.mjs','requests.mjs','schema.mjs','event-identity.mjs','request-certification.mjs','research.mjs','product.mjs','cap-certification.mjs','cap-stress-fixtures.mjs'].map(name=>['evaluation/hr3/harness/'+name,hash(readFileSync(new URL(name,import.meta.url)))]));
     sources['evaluation/hr3/protocol/errata.md']=hash(readFileSync(local('evaluation/hr3/protocol/errata.md')));
     return {version:'hr3-a3-complete-request-certificate-v1',status:rows.every(r=>r.pass)?'PASS':'FAIL_INPUT_MARGIN',minimumMarginPercent:INPUT_MARGIN_PERCENT,inputCaps:INPUT_CAPS,readerInputCaps:READER_INPUT_CAPS,
       method:'Complete provider JSON body UTF-8 bytes + 4096 reservation; real o200k_base tokenizer; unmodified whole-item 2000-token intent delivery budgets. All pilot and all 180 independent engineering references for U/T/O with constant and hashed 1536-dimensional unit-vector fixtures. Actual public-operation P for all 60 pilot families and 36 independent maximal graph/language/boundary cases, using constant unit vectors. No held-out generation or network.',
       limits:'Grammar/reference-structure certification, not a bound over unbounded schema spellings or every possible embedding ranking. P public identities and resulting exact token selections can vary between fresh stores; certify the observed bodies and retain their hashes.',
-      counts:{families:240,requests:rows.length},auditRegressions:audit,worst,rows,sources,paidAuthorization:false};
+      counts:{families:240,requests:rows.length},privacy:{hits:privacyReports.reduce((n,r)=>n+r.hits,0),families:privacyReports},historicalAuditReservations:[{arm:'U',reservation:20855},{arm:'T',reservation:24133}],auditRegressions:audit,worst,rows,sources,paidAuthorization:false};
   } finally {encoder.free();rmSync(temp,{recursive:true,force:true});}
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href) {
