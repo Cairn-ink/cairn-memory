@@ -705,7 +705,7 @@ test('L14 status snapshot ' + state + ' ' + lang, async t => {
     assert.ok(calls.every(call => allow.includes(call)), JSON.stringify(calls));
   }
   for (const line of result.display.trimEnd().split('\n')) if (!result.literals.includes(line)) assert.ok(columns(line) <= 80, line);
-  const screen = result.display.replaceAll(f.home, '<HOME>').replaceAll(process.execPath, '<NODE>').replaceAll(engineId, '<engine-id>')
+  const screen = result.display.replaceAll(f.home, '<HOME>').replaceAll(process.execPath, '<NODE>').replace(/\d+\.\d+\.\d+(?:-[\w.]+)?-[0-9a-f]{12}(?:-r\d+)?/gu, '<engine-id>')
     .replaceAll(version, '<version>').replace(/local-[a-f0-9]{16}/gu, '<owner>').replace(/[ \t]+$/gmu, '');
   const path = new URL('./snapshots/local-status-' + state + '-' + lang + '.txt', import.meta.url);
   if (process.env.UPDATE_SETUP_SNAPSHOTS === '1') await writeFile(path, screen);

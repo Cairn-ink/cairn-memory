@@ -34,8 +34,8 @@ Codex: local memory (cairn-local)
   Data: ~/.cairn-memory/data
 "<HOME>/.cairn-memory/data/memory.sqlite"
 "<NODE>"
-"<HOME>/.cairn-memory/engine/99.0.0-e88b1ea56ae9/app/node_modules/cairn-memory-local-preview/bin/cairn-memory.mjs"
+"<HOME>/.cairn-memory/engine/<engine-id>/app/node_modules/cairn-memory-local-preview/bin/cairn-memory.mjs"
 "<owner>"
-"99.0.0-e88b1ea56ae9"
+"<engine-id>"
   Retained failed installations:
 "<HOME>/.cairn-memory/engine/<engine-id>.failed-123"
