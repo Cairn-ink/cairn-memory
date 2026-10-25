@@ -1,3 +1,11 @@
+# A-4 second-recheck ledger repair
+
+Ledger snapshots now read the checkpoint and journal under the same exclusive lock. Monitoring reports errors without persisting rejection flags. Authoritative writer checks revalidate after lock acquisition and compare the checkpoint again before writing a rejection; they retain the newest cursor. Watchdog lock contention is reported as busy, with the five-minute stop still enforced.
+
+See [second-recheck report](REPORT-A4-RECHECK2.md) for the reproduced 3e49f0a4 race, fixed interleaving, rollback-persistence tests and full verification. Primary freeze and review remain required.
+
+The earlier repair records follow as historical context.
+
 # A-4 audit recheck repairs
 
 The ledger now pins its accepted configuration and history in memory and in a separately fsynced `ledger.jsonl.head.json`. Missing/empty journals, changed configuration and valid-prefix rollback stop before reservation/dispatch. Checkpoint mismatches require reconciliation; historical journals are never reinitialized or migrated. New run manifests include the checkpoint.

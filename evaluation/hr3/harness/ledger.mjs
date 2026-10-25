@@ -15,6 +15,10 @@ export function verifyJournalCheckpoint(events,bytes,checkpoint) {
 // A durable append-only journal, serialized by an exclusive directory lock.
 // Stale locks and partial records fail closed; the operator must reconcile them.
 export class Ledger {
+  #locked=false;
+  #persistRejection=false;
+  #checkpointBytes=null;
+  #diskHead=null;
   constructor(path,{stage='pilot',plan,limits={},carryForward=null}={}) {
     this.path=path;this.lock=path+'.lock';this.headPath=path+'.head.json';this.stage=stage==='smoke'?'pilot':stage;
     if(!CAPS[stage]||!Array.isArray(plan)||!plan.length||plan.some(p=>!['extraction','reader','research-embedding','product-embedding'].includes(p.operation)||!Number.isSafeInteger(p.maxDispatches)||p.maxDispatches<1||typeof p.ids!=='string'||!p.ids.startsWith('^')||!p.ids.endsWith('$')))fail('invalid_plan');
@@ -33,21 +37,44 @@ export class Ledger {
     finally{this.initializing=false;}
   }
   reject(reason) {
-    this.hardStop=reason;
-    // Preserve the last trusted position separately from damaged journal bytes.
-    // Failure to persist this stop still throws; it never permits dispatch.
-    if(this.acceptedHead)atomicJSON(this.headPath,{...this.acceptedHead,blockedReason:reason});
+    if(!this.#locked)fail('ledger_rejection_requires_lock');
+    // Monitoring reports a coherent failure without changing durable or sticky
+    // writer state. Only an authoritative transaction may persist a rejection.
+    if(this.#persistRejection){
+      this.#verifyCheckpointUnchanged();
+      const head=this.#diskHead,accepted=this.acceptedHead;
+      // A wrong-configuration constructor must not poison an existing writer.
+      // Preserve the newest validated cursor, never a stale observer's cursor.
+      if(accepted||head?.configurationSHA256===this.configurationSHA256){
+        const latest=head&&(!accepted||head.records>=accepted.records)?head:accepted;
+        if(latest)atomicJSON(this.headPath,{...latest,blockedReason:reason});
+      }
+      this.hardStop=reason;
+    }
     fail(reason);
   }
   read() {
+    return this.#withLock(()=>this.#readLocked(),false);
+  }
+  #checkpointRead(){return existsSync(this.headPath)?readFileSync(this.headPath,'utf8'):null;}
+  #verifyCheckpointUnchanged(){
+    if(!this.#locked)fail('ledger_checkpoint_requires_lock');
+    if(this.#checkpointRead()!==this.#checkpointBytes)fail('ledger_checkpoint_changed');
+  }
+  #readLocked() {
+    if(!this.#locked)fail('ledger_read_requires_lock');
+    // These bytes are captured only after acquisition, including on resume.
+    // Re-read them before any persistent rejection or append.
+    this.#checkpointBytes=this.#checkpointRead();this.#diskHead=null;
     if(this.hardStop)fail(this.hardStop);
-    if(hash(this.configuration)!==this.configurationSHA256)return this.reject('ledger_configuration_mismatch');
     let head;
-    if(existsSync(this.headPath)){
-      try{head=JSON.parse(readFileSync(this.headPath));}catch{return this.reject('ledger_head_corrupt');}
+    if(this.#checkpointBytes!==null){
+      try{head=JSON.parse(this.#checkpointBytes);}catch{return this.reject('ledger_head_corrupt');}
       if(head.blockedReason)fail(head.blockedReason);
       if(head.version!=='hr3-ledger-head-v1'||!Number.isSafeInteger(head.records)||head.records<1||!Number.isSafeInteger(head.bytes)||head.bytes<1||typeof head.head!=='string'||typeof head.configurationSHA256!=='string')return this.reject('ledger_head_corrupt');
+      this.#diskHead=head;
     }
+    if(hash(this.configuration)!==this.configurationSHA256)return this.reject('ledger_configuration_mismatch');
     if(!existsSync(this.path)){
       if(this.initializing&&!head&&!this.acceptedHead)return [];
       this.acceptedHead??=head;return this.reject('ledger_journal_missing');
@@ -71,10 +98,17 @@ export class Ledger {
     this.acceptedHead=head;this.cachedStamp=stamp;this.cachedEvents=events;return events;
   }
   transaction(fn) {
+    return this.#withLock(()=>fn(this.#readLocked()),true);
+  }
+  #withLock(fn,persistRejection) {
+    if(this.#locked)fail('ledger_locked');
     try {mkdirSync(this.lock,{mode:0o700});}catch {fail('ledger_locked');}
-    try{return fn(this.read());}finally{rmdirSync(this.lock);}
+    this.#locked=true;this.#persistRejection=persistRejection;
+    try{return fn();}finally{this.#persistRejection=false;this.#locked=false;rmdirSync(this.lock);}
   }
   append(events,event) {
+    if(!this.#locked||!this.#persistRejection)fail('ledger_append_requires_transaction');
+    this.#verifyCheckpointUnchanged();
     const data={...event,prior:events.at(-1)?.digest??''}, record={...data,digest:hash(data)};
     const fd=openSync(this.path,'a',0o600);try {const data=Buffer.from(canonical(record)+'\n');let offset=0;while(offset<data.length)offset+=writeSync(fd,data,offset,data.length-offset);fsyncSync(fd);}finally{closeSync(fd);}
     const parent=openSync(dirname(this.path),'r');try{fsyncSync(parent);}finally{closeSync(parent);}
@@ -83,6 +117,7 @@ export class Ledger {
     // Journal fsync precedes checkpoint replacement and directory fsync. A crash
     // between them is a hard mismatch requiring reconciliation, never a replay.
     atomicJSON(this.headPath,head);this.acceptedHead=head;
+    this.#checkpointBytes=canonical(head)+'\n';this.#diskHead=head;
     this.cachedStamp=[stat.ino,stat.size,stat.mtimeNs,stat.ctimeNs].join(':');this.cachedEvents=events;return record;
   }
   snapshot(events=this.read()) {

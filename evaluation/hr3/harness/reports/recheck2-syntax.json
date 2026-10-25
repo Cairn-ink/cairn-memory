@@ -1,0 +1,30 @@
+{
+  "status": "PASS",
+  "commands": [
+    {
+      "command": "node --check evaluation/hr3/harness/ledger.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/test.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/test/ledger-race-a4.test.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/test/recheck-a4.test.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/transport.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    }
+  ]
+}

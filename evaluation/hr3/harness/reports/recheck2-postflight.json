@@ -1,0 +1,59 @@
+{
+  "status": "PASS",
+  "verification": "evaluation/hr3/harness/artifacts/a4-verification-T9RSX9",
+  "orderedCommands": 21,
+  "allChildExits": 0,
+  "certificates": 8,
+  "sourceAndLogBindings": "PASS",
+  "runtimeClosureSHA256": "a28e18c928a083de109ea16e6a3d713d7293d9a04a8c8e693a493719831cc773",
+  "pilotAnswers": 480,
+  "checkpoint": "PASS",
+  "baselineRace": "3-record journal / poisoned 2-record checkpoint; both writer and resume fail",
+  "fixedRace": "3-record journal / 3-record checkpoint; writer and resume healthy; all writes locked",
+  "paidReadiness": false,
+  "primaryFreeze": "PENDING",
+  "networkCalls": 0,
+  "paidCalls": 0,
+  "commits": 0,
+  "changedFileCrossCheck": {
+    "status": "PASS",
+    "counts": {
+      "total": 2350,
+      "gitVisible": 49,
+      "ignoredArtifacts": 2301,
+      "sourceDocsTestsFixtures": 10
+    },
+    "routes": [
+      "Git tracked differences plus all untracked paths including ignored, filtered by task-entry SHA",
+      "Independent recursive filesystem content SHA inventory"
+    ],
+    "exitCode": 0,
+    "preexistingArtifactsUnchanged": 61670,
+    "historicalFixturesCarryAndFreezeUnchanged": true
+  },
+  "additionalCommands": {
+    "focusedTests": {
+      "pass": 45,
+      "fail": 0,
+      "exitCode": 0
+    },
+    "baselineRaceFinal": {
+      "pass": 0,
+      "fail": 1,
+      "exitCode": 1
+    },
+    "previousLedgerReplayExitCode": 0,
+    "syntax": {
+      "count": 5,
+      "allExitCodes": 0
+    },
+    "portableDiagnostics": {
+      "exitCode": 0,
+      "normalizedNewLogs": 2,
+      "scientificArtifactsChanged": 0
+    },
+    "certificateRebindExitCode": 0,
+    "postflightExitCode": 0,
+    "gitDiffCheckExitCode": 0
+  }
+}

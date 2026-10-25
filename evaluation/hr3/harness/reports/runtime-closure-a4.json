@@ -3924,6 +3924,11 @@
       "to": "evaluation/hr3/harness/requests.mjs"
     },
     {
+      "from": "evaluation/hr3/harness/inputs.mjs",
+      "specifier": "./common.mjs",
+      "to": "evaluation/hr3/harness/common.mjs"
+    },
+    {
       "from": "evaluation/hr3/harness/budget-a4.mjs",
       "specifier": "./accounting-a4.mjs",
       "to": "evaluation/hr3/harness/accounting-a4.mjs"
@@ -3944,12 +3949,17 @@
       "to": "evaluation/hr3/harness/common.mjs"
     },
     {
-      "from": "evaluation/hr3/harness/inputs.mjs",
+      "from": "evaluation/hr3/harness/accounting.mjs",
       "specifier": "./common.mjs",
       "to": "evaluation/hr3/harness/common.mjs"
     },
     {
-      "from": "evaluation/hr3/harness/accounting.mjs",
+      "from": "evaluation/hr3/harness/privacy.mjs",
+      "specifier": "./contract-projection-a4.mjs",
+      "to": "evaluation/hr3/harness/contract-projection-a4.mjs"
+    },
+    {
+      "from": "evaluation/hr3/harness/privacy.mjs",
       "specifier": "./common.mjs",
       "to": "evaluation/hr3/harness/common.mjs"
     },
@@ -3977,41 +3987,6 @@
       "from": "evaluation/hr3/harness/extraction.mjs",
       "specifier": "./schema.mjs",
       "to": "evaluation/hr3/harness/schema.mjs"
-    },
-    {
-      "from": "evaluation/hr3/harness/privacy.mjs",
-      "specifier": "./contract-projection-a4.mjs",
-      "to": "evaluation/hr3/harness/contract-projection-a4.mjs"
-    },
-    {
-      "from": "evaluation/hr3/harness/privacy.mjs",
-      "specifier": "./common.mjs",
-      "to": "evaluation/hr3/harness/common.mjs"
-    },
-    {
-      "from": "evaluation/hr3/harness/artifacts.mjs",
-      "specifier": "./common.mjs",
-      "to": "evaluation/hr3/harness/common.mjs"
-    },
-    {
-      "from": "evaluation/hr3/harness/bounds.mjs",
-      "specifier": "./accounting.mjs",
-      "to": "evaluation/hr3/harness/accounting.mjs"
-    },
-    {
-      "from": "evaluation/hr3/harness/bounds.mjs",
-      "specifier": "./extraction-diagnostics.mjs",
-      "to": "evaluation/hr3/harness/extraction-diagnostics.mjs"
-    },
-    {
-      "from": "evaluation/hr3/harness/bounds.mjs",
-      "specifier": "./ledger.mjs",
-      "to": "evaluation/hr3/harness/ledger.mjs"
-    },
-    {
-      "from": "evaluation/hr3/harness/bounds.mjs",
-      "specifier": "./common.mjs",
-      "to": "evaluation/hr3/harness/common.mjs"
     },
     {
       "from": "evaluation/hr3/harness/requests.mjs",
@@ -4045,6 +4020,31 @@
     },
     {
       "from": "evaluation/hr3/harness/research.mjs",
+      "specifier": "./common.mjs",
+      "to": "evaluation/hr3/harness/common.mjs"
+    },
+    {
+      "from": "evaluation/hr3/harness/artifacts.mjs",
+      "specifier": "./common.mjs",
+      "to": "evaluation/hr3/harness/common.mjs"
+    },
+    {
+      "from": "evaluation/hr3/harness/bounds.mjs",
+      "specifier": "./accounting.mjs",
+      "to": "evaluation/hr3/harness/accounting.mjs"
+    },
+    {
+      "from": "evaluation/hr3/harness/bounds.mjs",
+      "specifier": "./extraction-diagnostics.mjs",
+      "to": "evaluation/hr3/harness/extraction-diagnostics.mjs"
+    },
+    {
+      "from": "evaluation/hr3/harness/bounds.mjs",
+      "specifier": "./ledger.mjs",
+      "to": "evaluation/hr3/harness/ledger.mjs"
+    },
+    {
+      "from": "evaluation/hr3/harness/bounds.mjs",
       "specifier": "./common.mjs",
       "to": "evaluation/hr3/harness/common.mjs"
     },
@@ -4124,11 +4124,6 @@
       "to": "evaluation/hr3/harness/common.mjs"
     },
     {
-      "from": "evaluation/hr3/scorer/citations.mjs",
-      "specifier": "./canonical.mjs",
-      "to": "evaluation/hr3/scorer/canonical.mjs"
-    },
-    {
       "from": "evaluation/hr3/scorer/slots.mjs",
       "specifier": "./canonical.mjs",
       "to": "evaluation/hr3/scorer/canonical.mjs"
@@ -4140,6 +4135,11 @@
     },
     {
       "from": "evaluation/hr3/scorer/contract.mjs",
+      "specifier": "./canonical.mjs",
+      "to": "evaluation/hr3/scorer/canonical.mjs"
+    },
+    {
+      "from": "evaluation/hr3/scorer/citations.mjs",
       "specifier": "./canonical.mjs",
       "to": "evaluation/hr3/scorer/canonical.mjs"
     },
@@ -4357,6 +4357,11 @@
       "from": "core/memory-reader.mjs",
       "specifier": "./topic-overview-input.mjs",
       "to": "core/topic-overview-input.mjs"
+    },
+    {
+      "from": "core/validation.mjs",
+      "specifier": "../plugins/cairn-memory/lib/redact.mjs",
+      "to": "plugins/cairn-memory/lib/redact.mjs"
     },
     {
       "from": "core/context-reader.mjs",
@@ -4714,11 +4719,6 @@
       "to": "core/validation.mjs"
     },
     {
-      "from": "core/validation.mjs",
-      "specifier": "../plugins/cairn-memory/lib/redact.mjs",
-      "to": "plugins/cairn-memory/lib/redact.mjs"
-    },
-    {
       "from": "core/card-current-input.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
@@ -4804,14 +4804,14 @@
       "to": "core/private-card-input.mjs"
     },
     {
-      "from": "adapters/mcp/card-current-tools.mjs",
-      "specifier": "../../core/validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
       "from": "adapters/mcp/asset-tools.mjs",
       "specifier": "../../core/method-package-input.mjs",
       "to": "core/method-package-input.mjs"
+    },
+    {
+      "from": "adapters/mcp/card-current-tools.mjs",
+      "specifier": "../../core/validation.mjs",
+      "to": "core/validation.mjs"
     },
     {
       "from": "adapters/mcp/method-package-access.mjs",
@@ -4859,14 +4859,14 @@
       "to": "core/context-read-input.mjs"
     },
     {
-      "from": "adapters/mcp/role-profile-configuration.mjs",
-      "specifier": "../../core/role-profile-input.mjs",
-      "to": "core/role-profile-input.mjs"
-    },
-    {
       "from": "adapters/mcp/context-read-transport.mjs",
       "specifier": "../../core/context-read-assembly.mjs",
       "to": "core/context-read-assembly.mjs"
+    },
+    {
+      "from": "adapters/mcp/role-profile-configuration.mjs",
+      "specifier": "../../core/role-profile-input.mjs",
+      "to": "core/role-profile-input.mjs"
     },
     {
       "from": "adapters/mcp/role-profile-access.mjs",
@@ -4877,6 +4877,16 @@
       "from": "adapters/mcp/role-profile-access.mjs",
       "specifier": "../../core/role-profile-input.mjs",
       "to": "core/role-profile-input.mjs"
+    },
+    {
+      "from": "adapters/mcp/role-profile-tools.mjs",
+      "specifier": "../../core/validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "adapters/mcp/role-profile-tools.mjs",
+      "specifier": "../../core/method-package-input.mjs",
+      "to": "core/method-package-input.mjs"
     },
     {
       "from": "adapters/openai/context-counter.mjs",
@@ -4892,16 +4902,6 @@
       "from": "adapters/mcp/role-profile-transport.mjs",
       "specifier": "../../core/role-context-wire.mjs",
       "to": "core/role-context-wire.mjs"
-    },
-    {
-      "from": "adapters/mcp/role-profile-tools.mjs",
-      "specifier": "../../core/validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "adapters/mcp/role-profile-tools.mjs",
-      "specifier": "../../core/method-package-input.mjs",
-      "to": "core/method-package-input.mjs"
     },
     {
       "from": "core/topic-overview-input.mjs",
@@ -4995,6 +4995,56 @@
     },
     {
       "from": "core/asset-input.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/asset-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/asset-storage.mjs",
+      "specifier": "./asset-identity.mjs",
+      "to": "core/asset-identity.mjs"
+    },
+    {
+      "from": "core/asset-storage.mjs",
+      "specifier": "./asset-input.mjs",
+      "to": "core/asset-input.mjs"
+    },
+    {
+      "from": "core/asset-storage.mjs",
+      "specifier": "./asset-schema.mjs",
+      "to": "core/asset-schema.mjs"
+    },
+    {
+      "from": "core/asset-storage.mjs",
+      "specifier": "./private-operation-helpers.mjs",
+      "to": "core/private-operation-helpers.mjs"
+    },
+    {
+      "from": "core/asset-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/asset-storage.mjs",
+      "specifier": "./asset-derivative-storage.mjs",
+      "to": "core/asset-derivative-storage.mjs"
+    },
+    {
+      "from": "core/confirmation-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/confirmation-storage.mjs",
+      "specifier": "./relation-limits.mjs",
+      "to": "core/relation-limits.mjs"
+    },
+    {
+      "from": "core/confirmation-storage.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -5149,56 +5199,6 @@
       "to": "core/method-package-input.mjs"
     },
     {
-      "from": "core/asset-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/asset-storage.mjs",
-      "specifier": "./asset-identity.mjs",
-      "to": "core/asset-identity.mjs"
-    },
-    {
-      "from": "core/asset-storage.mjs",
-      "specifier": "./asset-input.mjs",
-      "to": "core/asset-input.mjs"
-    },
-    {
-      "from": "core/asset-storage.mjs",
-      "specifier": "./asset-schema.mjs",
-      "to": "core/asset-schema.mjs"
-    },
-    {
-      "from": "core/asset-storage.mjs",
-      "specifier": "./private-operation-helpers.mjs",
-      "to": "core/private-operation-helpers.mjs"
-    },
-    {
-      "from": "core/asset-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/asset-storage.mjs",
-      "specifier": "./asset-derivative-storage.mjs",
-      "to": "core/asset-derivative-storage.mjs"
-    },
-    {
-      "from": "core/confirmation-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/confirmation-storage.mjs",
-      "specifier": "./relation-limits.mjs",
-      "to": "core/relation-limits.mjs"
-    },
-    {
-      "from": "core/confirmation-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
       "from": "core/episode-reads.mjs",
       "specifier": "./database.mjs",
       "to": "core/database.mjs"
@@ -5210,6 +5210,16 @@
     },
     {
       "from": "core/episode-reads.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/procedural-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/procedural-storage.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -5235,6 +5245,81 @@
     },
     {
       "from": "core/session-context.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/episode-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/episode-storage.mjs",
+      "specifier": "./episode-schema.mjs",
+      "to": "core/episode-schema.mjs"
+    },
+    {
+      "from": "core/episode-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/episode-storage.mjs",
+      "specifier": "./procedural-storage.mjs",
+      "to": "core/procedural-storage.mjs"
+    },
+    {
+      "from": "core/episode-storage.mjs",
+      "specifier": "./raw-control-storage.mjs",
+      "to": "core/raw-control-storage.mjs"
+    },
+    {
+      "from": "core/episode-storage.mjs",
+      "specifier": "./local-authority-guard.mjs",
+      "to": "core/local-authority-guard.mjs"
+    },
+    {
+      "from": "core/classification-journal-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/classification-journal-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/moc-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/moc-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/moc-storage.mjs",
+      "specifier": "./query-candidates.mjs",
+      "to": "core/query-candidates.mjs"
+    },
+    {
+      "from": "core/moc-storage.mjs",
+      "specifier": "./source-evidence.mjs",
+      "to": "core/source-evidence.mjs"
+    },
+    {
+      "from": "core/staged-evidence-storage.mjs",
+      "specifier": "./episode-schema.mjs",
+      "to": "core/episode-schema.mjs"
+    },
+    {
+      "from": "core/staged-evidence-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/staged-evidence-storage.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -5359,62 +5444,12 @@
       "to": "core/episode-schema.mjs"
     },
     {
-      "from": "core/procedural-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/procedural-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/episode-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/episode-storage.mjs",
-      "specifier": "./episode-schema.mjs",
-      "to": "core/episode-schema.mjs"
-    },
-    {
-      "from": "core/episode-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/episode-storage.mjs",
-      "specifier": "./procedural-storage.mjs",
-      "to": "core/procedural-storage.mjs"
-    },
-    {
-      "from": "core/episode-storage.mjs",
-      "specifier": "./raw-control-storage.mjs",
-      "to": "core/raw-control-storage.mjs"
-    },
-    {
-      "from": "core/episode-storage.mjs",
-      "specifier": "./local-authority-guard.mjs",
-      "to": "core/local-authority-guard.mjs"
-    },
-    {
-      "from": "core/classification-journal-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/classification-journal-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/supersession-storage.mjs",
+      "from": "core/conflict-storage.mjs",
       "specifier": "./relation-limits.mjs",
       "to": "core/relation-limits.mjs"
     },
     {
-      "from": "core/supersession-storage.mjs",
+      "from": "core/conflict-storage.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -5432,46 +5467,6 @@
       "from": "core/admission-storage.mjs",
       "specifier": "./local-authority-guard.mjs",
       "to": "core/local-authority-guard.mjs"
-    },
-    {
-      "from": "core/moc-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/moc-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/moc-storage.mjs",
-      "specifier": "./query-candidates.mjs",
-      "to": "core/query-candidates.mjs"
-    },
-    {
-      "from": "core/moc-storage.mjs",
-      "specifier": "./source-evidence.mjs",
-      "to": "core/source-evidence.mjs"
-    },
-    {
-      "from": "core/index-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/index-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/ordered-capture-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/ordered-capture-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
     },
     {
       "from": "core/source-evidence.mjs",
@@ -5509,12 +5504,27 @@
       "to": "core/raw-source-input.mjs"
     },
     {
-      "from": "core/claim-qualification-storage.mjs",
-      "specifier": "./claim-qualification-input.mjs",
-      "to": "core/claim-qualification-input.mjs"
+      "from": "core/index-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
     },
     {
-      "from": "core/claim-qualification-storage.mjs",
+      "from": "core/index-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/qualified-transition-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/rationale-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/rationale-storage.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -5594,16 +5604,6 @@
       "to": "core/private-card-input.mjs"
     },
     {
-      "from": "core/rationale-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/rationale-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
       "from": "core/raw-source-roots.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
@@ -5625,6 +5625,21 @@
     },
     {
       "from": "core/raw-deletion-storage.mjs",
+      "specifier": "./card-raw-sources.mjs",
+      "to": "core/card-raw-sources.mjs"
+    },
+    {
+      "from": "core/raw-lineage-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/raw-lineage-storage.mjs",
+      "specifier": "./raw-source-roots.mjs",
+      "to": "core/raw-source-roots.mjs"
+    },
+    {
+      "from": "core/raw-lineage-storage.mjs",
       "specifier": "./card-raw-sources.mjs",
       "to": "core/card-raw-sources.mjs"
     },
@@ -5659,6 +5674,16 @@
       "to": "core/validation.mjs"
     },
     {
+      "from": "core/ordered-capture-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/ordered-capture-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
       "from": "core/asset-facade.mjs",
       "specifier": "./asset-input.mjs",
       "to": "core/asset-input.mjs"
@@ -5682,36 +5707,6 @@
       "from": "core/asset-facade.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/qualified-transition-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/raw-lineage-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/raw-lineage-storage.mjs",
-      "specifier": "./raw-source-roots.mjs",
-      "to": "core/raw-source-roots.mjs"
-    },
-    {
-      "from": "core/raw-lineage-storage.mjs",
-      "specifier": "./card-raw-sources.mjs",
-      "to": "core/card-raw-sources.mjs"
-    },
-    {
-      "from": "core/raw-options.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/raw-options.mjs",
-      "specifier": "./local-authority-input.mjs",
-      "to": "core/local-authority-input.mjs"
     },
     {
       "from": "core/method-package-facade.mjs",
@@ -5749,6 +5744,16 @@
       "to": "core/method-attachment-input.mjs"
     },
     {
+      "from": "core/raw-options.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/raw-options.mjs",
+      "specifier": "./local-authority-input.mjs",
+      "to": "core/local-authority-input.mjs"
+    },
+    {
       "from": "core/store-fence.mjs",
       "specifier": "./local-authority-input.mjs",
       "to": "core/local-authority-input.mjs"
@@ -5757,6 +5762,61 @@
       "from": "core/store-fence.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/raw-composition.mjs",
+      "specifier": "./runtime.mjs",
+      "to": "core/runtime.mjs"
+    },
+    {
+      "from": "core/raw-composition.mjs",
+      "specifier": "./raw-capture-storage.mjs",
+      "to": "core/raw-capture-storage.mjs"
+    },
+    {
+      "from": "core/raw-composition.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/raw-composition.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/private-card-facade.mjs",
+      "specifier": "./card-current-input.mjs",
+      "to": "core/card-current-input.mjs"
+    },
+    {
+      "from": "core/private-card-facade.mjs",
+      "specifier": "./card-current-facade.mjs",
+      "to": "core/card-current-facade.mjs"
+    },
+    {
+      "from": "core/private-card-facade.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/private-card-facade.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/private-card-facade.mjs",
+      "specifier": "./private-card-input.mjs",
+      "to": "core/private-card-input.mjs"
+    },
+    {
+      "from": "core/private-card-facade.mjs",
+      "specifier": "./private-evidence-input.mjs",
+      "to": "core/private-evidence-input.mjs"
+    },
+    {
+      "from": "core/private-card-facade.mjs",
+      "specifier": "./private-organization-input.mjs",
+      "to": "core/private-organization-input.mjs"
     },
     {
       "from": "core/existing-store.mjs",
@@ -5804,67 +5864,17 @@
       "to": "core/raw-input.mjs"
     },
     {
-      "from": "core/private-card-facade.mjs",
-      "specifier": "./card-current-input.mjs",
-      "to": "core/card-current-input.mjs"
-    },
-    {
-      "from": "core/private-card-facade.mjs",
-      "specifier": "./card-current-facade.mjs",
-      "to": "core/card-current-facade.mjs"
-    },
-    {
-      "from": "core/private-card-facade.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/private-card-facade.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/private-card-facade.mjs",
-      "specifier": "./private-card-input.mjs",
-      "to": "core/private-card-input.mjs"
-    },
-    {
-      "from": "core/private-card-facade.mjs",
-      "specifier": "./private-evidence-input.mjs",
-      "to": "core/private-evidence-input.mjs"
-    },
-    {
-      "from": "core/private-card-facade.mjs",
-      "specifier": "./private-organization-input.mjs",
-      "to": "core/private-organization-input.mjs"
-    },
-    {
       "from": "core/capture-deadline.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
     {
-      "from": "core/raw-composition.mjs",
-      "specifier": "./runtime.mjs",
-      "to": "core/runtime.mjs"
-    },
-    {
-      "from": "core/raw-composition.mjs",
-      "specifier": "./raw-capture-storage.mjs",
-      "to": "core/raw-capture-storage.mjs"
-    },
-    {
-      "from": "core/raw-composition.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/raw-composition.mjs",
+      "from": "core/placement-input.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
     {
-      "from": "core/episode-schema.mjs",
+      "from": "core/model-budget.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -5894,12 +5904,7 @@
       "to": "core/model-packing.mjs"
     },
     {
-      "from": "core/placement-input.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/model-budget.mjs",
+      "from": "core/episode-schema.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -6034,21 +6039,6 @@
       "to": "core/source-windows.mjs"
     },
     {
-      "from": "core/capture-input.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/conflict-storage.mjs",
-      "specifier": "./relation-limits.mjs",
-      "to": "core/relation-limits.mjs"
-    },
-    {
-      "from": "core/conflict-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
       "from": "core/model-packing.mjs",
       "specifier": "./model-budget.mjs",
       "to": "core/model-budget.mjs"
@@ -6062,6 +6052,16 @@
       "from": "core/model-packing.mjs",
       "specifier": "./model-call.mjs",
       "to": "core/model-call.mjs"
+    },
+    {
+      "from": "core/capture-input.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/query-excerpt.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
     },
     {
       "from": "core/query-candidates.mjs",
@@ -6114,6 +6114,21 @@
       "to": "core/model-diagnostics.mjs"
     },
     {
+      "from": "core/claim-qualification-storage.mjs",
+      "specifier": "./claim-qualification-input.mjs",
+      "to": "core/claim-qualification-input.mjs"
+    },
+    {
+      "from": "core/claim-qualification-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/private-evidence-input.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
       "from": "core/task-receipt.mjs",
       "specifier": "./private-card-input.mjs",
       "to": "core/private-card-input.mjs"
@@ -6129,34 +6144,19 @@
       "to": "core/validation.mjs"
     },
     {
-      "from": "core/private-evidence-input.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/query-excerpt.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/staged-evidence-storage.mjs",
-      "specifier": "./episode-schema.mjs",
-      "to": "core/episode-schema.mjs"
-    },
-    {
-      "from": "core/staged-evidence-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/staged-evidence-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
       "from": "core/context-read-embedder.mjs",
       "specifier": "./context-read-tokenize.mjs",
       "to": "core/context-read-tokenize.mjs"
+    },
+    {
+      "from": "core/supersession-storage.mjs",
+      "specifier": "./relation-limits.mjs",
+      "to": "core/relation-limits.mjs"
+    },
+    {
+      "from": "core/supersession-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
     },
     {
       "from": "core/context-read-assembly.mjs",
@@ -6184,7 +6184,32 @@
       "to": "core/validation.mjs"
     },
     {
+      "from": "core/asset-schema.mjs",
+      "specifier": "./method-package-schema.mjs",
+      "to": "core/method-package-schema.mjs"
+    },
+    {
+      "from": "core/asset-schema.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
       "from": "core/asset-identity.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/asset-derivative-storage.mjs",
+      "specifier": "./asset-input.mjs",
+      "to": "core/asset-input.mjs"
+    },
+    {
+      "from": "core/asset-derivative-storage.mjs",
+      "specifier": "./private-operation-helpers.mjs",
+      "to": "core/private-operation-helpers.mjs"
+    },
+    {
+      "from": "core/asset-derivative-storage.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -6259,6 +6284,21 @@
       "to": "core/private-card-input.mjs"
     },
     {
+      "from": "core/context-read-moc.mjs",
+      "specifier": "./context-read-bm25.mjs",
+      "to": "core/context-read-bm25.mjs"
+    },
+    {
+      "from": "core/context-read-moc.mjs",
+      "specifier": "./context-read-tokenize.mjs",
+      "to": "core/context-read-tokenize.mjs"
+    },
+    {
+      "from": "core/context-read-moc.mjs",
+      "specifier": "./context-read-relations.mjs",
+      "to": "core/context-read-relations.mjs"
+    },
+    {
       "from": "core/private-evidence-storage.mjs",
       "specifier": "./claim-qualification-storage.mjs",
       "to": "core/claim-qualification-storage.mjs"
@@ -6279,44 +6319,9 @@
       "to": "core/validation.mjs"
     },
     {
-      "from": "core/context-read-moc.mjs",
-      "specifier": "./context-read-bm25.mjs",
-      "to": "core/context-read-bm25.mjs"
-    },
-    {
-      "from": "core/context-read-moc.mjs",
-      "specifier": "./context-read-tokenize.mjs",
-      "to": "core/context-read-tokenize.mjs"
-    },
-    {
-      "from": "core/context-read-moc.mjs",
-      "specifier": "./context-read-relations.mjs",
-      "to": "core/context-read-relations.mjs"
-    },
-    {
       "from": "core/context-read-fusion.mjs",
       "specifier": "./context-read-bm25.mjs",
       "to": "core/context-read-bm25.mjs"
-    },
-    {
-      "from": "core/context-read-relations.mjs",
-      "specifier": "./context-read-bm25.mjs",
-      "to": "core/context-read-bm25.mjs"
-    },
-    {
-      "from": "core/context-read-relations.mjs",
-      "specifier": "./context-read-input.mjs",
-      "to": "core/context-read-input.mjs"
-    },
-    {
-      "from": "core/context-read-relations.mjs",
-      "specifier": "./context-read-sidecar.mjs",
-      "to": "core/context-read-sidecar.mjs"
-    },
-    {
-      "from": "core/context-read-relations.mjs",
-      "specifier": "./source-evidence.mjs",
-      "to": "core/source-evidence.mjs"
     },
     {
       "from": "core/context-read-sidecar.mjs",
@@ -6369,6 +6374,26 @@
       "to": "core/context-read-embedder.mjs"
     },
     {
+      "from": "core/context-read-relations.mjs",
+      "specifier": "./context-read-bm25.mjs",
+      "to": "core/context-read-bm25.mjs"
+    },
+    {
+      "from": "core/context-read-relations.mjs",
+      "specifier": "./context-read-input.mjs",
+      "to": "core/context-read-input.mjs"
+    },
+    {
+      "from": "core/context-read-relations.mjs",
+      "specifier": "./context-read-sidecar.mjs",
+      "to": "core/context-read-sidecar.mjs"
+    },
+    {
+      "from": "core/context-read-relations.mjs",
+      "specifier": "./source-evidence.mjs",
+      "to": "core/source-evidence.mjs"
+    },
+    {
       "from": "core/method-binding-storage.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
@@ -6384,12 +6409,17 @@
       "to": "core/method-package-input.mjs"
     },
     {
-      "from": "core/asset-schema.mjs",
-      "specifier": "./method-package-schema.mjs",
-      "to": "core/method-package-schema.mjs"
+      "from": "core/raw-control-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
     },
     {
-      "from": "core/asset-schema.mjs",
+      "from": "core/raw-control-storage.mjs",
+      "specifier": "./raw-input.mjs",
+      "to": "core/raw-input.mjs"
+    },
+    {
+      "from": "core/raw-control-storage.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -6420,21 +6450,6 @@
     },
     {
       "from": "core/method-attachment-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/asset-derivative-storage.mjs",
-      "specifier": "./asset-input.mjs",
-      "to": "core/asset-input.mjs"
-    },
-    {
-      "from": "core/asset-derivative-storage.mjs",
-      "specifier": "./private-operation-helpers.mjs",
-      "to": "core/private-operation-helpers.mjs"
-    },
-    {
-      "from": "core/asset-derivative-storage.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -6534,22 +6549,12 @@
       "to": "core/private-card-schema.mjs"
     },
     {
+      "from": "core/confirmation-schema.mjs",
+      "specifier": "./index-schema.mjs",
+      "to": "core/index-schema.mjs"
+    },
+    {
       "from": "core/local-authority-schema.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/raw-control-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/raw-control-storage.mjs",
-      "specifier": "./raw-input.mjs",
-      "to": "core/raw-input.mjs"
-    },
-    {
-      "from": "core/raw-control-storage.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -6574,6 +6579,11 @@
       "to": "core/validation.mjs"
     },
     {
+      "from": "core/raw-input.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
       "from": "core/private-organization-storage.mjs",
       "specifier": "./card-current-storage.mjs",
       "to": "core/card-current-storage.mjs"
@@ -6590,51 +6600,6 @@
     },
     {
       "from": "core/private-organization-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/raw-input.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/method-attachment-input.mjs",
-      "specifier": "./asset-input.mjs",
-      "to": "core/asset-input.mjs"
-    },
-    {
-      "from": "core/method-attachment-input.mjs",
-      "specifier": "./asset-identity.mjs",
-      "to": "core/asset-identity.mjs"
-    },
-    {
-      "from": "core/method-attachment-input.mjs",
-      "specifier": "./method-package-input.mjs",
-      "to": "core/method-package-input.mjs"
-    },
-    {
-      "from": "core/method-attachment-input.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/card-current-facade.mjs",
-      "specifier": "./private-card-input.mjs",
-      "to": "core/private-card-input.mjs"
-    },
-    {
-      "from": "core/card-current-facade.mjs",
-      "specifier": "./private-card-facade.mjs",
-      "to": "core/private-card-facade.mjs"
-    },
-    {
-      "from": "core/card-current-facade.mjs",
-      "specifier": "./card-current-input.mjs",
-      "to": "core/card-current-input.mjs"
-    },
-    {
-      "from": "core/card-current-facade.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -6709,7 +6674,22 @@
       "to": "core/validation.mjs"
     },
     {
-      "from": "core/method-package-schema.mjs",
+      "from": "core/method-attachment-input.mjs",
+      "specifier": "./asset-input.mjs",
+      "to": "core/asset-input.mjs"
+    },
+    {
+      "from": "core/method-attachment-input.mjs",
+      "specifier": "./asset-identity.mjs",
+      "to": "core/asset-identity.mjs"
+    },
+    {
+      "from": "core/method-attachment-input.mjs",
+      "specifier": "./method-package-input.mjs",
+      "to": "core/method-package-input.mjs"
+    },
+    {
+      "from": "core/method-attachment-input.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -6774,6 +6754,26 @@
       "to": "core/local-authority-guard.mjs"
     },
     {
+      "from": "core/card-current-facade.mjs",
+      "specifier": "./private-card-input.mjs",
+      "to": "core/private-card-input.mjs"
+    },
+    {
+      "from": "core/card-current-facade.mjs",
+      "specifier": "./private-card-facade.mjs",
+      "to": "core/private-card-facade.mjs"
+    },
+    {
+      "from": "core/card-current-facade.mjs",
+      "specifier": "./card-current-input.mjs",
+      "to": "core/card-current-input.mjs"
+    },
+    {
+      "from": "core/card-current-facade.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
       "from": "core/model-call.mjs",
       "specifier": "./model-budget.mjs",
       "to": "core/model-budget.mjs"
@@ -6787,6 +6787,11 @@
       "from": "core/model-call.mjs",
       "specifier": "./model-diagnostics.mjs",
       "to": "core/model-diagnostics.mjs"
+    },
+    {
+      "from": "core/method-package-schema.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
     },
     {
       "from": "core/episode-input.mjs",
@@ -6844,9 +6849,9 @@
       "to": "core/validation.mjs"
     },
     {
-      "from": "core/confirmation-schema.mjs",
-      "specifier": "./index-schema.mjs",
-      "to": "core/index-schema.mjs"
+      "from": "core/automatic-rationale.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
     },
     {
       "from": "core/qualification-candidates.mjs",
@@ -6887,11 +6892,6 @@
       "from": "core/qualification-candidates.mjs",
       "specifier": "./model-packing.mjs",
       "to": "core/model-packing.mjs"
-    },
-    {
-      "from": "core/automatic-rationale.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
     },
     {
       "from": "core/source-windows.mjs",
@@ -6979,6 +6979,31 @@
       "to": "core/validation.mjs"
     },
     {
+      "from": "core/local-authority-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/local-authority-storage.mjs",
+      "specifier": "./local-authority-input.mjs",
+      "to": "core/local-authority-input.mjs"
+    },
+    {
+      "from": "core/local-authority-storage.mjs",
+      "specifier": "./raw-input.mjs",
+      "to": "core/raw-input.mjs"
+    },
+    {
+      "from": "core/local-authority-storage.mjs",
+      "specifier": "./raw-control-storage.mjs",
+      "to": "core/raw-control-storage.mjs"
+    },
+    {
+      "from": "core/local-authority-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
       "from": "core/raw-journal.mjs",
       "specifier": "./database.mjs",
       "to": "core/database.mjs"
@@ -7022,31 +7047,6 @@
       "from": "core/raw-journal.mjs",
       "specifier": "./local-authority-storage.mjs",
       "to": "core/local-authority-storage.mjs"
-    },
-    {
-      "from": "core/local-authority-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/local-authority-storage.mjs",
-      "specifier": "./local-authority-input.mjs",
-      "to": "core/local-authority-input.mjs"
-    },
-    {
-      "from": "core/local-authority-storage.mjs",
-      "specifier": "./raw-input.mjs",
-      "to": "core/raw-input.mjs"
-    },
-    {
-      "from": "core/local-authority-storage.mjs",
-      "specifier": "./raw-control-storage.mjs",
-      "to": "core/raw-control-storage.mjs"
-    },
-    {
-      "from": "core/local-authority-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
     },
     {
       "from": "core/raw-source-map.mjs",
@@ -7969,8 +7969,8 @@
       "bytes": 2546
     },
     "evaluation/hr3/harness/ledger.mjs": {
-      "sha256": "5970aa55fef9e12ba470bc7efeb7b61c1cd4d68655fd3f42b8d4eecc7afdee6b",
-      "bytes": 10963
+      "sha256": "f67e392aa9c95db171f5c9ff33806771ddeb4f6941d6baff33098af017a4a396",
+      "bytes": 12653
     },
     "evaluation/hr3/harness/paid-preflight.mjs": {
       "sha256": "61cbf4260a5b5fe3a60c82b86bda1f04806d1c07a7783efb76276939a6f8e897",
@@ -8041,8 +8041,8 @@
       "bytes": 9732
     },
     "evaluation/hr3/harness/transport.mjs": {
-      "sha256": "38612514c0a14fee3a0b1843650a5964c8ea2119d9ce0b9784348919cc89b148",
-      "bytes": 8487
+      "sha256": "2d9ecd49ae1607711248bba55390d7801e6eb9bfa9b85feeb3e61e1d8ddd93be",
+      "bytes": 8909
     },
     "evaluation/hr3/runner/cli-real.mjs": {
       "sha256": "e931869b1590d70af4a01726437c22c1160e49a565e55ed50ccdc49905bad5b3",

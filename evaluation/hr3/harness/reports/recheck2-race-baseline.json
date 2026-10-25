@@ -1,0 +1,36 @@
+{
+  "sourceSHA256": "5970aa55fef9e12ba470bc7efeb7b61c1cd4d68655fd3f42b8d4eecc7afdee6b",
+  "observerError": "ledger_head_mismatch",
+  "interleavedWriterResult": null,
+  "journalRecords": 3,
+  "checkpointRecords": 2,
+  "blockedReason": "ledger_head_mismatch",
+  "writerError": "ledger_head_mismatch",
+  "resumeError": "ledger_head_mismatch",
+  "writes": [
+    {
+      "path": "evaluation/hr3/harness/artifacts/ledger-race-DAy1BJ/ledger.jsonl.head.json",
+      "records": 1,
+      "blockedReason": null,
+      "locked": true
+    },
+    {
+      "path": "evaluation/hr3/harness/artifacts/ledger-race-DAy1BJ/ledger.jsonl.head.json",
+      "records": 2,
+      "blockedReason": null,
+      "locked": true
+    },
+    {
+      "path": "evaluation/hr3/harness/artifacts/ledger-race-DAy1BJ/ledger.jsonl.head.json",
+      "records": 3,
+      "blockedReason": null,
+      "locked": true
+    },
+    {
+      "path": "evaluation/hr3/harness/artifacts/ledger-race-DAy1BJ/ledger.jsonl.head.json",
+      "records": 2,
+      "blockedReason": "ledger_head_mismatch",
+      "locked": false
+    }
+  ]
+}

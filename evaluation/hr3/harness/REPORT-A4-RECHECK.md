@@ -1,3 +1,5 @@
+Latest checkpoint-race repair: [REPORT-A4-RECHECK2.md](REPORT-A4-RECHECK2.md). This document records the earlier recheck repair.
+
 # A-4 implementation recheck repair
 
 All three recheck findings are implemented. **Full ordered verification passes: 21/21 commands, root exit 0; harness 291/291.** No paid readiness is claimed. Primary freeze and a passing non-author review remain required; no attestation is generated.

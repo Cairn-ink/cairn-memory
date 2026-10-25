@@ -1,7 +1,7 @@
 {
   "version": "hr3-a4-context-conformance-v2",
   "status": "PASS",
-  "runtimeClosureSHA256": "cfa208ba9e808e2eb6d36374fe062cdcab6b599a5c38a9133a07e4c39540266f",
+  "runtimeClosureSHA256": "a28e18c928a083de109ea16e6a3d713d7293d9a04a8c8e693a493719831cc773",
   "adoptedContexts": 6,
   "unresolvedContexts": 3,
   "sharedTurnAmbiguities": 3,
@@ -1147,7 +1147,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "50ea7299e320c75d428ded4af3265a1641de72a56ca1392c0bfddbda47a86305"
+      "sha256": "414904c7cad8b00d8309fafe2d6bf3797b0819b791c4a22b1e1758d8d73f768b"
     },
     {
       "operation": "extraction",
@@ -1219,7 +1219,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "0745fda2f3de0ead9bf8aea695059120a1eeafc415d84d81705418f583d1c322"
+      "sha256": "97472ad1c148f7f990221b1a6d09e1b759496e5b7689347125e2540b942d442e"
     },
     {
       "operation": "extraction",
@@ -1291,7 +1291,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "a3666096603cca8317c7427a88b7713b98845c9252dae9e7f95faccfd90d2610"
+      "sha256": "2629c3d118e6a1d04e9b3137c412eaa5302225a1cb48b201b99eba10f95919ae"
     },
     {
       "operation": "extraction",
@@ -1363,7 +1363,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "01ac7e82734171a7ab765891a241ea2e186f83000ee0d90024075034e2967eda"
+      "sha256": "a82f152b755ef1d48724fdb356a1f27dd18ed2982b439a6f4669e37566f0f0ba"
     },
     {
       "operation": "extraction",
@@ -1435,7 +1435,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "4aa08cbbb4240edfe90aaf61741c6e8f0ee4880808d45e3be1eb3eaf94dcf1c2"
+      "sha256": "6964784386d29e7a68b6a555b5bb168410be53463f8e33f609d8d58ae89669c5"
     },
     {
       "operation": "extraction",
@@ -1507,7 +1507,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "81ebf39e1009be771c96146148466cd7bda5df13434c2681a1b71b65b39dc60c"
+      "sha256": "10b788b6752b4c6ed08828f645a06144fa757a093ccc9fabe588e22e12657c2f"
     },
     {
       "operation": "extraction",
@@ -1579,7 +1579,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "ed98370b3100fd8787a8d8b2a9ca342909fa5bd96db6faf8d1ea2abe9e3776fc"
+      "sha256": "cb55c63ece6866d3e79ff622812a9518e3f3fa4f52f1e50dca5ad6c0920f3dec"
     },
     {
       "operation": "extraction",
@@ -1651,7 +1651,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "3f16f10ad1d0752158548dc97201a71f5deb2e70af728aca3a8fe166084ac00f"
+      "sha256": "00f8c414ad48e1e59f4268a9bfb481976f9e200fdfcf9cbdafbe8d4321e9d7fd"
     },
     {
       "operation": "extraction",
@@ -1723,7 +1723,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "7bb7b05c327f70289ce2cfe946474ca6a44fe557b2732f7f2ef69ebce79e9fc1"
+      "sha256": "52e34dbac5bb474701ebfe4e35dd2a52d81e0abd1139b484474c19e75512af2c"
     }
   ],
   "embeddingMeasurements": [
@@ -1888,13 +1888,13 @@
       "channel": "product",
       "inputs": 2,
       "inputUnits": [
-        214,
-        274
+        274,
+        214
       ],
       "units": 488,
       "maxInputUnits": 274,
       "requestBytes": 620,
-      "bodySHA256": "9394ee18af0779a12d3f92779b5258268a3a2086c2587ab35ebb207c3be35ef9"
+      "bodySHA256": "78ae503c65eff44594cd0d81ad9e543cd20e9f16e0b6524d170c307edf7b1a8e"
     },
     {
       "language": "en",
@@ -1934,13 +1934,13 @@
       "channel": "product",
       "inputs": 2,
       "inputUnits": [
-        214,
-        274
+        274,
+        214
       ],
       "units": 488,
       "maxInputUnits": 274,
       "requestBytes": 620,
-      "bodySHA256": "9394ee18af0779a12d3f92779b5258268a3a2086c2587ab35ebb207c3be35ef9"
+      "bodySHA256": "78ae503c65eff44594cd0d81ad9e543cd20e9f16e0b6524d170c307edf7b1a8e"
     },
     {
       "language": "en",
@@ -2349,13 +2349,13 @@
       "channel": "product",
       "inputs": 2,
       "inputUnits": [
-        218,
-        242
+        242,
+        218
       ],
       "units": 460,
       "maxInputUnits": 242,
       "requestBytes": 592,
-      "bodySHA256": "d5fd1151957ff2a1bc7c3b1615831caad433830832273f2adf8eed08628548ff"
+      "bodySHA256": "0c0bec487708d02295cab286b0f82e8347cc4174cffc5d2c7d6313e6ff077969"
     },
     {
       "language": "en",
@@ -2395,13 +2395,13 @@
       "channel": "product",
       "inputs": 2,
       "inputUnits": [
-        218,
-        242
+        242,
+        218
       ],
       "units": 460,
       "maxInputUnits": 242,
       "requestBytes": 592,
-      "bodySHA256": "d5fd1151957ff2a1bc7c3b1615831caad433830832273f2adf8eed08628548ff"
+      "bodySHA256": "0c0bec487708d02295cab286b0f82e8347cc4174cffc5d2c7d6313e6ff077969"
     },
     {
       "language": "en",
@@ -2594,13 +2594,13 @@
       "channel": "product",
       "inputs": 2,
       "inputUnits": [
-        274,
-        219
+        219,
+        274
       ],
       "units": 493,
       "maxInputUnits": 274,
       "requestBytes": 625,
-      "bodySHA256": "e61e598ab279fd4d1504f97d6afbb252216303b140ffb83be6d635988ab71fe9"
+      "bodySHA256": "8b70904a23475e58c9a3386b814aa9f5ce6d4e10806c496514318487b313f61b"
     },
     {
       "language": "zh-Hant",
@@ -2640,13 +2640,13 @@
       "channel": "product",
       "inputs": 2,
       "inputUnits": [
-        274,
-        219
+        219,
+        274
       ],
       "units": 493,
       "maxInputUnits": 274,
       "requestBytes": 625,
-      "bodySHA256": "e61e598ab279fd4d1504f97d6afbb252216303b140ffb83be6d635988ab71fe9"
+      "bodySHA256": "8b70904a23475e58c9a3386b814aa9f5ce6d4e10806c496514318487b313f61b"
     },
     {
       "language": "zh-Hant",
@@ -3761,13 +3761,13 @@
       "channel": "product",
       "inputs": 2,
       "inputUnits": [
-        233,
-        257
+        257,
+        233
       ],
       "units": 490,
       "maxInputUnits": 257,
       "requestBytes": 622,
-      "bodySHA256": "5efac5e6f4e20b37ce05db289ba268a6a38b6faf48d5179dc34c36d0352c9988"
+      "bodySHA256": "711b2939ba1137716390b211264dd7a62336b79e09693f80f851a8cdc290d4bc"
     },
     {
       "language": "mixed",
@@ -3807,13 +3807,13 @@
       "channel": "product",
       "inputs": 2,
       "inputUnits": [
-        233,
-        257
+        257,
+        233
       ],
       "units": 490,
       "maxInputUnits": 257,
       "requestBytes": 622,
-      "bodySHA256": "5efac5e6f4e20b37ce05db289ba268a6a38b6faf48d5179dc34c36d0352c9988"
+      "bodySHA256": "711b2939ba1137716390b211264dd7a62336b79e09693f80f851a8cdc290d4bc"
     },
     {
       "language": "mixed",

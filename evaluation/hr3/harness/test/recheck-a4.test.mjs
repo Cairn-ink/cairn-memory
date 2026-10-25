@@ -40,7 +40,7 @@ for(const defect of ['head-missing','head-stale','restored-after-rejection'])tes
  ledger.reserve(request('accepted'));const journal=readFileSync(path);
  if(defect==='head-missing')rmSync(path+'.head.json');
  else if(defect==='head-stale')writeFileSync(path+'.head.json',head);
- else {rmSync(path);assert.throws(()=>ledger.snapshot(),/ledger_journal_missing/);writeFileSync(path,journal);}
+ else {rmSync(path);assert.throws(()=>ledger.snapshot(),/ledger_journal_missing/);assert.equal(JSON.parse(readFileSync(path+'.head.json')).blockedReason,undefined);assert.throws(()=>ledger.reserve(request('persist-missing-journal')),/ledger_journal_missing/);writeFileSync(path,journal);}
  let calls=0;const guard=new GuardedTransport({async send(){calls++;}},ledger);
  await assert.rejects(guard.send(request('blocked')),/accounting_mismatch:ledger_/);assert.equal(calls,0);
  assert.throws(()=>new Ledger(path,{plan}),/ledger_/);

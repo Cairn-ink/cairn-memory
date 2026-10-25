@@ -1,0 +1,142 @@
+TAP version 13
+# Subtest: recheck2 race: observer cannot replace a fully committed newer checkpoint
+ok 1 - recheck2 race: observer cannot replace a fully committed newer checkpoint
+  ---
+  duration_ms: 54.907061
+  type: 'test'
+  ...
+# Subtest: recheck2 lock: observer revalidates forward progress after acquiring the lock
+ok 2 - recheck2 lock: observer revalidates forward progress after acquiring the lock
+  ---
+  duration_ms: 46.892426
+  type: 'test'
+  ...
+# Subtest: recheck2 lock: writer revalidates forward progress after acquiring the lock
+ok 3 - recheck2 lock: writer revalidates forward progress after acquiring the lock
+  ---
+  duration_ms: 62.142748
+  type: 'test'
+  ...
+# Subtest: recheck2 rollback: monitoring is read-only and a writer persists a genuine rollback under lock
+ok 4 - recheck2 rollback: monitoring is read-only and a writer persists a genuine rollback under lock
+  ---
+  duration_ms: 59.600668
+  type: 'test'
+  ...
+# Subtest: recheck2 rejection: stale observer cannot overwrite an intervening checkpoint
+ok 5 - recheck2 rejection: stale observer cannot overwrite an intervening checkpoint
+  ---
+  duration_ms: 56.406847
+  type: 'test'
+  ...
+# Subtest: recheck2 rejection: stale writer cannot overwrite an intervening checkpoint
+ok 6 - recheck2 rejection: stale writer cannot overwrite an intervening checkpoint
+  ---
+  duration_ms: 56.99256
+  type: 'test'
+  ...
+# Subtest: recheck2 mutation: direct rejection and append require writer lock ownership
+ok 7 - recheck2 mutation: direct rejection and append require writer lock ownership
+  ---
+  duration_ms: 31.761519
+  type: 'test'
+  ...
+# Subtest: recheck2 monitoring: lock contention reports busy without poisoning the writer or checkpoint
+ok 8 - recheck2 monitoring: lock contention reports busy without poisoning the writer or checkpoint
+  ---
+  duration_ms: 47.335423
+  type: 'test'
+  ...
+# Subtest: reservation is durable before dispatch, settlement releases only known usage by request ID
+ok 9 - reservation is durable before dispatch, settlement releases only known usage by request ID
+  ---
+  duration_ms: 51.576646
+  type: 'test'
+  ...
+# Subtest: stage, operational and unavailable authorization headroom deny before dispatch
+ok 10 - stage, operational and unavailable authorization headroom deny before dispatch
+  ---
+  duration_ms: 93.765015
+  type: 'test'
+  ...
+# Subtest: unsettled reservations survive restart and charge the full bound
+ok 11 - unsettled reservations survive restart and charge the full bound
+  ---
+  duration_ms: 32.225793
+  type: 'test'
+  ...
+# Subtest: one transport retry, cumulative third failure stops, no quality retries
+ok 12 - one transport retry, cumulative third failure stops, no quality retries
+  ---
+  duration_ms: 169.783846
+  type: 'test'
+  ...
+# Subtest: model mismatch, unexplained usage, duplicate provider IDs and unknown contract failures stop
+ok 13 - model mismatch, unexplained usage, duplicate provider IDs and unknown contract failures stop
+  ---
+  duration_ms: 219.574991
+  type: 'test'
+  ...
+# Subtest: five-minute lack of progress and dispatch timeout are supervised
+ok 14 - five-minute lack of progress and dispatch timeout are supervised
+  ---
+  duration_ms: 119.415679
+  type: 'test'
+  ...
+# Subtest: strict body models, no tools/prior state, caps and byte/embed bounds
+ok 15 - strict body models, no tools/prior state, caps and byte/embed bounds
+  ---
+  duration_ms: 9.862955
+  type: 'test'
+  ...
+# Subtest: unlisted calls, embedding unit allowances and corrupt journals fail closed
+ok 16 - unlisted calls, embedding unit allowances and corrupt journals fail closed
+  ---
+  duration_ms: 54.028561
+  type: 'test'
+  ...
+# Subtest: stage transitions share one operational ledger and preserve stage totals
+ok 17 - stage transitions share one operational ledger and preserve stage totals
+  ---
+  duration_ms: 45.357902
+  type: 'test'
+  ...
+# Subtest: A-4.2 reserves and settles unchanged output ceilings at amended input bounds and unchanged prices
+ok 18 - A-4.2 reserves and settles unchanged output ceilings at amended input bounds and unchanged prices
+  ---
+  duration_ms: 105.981673
+  type: 'test'
+  ...
+# Subtest: A-1.1 supervisor checks actual progress each minute and stops while between dispatches
+ok 19 - A-1.1 supervisor checks actual progress each minute and stops while between dispatches
+  ---
+  duration_ms: 32.06479
+  type: 'test'
+  ...
+# Subtest: A-1.1 five-minute elapsed dispatch cannot reset progress or settle usage
+ok 20 - A-1.1 five-minute elapsed dispatch cannot reset progress or settle usage
+  ---
+  duration_ms: 52.141487
+  type: 'test'
+  ...
+# Subtest: A-1.1 supervisor aborts a pending dispatch on the five-minute stop without retries
+ok 21 - A-1.1 supervisor aborts a pending dispatch on the five-minute stop without retries
+  ---
+  duration_ms: 48.60068
+  type: 'test'
+  ...
+# Subtest: A-1.1 accounting corruption stops before any dispatch and preserves evidence
+ok 22 - A-1.1 accounting corruption stops before any dispatch and preserves evidence
+  ---
+  duration_ms: 25.610366
+  type: 'test'
+  ...
+1..22
+# tests 22
+# suites 0
+# pass 22
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1504.178701

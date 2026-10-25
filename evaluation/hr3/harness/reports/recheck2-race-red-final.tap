@@ -1,0 +1,36 @@
+TAP version 13
+# Subtest: recheck2 race: observer cannot replace a fully committed newer checkpoint
+not ok 1 - recheck2 race: observer cannot replace a fully committed newer checkpoint
+  ---
+  duration_ms: 91.514739
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/ledger-race-a4.test.mjs:27:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'ledger_head_mismatch'
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: 'ledger_head_mismatch'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/ledger-race-a4.test.mjs:39:9)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 113.385523

@@ -1,0 +1,29 @@
+{
+  "version": "hr3-a4-recheck2-regressions-v1",
+  "status": "PASS",
+  "count": 9,
+  "names": [
+    "recheck2 race: observer cannot replace a fully committed newer checkpoint",
+    "recheck2 lock: observer revalidates forward progress after acquiring the lock",
+    "recheck2 lock: writer revalidates forward progress after acquiring the lock",
+    "recheck2 rollback: monitoring is read-only and a writer persists a genuine rollback under lock",
+    "recheck2 rejection: stale observer cannot overwrite an intervening checkpoint",
+    "recheck2 rejection: stale writer cannot overwrite an intervening checkpoint",
+    "recheck2 mutation: direct rejection and append require writer lock ownership",
+    "recheck2 monitoring: lock contention reports busy without poisoning the writer or checkpoint",
+    "recheck2 monitoring: five-minute stall still aborts while another writer holds the lock"
+  ],
+  "focused": {
+    "pass": 45,
+    "fail": 0,
+    "exitCode": 0
+  },
+  "baseline": {
+    "commit": "3e49f0a4",
+    "sourceSHA256": "5970aa55fef9e12ba470bc7efeb7b61c1cd4d68655fd3f42b8d4eecc7afdee6b",
+    "raceTestPass": 0,
+    "raceTestFail": 1,
+    "exitCode": 1,
+    "proof": "reports/recheck2-race-baseline.json"
+  }
+}

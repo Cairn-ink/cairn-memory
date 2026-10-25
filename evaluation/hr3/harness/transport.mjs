@@ -9,9 +9,15 @@ export class GuardedTransport {
   constructor(transport,ledger,{now=()=>Date.now(),stallMs=300000,timeoutMs=60000}={}) {
     this.transport=transport;this.ledger=ledger;this.now=now;this.lastProgress=now();this.stallMs=stallMs;this.timeoutMs=timeoutMs;
   }
-  checkProgress() {
+  checkProgress({authoritative=false}={}) {
     if(this.supervisionError)throw this.supervisionError;
-    let state;try{state=this.ledger.snapshot();}catch(error){try{fail('accounting_mismatch:'+error.message);}catch(mismatch){this.supervisionError=mismatch;throw mismatch;}}
+    let state;try{state=authoritative?this.ledger.transaction(events=>this.ledger.snapshot(events)):this.ledger.snapshot();}catch(error){
+      if(error.code==='ledger_locked'){
+        if(this.now()-this.lastProgress>=this.stallMs)fail('five_minutes_without_progress');
+        throw error;
+      }
+      try{fail('accounting_mismatch:'+error.message);}catch(mismatch){this.supervisionError=mismatch;throw mismatch;}
+    }
     if(state.stopped)fail('stopped:'+state.stopped);
     if(this.now()-this.lastProgress>=this.stallMs){this.ledger.stop('five_minutes_without_progress');fail('five_minutes_without_progress');}
     return state;
@@ -19,13 +25,13 @@ export class GuardedTransport {
   startSupervision(progress=()=>{}) {
     if(this.supervisor)fail('supervision_already_started');
     // Mechanical checks supplement, never attest, the primary's attendance.
-    this.supervisor=setInterval(()=>{try{const ledger=this.checkProgress();progress({kind:'supervision',ledger});}catch(error){this.supervisionError=error;this.activeController?.abort();this.rejectActive?.(error);}},60000);
+    this.supervisor=setInterval(()=>{try{const ledger=this.checkProgress();progress({kind:'supervision',ledger});}catch(error){if(error.code==='ledger_locked'){progress({kind:'supervision',ledgerBusy:true});return;}this.supervisionError=error;this.activeController?.abort();this.rejectActive?.(error);}},60000);
   }
   stopSupervision(){clearInterval(this.supervisor);this.supervisor=null;}
   async send(request,{signal}={}) {
     for(let attempt=0;attempt<2;attempt++) {
-      this.checkProgress();
-      const call={...request,logicalId:request.id,id:request.id+`/attempt-${attempt}`};validateRequest(call);this.ledger.reserve(call);this.checkProgress();
+      this.checkProgress({authoritative:true});
+      const call={...request,logicalId:request.id,id:request.id+`/attempt-${attempt}`};validateRequest(call);this.ledger.reserve(call);this.checkProgress({authoritative:true});
       let reply;
       const controller=new AbortController();this.activeController=controller;const abort=()=>controller.abort();signal?.addEventListener('abort',abort,{once:true});
       let timer;
@@ -37,7 +43,7 @@ export class GuardedTransport {
         if(!(error instanceof TransportError)){this.ledger.stop('transport_contract_error');throw error;}
         this.ledger.failure(call.id);if(attempt===1)return {status:'transport_exhausted',outputText:null};continue;
       } finally {clearTimeout(timer);this.activeController=null;this.rejectActive=null;signal?.removeEventListener('abort',abort);}
-      this.checkProgress();
+      this.checkProgress({authoritative:true});
       if(reply.model!==request.body.model){this.ledger.stop('model_mismatch');fail('model_mismatch');}
       this.ledger.settle(call.id,reply);this.lastProgress=this.now();return reply;
     }

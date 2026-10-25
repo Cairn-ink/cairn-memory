@@ -1,0 +1,30 @@
+{
+  "sourceSHA256": "f67e392aa9c95db171f5c9ff33806771ddeb4f6941d6baff33098af017a4a396",
+  "observerError": null,
+  "interleavedWriterResult": "ledger_locked",
+  "journalRecords": 3,
+  "checkpointRecords": 3,
+  "blockedReason": null,
+  "writerError": null,
+  "resumeError": null,
+  "writes": [
+    {
+      "path": "evaluation/hr3/harness/artifacts/ledger-race-tK5nSm/ledger.jsonl.head.json",
+      "records": 1,
+      "blockedReason": null,
+      "locked": true
+    },
+    {
+      "path": "evaluation/hr3/harness/artifacts/ledger-race-tK5nSm/ledger.jsonl.head.json",
+      "records": 2,
+      "blockedReason": null,
+      "locked": true
+    },
+    {
+      "path": "evaluation/hr3/harness/artifacts/ledger-race-tK5nSm/ledger.jsonl.head.json",
+      "records": 3,
+      "blockedReason": null,
+      "locked": true
+    }
+  ]
+}
