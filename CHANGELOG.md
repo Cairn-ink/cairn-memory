@@ -6,6 +6,14 @@
 - Results are ordered by `id_asc`, de-duplicated across L1, and carry an opaque cursor bound to a snapshot. The opt-in `topic-snapshot-v1` overview snapshot adds an `originToken`, so overview counts and member lists come from the same snapshot. `cursor_stale` and `storage_busy` are typed outcomes, and `storage_busy` never means empty.
 - Reads schema 18 and current stores without migrating them, under both DELETE and WAL. Legacy `readTopicOverview` output is unchanged; a differential test against `b2513501` covers every error class. Contract: `docs/plans/topic-overview-member-pages.md`.
 
+## Unreleased — optional local bge-m3 embedder (contract §20)
+
+- **New opt-in local embedder.** It uses the bge-m3 model (`--context-embedder local --context-embed-model bge-m3`) and is an alternative to the OpenAI default, which is unchanged.
+- **Model pack.** The model ships as a pack that Cairn owns, installed explicitly with `cairn-memory model install|verify bge-m3 --dir ABS`. The pack is pinned to one revision, every artifact is sha256-verified, and retrieval never downloads anything.
+- **Isolation.** Inference runs in a supervised child process, and the base package gains no inference dependencies. Inputs over 8,192 tokens are refused rather than truncated.
+- **Vectors.** Local and hosted vectors are never mixed.
+- **Platforms.** Qualified on Linux x64 (including WSL2) and macOS arm64; other platforms are unverified. The production model catalog stays empty and fails closed until reviewed release data is published.
+
 ## Unreleased — local role profiles (U5c-1)
 
 - Add explicit current-method dependency review for private Cards, canonical v33 guards, and read-time invalidation across evidence, retrieval, organization and role guidance.

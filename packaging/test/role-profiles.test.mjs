@@ -11,6 +11,7 @@ import {installedMethods,fileCommand} from './fixtures/method-packages.mjs';
 import {installedImportClosure} from './fixtures/installed-import-closure.mjs';
 import {roleHost,roleCall} from './fixtures/role-profile-host.mjs';
 import {roleLegacyProbe} from '../../adapters/mcp/test/fixtures/role-profile-legacy-probe.mjs';
+import {removeReviewedRoleHelpAdditions} from '../../adapters/mcp/test/fixtures/role-profile-help-compat.mjs';
 
 const root=fileURLToPath(new URL('../../',import.meta.url)),ns={ownerId:'owner',scope:'personal',projectId:null},project={...ns,scope:'project',projectId:'project'};
 const ok=r=>{assert.equal(r.ok,true,JSON.stringify(r));return r.value;};
@@ -88,12 +89,14 @@ test('C05 pinned 4aa9327b installed flag-off bytes remain identical; feature-off
   const baseline=join(dir,'node_modules','cairn-memory-local-preview'),files=walk(baseline);
   assert.deepEqual(files,expected.archive.files);
   for(const [p,hash]of Object.entries(expected.archive.sourceHashes))assert.equal(sha(readFileSync(join(baseline,p))),hash,p);
-  // Reproduce every pinned value from the independently frozen U5c-2 tree,
-  // then require the current installation to match those same bytes exactly.
+  // Reproduce the unmodified pin first. Only current help may omit the exact
+  // reviewed additions; every other current value still matches the pin.
   const legacy=join(workspace.path,'flag-off-probe');mkdirSync(legacy);
   assert.deepEqual(await roleLegacyProbe(baseline,legacy),expected.value);
   const current=join(workspace.path,'current-probe');mkdirSync(current);
-  assert.deepEqual(await roleLegacyProbe(installed.root,current),expected.value);
+  const actual=await roleLegacyProbe(installed.root,current);
+  actual.cli.stdout[0]=removeReviewedRoleHelpAdditions(actual.cli.stdout[0]);
+  assert.deepEqual(actual,expected.value);
   const rolePath=join(workspace.path,'feature-off.sqlite');
   const c=coreModule.openMemoryCore({path:rolePath,roleProfiles:{version:'role-profiles-local-v1',storage:'local-plain-v1',authority,attribution:{actorId:'a',agentId:'b'}}});
   const head=ok(c.publishRoleProfileRelease({...publish('finance',fields()),namespace:ns},token));c.close();

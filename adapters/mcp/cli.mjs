@@ -3,11 +3,12 @@ import { pathToFileURL } from 'node:url';
 import { assetCommand } from './asset-command.mjs';
 import { methodCommand } from './method-package-command.mjs';
 import { MethodStdioServerTransport } from './method-package-transport.mjs';
+import { modelCommand } from './model-command.mjs';
 import { contextCommand } from './context-read-command.mjs';
 // U5c-2 source startup wiring (SQLite-free).
 import { CONTEXT_SOURCE_FLAG, contextSourcesConfiguration, contextSourcesPreset } from './context-read-sources-configuration.mjs';
 import { CONTEXT_FLAGS, contextHostConfiguration } from './context-read-configuration.mjs';
-import { createContextEmbedding } from './context-read-provider.mjs';
+import { prepareContextEmbedding, contextEmbeddingPort, localCheckConfiguration } from './context-read-provider.mjs';
 import { ContextStdioServerTransport } from './context-read-transport.mjs';
 // U5c-1 host boundary: SQLite-free static modules.
 import { roleProfileHostConfiguration, roleProfileCheckConfiguration } from './role-profile-configuration.mjs';
@@ -25,6 +26,10 @@ Usage:
     [--context-embedder openai --context-embed-model MODEL --context-embed-dimensions N --context-embed-max-requests N --context-embed-max-usd X]
   cairn-memory context refresh --db ABS --owner ID [--project ID] --types memory,card --intent current|history --max-items N --max-ms T
     --context-embedder openai --context-embed-model MODEL --context-embed-dimensions N --context-embed-max-requests N --context-embed-max-usd X [--check-config]
+  cairn-memory model install|verify bge-m3 --dir ABS [--check-config]
+  cairn-memory --db ABS --owner ID --context-read context-read-v1
+    --context-embedder local --context-embed-model bge-m3 --context-embed-dimensions 1024
+    --context-embed-pack ABS --context-embed-max-requests N [--context-embed-threads T]
   cairn-memory assets import|derive|delete|export [see docs/assets-local.md]
   cairn-memory --db ABS --owner ID [--project ID] --assets local-v1
   cairn-memory methods import|adopt|disable [method command arguments; see docs/method-packages-local.md]
@@ -166,7 +171,7 @@ T1 intentionally misses an embedded single Han: 中 does not match 中文.
 See docs/context-read-local.md for budgets, degraded states and non-claims.
 `;
 
-export function parseConfiguration(args) {
+function parseHostConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
     '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
     '--classification-recovery', '--capture-deadline-ms', '--session-episodes-access',
@@ -267,10 +272,19 @@ export function parseConfiguration(args) {
       classificationRecovery: values.get('--classification-recovery') } : {}) };
 }
 
+export function parseConfiguration(args) {
+  try { return parseHostConfiguration(args); }
+  catch (error) {
+    if (args[args.indexOf('--context-embedder') + 1] === 'local' || args.includes('--context-embed-pack') || args.includes('--context-embed-threads')) throw Error('invalid_mcp_configuration');
+    throw error;
+  }
+}
+
 export async function start(args = process.argv.slice(2), env = process.env) {
   if (args.length === 1 && args[0] === '--help') { console.log(help); return; }
   if(args[0]==='assets')return assetCommand(args.slice(1));
   if(args[0]==='methods')return methodCommand(args.slice(1));
+  if(args[0]==='model')return modelCommand(args.slice(1));
   if(args[0]==='context')return contextCommand(args.slice(1),env);
   if(args[0]==='--check-config'&&args[1]==='context')return contextCommand([...args.slice(2),'--check-config'],env);
   if (args[0] === 'review-card') {
@@ -311,7 +325,7 @@ export async function start(args = process.argv.slice(2), env = process.env) {
       contextReadPersonal: config.contextReadPersonal ?? false,
       ...(config.privateCardCurrentDependencies ? { privateCardCurrentDependencies: config.privateCardCurrentDependencies, cardDependencyApproval: 'separate-local-tty-required' } : {}),
       ...(config.roleProfiles ? roleProfileCheckConfiguration(config) : {}), scope: config.namespace.scope,
-      provider: config.contextProvider ?? null, preset: contextSourcesPreset(config.contextReadSources, Boolean(config.contextProvider)),
+      provider: config.contextProvider ?? null, ...localCheckConfiguration(config.contextProvider), preset: contextSourcesPreset(config.contextReadSources, config.contextProvider?.provider === 'openai'),
       ...(config.contextReadSources ? { sources: config.contextReadSources } : {}),
       modelKeyInspected: false, databaseOpened: false, providerContacted: false, automaticCapture: false }));
     return;
@@ -375,28 +389,37 @@ export async function start(args = process.argv.slice(2), env = process.env) {
     model = { countTokens: countOpenAITokens };
   }
   const { contextProvider, ...serverConfiguration } = config;
-  const contextEmbedding = createContextEmbedding(contextProvider,env);
+  const contextEmbedding = await prepareContextEmbedding(contextProvider, env);
   const Transport=config.roleProfiles?RoleProfileStdioServerTransport:config.contextRead?ContextStdioServerTransport:(config.methodPackages||config.assets)?MethodStdioServerTransport:StdioServerTransport;
-  return startStdio(() => createCairnServer({ ...serverConfiguration, model, ...(contextCounter ? { contextCounter } : {}), ...(contextEmbedding?{contextEmbedding}:{}) }),
-    { serveStdio, StdioServerTransport:Transport },config.methodPackages||config.assets||config.contextRead?262144:65536);
+  return startOwnedStdio(() => createCairnServer({ ...serverConfiguration, model, ...(contextCounter ? { contextCounter } : {}), ...(contextEmbedding ? { contextEmbedding: contextEmbeddingPort(contextEmbedding) } : {}) }),
+    { serveStdio, StdioServerTransport:Transport },config.methodPackages||config.assets||config.contextRead?262144:65536, contextEmbedding);
 }
 
-function startStdio(factory, { serveStdio, StdioServerTransport },maxBufferSize=65536) {
+export async function startOwnedStdio(factory, stdio, maxBufferSize, embedding) {
+  try { return startStdio(factory, stdio, maxBufferSize, () => embedding?.close?.()); }
+  catch (error) { await embedding?.close?.(); throw error; }
+}
+
+export function startStdio(factory, { serveStdio, StdioServerTransport, input = process.stdin, output = process.stdout, events = process },maxBufferSize=65536, closeEmbedding = async () => {}) {
   let handle;
   let closing = false;
   const stop = () => {
     if (closing) return;
     closing = true;
-    void handle.close().catch(() => { console.error('cairn_mcp_close_failed'); })
-      .finally(() => { process.stdin.destroy(); });
+    void Promise.resolve().then(() => handle.close()).catch(() => { console.error('cairn_mcp_close_failed'); })
+      .finally(() => { input.destroy(); });
   };
   handle = serveStdio(factory, {
-    transport: new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize }),
+    transport: new StdioServerTransport(input, output, { maxBufferSize }),
     onerror: () => { console.error('cairn_mcp_transport_error'); queueMicrotask(stop); },
   });
-  process.once('SIGTERM', stop);
-  process.once('SIGINT', stop);
-  process.stdin.once('end', stop);
+  const closeHandle = handle.close.bind(handle); let closed;
+  handle.close = () => closed ??= Promise.resolve().then(closeHandle).finally(async () => {
+    try { await closeEmbedding(); } finally { events.removeListener('SIGTERM', stop); events.removeListener('SIGINT', stop); input.removeListener('end', stop); }
+  });
+  events.once('SIGTERM', stop);
+  events.once('SIGINT', stop);
+  input.once('end', stop);
   return handle;
 }
 

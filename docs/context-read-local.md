@@ -370,3 +370,8 @@ adoption, two-hop traversal, MOC summary freshness, role/task behavior or
 invalidation. Titles report `summaryFreshness:'unavailable'` with
 `summaryFreshnessReason:'e1_seam_unavailable'`.
 <!-- End U5c-2 integration. -->
+
+For the explicitly selected optional FP32 CPU model pack, see
+[local bge-m3 embedding](local-embedder-bge-m3.md). It documents install/verify,
+local resource policy, lifecycle diagnostics, completion criteria and the separate
+qualification workflow. No local embedder is selected by default.

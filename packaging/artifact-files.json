@@ -266,5 +266,21 @@
   "docs/plans/topic-overview-member-pages.md",
   "core/topic-members-opening.mjs",
   "core/topic-members-primary.mjs",
-  "core/topic-members-session.mjs"
+  "core/topic-members-session.mjs",
+  "adapters/local-embedder/bundle.mjs",
+  "adapters/local-embedder/catalog.mjs",
+  "adapters/local-embedder/child.mjs",
+  "adapters/local-embedder/common.mjs",
+  "adapters/local-embedder/index.mjs",
+  "adapters/local-embedder/install.mjs",
+  "adapters/local-embedder/pack.mjs",
+  "adapters/local-embedder/process.mjs",
+  "adapters/local-embedder/protocol.mjs",
+  "adapters/local-embedder/runtime.mjs",
+  "adapters/local-embedder/supervisor.mjs",
+  "adapters/local-embedder/publish.mjs",
+  "adapters/local-embedder/publish.c",
+  "adapters/mcp/model-command.mjs",
+  "core/context-read-local-status.mjs",
+  "docs/local-embedder-bge-m3.md"
 ]
