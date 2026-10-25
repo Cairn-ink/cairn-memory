@@ -81,7 +81,7 @@ export class GuardedTransport {
     this.supervisor=setInterval(()=>{
       try{const ledger=this.checkProgress();progress({kind:'supervision',ledger});}
       catch(error){
-        if(error.code==='ledger_locked'){progress({kind:'supervision',ledgerBusy:true});return;}
+        if(error.code==='ledger_locked'){progress({kind:'supervision',ledgerBusy:true,writerIntents:error.writerIntents??[]});return;}
         this.supervisionError=error;
         if(error.code==='five_minutes_without_progress'){
           try{const pending=this.stop(error.code);if(pending)this.supervisionAccounting=pending.catch(stoppingError=>{this.supervisionError=stoppingError;});}

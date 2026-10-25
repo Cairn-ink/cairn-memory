@@ -1,3 +1,11 @@
+# A-4 fourth-recheck writer-owner repair
+
+Writer intents now atomically publish pid, Linux process start time, boot/PID-namespace identity and a random nonce in their names. Observers reclaim a provably dead owner only under the accounting lock, after revalidation. Live and unverifiable owners retain priority; unknown identities are included in observation/watchdog diagnostics. There is no time-only lease. Anonymous legacy markers remain explicitly unknown.
+
+See [fourth-recheck report](REPORT-A4-RECHECK4.md) for independent-process regressions, the d5ab6bd3 baseline failure, verification and the changed-file inventory. Primary freeze and non-author review remain required.
+
+Earlier repair records follow as historical context.
+
 # A-4 third-recheck accounting contention repair
 
 Accounting operations retry lock contention with asynchronous backoff for at most 15 seconds. Pending writers take priority over read-only monitoring. Provider requests are never redispatched to recover accounting. Each received reply is fsynced independently before checking or settling it; only successful settlement removes that copy. Exhaustion leaves the full reservation, exact reply and a durable stop for explicit reconciliation. Runner failure artifacts include this evidence.

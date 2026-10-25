@@ -1,0 +1,50 @@
+[
+  {
+    "command": "node --check evaluation/hr3/harness/ledger.mjs",
+    "sourceSHA256": "c99218c1504cfe99fb2eac25f4a8c1f5d51998bed5a55e7b1bd1e00a10951033",
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "command": "node --check evaluation/hr3/harness/transport.mjs",
+    "sourceSHA256": "3154d628ee8fbd74ef159e1b6d26fa5d83390582bb7e858b49193eeb6cb13260",
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "command": "node --check evaluation/hr3/harness/writer-owner.mjs",
+    "sourceSHA256": "bf3bf4a5c2914f7d1baadf90725cd70b1b9b4fb7a9c25489724d4d694f7c44df",
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "command": "node --check evaluation/hr3/harness/test.mjs",
+    "sourceSHA256": "6386131a923de80df849f533ce6cff7c3c5803c640151ea5d2ac97ec7cdd6d2f",
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "command": "node --check evaluation/hr3/harness/test/ledger-contention-a4.test.mjs",
+    "sourceSHA256": "178b94953ec2109f2d734a3db377c0b8904489004e5f6b7df79de173e60cf952",
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "command": "node --check evaluation/hr3/harness/test/ledger-race-a4.test.mjs",
+    "sourceSHA256": "a5731ef46187168ff649dbcfe27fa20076a5ad3e6278fe9b8daebe351408cc79",
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "command": "node --check evaluation/hr3/harness/test/writer-owner-a4.test.mjs",
+    "sourceSHA256": "d1694e474b7f76d8bf67a67b6a45a2575fe3dc3edbb98379b7f2a074297522c2",
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "command": "node --check evaluation/hr3/harness/test/writer-owner-worker.mjs",
+    "sourceSHA256": "b1d2eec656cdc167450d466bc98359af39482770e7d8e81431beb4fcf310c30e",
+    "exitCode": 0,
+    "stderr": ""
+  }
+]

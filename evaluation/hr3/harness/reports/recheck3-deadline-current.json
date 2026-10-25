@@ -1,7 +1,7 @@
 {
   "sourceHashes": {
-    "ledger": "496e0afbb82f3c53ba691fe0e590c44d3d9bccc9549ac243a6f6b28b2fa7c818",
-    "transport": "28d3234589130e7bfe62c8ae159cc7d8df4dab488e64f23578929c512ca32919"
+    "ledger": "c99218c1504cfe99fb2eac25f4a8c1f5d51998bed5a55e7b1bd1e00a10951033",
+    "transport": "3154d628ee8fbd74ef159e1b6d26fa5d83390582bb7e858b49193eeb6cb13260"
   },
   "result": {
     "reply": null,
@@ -27,7 +27,7 @@
   "lastProgress": 0,
   "responses": [
     {
-      "path": "evaluation/hr3/harness/artifacts/ledger-contention-9ElGg5/ledger.jsonl.responses/4c28a723dd8983b2a7eb4054b7840c475dfdb03ef551ef3dc2a04539a71e3250.json",
+      "path": "evaluation/hr3/harness/artifacts/ledger-contention-0oONb0/ledger.jsonl.responses/4c28a723dd8983b2a7eb4054b7840c475dfdb03ef551ef3dc2a04539a71e3250.json",
       "value": {
         "bodySHA256": "d1f6ba5f6b77732178cf4a7e0c819ea25b28877ef7fe4e2a47c4b522d4fac1cd",
         "id": "elapsed/attempt-0",

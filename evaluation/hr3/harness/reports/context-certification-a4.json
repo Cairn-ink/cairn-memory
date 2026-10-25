@@ -1,7 +1,7 @@
 {
   "version": "hr3-a4-context-conformance-v2",
   "status": "PASS",
-  "runtimeClosureSHA256": "f134fe66e55a05e5c514cad6ed587e7aacfc9a7d483422a428256cdb0e7a8338",
+  "runtimeClosureSHA256": "62dc9118549641993f2d1bd64c8f02808dc979f8045f68ddfd493a18afd53223",
   "adoptedContexts": 6,
   "unresolvedContexts": 3,
   "sharedTurnAmbiguities": 3,
@@ -1147,7 +1147,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "9809d0f45ab8b090ed419ec402da1c44b1adb921704ccb514b1cde538862805d"
+      "sha256": "6e6a401100bf94ce6e9ec18fbef0a80f687f40bdb2ab3ff25dd4fc99ed85afe4"
     },
     {
       "operation": "extraction",
@@ -1219,7 +1219,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "6a1c156b114ab5b2c6ab94a54772afd86c0d23e5e682e984c97876d7f4e6d6b9"
+      "sha256": "a7c8a4ae214e21eff7142fc82234b0b8fd5fe6524ddd7bc9f7ae5fa89a776fea"
     },
     {
       "operation": "extraction",
@@ -1291,7 +1291,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "da477cb39852a1012623d5ca355ae415a7929755cf55b4d138f7e7b43a5e156b"
+      "sha256": "6643e74972ee20dc50938cbfd1b09f55f3fadeb39b0abb604f4c1d323d872004"
     },
     {
       "operation": "extraction",
@@ -1363,7 +1363,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "a4346e8d9cb17336415e4940acaddc601d5a341e798dffa15f89c3d4a5855eeb"
+      "sha256": "99a5f9cf18efb1ea68d4ef495191a4d6b6061aac5068e854b6f74a95ad550e43"
     },
     {
       "operation": "extraction",
@@ -1435,7 +1435,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "084a77ffa861ff5726b323547d7761960358d5e327875212abaf056064768d4e"
+      "sha256": "e07e56269bdd0a0b24f16393328f1fe1036f5a8751ef0b884a564cc98cbd1241"
     },
     {
       "operation": "extraction",
@@ -1507,7 +1507,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "1ef1ea581269e240cd3af2937a83cba59a5126e7f6383b1eef88757c194329bf"
+      "sha256": "896631f6e2a49166cda42a25374058c8c33be4fb8cffccada76651e986920ead"
     },
     {
       "operation": "extraction",
@@ -1579,7 +1579,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "a697d4c0bcfb36eb6d9423791cb567ba5b53fe85fdccaa6aff7608458be4e2b6"
+      "sha256": "94f938ac33021a248c1953015c4e512778cbdf52bb36ae5b6c9da0cd7310f726"
     },
     {
       "operation": "extraction",
@@ -1651,7 +1651,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "61f06fa9ce6445e096ff589b399aee62d8913cbc3af34140562fa19e4c4d1923"
+      "sha256": "81d135a6ded24bb8b71745bd0cecac0264281f122584103e58fcc3c989f5e695"
     },
     {
       "operation": "extraction",
@@ -1723,7 +1723,7 @@
       "limit": 40960,
       "pass": true,
       "outputTokens": 33,
-      "sha256": "e1c6ac99cb1a66f3fa502a04e05a4618a7fa8530aa6b35c7f79fe8bf04be5aa3"
+      "sha256": "6cebe2ca424036a2bd4a5bc450debc421cb731293759508cfc7a3ec4707559db"
     }
   ],
   "embeddingMeasurements": [
@@ -3300,13 +3300,13 @@
       "channel": "product",
       "inputs": 2,
       "inputUnits": [
-        209,
-        274
+        274,
+        209
       ],
       "units": 483,
       "maxInputUnits": 274,
       "requestBytes": 615,
-      "bodySHA256": "95f0ebada55fb310097633f0a22d564b550ad02e551cc93427d2e9f9102526b0"
+      "bodySHA256": "592115d4e35403ca82a334a27d5edf27d0bb94cf59f123d77c33fd92afed5731"
     },
     {
       "language": "mixed",
@@ -3346,13 +3346,13 @@
       "channel": "product",
       "inputs": 2,
       "inputUnits": [
-        209,
-        274
+        274,
+        209
       ],
       "units": 483,
       "maxInputUnits": 274,
       "requestBytes": 615,
-      "bodySHA256": "95f0ebada55fb310097633f0a22d564b550ad02e551cc93427d2e9f9102526b0"
+      "bodySHA256": "592115d4e35403ca82a334a27d5edf27d0bb94cf59f123d77c33fd92afed5731"
     },
     {
       "language": "mixed",

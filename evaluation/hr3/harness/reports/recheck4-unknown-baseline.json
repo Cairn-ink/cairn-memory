@@ -1,0 +1,18 @@
+{
+  "ledgerSHA256": "496e0afbb82f3c53ba691fe0e590c44d3d9bccc9549ac243a6f6b28b2fa7c818",
+  "result": {
+    "error": "ledger_locked",
+    "id": 1,
+    "report": null,
+    "unlinks": [],
+    "writerIntents": []
+  },
+  "owner": {
+    "bootId": "64e66476-8267-45df-93c9-7087141c2627",
+    "namespace": "4026532485",
+    "nonce": "b178535e-14b3-47a7-befa-4f2a3d007018",
+    "pid": 102,
+    "starttime": "16537255"
+  },
+  "markerPresent": true
+}

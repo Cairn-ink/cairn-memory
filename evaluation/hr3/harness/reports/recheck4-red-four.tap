@@ -1,0 +1,94 @@
+TAP version 13
+# Subtest: recheck4 owner: crashed independent writer is reclaimed under lock and observers recover
+not ok 1 - recheck4 owner: crashed independent writer is reclaimed under lock and observers recover
+  ---
+  duration_ms: 303.261321
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/writer-owner-a4.test.mjs:33:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'ledger_locked'
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: 'ledger_locked'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/writer-owner-a4.test.mjs:38:9)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: recheck4 owner: live independent writer retains priority regardless of marker age
+not ok 2 - recheck4 owner: live independent writer retains priority regardless of marker age
+  ---
+  duration_ms: 199.612569
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/writer-owner-a4.test.mjs:41:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+    
+      assert.ok(identity?.starttime&&identity.bootId&&identity.namespace&&identity.nonce)
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/writer-owner-a4.test.mjs:42:184)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: recheck4 owner: reused pid with a different process start is reclaimed without harming its live replacement
+not ok 3 - recheck4 owner: reused pid with a different process start is reclaimed without harming its live replacement
+  ---
+  duration_ms: 200.768511
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/writer-owner-a4.test.mjs:50:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'ledger_locked'
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: 'ledger_locked'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/writer-owner-a4.test.mjs:53:9)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: recheck4 owner: unknown start identity is retained and reported across independent processes
+not ok 4 - recheck4 owner: unknown start identity is retained and reported across independent processes
+  ---
+  duration_ms: 168.660672
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/writer-owner-a4.test.mjs:56:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'state')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/writer-owner-a4.test.mjs:59:109)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 0
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 896.729619

@@ -1,5 +1,5 @@
 {
-  "sourceSHA256": "496e0afbb82f3c53ba691fe0e590c44d3d9bccc9549ac243a6f6b28b2fa7c818",
+  "sourceSHA256": "c99218c1504cfe99fb2eac25f4a8c1f5d51998bed5a55e7b1bd1e00a10951033",
   "observerError": null,
   "interleavedWriterResult": "ledger_locked",
   "journalRecords": 3,
@@ -9,19 +9,19 @@
   "resumeError": null,
   "writes": [
     {
-      "path": "evaluation/hr3/harness/artifacts/ledger-race-rSVi46/ledger.jsonl.head.json",
+      "path": "evaluation/hr3/harness/artifacts/ledger-race-drFNCs/ledger.jsonl.head.json",
       "records": 1,
       "blockedReason": null,
       "locked": true
     },
     {
-      "path": "evaluation/hr3/harness/artifacts/ledger-race-rSVi46/ledger.jsonl.head.json",
+      "path": "evaluation/hr3/harness/artifacts/ledger-race-drFNCs/ledger.jsonl.head.json",
       "records": 2,
       "blockedReason": null,
       "locked": true
     },
     {
-      "path": "evaluation/hr3/harness/artifacts/ledger-race-rSVi46/ledger.jsonl.head.json",
+      "path": "evaluation/hr3/harness/artifacts/ledger-race-drFNCs/ledger.jsonl.head.json",
       "records": 3,
       "blockedReason": null,
       "locked": true

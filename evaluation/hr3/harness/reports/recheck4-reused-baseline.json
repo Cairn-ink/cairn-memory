@@ -1,0 +1,31 @@
+{
+  "ledgerSHA256": "496e0afbb82f3c53ba691fe0e590c44d3d9bccc9549ac243a6f6b28b2fa7c818",
+  "old": {
+    "bootId": "64e66476-8267-45df-93c9-7087141c2627",
+    "namespace": "4026532485",
+    "nonce": "aa76d2e5-ed9e-4016-9e46-f4918738b5d4",
+    "pid": 80,
+    "starttime": "16537236"
+  },
+  "replacement": {
+    "bootId": "64e66476-8267-45df-93c9-7087141c2627",
+    "namespace": "4026532485",
+    "nonce": "aa76d2e5-ed9e-4016-9e46-f4918738b5d4",
+    "pid": 80,
+    "starttime": "16537235"
+  },
+  "result": {
+    "error": "ledger_locked",
+    "id": 1,
+    "report": null,
+    "unlinks": [],
+    "writerIntents": []
+  },
+  "alive": {
+    "error": null,
+    "id": 2,
+    "report": null,
+    "unlinks": []
+  },
+  "markerPresent": true
+}

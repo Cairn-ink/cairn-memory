@@ -1,0 +1,47 @@
+{
+  "ledgerSHA256": "c99218c1504cfe99fb2eac25f4a8c1f5d51998bed5a55e7b1bd1e00a10951033",
+  "result": {
+    "error": "ledger_locked",
+    "id": 1,
+    "report": {
+      "reclaimed": [],
+      "waiting": [
+        {
+          "marker": "v2.5857.u.64e66476-8267-45df-93c9-7087141c2627.4026532257.99c13b94-66db-4214-9d62-903b1507d1c4",
+          "owner": {
+            "bootId": "64e66476-8267-45df-93c9-7087141c2627",
+            "namespace": "4026532257",
+            "nonce": "99c13b94-66db-4214-9d62-903b1507d1c4",
+            "pid": 5857,
+            "starttime": null
+          },
+          "reason": "owner_start_unverifiable",
+          "state": "unknown"
+        }
+      ]
+    },
+    "unlinks": [],
+    "writerIntents": [
+      {
+        "marker": "v2.5857.u.64e66476-8267-45df-93c9-7087141c2627.4026532257.99c13b94-66db-4214-9d62-903b1507d1c4",
+        "owner": {
+          "bootId": "64e66476-8267-45df-93c9-7087141c2627",
+          "namespace": "4026532257",
+          "nonce": "99c13b94-66db-4214-9d62-903b1507d1c4",
+          "pid": 5857,
+          "starttime": null
+        },
+        "reason": "owner_start_unverifiable",
+        "state": "unknown"
+      }
+    ]
+  },
+  "owner": {
+    "bootId": "64e66476-8267-45df-93c9-7087141c2627",
+    "namespace": "4026532257",
+    "nonce": "99c13b94-66db-4214-9d62-903b1507d1c4",
+    "pid": 5857,
+    "starttime": "16632062"
+  },
+  "markerPresent": true
+}

@@ -1,3 +1,4 @@
+import {writerOwnerIdentity,writerMarkerName,parseWriterMarker,writerOwnerLiveness} from '../writer-owner.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
@@ -14,7 +15,7 @@ function fixture(t){const dir=fs.mkdtempSync('evaluation/hr3/harness/artifacts/l
 function implementation(hooks={}){
  const baseline=process.env.HR3_LEDGER_RACE_BASELINE==='1',source=fs.readFileSync(new URL(baseline?'./fixtures/ledger-3e49f0a4.mjs.txt':'../ledger.mjs',import.meta.url),'utf8');
  if(baseline)assert.equal(hash(source),'5970aa55fef9e12ba470bc7efeb7b61c1cd4d68655fd3f42b8d4eecc7afdee6b');
- const writes=[],context={...fs,dirname,canonical,hash,fail,loadCarryForward,verifyCarrySnapshot,validateRequest,Buffer,
+ const writes=[],context={...fs,writerOwnerIdentity,writerMarkerName,parseWriterMarker,writerOwnerLiveness,dirname,canonical,hash,fail,loadCarryForward,verifyCarrySnapshot,validateRequest,Buffer,
   mkdirSync(path,...args){hooks.beforeLock?.(path);return fs.mkdirSync(path,...args);},
   readFileSync(path,...args){const value=fs.readFileSync(path,...args);hooks.afterRead?.(path,value);return value;},
   atomicJSON(path,value){writes.push({path,records:value.records,blockedReason:value.blockedReason??null,locked:fs.existsSync(path.replace(/\.head\.json$/,'.lock'))});atomicJSON(path,value);}};

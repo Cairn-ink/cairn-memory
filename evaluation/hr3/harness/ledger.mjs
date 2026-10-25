@@ -1,4 +1,5 @@
-import { mkdirSync, readFileSync, openSync, closeSync, writeSync, fsyncSync, rmdirSync, existsSync, statSync, readdirSync, unlinkSync } from 'node:fs';
+import {writerOwnerIdentity,writerMarkerName,parseWriterMarker,writerOwnerLiveness} from './writer-owner.mjs';
+import { mkdirSync, readFileSync, openSync, closeSync, writeSync, fsyncSync, rmdirSync, existsSync, statSync, readdirSync, unlinkSync, lstatSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { canonical, hash, fail, atomicJSON } from './common.mjs';
 import {loadCarryForward,verifyCarrySnapshot} from './accounting.mjs';
@@ -104,16 +105,39 @@ export class Ledger {
     // Separate intents let observers yield while an asynchronous writer waits.
     // Never remove this directory: doing so races another process's registration.
     const directory=this.lock+'.writers';mkdirSync(directory,{recursive:true,mode:0o700});
-    const path=directory+'/'+hash(String(Math.random())+String(Date.now()));
+    // The complete owner identity is published atomically in the filename. A
+    // crash immediately after open cannot leave an anonymous/partial record.
+    const path=directory+'/'+writerMarkerName(writerOwnerIdentity());
     const fd=openSync(path,'wx',0o600);closeSync(fd);
     return ()=>unlinkSync(path);
   }
-  #writerWaiting(){const path=this.lock+'.writers';return existsSync(path)&&readdirSync(path).length>0;}
+  #writerWaiting(reclaim=false){
+    if(reclaim&&!this.#locked)fail('writer_reclamation_requires_lock');
+    const directory=this.lock+'.writers',waiting=[],reclaimed=[...(this.writerIntentReport?.reclaimed??[])];
+    let names=[];
+    try{names=readdirSync(directory).sort();}catch(error){if(error.code!=='ENOENT')waiting.push({marker:null,state:'unknown',reason:'intent_directory_unreadable'});}
+    for(const marker of names){
+      const path=directory+'/'+marker,owner=parseWriterMarker(marker);let stat;
+      try{stat=lstatSync(path,{bigint:true});}catch(error){if(error.code!=='ENOENT')waiting.push({marker,owner,state:'unknown',reason:'marker_unreadable'});continue;}
+      const stamp=s=>[s.dev,s.ino,s.size,s.mtimeNs,s.ctimeNs].join(':');
+      const health=stat.isFile()&&stat.size===0n?writerOwnerLiveness(owner):{state:'unknown',reason:'marker_format_unverifiable'};
+      if(health.state==='dead'){
+        if(!reclaim)continue; // Only the locked, fresh scan may actually unlink.
+        try{
+          const current=lstatSync(path,{bigint:true});
+          if(stamp(current)!==stamp(stat)||writerOwnerLiveness(owner).state!=='dead'){waiting.push({marker,owner,state:'unknown',reason:'marker_changed_during_validation'});continue;}
+          unlinkSync(path);reclaimed.push({marker,owner,...health});
+        }catch(error){if(error.code!=='ENOENT')waiting.push({marker,owner,state:'unknown',reason:'reclamation_unavailable'});}
+      }else waiting.push({marker,owner,...health});
+    }
+    this.writerIntentReport={waiting,reclaimed};return waiting.length>0;
+  }
+  #busy(){throw Object.assign(new Error('ledger_locked'),{code:'ledger_locked',writerIntents:this.writerIntentReport?.waiting??[]});}
   #withLock(fn,persistRejection) {
-    if(this.#locked||!persistRejection&&this.#writerWaiting())fail('ledger_locked');
-    try {mkdirSync(this.lock,{mode:0o700});}catch {fail('ledger_locked');}
+    if(this.#locked||!persistRejection&&this.#writerWaiting())this.#busy();
+    try {mkdirSync(this.lock,{mode:0o700});}catch {this.#busy();}
     this.#locked=true;this.#persistRejection=persistRejection;
-    try{if(!persistRejection&&this.#writerWaiting())fail('ledger_locked');return fn();}finally{this.#persistRejection=false;this.#locked=false;rmdirSync(this.lock);}
+    try{const waiting=this.#writerWaiting(true);if(!persistRejection&&waiting)this.#busy();return fn();}finally{this.#persistRejection=false;this.#locked=false;rmdirSync(this.lock);}
   }
   append(events,event) {
     if(!this.#locked||!this.#persistRejection)fail('ledger_append_requires_transaction');

@@ -1,0 +1,23 @@
+TAP version 13
+# Subtest: recheck4 owner: crashed independent writer is reclaimed under lock and observers recover
+not ok 1 - recheck4 owner: crashed independent writer is reclaimed under lock and observers recover
+  ---
+  duration_ms: 52.191057
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/writer-owner-a4.test.mjs:25:1'
+  failureType: 'testCodeFailure'
+  error: 'worker_closed:'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    evaluation/hr3/harness/test/writer-owner-a4.test.mjs:18:168
+    process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 86.340579

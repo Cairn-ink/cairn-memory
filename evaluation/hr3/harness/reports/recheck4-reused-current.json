@@ -1,0 +1,66 @@
+{
+  "ledgerSHA256": "c99218c1504cfe99fb2eac25f4a8c1f5d51998bed5a55e7b1bd1e00a10951033",
+  "old": {
+    "bootId": "64e66476-8267-45df-93c9-7087141c2627",
+    "namespace": "4026532257",
+    "nonce": "b7f83697-e83d-4b2b-9c89-a1db27434f31",
+    "pid": 5554,
+    "starttime": "16631994"
+  },
+  "replacement": {
+    "bootId": "64e66476-8267-45df-93c9-7087141c2627",
+    "namespace": "4026532257",
+    "nonce": "b7f83697-e83d-4b2b-9c89-a1db27434f31",
+    "pid": 5554,
+    "starttime": "16631993"
+  },
+  "result": {
+    "error": null,
+    "id": 1,
+    "report": {
+      "reclaimed": [
+        {
+          "marker": "v2.5554.16631994.64e66476-8267-45df-93c9-7087141c2627.4026532257.b7f83697-e83d-4b2b-9c89-a1db27434f31",
+          "owner": {
+            "bootId": "64e66476-8267-45df-93c9-7087141c2627",
+            "namespace": "4026532257",
+            "nonce": "b7f83697-e83d-4b2b-9c89-a1db27434f31",
+            "pid": 5554,
+            "starttime": "16631994"
+          },
+          "reason": "pid_reused",
+          "state": "dead"
+        }
+      ],
+      "waiting": []
+    },
+    "state": {
+      "byStage": {},
+      "embedding": {
+        "product": 0,
+        "research": 0
+      },
+      "failures": 0,
+      "reservations": 0,
+      "stopped": null,
+      "total": 0,
+      "unsettled": []
+    },
+    "unlinks": [
+      {
+        "marker": "v2.5554.16631994.64e66476-8267-45df-93c9-7087141c2627.4026532257.b7f83697-e83d-4b2b-9c89-a1db27434f31",
+        "underLock": true
+      }
+    ]
+  },
+  "alive": {
+    "error": null,
+    "id": 2,
+    "report": {
+      "reclaimed": [],
+      "waiting": []
+    },
+    "unlinks": []
+  },
+  "markerPresent": false
+}

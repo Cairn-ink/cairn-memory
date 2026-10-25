@@ -198,6 +198,7 @@
     "evaluation/hr3/harness/runtime-closure.mjs",
     "evaluation/hr3/harness/schema.mjs",
     "evaluation/hr3/harness/transport.mjs",
+    "evaluation/hr3/harness/writer-owner.mjs",
     "evaluation/hr3/runner/cli-real.mjs",
     "evaluation/hr3/runner/openai-transport.mjs",
     "evaluation/hr3/scorer/canonical.mjs",
@@ -395,6 +396,7 @@
     "evaluation/hr3/harness/runtime-closure.mjs",
     "evaluation/hr3/harness/schema.mjs",
     "evaluation/hr3/harness/transport.mjs",
+    "evaluation/hr3/harness/writer-owner.mjs",
     "evaluation/hr3/runner/cli-real.mjs",
     "evaluation/hr3/runner/openai-transport.mjs",
     "evaluation/hr3/scorer/canonical.mjs",
@@ -615,6 +617,11 @@
       "from": "evaluation/hr3/harness/accounting.mjs",
       "specifier": "./common.mjs",
       "to": "evaluation/hr3/harness/common.mjs"
+    },
+    {
+      "from": "evaluation/hr3/harness/ledger.mjs",
+      "specifier": "./writer-owner.mjs",
+      "to": "evaluation/hr3/harness/writer-owner.mjs"
     },
     {
       "from": "evaluation/hr3/harness/ledger.mjs",
@@ -3884,11 +3891,6 @@
       "to": "evaluation/hr3/harness/common.mjs"
     },
     {
-      "from": "evaluation/hr3/harness/inputs.mjs",
-      "specifier": "./common.mjs",
-      "to": "evaluation/hr3/harness/common.mjs"
-    },
-    {
       "from": "evaluation/hr3/harness/paid-preflight.mjs",
       "specifier": "./common.mjs",
       "to": "evaluation/hr3/harness/common.mjs"
@@ -3930,6 +3932,11 @@
     },
     {
       "from": "evaluation/hr3/harness/ledger.mjs",
+      "specifier": "./writer-owner.mjs",
+      "to": "evaluation/hr3/harness/writer-owner.mjs"
+    },
+    {
+      "from": "evaluation/hr3/harness/ledger.mjs",
       "specifier": "./common.mjs",
       "to": "evaluation/hr3/harness/common.mjs"
     },
@@ -3964,11 +3971,6 @@
       "to": "evaluation/hr3/harness/common.mjs"
     },
     {
-      "from": "evaluation/hr3/harness/event-identity.mjs",
-      "specifier": "./common.mjs",
-      "to": "evaluation/hr3/harness/common.mjs"
-    },
-    {
       "from": "evaluation/hr3/harness/extraction.mjs",
       "specifier": "./common.mjs",
       "to": "evaluation/hr3/harness/common.mjs"
@@ -3989,12 +3991,7 @@
       "to": "evaluation/hr3/harness/schema.mjs"
     },
     {
-      "from": "evaluation/hr3/harness/research.mjs",
-      "specifier": "./privacy.mjs",
-      "to": "evaluation/hr3/harness/privacy.mjs"
-    },
-    {
-      "from": "evaluation/hr3/harness/research.mjs",
+      "from": "evaluation/hr3/harness/event-identity.mjs",
       "specifier": "./common.mjs",
       "to": "evaluation/hr3/harness/common.mjs"
     },
@@ -4019,32 +4016,22 @@
       "to": "evaluation/hr3/harness/contract-projection-a4.mjs"
     },
     {
+      "from": "evaluation/hr3/harness/inputs.mjs",
+      "specifier": "./common.mjs",
+      "to": "evaluation/hr3/harness/common.mjs"
+    },
+    {
+      "from": "evaluation/hr3/harness/research.mjs",
+      "specifier": "./privacy.mjs",
+      "to": "evaluation/hr3/harness/privacy.mjs"
+    },
+    {
+      "from": "evaluation/hr3/harness/research.mjs",
+      "specifier": "./common.mjs",
+      "to": "evaluation/hr3/harness/common.mjs"
+    },
+    {
       "from": "evaluation/hr3/harness/pin.mjs",
-      "specifier": "./common.mjs",
-      "to": "evaluation/hr3/harness/common.mjs"
-    },
-    {
-      "from": "evaluation/hr3/harness/artifacts.mjs",
-      "specifier": "./common.mjs",
-      "to": "evaluation/hr3/harness/common.mjs"
-    },
-    {
-      "from": "evaluation/hr3/harness/bounds.mjs",
-      "specifier": "./accounting.mjs",
-      "to": "evaluation/hr3/harness/accounting.mjs"
-    },
-    {
-      "from": "evaluation/hr3/harness/bounds.mjs",
-      "specifier": "./extraction-diagnostics.mjs",
-      "to": "evaluation/hr3/harness/extraction-diagnostics.mjs"
-    },
-    {
-      "from": "evaluation/hr3/harness/bounds.mjs",
-      "specifier": "./ledger.mjs",
-      "to": "evaluation/hr3/harness/ledger.mjs"
-    },
-    {
-      "from": "evaluation/hr3/harness/bounds.mjs",
       "specifier": "./common.mjs",
       "to": "evaluation/hr3/harness/common.mjs"
     },
@@ -4072,6 +4059,31 @@
       "from": "evaluation/hr3/scorer/scorer.mjs",
       "specifier": "./contract.mjs",
       "to": "evaluation/hr3/scorer/contract.mjs"
+    },
+    {
+      "from": "evaluation/hr3/harness/artifacts.mjs",
+      "specifier": "./common.mjs",
+      "to": "evaluation/hr3/harness/common.mjs"
+    },
+    {
+      "from": "evaluation/hr3/harness/bounds.mjs",
+      "specifier": "./accounting.mjs",
+      "to": "evaluation/hr3/harness/accounting.mjs"
+    },
+    {
+      "from": "evaluation/hr3/harness/bounds.mjs",
+      "specifier": "./extraction-diagnostics.mjs",
+      "to": "evaluation/hr3/harness/extraction-diagnostics.mjs"
+    },
+    {
+      "from": "evaluation/hr3/harness/bounds.mjs",
+      "specifier": "./ledger.mjs",
+      "to": "evaluation/hr3/harness/ledger.mjs"
+    },
+    {
+      "from": "evaluation/hr3/harness/bounds.mjs",
+      "specifier": "./common.mjs",
+      "to": "evaluation/hr3/harness/common.mjs"
     },
     {
       "from": "evaluation/hr3/harness/runtime-closure.mjs",
@@ -4354,6 +4366,161 @@
       "to": "adapters/openai/context-counter.mjs"
     },
     {
+      "from": "core/runtime.mjs",
+      "specifier": "./role-profile-input.mjs",
+      "to": "core/role-profile-input.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./role-profile-storage.mjs",
+      "to": "core/role-profile-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./asset-input.mjs",
+      "to": "core/asset-input.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./asset-storage.mjs",
+      "to": "core/asset-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./method-package-input.mjs",
+      "to": "core/method-package-input.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./method-package-storage.mjs",
+      "to": "core/method-package-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./confirmation-storage.mjs",
+      "to": "core/confirmation-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./session-context.mjs",
+      "to": "core/session-context.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./episode-reads.mjs",
+      "to": "core/episode-reads.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./episode-storage.mjs",
+      "to": "core/episode-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./procedural-storage.mjs",
+      "to": "core/procedural-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./moc-storage.mjs",
+      "to": "core/moc-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./admission-storage.mjs",
+      "to": "core/admission-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./classification-journal-storage.mjs",
+      "to": "core/classification-journal-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./staged-evidence-storage.mjs",
+      "to": "core/staged-evidence-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./conflict-storage.mjs",
+      "to": "core/conflict-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./index-storage.mjs",
+      "to": "core/index-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./supersession-storage.mjs",
+      "to": "core/supersession-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./ordered-capture-storage.mjs",
+      "to": "core/ordered-capture-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./claim-qualification-storage.mjs",
+      "to": "core/claim-qualification-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./source-evidence.mjs",
+      "to": "core/source-evidence.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./qualified-transition-storage.mjs",
+      "to": "core/qualified-transition-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./rationale-storage.mjs",
+      "to": "core/rationale-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./private-card-input.mjs",
+      "to": "core/private-card-input.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./private-card-storage.mjs",
+      "to": "core/private-card-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./card-raw-sources.mjs",
+      "to": "core/card-raw-sources.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./raw-source-roots.mjs",
+      "to": "core/raw-source-roots.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./raw-deletion-storage.mjs",
+      "to": "core/raw-deletion-storage.mjs"
+    },
+    {
+      "from": "core/runtime.mjs",
+      "specifier": "./raw-lineage-storage.mjs",
+      "to": "core/raw-lineage-storage.mjs"
+    },
+    {
       "from": "core/validation.mjs",
       "specifier": "../plugins/cairn-memory/lib/redact.mjs",
       "to": "plugins/cairn-memory/lib/redact.mjs"
@@ -4554,161 +4721,6 @@
       "to": "core/validation.mjs"
     },
     {
-      "from": "core/runtime.mjs",
-      "specifier": "./role-profile-input.mjs",
-      "to": "core/role-profile-input.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./role-profile-storage.mjs",
-      "to": "core/role-profile-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./asset-input.mjs",
-      "to": "core/asset-input.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./asset-storage.mjs",
-      "to": "core/asset-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./method-package-input.mjs",
-      "to": "core/method-package-input.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./method-package-storage.mjs",
-      "to": "core/method-package-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./confirmation-storage.mjs",
-      "to": "core/confirmation-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./session-context.mjs",
-      "to": "core/session-context.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./episode-reads.mjs",
-      "to": "core/episode-reads.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./episode-storage.mjs",
-      "to": "core/episode-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./procedural-storage.mjs",
-      "to": "core/procedural-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./moc-storage.mjs",
-      "to": "core/moc-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./admission-storage.mjs",
-      "to": "core/admission-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./classification-journal-storage.mjs",
-      "to": "core/classification-journal-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./staged-evidence-storage.mjs",
-      "to": "core/staged-evidence-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./conflict-storage.mjs",
-      "to": "core/conflict-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./index-storage.mjs",
-      "to": "core/index-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./supersession-storage.mjs",
-      "to": "core/supersession-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./ordered-capture-storage.mjs",
-      "to": "core/ordered-capture-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./claim-qualification-storage.mjs",
-      "to": "core/claim-qualification-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./source-evidence.mjs",
-      "to": "core/source-evidence.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./qualified-transition-storage.mjs",
-      "to": "core/qualified-transition-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./rationale-storage.mjs",
-      "to": "core/rationale-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./private-card-input.mjs",
-      "to": "core/private-card-input.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./private-card-storage.mjs",
-      "to": "core/private-card-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./card-raw-sources.mjs",
-      "to": "core/card-raw-sources.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./raw-source-roots.mjs",
-      "to": "core/raw-source-roots.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./raw-deletion-storage.mjs",
-      "to": "core/raw-deletion-storage.mjs"
-    },
-    {
-      "from": "core/runtime.mjs",
-      "specifier": "./raw-lineage-storage.mjs",
-      "to": "core/raw-lineage-storage.mjs"
-    },
-    {
       "from": "core/memory-reader.mjs",
       "specifier": "./topic-overview-input.mjs",
       "to": "core/topic-overview-input.mjs"
@@ -4904,32 +4916,37 @@
       "to": "core/validation.mjs"
     },
     {
-      "from": "core/role-profile-facade.mjs",
+      "from": "core/role-profile-storage.mjs",
       "specifier": "./role-profile-input.mjs",
       "to": "core/role-profile-input.mjs"
     },
     {
-      "from": "core/role-profile-facade.mjs",
+      "from": "core/role-profile-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/role-profile-storage.mjs",
       "specifier": "./private-card-input.mjs",
       "to": "core/private-card-input.mjs"
     },
     {
-      "from": "core/role-profile-facade.mjs",
-      "specifier": "./private-card-facade.mjs",
-      "to": "core/private-card-facade.mjs"
+      "from": "core/role-profile-storage.mjs",
+      "specifier": "./private-operation-helpers.mjs",
+      "to": "core/private-operation-helpers.mjs"
     },
     {
-      "from": "core/role-profile-facade.mjs",
+      "from": "core/role-profile-storage.mjs",
       "specifier": "./task-receipt.mjs",
       "to": "core/task-receipt.mjs"
     },
     {
-      "from": "core/role-profile-facade.mjs",
-      "specifier": "./role-context-facade.mjs",
-      "to": "core/role-context-facade.mjs"
+      "from": "core/role-profile-storage.mjs",
+      "specifier": "./method-package-input.mjs",
+      "to": "core/method-package-input.mjs"
     },
     {
-      "from": "core/role-profile-facade.mjs",
+      "from": "core/role-profile-storage.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -4964,29 +4981,39 @@
       "to": "core/validation.mjs"
     },
     {
-      "from": "core/asset-facade.mjs",
+      "from": "core/asset-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/asset-storage.mjs",
+      "specifier": "./asset-identity.mjs",
+      "to": "core/asset-identity.mjs"
+    },
+    {
+      "from": "core/asset-storage.mjs",
       "specifier": "./asset-input.mjs",
       "to": "core/asset-input.mjs"
     },
     {
-      "from": "core/asset-facade.mjs",
-      "specifier": "./private-card-input.mjs",
-      "to": "core/private-card-input.mjs"
+      "from": "core/asset-storage.mjs",
+      "specifier": "./asset-schema.mjs",
+      "to": "core/asset-schema.mjs"
     },
     {
-      "from": "core/asset-facade.mjs",
-      "specifier": "./private-card-facade.mjs",
-      "to": "core/private-card-facade.mjs"
-    },
-    {
-      "from": "core/asset-facade.mjs",
+      "from": "core/asset-storage.mjs",
       "specifier": "./private-operation-helpers.mjs",
       "to": "core/private-operation-helpers.mjs"
     },
     {
-      "from": "core/asset-facade.mjs",
+      "from": "core/asset-storage.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/asset-storage.mjs",
+      "specifier": "./asset-derivative-storage.mjs",
+      "to": "core/asset-derivative-storage.mjs"
     },
     {
       "from": "core/method-package-input.mjs",
@@ -5010,6 +5037,601 @@
     },
     {
       "from": "core/method-package-input.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/method-package-storage.mjs",
+      "specifier": "./card-current-storage.mjs",
+      "to": "core/card-current-storage.mjs"
+    },
+    {
+      "from": "core/method-package-storage.mjs",
+      "specifier": "./method-binding-storage.mjs",
+      "to": "core/method-binding-storage.mjs"
+    },
+    {
+      "from": "core/method-package-storage.mjs",
+      "specifier": "./method-attachment-storage.mjs",
+      "to": "core/method-attachment-storage.mjs"
+    },
+    {
+      "from": "core/method-package-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/method-package-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/method-package-storage.mjs",
+      "specifier": "./private-card-input.mjs",
+      "to": "core/private-card-input.mjs"
+    },
+    {
+      "from": "core/method-package-storage.mjs",
+      "specifier": "./card-receipt-sources.mjs",
+      "to": "core/card-receipt-sources.mjs"
+    },
+    {
+      "from": "core/method-package-storage.mjs",
+      "specifier": "./card-raw-sources.mjs",
+      "to": "core/card-raw-sources.mjs"
+    },
+    {
+      "from": "core/method-package-storage.mjs",
+      "specifier": "./private-operation-helpers.mjs",
+      "to": "core/private-operation-helpers.mjs"
+    },
+    {
+      "from": "core/method-package-storage.mjs",
+      "specifier": "./method-package-input.mjs",
+      "to": "core/method-package-input.mjs"
+    },
+    {
+      "from": "core/confirmation-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/confirmation-storage.mjs",
+      "specifier": "./relation-limits.mjs",
+      "to": "core/relation-limits.mjs"
+    },
+    {
+      "from": "core/confirmation-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/session-context.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/session-context.mjs",
+      "specifier": "./model-budget.mjs",
+      "to": "core/model-budget.mjs"
+    },
+    {
+      "from": "core/session-context.mjs",
+      "specifier": "./episode-reads.mjs",
+      "to": "core/episode-reads.mjs"
+    },
+    {
+      "from": "core/session-context.mjs",
+      "specifier": "./procedural-storage.mjs",
+      "to": "core/procedural-storage.mjs"
+    },
+    {
+      "from": "core/session-context.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/episode-reads.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/episode-reads.mjs",
+      "specifier": "./episode-storage.mjs",
+      "to": "core/episode-storage.mjs"
+    },
+    {
+      "from": "core/episode-reads.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/episode-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/episode-storage.mjs",
+      "specifier": "./episode-schema.mjs",
+      "to": "core/episode-schema.mjs"
+    },
+    {
+      "from": "core/episode-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/episode-storage.mjs",
+      "specifier": "./procedural-storage.mjs",
+      "to": "core/procedural-storage.mjs"
+    },
+    {
+      "from": "core/episode-storage.mjs",
+      "specifier": "./raw-control-storage.mjs",
+      "to": "core/raw-control-storage.mjs"
+    },
+    {
+      "from": "core/episode-storage.mjs",
+      "specifier": "./local-authority-guard.mjs",
+      "to": "core/local-authority-guard.mjs"
+    },
+    {
+      "from": "core/procedural-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/procedural-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./card-current-schema.mjs",
+      "to": "core/card-current-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./role-profile-schema.mjs",
+      "to": "core/role-profile-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./asset-schema.mjs",
+      "to": "core/asset-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./store-fence.mjs",
+      "to": "core/store-fence.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./method-package-migration.mjs",
+      "to": "core/method-package-migration.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./raw-deletion-schema.mjs",
+      "to": "core/raw-deletion-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./raw-source-schema.mjs",
+      "to": "core/raw-source-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./local-authority-schema.mjs",
+      "to": "core/local-authority-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./existing-store.mjs",
+      "to": "core/existing-store.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./confirmation-schema.mjs",
+      "to": "core/confirmation-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./private-card-schema.mjs",
+      "to": "core/private-card-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./private-evidence-schema.mjs",
+      "to": "core/private-evidence-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./private-organization-schema.mjs",
+      "to": "core/private-organization-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./index-schema.mjs",
+      "to": "core/index-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./ordered-capture-schema.mjs",
+      "to": "core/ordered-capture-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./claim-qualification-schema.mjs",
+      "to": "core/claim-qualification-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./qualified-transition-schema.mjs",
+      "to": "core/qualified-transition-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./rationale-schema.mjs",
+      "to": "core/rationale-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./staged-evidence-schema.mjs",
+      "to": "core/staged-evidence-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./classification-journal-schema.mjs",
+      "to": "core/classification-journal-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./raw-schema.mjs",
+      "to": "core/raw-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./raw-lineage-schema.mjs",
+      "to": "core/raw-lineage-schema.mjs"
+    },
+    {
+      "from": "core/database.mjs",
+      "specifier": "./episode-schema.mjs",
+      "to": "core/episode-schema.mjs"
+    },
+    {
+      "from": "core/moc-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/moc-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/moc-storage.mjs",
+      "specifier": "./query-candidates.mjs",
+      "to": "core/query-candidates.mjs"
+    },
+    {
+      "from": "core/moc-storage.mjs",
+      "specifier": "./source-evidence.mjs",
+      "to": "core/source-evidence.mjs"
+    },
+    {
+      "from": "core/admission-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/admission-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/admission-storage.mjs",
+      "specifier": "./local-authority-guard.mjs",
+      "to": "core/local-authority-guard.mjs"
+    },
+    {
+      "from": "core/classification-journal-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/classification-journal-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/staged-evidence-storage.mjs",
+      "specifier": "./episode-schema.mjs",
+      "to": "core/episode-schema.mjs"
+    },
+    {
+      "from": "core/staged-evidence-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/staged-evidence-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/conflict-storage.mjs",
+      "specifier": "./relation-limits.mjs",
+      "to": "core/relation-limits.mjs"
+    },
+    {
+      "from": "core/conflict-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/index-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/index-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/supersession-storage.mjs",
+      "specifier": "./relation-limits.mjs",
+      "to": "core/relation-limits.mjs"
+    },
+    {
+      "from": "core/supersession-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/ordered-capture-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/ordered-capture-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/claim-qualification-storage.mjs",
+      "specifier": "./claim-qualification-input.mjs",
+      "to": "core/claim-qualification-input.mjs"
+    },
+    {
+      "from": "core/claim-qualification-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/source-evidence.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/qualified-transition-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/rationale-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/rationale-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/private-card-input.mjs",
+      "specifier": "./card-current-input.mjs",
+      "to": "core/card-current-input.mjs"
+    },
+    {
+      "from": "core/private-card-input.mjs",
+      "specifier": "../plugins/cairn-memory/lib/redact.mjs",
+      "to": "plugins/cairn-memory/lib/redact.mjs"
+    },
+    {
+      "from": "core/private-card-input.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/private-card-input.mjs",
+      "specifier": "./private-evidence-input.mjs",
+      "to": "core/private-evidence-input.mjs"
+    },
+    {
+      "from": "core/private-card-input.mjs",
+      "specifier": "./private-organization-input.mjs",
+      "to": "core/private-organization-input.mjs"
+    },
+    {
+      "from": "core/private-card-input.mjs",
+      "specifier": "./raw-source-input.mjs",
+      "to": "core/raw-source-input.mjs"
+    },
+    {
+      "from": "core/private-card-storage.mjs",
+      "specifier": "./card-current-storage.mjs",
+      "to": "core/card-current-storage.mjs"
+    },
+    {
+      "from": "core/private-card-storage.mjs",
+      "specifier": "./card-current-input.mjs",
+      "to": "core/card-current-input.mjs"
+    },
+    {
+      "from": "core/private-card-storage.mjs",
+      "specifier": "./private-operation-helpers.mjs",
+      "to": "core/private-operation-helpers.mjs"
+    },
+    {
+      "from": "core/private-card-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/private-card-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/private-card-storage.mjs",
+      "specifier": "./private-evidence-input.mjs",
+      "to": "core/private-evidence-input.mjs"
+    },
+    {
+      "from": "core/private-card-storage.mjs",
+      "specifier": "./private-evidence-storage.mjs",
+      "to": "core/private-evidence-storage.mjs"
+    },
+    {
+      "from": "core/private-card-storage.mjs",
+      "specifier": "./private-evidence-schema.mjs",
+      "to": "core/private-evidence-schema.mjs"
+    },
+    {
+      "from": "core/private-card-storage.mjs",
+      "specifier": "./private-organization-input.mjs",
+      "to": "core/private-organization-input.mjs"
+    },
+    {
+      "from": "core/private-card-storage.mjs",
+      "specifier": "./private-organization-storage.mjs",
+      "to": "core/private-organization-storage.mjs"
+    },
+    {
+      "from": "core/private-card-storage.mjs",
+      "specifier": "./card-receipt-sources.mjs",
+      "to": "core/card-receipt-sources.mjs"
+    },
+    {
+      "from": "core/private-card-storage.mjs",
+      "specifier": "./card-raw-sources.mjs",
+      "to": "core/card-raw-sources.mjs"
+    },
+    {
+      "from": "core/private-card-storage.mjs",
+      "specifier": "./private-card-input.mjs",
+      "to": "core/private-card-input.mjs"
+    },
+    {
+      "from": "core/card-raw-sources.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/card-raw-sources.mjs",
+      "specifier": "./raw-source-input.mjs",
+      "to": "core/raw-source-input.mjs"
+    },
+    {
+      "from": "core/raw-source-roots.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/raw-deletion-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/raw-deletion-storage.mjs",
+      "specifier": "./raw-input.mjs",
+      "to": "core/raw-input.mjs"
+    },
+    {
+      "from": "core/raw-deletion-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/raw-deletion-storage.mjs",
+      "specifier": "./card-raw-sources.mjs",
+      "to": "core/card-raw-sources.mjs"
+    },
+    {
+      "from": "core/raw-lineage-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/raw-lineage-storage.mjs",
+      "specifier": "./raw-source-roots.mjs",
+      "to": "core/raw-source-roots.mjs"
+    },
+    {
+      "from": "core/raw-lineage-storage.mjs",
+      "specifier": "./card-raw-sources.mjs",
+      "to": "core/card-raw-sources.mjs"
+    },
+    {
+      "from": "core/role-profile-facade.mjs",
+      "specifier": "./role-profile-input.mjs",
+      "to": "core/role-profile-input.mjs"
+    },
+    {
+      "from": "core/role-profile-facade.mjs",
+      "specifier": "./private-card-input.mjs",
+      "to": "core/private-card-input.mjs"
+    },
+    {
+      "from": "core/role-profile-facade.mjs",
+      "specifier": "./private-card-facade.mjs",
+      "to": "core/private-card-facade.mjs"
+    },
+    {
+      "from": "core/role-profile-facade.mjs",
+      "specifier": "./task-receipt.mjs",
+      "to": "core/task-receipt.mjs"
+    },
+    {
+      "from": "core/role-profile-facade.mjs",
+      "specifier": "./role-context-facade.mjs",
+      "to": "core/role-context-facade.mjs"
+    },
+    {
+      "from": "core/role-profile-facade.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/asset-facade.mjs",
+      "specifier": "./asset-input.mjs",
+      "to": "core/asset-input.mjs"
+    },
+    {
+      "from": "core/asset-facade.mjs",
+      "specifier": "./private-card-input.mjs",
+      "to": "core/private-card-input.mjs"
+    },
+    {
+      "from": "core/asset-facade.mjs",
+      "specifier": "./private-card-facade.mjs",
+      "to": "core/private-card-facade.mjs"
+    },
+    {
+      "from": "core/asset-facade.mjs",
+      "specifier": "./private-operation-helpers.mjs",
+      "to": "core/private-operation-helpers.mjs"
+    },
+    {
+      "from": "core/asset-facade.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -5149,21 +5771,6 @@
       "to": "core/context-read-input.mjs"
     },
     {
-      "from": "core/confirmation-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/confirmation-storage.mjs",
-      "specifier": "./relation-limits.mjs",
-      "to": "core/relation-limits.mjs"
-    },
-    {
-      "from": "core/confirmation-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
       "from": "core/raw-options.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
@@ -5249,36 +5856,6 @@
       "to": "core/validation.mjs"
     },
     {
-      "from": "core/private-card-input.mjs",
-      "specifier": "./card-current-input.mjs",
-      "to": "core/card-current-input.mjs"
-    },
-    {
-      "from": "core/private-card-input.mjs",
-      "specifier": "../plugins/cairn-memory/lib/redact.mjs",
-      "to": "plugins/cairn-memory/lib/redact.mjs"
-    },
-    {
-      "from": "core/private-card-input.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/private-card-input.mjs",
-      "specifier": "./private-evidence-input.mjs",
-      "to": "core/private-evidence-input.mjs"
-    },
-    {
-      "from": "core/private-card-input.mjs",
-      "specifier": "./private-organization-input.mjs",
-      "to": "core/private-organization-input.mjs"
-    },
-    {
-      "from": "core/private-card-input.mjs",
-      "specifier": "./raw-source-input.mjs",
-      "to": "core/raw-source-input.mjs"
-    },
-    {
       "from": "core/private-card-facade.mjs",
       "specifier": "./card-current-input.mjs",
       "to": "core/card-current-input.mjs"
@@ -5314,199 +5891,9 @@
       "to": "core/private-organization-input.mjs"
     },
     {
-      "from": "core/session-context.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/session-context.mjs",
-      "specifier": "./model-budget.mjs",
-      "to": "core/model-budget.mjs"
-    },
-    {
-      "from": "core/session-context.mjs",
-      "specifier": "./episode-reads.mjs",
-      "to": "core/episode-reads.mjs"
-    },
-    {
-      "from": "core/session-context.mjs",
-      "specifier": "./procedural-storage.mjs",
-      "to": "core/procedural-storage.mjs"
-    },
-    {
-      "from": "core/session-context.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/episode-reads.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/episode-reads.mjs",
-      "specifier": "./episode-storage.mjs",
-      "to": "core/episode-storage.mjs"
-    },
-    {
-      "from": "core/episode-reads.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./card-current-schema.mjs",
-      "to": "core/card-current-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./role-profile-schema.mjs",
-      "to": "core/role-profile-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./asset-schema.mjs",
-      "to": "core/asset-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./store-fence.mjs",
-      "to": "core/store-fence.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./method-package-migration.mjs",
-      "to": "core/method-package-migration.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./raw-deletion-schema.mjs",
-      "to": "core/raw-deletion-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./raw-source-schema.mjs",
-      "to": "core/raw-source-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./local-authority-schema.mjs",
-      "to": "core/local-authority-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./existing-store.mjs",
-      "to": "core/existing-store.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./confirmation-schema.mjs",
-      "to": "core/confirmation-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./private-card-schema.mjs",
-      "to": "core/private-card-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./private-evidence-schema.mjs",
-      "to": "core/private-evidence-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./private-organization-schema.mjs",
-      "to": "core/private-organization-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./index-schema.mjs",
-      "to": "core/index-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./ordered-capture-schema.mjs",
-      "to": "core/ordered-capture-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./claim-qualification-schema.mjs",
-      "to": "core/claim-qualification-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./qualified-transition-schema.mjs",
-      "to": "core/qualified-transition-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./rationale-schema.mjs",
-      "to": "core/rationale-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./staged-evidence-schema.mjs",
-      "to": "core/staged-evidence-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./classification-journal-schema.mjs",
-      "to": "core/classification-journal-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./raw-schema.mjs",
-      "to": "core/raw-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./raw-lineage-schema.mjs",
-      "to": "core/raw-lineage-schema.mjs"
-    },
-    {
-      "from": "core/database.mjs",
-      "specifier": "./episode-schema.mjs",
-      "to": "core/episode-schema.mjs"
-    },
-    {
       "from": "core/episode-schema.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/episode-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/episode-storage.mjs",
-      "specifier": "./episode-schema.mjs",
-      "to": "core/episode-schema.mjs"
-    },
-    {
-      "from": "core/episode-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/episode-storage.mjs",
-      "specifier": "./procedural-storage.mjs",
-      "to": "core/procedural-storage.mjs"
-    },
-    {
-      "from": "core/episode-storage.mjs",
-      "specifier": "./raw-control-storage.mjs",
-      "to": "core/raw-control-storage.mjs"
-    },
-    {
-      "from": "core/episode-storage.mjs",
-      "specifier": "./local-authority-guard.mjs",
-      "to": "core/local-authority-guard.mjs"
     },
     {
       "from": "core/capture-deadline.mjs",
@@ -5520,11 +5907,6 @@
     },
     {
       "from": "core/model-budget.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/source-evidence.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -5552,51 +5934,6 @@
       "from": "core/classification.mjs",
       "specifier": "./model-packing.mjs",
       "to": "core/model-packing.mjs"
-    },
-    {
-      "from": "core/fetch.mjs",
-      "specifier": "./model-budget.mjs",
-      "to": "core/model-budget.mjs"
-    },
-    {
-      "from": "core/fetch.mjs",
-      "specifier": "./source-evidence.mjs",
-      "to": "core/source-evidence.mjs"
-    },
-    {
-      "from": "core/fetch.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/recall.mjs",
-      "specifier": "./model-call.mjs",
-      "to": "core/model-call.mjs"
-    },
-    {
-      "from": "core/recall.mjs",
-      "specifier": "./model-diagnostics.mjs",
-      "to": "core/model-diagnostics.mjs"
-    },
-    {
-      "from": "core/recall.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/recall.mjs",
-      "specifier": "./source-evidence.mjs",
-      "to": "core/source-evidence.mjs"
-    },
-    {
-      "from": "core/recall.mjs",
-      "specifier": "./model-packing.mjs",
-      "to": "core/model-packing.mjs"
-    },
-    {
-      "from": "core/recall.mjs",
-      "specifier": "./query-excerpt.mjs",
-      "to": "core/query-excerpt.mjs"
     },
     {
       "from": "core/episode-capture.mjs",
@@ -5684,11 +6021,6 @@
       "to": "core/source-windows.mjs"
     },
     {
-      "from": "core/capture-input.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
       "from": "core/model-packing.mjs",
       "specifier": "./model-budget.mjs",
       "to": "core/model-budget.mjs"
@@ -5704,17 +6036,52 @@
       "to": "core/model-call.mjs"
     },
     {
+      "from": "core/capture-input.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
       "from": "core/query-excerpt.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
     {
-      "from": "core/query-candidates.mjs",
+      "from": "core/recall.mjs",
+      "specifier": "./model-call.mjs",
+      "to": "core/model-call.mjs"
+    },
+    {
+      "from": "core/recall.mjs",
+      "specifier": "./model-diagnostics.mjs",
+      "to": "core/model-diagnostics.mjs"
+    },
+    {
+      "from": "core/recall.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
     {
+      "from": "core/recall.mjs",
+      "specifier": "./source-evidence.mjs",
+      "to": "core/source-evidence.mjs"
+    },
+    {
+      "from": "core/recall.mjs",
+      "specifier": "./model-packing.mjs",
+      "to": "core/model-packing.mjs"
+    },
+    {
+      "from": "core/recall.mjs",
+      "specifier": "./query-excerpt.mjs",
+      "to": "core/query-excerpt.mjs"
+    },
+    {
       "from": "core/claim-qualification-input.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/query-candidates.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -5759,352 +6126,22 @@
       "to": "core/source-addresses.mjs"
     },
     {
-      "from": "core/role-profile-storage.mjs",
-      "specifier": "./role-profile-input.mjs",
-      "to": "core/role-profile-input.mjs"
-    },
-    {
-      "from": "core/role-profile-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/role-profile-storage.mjs",
-      "specifier": "./private-card-input.mjs",
-      "to": "core/private-card-input.mjs"
-    },
-    {
-      "from": "core/role-profile-storage.mjs",
-      "specifier": "./private-operation-helpers.mjs",
-      "to": "core/private-operation-helpers.mjs"
-    },
-    {
-      "from": "core/role-profile-storage.mjs",
-      "specifier": "./task-receipt.mjs",
-      "to": "core/task-receipt.mjs"
-    },
-    {
-      "from": "core/role-profile-storage.mjs",
-      "specifier": "./method-package-input.mjs",
-      "to": "core/method-package-input.mjs"
-    },
-    {
-      "from": "core/role-profile-storage.mjs",
+      "from": "core/topic-overview-input.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
     {
-      "from": "core/asset-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
+      "from": "core/fetch.mjs",
+      "specifier": "./model-budget.mjs",
+      "to": "core/model-budget.mjs"
     },
     {
-      "from": "core/asset-storage.mjs",
-      "specifier": "./asset-identity.mjs",
-      "to": "core/asset-identity.mjs"
-    },
-    {
-      "from": "core/asset-storage.mjs",
-      "specifier": "./asset-input.mjs",
-      "to": "core/asset-input.mjs"
-    },
-    {
-      "from": "core/asset-storage.mjs",
-      "specifier": "./asset-schema.mjs",
-      "to": "core/asset-schema.mjs"
-    },
-    {
-      "from": "core/asset-storage.mjs",
-      "specifier": "./private-operation-helpers.mjs",
-      "to": "core/private-operation-helpers.mjs"
-    },
-    {
-      "from": "core/asset-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/asset-storage.mjs",
-      "specifier": "./asset-derivative-storage.mjs",
-      "to": "core/asset-derivative-storage.mjs"
-    },
-    {
-      "from": "core/method-package-storage.mjs",
-      "specifier": "./card-current-storage.mjs",
-      "to": "core/card-current-storage.mjs"
-    },
-    {
-      "from": "core/method-package-storage.mjs",
-      "specifier": "./method-binding-storage.mjs",
-      "to": "core/method-binding-storage.mjs"
-    },
-    {
-      "from": "core/method-package-storage.mjs",
-      "specifier": "./method-attachment-storage.mjs",
-      "to": "core/method-attachment-storage.mjs"
-    },
-    {
-      "from": "core/method-package-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/method-package-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/method-package-storage.mjs",
-      "specifier": "./private-card-input.mjs",
-      "to": "core/private-card-input.mjs"
-    },
-    {
-      "from": "core/method-package-storage.mjs",
-      "specifier": "./card-receipt-sources.mjs",
-      "to": "core/card-receipt-sources.mjs"
-    },
-    {
-      "from": "core/method-package-storage.mjs",
-      "specifier": "./card-raw-sources.mjs",
-      "to": "core/card-raw-sources.mjs"
-    },
-    {
-      "from": "core/method-package-storage.mjs",
-      "specifier": "./private-operation-helpers.mjs",
-      "to": "core/private-operation-helpers.mjs"
-    },
-    {
-      "from": "core/method-package-storage.mjs",
-      "specifier": "./method-package-input.mjs",
-      "to": "core/method-package-input.mjs"
-    },
-    {
-      "from": "core/procedural-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/procedural-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/moc-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/moc-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/moc-storage.mjs",
-      "specifier": "./query-candidates.mjs",
-      "to": "core/query-candidates.mjs"
-    },
-    {
-      "from": "core/moc-storage.mjs",
+      "from": "core/fetch.mjs",
       "specifier": "./source-evidence.mjs",
       "to": "core/source-evidence.mjs"
     },
     {
-      "from": "core/admission-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/admission-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/admission-storage.mjs",
-      "specifier": "./local-authority-guard.mjs",
-      "to": "core/local-authority-guard.mjs"
-    },
-    {
-      "from": "core/classification-journal-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/classification-journal-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/index-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/index-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/ordered-capture-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/ordered-capture-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/claim-qualification-storage.mjs",
-      "specifier": "./claim-qualification-input.mjs",
-      "to": "core/claim-qualification-input.mjs"
-    },
-    {
-      "from": "core/claim-qualification-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/qualified-transition-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/rationale-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/rationale-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/private-card-storage.mjs",
-      "specifier": "./card-current-storage.mjs",
-      "to": "core/card-current-storage.mjs"
-    },
-    {
-      "from": "core/private-card-storage.mjs",
-      "specifier": "./card-current-input.mjs",
-      "to": "core/card-current-input.mjs"
-    },
-    {
-      "from": "core/private-card-storage.mjs",
-      "specifier": "./private-operation-helpers.mjs",
-      "to": "core/private-operation-helpers.mjs"
-    },
-    {
-      "from": "core/private-card-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/private-card-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/private-card-storage.mjs",
-      "specifier": "./private-evidence-input.mjs",
-      "to": "core/private-evidence-input.mjs"
-    },
-    {
-      "from": "core/private-card-storage.mjs",
-      "specifier": "./private-evidence-storage.mjs",
-      "to": "core/private-evidence-storage.mjs"
-    },
-    {
-      "from": "core/private-card-storage.mjs",
-      "specifier": "./private-evidence-schema.mjs",
-      "to": "core/private-evidence-schema.mjs"
-    },
-    {
-      "from": "core/private-card-storage.mjs",
-      "specifier": "./private-organization-input.mjs",
-      "to": "core/private-organization-input.mjs"
-    },
-    {
-      "from": "core/private-card-storage.mjs",
-      "specifier": "./private-organization-storage.mjs",
-      "to": "core/private-organization-storage.mjs"
-    },
-    {
-      "from": "core/private-card-storage.mjs",
-      "specifier": "./card-receipt-sources.mjs",
-      "to": "core/card-receipt-sources.mjs"
-    },
-    {
-      "from": "core/private-card-storage.mjs",
-      "specifier": "./card-raw-sources.mjs",
-      "to": "core/card-raw-sources.mjs"
-    },
-    {
-      "from": "core/private-card-storage.mjs",
-      "specifier": "./private-card-input.mjs",
-      "to": "core/private-card-input.mjs"
-    },
-    {
-      "from": "core/card-raw-sources.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/card-raw-sources.mjs",
-      "specifier": "./raw-source-input.mjs",
-      "to": "core/raw-source-input.mjs"
-    },
-    {
-      "from": "core/raw-source-roots.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/raw-deletion-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/raw-deletion-storage.mjs",
-      "specifier": "./raw-input.mjs",
-      "to": "core/raw-input.mjs"
-    },
-    {
-      "from": "core/raw-deletion-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/raw-deletion-storage.mjs",
-      "specifier": "./card-raw-sources.mjs",
-      "to": "core/card-raw-sources.mjs"
-    },
-    {
-      "from": "core/raw-lineage-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/raw-lineage-storage.mjs",
-      "specifier": "./raw-source-roots.mjs",
-      "to": "core/raw-source-roots.mjs"
-    },
-    {
-      "from": "core/raw-lineage-storage.mjs",
-      "specifier": "./card-raw-sources.mjs",
-      "to": "core/card-raw-sources.mjs"
-    },
-    {
-      "from": "core/conflict-storage.mjs",
-      "specifier": "./relation-limits.mjs",
-      "to": "core/relation-limits.mjs"
-    },
-    {
-      "from": "core/conflict-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/topic-overview-input.mjs",
+      "from": "core/fetch.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -6134,31 +6171,6 @@
       "to": "core/validation.mjs"
     },
     {
-      "from": "core/staged-evidence-storage.mjs",
-      "specifier": "./episode-schema.mjs",
-      "to": "core/episode-schema.mjs"
-    },
-    {
-      "from": "core/staged-evidence-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/staged-evidence-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/supersession-storage.mjs",
-      "specifier": "./relation-limits.mjs",
-      "to": "core/relation-limits.mjs"
-    },
-    {
-      "from": "core/supersession-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
       "from": "core/context-read-assembly.mjs",
       "specifier": "./model-budget.mjs",
       "to": "core/model-budget.mjs"
@@ -6175,6 +6187,311 @@
     },
     {
       "from": "core/context-read-assembly.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/private-operation-helpers.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/asset-identity.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/asset-schema.mjs",
+      "specifier": "./method-package-schema.mjs",
+      "to": "core/method-package-schema.mjs"
+    },
+    {
+      "from": "core/asset-schema.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/asset-derivative-storage.mjs",
+      "specifier": "./asset-input.mjs",
+      "to": "core/asset-input.mjs"
+    },
+    {
+      "from": "core/asset-derivative-storage.mjs",
+      "specifier": "./private-operation-helpers.mjs",
+      "to": "core/private-operation-helpers.mjs"
+    },
+    {
+      "from": "core/asset-derivative-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/card-current-storage.mjs",
+      "specifier": "./method-package-storage.mjs",
+      "to": "core/method-package-storage.mjs"
+    },
+    {
+      "from": "core/card-current-storage.mjs",
+      "specifier": "./card-current-input.mjs",
+      "to": "core/card-current-input.mjs"
+    },
+    {
+      "from": "core/card-current-storage.mjs",
+      "specifier": "./task-receipt.mjs",
+      "to": "core/task-receipt.mjs"
+    },
+    {
+      "from": "core/card-current-storage.mjs",
+      "specifier": "./method-package-input.mjs",
+      "to": "core/method-package-input.mjs"
+    },
+    {
+      "from": "core/card-current-storage.mjs",
+      "specifier": "./private-operation-helpers.mjs",
+      "to": "core/private-operation-helpers.mjs"
+    },
+    {
+      "from": "core/card-current-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/method-binding-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/method-binding-storage.mjs",
+      "specifier": "./private-operation-helpers.mjs",
+      "to": "core/private-operation-helpers.mjs"
+    },
+    {
+      "from": "core/method-binding-storage.mjs",
+      "specifier": "./method-package-input.mjs",
+      "to": "core/method-package-input.mjs"
+    },
+    {
+      "from": "core/method-attachment-storage.mjs",
+      "specifier": "./asset-identity.mjs",
+      "to": "core/asset-identity.mjs"
+    },
+    {
+      "from": "core/method-attachment-storage.mjs",
+      "specifier": "./asset-input.mjs",
+      "to": "core/asset-input.mjs"
+    },
+    {
+      "from": "core/method-attachment-storage.mjs",
+      "specifier": "./method-attachment-input.mjs",
+      "to": "core/method-attachment-input.mjs"
+    },
+    {
+      "from": "core/method-attachment-storage.mjs",
+      "specifier": "./asset-schema.mjs",
+      "to": "core/asset-schema.mjs"
+    },
+    {
+      "from": "core/method-attachment-storage.mjs",
+      "specifier": "./private-operation-helpers.mjs",
+      "to": "core/private-operation-helpers.mjs"
+    },
+    {
+      "from": "core/method-attachment-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/card-receipt-sources.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/card-receipt-sources.mjs",
+      "specifier": "./private-card-input.mjs",
+      "to": "core/private-card-input.mjs"
+    },
+    {
+      "from": "core/raw-control-storage.mjs",
+      "specifier": "./database.mjs",
+      "to": "core/database.mjs"
+    },
+    {
+      "from": "core/raw-control-storage.mjs",
+      "specifier": "./raw-input.mjs",
+      "to": "core/raw-input.mjs"
+    },
+    {
+      "from": "core/raw-control-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/card-current-schema.mjs",
+      "specifier": "./card-current-input.mjs",
+      "to": "core/card-current-input.mjs"
+    },
+    {
+      "from": "core/card-current-schema.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/role-profile-schema.mjs",
+      "specifier": "./role-profile-input.mjs",
+      "to": "core/role-profile-input.mjs"
+    },
+    {
+      "from": "core/role-profile-schema.mjs",
+      "specifier": "./task-receipt.mjs",
+      "to": "core/task-receipt.mjs"
+    },
+    {
+      "from": "core/role-profile-schema.mjs",
+      "specifier": "./private-card-input.mjs",
+      "to": "core/private-card-input.mjs"
+    },
+    {
+      "from": "core/role-profile-schema.mjs",
+      "specifier": "./method-package-input.mjs",
+      "to": "core/method-package-input.mjs"
+    },
+    {
+      "from": "core/role-profile-schema.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/method-package-migration.mjs",
+      "specifier": "./private-card-schema.mjs",
+      "to": "core/private-card-schema.mjs"
+    },
+    {
+      "from": "core/method-package-migration.mjs",
+      "specifier": "./private-evidence-schema.mjs",
+      "to": "core/private-evidence-schema.mjs"
+    },
+    {
+      "from": "core/method-package-migration.mjs",
+      "specifier": "./private-organization-schema.mjs",
+      "to": "core/private-organization-schema.mjs"
+    },
+    {
+      "from": "core/method-package-migration.mjs",
+      "specifier": "./raw-schema.mjs",
+      "to": "core/raw-schema.mjs"
+    },
+    {
+      "from": "core/method-package-migration.mjs",
+      "specifier": "./raw-lineage-schema.mjs",
+      "to": "core/raw-lineage-schema.mjs"
+    },
+    {
+      "from": "core/method-package-migration.mjs",
+      "specifier": "./raw-deletion-schema.mjs",
+      "to": "core/raw-deletion-schema.mjs"
+    },
+    {
+      "from": "core/method-package-migration.mjs",
+      "specifier": "./raw-source-schema.mjs",
+      "to": "core/raw-source-schema.mjs"
+    },
+    {
+      "from": "core/method-package-migration.mjs",
+      "specifier": "./local-authority-schema.mjs",
+      "to": "core/local-authority-schema.mjs"
+    },
+    {
+      "from": "core/method-package-migration.mjs",
+      "specifier": "./existing-store.mjs",
+      "to": "core/existing-store.mjs"
+    },
+    {
+      "from": "core/method-package-migration.mjs",
+      "specifier": "./method-package-schema.mjs",
+      "to": "core/method-package-schema.mjs"
+    },
+    {
+      "from": "core/method-package-migration.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/raw-source-schema.mjs",
+      "specifier": "./private-card-schema.mjs",
+      "to": "core/private-card-schema.mjs"
+    },
+    {
+      "from": "core/local-authority-schema.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/confirmation-schema.mjs",
+      "specifier": "./index-schema.mjs",
+      "to": "core/index-schema.mjs"
+    },
+    {
+      "from": "core/private-organization-input.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/private-organization-input.mjs",
+      "specifier": "./private-evidence-input.mjs",
+      "to": "core/private-evidence-input.mjs"
+    },
+    {
+      "from": "core/private-organization-input.mjs",
+      "specifier": "./placement-input.mjs",
+      "to": "core/placement-input.mjs"
+    },
+    {
+      "from": "core/raw-source-input.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/private-evidence-storage.mjs",
+      "specifier": "./claim-qualification-storage.mjs",
+      "to": "core/claim-qualification-storage.mjs"
+    },
+    {
+      "from": "core/private-evidence-storage.mjs",
+      "specifier": "./private-evidence-input.mjs",
+      "to": "core/private-evidence-input.mjs"
+    },
+    {
+      "from": "core/private-evidence-storage.mjs",
+      "specifier": "./private-card-input.mjs",
+      "to": "core/private-card-input.mjs"
+    },
+    {
+      "from": "core/private-evidence-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/private-organization-storage.mjs",
+      "specifier": "./card-current-storage.mjs",
+      "to": "core/card-current-storage.mjs"
+    },
+    {
+      "from": "core/private-organization-storage.mjs",
+      "specifier": "./private-card-input.mjs",
+      "to": "core/private-card-input.mjs"
+    },
+    {
+      "from": "core/private-organization-storage.mjs",
+      "specifier": "./private-organization-input.mjs",
+      "to": "core/private-organization-input.mjs"
+    },
+    {
+      "from": "core/private-organization-storage.mjs",
+      "specifier": "./validation.mjs",
+      "to": "core/validation.mjs"
+    },
+    {
+      "from": "core/raw-input.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -6249,16 +6566,6 @@
       "to": "core/validation.mjs"
     },
     {
-      "from": "core/asset-identity.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/private-operation-helpers.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
       "from": "core/method-attachment-input.mjs",
       "specifier": "./asset-input.mjs",
       "to": "core/asset-input.mjs"
@@ -6307,66 +6614,6 @@
       "from": "core/read-database.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/card-current-storage.mjs",
-      "specifier": "./method-package-storage.mjs",
-      "to": "core/method-package-storage.mjs"
-    },
-    {
-      "from": "core/card-current-storage.mjs",
-      "specifier": "./card-current-input.mjs",
-      "to": "core/card-current-input.mjs"
-    },
-    {
-      "from": "core/card-current-storage.mjs",
-      "specifier": "./task-receipt.mjs",
-      "to": "core/task-receipt.mjs"
-    },
-    {
-      "from": "core/card-current-storage.mjs",
-      "specifier": "./method-package-input.mjs",
-      "to": "core/method-package-input.mjs"
-    },
-    {
-      "from": "core/card-current-storage.mjs",
-      "specifier": "./private-operation-helpers.mjs",
-      "to": "core/private-operation-helpers.mjs"
-    },
-    {
-      "from": "core/card-current-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/private-evidence-storage.mjs",
-      "specifier": "./claim-qualification-storage.mjs",
-      "to": "core/claim-qualification-storage.mjs"
-    },
-    {
-      "from": "core/private-evidence-storage.mjs",
-      "specifier": "./private-evidence-input.mjs",
-      "to": "core/private-evidence-input.mjs"
-    },
-    {
-      "from": "core/private-evidence-storage.mjs",
-      "specifier": "./private-card-input.mjs",
-      "to": "core/private-card-input.mjs"
-    },
-    {
-      "from": "core/private-evidence-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/card-receipt-sources.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/card-receipt-sources.mjs",
-      "specifier": "./private-card-input.mjs",
-      "to": "core/private-card-input.mjs"
     },
     {
       "from": "core/context-read-sidecar.mjs",
@@ -6459,62 +6706,7 @@
       "to": "core/context-read-bm25.mjs"
     },
     {
-      "from": "core/card-current-schema.mjs",
-      "specifier": "./card-current-input.mjs",
-      "to": "core/card-current-input.mjs"
-    },
-    {
-      "from": "core/card-current-schema.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/role-profile-schema.mjs",
-      "specifier": "./role-profile-input.mjs",
-      "to": "core/role-profile-input.mjs"
-    },
-    {
-      "from": "core/role-profile-schema.mjs",
-      "specifier": "./task-receipt.mjs",
-      "to": "core/task-receipt.mjs"
-    },
-    {
-      "from": "core/role-profile-schema.mjs",
-      "specifier": "./private-card-input.mjs",
-      "to": "core/private-card-input.mjs"
-    },
-    {
-      "from": "core/role-profile-schema.mjs",
-      "specifier": "./method-package-input.mjs",
-      "to": "core/method-package-input.mjs"
-    },
-    {
-      "from": "core/role-profile-schema.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/asset-schema.mjs",
-      "specifier": "./method-package-schema.mjs",
-      "to": "core/method-package-schema.mjs"
-    },
-    {
-      "from": "core/asset-schema.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
       "from": "core/method-package-schema.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/local-authority-schema.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/raw-input.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -6579,26 +6771,6 @@
       "to": "core/local-authority-guard.mjs"
     },
     {
-      "from": "core/private-organization-input.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/private-organization-input.mjs",
-      "specifier": "./private-evidence-input.mjs",
-      "to": "core/private-evidence-input.mjs"
-    },
-    {
-      "from": "core/private-organization-input.mjs",
-      "specifier": "./placement-input.mjs",
-      "to": "core/placement-input.mjs"
-    },
-    {
-      "from": "core/raw-source-input.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
       "from": "core/card-current-facade.mjs",
       "specifier": "./private-card-input.mjs",
       "to": "core/private-card-input.mjs"
@@ -6615,86 +6787,6 @@
     },
     {
       "from": "core/card-current-facade.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/method-package-migration.mjs",
-      "specifier": "./private-card-schema.mjs",
-      "to": "core/private-card-schema.mjs"
-    },
-    {
-      "from": "core/method-package-migration.mjs",
-      "specifier": "./private-evidence-schema.mjs",
-      "to": "core/private-evidence-schema.mjs"
-    },
-    {
-      "from": "core/method-package-migration.mjs",
-      "specifier": "./private-organization-schema.mjs",
-      "to": "core/private-organization-schema.mjs"
-    },
-    {
-      "from": "core/method-package-migration.mjs",
-      "specifier": "./raw-schema.mjs",
-      "to": "core/raw-schema.mjs"
-    },
-    {
-      "from": "core/method-package-migration.mjs",
-      "specifier": "./raw-lineage-schema.mjs",
-      "to": "core/raw-lineage-schema.mjs"
-    },
-    {
-      "from": "core/method-package-migration.mjs",
-      "specifier": "./raw-deletion-schema.mjs",
-      "to": "core/raw-deletion-schema.mjs"
-    },
-    {
-      "from": "core/method-package-migration.mjs",
-      "specifier": "./raw-source-schema.mjs",
-      "to": "core/raw-source-schema.mjs"
-    },
-    {
-      "from": "core/method-package-migration.mjs",
-      "specifier": "./local-authority-schema.mjs",
-      "to": "core/local-authority-schema.mjs"
-    },
-    {
-      "from": "core/method-package-migration.mjs",
-      "specifier": "./existing-store.mjs",
-      "to": "core/existing-store.mjs"
-    },
-    {
-      "from": "core/method-package-migration.mjs",
-      "specifier": "./method-package-schema.mjs",
-      "to": "core/method-package-schema.mjs"
-    },
-    {
-      "from": "core/method-package-migration.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/raw-source-schema.mjs",
-      "specifier": "./private-card-schema.mjs",
-      "to": "core/private-card-schema.mjs"
-    },
-    {
-      "from": "core/confirmation-schema.mjs",
-      "specifier": "./index-schema.mjs",
-      "to": "core/index-schema.mjs"
-    },
-    {
-      "from": "core/raw-control-storage.mjs",
-      "specifier": "./database.mjs",
-      "to": "core/database.mjs"
-    },
-    {
-      "from": "core/raw-control-storage.mjs",
-      "specifier": "./raw-input.mjs",
-      "to": "core/raw-input.mjs"
-    },
-    {
-      "from": "core/raw-control-storage.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -6825,86 +6917,6 @@
     },
     {
       "from": "core/source-addresses.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/asset-derivative-storage.mjs",
-      "specifier": "./asset-input.mjs",
-      "to": "core/asset-input.mjs"
-    },
-    {
-      "from": "core/asset-derivative-storage.mjs",
-      "specifier": "./private-operation-helpers.mjs",
-      "to": "core/private-operation-helpers.mjs"
-    },
-    {
-      "from": "core/asset-derivative-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/method-binding-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/method-binding-storage.mjs",
-      "specifier": "./private-operation-helpers.mjs",
-      "to": "core/private-operation-helpers.mjs"
-    },
-    {
-      "from": "core/method-binding-storage.mjs",
-      "specifier": "./method-package-input.mjs",
-      "to": "core/method-package-input.mjs"
-    },
-    {
-      "from": "core/method-attachment-storage.mjs",
-      "specifier": "./asset-identity.mjs",
-      "to": "core/asset-identity.mjs"
-    },
-    {
-      "from": "core/method-attachment-storage.mjs",
-      "specifier": "./asset-input.mjs",
-      "to": "core/asset-input.mjs"
-    },
-    {
-      "from": "core/method-attachment-storage.mjs",
-      "specifier": "./method-attachment-input.mjs",
-      "to": "core/method-attachment-input.mjs"
-    },
-    {
-      "from": "core/method-attachment-storage.mjs",
-      "specifier": "./asset-schema.mjs",
-      "to": "core/asset-schema.mjs"
-    },
-    {
-      "from": "core/method-attachment-storage.mjs",
-      "specifier": "./private-operation-helpers.mjs",
-      "to": "core/private-operation-helpers.mjs"
-    },
-    {
-      "from": "core/method-attachment-storage.mjs",
-      "specifier": "./validation.mjs",
-      "to": "core/validation.mjs"
-    },
-    {
-      "from": "core/private-organization-storage.mjs",
-      "specifier": "./card-current-storage.mjs",
-      "to": "core/card-current-storage.mjs"
-    },
-    {
-      "from": "core/private-organization-storage.mjs",
-      "specifier": "./private-card-input.mjs",
-      "to": "core/private-card-input.mjs"
-    },
-    {
-      "from": "core/private-organization-storage.mjs",
-      "specifier": "./private-organization-input.mjs",
-      "to": "core/private-organization-input.mjs"
-    },
-    {
-      "from": "core/private-organization-storage.mjs",
       "specifier": "./validation.mjs",
       "to": "core/validation.mjs"
     },
@@ -7969,8 +7981,8 @@
       "bytes": 2546
     },
     "evaluation/hr3/harness/ledger.mjs": {
-      "sha256": "496e0afbb82f3c53ba691fe0e590c44d3d9bccc9549ac243a6f6b28b2fa7c818",
-      "bytes": 13676
+      "sha256": "c99218c1504cfe99fb2eac25f4a8c1f5d51998bed5a55e7b1bd1e00a10951033",
+      "bytes": 15554
     },
     "evaluation/hr3/harness/paid-preflight.mjs": {
       "sha256": "61cbf4260a5b5fe3a60c82b86bda1f04806d1c07a7783efb76276939a6f8e897",
@@ -8041,8 +8053,12 @@
       "bytes": 9732
     },
     "evaluation/hr3/harness/transport.mjs": {
-      "sha256": "28d3234589130e7bfe62c8ae159cc7d8df4dab488e64f23578929c512ca32919",
-      "bytes": 14570
+      "sha256": "3154d628ee8fbd74ef159e1b6d26fa5d83390582bb7e858b49193eeb6cb13260",
+      "bytes": 14608
+    },
+    "evaluation/hr3/harness/writer-owner.mjs": {
+      "sha256": "bf3bf4a5c2914f7d1baadf90725cd70b1b9b4fb7a9c25489724d4d694f7c44df",
+      "bytes": 3528
     },
     "evaluation/hr3/runner/cli-real.mjs": {
       "sha256": "e931869b1590d70af4a01726437c22c1160e49a565e55ed50ccdc49905bad5b3",

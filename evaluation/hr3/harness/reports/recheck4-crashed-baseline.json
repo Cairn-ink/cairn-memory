@@ -1,0 +1,48 @@
+{
+  "ledgerSHA256": "496e0afbb82f3c53ba691fe0e590c44d3d9bccc9549ac243a6f6b28b2fa7c818",
+  "ownerPid": 14,
+  "observerPid": 25,
+  "exit": {
+    "code": null,
+    "signal": "SIGKILL"
+  },
+  "marker": "ef5ba8f14fe6595e3fd149e9dba6040815673cbe6ba20bedf9f3bf4f584a1dfd",
+  "recovered": {
+    "error": "ledger_locked",
+    "id": 2,
+    "report": null,
+    "unlinks": [],
+    "writerIntents": []
+  },
+  "written": {
+    "error": null,
+    "id": 1,
+    "record": {
+      "bodyHash": "d1f6ba5f6b77732178cf4a7e0c819ea25b28877ef7fe4e2a47c4b522d4fac1cd",
+      "bound": {
+        "input": 16215,
+        "inputRate": 400,
+        "output": 4352,
+        "outputRate": 1600
+      },
+      "digest": "c2b1416348dea6d398b231195887ffbb1427de9a2315e267cfb68f5f22be863c",
+      "id": "fresh-after-crash",
+      "logicalId": "fresh-after-crash",
+      "operation": "extraction",
+      "prior": "0e5962d4413bdcad15786425356c38f2e011bce1d90639aed6802fd88fd73068",
+      "reserved": 13449200,
+      "stage": "pilot",
+      "type": "reserve"
+    },
+    "report": null,
+    "unlinks": []
+  },
+  "observed": {
+    "error": "ledger_locked",
+    "id": 3,
+    "report": null,
+    "unlinks": [],
+    "writerIntents": []
+  },
+  "markerPresent": true
+}

@@ -1,0 +1,104 @@
+{
+  "ledgerSHA256": "c99218c1504cfe99fb2eac25f4a8c1f5d51998bed5a55e7b1bd1e00a10951033",
+  "ownerPid": 4497,
+  "observerPid": 4508,
+  "exit": {
+    "code": null,
+    "signal": "SIGKILL"
+  },
+  "marker": "v2.4497.16631738.64e66476-8267-45df-93c9-7087141c2627.4026532257.464f78a8-c892-49ef-95d8-4c846c7bbb64",
+  "recovered": {
+    "error": null,
+    "id": 2,
+    "report": {
+      "reclaimed": [
+        {
+          "marker": "v2.4497.16631738.64e66476-8267-45df-93c9-7087141c2627.4026532257.464f78a8-c892-49ef-95d8-4c846c7bbb64",
+          "owner": {
+            "bootId": "64e66476-8267-45df-93c9-7087141c2627",
+            "namespace": "4026532257",
+            "nonce": "464f78a8-c892-49ef-95d8-4c846c7bbb64",
+            "pid": 4497,
+            "starttime": "16631738"
+          },
+          "reason": "process_missing",
+          "state": "dead"
+        }
+      ],
+      "waiting": []
+    },
+    "state": {
+      "byStage": {},
+      "embedding": {
+        "product": 0,
+        "research": 0
+      },
+      "failures": 0,
+      "reservations": 0,
+      "stopped": null,
+      "total": 0,
+      "unsettled": []
+    },
+    "unlinks": [
+      {
+        "marker": "v2.4497.16631738.64e66476-8267-45df-93c9-7087141c2627.4026532257.464f78a8-c892-49ef-95d8-4c846c7bbb64",
+        "underLock": true
+      }
+    ]
+  },
+  "written": {
+    "error": null,
+    "id": 1,
+    "record": {
+      "bodyHash": "d1f6ba5f6b77732178cf4a7e0c819ea25b28877ef7fe4e2a47c4b522d4fac1cd",
+      "bound": {
+        "input": 16215,
+        "inputRate": 400,
+        "output": 4352,
+        "outputRate": 1600
+      },
+      "digest": "c2b1416348dea6d398b231195887ffbb1427de9a2315e267cfb68f5f22be863c",
+      "id": "fresh-after-crash",
+      "logicalId": "fresh-after-crash",
+      "operation": "extraction",
+      "prior": "0e5962d4413bdcad15786425356c38f2e011bce1d90639aed6802fd88fd73068",
+      "reserved": 13449200,
+      "stage": "pilot",
+      "type": "reserve"
+    },
+    "report": {
+      "reclaimed": [],
+      "waiting": []
+    },
+    "unlinks": []
+  },
+  "observed": {
+    "error": null,
+    "id": 3,
+    "records": 2,
+    "report": {
+      "reclaimed": [
+        {
+          "marker": "v2.4497.16631738.64e66476-8267-45df-93c9-7087141c2627.4026532257.464f78a8-c892-49ef-95d8-4c846c7bbb64",
+          "owner": {
+            "bootId": "64e66476-8267-45df-93c9-7087141c2627",
+            "namespace": "4026532257",
+            "nonce": "464f78a8-c892-49ef-95d8-4c846c7bbb64",
+            "pid": 4497,
+            "starttime": "16631738"
+          },
+          "reason": "process_missing",
+          "state": "dead"
+        }
+      ],
+      "waiting": []
+    },
+    "unlinks": [
+      {
+        "marker": "v2.4497.16631738.64e66476-8267-45df-93c9-7087141c2627.4026532257.464f78a8-c892-49ef-95d8-4c846c7bbb64",
+        "underLock": true
+      }
+    ]
+  },
+  "markerPresent": false
+}

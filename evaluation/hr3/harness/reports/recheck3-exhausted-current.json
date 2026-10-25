@@ -1,7 +1,7 @@
 {
   "sourceHashes": {
-    "ledger": "496e0afbb82f3c53ba691fe0e590c44d3d9bccc9549ac243a6f6b28b2fa7c818",
-    "transport": "28d3234589130e7bfe62c8ae159cc7d8df4dab488e64f23578929c512ca32919"
+    "ledger": "c99218c1504cfe99fb2eac25f4a8c1f5d51998bed5a55e7b1bd1e00a10951033",
+    "transport": "3154d628ee8fbd74ef159e1b6d26fa5d83390582bb7e858b49193eeb6cb13260"
   },
   "result": {
     "reply": null,
@@ -15,7 +15,7 @@
     "reply": null,
     "error": "stopped:accounting_contention_exhausted"
   },
-  "elapsed": 164.139006,
+  "elapsed": 205.2223439999998,
   "dispatches": 1,
   "stop": {
     "id": "exhausted/attempt-0",
@@ -27,7 +27,7 @@
   },
   "responses": [
     {
-      "path": "evaluation/hr3/harness/artifacts/ledger-contention-t5WLYz/ledger.jsonl.responses/51773ae6a2bf6b9fd4265796a84304c7b149af04b20e0d6bc6f818a752963120.json",
+      "path": "evaluation/hr3/harness/artifacts/ledger-contention-f8aLU1/ledger.jsonl.responses/51773ae6a2bf6b9fd4265796a84304c7b149af04b20e0d6bc6f818a752963120.json",
       "value": {
         "bodySHA256": "d1f6ba5f6b77732178cf4a7e0c819ea25b28877ef7fe4e2a47c4b522d4fac1cd",
         "id": "exhausted/attempt-0",
