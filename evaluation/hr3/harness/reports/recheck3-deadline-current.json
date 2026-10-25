@@ -1,0 +1,51 @@
+{
+  "sourceHashes": {
+    "ledger": "496e0afbb82f3c53ba691fe0e590c44d3d9bccc9549ac243a6f6b28b2fa7c818",
+    "transport": "fbed37d8b142bcb3ccacb912b55528624a647b3ef8050ddfb858f19683a4a7e5"
+  },
+  "result": {
+    "reply": null,
+    "error": "five_minutes_without_progress"
+  },
+  "state": {
+    "total": 13449200,
+    "reservations": 1,
+    "unsettled": [
+      "elapsed/attempt-0"
+    ],
+    "embedding": {
+      "research": 0,
+      "product": 0
+    },
+    "byStage": {
+      "pilot": 13449200
+    },
+    "failures": 0,
+    "stopped": "five_minutes_without_progress"
+  },
+  "dispatches": 1,
+  "lastProgress": 0,
+  "responses": [
+    {
+      "path": "evaluation/hr3/harness/artifacts/ledger-contention-wR9LNs/ledger.jsonl.responses/4c28a723dd8983b2a7eb4054b7840c475dfdb03ef551ef3dc2a04539a71e3250.json",
+      "value": {
+        "bodySHA256": "d1f6ba5f6b77732178cf4a7e0c819ea25b28877ef7fe4e2a47c4b522d4fac1cd",
+        "id": "elapsed/attempt-0",
+        "logicalId": "elapsed",
+        "operation": "extraction",
+        "response": {
+          "model": "gpt-4.1-mini-2025-04-14",
+          "outputText": "{\"exact\":\"paid reply 假回覆\"}",
+          "requestId": "local-elapsed/attempt-0",
+          "status": "completed",
+          "usage": {
+            "inputTokens": 1,
+            "outputTokens": 1
+          }
+        },
+        "version": "hr3-accounting-response-v1"
+      },
+      "mode": 384
+    }
+  ]
+}

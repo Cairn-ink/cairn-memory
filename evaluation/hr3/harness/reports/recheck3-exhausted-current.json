@@ -1,0 +1,67 @@
+{
+  "sourceHashes": {
+    "ledger": "496e0afbb82f3c53ba691fe0e590c44d3d9bccc9549ac243a6f6b28b2fa7c818",
+    "transport": "fbed37d8b142bcb3ccacb912b55528624a647b3ef8050ddfb858f19683a4a7e5"
+  },
+  "result": {
+    "reply": null,
+    "error": "accounting_contention_exhausted"
+  },
+  "retry": {
+    "reply": null,
+    "error": "accounting_contention_exhausted"
+  },
+  "again": {
+    "reply": null,
+    "error": "stopped:accounting_contention_exhausted"
+  },
+  "elapsed": 123.14354700000001,
+  "dispatches": 1,
+  "stop": {
+    "id": "exhausted/attempt-0",
+    "operation": "post-reply-check",
+    "reason": "accounting_contention_exhausted",
+    "responsePath": "ledger.jsonl.responses/51773ae6a2bf6b9fd4265796a84304c7b149af04b20e0d6bc6f818a752963120.json",
+    "timeoutMs": 30,
+    "version": "hr3-accounting-stop-v1"
+  },
+  "responses": [
+    {
+      "path": "evaluation/hr3/harness/artifacts/ledger-contention-W7CYYr/ledger.jsonl.responses/51773ae6a2bf6b9fd4265796a84304c7b149af04b20e0d6bc6f818a752963120.json",
+      "value": {
+        "bodySHA256": "d1f6ba5f6b77732178cf4a7e0c819ea25b28877ef7fe4e2a47c4b522d4fac1cd",
+        "id": "exhausted/attempt-0",
+        "logicalId": "exhausted",
+        "operation": "extraction",
+        "response": {
+          "model": "gpt-4.1-mini-2025-04-14",
+          "outputText": "{\"exact\":\"paid reply 假回覆\"}",
+          "requestId": "local-exhausted/attempt-0",
+          "status": "completed",
+          "usage": {
+            "inputTokens": 1,
+            "outputTokens": 1
+          }
+        },
+        "version": "hr3-accounting-response-v1"
+      },
+      "mode": 384
+    }
+  ],
+  "snapshot": {
+    "total": 13449200,
+    "reservations": 1,
+    "unsettled": [
+      "exhausted/attempt-0"
+    ],
+    "embedding": {
+      "research": 0,
+      "product": 0
+    },
+    "byStage": {
+      "pilot": 13449200
+    },
+    "failures": 0,
+    "stopped": "accounting_contention_exhausted"
+  }
+}

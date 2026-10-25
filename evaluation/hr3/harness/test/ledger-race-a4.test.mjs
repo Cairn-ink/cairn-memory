@@ -98,5 +98,5 @@ test('recheck2 monitoring: five-minute stall still aborts while another writer h
  const pending=guard.send(request('pending')),checkpoint=fs.readFileSync(path+'.head.json');fs.mkdirSync(path+'.lock');
  try{now=300000;t.mock.timers.tick(60000);await assert.rejects(pending,/five_minutes_without_progress/);assert.equal(signal.aborted,true);assert.equal(calls,1);assert.deepEqual(fs.readFileSync(path+'.head.json'),checkpoint);}
  finally{fs.rmdirSync(path+'.lock');}
- assert.equal(writer.snapshot().unsettled.length,1);assert.equal(state(path).head.blockedReason,undefined);
+ await guard.stopSupervision();assert.equal(writer.snapshot().unsettled.length,1);assert.equal(state(path).head.blockedReason,undefined);
 });

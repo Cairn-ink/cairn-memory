@@ -1,0 +1,358 @@
+TAP version 13
+# Subtest: recheck3 contention: monitoring lock at reply settles once after release with one dispatch
+ok 1 - recheck3 contention: monitoring lock at reply settles once after release with one dispatch
+  ---
+  duration_ms: 116.810256
+  type: 'test'
+  ...
+# Subtest: recheck3 contention: exhausted reply wait stops durably with reservation and response retained and no redispatch
+ok 2 - recheck3 contention: exhausted reply wait stops durably with reservation and response retained and no redispatch
+  ---
+  duration_ms: 93.42997
+  type: 'test'
+  ...
+# Subtest: recheck3 contention: busy watchdog yields to pending writer without starvation
+ok 3 - recheck3 contention: busy watchdog yields to pending writer without starvation
+  ---
+  duration_ms: 106.596756
+  type: 'test'
+  ...
+# Subtest: recheck3 accounting: reserve contention retries only the accounting step
+ok 4 - recheck3 accounting: reserve contention retries only the accounting step
+  ---
+  duration_ms: 98.734561
+  type: 'test'
+  ...
+# Subtest: recheck3 accounting: settle contention retries only the accounting step
+ok 5 - recheck3 accounting: settle contention retries only the accounting step
+  ---
+  duration_ms: 95.514083
+  type: 'test'
+  ...
+# Subtest: recheck3 accounting: failure contention retries only the accounting step
+ok 6 - recheck3 accounting: failure contention retries only the accounting step
+  ---
+  duration_ms: 144.249202
+  type: 'test'
+  ...
+# Subtest: recheck3 accounting: stop contention retries only the accounting step
+ok 7 - recheck3 accounting: stop contention retries only the accounting step
+  ---
+  duration_ms: 91.641022
+  type: 'test'
+  ...
+# Subtest: recheck3 accounting: pre-dispatch contention expires without reservation or dispatch
+ok 8 - recheck3 accounting: pre-dispatch contention expires without reservation or dispatch
+  ---
+  duration_ms: 47.779488
+  type: 'test'
+  ...
+# Subtest: recheck3 accounting: independent writer intents keep observers yielding until every writer finishes
+ok 9 - recheck3 accounting: independent writer intents keep observers yielding until every writer finishes
+  ---
+  duration_ms: 32.05901
+  type: 'test'
+  ...
+# Subtest: recheck3 accounting: wait ceiling cannot reach the five-minute stall bound
+ok 10 - recheck3 accounting: wait ceiling cannot reach the five-minute stall bound
+  ---
+  duration_ms: 15.04633
+  type: 'test'
+  ...
+# Subtest: recheck3 accounting: exhausted settle retains reservation and never retries provider
+ok 11 - recheck3 accounting: exhausted settle retains reservation and never retries provider
+  ---
+  duration_ms: 73.559452
+  type: 'test'
+  ...
+# Subtest: recheck3 accounting: exhausted failure retains reservation and never retries provider
+ok 12 - recheck3 accounting: exhausted failure retains reservation and never retries provider
+  ---
+  duration_ms: 63.27962
+  type: 'test'
+  ...
+# Subtest: recheck3 accounting: runner-style snapshot retries contention and preserves coherent totals
+ok 13 - recheck3 accounting: runner-style snapshot retries contention and preserves coherent totals
+  ---
+  duration_ms: 47.312394
+  type: 'test'
+  ...
+# Subtest: recheck2 race: observer cannot replace a fully committed newer checkpoint
+ok 14 - recheck2 race: observer cannot replace a fully committed newer checkpoint
+  ---
+  duration_ms: 49.139506
+  type: 'test'
+  ...
+# Subtest: recheck2 lock: observer revalidates forward progress after acquiring the lock
+ok 15 - recheck2 lock: observer revalidates forward progress after acquiring the lock
+  ---
+  duration_ms: 49.008995
+  type: 'test'
+  ...
+# Subtest: recheck2 lock: writer revalidates forward progress after acquiring the lock
+ok 16 - recheck2 lock: writer revalidates forward progress after acquiring the lock
+  ---
+  duration_ms: 61.938029
+  type: 'test'
+  ...
+# Subtest: recheck2 rollback: monitoring is read-only and a writer persists a genuine rollback under lock
+ok 17 - recheck2 rollback: monitoring is read-only and a writer persists a genuine rollback under lock
+  ---
+  duration_ms: 57.539566
+  type: 'test'
+  ...
+# Subtest: recheck2 rejection: stale observer cannot overwrite an intervening checkpoint
+ok 18 - recheck2 rejection: stale observer cannot overwrite an intervening checkpoint
+  ---
+  duration_ms: 57.320167
+  type: 'test'
+  ...
+# Subtest: recheck2 rejection: stale writer cannot overwrite an intervening checkpoint
+ok 19 - recheck2 rejection: stale writer cannot overwrite an intervening checkpoint
+  ---
+  duration_ms: 57.139413
+  type: 'test'
+  ...
+# Subtest: recheck2 mutation: direct rejection and append require writer lock ownership
+ok 20 - recheck2 mutation: direct rejection and append require writer lock ownership
+  ---
+  duration_ms: 30.270682
+  type: 'test'
+  ...
+# Subtest: recheck2 monitoring: lock contention reports busy without poisoning the writer or checkpoint
+ok 21 - recheck2 monitoring: lock contention reports busy without poisoning the writer or checkpoint
+  ---
+  duration_ms: 63.184433
+  type: 'test'
+  ...
+# Subtest: recheck2 monitoring: five-minute stall still aborts while another writer holds the lock
+ok 22 - recheck2 monitoring: five-minute stall still aborts while another writer holds the lock
+  ---
+  duration_ms: 33.898322
+  type: 'test'
+  ...
+# Subtest: reservation is durable before dispatch, settlement releases only known usage by request ID
+ok 23 - reservation is durable before dispatch, settlement releases only known usage by request ID
+  ---
+  duration_ms: 74.497542
+  type: 'test'
+  ...
+# Subtest: stage, operational and unavailable authorization headroom deny before dispatch
+ok 24 - stage, operational and unavailable authorization headroom deny before dispatch
+  ---
+  duration_ms: 98.228991
+  type: 'test'
+  ...
+# Subtest: unsettled reservations survive restart and charge the full bound
+ok 25 - unsettled reservations survive restart and charge the full bound
+  ---
+  duration_ms: 32.143785
+  type: 'test'
+  ...
+# Subtest: one transport retry, cumulative third failure stops, no quality retries
+ok 26 - one transport retry, cumulative third failure stops, no quality retries
+  ---
+  duration_ms: 186.847981
+  type: 'test'
+  ...
+# Subtest: model mismatch, unexplained usage, duplicate provider IDs and unknown contract failures stop
+ok 27 - model mismatch, unexplained usage, duplicate provider IDs and unknown contract failures stop
+  ---
+  duration_ms: 272.037263
+  type: 'test'
+  ...
+# Subtest: five-minute lack of progress and dispatch timeout are supervised
+ok 28 - five-minute lack of progress and dispatch timeout are supervised
+  ---
+  duration_ms: 115.231094
+  type: 'test'
+  ...
+# Subtest: strict body models, no tools/prior state, caps and byte/embed bounds
+ok 29 - strict body models, no tools/prior state, caps and byte/embed bounds
+  ---
+  duration_ms: 10.386941
+  type: 'test'
+  ...
+# Subtest: unlisted calls, embedding unit allowances and corrupt journals fail closed
+ok 30 - unlisted calls, embedding unit allowances and corrupt journals fail closed
+  ---
+  duration_ms: 53.18887
+  type: 'test'
+  ...
+# Subtest: stage transitions share one operational ledger and preserve stage totals
+ok 31 - stage transitions share one operational ledger and preserve stage totals
+  ---
+  duration_ms: 46.167351
+  type: 'test'
+  ...
+# Subtest: A-4.2 reserves and settles unchanged output ceilings at amended input bounds and unchanged prices
+ok 32 - A-4.2 reserves and settles unchanged output ceilings at amended input bounds and unchanged prices
+  ---
+  duration_ms: 106.492574
+  type: 'test'
+  ...
+# Subtest: A-1.1 supervisor checks actual progress each minute and stops while between dispatches
+ok 33 - A-1.1 supervisor checks actual progress each minute and stops while between dispatches
+  ---
+  duration_ms: 31.703488
+  type: 'test'
+  ...
+# Subtest: A-1.1 five-minute elapsed dispatch cannot reset progress or settle usage
+ok 34 - A-1.1 five-minute elapsed dispatch cannot reset progress or settle usage
+  ---
+  duration_ms: 58.58793
+  type: 'test'
+  ...
+# Subtest: A-1.1 supervisor aborts a pending dispatch on the five-minute stop without retries
+ok 35 - A-1.1 supervisor aborts a pending dispatch on the five-minute stop without retries
+  ---
+  duration_ms: 45.579886
+  type: 'test'
+  ...
+# Subtest: A-1.1 accounting corruption stops before any dispatch and preserves evidence
+ok 36 - A-1.1 accounting corruption stops before any dispatch and preserves evidence
+  ---
+  duration_ms: 25.952343
+  type: 'test'
+  ...
+# Subtest: recheck ledger deleted stops before reservation and dispatch
+ok 37 - recheck ledger deleted stops before reservation and dispatch
+  ---
+  duration_ms: 42.68126
+  type: 'test'
+  ...
+# Subtest: recheck ledger empty stops before reservation and dispatch
+ok 38 - recheck ledger empty stops before reservation and dispatch
+  ---
+  duration_ms: 41.605458
+  type: 'test'
+  ...
+# Subtest: recheck ledger valid-prefix stops before reservation and dispatch
+ok 39 - recheck ledger valid-prefix stops before reservation and dispatch
+  ---
+  duration_ms: 42.958243
+  type: 'test'
+  ...
+# Subtest: recheck ledger configuration-replaced stops before reservation and dispatch
+ok 40 - recheck ledger configuration-replaced stops before reservation and dispatch
+  ---
+  duration_ms: 44.083435
+  type: 'test'
+  ...
+# Subtest: recheck ledger configuration-missing stops before reservation and dispatch
+ok 41 - recheck ledger configuration-missing stops before reservation and dispatch
+  ---
+  duration_ms: 40.007099
+  type: 'test'
+  ...
+# Subtest: recheck ledger durable head rejects a valid-prefix rollback after restart
+ok 42 - recheck ledger durable head rejects a valid-prefix rollback after restart
+  ---
+  duration_ms: 37.679173
+  type: 'test'
+  ...
+# Subtest: recheck ledger head-missing cannot clear an accepted stop
+ok 43 - recheck ledger head-missing cannot clear an accepted stop
+  ---
+  duration_ms: 40.363941
+  type: 'test'
+  ...
+# Subtest: recheck ledger head-stale cannot clear an accepted stop
+ok 44 - recheck ledger head-stale cannot clear an accepted stop
+  ---
+  duration_ms: 42.183173
+  type: 'test'
+  ...
+# Subtest: recheck ledger restored-after-rejection cannot clear an accepted stop
+ok 45 - recheck ledger restored-after-rejection cannot clear an accepted stop
+  ---
+  duration_ms: 42.803583
+  type: 'test'
+  ...
+# Subtest: recheck ledger valid forward progress survives restart with the same durable head
+ok 46 - recheck ledger valid forward progress survives restart with the same durable head
+  ---
+  duration_ms: 45.706978
+  type: 'test'
+  ...
+# Subtest: recheck dependencies: unapproved mcp installation is rejected before import or journal
+ok 47 - recheck dependencies: unapproved mcp installation is rejected before import or journal
+  ---
+  duration_ms: 23.816011
+  type: 'test'
+  ...
+# Subtest: recheck dependencies: unapproved tokenizer installation is rejected before import or journal
+ok 48 - recheck dependencies: unapproved tokenizer installation is rejected before import or journal
+  ---
+  duration_ms: 20.991839
+  type: 'test'
+  ...
+# Subtest: recheck dependencies: runner rejects a foreign resolver before creating its output directory
+ok 49 - recheck dependencies: runner rejects a foreign resolver before creating its output directory
+  ---
+  duration_ms: 49.902624
+  type: 'test'
+  ...
+# Subtest: recheck dependencies: execution and closure use the same approved configuration
+ok 50 - recheck dependencies: execution and closure use the same approved configuration
+  ---
+  duration_ms: 403.779599
+  type: 'test'
+  ...
+# Subtest: recheck context embeddings: all nine cases measure and validate both channels
+ok 51 - recheck context embeddings: all nine cases measure and validate both channels
+  ---
+  duration_ms: 3125.761707
+  type: 'test'
+  ...
+# Subtest: recheck context embeddings: context samples participate in every maximum and cumulative projection
+ok 52 - recheck context embeddings: context samples participate in every maximum and cumulative projection
+  ---
+  duration_ms: 0.679342
+  type: 'test'
+  ...
+# Subtest: recheck freeze output: original producer omits runtime members while current output hashes their actual bytes
+ok 53 - recheck freeze output: original producer omits runtime members while current output hashes their actual bytes
+  ---
+  duration_ms: 488.165101
+  type: 'test'
+  ...
+# Subtest: recheck ledger carried exposure cannot disappear with the journal
+ok 54 - recheck ledger carried exposure cannot disappear with the journal
+  ---
+  duration_ms: 89.984595
+  type: 'test'
+  ...
+# Subtest: recheck ledger memory anchor rejects rewinding both files within the process
+ok 55 - recheck ledger memory anchor rejects rewinding both files within the process
+  ---
+  duration_ms: 40.139785
+  type: 'test'
+  ...
+# Subtest: recheck ledger uncheckpointed complete append stops instead of replaying after restart
+ok 56 - recheck ledger uncheckpointed complete append stops instead of replaying after restart
+  ---
+  duration_ms: 39.394723
+  type: 'test'
+  ...
+# Subtest: recheck embedding certificate: context requests are merged before maxima and cumulative projections
+ok 57 - recheck embedding certificate: context requests are merged before maxima and cumulative projections
+  ---
+  duration_ms: 14.962481
+  type: 'test'
+  ...
+# Subtest: recheck baseline snapshots match pinned committed producer bytes
+ok 58 - recheck baseline snapshots match pinned committed producer bytes
+  ---
+  duration_ms: 0.201944
+  type: 'test'
+  ...
+1..58
+# tests 58
+# suites 0
+# pass 58
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7399.911459

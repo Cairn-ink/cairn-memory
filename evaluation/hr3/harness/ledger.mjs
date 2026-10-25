@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, openSync, closeSync, writeSync, fsyncSync, rmdirSync, existsSync, statSync } from 'node:fs';
+import { mkdirSync, readFileSync, openSync, closeSync, writeSync, fsyncSync, rmdirSync, existsSync, statSync, readdirSync, unlinkSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { canonical, hash, fail, atomicJSON } from './common.mjs';
 import {loadCarryForward,verifyCarrySnapshot} from './accounting.mjs';
@@ -100,11 +100,20 @@ export class Ledger {
   transaction(fn) {
     return this.#withLock(()=>fn(this.#readLocked()),true);
   }
+  writerPriority() {
+    // Separate intents let observers yield while an asynchronous writer waits.
+    // Never remove this directory: doing so races another process's registration.
+    const directory=this.lock+'.writers';mkdirSync(directory,{recursive:true,mode:0o700});
+    const path=directory+'/'+hash(String(Math.random())+String(Date.now()));
+    const fd=openSync(path,'wx',0o600);closeSync(fd);
+    return ()=>unlinkSync(path);
+  }
+  #writerWaiting(){const path=this.lock+'.writers';return existsSync(path)&&readdirSync(path).length>0;}
   #withLock(fn,persistRejection) {
-    if(this.#locked)fail('ledger_locked');
+    if(this.#locked||!persistRejection&&this.#writerWaiting())fail('ledger_locked');
     try {mkdirSync(this.lock,{mode:0o700});}catch {fail('ledger_locked');}
     this.#locked=true;this.#persistRejection=persistRejection;
-    try{return fn();}finally{this.#persistRejection=false;this.#locked=false;rmdirSync(this.lock);}
+    try{if(!persistRejection&&this.#writerWaiting())fail('ledger_locked');return fn();}finally{this.#persistRejection=false;this.#locked=false;rmdirSync(this.lock);}
   }
   append(events,event) {
     if(!this.#locked||!this.#persistRejection)fail('ledger_append_requires_transaction');
@@ -129,6 +138,10 @@ export class Ledger {
       if(e.type==='failure')failures++;
       if(e.type==='stop')stopped=e.reason;
     }
+    // This independent, fsynced stop survives a held/stale journal lock. It never
+    // changes the checkpoint and cannot release a reservation. Readers may still
+    // inspect coherent accounting; every reserve sees the stop before dispatch.
+    if(existsSync(this.path+'.accounting-stop.json'))stopped='accounting_contention_exhausted';
     return {total:seed.total+[...charges.values()].reduce((a,b)=>a+b,0),reservations:seed.reservations+charges.size,unsettled:[...seed.unsettled,...[...charges.keys()].filter(id=>!settled.has(id))],embedding,byStage,failures,stopped};
   }
   stop(reason) {return this.transaction(events=>{if(!this.snapshot(events).stopped)this.append(events,{type:'stop',reason});});}

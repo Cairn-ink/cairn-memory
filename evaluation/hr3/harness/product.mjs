@@ -179,7 +179,7 @@ export class ProductAgent {
         const result=this.call('admit',{namespace:action.namespace,memory:{content:action.content,kind:'context'},receipts:[{client:'hr3',sessionId:'control',eventId:action.actionId,role:'user',excerpt:action.content}]});
         if(result.ok){for(const name of action.returns??[])this.symbols[name]=name==='revision'?result.value.memory.revision:result.value.memory.id;
           if(action.namespace.ownerId===this.namespace.ownerId&&!action.expected)this.controlRecords.push({id:'control-'+(action.returns?.[0]??'record'),productId:result.value.memory.id,body:action.content,current:true,history:true});}
-        this.log.push({surface:'control',method:'safety_admit',expected:action.expected??null,result});if(action.expected?.suppressed&&result.ok){this.onAuthorizationExposure();throw Object.assign(Error('authorization_exposure'),{code:'authorization_exposure'});}
+        this.log.push({surface:'control',method:'safety_admit',expected:action.expected??null,result});if(action.expected?.suppressed&&result.ok){await this.onAuthorizationExposure();throw Object.assign(Error('authorization_exposure'),{code:'authorization_exposure'});}
       } else {
         const id=this.resolveSymbols(action.target),detail=this.inspect(id),result=detail.ok?this.call('forget',{namespace:action.namespace,memoryId:id,expectedRevision:detail.value.memory.revision}):detail;
         if(result.ok)this.forgottenIds.add(id);this.controlRecords=this.controlRecords.filter(r=>r.productId!==id);this.log.push({surface:'control',method:'named_forget',result});
@@ -207,7 +207,7 @@ export class ProductAgent {
       const wire=JSON.parse(blocks[intent]);const items=wire.value.items;
       for(let i=0;i<items.length;i++) {
         const item=items[i],bodyMap=this.contentOrigins.get(item.body);
-        if(item.ref.ns!==0||this.forgottenIds.has(item.ref.id)||item.ref.id===this.symbols.foreignRecord){this.onAuthorizationExposure();throw Object.assign(Error('authorization_exposure'),{code:'authorization_exposure'});}
+        if(item.ref.ns!==0||this.forgottenIds.has(item.ref.id)||item.ref.id===this.symbols.foreignRecord){await this.onAuthorizationExposure();throw Object.assign(Error('authorization_exposure'),{code:'authorization_exposure'});}
         delivered.push(bodyMap?{...unit(intent,i,'body',null,item.body,'product:'+item.ref.id),...bodyMap}:unit(intent,i,'body',null,item.body,'product:'+item.ref.id));
         for(let j=0;j<item.sources.length;j++) {
           const s=item.sources[j];

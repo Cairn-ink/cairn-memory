@@ -1,3 +1,11 @@
+# A-4 third-recheck accounting contention repair
+
+Accounting operations retry lock contention with asynchronous backoff for at most 15 seconds. Pending writers take priority over read-only monitoring. Provider requests are never redispatched to recover accounting. Each received reply is fsynced independently before checking or settling it; only successful settlement removes that copy. Exhaustion leaves the full reservation, exact reply and a durable stop for explicit reconciliation. Runner failure artifacts include this evidence.
+
+See [third-recheck report](REPORT-A4-RECHECK3.md) for the three regressions that fail on 2221f923, current verification, and the changed-file inventory. Primary freeze and non-author review remain required.
+
+The earlier repair records follow as historical context.
+
 # A-4 second-recheck ledger repair
 
 Ledger snapshots now read the checkpoint and journal under the same exclusive lock. Monitoring reports errors without persisting rejection flags. Authoritative writer checks revalidate after lock acquisition and compare the checkpoint again before writing a rejection; they retain the newest cursor. Watchdog lock contention is reported as busy, with the five-minute stop still enforced.

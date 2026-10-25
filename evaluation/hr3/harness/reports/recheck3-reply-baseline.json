@@ -1,0 +1,14 @@
+{
+  "sourceHashes": {
+    "ledger": "f67e392aa9c95db171f5c9ff33806771ddeb4f6941d6baff33098af017a4a396",
+    "transport": "2d9ecd49ae1607711248bba55390d7801e6eb9bfa9b85feeb3e61e1d8ddd93be"
+  },
+  "result": {
+    "reply": null,
+    "error": "ledger_locked"
+  },
+  "dispatches": 1,
+  "reservations": 1,
+  "settlements": 0,
+  "responses": []
+}

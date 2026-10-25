@@ -1,0 +1,38 @@
+{
+  "sourceHashes": {
+    "ledger": "f67e392aa9c95db171f5c9ff33806771ddeb4f6941d6baff33098af017a4a396",
+    "transport": "2d9ecd49ae1607711248bba55390d7801e6eb9bfa9b85feeb3e61e1d8ddd93be"
+  },
+  "result": {
+    "reply": null,
+    "error": "ledger_locked"
+  },
+  "retry": {
+    "reply": null,
+    "error": "request_already_reserved"
+  },
+  "again": {
+    "reply": null,
+    "error": "request_already_reserved"
+  },
+  "elapsed": 18.559697999999997,
+  "dispatches": 1,
+  "stop": null,
+  "responses": [],
+  "snapshot": {
+    "total": 13449200,
+    "reservations": 1,
+    "unsettled": [
+      "exhausted/attempt-0"
+    ],
+    "embedding": {
+      "research": 0,
+      "product": 0
+    },
+    "byStage": {
+      "pilot": 13449200
+    },
+    "failures": 0,
+    "stopped": null
+  }
+}

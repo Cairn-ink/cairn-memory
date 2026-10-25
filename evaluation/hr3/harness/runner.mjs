@@ -53,13 +53,13 @@ export async function run({stage='smoke',inputs,out,transport=new FakeTransport(
   for(const directory of ['extractions','states','deliveries','answers','scores'])mkdirSync(join(root,directory),{mode:0o700});
   const observations=[],extractionSummary=[],privacyReports=[],written=['ledger.jsonl','ledger.jsonl.head.json'];let stopped=null;
   const persist=(path,value)=>{atomicJSON(path,value);written.push(path.slice(root.length+1));};
-  persist(join(root,'run.json'),{stage,carryForward:ledger.configuration.carryForward??null,offline:transport instanceof FakeTransport,transport:transport.constructor.name,version:'hr3-run-a4-recheck-v3',dependencyConfiguration,productHeadline:'Pinned product + frozen public-operation agent + shared research extraction + slot reader.',protocol:'v0.3.4+E-1+E-2+A-1+A-2+A-3+A-4+A-4.1+A-4.2+A-1.1',productPin:'b2513501a6747a163ab1cefb7d37a16744c9621a',families:families.map(f=>f.family_id),inputVerification:data.verification,frozenArtifacts:frozenArtifacts(inputs),productVerification,tokenizer:counter.id,readiness:transport instanceof FakeTransport?'offline exercise only; paid gates pending':'paid engineering pilot under A-1: mechanical scoring only, referrals unresolved'});
+  persist(join(root,'run.json'),{stage,carryForward:ledger.configuration.carryForward??null,offline:transport instanceof FakeTransport,transport:transport.constructor.name,version:'hr3-run-a4-recheck-v4',dependencyConfiguration,productHeadline:'Pinned product + frozen public-operation agent + shared research extraction + slot reader.',protocol:'v0.3.4+E-1+E-2+A-1+A-2+A-3+A-4+A-4.1+A-4.2+A-1.1',productPin:'b2513501a6747a163ab1cefb7d37a16744c9621a',families:families.map(f=>f.family_id),inputVerification:data.verification,frozenArtifacts:frozenArtifacts(inputs),productVerification,tokenizer:counter.id,readiness:transport instanceof FakeTransport?'offline exercise only; paid gates pending':'paid engineering pilot under A-1: mechanical scoring only, referrals unresolved'});
   guarded.startSupervision(progress);
   try {
     for(const family of families) {
       const researchEmbedder=createEmbedder(guarded,{prefix:family.family_id+'/research-embedding'}),productEmbedder=createEmbedder(guarded,{channel:'product',prefix:family.family_id+'/product-embedding'});
       const privacy=new PrivacyGuard(family),aliases=sourceOrderAliases();
-      const product=await ProductAgent.open({privacy,aliases,namespace:family.namespace,embedder:productEmbedder,counter,onAuthorizationExposure:()=>ledger.stop('authorization_exposure')});const events=[];
+      const product=await ProductAgent.open({privacy,aliases,namespace:family.namespace,embedder:productEmbedder,counter,onAuthorizationExposure:async()=>{await guarded.stop('authorization_exposure');}});const events=[];
       try {
         for(const batch of family.batches) {
           const extraction=await extract({family,batch:batch.ordinal,transport:guarded,cache:join(root,'extractions')});
@@ -70,7 +70,7 @@ export async function run({stage='smoke',inputs,out,transport=new FakeTransport(
           events.push(...next);
           const linkedEvents=resolveLinks(events);
           await product.ingest(next,batch.observed_at,{linkedEvents});await product.controls(family.controls,batch.ordinal);
-          if(ledger.snapshot().stopped)fail(ledger.snapshot().stopped);
+          {const accounting=await guarded.snapshot();if(accounting.stopped)fail(accounting.stopped);}
           const checkpoint=family.checkpoints.find(c=>c.batch===batch.ordinal);if(!checkpoint)continue;
           const query=literalQuery(family.header,family.language);if(query!==checkpoint.query)fail('literal_query_mismatch');
           const controls=product.controlSnapshot();
@@ -78,7 +78,7 @@ export async function run({stage='smoke',inputs,out,transport=new FakeTransport(
             const name=`${family.family_id}-${arm}-${checkpoint.batch}`,state=arm==='P'?product.state():materialize(arm,events,checkpoint.at,{linkedEvents});
             persist(join(root,'states',name+'.json'),state);
             const delivery=arm==='P'?await product.retrieve(query):await retrieve(state,{query,embedder:researchEmbedder,counter,controls,aliases});
-            if(ledger.snapshot().stopped)fail(ledger.snapshot().stopped);
+            {const accounting=await guarded.snapshot();if(accounting.stopped)fail(accounting.stopped);}
             persist(join(root,'deliveries',name+'.json'),delivery);
             const readerInput={public_contract:projectContract('reader',familyContractContext(family,checkpoint.question)),question:checkpoint.question,checkpoint:checkpoint.batch,focal_turn:checkpoint.focal_turn,requested_predecessor_turns:checkpoint.requested_predecessor_turns,delivered:delivery.blocks};
             const body=responseRequest('reader',readerInput);privacy.check('reader-request',body,{arm,checkpoint:checkpoint.batch});
@@ -89,19 +89,20 @@ export async function run({stage='smoke',inputs,out,transport=new FakeTransport(
             const gold=scorerGold(family,checkpoint,data.gold.find(g=>g.family_id===family.family_id),data.support.find(s=>s.family_id===family.family_id));
             const result=score(gold,{answer,delivered:delivery.delivered});persist(join(root,'scores',name+'.json'),result);observations.push({family:family.family_id,arm,batch:checkpoint.batch,...result});
           }
-          progress({family:family.family_id,batch:checkpoint.batch,observations:observations.length,ledger:ledger.snapshot()});
+          progress({family:family.family_id,batch:checkpoint.batch,observations:observations.length,ledger:await guarded.snapshot({forReport:true})});
         }
       } finally {privacyReports.push({family:family.family_id,...privacy.report()});persist(join(root,'states',family.family_id+'-P-final.json'),product.state());await product.close();}
     }
-  } catch(error) {stopped=error.code??error.message;written.push('failure.json');writeFileSync(join(root,'failure.json'),canonical({reason:stopped,ledger:ledger.snapshot()})+'\n',{mode:0o600});throw error;
+  } catch(error) {stopped=error.code??error.message;await guarded.stopSupervision();written.push('failure.json');writeFileSync(join(root,'failure.json'),canonical({reason:stopped,ledger:await guarded.snapshot({forReport:true})})+'\n',{mode:0o600});throw error;
   } finally {
-    guarded.stopSupervision();
+    await guarded.stopSupervision();
     persist(join(root,'extraction-summary.json'),extractionSummary);
     persist(join(root,'privacy-scan.json'),{version:'hr3-private-label-scan-v1',hits:privacyReports.reduce((n,r)=>n+r.hits,0),families:privacyReports});
     written.push('scored.jsonl');writeFileSync(join(root,'scored.jsonl'),observations.map(canonical).join('\n')+(observations.length?'\n':''),{mode:0o600});
-    persist(join(root,'summary.json'),{stage,complete:!stopped,attempted:observations.length,pipelineStageDiagnostics:extractionDiagnostics(extractionSummary),arms:Object.fromEntries(['U','T','O','P'].map(arm=>[arm,{attempted:observations.filter(o=>o.arm===arm).length,valid:observations.filter(o=>o.arm===arm&&o.valid).length}])),ledger:ledger.snapshot(),fakeAccuracyClaim:false});
+    persist(join(root,'summary.json'),{stage,complete:!stopped,attempted:observations.length,pipelineStageDiagnostics:extractionDiagnostics(extractionSummary),arms:Object.fromEntries(['U','T','O','P'].map(arm=>[arm,{attempted:observations.filter(o=>o.arm===arm).length,valid:observations.filter(o=>o.arm===arm&&o.valid).length}])),ledger:await guarded.snapshot({forReport:true}),fakeAccuracyClaim:false});
+    written.push(...[...guarded.accountingArtifacts].map(path=>path.slice(root.length+1)));
     artifactManifest(root,written);
     if(ownedCounter)counter.close();
   }
-  return {root,observations,ledger:ledger.snapshot()};
+  return {root,observations,ledger:await guarded.snapshot({forReport:true})};
 }

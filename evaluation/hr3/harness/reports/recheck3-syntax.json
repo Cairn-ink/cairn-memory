@@ -1,0 +1,51 @@
+[
+  {
+    "command": "node --check evaluation/hr3/harness/ledger.mjs",
+    "sourceSHA256": "496e0afbb82f3c53ba691fe0e590c44d3d9bccc9549ac243a6f6b28b2fa7c818",
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": "node --check evaluation/hr3/harness/transport.mjs",
+    "sourceSHA256": "fbed37d8b142bcb3ccacb912b55528624a647b3ef8050ddfb858f19683a4a7e5",
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": "node --check evaluation/hr3/harness/runner.mjs",
+    "sourceSHA256": "339d56ec401cb5f588ca0c7fb41ca367cf6d03118fb70e1abecaa9c87b9b3ec8",
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": "node --check evaluation/hr3/harness/product.mjs",
+    "sourceSHA256": "33833298d9293fcaf41558ae50b0dd902148c3bc70197298095cc0f5037ba53b",
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": "node --check evaluation/hr3/harness/test.mjs",
+    "sourceSHA256": "faef820d40bf8c205d47136fc5f1db2675f37046e954e44db5757dc03fae7e10",
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": "node --check evaluation/hr3/harness/test/ledger-contention-a4.test.mjs",
+    "sourceSHA256": "f105e182ec5607592dc4df080b2aec10a8e70e753bcfcad887098676138319cd",
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": "node --check evaluation/hr3/harness/test/ledger-race-a4.test.mjs",
+    "sourceSHA256": "e562d156d7f0ba23da0d53cc329446316c0d00dc324c5e64912fb4a880efd93e",
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  }
+]

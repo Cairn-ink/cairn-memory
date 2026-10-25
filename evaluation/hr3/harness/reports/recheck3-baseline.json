@@ -1,0 +1,14 @@
+{
+  "head": "2221f923d1943fd871385b3b35ab035f3e75be2a",
+  "files": 66639,
+  "sources": {
+    "evaluation/hr3/harness/ledger.mjs": {
+      "sha256": "f67e392aa9c95db171f5c9ff33806771ddeb4f6941d6baff33098af017a4a396",
+      "bytes": 12653
+    },
+    "evaluation/hr3/harness/transport.mjs": {
+      "sha256": "2d9ecd49ae1607711248bba55390d7801e6eb9bfa9b85feeb3e61e1d8ddd93be",
+      "bytes": 8909
+    }
+  }
+}

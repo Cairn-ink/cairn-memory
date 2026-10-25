@@ -1,0 +1,36 @@
+{
+  "sourceHashes": {
+    "ledger": "496e0afbb82f3c53ba691fe0e590c44d3d9bccc9549ac243a6f6b28b2fa7c818",
+    "transport": "a96895bc0863707dcaf02a6a54329562add8f2ae84e5e9dbfbd830f6bd920d7b"
+  },
+  "result": {
+    "reply": {
+      "requestId": "local-elapsed/attempt-0",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "status": "completed",
+      "outputText": "{\"exact\":\"paid reply 假回覆\"}",
+      "usage": {
+        "inputTokens": 1,
+        "outputTokens": 1
+      }
+    },
+    "error": null
+  },
+  "state": {
+    "total": 2000,
+    "reservations": 1,
+    "unsettled": [],
+    "embedding": {
+      "research": 0,
+      "product": 0
+    },
+    "byStage": {
+      "pilot": 2000
+    },
+    "failures": 0,
+    "stopped": null
+  },
+  "dispatches": 1,
+  "lastProgress": 300000,
+  "responses": []
+}
