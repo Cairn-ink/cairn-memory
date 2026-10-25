@@ -623,3 +623,177 @@ Further exact source-profile/conditional-CDF enumeration with outward-rounded fi
 
 - **Related execution clarification.** Adopt the separately disclosed Keep-first overlap convention: after validity gates, hard-violation handling and the judgment-robustness gate, evaluate the frozen Keep conditions before Advance when both table rows match. This changes no threshold and can only turn an overlapping otherwise-Advance classification into Keep U, never the reverse. Retain no familywise-95% claim for Keep. [decision.mjs:8](../analysis/decision.mjs:8), [README.md:331](../analysis/README.md:331)
 - **Freeze and reporting.** Candidate labels are not acceptance. Preserve r0 and all structural failures; freeze the reviewed A-5-r1 implementation/authority identity, then complete the full workload and independent review before development/inference. Report all failures and exclusions; reduced runs and old precursor results remain non-certifying. Keep supervision/resource gates and paid caps unchanged. This draft modifies no analysis code and records no validation or calibration pass.
+
+## A-6 (2026-10-25): source-named predecessor identity and execution-contract repairs after engineering pilot four (non-author audit: acceptable for implementation after revision r1)
+
+**Status:** prospective draft for primary freeze and non-author review; not execution authorization. Baseline reviewed: `22510a2cef486780ba7be805a4d33c68c3b42a6b`. No network, paid calls, keys or repository changes are part of this drafting task.
+
+### 1. Purpose and amendment classification
+
+The fourth pilot is an uncalibrated execution diagnostic, not evidence selecting a policy or model. The attribution finds that all 95 admitted focal changes are unresolved: source names exist, but extraction sees one batch while the resolver requires an earlier turn address. Its ranked remedies and ceilings are optimistic counterfactual bounds, not expected gains or amended scores. [diagnosis.md:51](evidence/pilot4-diagnosis.md:51), [ceilings interpretation:106](evidence/pilot4-diagnosis.md:106)
+
+| Repair | Classification and validity rationale |
+|---|---|
+| Source-name registry | **Prospective extraction/link-contract amendment with semantic pipeline effects**, implementing A-4's intended source-stated predecessor identity. It changes which explicit references can resolve; it does not change what correction, reversal, refinement or scope change means. Do not describe it as prompt-only or retrospectively compatible. |
+| Extraction and reader instructions/examples | Clarifications of existing A-4 meanings; validators, admission thresholds, reader capabilities and update policies stay unchanged. |
+| R punctuation coverage | Narrow semantic-content clarification of §7, implemented as a **prospective scorer/canonicalization amendment** because mechanical verdicts can change. It does not license punctuation normalization during citation resolution. |
+| Model selection | Recommend **no primary model change**. Other configurations below are prospective cost comparisons, not a four-way paid bakeoff or automatic permission to migrate. |
+
+These repairs address unavailable identity information and documented contract adherence, rather than selecting parameters to increase T−U or J. They apply identically across arms, are frozen before the fresh pilot, and introduce no accuracy-based continuation floor. Earlier runs remain immutable and unpooled.
+
+### 2. Deterministic, gold-free predecessor identity
+
+The current extraction input is batch-only; the extraction schema has predecessor turn/name anchors but no own-record name, and `resolveLinks` matches earlier turn/subject/predicate without using the name. [extraction.mjs:8](../harness/extraction.mjs:8), [preflight-a4-schema.mjs:21](../harness/preflight-a4-schema.mjs:21), [research.mjs:7](../harness/research.mjs:7)
+
+**New wire contract.** Replace the model's `predecessor_anchors` with:
+
+```text
+record_name: null | {name:string, anchor:{turn_id,quote,occurrence}}
+predecessor_refs: [{record_name:string, anchor:{turn_id,quote,occurrence}}]
+```
+
+An own-name anchor quotes that event's complete source-stated identifier; a predecessor anchor quotes the identifier where the **current** batch refers to it. In both forms `quote` equals the submitted name before normalization, the turn belongs to the event's `source_turns`, and ordinary exact A-3 anchoring must succeed. Do not ask the extractor to invent the earlier turn. In the current ASCII-identifier fixture domain, require complete `[A-Za-z0-9_-]+` tokens, with adjacent characters outside that class; prefix matches such as `demo7` inside `demo70` do not qualify. Nonconforming names are not guessed. A name's role as own versus referenced is a model-extracted semantic assertion; an exact substring alone does not establish that role.
+
+Own name means the newly introduced record's name, not the predecessor mentioned by “correct record …”. Use null if none is stated. Initial/unchanged events may have no predecessor references; updates requiring a predecessor remain unresolved if none is supplied. Emit each referenced record once. Keep the existing core fields, context branch, supplied-slot rules and derived field mask.
+
+**Registry algorithm, before arm fan-out:**
+
+1. Use only admitted, source-anchored name assertions. Partition by family/authorized namespace and canonical subject/predicate. The key is `(family, namespace, subject, predicate, record_name)`; scope and apparent currentness are not disambiguation keys. Subject/predicate use the unchanged public dictionaries. Names use the already declared NFKC/whitespace normalization, with case preserved; no case folding, phonetics, punctuation deletion or undeclared aliases. Source anchoring itself remains verbatim.
+2. Process the unchanged frozen event order. For a reference, look up only already observed, strictly earlier admitted events whose naming evidence precedes the reference. Same-batch resolution requires both that order and source order to agree. Self/forward/cyclic references fail closed; do not retry them using later batches. Register the current event's valid own name after its references are processed; own-name collision checking is part of the same pre-enactment validation, before any write or predecessor retirement.
+3. Zero matches → `missing_named_predecessor`; more than one distinct admitted event → `ambiguous_named_predecessor`. Keep colliding entries, including historical/non-adopted entries; never overwrite with the newest or pick an adopted/current candidate. A later collision affects later references, not past checkpoints. Replaying the same internal event key is idempotent, not a second name claim.
+4. Distinct events with the same canonical key remain duplicates even if their text is identical. A current event introducing such a duplicate own-name binding is unresolved before enactment; keep both identities for later ambiguity checks rather than merging their facts. Repeated predecessor references resolving to one event are `duplicate_reference`, not silently deduplicated. An absent own name prevents registration without discarding otherwise admitted facts. A claimed own-name annotation with an invalid anchor, or any missing/invalid predecessor-reference annotation, makes the event unresolved before enactment; facts may survive only under the existing unresolved-record rules. No legacy core-admission rule is relaxed.
+5. A unique identity must still pass every existing adoption, compatibility, overlapping-scope and historical-target check. Name resolution does not supply missing replacement extent or override those checks. Resolve a multi-predecessor set completely before enactment; any failure leaves the event unresolved. Preserve each arm's existing handling of unresolved records; P still skips unresolved/non-adopted writes.
+6. Produce internal target event IDs and their source-turn associations from the registry, then feed that identical linked stream to all arms. Do not consult gold, ASTs, questions' requested predecessor lists, known batch patterns, source-renderer private names or a hand-authored pilot map.
+
+Name anchors are identity annotations only: validate and audit them without automatically inserting name-only snippets into receipts, factual/reason evidence or reader bodies. Preserve the existing core/fact/reason quotation collection and receipt-selection policy. Emit one event for one source-asserted record/update and its supplied slots; repeated mentions do not create extra events, while distinct source events are never merged to avoid a name collision.
+
+The registry stores identity, event key, naming-anchor location/hash and resolution diagnostics, **not slot values, old decision prose, reasons or a historical answer**. It is neither sent to the extractor/reader nor indexed/retrieved as memory. It cannot restore O's overwritten history, reconstruct P's pre-correction content or bypass forgetting. Retain collision/tombstone identities so deletion does not make a formerly ambiguous name look uniquely new; they never supply content or authorize a write. Logs and cache replay must distinguish registration, identity resolution and policy eligibility.
+
+**Independent example, not a pilot case:** batch one says “Record demoLira: we adopt route demoRoute9.” Batch two says “Correct record demoLira; adopt record demoNeso with route demoRoute4.” The second extraction names its own record `demoNeso` and references `demoLira` at its current mention. The registry supplies the earlier event ID; the model supplies no earlier turn guess. If two earlier records claim `demoLira` under the same key, or its naming assertion was not admitted, the update stays unresolved. Publish a Traditional Chinese counterpart with the same semantics. These examples are excluded from research/calibration worlds.
+
+No source text is changed to insert earlier-turn IDs. New schema/resolver/cache versions and fresh pilot requests are mandatory; do not retrofit old extraction replies into this contract.
+
+### 3. Extraction instructions: retain strict admission
+
+**Prompt/contract changes only for these admission remedies.** The current validator separately checks core enums, core anchors, assignments and reason quotations; invalid core excludes the event, including attached reasons. Preserve that behavior and the existing structural-schema versus event/domain-validation precedence. Do not coerce a wrong enum, salvage invalid-core reasons into a manufactured context event, supply defaults, or loosen exact anchors. [schema.mjs:72](../harness/schema.mjs:72)
+
+Include this explicit crosswalk in the extraction contract, replacing vague/redundant instructions rather than adding case-specific hints:
+
+| Field | Allowed meanings/values |
+|---|---|
+| `kind` | `fact`, `preference`, `decision`, `instruction`, `context` |
+| `commitment` | `adopted`, `proposed`, `quoted`, `rejected`, `unresolved` |
+| `change_type` | `initial`, `correction`, `reversal`, `refinement`, `scope_change`, `expiry`, `unchanged` |
+| `replacement_extent` | `entire_predecessor`, `partial`, `unresolved` |
+
+Required wording/examples:
+
+- **Orthogonal fields:** “Correction is a change type, never a commitment. ‘The old assertion was never adopted; we adopt its replacement’ means `commitment:adopted, change_type:correction` for the replacement. A rejected proposal is `commitment:rejected`; it enacts no decision.” Include English/Traditional Chinese positives and negatives. Do not move these checks into a provider enum restriction that would change event-level rejection into whole-batch rejection.
+- **Source coverage:** “List every current-batch turn used by event, slot, own-name/reference and reason anchors in `source_turns`. Never put an unavailable prior turn there. Copy exact quotations and their actual local occurrences; the harness computes offsets.”
+- **Causal clauses:** “Copy every explicitly stated serial clause, conjunction and sufficiency qualification needed for the change, retaining its source association. Attach them as `reason_quotes` independently of which slots are supplied; do not invent a graph or implicit edge. A declared deadline's passage must be stated as causing expiry; a bare date is insufficient.” Invalid individual reason quotations still do not discard valid facts, but invalid core still excludes all attached evidence.
+- **Non-slot context:** use A-4's existing anchored context branch only for an independently source-stated context assertion. Do not emit an empty slot payload for a standalone context assertion, invent adoption, or duplicate every decision/reason into a separate context archive. A context event needs valid core metadata and its own exact text anchor; it cannot repair a rejected decision event. Eligibility stays unchanged.
+- **Slots/metadata:** “Extract only supplied route/Text, approval/Boolean and cap/Quantity assignments, each independently anchored. Null means unsupplied: do not fill inherited fields. Preserve all explicit replacement qualifications, audience cells and source-claimed intervals; observed time is not automatically effective time. Complete versus partial replacement must be stated, not guessed.” Show cap-only amendment and complete replacement examples with unsupplied slots left null, plus a future-effective example. Use the existing exact unit and timezone rules.
+
+For an independent causal-anchor example, let current-batch turn `demo-decision` contain the adopted replacement and `demo-cause` say “Capacity loss caused queues to grow. Queue growth caused this replacement.” Include both turns in that event’s `source_turns` and quote both complete clauses from `demo-cause` with their own exact occurrences in `reason_quotes`; do not replace them with endpoint labels or attach them to an invalid core event. A cap-only source saying “Keep route and approval; change only cap to 5 requests/hour” supplies only a cap Quantity and its anchor, leaving extraction route/approval null; it does not supply inherited values. Provide independently authored Chinese counterparts, without using any pilot names or values.
+
+No request adds prior conversation, gold, cached target values or a model self-correction turn. Real extraction omissions/semantic mistakes remain measured failures.
+
+### 4. Reader instructions: addresses, recovery and causal selection
+
+**Prompt/public-contract clarifications only.** Preserve the closed answer schema, stateless/tool-free reader, identical arm-blind prompt, actual delivered blocks and fixed retrieval/assembly. The current public contract already distinguishes bodies and receipts; new examples teach adherence without changing delivery. [public-contract.json:502](../generator/public-contract.json:502), [prompts-a4.mjs:2](../harness/prompts-a4.mjs:2)
+
+**Worked addressing example** (illustrative decoded wire, independent of pilot material):
+
+```json
+{"intent":"history","items":[{"body":"{\"slots\":{\"route\":\"demoRoute4\"}}","sources":[{"index":0,"excerpt":"A shipping restriction caused the switch."}]}]}
+```
+
+To select the causal excerpt:
+
+```json
+{"intent":"history","item":0,"unit":"receipt","source":0,"quote":"A shipping restriction caused the switch.","occurrence":1}
+```
+
+To cite the complete decoded body for its route assertion:
+
+```json
+{"intent":"history","item":0,"unit":"body","source":null,"quote":"{\"slots\":{\"route\":\"demoRoute4\"}}","occurrence":1}
+```
+
+The causal sentence is not a substring of that body; labelling it body/null is invalid. `item` is the zero-based position in the actual selected intent's delivered items, not a record alias, turn number or ranking position before assembly. Receipt `source` uses its displayed source index. Count occurrences within that exact unit only: in `Queue rose. Queue rose.`, selecting the second `Queue rose.` means occurrence 2, not item/source 2. Copy the decoded delivered text after any product normalization; do not cite raw-source spelling or omitted suffixes. Legitimate delivered aliases retain their existing rules and ambiguous overlaps remain unresolved. No address relocation, occurrence substitution, punctuation stripping or retry occurs after submission.
+
+Add these reader instructions and independent bilingual examples:
+
+- Recover complete requested assignments from delivered, source-supported evidence using the frozen public update meanings. A partial refinement inherits unspecified fields from its identified predecessor without requiring a separate “keep” statement. Recover inherited values only when the delivered evidence establishes those values and the applicable predecessor relationship; never invent missing predecessor content. An explicit complete replacement clears the selected predecessor fields before installing supplied assignments. Apply these rules identically across arms, preserving scope and source-claimed intervals. Missing delivery is not `not_specified`, false or zero.
+- Conformance: add independent bilingual pairs of the same partial refinement with and without an explicit preservation sentence; both must have identical intended semantics in every arm.
+- An unresolved processing label does not by itself negate explicit delivered source facts. Use those facts only when they suffice under the shared update meanings; never reconstruct missing predecessor content or treat an unresolved reference as evidence that its values are known.
+- `current.status:no_active_decision` requires `rows:[]`; put an available last-known decision only in requested history, labelled expired. Old records match exactly the requested predecessor turns and erroneous/previously-adopted/expired status. Questions announce the complete shared vocabulary, not the correct label.
+- For stated R, select every serial mediator and necessary conjunction, or one complete independently sufficient alternative, including its association to the focal change. Endpoint mentions, unrelated background, speculation, negation and an earlier change with repeated wording do not suffice. Do not quote the entire context to evade selection. Use `unavailable` when the explanation was not delivered; do not default to `not_stated` from a gap. The factual negative-R rule and its support-not-applicable/no-evidence-baseline reporting remain unchanged; no delivered negative witness is newly required.
+
+C/O remain factual correctness measures with separate citation diagnostics. Reader instruction changes do not give C/O a new citation requirement.
+
+### 5. R punctuation: narrow semantic coverage, exact citation resolution
+
+**Decision:** ignoring demonstrably nonsemantic punctuation is faithful to §7's requirement for complete causal content, but implement it as a **versioned prospective scorer/canonicalization amendment**. Do not retrospectively change pilot-four scores. The diagnosis's 76 cases are secondary failures after hypothetical address correction; punctuation treatment alone does not repair their original invalid citations. [diagnosis.md:45](evidence/pilot4-diagnosis.md:45)
+
+The current resolver requires verbatim delivered quotations, while coverage requires continuous exact source-span coverage after trimming edge whitespace. Keep the former unchanged; amend only semantic support coverage. [citations.mjs:60](../scorer/citations.mjs:60), [covers:101](../scorer/citations.mjs:101)
+
+1. First resolve every submitted address/quote/occurrence exactly against the same delivered unit and legitimate aliases, preserving normalization/truncation/source-position maps. An invalid address, altered quote or absent substring cannot enter punctuation-insensitive coverage.
+2. At generation/challenge authoring, mark **optional-trivia source positions** in the private support registry from deterministic template provenance, before answers exist. Eligible characters are whitespace and the finite punctuation set `.,;:，。；：、` only where emitted as nonsemantic template separators. All interpolated words, values, identifiers, numbers and causal qualifiers are protected, including punctuation inside them. Question/exclamation marks, quotation marks, apostrophes, hyphens, signs, arrows/operators and parentheses are never ignored by this rule. Each optional position must be licensed by a predeclared production/language/literal-offset rule, independently reviewed before generation; membership in the character whitelist alone is insufficient. Never infer trivia by applying a punctuation-deletion regex to a gold or submitted string.
+3. For each required support span, every non-trivia source position must be covered by the union of the actually resolved citation ranges from that same source origin, with exact content correspondence. Optional punctuation may be uncovered; no missing word, digit, connector, mediator, conjunction or focal-change association may be supplied. Preserve all graph/support OR-of-AND requirements and rejection/referral of additional unsupported content. Do not discard an extra citation or text outside licensed support merely because it consists of punctuation. Spans with no substantive required content cannot establish a cause.
+4. For example, an independently authored template `A caused B.` may license its final full stop; selecting exact `A caused B` can cover the required content. Selecting only `A` and `B` cannot. The decimal point in an interpolated `1.5` or a dot in an identifier is protected: citing `1` and `5` separately does not cover `1.5`. Punctuation carrying an unfamiliar meaning receives no automatic equivalence.
+5. Markings are scoring-side provenance, not reader-visible cause choices, new source evidence or additions to quotation-free `G_correct`. Unknown equivalence/context still follows calibrated referral. Complete source-word coverage alone does not bypass `unrecognized_evidence_context` or the gold-blind support pass. The same changed coverage predicate must be used consistently for completeness and extra-selection checks.
+
+This is narrower than the diagnosis's exploratory punctuation-insensitive census. It promises neither recovery of all 76 cases nor automatic R=1. New licensing, provenance mappings, keys and negative tests must pass independent calibration v2; neither scorer nor judges may repair missing/incorrect citations or partial causal content.
+
+### 6. Prospective models and fifth-pilot budget
+
+**Recommendation: retain `gpt-4.1-mini-2025-04-14` for extraction and reading.** The workload remains bounded structured extraction plus explicit slot/evidence recovery. A representable name-address contract and worked citation rules are necessary regardless of model; a capacity change cannot provide absent earlier identity. Retention keeps the primary condition and planned alternative-extractor sensitivity intact, avoids another confound, and provides the cheapest execution check. This recommendation uses workload, design continuity and cost—not observed pilot scores or counterfactual ceilings. No accuracy advantage for either model is asserted without prospective evidence.
+
+For comparison, use only the named alternative `gpt-5.4-mini-2026-03-17`, at the primary-verified **$0.75/M input, $4.50/M output**. Existing local profiles specify those rates and reasoning `none`; 4.1 uses $0.40/$1.60. No network price/availability check was performed here. [profiles.mjs:6](../../../adapters/openai/profiles.mjs:6)
+
+Freeze 4.1 temperature 0 with no reasoning field; for any selected 5.4 role freeze `reasoning:{effort:"none"}` and omit temperature, as in the existing alternative request. Record requested/returned model identity, complete settings/body hash, usage and request ID; temperature 0 is not a claim of deterministic provider outputs. No adaptive effort or model fallback. Reader 5.4 is a hypothetical configuration requiring an explicit role/model allow-list, request, transport and rate-plan amendment: the current harness permits 5.4 only for extraction. [requests.mjs:17](../harness/requests.mjs:17)
+
+**Fixed call plan:** one 60-family fifth engineering pilot; 240 shared extractions, 480 answers (120/arm), at most one transport retry per logical call, no quality retry. Do not run all four options. Retain output caps E=4,352/R=2,176 and input reservation ceilings E=20,480; R=40,960 for U/T/P and 32,768 for O. Reservations are complete-body UTF-8 bytes plus 4,096 framing units. These current ceilings are assumptions to re-certify for A-6, not an asserted fit. [requests.mjs:3](../harness/requests.mjs:3)
+
+All amounts below are US dollars. For input/output prices `(i,o)` per million tokens:
+
+- `E(i,o) = 480 × (20,480 i + 4,352 o) / 1,000,000`.
+- `R(i,o) = 240 × ((3×40,960 + 32,768) i + 4×2,176 o) / 1,000,000`.
+- Embeddings: conservative full shared allowance `128,000,000 × $0.02/M = $2.56`; actual remaining allowance is smaller after carry-forward. This does not reset either cumulative 64M-unit counter.
+
+| Extractor / reader | Extraction maximum, retries included | Reader maximum, retries included | Incremental total incl. $2.56 embeddings | Illustrative cumulative at $4.15 carry |
+|---|---:|---:|---:|---:|
+| **4.1 / 4.1 — recommended** | $7.274496 | $18.284544 | **$28.119040** | **$32.269040** |
+| 5.4 / 4.1 | $16.773120 | $18.284544 | $37.617664 | $41.767664 |
+| 4.1 / 5.4 | $7.274496 | $37.416960 | $47.251456 | $51.401456 |
+| 5.4 / 5.4 | $16.773120 | $37.416960 | $56.750080 | $60.900080 |
+
+For the unchanged planning inputs of 8,000 extraction/6,000 reader tokens and full output caps, single-attempt response forecasts are respectively **$5.262336, $8.963328, $9.299328, $13.000320**, excluding embeddings. These are forecasts, not usage measurements or spending authority.
+
+**Cap decision:** retain the cumulative **$50 pilot cap** for the recommended option; it requires no increase. Verify exact settled charges **plus full outstanding/preparation exposure**, embedding counters and the complete four-pilot chain before dispatch. The approximate $4.15 is only an illustration, not a replacement for that ledger. If the primary separately selects reader-only/both upgrades, illustrative rounded caps of **$55/$65** would cover the shown maxima, respectively, but would require a separate explicit cumulative-cap amendment and exact recomputation; they are not enacted here. An extractor-only upgrade fits the illustrative $50 cap but still needs a model amendment. No rounded cap can override larger verified carry or a failed certificate.
+
+No input/output ceiling rises silently to fit new examples or fields. If the required 5% request/10% output margins fail, block dispatch and publish a numerical amendment with recomputed token arithmetic. Count any preparation probes, schema failures, retries and unknown charges; no extra unlisted API calls. Preserve global **$450 operational/$500 authorization** limits, unavailable $50 headroom, ≤$400 pre-development completion projection, full-test/Inconclusive rule and self-ledgering. Under the unchanged model/planning assumptions, retaining the entire $50 pilot cap plus 25% contingency on the remaining response/embedding plan still gives $282.00320; regenerate the binding projection from the new frozen plan and settled usage before development. Upgrading the primary extractor would also require prospectively swapping the identical planned 5.4 alternative to 4.1 and repricing it; any reader upgrade must apply equally to every arm and sensitivity run. None is selected in this draft.
+
+### 7. Fresh material, unchanged comparison, implementation and recertification
+
+**Process amendment:** extend the A-1/A-4 engineering-pilot exception to exactly one fifth 60-family run under A-6 and the cumulative $50 cap; it does not authorize execution before review/freeze or move the development gates.
+
+**Fresh fifth pilot required:** publish a new deterministic world seed before evaluation, preserving the 60-family allocation, 12/type, language/causal/control counts and lineage multiplicities. Use only engineering/pilot banks; new seeds do not create new ancestry roots. Preserve naming counterbalance and question/contract-only leakage checks. The source conversation need not gain artificial turn IDs; support-trivia metadata changes no source words. Do not reuse paid pilot-four extraction/answer caches under A-6, relabel its scores, pool runs or transfer its names/values/answers/gold into calibration v2. Independent contract examples and calibration worlds must be separately authored.
+
+T and U receive identical newly cached real extractions and the same gold-free resolution. Keep T's typed cell/field rules, inheritance, history labels and no-fallback expiry; keep U's exact-scope whole-version selection, generic links and original evidence. Keep O destruction, P's public-operation mapping/current product pin, correction loss, unresolved/non-adopted filters and adapter expiry. No history archive, raw-source fallback, new queryable registry or incidental admission expansion. Keep literal retrieval queries, hosted embeddings, 2,000 tokens/intent, representation-v2, default whole-record assembly, Card/safety controls and protected independent artifacts. The four diagnosed budget losses remain legitimate policy losses, not defects to erase. [diagnosis.md:104](evidence/pilot4-diagnosis.md:104)
+
+The sole confirmatory estimand remains **final-checkpoint J(T)−J(U) under the prospectively frozen pipeline**. All thresholds, guards, allocations, weights, multiplicity interpretation, judgment-error requirements and A-5 inference/interval rules remain unchanged. Common execution/scoring amendments can change measured C/O/R/J; that is why they are versioned before held-out use, not claimed numerically identical to earlier pilots. P remains a descriptive **pinned product + public-operation agent + shared research extraction + slot-reader** baseline, not native product capture.
+
+| Directory | Implementation and focused conformance requirements |
+|---|---|
+| `generator/` | Publish independent bilingual extraction/address/slot/causal examples and name-token rules; leave conversation meanings/allocations intact; generate private optional-trivia positions from literal-versus-interpolated provenance; validate protection of all values/identifiers/causal operators and fresh-world/leakage constraints. |
+| `harness/` | Version wire schema, prompts, public projections, name registry/resolver and caches; preserve strict core/assignment/reason admission; log missing/colliding/incompatible names and actual P operations. Test cross-batch and eligible same-batch links, self/forward/duplicate/replayed names, prefix/canonical collisions, missing declarations, scopes, retired/forgotten targets, multi-target all-or-none and family isolation; independent bilingual partial-refinement inheritance pairs with and without an explicit preservation sentence, identical intended semantics across arms. No model-specific semantic override. |
+| `scorer/` | Preserve exact address/quote/occurrence resolution; version support schema/keys and trivia-aware coverage consistently across completeness/extra-content checks; test missing causal words, conjunctions, intermediates, wrong change, extra clauses, decimals/dotted IDs/operators, Unicode/truncation and unknown-context referrals. Preserve C/O and factual-negative-R semantics. |
+| `integration/` | Reconcile new extraction/name/support fields losslessly; verify old/new reducers agree on independently authored equivalent fully resolved input streams; demonstrate named links cannot retrieve O/P lost content; verify P receives the intended public operation, without judging product behavior for skipped writes. Cross-check complete manifests and field mappings by independent routes. |
+| `challenge/` | Independently rebuild calibration v2 for the changed contract/scorer; cover exact positive/negative addresses, same text at wrong turn/occurrence, punctuation-only omission versus protected-content omission, non-slot context and referral qualification; preserve gold-blind support, quotation-free correctness gold and error/propagation registries. No pilot answers or case-specific fixes. |
+| `analysis/` | Re-certify acceptance of new scorer/key/provenance versions and perturbed family-score recomputation only; do not change T−U math, A-5 intervals, M=204, effect grid, thresholds or decision rules. Full required validation remains a before-development/inference gate. |
+
+**Before the fifth paid pilot:** non-author review/primary freeze; independently authored conformance cases spanning every operation/control branch; actual-token maximal extraction/answer certificates (10% headroom), complete provider-body certificates (5% headroom), new linked-state/serialization/receipt/embedding byte limits and cumulative-unit certificates; privacy/arm-blinding/gold-leakage scans including the private identity registry; exact cumulative ledger/call-plan reconciliation; supervised progress/stop mechanism. Invalid core must still exclude, and genuine ambiguity must stay unresolved. No semantic-accuracy floor or “recover N pilot components” gate is introduced.
+
+**Before development:** independent calibration v2 and its domain-specific referral/resource gates; full A-5 validation on the newly frozen adapter/scorer identities; a ≤$400 total-completion projection within all stage/global limits; required fresh held-out banks, published ancestry and recertification before held-out calls. A-1/A-1.1 still allow only uncalibrated mechanical engineering bounds, with no pilot intervals/inference or Advance/Keep decision. The 200-family development P baseline remains the first substantive calibrated report. A fifth pilot that fails execution validity is retained; it does not authorize an automatic sixth run or score-driven prompt/model search.
