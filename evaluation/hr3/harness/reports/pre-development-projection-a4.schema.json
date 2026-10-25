@@ -10,7 +10,7 @@
       "const": "paid_pilot_settled_ledger"
     },
     "errataSHA256": {
-      "const": "e43a5bcfec9a605ed3f9a55570969b1fd8cb11425d1749cc3222fe8e635b057a"
+      "const": "7dea0aa1382fa772f4e88570c701cd8caa3a41f9fae0b1e7e6faea875423ffd5"
     },
     "pilot": {
       "type": "object",

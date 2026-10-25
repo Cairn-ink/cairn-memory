@@ -1,0 +1,30 @@
+{
+  "version": "hr3-a4-reference-context-property-v1",
+  "counts": {
+    "pilot": {
+      "contexts": 240,
+      "adopted": 0,
+      "unresolved": 240,
+      "byLanguage": {
+        "zh-Hant": 132,
+        "mixed": 36,
+        "en": 72
+      }
+    },
+    "engineering": {
+      "contexts": 720,
+      "adopted": 0,
+      "unresolved": 720,
+      "byLanguage": {
+        "en": 240,
+        "zh-Hant": 240,
+        "mixed": 240
+      }
+    }
+  },
+  "explanation": "All 960 frozen/reference context events are deliberately authored as unresolved unsupported-cause distractors. Zero adopted reference contexts is a generator/fixture property. Independently authored conformance cases exercise adopted context without modifying generator gold.",
+  "sources": {
+    "evaluation/hr3/generator/artifacts/pilot/families.jsonl": "fe3681c8bd35c7d4f0079b261aeb65f24d2c53ee5c91287388aee44146e50c20",
+    "evaluation/hr3/harness/cap-stress-fixtures.mjs": "c1eef36b796b00c840de2040b7546a4ffe842557d0d178b03a10b95a28573b16"
+  }
+}

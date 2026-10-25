@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import {runtimeClosure} from './runtime-closure.mjs';
+import {contextConformance} from './context-certification.mjs';
 import {prepareA4Accounting} from './accounting-a4.mjs';
 import {projectContract,familyContractContext} from './contract-projection-a4.mjs';
 import assert from 'node:assert/strict';
@@ -13,7 +15,7 @@ import {engineeringStressFixtures} from './cap-stress-fixtures.mjs';
 import {extractionInput} from './extraction.mjs';
 import {validateExtraction} from './schema.mjs';
 import {identifyEvents} from './event-identity.mjs';
-import {materialize,retrieve,literalQuery} from './research.mjs';
+import {materialize,retrieve,literalQuery,resolveLinks} from './research.mjs';
 import {responseRequest,INPUT_CAPS,READER_INPUT_CAPS,inputLimit,validateRequest,embeddingRequest} from './requests.mjs';
 import {bytes,hash} from './common.mjs';
 
@@ -42,7 +44,7 @@ export async function certifyRequests({progress=()=>{}}={}) {
   function measure(operation,input,metadata) {
     const body=responseRequest(operation,input,{alternative:metadata.alternative??false});
     const id=metadata.arm?`${metadata.family}/reader/${metadata.arm}/${metadata.batch}`:'certificate';
-    if(operation==='reader')currentPrivacy.check('reader-request',body,{arm:metadata.arm,checkpoint:metadata.batch});
+    currentPrivacy.check(operation==='reader'?'reader-request':'extraction-request',body,{arm:metadata.arm,checkpoint:metadata.batch});
     const reservation=bytes(body)+4096,limit=inputLimit(operation,id);
     const row={...metadata,operation,requestBytes:bytes(body),reservation,limit,margin:limit-reservation,marginPercent:(limit-reservation)/limit*100,
       providerBodyTokens:counter.countTokens(JSON.stringify(body)),sha256:hash(body),pass:reservation*100<=limit*(100-INPUT_MARGIN_PERCENT)};
@@ -65,11 +67,12 @@ export async function certifyRequests({progress=()=>{}}={}) {
         try {
           for(const b of family.batches) {
             const next=referenceEvents(family,b.ordinal);events.push(...next);aliases.register(next);
-            if(product){await product.ingest(next,b.observed_at);await product.controls(family.controls??[],b.ordinal);}
+            const linkedEvents=resolveLinks(events);
+            if(product){await product.ingest(next,b.observed_at,{linkedEvents});await product.controls(family.controls??[],b.ordinal);}
             const cp=family.checkpoints.find(c=>c.batch===b.ordinal);if(!cp)continue;
             const query=literalQuery(family.header,family.language),controls=product?.controlSnapshot()??[];
             for(const mode of ['constant','hashed-axis'])for(const arm of ['U','T','O']) {
-              const d=await retrieve(materialize(arm,events,cp.at),{query,embedder:certificateEmbedder(mode),counter,controls,aliases});
+              const d=await retrieve(materialize(arm,events,cp.at,{linkedEvents}),{query,embedder:certificateEmbedder(mode),counter,controls,aliases});
               const tokens={current:d.diagnostics.current.tokens,history:d.diagnostics.history.tokens};
               assert.ok(Object.values(tokens).every(t=>t<=2000),'Intent delivery budget changed');
               measure('reader',readerInput(cp,d.blocks),{...meta,batch:cp.batch,arm,embedding:mode,deliveryTokens:tokens});
@@ -83,9 +86,9 @@ export async function certifyRequests({progress=()=>{}}={}) {
           }
         } finally {await product?.close();}
         if(family.family_id==='pilot-scope_change-L06-W1') {
-          const cp=family.checkpoints.find(c=>c.batch===4),events=family.batches.flatMap(b=>referenceEvents(family,b.ordinal,{auditIdentity:true}));
+          const cp=family.checkpoints.find(c=>c.batch===4),events=family.batches.flatMap(b=>referenceEvents(family,b.ordinal,{auditIdentity:true})),linkedEvents=resolveLinks(events);
           for(const arm of ['U','T']) {
-            const d=await retrieve(materialize(arm,events,cp.at),{query:literalQuery(family.header,family.language),counter,embedder:certificateEmbedder(),aliases:sourceOrderAliases(events)});
+            const d=await retrieve(materialize(arm,events,cp.at,{linkedEvents}),{query:literalQuery(family.header,family.language),counter,embedder:certificateEmbedder(),aliases:sourceOrderAliases(events)});
             const row=measure('reader',readerInput(cp,d.blocks),{...meta,batch:4,arm,embedding:'constant',regression:'auditor-batch-qualified-reference-ids',deliveryTokens:{current:d.diagnostics.current.tokens,history:d.diagnostics.history.tokens}});
             audit.push(row);
           }
@@ -96,10 +99,11 @@ export async function certifyRequests({progress=()=>{}}={}) {
     }
     const familyUnits=new Map();for(const m of embeddingMeasurements){const key=[m.family,m.mode,m.channel].join('/');familyUnits.set(key,(familyUnits.get(key)??0)+m.units);}
     const cumulative=Object.fromEntries(['research','product'].map(channel=>{const maxFamilyUnits=Math.max(...[...familyUnits].filter(([k])=>k.endsWith('/'+channel)).map(([,n])=>n));const families=channel==='research'?2060:1860;const priorUnits=accounting.carry.exposure.embedding[channel];const retryUnits=2*Math.max(...embeddingMeasurements.filter(m=>m.channel===channel).map(m=>m.units));const bound=priorUnits+maxFamilyUnits*families+retryUnits;return [channel,{maxMeasuredFamilyUnits:maxFamilyUnits,conservativeFamilies:families,availableCarryUnits:priorUnits,twoTransportFailureReservations:retryUnits,projectedCompleteRunUnits:bound,limit:64000000,withinAllowance:bound<=64000000,scope:'Fixture-grammar bound using the largest measured family, including conservative audit calls; replacement banks require recertification. A completed run can survive at most two transport failures before the cumulative third-failure stop.'}];}));
-    const sources=Object.fromEntries(['references-a4.mjs','contract-projection-a4.mjs','prompts-a4.mjs','preflight-a4-schema.mjs','privacy.mjs','reports/private-field-inventory-a4.json','run-configuration.mjs','requests.mjs','schema.mjs','event-identity.mjs','request-certification.mjs','accounting-a4.mjs','reports/a4-carry-forward.json','reports/accounting-input-a4.json','research.mjs','product.mjs','cap-certification.mjs','cap-stress-fixtures.mjs'].map(name=>['evaluation/hr3/harness/'+name,hash(readFileSync(new URL(name,import.meta.url)))]));
+    const contextCoverage=await contextConformance({counter});
+    const sources=Object.fromEntries(['references-a4.mjs','contract-projection-a4.mjs','prompts-a4.mjs','preflight-a4-schema.mjs','privacy.mjs','reports/private-field-inventory-a4.json','run-configuration.mjs','requests.mjs','schema.mjs','event-identity.mjs','request-certification.mjs','context-certification.mjs','runtime-closure.mjs','public-paths-a4.mjs','accounting-a4.mjs','reports/a4-carry-forward.json','reports/accounting-input-a4.json','research.mjs','product.mjs','cap-certification.mjs','cap-stress-fixtures.mjs'].map(name=>['evaluation/hr3/harness/'+name,hash(readFileSync(new URL(name,import.meta.url)))]));
     for(const spec of accounting.sourceSpecs)sources[spec.path]=spec.sha256;
     sources['evaluation/hr3/protocol/errata.md']=hash(readFileSync(local('evaluation/hr3/protocol/errata.md')));
-    return {version:'hr3-a4.2-complete-request-certificate-v1',status:rows.every(r=>r.pass)&&Object.values(cumulative).every(c=>c.withinAllowance)&&privacyReports.every(p=>p.hits===0)?'PASS':'FAIL_INPUT_EMBEDDING_OR_PRIVACY_GATE',minimumMarginPercent:INPUT_MARGIN_PERCENT,inputCaps:INPUT_CAPS,readerInputCaps:READER_INPUT_CAPS,
+    return {runtimeClosureSHA256:hash(runtimeClosure().files),contextCoverage,version:'hr3-a4-complete-request-certificate-audit-v2',status:rows.every(r=>r.pass)&&Object.values(cumulative).every(c=>c.withinAllowance)&&privacyReports.every(p=>p.hits===0)?'PASS':'FAIL_INPUT_EMBEDDING_OR_PRIVACY_GATE',minimumMarginPercent:INPUT_MARGIN_PERCENT,inputCaps:INPUT_CAPS,readerInputCaps:READER_INPUT_CAPS,
       method:'Complete provider JSON body UTF-8 bytes + 4096 reservation; real o200k_base tokenizer; unmodified whole-item 2000-token intent delivery budgets. All pilot and all 180 independent engineering references for U/T/O with constant and hashed 1536-dimensional unit-vector fixtures. Actual public-operation P for all 60 pilot families and 36 independent maximal graph/language/boundary cases, using constant unit vectors. No held-out generation or network.',
       limits:'Grammar/reference-structure certification, not a bound over unbounded schema spellings or every possible embedding ranking. P public identities and resulting exact token selections can vary between fresh stores; certify the observed bodies and retain their hashes.',
       embeddings:{cumulativeProjection:cumulative,requests:embeddingMeasurements.length,maxInputUnits:Math.max(...embeddingMeasurements.map(m=>m.maxInputUnits)),maxRequestUnits:Math.max(...embeddingMeasurements.map(m=>m.units)),maxRequestBytes:Math.max(...embeddingMeasurements.map(m=>m.requestBytes)),unitsByChannel:Object.fromEntries(['research','product'].map(channel=>[channel,embeddingMeasurements.filter(m=>m.channel===channel).reduce((n,m)=>n+m.units,0)])),cumulativeLimits:{research:64000000,product:64000000},enforcement:'validateRequest checks every per-input/request body; ledger cumulatively reserves every retry before dispatch with no reset. Certificate repeated fixture measurements are offline, not billable counters.'},counts:{families:240,requests:rows.length},privacy:{hits:privacyReports.reduce((n,r)=>n+r.hits,0),families:privacyReports},historicalAuditReservations:[{arm:'U',reservation:20855},{arm:'T',reservation:24133}],auditRegressions:audit,worst,rows,sources,paidAuthorization:false};

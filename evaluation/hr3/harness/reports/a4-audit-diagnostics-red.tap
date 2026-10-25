@@ -1,0 +1,36 @@
+TAP version 13
+# Subtest: audit research diagnostics: unresolved context and overwrite dispositions match materialized state
+not ok 1 - audit research diagnostics: unresolved context and overwrite dispositions match materialized state
+  ---
+  duration_ms: 5.697275
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/a4-audit.test.mjs:48:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'commitment_filter'
+    - 'unresolved_record'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'unresolved_record'
+  actual: 'commitment_filter'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/a4-audit.test.mjs:50:227)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 85.25676

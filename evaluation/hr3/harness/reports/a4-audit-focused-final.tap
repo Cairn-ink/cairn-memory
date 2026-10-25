@@ -1,0 +1,274 @@
+TAP version 13
+# Subtest: audit aliases: zh-Hant predecessor names resolve through the public alias table
+ok 1 - audit aliases: zh-Hant predecessor names resolve through the public alias table
+  ---
+  duration_ms: 89.208912
+  type: 'test'
+  ...
+# Subtest: audit aliases: mixed predecessor names resolve through the public alias table
+ok 2 - audit aliases: mixed predecessor names resolve through the public alias table
+  ---
+  duration_ms: 21.525673
+  type: 'test'
+  ...
+# Subtest: audit common links: shared-turn context ambiguity is identical in T/U/O and P diagnostics
+ok 3 - audit common links: shared-turn context ambiguity is identical in T/U/O and P diagnostics
+  ---
+  duration_ms: 404.392376
+  type: 'test'
+  ...
+# Subtest: audit context coverage: certificates exercise adopted, unresolved and shared-turn context branches
+ok 4 - audit context coverage: certificates exercise adopted, unresolved and shared-turn context branches
+  ---
+  duration_ms: 3233.739303
+  type: 'test'
+  ...
+# Subtest: audit P addresses: omitted original receipt indices and sameAs aliases use delivered positions without changing blocks
+ok 5 - audit P addresses: omitted original receipt indices and sameAs aliases use delivered positions without changing blocks
+  ---
+  duration_ms: 136.341686
+  type: 'test'
+  ...
+# Subtest: audit paid gate: missing preflight cannot open a journal or dispatch
+ok 6 - audit paid gate: missing preflight cannot open a journal or dispatch
+  ---
+  duration_ms: 178.517927
+  type: 'test'
+  ...
+# Subtest: audit freeze closure: graph and independent loader include scorer, real runner and pinned product dependencies
+ok 7 - audit freeze closure: graph and independent loader include scorer, real runner and pinned product dependencies
+  ---
+  duration_ms: 395.138238
+  type: 'test'
+  ...
+# Subtest: audit recursive privacy: independent authoring injection 0
+ok 8 - audit recursive privacy: independent authoring injection 0
+  ---
+  duration_ms: 0.297945
+  type: 'test'
+  ...
+# Subtest: audit recursive privacy: independent authoring injection 1
+ok 9 - audit recursive privacy: independent authoring injection 1
+  ---
+  duration_ms: 0.065281
+  type: 'test'
+  ...
+# Subtest: audit recursive privacy: independent authoring injection 2
+ok 10 - audit recursive privacy: independent authoring injection 2
+  ---
+  duration_ms: 0.131492
+  type: 'test'
+  ...
+# Subtest: audit recursive privacy: independent authoring injection 3
+ok 11 - audit recursive privacy: independent authoring injection 3
+  ---
+  duration_ms: 0.03708
+  type: 'test'
+  ...
+# Subtest: audit extractor privacy: complete body is scanned before cache or transport
+ok 12 - audit extractor privacy: complete body is scanned before cache or transport
+  ---
+  duration_ms: 2.692729
+  type: 'test'
+  ...
+# Subtest: paid-preflight complete synthetic interchange validates without producing readiness
+ok 13 - paid-preflight complete synthetic interchange validates without producing readiness
+  ---
+  duration_ms: 889.966577
+  type: 'test'
+  ...
+# Subtest: paid-preflight semanticInventory missing blocks journal creation and dispatch
+ok 14 - paid-preflight semanticInventory missing blocks journal creation and dispatch
+  ---
+  duration_ms: 629.958413
+  type: 'test'
+  ...
+# Subtest: paid-preflight semanticInventory stale blocks journal creation and dispatch
+ok 15 - paid-preflight semanticInventory stale blocks journal creation and dispatch
+  ---
+  duration_ms: 627.252044
+  type: 'test'
+  ...
+# Subtest: paid-preflight output missing blocks journal creation and dispatch
+ok 16 - paid-preflight output missing blocks journal creation and dispatch
+  ---
+  duration_ms: 623.047426
+  type: 'test'
+  ...
+# Subtest: paid-preflight output stale blocks journal creation and dispatch
+ok 17 - paid-preflight output stale blocks journal creation and dispatch
+  ---
+  duration_ms: 634.563048
+  type: 'test'
+  ...
+# Subtest: paid-preflight requests missing blocks journal creation and dispatch
+ok 18 - paid-preflight requests missing blocks journal creation and dispatch
+  ---
+  duration_ms: 624.031744
+  type: 'test'
+  ...
+# Subtest: paid-preflight requests stale blocks journal creation and dispatch
+ok 19 - paid-preflight requests stale blocks journal creation and dispatch
+  ---
+  duration_ms: 612.994551
+  type: 'test'
+  ...
+# Subtest: paid-preflight embeddings missing blocks journal creation and dispatch
+ok 20 - paid-preflight embeddings missing blocks journal creation and dispatch
+  ---
+  duration_ms: 624.689177
+  type: 'test'
+  ...
+# Subtest: paid-preflight embeddings stale blocks journal creation and dispatch
+ok 21 - paid-preflight embeddings stale blocks journal creation and dispatch
+  ---
+  duration_ms: 615.226407
+  type: 'test'
+  ...
+# Subtest: paid-preflight privacy missing blocks journal creation and dispatch
+ok 22 - paid-preflight privacy missing blocks journal creation and dispatch
+  ---
+  duration_ms: 660.35778
+  type: 'test'
+  ...
+# Subtest: paid-preflight privacy stale blocks journal creation and dispatch
+ok 23 - paid-preflight privacy stale blocks journal creation and dispatch
+  ---
+  duration_ms: 639.664841
+  type: 'test'
+  ...
+# Subtest: paid-preflight conformance missing blocks journal creation and dispatch
+ok 24 - paid-preflight conformance missing blocks journal creation and dispatch
+  ---
+  duration_ms: 610.95012
+  type: 'test'
+  ...
+# Subtest: paid-preflight conformance stale blocks journal creation and dispatch
+ok 25 - paid-preflight conformance stale blocks journal creation and dispatch
+  ---
+  duration_ms: 633.512462
+  type: 'test'
+  ...
+# Subtest: paid-preflight allocation missing blocks journal creation and dispatch
+ok 26 - paid-preflight allocation missing blocks journal creation and dispatch
+  ---
+  duration_ms: 636.882724
+  type: 'test'
+  ...
+# Subtest: paid-preflight allocation stale blocks journal creation and dispatch
+ok 27 - paid-preflight allocation stale blocks journal creation and dispatch
+  ---
+  duration_ms: 669.518042
+  type: 'test'
+  ...
+# Subtest: paid-preflight accounting missing blocks journal creation and dispatch
+ok 28 - paid-preflight accounting missing blocks journal creation and dispatch
+  ---
+  duration_ms: 629.712633
+  type: 'test'
+  ...
+# Subtest: paid-preflight accounting stale blocks journal creation and dispatch
+ok 29 - paid-preflight accounting stale blocks journal creation and dispatch
+  ---
+  duration_ms: 619.212227
+  type: 'test'
+  ...
+# Subtest: paid-preflight analysisCoverage missing blocks journal creation and dispatch
+ok 30 - paid-preflight analysisCoverage missing blocks journal creation and dispatch
+  ---
+  duration_ms: 646.256471
+  type: 'test'
+  ...
+# Subtest: paid-preflight analysisCoverage stale blocks journal creation and dispatch
+ok 31 - paid-preflight analysisCoverage stale blocks journal creation and dispatch
+  ---
+  duration_ms: 619.356334
+  type: 'test'
+  ...
+# Subtest: paid-preflight resources missing blocks journal creation and dispatch
+ok 32 - paid-preflight resources missing blocks journal creation and dispatch
+  ---
+  duration_ms: 649.637848
+  type: 'test'
+  ...
+# Subtest: paid-preflight resources stale blocks journal creation and dispatch
+ok 33 - paid-preflight resources stale blocks journal creation and dispatch
+  ---
+  duration_ms: 629.334616
+  type: 'test'
+  ...
+# Subtest: paid-preflight freshRun missing blocks journal creation and dispatch
+ok 34 - paid-preflight freshRun missing blocks journal creation and dispatch
+  ---
+  duration_ms: 660.390496
+  type: 'test'
+  ...
+# Subtest: paid-preflight freshRun stale blocks journal creation and dispatch
+ok 35 - paid-preflight freshRun stale blocks journal creation and dispatch
+  ---
+  duration_ms: 627.259566
+  type: 'test'
+  ...
+# Subtest: paid-preflight freeze missing blocks journal creation and dispatch
+ok 36 - paid-preflight freeze missing blocks journal creation and dispatch
+  ---
+  duration_ms: 622.317634
+  type: 'test'
+  ...
+# Subtest: paid-preflight freeze stale blocks journal creation and dispatch
+ok 37 - paid-preflight freeze stale blocks journal creation and dispatch
+  ---
+  duration_ms: 647.689149
+  type: 'test'
+  ...
+# Subtest: paid-preflight review missing blocks journal creation and dispatch
+ok 38 - paid-preflight review missing blocks journal creation and dispatch
+  ---
+  duration_ms: 661.032273
+  type: 'test'
+  ...
+# Subtest: paid-preflight review stale blocks journal creation and dispatch
+ok 39 - paid-preflight review stale blocks journal creation and dispatch
+  ---
+  duration_ms: 613.101309
+  type: 'test'
+  ...
+# Subtest: paid-preflight output stale source binding independently blocks before journal
+ok 40 - paid-preflight output stale source binding independently blocks before journal
+  ---
+  duration_ms: 606.167731
+  type: 'test'
+  ...
+# Subtest: paid-preflight requests stale source binding independently blocks before journal
+ok 41 - paid-preflight requests stale source binding independently blocks before journal
+  ---
+  duration_ms: 668.814253
+  type: 'test'
+  ...
+# Subtest: paid-preflight privacy stale source binding independently blocks before journal
+ok 42 - paid-preflight privacy stale source binding independently blocks before journal
+  ---
+  duration_ms: 629.043728
+  type: 'test'
+  ...
+# Subtest: paid-preflight embeddings stale source binding independently blocks before journal
+ok 43 - paid-preflight embeddings stale source binding independently blocks before journal
+  ---
+  duration_ms: 633.316196
+  type: 'test'
+  ...
+# Subtest: paid-preflight analysisCoverage stale source binding independently blocks before journal
+ok 44 - paid-preflight analysisCoverage stale source binding independently blocks before journal
+  ---
+  duration_ms: 680.295436
+  type: 'test'
+  ...
+1..44
+# tests 44
+# suites 0
+# pass 44
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 25117.624448

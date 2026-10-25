@@ -1,5 +1,6 @@
 {
-  "version": "hr3-cap-certification-a4-v1",
+  "runtimeClosureSHA256": "da297112b46280badda0fd6f06796d5532c2abae4f3bd6acf31066b899983aa7",
+  "version": "hr3-cap-certification-a4-audit-v2",
   "protocol": "v0.3.4 + A-4/A-4.1",
   "seed": "hr3-worlds-a4-pilot-v1",
   "status": "PASS",
@@ -70,7 +71,7 @@
   },
   "inspectedHeldOutManifest": {
     "path": "evaluation/hr3/harness/reports/inspected-heldout-references.json",
-    "sha256": "82f8c9dcd5d97cce300e8222cf00481020b56a635fa9840a8e7408bfda8ead0d"
+    "sha256": "9ac3e67a7b54a119536e7a65d19fc2d3eca01d580e0f81c7b116c8d4692245d0"
   },
   "historicalReport": {
     "path": "evaluation/hr3/harness/reports/cap-certification.json",
@@ -193,7 +194,7 @@
   },
   "sources": {
     "evaluation/hr3/protocol/protocol-v0.3.4.md": "639c55edb6633186580af434ee2fe3ed39bffc2bf36a9292dac03b7a1b20b3cc",
-    "evaluation/hr3/protocol/errata.md": "e43a5bcfec9a605ed3f9a55570969b1fd8cb11425d1749cc3222fe8e635b057a",
+    "evaluation/hr3/protocol/errata.md": "7dea0aa1382fa772f4e88570c701cd8caa3a41f9fae0b1e7e6faea875423ffd5",
     "evaluation/hr3/generator/freeze.json": "1514c3b4faa7f506ad12767d5e4029c76a1273fb04707614927b1251faaaaa7c",
     "evaluation/hr3/generator/README.md": "bb491a5dde18cd77d0bba38bf764c0c60eb29ef4284eb354f5bd7ba149ab7f6b",
     "evaluation/hr3/generator/answer.schema.json": "e41a9bbf4d9bdf15f8d21087a460fcd19bd627c93f429d8577d3338e0d6a24fb",
@@ -219,17 +220,19 @@
     "evaluation/hr3/harness/contract-projection-a4.mjs": "c347c838fc3d8c6ee3bf4a5386e4a33a000aa5b4d2da072da7d7c91c71fbae9b",
     "evaluation/hr3/harness/prompts-a4.mjs": "d05c750ac0a0c82fd2931ad4e44be55b18e2721313f53695da42e058eb3ab932",
     "evaluation/hr3/harness/preflight-a4-schema.mjs": "e8cbc03c86653e0a75b163b9e376828714145fa4abde5f8d886b0ce69b356551",
-    "evaluation/hr3/harness/schema.mjs": "7d1f3901bf533a6f0a5a59b54103b59b8be59eb640242be2a9febcbc48b8a618",
+    "evaluation/hr3/harness/schema.mjs": "a39e28e52824ed40385f04230f0380484d2ed35dea17bf5ac2bb236710c015be",
     "evaluation/hr3/harness/requests.mjs": "4dc437ac903778a8207120ac055381d8f50e9ae37c8345eb7fc4e7c140cfe3de",
     "evaluation/hr3/harness/inputs.mjs": "5a6980e81024c91c0822c8abc4221667d0ef64d67bea59fb2e2ffe197ef5eb8f",
-    "evaluation/hr3/harness/extraction.mjs": "cfdff29f6b8f65d94dfe3d650e05bbdcd345869777d423fad5ab5ba55b8fdc75",
-    "evaluation/hr3/harness/cap-certification.mjs": "d7d4dc7e829c1fc3a0be6a0f2eceb000d8d514b7e06d5f5998ac62ba75569116",
+    "evaluation/hr3/harness/extraction.mjs": "68dfcbe3bad75f2fdf3e9a4a2634771202d86705bc1d008a2d022c1cc3eb13be",
+    "evaluation/hr3/harness/cap-certification.mjs": "21146424ef05a497d3d604166b712fdceb2467ff9a13b3857c42c1138f5ebb60",
     "evaluation/hr3/harness/cap-stress-fixtures.mjs": "c1eef36b796b00c840de2040b7546a4ffe842557d0d178b03a10b95a28573b16",
-    "evaluation/hr3/harness/reports/inspected-heldout-references.json": "82f8c9dcd5d97cce300e8222cf00481020b56a635fa9840a8e7408bfda8ead0d",
+    "evaluation/hr3/harness/reports/inspected-heldout-references.json": "9ac3e67a7b54a119536e7a65d19fc2d3eca01d580e0f81c7b116c8d4692245d0",
     "evaluation/hr3/harness/reports/cap-certification-a2-pre-cap-revision.json": "4d75c09649fbe82318b7a05b83eb2e1674f82f63da977ae3f07d972f00c8ef3f",
     "evaluation/hr3/scorer/schema.mjs": "5ac7a7fe80de0605cc8d9de3e845b8fa4463ccdf041b1cd613c649281e34979d",
     "evaluation/hr3/scorer/canonical.mjs": "d71a2203a6de43f64fc2bd44a1394a017345858e7a3c37511b135913f05add3f",
     "evaluation/hr3/scorer/citations.mjs": "89e3144f326904cf11ec58d945338491577838e32827ebb6a88de4fcc10ae77b",
+    "evaluation/hr3/scorer/slots.mjs": "c325261845baa158bbd9c4e7c2c64c51cf889fee45482a8d793a28e0480c0217",
+    "evaluation/hr3/scorer/contract.mjs": "eeb939d7b320a9579f5ccaad81206af508a47a6e531b42fc8b6b76a04145ed43",
     "evaluation/hr3/scorer/scorer.mjs": "4b23f23152932e6aa50388b9f1d2872f970cd126751d6146e515a8fe0ca4fd9b"
   },
   "counts": [

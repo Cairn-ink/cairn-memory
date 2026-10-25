@@ -51,7 +51,17 @@ function referralCounts(rows) {
   return { observations: rows.filter(r => r.referrals.length).length, ...passes };
 }
 
+// A-1.1 permits mechanical identification bounds only. Reject inferential
+// payloads recursively, including metadata, before publishing any report.
+export function assertDescriptivePilot(value){
+ if(!value||typeof value!=='object')return;
+ for(const [key,child]of Object.entries(value)){
+  check(!/bootstrap|confidence.?interval|credible.?interval|standard.?error|monte.?carlo|contrast|p.?value|quantile|percentile/i.test(key),'inference_forbidden:'+key);
+  assertDescriptivePilot(child);
+ }
+}
 export function buildBoundReport({ families, observations, metadata }) {
+  assertDescriptivePilot(metadata);
   check(families.length === 60 && new Set(families.map(f => f.family_id)).size === 60, 'requires_fixed_60_family_pilot');
   const familyMap = new Map(families.map(f => [f.family_id, f]));
   const lineages = unique(families.map(f => f.lineage_id));
@@ -122,7 +132,7 @@ export function buildBoundReport({ families, observations, metadata }) {
     stageStatus:metadata?.stageStatus ?? {complete:false,stopReason:null},
     continuationApproval:false,productHeadline:'Pinned product + frozen public-operation agent + shared research extraction + slot reader.',
     interpretation:'Conservative score bounds conditional on frozen mechanical decisions; not certified factual-accuracy bounds, not confidence intervals; endpoints need not be jointly attainable.',
-    samplingConfidenceIntervals:'deferred under A-1', use:'Descriptive engineering pilot only; cannot produce an Advance/Keep decision or enter development/test estimates.',
+    inference:'Prohibited under A-1 and A-1.1; mechanical identification bounds only', use:'Descriptive engineering pilot only; cannot produce an Advance/Keep decision or enter development/test estimates.',
     aggregation:'J endpoints are products within each family/arm/checkpoint, then frozen-weight lineage means. Aggregate component rates are never multiplied. Failed attempts stay scored; unexecuted cases are listed and excluded from observed denominators.',
     referralCounting:'Outstanding pass applications are counted independently of score uncertainty. propagatedApplications = applications - uniqueKeys within the reported group; unique keys are deduplicated again globally, never summed across tables.',
     pipelineStageDiagnostics:metadata?.pipelineStageDiagnostics??{stage:'extraction',armIndependent:true,available:false,table:[],totals:null},
@@ -189,6 +199,7 @@ export function writeBoundReport({ stageDirectory, inputs, out }) {
     }
   }
   const report = buildBoundReport({families, observations, metadata});
+  assertDescriptivePilot(report);
   writeFileSync(out, canonical(report) + '\n', {flag:'wx', mode:0o600});
   return report;
 }

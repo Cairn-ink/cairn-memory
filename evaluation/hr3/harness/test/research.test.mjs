@@ -54,10 +54,10 @@ test('reducer/serializer/retrieval determinism and whole-record assembly budget'
 });
 test('hand-worked outputs and serializer bytes remain frozen for ten temporal/link cases',async()=>{
  const {readFileSync}=await import('node:fs'),{referenceCases}=await import('./fixtures.mjs'),{hash}=await import('../common.mjs');
- const expected=JSON.parse(readFileSync(new URL('./references-a4.json',import.meta.url)));
+ const expected=JSON.parse(readFileSync(new URL('./references-a4-audit.json',import.meta.url)));
  const historical=JSON.parse(readFileSync(new URL('./references.json',import.meta.url)));
  const actual=referenceCases().map(c=>({name:c.name,arms:Object.fromEntries(['U','T','O'].map(arm=>{const state=materialize(arm,c.events,c.at);return [arm,{state,serializer_sha256:hash(canonical([...state.current,...state.history].map(r=>serializeRecord(r,sourceOrderAliases(c.events)))))}];}))}));
- const semantics=state=>{const copy=structuredClone(state);delete copy.ingestionLosses;if(copy.events===undefined)delete copy.events;for(const r of [...copy.current,...copy.history,...copy.pending]){delete r.context;delete r.kind;delete r.reason_nodes;delete r.reason_edges;r.receipts=r.receipts.map(({event_id,...q})=>q);}return copy;};
+ const semantics=state=>{const copy=structuredClone(state);delete copy.ingestionLosses;delete copy.linkDecisions;if(copy.events===undefined)delete copy.events;for(const r of [...copy.current,...copy.history,...copy.pending]){delete r.context;delete r.kind;delete r.reason_nodes;delete r.reason_edges;r.receipts=r.receipts.map(({event_id,...q})=>q);}return copy;};
  for(let i=0;i<actual.length;i++)for(const arm of ['T','U','O'])assert.deepEqual(semantics(actual[i].arms[arm].state),semantics(historical[i].arms[arm].state));
  assert.equal(canonical(actual),canonical(expected));
 });

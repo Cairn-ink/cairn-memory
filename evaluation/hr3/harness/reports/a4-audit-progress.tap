@@ -1,0 +1,124 @@
+TAP version 13
+# Subtest: audit aliases: zh-Hant predecessor names resolve through the public alias table
+ok 1 - audit aliases: zh-Hant predecessor names resolve through the public alias table
+  ---
+  duration_ms: 86.132362
+  type: 'test'
+  ...
+# Subtest: audit aliases: mixed predecessor names resolve through the public alias table
+ok 2 - audit aliases: mixed predecessor names resolve through the public alias table
+  ---
+  duration_ms: 19.758049
+  type: 'test'
+  ...
+# Subtest: audit common links: shared-turn context ambiguity is identical in T/U/O and P diagnostics
+ok 3 - audit common links: shared-turn context ambiguity is identical in T/U/O and P diagnostics
+  ---
+  duration_ms: 399.43592
+  type: 'test'
+  ...
+# Subtest: audit context coverage: certificates exercise adopted, unresolved and shared-turn context branches
+ok 4 - audit context coverage: certificates exercise adopted, unresolved and shared-turn context branches
+  ---
+  duration_ms: 2229.987597
+  type: 'test'
+  ...
+# Subtest: audit P addresses: omitted original receipt indices and sameAs aliases use delivered positions without changing blocks
+ok 5 - audit P addresses: omitted original receipt indices and sameAs aliases use delivered positions without changing blocks
+  ---
+  duration_ms: 123.184326
+  type: 'test'
+  ...
+# Subtest: audit paid gate: missing preflight cannot open a journal or dispatch
+not ok 6 - audit paid gate: missing preflight cannot open a journal or dispatch
+  ---
+  duration_ms: 496.37191
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/a4-audit.test.mjs:30:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight/. Input:
+    
+    'Error: must_not_dispatch'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'must_not_dispatch'
+  stack: |-
+    Object.send (evaluation/hr3/harness/test/a4-audit.test.mjs:32:202)
+    GuardedTransport.send (evaluation/hr3/harness/transport.mjs:21:50)
+    extract (evaluation/hr3/harness/extraction.mjs:12:31)
+    run (evaluation/hr3/harness/runner.mjs:61:34)
+    async waitForActual (node:assert:566:5)
+    async Function.rejects (node:assert:687:25)
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/a4-audit.test.mjs:32:2)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/a4-audit.test.mjs:32:2)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: audit freeze closure: graph and independent loader include scorer, real runner and pinned product dependencies
+not ok 7 - audit freeze closure: graph and independent loader include scorer, real runner and pinned product dependencies
+  ---
+  duration_ms: 0.616591
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/a4-audit.test.mjs:34:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot find module 'evaluation/hr3/harness/runtime-closure.mjs' imported from evaluation/hr3/harness/test/a4-audit.test.mjs"
+  code: 'ERR_MODULE_NOT_FOUND'
+  stack: |-
+    finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    moduleResolve (node:internal/modules/esm/resolve:860:10)
+    defaultResolve (node:internal/modules/esm/resolve:984:11)
+    ModuleLoader.defaultResolve (node:internal/modules/esm/loader:780:12)
+    #cachedDefaultResolve (node:internal/modules/esm/loader:704:25)
+    #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:739:38)
+    nextStep (node:internal/modules/customization_hooks:185:26)
+    resolve (evaluation/hr3/harness/dependencies.mjs:9:12)
+    nextStep (node:internal/modules/customization_hooks:185:26)
+    resolve (evaluation/hr3/harness/dependencies.mjs:9:12)
+  ...
+# Subtest: audit recursive privacy: independent authoring injection 0
+ok 8 - audit recursive privacy: independent authoring injection 0
+  ---
+  duration_ms: 0.159843
+  type: 'test'
+  ...
+# Subtest: audit recursive privacy: independent authoring injection 1
+ok 9 - audit recursive privacy: independent authoring injection 1
+  ---
+  duration_ms: 0.052571
+  type: 'test'
+  ...
+# Subtest: audit recursive privacy: independent authoring injection 2
+ok 10 - audit recursive privacy: independent authoring injection 2
+  ---
+  duration_ms: 0.112282
+  type: 'test'
+  ...
+# Subtest: audit recursive privacy: independent authoring injection 3
+ok 11 - audit recursive privacy: independent authoring injection 3
+  ---
+  duration_ms: 0.032671
+  type: 'test'
+  ...
+# Subtest: audit extractor privacy: complete body is scanned before cache or transport
+ok 12 - audit extractor privacy: complete body is scanned before cache or transport
+  ---
+  duration_ms: 2.118709
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 10
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3424.544433

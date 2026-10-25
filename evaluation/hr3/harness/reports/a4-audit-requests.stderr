@@ -1,0 +1,18 @@
+(node:11) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+evaluation/hr3/harness/common.mjs:9
+export const fail = code => { throw Object.assign(new Error(code),{code}); };
+                                                  ^
+
+Error: private_label_leak:product-payload
+    at fail (evaluation/hr3/harness/common.mjs:9:51)
+    at PrivacyGuard.check (evaluation/hr3/harness/privacy.mjs:79:20)
+    at ProductAgent.call (evaluation/hr3/harness/product.mjs:39:61)
+    at ProductAgent.cardControl (evaluation/hr3/harness/product.mjs:164:25)
+    at ProductAgent.controls (evaluation/hr3/harness/product.mjs:142:43)
+    at certifyRequests (evaluation/hr3/harness/request-certification.mjs:71:95)
+    at async evaluation/hr3/harness/request-certification.mjs:113:16 {
+  code: 'private_label_leak:product-payload'
+}
+
+Node.js v22.16.0

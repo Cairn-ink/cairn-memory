@@ -1,0 +1,28 @@
+TAP version 13
+# Subtest: audit freeze closure: external dependency bytes participate in every certificate binding
+not ok 1 - audit freeze closure: external dependency bytes participate in every certificate binding
+  ---
+  duration_ms: 368.716712
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/a4-audit.test.mjs:45:1'
+  failureType: 'testCodeFailure'
+  error: 'spawnSync find EPERM'
+  code: 'EPERM'
+  stack: |-
+    Object.spawnSync (node:internal/child_process:1120:20)
+    spawnSync (node:child_process:868:24)
+    execFileSync (node:child_process:911:15)
+    runtimeClosure (evaluation/hr3/harness/runtime-closure.mjs:15:28)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/a4-audit.test.mjs:46:72)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 443.181527

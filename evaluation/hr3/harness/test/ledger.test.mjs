@@ -67,3 +67,27 @@ test('A-4.2 reserves and settles unchanged output ceilings at amended input boun
  }
  assert.equal(ledger.snapshot().unsettled.length,0);
 });
+
+test('A-1.1 supervisor checks actual progress each minute and stops while between dispatches',t=>{
+ t.mock.timers.enable({apis:['setInterval']});const {ledger}=fixture(t);let now=0,checks=0;
+ const guard=new GuardedTransport(new FakeTransport(),ledger,{now:()=>now});guard.startSupervision(()=>checks++);t.after(()=>guard.stopSupervision());
+ for(let minute=1;minute<=4;minute++){now=minute*60000;t.mock.timers.tick(60000);assert.equal(checks,minute);assert.equal(ledger.snapshot().stopped,null);}
+ now=300000;t.mock.timers.tick(60000);assert.equal(ledger.snapshot().stopped,'five_minutes_without_progress');
+ assert.throws(()=>guard.checkProgress(),/five_minutes_without_progress/);
+});
+test('A-1.1 five-minute elapsed dispatch cannot reset progress or settle usage',async t=>{
+ const {ledger}=fixture(t);let now=0;const fake=new FakeTransport();
+ const guard=new GuardedTransport({async send(r){const reply=await fake.send(r);now=300000;return reply;}},ledger,{now:()=>now});
+ await assert.rejects(guard.send(request()),/five_minutes_without_progress/);assert.equal(fake.calls.length,1);assert.equal(ledger.snapshot().unsettled.length,1);assert.equal(ledger.snapshot().stopped,'five_minutes_without_progress');
+});
+test('A-1.1 supervisor aborts a pending dispatch on the five-minute stop without retries',async t=>{
+ t.mock.timers.enable({apis:['setInterval']});const {ledger}=fixture(t);let now=0,calls=0,signal;
+ const guard=new GuardedTransport({send(r,o){calls++;signal=o.signal;return new Promise(()=>{});}},ledger,{now:()=>now});guard.startSupervision();t.after(()=>guard.stopSupervision());
+ const pending=guard.send(request());now=300000;t.mock.timers.tick(60000);
+ await assert.rejects(pending,/five_minutes_without_progress/);assert.equal(signal.aborted,true);assert.equal(calls,1);assert.equal(ledger.snapshot().unsettled.length,1);
+});
+test('A-1.1 accounting corruption stops before any dispatch and preserves evidence',async t=>{
+ const {ledger,path}=fixture(t);appendFileSync(path,'{');const original=readFileSync(path);let calls=0;
+ const guard=new GuardedTransport({async send(){calls++;}},ledger);await assert.rejects(guard.send(request()),/accounting_mismatch:ledger_incomplete/);
+ assert.equal(calls,0);assert.deepEqual(readFileSync(path),original);
+});

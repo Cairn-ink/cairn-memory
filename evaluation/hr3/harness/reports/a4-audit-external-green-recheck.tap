@@ -1,0 +1,16 @@
+TAP version 13
+# Subtest: audit freeze closure: external dependency bytes participate in every certificate binding
+ok 1 - audit freeze closure: external dependency bytes participate in every certificate binding
+  ---
+  duration_ms: 407.457939
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 480.294315

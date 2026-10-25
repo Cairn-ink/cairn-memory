@@ -12,7 +12,7 @@ try {
   } else {
   useInstalledDependencies({mcp:options['--mcp-dependencies'],tokenizer:options['--tokenizer-dependencies']});
   const {run}=await import('./runner.mjs');
-  const result=await run({stage:options['--stage']??'smoke',inputs:options['--inputs'],out:options['--out'],carryForward:options['--carry-forward']??null,progress:p=>process.stdout.write(JSON.stringify({progress:p.family,batch:p.batch,scored:p.observations})+'\n')});
+  const result=await run({stage:options['--stage']??'smoke',inputs:options['--inputs'],out:options['--out'],carryForward:options['--carry-forward']??null,progress:p=>process.stdout.write(JSON.stringify(p.kind==='supervision'?p:{progress:p.family,batch:p.batch,scored:p.observations})+'\n')});
   process.stdout.write(JSON.stringify({complete:true,observations:result.observations.length,ledger:result.ledger})+'\n');
   }
 }catch(error){process.stderr.write((error.code??'error')+': '+error.message+'\n');process.exitCode=1;}

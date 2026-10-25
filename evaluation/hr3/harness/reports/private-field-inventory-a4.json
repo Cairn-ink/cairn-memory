@@ -1,22 +1,1401 @@
 {
-  "version": "hr3-private-field-inventory-a4-v1",
+  "version": "hr3-private-field-inventory-a4-audit-v2",
   "publicContractBoundary": {
     "path": "public_contract",
     "policy": "Only exact deterministic re-projections of generator/public-contract.json; private keys remain forbidden everywhere else."
   },
-  "derivation": "All nonpublic top-level fixture and allocation authoring keys, reason membership keys, AST variant flags, and executable run routing keys; plus previously supported reserved private identifiers. Naming variants normalized across snake/camel/Pascal/kebab and is-prefixed membership flags.",
-  "publicSemanticFields": [
+  "derivation": "Recursive leaf/container decisions against explicit public paths, closed model schema keys and listed public product-operation fields. Every AST event, control action, checkpoint and expected-state object is visited. Schema-colliding key names are documented separately; no authoring subtree is exempt. Reserved private identifiers remain covered.",
+  "productSchemaBindings": {
+    "core/private-card-input.mjs": [
+      "occurredAt",
+      "drafting",
+      "bindings",
+      "applicability",
+      "sources",
+      "memoryRefs",
+      "sourcePolicy",
+      "sourceId",
+      "contentIdentity",
+      "completeness"
+    ],
+    "core/method-package-input.mjs": [
+      "files",
+      "mediaType",
+      "path",
+      "basedOn",
+      "expectedPackageRevision",
+      "bindingNamespace",
+      "package",
+      "packageId",
+      "versionId",
+      "manifestIdentity",
+      "roleId",
+      "roleKey",
+      "change",
+      "items",
+      "reasonRefs",
+      "summary",
+      "paths"
+    ],
+    "core/card-current-input.mjs": [
+      "currentDependencies",
+      "context",
+      "packages",
+      "snapshot",
+      "expectedDependencyRevision"
+    ]
+  },
+  "publicSemanticPaths": [
     "language",
     "change_type",
     "namespace",
+    "namespace.ownerId",
+    "namespace.scope",
+    "namespace.projectId",
     "header",
-    "query_scope",
+    "header.subject",
+    "header.predicate",
+    "header.scope_text",
     "batches",
-    "checkpoints",
-    "controls",
-    "ast"
+    "batches.*",
+    "batches.*.ordinal",
+    "batches.*.observed_at",
+    "batches.*.effective_at",
+    "batches.*.turns",
+    "batches.*.turns.*",
+    "batches.*.turns.*.turn_id",
+    "batches.*.turns.*.speaker",
+    "batches.*.turns.*.text",
+    "ast.events",
+    "ast.events.*",
+    "ast.events.*.event_id",
+    "ast.events.*.source_turns",
+    "ast.events.*.observed_at",
+    "ast.events.*.kind",
+    "ast.events.*.commitment",
+    "ast.events.*.change_type",
+    "ast.events.*.subject",
+    "ast.events.*.predicate",
+    "ast.events.*.scope",
+    "ast.events.*.effective_interval",
+    "ast.events.*.predecessor_anchors",
+    "ast.events.*.replacement_extent",
+    "ast.events.*.source_quotes",
+    "ast.events.*.claims",
+    "ast.events.*.scope.any",
+    "ast.events.*.scope.any.*",
+    "ast.events.*.scope.any.*.all",
+    "ast.events.*.scope.any.*.all.*",
+    "ast.events.*.scope.any.*.all.*.field",
+    "ast.events.*.scope.any.*.all.*.values",
+    "ast.events.*.scope.any.*.all.*.values.*",
+    "ast.events.*.effective_interval.from",
+    "ast.events.*.effective_interval.to",
+    "ast.events.*.source_turns.*",
+    "ast.events.*.predecessor_anchors.*",
+    "ast.events.*.predecessor_anchors.*.source_turn",
+    "ast.events.*.predecessor_anchors.*.record_name",
+    "ast.events.*.predecessor_anchors.*.subject",
+    "ast.events.*.predecessor_anchors.*.predicate",
+    "ast.events.*.source_quotes.*",
+    "ast.events.*.source_quotes.*.turn_id",
+    "ast.events.*.source_quotes.*.start",
+    "ast.events.*.source_quotes.*.end",
+    "ast.events.*.source_quotes.*.offset_unit",
+    "ast.events.*.source_quotes.*.quote",
+    "ast.events.*.claims.*",
+    "ast.events.*.claims.*.field",
+    "ast.events.*.claims.*.value",
+    "ast.events.*.claims.*.value.type",
+    "ast.events.*.claims.*.value.text",
+    "ast.events.*.claims.*.value.value",
+    "ast.events.*.claims.*.value.decimal",
+    "ast.events.*.claims.*.value.unit",
+    "ast.events.*.claims.*.value.iso",
+    "ast.events.*.claims.*.value.lower",
+    "ast.events.*.claims.*.value.upper",
+    "ast.events.*.claims.*.value.lowerClosed",
+    "ast.events.*.claims.*.value.upperClosed"
+  ],
+  "publicSchemaKeys": [
+    "*",
+    "actionId",
+    "all",
+    "anchors",
+    "any",
+    "applicability",
+    "approval",
+    "authoredInput",
+    "basedOn",
+    "batches",
+    "bindingNamespace",
+    "bindings",
+    "body",
+    "bodyRevision",
+    "budget",
+    "cap",
+    "cardId",
+    "change",
+    "change_type",
+    "checkpoint",
+    "citations",
+    "claims",
+    "commitment",
+    "completeness",
+    "confidence",
+    "content",
+    "contentIdentity",
+    "context",
+    "current",
+    "currentDependencies",
+    "deadlineMs",
+    "decimal",
+    "dependencies",
+    "drafting",
+    "effective_at",
+    "effective_interval",
+    "end",
+    "event_id",
+    "events",
+    "excerpt",
+    "expectedBodyRevision",
+    "expectedDependencyRevision",
+    "expectedPackageRevision",
+    "expectedRevision",
+    "f",
+    "field",
+    "files",
+    "filing",
+    "focal_turn",
+    "from",
+    "header",
+    "id",
+    "index",
+    "input",
+    "intent",
+    "iso",
+    "item",
+    "items",
+    "kind",
+    "language",
+    "limit",
+    "lower",
+    "lowerClosed",
+    "manifestIdentity",
+    "maxItems",
+    "maxMs",
+    "maxTokens",
+    "mediaType",
+    "memory",
+    "memoryId",
+    "memoryRefs",
+    "metadata",
+    "namespace",
+    "namespaceIndex",
+    "ns",
+    "observed_at",
+    "occurredAt",
+    "occurrence",
+    "offset_unit",
+    "old",
+    "ordinal",
+    "origin",
+    "ownerId",
+    "package",
+    "packageId",
+    "packages",
+    "path",
+    "paths",
+    "payload",
+    "predecessor_anchors",
+    "predecessor_turn",
+    "predicate",
+    "projectId",
+    "public_contract",
+    "public_header",
+    "query",
+    "question",
+    "quote",
+    "readSet",
+    "reason",
+    "reasonRefs",
+    "reason_quotes",
+    "receipts",
+    "record_name",
+    "records",
+    "replacement_extent",
+    "requested_predecessor_turns",
+    "rev",
+    "reviewState",
+    "revision",
+    "role",
+    "roleId",
+    "roleKey",
+    "route",
+    "rows",
+    "sameAs",
+    "sameAsBody",
+    "scope",
+    "scope_text",
+    "semantic",
+    "snapshot",
+    "source",
+    "sourceId",
+    "sourceMemoryId",
+    "sourcePolicy",
+    "sourceRevision",
+    "source_quotes",
+    "source_turn",
+    "source_turns",
+    "sources",
+    "speaker",
+    "start",
+    "state",
+    "status",
+    "subject",
+    "summary",
+    "support",
+    "text",
+    "title",
+    "to",
+    "turn_id",
+    "turns",
+    "type",
+    "types",
+    "unit",
+    "upper",
+    "upperClosed",
+    "valid",
+    "value",
+    "values",
+    "version",
+    "versionId"
+  ],
+  "pathDecisions": [
+    {
+      "path": "ast",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.change_type",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.claims",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.claims.*.field",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.claims.*.value",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.claims.*.value.decimal",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.claims.*.value.text",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.claims.*.value.type",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.claims.*.value.unit",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.claims.*.value.value",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.commitment",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.distractor",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.effective_interval",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.effective_interval.from",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.effective_interval.to",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.event_id",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.field_mask",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.kind",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.observed_at",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.predecessor_anchors",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.predecessor_anchors.*.predicate",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.predecessor_anchors.*.record_name",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.predecessor_anchors.*.source_turn",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.predecessor_anchors.*.subject",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.predicate",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.reason_edges",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.reason_edges.*.from",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_edges.*.support",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_edges.*.support.*.*.end",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_edges.*.support.*.*.offset_unit",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_edges.*.support.*.*.quote",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_edges.*.support.*.*.start",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_edges.*.support.*.*.turn_id",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_edges.*.to",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.citations",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.predicate",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.qualifiers",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.scope",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.scope.any",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.scope.any.*.all",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.scope.any.*.all.*.field",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.scope.any.*.all.*.values",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.subject",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.valid",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.valid.from",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.valid.to",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.value",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.value.iso",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.value.text",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.value.type",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.id",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.record_name",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.replacement_extent",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.scope",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.scope.any",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.scope.any.*.all",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.scope.any.*.all.*.field",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.scope.any.*.all.*.values",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.source_quotes",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.source_quotes.*.end",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.source_quotes.*.offset_unit",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.source_quotes.*.quote",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.source_quotes.*.start",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.source_quotes.*.turn_id",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.source_turns",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.subject",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.focal_changes",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.interval_convention",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.time_zone",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.variant",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.variant.future_effective",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.variant.retroactive",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "authored_rationale_topology",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "batches",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "batches.*.effective_at",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "batches.*.observed_at",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "batches.*.ordinal",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "batches.*.turns",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "batches.*.turns.*.speaker",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "batches.*.turns.*.text",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "batches.*.turns.*.turn_id",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "causal_class",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "change_type",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "checkpoints",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "checkpoints.*.at",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "checkpoints.*.batch",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "checkpoints.*.focal_turn",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "checkpoints.*.primary",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "checkpoints.*.query",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "checkpoints.*.question",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "checkpoints.*.requested_predecessor_turns",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.actionId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.authority",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.batch",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.call",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.content",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.expected",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.expected.dependencyEligible",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.expected.error",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.expected.mutation",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.expected.suppressed",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.expectedRevision",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.namespace",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.namespace.ownerId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.namespace.projectId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.namespace.scope",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.actionId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.applicability",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.basedOn",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.bindingNamespace",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.bindingNamespace.ownerId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.bindingNamespace.projectId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.bindingNamespace.scope",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.bindings",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.body",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.cardId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies.context",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies.context.readSet",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies.context.readSet.*.ownerId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies.context.readSet.*.projectId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies.context.readSet.*.scope",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies.context.roleId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies.packages",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies.packages.*.package",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies.packages.*.snapshot",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.drafting",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.expectedDependencyRevision",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.expectedPackageRevision",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.expectedRevision",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.files",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.files.*.mediaType",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.files.*.path",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.files.*.text",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.input",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.input.authoredInput",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.input.authoredInput.occurredAt",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.input.authoredInput.text",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.input.body",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.input.title",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.namespace",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.namespace.ownerId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.namespace.projectId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.namespace.scope",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.package",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.readSet",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.readSet.*.ownerId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.readSet.*.projectId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.readSet.*.scope",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.roleId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.title",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.version",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.returns",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.target",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.authoring_path",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.branch",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.certification",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.certification.nonAuthorSemanticAudit",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.certification.paidReadiness",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.certification.schemaAndLifecycle",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.checkpoints",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.checkpoints.*.batch",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.checkpoints.*.body",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.checkpoints.*.currentEligible",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.checkpoints.*.historyEligible",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.checkpoints.*.overwrittenBodyRecoverable",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.execution_status",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.expected",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.expected.foreignExposed",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.expected.independentCopyEligible",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.expected.namedRecordExposed",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.expected.receiptsExposed",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.expected.replayResurrection",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.foreignNamespace",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.foreignNamespace.ownerId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.foreignNamespace.projectId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.foreignNamespace.scope",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.historyIsCurrent",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.independentArtifactAudit",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.kind",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.namespace",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.namespace.ownerId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.namespace.projectId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.namespace.scope",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.readSet",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.readSet.*.ownerId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.readSet.*.projectId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.readSet.*.scope",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.scoring",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.separate_assertion",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.targetRecord",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.unresolved_protocol",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "expiry_mode",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "family_id",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "header",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "header.predicate",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "header.scope_text",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "header.subject",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "language",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "lineage_id",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "multi_hop",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "namespace",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "namespace.ownerId",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "namespace.projectId",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "namespace.scope",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "query_scope",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "query_scope.any",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "query_scope.any.*.all",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "reason_strata",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "reason_strata.*.batch",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "reason_strata.*.minimumEdges",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "reason_strata.*.multiHop",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "reason_strata.*.status",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "schema_version",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "seed",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "split",
+      "public": false,
+      "publicSchemaCollision": false
+    }
   ],
   "fields": [
+    {
+      "name": "actions",
+      "variants": [
+        "Actions",
+        "actions",
+        "isActions",
+        "is_actions"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions"
+      ]
+    },
     {
       "name": "aliases",
       "variants": [
@@ -80,6 +1459,32 @@
       ]
     },
     {
+      "name": "ast",
+      "variants": [
+        "Ast",
+        "ast",
+        "isAst",
+        "is_ast"
+      ],
+      "origins": [
+        "engineering.family.ast",
+        "pilot.family.ast"
+      ]
+    },
+    {
+      "name": "at",
+      "variants": [
+        "At",
+        "at",
+        "isAt",
+        "is_at"
+      ],
+      "origins": [
+        "engineering.family.checkpoints.*.at",
+        "pilot.family.checkpoints.*.at"
+      ]
+    },
+    {
       "name": "authored_change_type",
       "variants": [
         "AuthoredChangeType",
@@ -119,7 +1524,19 @@
         "is_authoring_path"
       ],
       "origins": [
-        "pilot.family.controls[].authoring_path"
+        "pilot.family.controls.*.authoring_path"
+      ]
+    },
+    {
+      "name": "authority",
+      "variants": [
+        "Authority",
+        "authority",
+        "isAuthority",
+        "is_authority"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions.*.authority"
       ]
     },
     {
@@ -138,6 +1555,22 @@
       ]
     },
     {
+      "name": "batch",
+      "variants": [
+        "Batch",
+        "batch",
+        "isBatch",
+        "is_batch"
+      ],
+      "origins": [
+        "engineering.family.checkpoints.*.batch",
+        "pilot.family.checkpoints.*.batch",
+        "pilot.family.controls.*.actions.*.batch",
+        "pilot.family.controls.*.checkpoints.*.batch",
+        "pilot.family.reason_strata.*.batch"
+      ]
+    },
+    {
       "name": "branch",
       "variants": [
         "Branch",
@@ -146,7 +1579,19 @@
         "is_branch"
       ],
       "origins": [
-        "pilot.family.controls[].branch"
+        "pilot.family.controls.*.branch"
+      ]
+    },
+    {
+      "name": "call",
+      "variants": [
+        "Call",
+        "call",
+        "isCall",
+        "is_call"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions.*.call"
       ]
     },
     {
@@ -228,7 +1673,7 @@
         "is_certification"
       ],
       "origins": [
-        "pilot.family.controls[].certification"
+        "pilot.family.controls.*.certification"
       ]
     },
     {
@@ -246,6 +1691,33 @@
       ]
     },
     {
+      "name": "checkpoints",
+      "variants": [
+        "Checkpoints",
+        "checkpoints",
+        "isCheckpoints",
+        "is_checkpoints"
+      ],
+      "origins": [
+        "engineering.family.checkpoints",
+        "pilot.family.checkpoints",
+        "pilot.family.controls.*.checkpoints"
+      ]
+    },
+    {
+      "name": "claim",
+      "variants": [
+        "Claim",
+        "claim",
+        "isClaim",
+        "is_claim"
+      ],
+      "origins": [
+        "engineering.family.ast.events.*.reason_nodes.*.claim",
+        "pilot.family.ast.events.*.reason_nodes.*.claim"
+      ]
+    },
+    {
       "name": "condition_id",
       "variants": [
         "ConditionId",
@@ -257,6 +1729,46 @@
       ],
       "origins": [
         "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "controls",
+      "variants": [
+        "Controls",
+        "controls",
+        "isControls",
+        "is_controls"
+      ],
+      "origins": [
+        "pilot.family.controls"
+      ]
+    },
+    {
+      "name": "currentEligible",
+      "variants": [
+        "CurrentEligible",
+        "current-eligible",
+        "currentEligible",
+        "current_eligible",
+        "isCurrentEligible",
+        "is_current_eligible"
+      ],
+      "origins": [
+        "pilot.family.controls.*.checkpoints.*.currentEligible"
+      ]
+    },
+    {
+      "name": "dependencyEligible",
+      "variants": [
+        "DependencyEligible",
+        "dependency-eligible",
+        "dependencyEligible",
+        "dependency_eligible",
+        "isDependencyEligible",
+        "is_dependency_eligible"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions.*.expected.dependencyEligible"
       ]
     },
     {
@@ -272,6 +1784,31 @@
       ]
     },
     {
+      "name": "distractor",
+      "variants": [
+        "Distractor",
+        "distractor",
+        "isDistractor",
+        "is_distractor"
+      ],
+      "origins": [
+        "engineering.family.ast.events.*.distractor",
+        "pilot.family.ast.events.*.distractor"
+      ]
+    },
+    {
+      "name": "error",
+      "variants": [
+        "Error",
+        "error",
+        "isError",
+        "is_error"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions.*.expected.error"
+      ]
+    },
+    {
       "name": "execution_status",
       "variants": [
         "ExecutionStatus",
@@ -282,7 +1819,20 @@
         "is_execution_status"
       ],
       "origins": [
-        "pilot.family.controls[].execution_status"
+        "pilot.family.controls.*.execution_status"
+      ]
+    },
+    {
+      "name": "expected",
+      "variants": [
+        "Expected",
+        "expected",
+        "isExpected",
+        "is_expected"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions.*.expected",
+        "pilot.family.controls.*.expected"
       ]
     },
     {
@@ -314,6 +1864,21 @@
         "allocation.lineage.members[].family_id",
         "engineering.family.family_id",
         "pilot.family.family_id"
+      ]
+    },
+    {
+      "name": "field_mask",
+      "variants": [
+        "FieldMask",
+        "field-mask",
+        "fieldMask",
+        "field_mask",
+        "isFieldMask",
+        "is_field_mask"
+      ],
+      "origins": [
+        "engineering.family.ast.events.*.field_mask",
+        "pilot.family.ast.events.*.field_mask"
       ]
     },
     {
@@ -359,6 +1924,34 @@
       ]
     },
     {
+      "name": "foreignExposed",
+      "variants": [
+        "ForeignExposed",
+        "foreign-exposed",
+        "foreignExposed",
+        "foreign_exposed",
+        "isForeignExposed",
+        "is_foreign_exposed"
+      ],
+      "origins": [
+        "pilot.family.controls.*.expected.foreignExposed"
+      ]
+    },
+    {
+      "name": "foreignNamespace",
+      "variants": [
+        "ForeignNamespace",
+        "foreign-namespace",
+        "foreignNamespace",
+        "foreign_namespace",
+        "isForeignNamespace",
+        "is_foreign_namespace"
+      ],
+      "origins": [
+        "pilot.family.controls.*.foreignNamespace"
+      ]
+    },
+    {
       "name": "freshness",
       "variants": [
         "Freshness",
@@ -397,6 +1990,20 @@
       ]
     },
     {
+      "name": "historyEligible",
+      "variants": [
+        "HistoryEligible",
+        "history-eligible",
+        "historyEligible",
+        "history_eligible",
+        "isHistoryEligible",
+        "is_history_eligible"
+      ],
+      "origins": [
+        "pilot.family.controls.*.checkpoints.*.historyEligible"
+      ]
+    },
+    {
       "name": "historyIsCurrent",
       "variants": [
         "HistoryIsCurrent",
@@ -407,7 +2014,7 @@
         "is_history_is_current"
       ],
       "origins": [
-        "pilot.family.controls[].historyIsCurrent"
+        "pilot.family.controls.*.historyIsCurrent"
       ]
     },
     {
@@ -421,7 +2028,21 @@
         "is_independent_artifact_audit"
       ],
       "origins": [
-        "pilot.family.controls[].independentArtifactAudit"
+        "pilot.family.controls.*.independentArtifactAudit"
+      ]
+    },
+    {
+      "name": "independentCopyEligible",
+      "variants": [
+        "IndependentCopyEligible",
+        "independent-copy-eligible",
+        "independentCopyEligible",
+        "independent_copy_eligible",
+        "isIndependentCopyEligible",
+        "is_independent_copy_eligible"
+      ],
+      "origins": [
+        "pilot.family.controls.*.expected.independentCopyEligible"
       ]
     },
     {
@@ -477,7 +2098,7 @@
         "minimum_edges"
       ],
       "origins": [
-        "pilot.family.reason_strata[].minimumEdges"
+        "pilot.family.reason_strata.*.minimumEdges"
       ]
     },
     {
@@ -506,7 +2127,7 @@
         "multi_hop"
       ],
       "origins": [
-        "pilot.family.reason_strata[].multiHop"
+        "pilot.family.reason_strata.*.multiHop"
       ]
     },
     {
@@ -522,6 +2143,32 @@
       ]
     },
     {
+      "name": "mutation",
+      "variants": [
+        "Mutation",
+        "isMutation",
+        "is_mutation",
+        "mutation"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions.*.expected.mutation"
+      ]
+    },
+    {
+      "name": "namedRecordExposed",
+      "variants": [
+        "NamedRecordExposed",
+        "isNamedRecordExposed",
+        "is_named_record_exposed",
+        "named-record-exposed",
+        "namedRecordExposed",
+        "named_record_exposed"
+      ],
+      "origins": [
+        "pilot.family.controls.*.expected.namedRecordExposed"
+      ]
+    },
+    {
       "name": "nonAuthorSemanticAudit",
       "variants": [
         "NonAuthorSemanticAudit",
@@ -532,7 +2179,21 @@
         "non_author_semantic_audit"
       ],
       "origins": [
-        "pilot.family.controls[].certification.nonAuthorSemanticAudit"
+        "pilot.family.controls.*.certification.nonAuthorSemanticAudit"
+      ]
+    },
+    {
+      "name": "overwrittenBodyRecoverable",
+      "variants": [
+        "OverwrittenBodyRecoverable",
+        "isOverwrittenBodyRecoverable",
+        "is_overwritten_body_recoverable",
+        "overwritten-body-recoverable",
+        "overwrittenBodyRecoverable",
+        "overwritten_body_recoverable"
+      ],
+      "origins": [
+        "pilot.family.controls.*.checkpoints.*.overwrittenBodyRecoverable"
       ]
     },
     {
@@ -546,7 +2207,7 @@
         "paid_readiness"
       ],
       "origins": [
-        "pilot.family.controls[].certification.paidReadiness"
+        "pilot.family.controls.*.certification.paidReadiness"
       ]
     },
     {
@@ -590,6 +2251,18 @@
       ]
     },
     {
+      "name": "primary",
+      "variants": [
+        "Primary",
+        "isPrimary",
+        "is_primary",
+        "primary"
+      ],
+      "origins": [
+        "pilot.family.checkpoints.*.primary"
+      ]
+    },
+    {
       "name": "private_label",
       "variants": [
         "PrivateLabel",
@@ -618,6 +2291,63 @@
       ]
     },
     {
+      "name": "qualifiers",
+      "variants": [
+        "Qualifiers",
+        "isQualifiers",
+        "is_qualifiers",
+        "qualifiers"
+      ],
+      "origins": [
+        "engineering.family.ast.events.*.reason_nodes.*.claim.qualifiers",
+        "pilot.family.ast.events.*.reason_nodes.*.claim.qualifiers"
+      ]
+    },
+    {
+      "name": "query_scope",
+      "variants": [
+        "QueryScope",
+        "isQueryScope",
+        "is_query_scope",
+        "query-scope",
+        "queryScope",
+        "query_scope"
+      ],
+      "origins": [
+        "pilot.family.query_scope"
+      ]
+    },
+    {
+      "name": "reason_edges",
+      "variants": [
+        "ReasonEdges",
+        "isReasonEdges",
+        "is_reason_edges",
+        "reason-edges",
+        "reasonEdges",
+        "reason_edges"
+      ],
+      "origins": [
+        "engineering.family.ast.events.*.reason_edges",
+        "pilot.family.ast.events.*.reason_edges"
+      ]
+    },
+    {
+      "name": "reason_nodes",
+      "variants": [
+        "ReasonNodes",
+        "isReasonNodes",
+        "is_reason_nodes",
+        "reason-nodes",
+        "reasonNodes",
+        "reason_nodes"
+      ],
+      "origins": [
+        "engineering.family.ast.events.*.reason_nodes",
+        "pilot.family.ast.events.*.reason_nodes"
+      ]
+    },
+    {
       "name": "reason_strata",
       "variants": [
         "ReasonStrata",
@@ -629,6 +2359,20 @@
       ],
       "origins": [
         "pilot.family.reason_strata"
+      ]
+    },
+    {
+      "name": "receiptsExposed",
+      "variants": [
+        "ReceiptsExposed",
+        "isReceiptsExposed",
+        "is_receipts_exposed",
+        "receipts-exposed",
+        "receiptsExposed",
+        "receipts_exposed"
+      ],
+      "origins": [
+        "pilot.family.controls.*.expected.receiptsExposed"
       ]
     },
     {
@@ -659,6 +2403,20 @@
       ]
     },
     {
+      "name": "replayResurrection",
+      "variants": [
+        "ReplayResurrection",
+        "isReplayResurrection",
+        "is_replay_resurrection",
+        "replay-resurrection",
+        "replayResurrection",
+        "replay_resurrection"
+      ],
+      "origins": [
+        "pilot.family.controls.*.expected.replayResurrection"
+      ]
+    },
+    {
       "name": "retroactive",
       "variants": [
         "Retroactive",
@@ -668,6 +2426,18 @@
       ],
       "origins": [
         "pilot.family.ast.variant.retroactive"
+      ]
+    },
+    {
+      "name": "returns",
+      "variants": [
+        "Returns",
+        "isReturns",
+        "is_returns",
+        "returns"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions.*.returns"
       ]
     },
     {
@@ -707,7 +2477,7 @@
         "schema_and_lifecycle"
       ],
       "origins": [
-        "pilot.family.controls[].certification.schemaAndLifecycle"
+        "pilot.family.controls.*.certification.schemaAndLifecycle"
       ]
     },
     {
@@ -719,7 +2489,7 @@
         "scoring"
       ],
       "origins": [
-        "pilot.family.controls[].scoring"
+        "pilot.family.controls.*.scoring"
       ]
     },
     {
@@ -745,7 +2515,7 @@
         "separate_assertion"
       ],
       "origins": [
-        "pilot.family.controls[].separate_assertion"
+        "pilot.family.controls.*.separate_assertion"
       ]
     },
     {
@@ -775,6 +2545,44 @@
       ]
     },
     {
+      "name": "suppressed",
+      "variants": [
+        "Suppressed",
+        "isSuppressed",
+        "is_suppressed",
+        "suppressed"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions.*.expected.suppressed"
+      ]
+    },
+    {
+      "name": "target",
+      "variants": [
+        "Target",
+        "isTarget",
+        "is_target",
+        "target"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions.*.target"
+      ]
+    },
+    {
+      "name": "targetRecord",
+      "variants": [
+        "TargetRecord",
+        "isTargetRecord",
+        "is_target_record",
+        "target-record",
+        "targetRecord",
+        "target_record"
+      ],
+      "origins": [
+        "pilot.family.controls.*.targetRecord"
+      ]
+    },
+    {
       "name": "time_zone",
       "variants": [
         "TimeZone",
@@ -799,7 +2607,7 @@
         "unresolved_protocol"
       ],
       "origins": [
-        "pilot.family.controls[].unresolved_protocol"
+        "pilot.family.controls.*.unresolved_protocol"
       ]
     },
     {
@@ -830,11 +2638,17 @@
     }
   ],
   "sources": {
-    "evaluation/hr3/harness/private-field-inventory.mjs": "6deb3423236bb9f2a21d2e7d860f595c1cc9d43f98391a19df7075e313f4436d",
+    "evaluation/hr3/harness/private-field-inventory.mjs": "09ccab8d0361f10025bd4af36ccdad08360a1ab186327a596fe0645d6560979f",
+    "evaluation/hr3/harness/public-paths-a4.mjs": "ad17e7c2afa4b41e1c1bad0b9ba0923bec255a2b516784c271938d434ecfa553",
+    "evaluation/hr3/harness/preflight-a4-schema.mjs": "e8cbc03c86653e0a75b163b9e376828714145fa4abde5f8d886b0ce69b356551",
+    "evaluation/hr3/scorer/schema.mjs": "5ac7a7fe80de0605cc8d9de3e845b8fa4463ccdf041b1cd613c649281e34979d",
     "evaluation/hr3/harness/run-configuration.mjs": "cde03c70a4ee26ac362c27628341103bda45722d1ec8b558fb8c139529226ebb",
     "evaluation/hr3/harness/cap-stress-fixtures.mjs": "c1eef36b796b00c840de2040b7546a4ffe842557d0d178b03a10b95a28573b16",
     "evaluation/hr3/generator/generate.mjs": "feee8573471100f2e14a9af65a4c93e8728cdec0f88cbb96951e49d7c4253611",
     "evaluation/hr3/generator/inventory.mjs": "08960e14490862afe531c867ad21bc1c80c4bfde9e021111aef023700efc21f4",
-    "evaluation/hr3/generator/artifacts/pilot/families.jsonl": "fe3681c8bd35c7d4f0079b261aeb65f24d2c53ee5c91287388aee44146e50c20"
+    "evaluation/hr3/generator/artifacts/pilot/families.jsonl": "fe3681c8bd35c7d4f0079b261aeb65f24d2c53ee5c91287388aee44146e50c20",
+    "core/private-card-input.mjs": "701ea7f75124be1ed84547d179e8fe6077a44114fe2410103a98022e9a735fd5",
+    "core/method-package-input.mjs": "e9ec687d06bc058005bc060c409d711ddada1d2da9b3bcff2e82a2f0c60dcb7b",
+    "core/card-current-input.mjs": "bc7207aeffceb667e6bd5c50808f08b259f70556d48d8cd11b3a50d4810618f1"
   }
 }

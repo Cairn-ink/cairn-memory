@@ -1,0 +1,11 @@
+{
+  "version": "hr3-a4-paid-gate-regression-red-v1",
+  "baselineCommit": "dd01b643",
+  "command": "node --test --experimental-test-isolation=none evaluation/hr3/harness/test/paid-preflight.test.mjs",
+  "exitCode": 1,
+  "fixedRunnerRestored": true,
+  "restoredSHA256": "b3f1a1d320caffb7b51442d308ed406671a735a433e9eac0b4dae38af445f382",
+  "networkCalls": 0,
+  "paidCalls": 0,
+  "note": "Only the committed runner was temporarily restored; all transports were local test stubs. No readiness/review artifact was published."
+}

@@ -1,0 +1,112 @@
+{
+  "status": "PASS",
+  "verification": "evaluation/hr3/harness/artifacts/a4-verification-Rvw2G4",
+  "orderedCommands": 21,
+  "allChildExits": 0,
+  "sourceAndLogBindings": "PASS",
+  "runtimeClosureSHA256": "da297112b46280badda0fd6f06796d5532c2abae4f3bd6acf31066b899983aa7",
+  "pilotInference": "NONE; recursive actual bound-report check PASS",
+  "requirementsByStage": {
+    "pilot": [
+      "semanticInventory",
+      "output",
+      "requests",
+      "embeddings",
+      "privacy",
+      "conformance",
+      "allocation",
+      "accounting",
+      "supervision",
+      "freshRun",
+      "freeze",
+      "review"
+    ],
+    "development": [
+      "semanticInventory",
+      "output",
+      "requests",
+      "embeddings",
+      "privacy",
+      "conformance",
+      "allocation",
+      "accounting",
+      "analysisCoverage",
+      "resources",
+      "supervision",
+      "freshRun",
+      "freeze",
+      "review"
+    ],
+    "test": [
+      "semanticInventory",
+      "output",
+      "requests",
+      "embeddings",
+      "privacy",
+      "conformance",
+      "allocation",
+      "accounting",
+      "analysisCoverage",
+      "resources",
+      "supervision",
+      "freshRun",
+      "freeze",
+      "review"
+    ]
+  },
+  "paidReadiness": false,
+  "primaryOnlyPending": [
+    "supervision attestation",
+    "freeze",
+    "non-author review including A-1.1 confirmation"
+  ],
+  "attestationsAuthored": 0,
+  "networkCalls": 0,
+  "paidCalls": 0,
+  "commits": 0,
+  "changedFileCrossCheck": {
+    "status": "PASS",
+    "routes": [
+      "Git tracked diff plus all untracked paths including ignored; entry SHA comparison",
+      "Independent recursive filesystem content SHA inventory"
+    ],
+    "counts": {
+      "total": 2342,
+      "gitVisible": 42,
+      "ignoredArtifacts": 2300,
+      "authoredSourceDocsTests": 13
+    },
+    "preexistingArtifactFilesUnchanged": 52470
+  },
+  "additionalCommands": {
+    "syntax": {
+      "count": 10,
+      "exitCodes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "focusedMechanicalTests": {
+      "pass": 52,
+      "fail": 0,
+      "exitCode": 0
+    },
+    "initialStandalonePreflightBeforeAccountingRefresh": {
+      "pass": 2,
+      "fail": 115,
+      "exitCode": 1
+    },
+    "portableDiagnosticsExitCode": 0,
+    "certificateRebindExitCode": 0,
+    "bindingReadbackExitCode": 0,
+    "gitDiffCheckExitCode": 0
+  }
+}

@@ -1,0 +1,322 @@
+TAP version 13
+# Subtest: A-1 component states C=0 O=0 R=0
+ok 1 - A-1 component states C=0 O=0 R=0
+  ---
+  duration_ms: 1.025539
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=0 O=0 R=1
+ok 2 - A-1 component states C=0 O=0 R=1
+  ---
+  duration_ms: 0.153773
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=0 O=0 R=null
+ok 3 - A-1 component states C=0 O=0 R=null
+  ---
+  duration_ms: 0.049701
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=0 O=1 R=0
+ok 4 - A-1 component states C=0 O=1 R=0
+  ---
+  duration_ms: 0.043741
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=0 O=1 R=1
+ok 5 - A-1 component states C=0 O=1 R=1
+  ---
+  duration_ms: 0.074852
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=0 O=1 R=null
+ok 6 - A-1 component states C=0 O=1 R=null
+  ---
+  duration_ms: 0.039871
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=0 O=null R=0
+ok 7 - A-1 component states C=0 O=null R=0
+  ---
+  duration_ms: 0.045551
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=0 O=null R=1
+ok 8 - A-1 component states C=0 O=null R=1
+  ---
+  duration_ms: 0.071631
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=0 O=null R=null
+ok 9 - A-1 component states C=0 O=null R=null
+  ---
+  duration_ms: 0.225404
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=1 O=0 R=0
+ok 10 - A-1 component states C=1 O=0 R=0
+  ---
+  duration_ms: 0.278306
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=1 O=0 R=1
+ok 11 - A-1 component states C=1 O=0 R=1
+  ---
+  duration_ms: 0.087832
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=1 O=0 R=null
+ok 12 - A-1 component states C=1 O=0 R=null
+  ---
+  duration_ms: 0.035581
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=1 O=1 R=0
+ok 13 - A-1 component states C=1 O=1 R=0
+  ---
+  duration_ms: 0.02205
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=1 O=1 R=1
+ok 14 - A-1 component states C=1 O=1 R=1
+  ---
+  duration_ms: 0.076302
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=1 O=1 R=null
+ok 15 - A-1 component states C=1 O=1 R=null
+  ---
+  duration_ms: 0.045121
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=1 O=null R=0
+ok 16 - A-1 component states C=1 O=null R=0
+  ---
+  duration_ms: 0.02361
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=1 O=null R=1
+ok 17 - A-1 component states C=1 O=null R=1
+  ---
+  duration_ms: 0.019311
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=1 O=null R=null
+ok 18 - A-1 component states C=1 O=null R=null
+  ---
+  duration_ms: 0.075721
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=null O=0 R=0
+ok 19 - A-1 component states C=null O=0 R=0
+  ---
+  duration_ms: 0.04518
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=null O=0 R=1
+ok 20 - A-1 component states C=null O=0 R=1
+  ---
+  duration_ms: 0.0223
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=null O=0 R=null
+ok 21 - A-1 component states C=null O=0 R=null
+  ---
+  duration_ms: 0.01791
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=null O=1 R=0
+ok 22 - A-1 component states C=null O=1 R=0
+  ---
+  duration_ms: 0.172714
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=null O=1 R=1
+ok 23 - A-1 component states C=null O=1 R=1
+  ---
+  duration_ms: 0.02761
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=null O=1 R=null
+ok 24 - A-1 component states C=null O=1 R=null
+  ---
+  duration_ms: 0.02015
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=null O=null R=0
+ok 25 - A-1 component states C=null O=null R=0
+  ---
+  duration_ms: 0.01834
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=null O=null R=1
+ok 26 - A-1 component states C=null O=null R=1
+  ---
+  duration_ms: 0.017471
+  type: 'test'
+  ...
+# Subtest: A-1 component states C=null O=null R=null
+ok 27 - A-1 component states C=null O=null R=null
+  ---
+  duration_ms: 0.01798
+  type: 'test'
+  ...
+# Subtest: frozen aggregation computes family J first, with all 48 arm/type/checkpoint rows
+ok 28 - frozen aggregation computes family J first, with all 48 arm/type/checkpoint rows
+  ---
+  duration_ms: 2.738231
+  type: 'test'
+  ...
+# Subtest: partial attempts preserve frozen lineage weights, failures, unexecuted IDs and separate referral/score counts
+ok 29 - partial attempts preserve frozen lineage weights, failures, unexecuted IDs and separate referral/score counts
+  ---
+  duration_ms: 0.965768
+  type: 'test'
+  ...
+# Subtest: unresolved J and correctness/support referral applications are distinct and deduplicated per pass
+ok 30 - unresolved J and correctness/support referral applications are distinct and deduplicated per pass
+  ---
+  duration_ms: 0.593791
+  type: 'test'
+  ...
+# Subtest: invalid states, duplicate/foreign observations and inconsistent J fail explicitly
+ok 31 - invalid states, duplicate/foreign observations and inconsistent J fail explicitly
+  ---
+  duration_ms: 0.480209
+  type: 'test'
+  ...
+# Subtest: completed-stage report requires execution hashes, checks artifact bytes, and never overwrites output
+ok 32 - completed-stage report requires execution hashes, checks artifact bytes, and never overwrites output
+  ---
+  duration_ms: 96.799218
+  type: 'test'
+  ...
+# Subtest: A-1.1 bound report emits no intervals, bootstrap estimates or uncertain contrasts
+ok 33 - A-1.1 bound report emits no intervals, bootstrap estimates or uncertain contrasts
+  ---
+  duration_ms: 4.272123
+  type: 'test'
+  ...
+# Subtest: A-1.1 rejects nested inferential metadata confidenceIntervals
+ok 34 - A-1.1 rejects nested inferential metadata confidenceIntervals
+  ---
+  duration_ms: 0.155663
+  type: 'test'
+  ...
+# Subtest: A-1.1 rejects nested inferential metadata bootstrapEstimate
+ok 35 - A-1.1 rejects nested inferential metadata bootstrapEstimate
+  ---
+  duration_ms: 0.043731
+  type: 'test'
+  ...
+# Subtest: A-1.1 rejects nested inferential metadata contrastWithUncertainty
+ok 36 - A-1.1 rejects nested inferential metadata contrastWithUncertainty
+  ---
+  duration_ms: 0.028481
+  type: 'test'
+  ...
+# Subtest: A-1.1 rejects nested inferential metadata standardError
+ok 37 - A-1.1 rejects nested inferential metadata standardError
+  ---
+  duration_ms: 0.026521
+  type: 'test'
+  ...
+# Subtest: A-1.1 rejects nested inferential metadata pValue
+ok 38 - A-1.1 rejects nested inferential metadata pValue
+  ---
+  duration_ms: 0.02433
+  type: 'test'
+  ...
+# Subtest: reservation is durable before dispatch, settlement releases only known usage by request ID
+ok 39 - reservation is durable before dispatch, settlement releases only known usage by request ID
+  ---
+  duration_ms: 24.076735
+  type: 'test'
+  ...
+# Subtest: stage, operational and unavailable authorization headroom deny before dispatch
+ok 40 - stage, operational and unavailable authorization headroom deny before dispatch
+  ---
+  duration_ms: 44.206048
+  type: 'test'
+  ...
+# Subtest: unsettled reservations survive restart and charge the full bound
+ok 41 - unsettled reservations survive restart and charge the full bound
+  ---
+  duration_ms: 21.495163
+  type: 'test'
+  ...
+# Subtest: one transport retry, cumulative third failure stops, no quality retries
+ok 42 - one transport retry, cumulative third failure stops, no quality retries
+  ---
+  duration_ms: 73.721162
+  type: 'test'
+  ...
+# Subtest: model mismatch, unexplained usage, duplicate provider IDs and unknown contract failures stop
+ok 43 - model mismatch, unexplained usage, duplicate provider IDs and unknown contract failures stop
+  ---
+  duration_ms: 90.143752
+  type: 'test'
+  ...
+# Subtest: five-minute lack of progress and dispatch timeout are supervised
+ok 44 - five-minute lack of progress and dispatch timeout are supervised
+  ---
+  duration_ms: 51.546601
+  type: 'test'
+  ...
+# Subtest: strict body models, no tools/prior state, caps and byte/embed bounds
+ok 45 - strict body models, no tools/prior state, caps and byte/embed bounds
+  ---
+  duration_ms: 10.635204
+  type: 'test'
+  ...
+# Subtest: unlisted calls, embedding unit allowances and corrupt journals fail closed
+ok 46 - unlisted calls, embedding unit allowances and corrupt journals fail closed
+  ---
+  duration_ms: 17.949973
+  type: 'test'
+  ...
+# Subtest: stage transitions share one operational ledger and preserve stage totals
+ok 47 - stage transitions share one operational ledger and preserve stage totals
+  ---
+  duration_ms: 18.094951
+  type: 'test'
+  ...
+# Subtest: A-4.2 reserves and settles unchanged output ceilings at amended input bounds and unchanged prices
+ok 48 - A-4.2 reserves and settles unchanged output ceilings at amended input bounds and unchanged prices
+  ---
+  duration_ms: 42.025722
+  type: 'test'
+  ...
+# Subtest: A-1.1 supervisor checks actual progress each minute and stops while between dispatches
+ok 49 - A-1.1 supervisor checks actual progress each minute and stops while between dispatches
+  ---
+  duration_ms: 11.281651
+  type: 'test'
+  ...
+# Subtest: A-1.1 five-minute elapsed dispatch cannot reset progress or settle usage
+ok 50 - A-1.1 five-minute elapsed dispatch cannot reset progress or settle usage
+  ---
+  duration_ms: 20.348912
+  type: 'test'
+  ...
+# Subtest: A-1.1 supervisor aborts a pending dispatch on the five-minute stop without retries
+ok 51 - A-1.1 supervisor aborts a pending dispatch on the five-minute stop without retries
+  ---
+  duration_ms: 18.492564
+  type: 'test'
+  ...
+# Subtest: A-1.1 accounting corruption stops before any dispatch and preserves evidence
+ok 52 - A-1.1 accounting corruption stops before any dispatch and preserves evidence
+  ---
+  duration_ms: 11.59009
+  type: 'test'
+  ...
+1..52
+# tests 52
+# suites 0
+# pass 52
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1478.372851

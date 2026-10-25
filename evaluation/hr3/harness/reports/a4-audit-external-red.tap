@@ -1,0 +1,38 @@
+TAP version 13
+# Subtest: audit freeze closure: external dependency bytes participate in every certificate binding
+not ok 1 - audit freeze closure: external dependency bytes participate in every certificate binding
+  ---
+  duration_ms: 396.919907
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/a4-audit.test.mjs:45:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    adapters/mcp/node_modules/.bin/node-which
+    + actual - expected
+    
+    + undefined
+    - {
+    -   bytes: 985,
+    -   sha256: '055f0ac4eed1a1591d033d59462972968bf3483b4cc07e163589569c0fb999f0'
+    - }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    sha256: '055f0ac4eed1a1591d033d59462972968bf3483b4cc07e163589569c0fb999f0'
+    bytes: 985
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/a4-audit.test.mjs:46:195)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 472.146613

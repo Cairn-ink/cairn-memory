@@ -1,0 +1,108 @@
+{
+  "version": "hr3-a4-audit-postflight-v1",
+  "status": "PASS",
+  "HEAD": "dd01b643000233d73ef59c85b68d9fb7312573a4",
+  "orderedVerifierExitCode": 0,
+  "childExitsAndLogHashes": {
+    "commands": 21,
+    "exitCode": 0
+  },
+  "certificateSources": [
+    {
+      "report": "evaluation/hr3/harness/reports/cap-certification-a4.json",
+      "sourceHashes": 41,
+      "exitCode": 0
+    },
+    {
+      "report": "evaluation/hr3/harness/reports/request-certification-a4.json",
+      "sourceHashes": 26,
+      "exitCode": 0
+    },
+    {
+      "report": "evaluation/hr3/harness/reports/context-certification-a4.json",
+      "sourceHashes": 7,
+      "exitCode": 0
+    },
+    {
+      "report": "evaluation/hr3/harness/reports/privacy-scan-a4.json",
+      "sourceHashes": 6,
+      "exitCode": 0
+    },
+    {
+      "report": "evaluation/hr3/harness/reports/embedding-certification-a4.json",
+      "sourceHashes": 1560,
+      "exitCode": 0
+    },
+    {
+      "report": "evaluation/hr3/harness/reports/conformance-certification-a4.json",
+      "sourceHashes": 1560,
+      "exitCode": 0
+    },
+    {
+      "report": "evaluation/hr3/harness/reports/allocation-certification-a4.json",
+      "sourceHashes": 1562,
+      "exitCode": 0
+    },
+    {
+      "report": "evaluation/hr3/harness/reports/a4-semantic-inventory.json",
+      "sourceHashes": 1562,
+      "exitCode": 0
+    },
+    {
+      "report": "evaluation/hr3/harness/reports/budget-a4.json",
+      "sourceHashes": 14,
+      "exitCode": 0
+    },
+    {
+      "report": "evaluation/hr3/harness/reports/continuation-a4.json",
+      "sourceHashes": 14,
+      "exitCode": 0
+    }
+  ],
+  "gitDiffCheck": {
+    "command": "git diff --check",
+    "exitCode": 0
+  },
+  "authoredWhitespaceDiagnostics": 0,
+  "absoluteLocalPathHits": 0,
+  "changedFileCrossCheck": {
+    "count": 13914,
+    "gitVisible": 115,
+    "retainedIgnored": 13799,
+    "routes": [
+      "git name-only plus all untracked paths including ignored",
+      "recursive file content hashes against pre-task baseline"
+    ],
+    "rawTrackedDiffAlsoMatches": true,
+    "exitCode": 0
+  },
+  "outsideScopeChanges": [],
+  "originalAccountingInputsUnchanged": [
+    "evaluation/hr3/harness/reports/a3-carry-forward.json",
+    "evaluation/hr3/harness/reports/a4-carry-forward.json",
+    "evaluation/hr3/harness/reports/accounting-input-a4.json",
+    "evaluation/hr3/harness/test/fixtures/pilot3-de178399-ledger.jsonl",
+    "evaluation/hr3/harness/test/fixtures/pilot3-de178399-run.json",
+    "evaluation/hr3/harness/test/fixtures/pilot3-de178399-summary.json"
+  ],
+  "preexistingVerificationArchivesPreserved": [
+    "evaluation/hr3/harness/artifacts/a4-verification-kXWHqr/verification.json"
+  ],
+  "freezeUnchanged": true,
+  "syntax": {
+    "path": "evaluation/hr3/harness/reports/a4-audit-syntax.json",
+    "files": 25,
+    "exitCode": 0
+  },
+  "paidReadiness": false,
+  "paidRecordProduced": false,
+  "primaryPrerequisites": [
+    "actual analysis/coverage result evidence",
+    "measured resource evidence",
+    "freeze",
+    "passing non-author review attestation"
+  ],
+  "networkCalls": 0,
+  "paidCalls": 0,
+  "commits": 0
+}

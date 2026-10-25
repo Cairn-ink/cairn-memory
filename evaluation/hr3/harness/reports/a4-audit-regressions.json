@@ -1,0 +1,295 @@
+{
+  "version": "hr3-a4-audit-regressions-v2",
+  "newRegressionTests": 56,
+  "findings": [
+    {
+      "id": "P1-1",
+      "fix": "Canonicalize public subject/predicate names in predecessor anchors with the event alias table.",
+      "locations": [
+        {
+          "path": "evaluation/hr3/harness/schema.mjs",
+          "line": 121
+        }
+      ],
+      "tests": [
+        "audit aliases: zh-Hant predecessor names resolve through the public alias table",
+        "audit aliases: mixed predecessor names resolve through the public alias table"
+      ]
+    },
+    {
+      "id": "P1-2",
+      "fix": "Resolve the common slot/context identity graph before fan-out; share P/research link decisions and derive diagnostics from actual materialized views.",
+      "locations": [
+        {
+          "path": "evaluation/hr3/harness/runner.mjs",
+          "line": 69
+        },
+        {
+          "path": "evaluation/hr3/harness/research.mjs",
+          "line": 112
+        },
+        {
+          "path": "evaluation/hr3/harness/research.mjs",
+          "line": 126
+        },
+        {
+          "path": "evaluation/hr3/harness/product.mjs",
+          "line": 83
+        }
+      ],
+      "tests": [
+        "audit common links: shared-turn context ambiguity is identical in T/U/O and P diagnostics",
+        "audit context coverage: certificates exercise adopted, unresolved and shared-turn context branches",
+        "audit research diagnostics: unresolved context and overwrite dispositions match materialized state"
+      ]
+    },
+    {
+      "id": "P1-3",
+      "fix": "Use delivered receipt-array positions for scorer addresses; retain original receipt indices only as metadata; preserve P blocks.",
+      "locations": [
+        {
+          "path": "evaluation/hr3/harness/product.mjs",
+          "line": 214
+        },
+        {
+          "path": "evaluation/hr3/harness/product.mjs",
+          "line": 220
+        }
+      ],
+      "tests": [
+        "audit P addresses: omitted original receipt indices and sameAs aliases use delivered positions without changing blocks"
+      ]
+    },
+    {
+      "id": "P1-4",
+      "fix": "Validate all 13 bound preflight requirements, full analysis results and primary-supplied passing review before journal/dispatch; reject synthetic reviews and non-boolean resource claims.",
+      "locations": [
+        {
+          "path": "evaluation/hr3/harness/runner.mjs",
+          "line": 47
+        },
+        {
+          "path": "evaluation/hr3/harness/paid-preflight.mjs",
+          "line": 21
+        },
+        {
+          "path": "evaluation/hr3/harness/paid-preflight.mjs",
+          "line": 8
+        },
+        {
+          "path": "evaluation/hr3/harness/paid-requirements-a4.mjs",
+          "line": 3
+        }
+      ],
+      "tests": [
+        "audit paid gate: missing preflight cannot open a journal or dispatch",
+        "paid-preflight complete synthetic interchange reaches review boundary and cannot produce readiness",
+        "paid-preflight semanticInventory missing blocks journal creation and dispatch",
+        "paid-preflight semanticInventory stale blocks journal creation and dispatch",
+        "paid-preflight output missing blocks journal creation and dispatch",
+        "paid-preflight output stale blocks journal creation and dispatch",
+        "paid-preflight requests missing blocks journal creation and dispatch",
+        "paid-preflight requests stale blocks journal creation and dispatch",
+        "paid-preflight embeddings missing blocks journal creation and dispatch",
+        "paid-preflight embeddings stale blocks journal creation and dispatch",
+        "paid-preflight privacy missing blocks journal creation and dispatch",
+        "paid-preflight privacy stale blocks journal creation and dispatch",
+        "paid-preflight conformance missing blocks journal creation and dispatch",
+        "paid-preflight conformance stale blocks journal creation and dispatch",
+        "paid-preflight allocation missing blocks journal creation and dispatch",
+        "paid-preflight allocation stale blocks journal creation and dispatch",
+        "paid-preflight accounting missing blocks journal creation and dispatch",
+        "paid-preflight accounting stale blocks journal creation and dispatch",
+        "paid-preflight analysisCoverage missing blocks journal creation and dispatch",
+        "paid-preflight analysisCoverage stale blocks journal creation and dispatch",
+        "paid-preflight resources missing blocks journal creation and dispatch",
+        "paid-preflight resources stale blocks journal creation and dispatch",
+        "paid-preflight freshRun missing blocks journal creation and dispatch",
+        "paid-preflight freshRun stale blocks journal creation and dispatch",
+        "paid-preflight freeze missing blocks journal creation and dispatch",
+        "paid-preflight freeze stale blocks journal creation and dispatch",
+        "paid-preflight review missing blocks journal creation and dispatch",
+        "paid-preflight review stale blocks journal creation and dispatch",
+        "paid-preflight output stale source binding independently blocks before journal",
+        "paid-preflight requests stale source binding independently blocks before journal",
+        "paid-preflight privacy stale source binding independently blocks before journal",
+        "paid-preflight embeddings stale source binding independently blocks before journal",
+        "paid-preflight analysisCoverage stale source binding independently blocks before journal",
+        "paid-preflight analysis result missing cannot open journal or dispatch",
+        "paid-preflight analysis result stale cannot open journal or dispatch",
+        "paid-preflight analysis result reduced-grid cannot open journal or dispatch",
+        "paid-preflight analysis result stale-implementation cannot open journal or dispatch",
+        "paid-preflight altered frozen analysis baseline blocks journal and dispatch",
+        "paid-preflight unperformed resource strings cannot count as completed benchmarks"
+      ]
+    },
+    {
+      "id": "P1-5",
+      "fix": "Freeze the import closure, real runner, pinned product and installed dependencies; cross-check graphs/inventories independently and include external bytes in certificate bindings.",
+      "locations": [
+        {
+          "path": "evaluation/hr3/harness/runtime-closure.mjs",
+          "line": 3
+        },
+        {
+          "path": "evaluation/hr3/harness/runtime-closure.mjs",
+          "line": 19
+        },
+        {
+          "path": "evaluation/hr3/harness/freeze-a4.mjs",
+          "line": 7
+        }
+      ],
+      "tests": [
+        "audit freeze closure: graph and independent loader include scorer, real runner and pinned product dependencies",
+        "audit freeze closure: external dependency bytes participate in every certificate binding",
+        "paid-preflight freeze missing dependency evaluation/hr3/scorer/slots.mjs blocks before journal",
+        "paid-preflight freeze missing dependency evaluation/hr3/scorer/contract.mjs blocks before journal",
+        "paid-preflight freeze missing dependency evaluation/hr3/runner/openai-transport.mjs blocks before journal",
+        "paid-preflight freeze missing dependency core/context-read-assembly.mjs blocks before journal"
+      ]
+    },
+    {
+      "id": "P2",
+      "fix": "Recursively derive private authoring fields against explicit public paths/schema bindings; scan complete extraction bodies before cache/transport and in certification/leak scans.",
+      "locations": [
+        {
+          "path": "evaluation/hr3/harness/private-field-inventory.mjs",
+          "line": 19
+        },
+        {
+          "path": "evaluation/hr3/harness/public-paths-a4.mjs",
+          "line": 6
+        },
+        {
+          "path": "evaluation/hr3/harness/extraction.mjs",
+          "line": 10
+        },
+        {
+          "path": "evaluation/hr3/harness/request-certification.mjs",
+          "line": 47
+        },
+        {
+          "path": "evaluation/hr3/harness/leak-scan.mjs",
+          "line": 31
+        }
+      ],
+      "tests": [
+        "audit recursive privacy: independent authoring injection 0",
+        "audit recursive privacy: independent authoring injection 1",
+        "audit recursive privacy: independent authoring injection 2",
+        "audit recursive privacy: independent authoring injection 3",
+        "audit extractor privacy: complete body is scanned before cache or transport"
+      ]
+    }
+  ],
+  "redEvidence": [
+    {
+      "log": "evaluation/hr3/harness/reports/a4-audit-red.tap",
+      "exitCode": 1,
+      "tests": 12,
+      "passed": 0,
+      "failed": 12,
+      "failedNames": [
+        "audit aliases: zh-Hant predecessor names resolve through the public alias table",
+        "audit aliases: mixed predecessor names resolve through the public alias table",
+        "audit common links: shared-turn context ambiguity is identical in T/U/O and P diagnostics",
+        "audit context coverage: certificates exercise adopted, unresolved and shared-turn context branches",
+        "audit P addresses: omitted original receipt indices and sameAs aliases use delivered positions without changing blocks",
+        "audit paid gate: missing preflight cannot open a journal or dispatch",
+        "audit freeze closure: graph and independent loader include scorer, real runner and pinned product dependencies",
+        "audit recursive privacy: independent authoring injection 0",
+        "audit recursive privacy: independent authoring injection 1",
+        "audit recursive privacy: independent authoring injection 2",
+        "audit recursive privacy: independent authoring injection 3",
+        "audit extractor privacy: complete body is scanned before cache or transport"
+      ]
+    },
+    {
+      "log": "evaluation/hr3/harness/reports/a4-audit-paid-red.tap",
+      "exitCode": 1,
+      "tests": 40,
+      "passed": 1,
+      "failed": 39,
+      "failedNames": [
+        "paid-preflight semanticInventory missing blocks journal creation and dispatch",
+        "paid-preflight semanticInventory stale blocks journal creation and dispatch",
+        "paid-preflight output missing blocks journal creation and dispatch",
+        "paid-preflight output stale blocks journal creation and dispatch",
+        "paid-preflight requests missing blocks journal creation and dispatch",
+        "paid-preflight requests stale blocks journal creation and dispatch",
+        "paid-preflight embeddings missing blocks journal creation and dispatch",
+        "paid-preflight embeddings stale blocks journal creation and dispatch",
+        "paid-preflight privacy missing blocks journal creation and dispatch",
+        "paid-preflight privacy stale blocks journal creation and dispatch",
+        "paid-preflight conformance missing blocks journal creation and dispatch",
+        "paid-preflight conformance stale blocks journal creation and dispatch",
+        "paid-preflight allocation missing blocks journal creation and dispatch",
+        "paid-preflight allocation stale blocks journal creation and dispatch",
+        "paid-preflight accounting missing blocks journal creation and dispatch",
+        "paid-preflight accounting stale blocks journal creation and dispatch",
+        "paid-preflight analysisCoverage missing blocks journal creation and dispatch",
+        "paid-preflight analysisCoverage stale blocks journal creation and dispatch",
+        "paid-preflight resources missing blocks journal creation and dispatch",
+        "paid-preflight resources stale blocks journal creation and dispatch",
+        "paid-preflight freshRun missing blocks journal creation and dispatch",
+        "paid-preflight freshRun stale blocks journal creation and dispatch",
+        "paid-preflight freeze missing blocks journal creation and dispatch",
+        "paid-preflight freeze stale blocks journal creation and dispatch",
+        "paid-preflight review missing blocks journal creation and dispatch",
+        "paid-preflight review stale blocks journal creation and dispatch",
+        "paid-preflight output stale source binding independently blocks before journal",
+        "paid-preflight requests stale source binding independently blocks before journal",
+        "paid-preflight privacy stale source binding independently blocks before journal",
+        "paid-preflight embeddings stale source binding independently blocks before journal",
+        "paid-preflight analysisCoverage stale source binding independently blocks before journal",
+        "paid-preflight analysis result missing cannot open journal or dispatch",
+        "paid-preflight analysis result stale cannot open journal or dispatch",
+        "paid-preflight analysis result reduced-grid cannot open journal or dispatch",
+        "paid-preflight analysis result stale-implementation cannot open journal or dispatch",
+        "paid-preflight freeze missing dependency evaluation/hr3/scorer/slots.mjs blocks before journal",
+        "paid-preflight freeze missing dependency evaluation/hr3/scorer/contract.mjs blocks before journal",
+        "paid-preflight freeze missing dependency evaluation/hr3/runner/openai-transport.mjs blocks before journal",
+        "paid-preflight freeze missing dependency core/context-read-assembly.mjs blocks before journal"
+      ]
+    },
+    {
+      "log": "evaluation/hr3/harness/reports/a4-audit-external-red.tap",
+      "exitCode": 1,
+      "tests": 1,
+      "passed": 0,
+      "failed": 1,
+      "failedNames": [
+        "audit freeze closure: external dependency bytes participate in every certificate binding"
+      ]
+    },
+    {
+      "log": "evaluation/hr3/harness/reports/a4-audit-diagnostics-red.tap",
+      "exitCode": 1,
+      "tests": 1,
+      "passed": 0,
+      "failed": 1,
+      "failedNames": [
+        "audit research diagnostics: unresolved context and overwrite dispositions match materialized state"
+      ]
+    },
+    {
+      "log": "evaluation/hr3/harness/reports/a4-audit-resource-red.tap",
+      "exitCode": 1,
+      "tests": 1,
+      "passed": 0,
+      "failed": 1,
+      "failedNames": [
+        "paid-preflight unperformed resource strings cannot count as completed benchmarks"
+      ]
+    }
+  ],
+  "greenHarness": {
+    "tests": 182,
+    "passed": 182,
+    "failed": 0,
+    "exitCode": 0,
+    "log": "evaluation/hr3/harness/artifacts/a4-verification-pXWRJb/harness-tests.stdout"
+  },
+  "testOnlyReviewsAreRejected": true
+}

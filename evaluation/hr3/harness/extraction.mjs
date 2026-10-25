@@ -1,12 +1,13 @@
 import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { atomicJSON, hash, fail, canonical } from './common.mjs';
+import {PrivacyGuard} from './privacy.mjs';
 import { responseRequest } from './requests.mjs';
 import { validateExtraction } from './schema.mjs';
-export const CACHE_VERSION='hr3-extraction-cache-a4-v1';
+export const CACHE_VERSION='hr3-extraction-cache-a4-audit-v2';
 export function extractionInput(family,batch) {const b=family.batches.find(x=>x.ordinal===batch);return structuredClone({observed_at:b.observed_at,public_header:family.header,turns:b.turns});}
 export async function extract({family,batch,transport,cache,alternative=false}) {
-  const input=extractionInput(family,batch), body=responseRequest('extraction',input,{alternative}),key=hash(body),path=join(cache,key+'.json');mkdirSync(cache,{recursive:true,mode:0o700});
+  const input=extractionInput(family,batch), body=responseRequest('extraction',input,{alternative}),key=hash(body),path=join(cache,key+'.json');new PrivacyGuard(family).check('extraction-request',body);mkdirSync(cache,{recursive:true,mode:0o700});
   if(existsSync(path)){const result=JSON.parse(readFileSync(path,'utf8'));const {digest,...record}=result;if(result.version!==CACHE_VERSION||result.key!==key||hash(result.body)!==key||hash(result.reply)!==result.replyHash||hash(record)!==digest)fail('cache_corrupt');const parsed=decodeExtraction(result.reply,input);if(canonical(parsed)!==canonical({value:result.value,error:result.error,diagnostics:result.diagnostics}))fail('cache_corrupt');return result;}
   const reply=await transport.send({id:`${family.family_id}/extract/${batch}`,operation:'extraction',body});
   const {value,error,diagnostics}=decodeExtraction(reply,input);

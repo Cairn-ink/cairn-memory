@@ -1,0 +1,23 @@
+{
+  "version": "hr3-a4-audit-links-v1",
+  "counts": {
+    "zh-Hant": {
+      "updates": 66,
+      "unresolved": 66,
+      "contexts": 132,
+      "adoptedContexts": 0
+    },
+    "mixed": {
+      "updates": 18,
+      "unresolved": 18,
+      "contexts": 36,
+      "adoptedContexts": 0
+    },
+    "en": {
+      "updates": 36,
+      "unresolved": 0,
+      "contexts": 72,
+      "adoptedContexts": 0
+    }
+  }
+}

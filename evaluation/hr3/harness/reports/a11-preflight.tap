@@ -1,0 +1,4047 @@
+TAP version 13
+# Subtest: paid-preflight complete synthetic interchange reaches review boundary and cannot produce readiness
+ok 1 - paid-preflight complete synthetic interchange reaches review boundary and cannot produce readiness
+  ---
+  duration_ms: 1140.664371
+  type: 'test'
+  ...
+# Subtest: paid-preflight pilot semanticInventory missing blocks journal creation and dispatch
+not ok 2 - paid-preflight pilot semanticInventory missing blocks journal creation and dispatch
+  ---
+  duration_ms: 738.553416
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_semanticInventory/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot semanticInventory stale blocks journal creation and dispatch
+not ok 3 - paid-preflight pilot semanticInventory stale blocks journal creation and dispatch
+  ---
+  duration_ms: 674.340074
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_semanticInventory/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot output missing blocks journal creation and dispatch
+not ok 4 - paid-preflight pilot output missing blocks journal creation and dispatch
+  ---
+  duration_ms: 691.15956
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_output/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot output stale blocks journal creation and dispatch
+not ok 5 - paid-preflight pilot output stale blocks journal creation and dispatch
+  ---
+  duration_ms: 646.171949
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_output/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot requests missing blocks journal creation and dispatch
+not ok 6 - paid-preflight pilot requests missing blocks journal creation and dispatch
+  ---
+  duration_ms: 698.394513
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_requests/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot requests stale blocks journal creation and dispatch
+not ok 7 - paid-preflight pilot requests stale blocks journal creation and dispatch
+  ---
+  duration_ms: 664.489102
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_requests/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot embeddings missing blocks journal creation and dispatch
+not ok 8 - paid-preflight pilot embeddings missing blocks journal creation and dispatch
+  ---
+  duration_ms: 667.490684
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_embeddings/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot embeddings stale blocks journal creation and dispatch
+not ok 9 - paid-preflight pilot embeddings stale blocks journal creation and dispatch
+  ---
+  duration_ms: 674.046573
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_embeddings/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot privacy missing blocks journal creation and dispatch
+not ok 10 - paid-preflight pilot privacy missing blocks journal creation and dispatch
+  ---
+  duration_ms: 728.22664
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_privacy/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot privacy stale blocks journal creation and dispatch
+not ok 11 - paid-preflight pilot privacy stale blocks journal creation and dispatch
+  ---
+  duration_ms: 670.047215
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_privacy/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot conformance missing blocks journal creation and dispatch
+not ok 12 - paid-preflight pilot conformance missing blocks journal creation and dispatch
+  ---
+  duration_ms: 658.483703
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_conformance/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot conformance stale blocks journal creation and dispatch
+not ok 13 - paid-preflight pilot conformance stale blocks journal creation and dispatch
+  ---
+  duration_ms: 691.483338
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_conformance/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot allocation missing blocks journal creation and dispatch
+not ok 14 - paid-preflight pilot allocation missing blocks journal creation and dispatch
+  ---
+  duration_ms: 712.014213
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_allocation/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot allocation stale blocks journal creation and dispatch
+not ok 15 - paid-preflight pilot allocation stale blocks journal creation and dispatch
+  ---
+  duration_ms: 668.193292
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_allocation/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot accounting missing blocks journal creation and dispatch
+not ok 16 - paid-preflight pilot accounting missing blocks journal creation and dispatch
+  ---
+  duration_ms: 658.248619
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_accounting/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot accounting stale blocks journal creation and dispatch
+not ok 17 - paid-preflight pilot accounting stale blocks journal creation and dispatch
+  ---
+  duration_ms: 671.144116
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_accounting/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot supervision missing blocks journal creation and dispatch
+not ok 18 - paid-preflight pilot supervision missing blocks journal creation and dispatch
+  ---
+  duration_ms: 662.691722
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_supervision/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot supervision stale blocks journal creation and dispatch
+not ok 19 - paid-preflight pilot supervision stale blocks journal creation and dispatch
+  ---
+  duration_ms: 701.47073
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_supervision/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot freshRun missing blocks journal creation and dispatch
+not ok 20 - paid-preflight pilot freshRun missing blocks journal creation and dispatch
+  ---
+  duration_ms: 708.458768
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_freshRun/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot freshRun stale blocks journal creation and dispatch
+not ok 21 - paid-preflight pilot freshRun stale blocks journal creation and dispatch
+  ---
+  duration_ms: 646.27116
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_freshRun/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot freeze missing blocks journal creation and dispatch
+not ok 22 - paid-preflight pilot freeze missing blocks journal creation and dispatch
+  ---
+  duration_ms: 676.313871
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_freeze/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot freeze stale blocks journal creation and dispatch
+not ok 23 - paid-preflight pilot freeze stale blocks journal creation and dispatch
+  ---
+  duration_ms: 679.703691
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_freeze/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot review missing blocks journal creation and dispatch
+not ok 24 - paid-preflight pilot review missing blocks journal creation and dispatch
+  ---
+  duration_ms: 660.646664
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_review/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot review stale blocks journal creation and dispatch
+not ok 25 - paid-preflight pilot review stale blocks journal creation and dispatch
+  ---
+  duration_ms: 664.7742
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_review/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development semanticInventory missing blocks journal creation and dispatch
+not ok 26 - paid-preflight development semanticInventory missing blocks journal creation and dispatch
+  ---
+  duration_ms: 672.055682
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_semanticInventory/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development semanticInventory stale blocks journal creation and dispatch
+not ok 27 - paid-preflight development semanticInventory stale blocks journal creation and dispatch
+  ---
+  duration_ms: 691.643871
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_semanticInventory/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development output missing blocks journal creation and dispatch
+not ok 28 - paid-preflight development output missing blocks journal creation and dispatch
+  ---
+  duration_ms: 668.743332
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_output/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development output stale blocks journal creation and dispatch
+not ok 29 - paid-preflight development output stale blocks journal creation and dispatch
+  ---
+  duration_ms: 671.94485
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_output/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development requests missing blocks journal creation and dispatch
+not ok 30 - paid-preflight development requests missing blocks journal creation and dispatch
+  ---
+  duration_ms: 662.455345
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_requests/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development requests stale blocks journal creation and dispatch
+not ok 31 - paid-preflight development requests stale blocks journal creation and dispatch
+  ---
+  duration_ms: 681.086129
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_requests/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development embeddings missing blocks journal creation and dispatch
+not ok 32 - paid-preflight development embeddings missing blocks journal creation and dispatch
+  ---
+  duration_ms: 658.450143
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_embeddings/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development embeddings stale blocks journal creation and dispatch
+not ok 33 - paid-preflight development embeddings stale blocks journal creation and dispatch
+  ---
+  duration_ms: 653.297694
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_embeddings/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development privacy missing blocks journal creation and dispatch
+not ok 34 - paid-preflight development privacy missing blocks journal creation and dispatch
+  ---
+  duration_ms: 654.947774
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_privacy/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development privacy stale blocks journal creation and dispatch
+not ok 35 - paid-preflight development privacy stale blocks journal creation and dispatch
+  ---
+  duration_ms: 694.314249
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_privacy/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development conformance missing blocks journal creation and dispatch
+not ok 36 - paid-preflight development conformance missing blocks journal creation and dispatch
+  ---
+  duration_ms: 659.856788
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_conformance/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development conformance stale blocks journal creation and dispatch
+not ok 37 - paid-preflight development conformance stale blocks journal creation and dispatch
+  ---
+  duration_ms: 668.813993
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_conformance/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development allocation missing blocks journal creation and dispatch
+not ok 38 - paid-preflight development allocation missing blocks journal creation and dispatch
+  ---
+  duration_ms: 672.597012
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_allocation/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development allocation stale blocks journal creation and dispatch
+not ok 39 - paid-preflight development allocation stale blocks journal creation and dispatch
+  ---
+  duration_ms: 663.961424
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_allocation/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development accounting missing blocks journal creation and dispatch
+not ok 40 - paid-preflight development accounting missing blocks journal creation and dispatch
+  ---
+  duration_ms: 674.522986
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_accounting/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development accounting stale blocks journal creation and dispatch
+not ok 41 - paid-preflight development accounting stale blocks journal creation and dispatch
+  ---
+  duration_ms: 701.897507
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_accounting/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development analysisCoverage missing blocks journal creation and dispatch
+not ok 42 - paid-preflight development analysisCoverage missing blocks journal creation and dispatch
+  ---
+  duration_ms: 667.341096
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_analysisCoverage/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development analysisCoverage stale blocks journal creation and dispatch
+not ok 43 - paid-preflight development analysisCoverage stale blocks journal creation and dispatch
+  ---
+  duration_ms: 656.837908
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_analysisCoverage/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development resources missing blocks journal creation and dispatch
+not ok 44 - paid-preflight development resources missing blocks journal creation and dispatch
+  ---
+  duration_ms: 656.033959
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_resources/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development resources stale blocks journal creation and dispatch
+not ok 45 - paid-preflight development resources stale blocks journal creation and dispatch
+  ---
+  duration_ms: 685.823879
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_resources/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development supervision missing blocks journal creation and dispatch
+not ok 46 - paid-preflight development supervision missing blocks journal creation and dispatch
+  ---
+  duration_ms: 651.908062
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_supervision/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development supervision stale blocks journal creation and dispatch
+not ok 47 - paid-preflight development supervision stale blocks journal creation and dispatch
+  ---
+  duration_ms: 680.587558
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_supervision/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development freshRun missing blocks journal creation and dispatch
+not ok 48 - paid-preflight development freshRun missing blocks journal creation and dispatch
+  ---
+  duration_ms: 678.147035
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_freshRun/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development freshRun stale blocks journal creation and dispatch
+not ok 49 - paid-preflight development freshRun stale blocks journal creation and dispatch
+  ---
+  duration_ms: 652.971626
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_freshRun/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development freeze missing blocks journal creation and dispatch
+not ok 50 - paid-preflight development freeze missing blocks journal creation and dispatch
+  ---
+  duration_ms: 673.83633
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_freeze/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development freeze stale blocks journal creation and dispatch
+not ok 51 - paid-preflight development freeze stale blocks journal creation and dispatch
+  ---
+  duration_ms: 674.14203
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_freeze/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development review missing blocks journal creation and dispatch
+not ok 52 - paid-preflight development review missing blocks journal creation and dispatch
+  ---
+  duration_ms: 673.649451
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_review/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development review stale blocks journal creation and dispatch
+not ok 53 - paid-preflight development review stale blocks journal creation and dispatch
+  ---
+  duration_ms: 674.663799
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_review/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test semanticInventory missing blocks journal creation and dispatch
+not ok 54 - paid-preflight test semanticInventory missing blocks journal creation and dispatch
+  ---
+  duration_ms: 724.050615
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_semanticInventory/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test semanticInventory stale blocks journal creation and dispatch
+not ok 55 - paid-preflight test semanticInventory stale blocks journal creation and dispatch
+  ---
+  duration_ms: 671.180432
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_semanticInventory/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test output missing blocks journal creation and dispatch
+not ok 56 - paid-preflight test output missing blocks journal creation and dispatch
+  ---
+  duration_ms: 688.795888
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_output/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test output stale blocks journal creation and dispatch
+not ok 57 - paid-preflight test output stale blocks journal creation and dispatch
+  ---
+  duration_ms: 668.862554
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_output/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test requests missing blocks journal creation and dispatch
+not ok 58 - paid-preflight test requests missing blocks journal creation and dispatch
+  ---
+  duration_ms: 698.553205
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_requests/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test requests stale blocks journal creation and dispatch
+not ok 59 - paid-preflight test requests stale blocks journal creation and dispatch
+  ---
+  duration_ms: 673.402283
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_requests/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test embeddings missing blocks journal creation and dispatch
+not ok 60 - paid-preflight test embeddings missing blocks journal creation and dispatch
+  ---
+  duration_ms: 688.329415
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_embeddings/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test embeddings stale blocks journal creation and dispatch
+not ok 61 - paid-preflight test embeddings stale blocks journal creation and dispatch
+  ---
+  duration_ms: 659.845579
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_embeddings/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test privacy missing blocks journal creation and dispatch
+not ok 62 - paid-preflight test privacy missing blocks journal creation and dispatch
+  ---
+  duration_ms: 669.262741
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_privacy/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test privacy stale blocks journal creation and dispatch
+not ok 63 - paid-preflight test privacy stale blocks journal creation and dispatch
+  ---
+  duration_ms: 650.994992
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_privacy/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test conformance missing blocks journal creation and dispatch
+not ok 64 - paid-preflight test conformance missing blocks journal creation and dispatch
+  ---
+  duration_ms: 634.317517
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_conformance/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test conformance stale blocks journal creation and dispatch
+not ok 65 - paid-preflight test conformance stale blocks journal creation and dispatch
+  ---
+  duration_ms: 669.291162
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_conformance/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test allocation missing blocks journal creation and dispatch
+not ok 66 - paid-preflight test allocation missing blocks journal creation and dispatch
+  ---
+  duration_ms: 665.280654
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_allocation/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test allocation stale blocks journal creation and dispatch
+not ok 67 - paid-preflight test allocation stale blocks journal creation and dispatch
+  ---
+  duration_ms: 680.635403
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_allocation/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test accounting missing blocks journal creation and dispatch
+not ok 68 - paid-preflight test accounting missing blocks journal creation and dispatch
+  ---
+  duration_ms: 721.081937
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_accounting/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test accounting stale blocks journal creation and dispatch
+not ok 69 - paid-preflight test accounting stale blocks journal creation and dispatch
+  ---
+  duration_ms: 694.833666
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_accounting/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test analysisCoverage missing blocks journal creation and dispatch
+not ok 70 - paid-preflight test analysisCoverage missing blocks journal creation and dispatch
+  ---
+  duration_ms: 651.928528
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_analysisCoverage/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test analysisCoverage stale blocks journal creation and dispatch
+not ok 71 - paid-preflight test analysisCoverage stale blocks journal creation and dispatch
+  ---
+  duration_ms: 666.547895
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_analysisCoverage/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test resources missing blocks journal creation and dispatch
+not ok 72 - paid-preflight test resources missing blocks journal creation and dispatch
+  ---
+  duration_ms: 702.773802
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_resources/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test resources stale blocks journal creation and dispatch
+not ok 73 - paid-preflight test resources stale blocks journal creation and dispatch
+  ---
+  duration_ms: 702.383059
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_resources/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test supervision missing blocks journal creation and dispatch
+not ok 74 - paid-preflight test supervision missing blocks journal creation and dispatch
+  ---
+  duration_ms: 692.614738
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_supervision/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test supervision stale blocks journal creation and dispatch
+not ok 75 - paid-preflight test supervision stale blocks journal creation and dispatch
+  ---
+  duration_ms: 678.061244
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_supervision/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test freshRun missing blocks journal creation and dispatch
+not ok 76 - paid-preflight test freshRun missing blocks journal creation and dispatch
+  ---
+  duration_ms: 664.746813
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_freshRun/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test freshRun stale blocks journal creation and dispatch
+not ok 77 - paid-preflight test freshRun stale blocks journal creation and dispatch
+  ---
+  duration_ms: 681.176636
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_freshRun/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test freeze missing blocks journal creation and dispatch
+not ok 78 - paid-preflight test freeze missing blocks journal creation and dispatch
+  ---
+  duration_ms: 674.515258
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_freeze/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test freeze stale blocks journal creation and dispatch
+not ok 79 - paid-preflight test freeze stale blocks journal creation and dispatch
+  ---
+  duration_ms: 687.126194
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_freeze/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test review missing blocks journal creation and dispatch
+not ok 80 - paid-preflight test review missing blocks journal creation and dispatch
+  ---
+  duration_ms: 665.396363
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:missing_review/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test review stale blocks journal creation and dispatch
+not ok 81 - paid-preflight test review stale blocks journal creation and dispatch
+  ---
+  duration_ms: 671.405442
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:26:136'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_review/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:429)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:26:408)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot output stale source binding independently blocks before journal
+not ok 82 - paid-preflight pilot output stale source binding independently blocks before journal
+  ---
+  duration_ms: 684.484998
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:27:157'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_source_output/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:480)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:459)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot requests stale source binding independently blocks before journal
+not ok 83 - paid-preflight pilot requests stale source binding independently blocks before journal
+  ---
+  duration_ms: 675.07322
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:27:157'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_source_requests/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:480)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:459)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot privacy stale source binding independently blocks before journal
+not ok 84 - paid-preflight pilot privacy stale source binding independently blocks before journal
+  ---
+  duration_ms: 682.925473
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:27:157'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_source_privacy/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:480)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:459)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight pilot embeddings stale source binding independently blocks before journal
+not ok 85 - paid-preflight pilot embeddings stale source binding independently blocks before journal
+  ---
+  duration_ms: 659.450702
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:27:157'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_source_embeddings/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:480)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:459)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development output stale source binding independently blocks before journal
+not ok 86 - paid-preflight development output stale source binding independently blocks before journal
+  ---
+  duration_ms: 663.950891
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:27:157'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_source_output/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:480)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:459)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development requests stale source binding independently blocks before journal
+not ok 87 - paid-preflight development requests stale source binding independently blocks before journal
+  ---
+  duration_ms: 660.561975
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:27:157'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_source_requests/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:480)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:459)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development privacy stale source binding independently blocks before journal
+not ok 88 - paid-preflight development privacy stale source binding independently blocks before journal
+  ---
+  duration_ms: 672.716246
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:27:157'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_source_privacy/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:480)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:459)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development embeddings stale source binding independently blocks before journal
+not ok 89 - paid-preflight development embeddings stale source binding independently blocks before journal
+  ---
+  duration_ms: 693.725597
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:27:157'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_source_embeddings/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:480)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:459)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development analysisCoverage stale source binding independently blocks before journal
+not ok 90 - paid-preflight development analysisCoverage stale source binding independently blocks before journal
+  ---
+  duration_ms: 703.334493
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:27:157'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_source_analysisCoverage/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:480)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:459)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test output stale source binding independently blocks before journal
+not ok 91 - paid-preflight test output stale source binding independently blocks before journal
+  ---
+  duration_ms: 657.417235
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:27:157'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_source_output/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:480)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:459)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test requests stale source binding independently blocks before journal
+not ok 92 - paid-preflight test requests stale source binding independently blocks before journal
+  ---
+  duration_ms: 687.837519
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:27:157'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_source_requests/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:480)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:459)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test privacy stale source binding independently blocks before journal
+not ok 93 - paid-preflight test privacy stale source binding independently blocks before journal
+  ---
+  duration_ms: 655.431407
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:27:157'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_source_privacy/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:480)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:459)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test embeddings stale source binding independently blocks before journal
+not ok 94 - paid-preflight test embeddings stale source binding independently blocks before journal
+  ---
+  duration_ms: 673.918262
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:27:157'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_source_embeddings/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:480)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:459)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test analysisCoverage stale source binding independently blocks before journal
+not ok 95 - paid-preflight test analysisCoverage stale source binding independently blocks before journal
+  ---
+  duration_ms: 707.694336
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:27:157'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:stale_source_analysisCoverage/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:480)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:27:459)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development analysis result missing cannot open journal or dispatch
+not ok 96 - paid-preflight development analysis result missing cannot open journal or dispatch
+  ---
+  duration_ms: 713.580834
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:29:121'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:.*analysis_/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:29:767)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:29:746)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development analysis result stale cannot open journal or dispatch
+not ok 97 - paid-preflight development analysis result stale cannot open journal or dispatch
+  ---
+  duration_ms: 678.574128
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:29:121'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:.*analysis_/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:29:767)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:29:746)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development analysis result reduced-grid cannot open journal or dispatch
+not ok 98 - paid-preflight development analysis result reduced-grid cannot open journal or dispatch
+  ---
+  duration_ms: 689.080801
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:29:121'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:.*analysis_/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:29:767)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:29:746)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development analysis result stale-implementation cannot open journal or dispatch
+not ok 99 - paid-preflight development analysis result stale-implementation cannot open journal or dispatch
+  ---
+  duration_ms: 684.285642
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:29:121'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:.*analysis_/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:29:767)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:29:746)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test analysis result missing cannot open journal or dispatch
+not ok 100 - paid-preflight test analysis result missing cannot open journal or dispatch
+  ---
+  duration_ms: 690.011446
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:29:121'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:.*analysis_/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:29:767)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:29:746)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test analysis result stale cannot open journal or dispatch
+not ok 101 - paid-preflight test analysis result stale cannot open journal or dispatch
+  ---
+  duration_ms: 686.545505
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:29:121'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:.*analysis_/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:29:767)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:29:746)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test analysis result reduced-grid cannot open journal or dispatch
+not ok 102 - paid-preflight test analysis result reduced-grid cannot open journal or dispatch
+  ---
+  duration_ms: 669.86282
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:29:121'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:.*analysis_/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:29:767)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:29:746)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test analysis result stale-implementation cannot open journal or dispatch
+not ok 103 - paid-preflight test analysis result stale-implementation cannot open journal or dispatch
+  ---
+  duration_ms: 695.694902
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:29:121'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:.*analysis_/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:29:767)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:29:746)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight freeze missing dependency evaluation/hr3/scorer/slots.mjs blocks before journal
+not ok 104 - paid-preflight freeze missing dependency evaluation/hr3/scorer/slots.mjs blocks before journal
+  ---
+  duration_ms: 655.571372
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:30:170'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:freeze_closure/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:30:431)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:30:410)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight freeze missing dependency evaluation/hr3/scorer/contract.mjs blocks before journal
+not ok 105 - paid-preflight freeze missing dependency evaluation/hr3/scorer/contract.mjs blocks before journal
+  ---
+  duration_ms: 679.201155
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:30:170'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:freeze_closure/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:30:431)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:30:410)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight freeze missing dependency evaluation/hr3/runner/openai-transport.mjs blocks before journal
+not ok 106 - paid-preflight freeze missing dependency evaluation/hr3/runner/openai-transport.mjs blocks before journal
+  ---
+  duration_ms: 668.277038
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:30:170'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:freeze_closure/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:30:431)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:30:410)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight freeze missing dependency core/context-read-assembly.mjs blocks before journal
+not ok 107 - paid-preflight freeze missing dependency core/context-read-assembly.mjs blocks before journal
+  ---
+  duration_ms: 672.094909
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:30:170'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:freeze_closure/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:30:431)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:30:410)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development altered frozen analysis baseline blocks journal and dispatch
+not ok 108 - paid-preflight development altered frozen analysis baseline blocks journal and dispatch
+  ---
+  duration_ms: 671.726251
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:32:43'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:analysis_design/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:32:372)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:32:351)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test altered frozen analysis baseline blocks journal and dispatch
+not ok 109 - paid-preflight test altered frozen analysis baseline blocks journal and dispatch
+  ---
+  duration_ms: 649.946133
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:32:43'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:analysis_design/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:32:372)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:32:351)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight development unperformed resource strings cannot count as completed benchmarks
+not ok 110 - paid-preflight development unperformed resource strings cannot count as completed benchmarks
+  ---
+  duration_ms: 697.220132
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:33:43'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:resources/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:33:399)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:33:378)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: paid-preflight test unperformed resource strings cannot count as completed benchmarks
+not ok 111 - paid-preflight test unperformed resource strings cannot count as completed benchmarks
+  ---
+  duration_ms: 660.051563
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:33:43'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:resources/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:33:399)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:33:378)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: A-1.1 pilot omits analysis and resource evidence and still requires review
+ok 112 - A-1.1 pilot omits analysis and resource evidence and still requires review
+  ---
+  duration_ms: 948.166779
+  type: 'test'
+  ...
+# Subtest: A-1.1 supervision suppliedBy must be a completed primary record
+not ok 113 - A-1.1 supervision suppliedBy must be a completed primary record
+  ---
+  duration_ms: 652.249292
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:38:113'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:supervision/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:38:403)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:38:382)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: A-1.1 supervision completed must be a completed primary record
+not ok 114 - A-1.1 supervision completed must be a completed primary record
+  ---
+  duration_ms: 642.529841
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:38:113'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:supervision/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:38:403)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:38:382)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: A-1.1 supervision attended must be a completed primary record
+not ok 115 - A-1.1 supervision attended must be a completed primary record
+  ---
+  duration_ms: 691.559022
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:38:113'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:supervision/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:38:403)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:38:382)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: A-1.1 supervision progressChecksAtLeastEveryMinute must be a completed primary record
+not ok 116 - A-1.1 supervision progressChecksAtLeastEveryMinute must be a completed primary record
+  ---
+  duration_ms: 643.82396
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:38:113'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:supervision/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:38:403)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:38:382)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: A-1.1 supervision stopRulesAccepted must be a completed primary record
+not ok 117 - A-1.1 supervision stopRulesAccepted must be a completed primary record
+  ---
+  duration_ms: 669.244823
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/paid-preflight.test.mjs:38:113'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight:supervision/. Input:
+    
+    'Error: a4_complete_accounting_required'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'a4_complete_accounting_required'
+  code: 'a4_complete_accounting_required'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    verifyA4RunAccounting (evaluation/hr3/harness/runner.mjs:35:178)
+    run (evaluation/hr3/harness/runner.mjs:45:17)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:38:403)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/paid-preflight.test.mjs:38:382)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..117
+# tests 117
+# suites 0
+# pass 2
+# fail 115
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 79920.473274

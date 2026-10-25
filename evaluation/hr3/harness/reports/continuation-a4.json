@@ -55,7 +55,7 @@
   ],
   "bindingInputSchema": {
     "path": "evaluation/hr3/harness/reports/pre-development-projection-a4.schema.json",
-    "sha256": "3505029fd9f62bacc5cb9830b46b30835ed6db976ae012ffb9598e617c676054"
+    "sha256": "946557633071a71c5fde7a80dd149294202716ef8da9f470986d7d40ce8bf8cd"
   },
   "sources": {
     "evaluation/hr3/harness/requests.mjs": "4dc437ac903778a8207120ac055381d8f50e9ae37c8345eb7fc4e7c140cfe3de",
@@ -71,6 +71,6 @@
     "evaluation/hr3/harness/test/fixtures/pilot3-de178399-ledger.jsonl": "433d0c74002b96ce1319e5a14891e03e2bb47125c5381acb5edfba8e143a501e",
     "evaluation/hr3/harness/test/fixtures/pilot3-de178399-run.json": "e1246c22adae8be30d339b4c03d0f483a497f7e7080d8a3f39bcbd06ec5878dc",
     "evaluation/hr3/harness/test/fixtures/pilot3-de178399-summary.json": "a512843d40e82816fa9130e67289e1063102699a5740a43a75d2d45ce8ca98df",
-    "evaluation/hr3/protocol/errata.md": "e43a5bcfec9a605ed3f9a55570969b1fd8cb11425d1749cc3222fe8e635b057a"
+    "evaluation/hr3/protocol/errata.md": "7dea0aa1382fa772f4e88570c701cd8caa3a41f9fae0b1e7e6faea875423ffd5"
   }
 }

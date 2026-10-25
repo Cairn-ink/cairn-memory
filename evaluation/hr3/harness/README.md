@@ -1,3 +1,13 @@
+# A-4 implementation-audit repair
+
+The repaired runtime canonicalizes predecessor aliases, resolves identities once on the common admitted slot/context set, uses delivered-array citation positions for P, recursively inventories private authoring metadata, and scans complete extraction bodies before dispatch. Actual P blocks remain unchanged. A-4.1/A-4.2 ceilings and all other limits remain fixed.
+
+Real execution requires the primary-supplied record described in [Paid preflight](PAID-PREFLIGHT-A4.md), in addition to complete accounting. It must bind all certificates, runtime closure, final freeze, a primary-supplied attended-supervision record, one fresh run plan and a passing non-author review confirming A-1.1. Under prospective A-1.1, analysis/coverage and adjudication/subscription resource evidence are deferred for the engineering pilot only; both remain required before development/test or inference. The harness cannot produce supervision/review attestations or a paid-readiness record. Missing, stale or reduced evidence blocks before any journal or request.
+
+[Audit repair report](REPORT-A4-AUDIT.md) records regressions, link counts, certificates, command exits and the two-route changed-file inventory. Freeze remains with the primary. Offline passes are not paid authorization.
+
+The earlier A-4 report and implementation notes follow as historical context.
+
 # A-4 / A-4.1 / A-4.2 harness status
 
 The active runtime uses supplied route/approval/cap slots, independent assignment and quotation admission, anchored non-slot context, compact T/U/O and P serialization, and the closed slot-plus-quoted-explanation reader. Model requests contain complete deterministic projections of generator/public-contract.json. Extraction reservations are 20,480; reader reservation ceilings are T/U/P 40,960 and O 32,768 under A-4.2. The cumulative pilot ledger cap is $50. No paid readiness is claimed.

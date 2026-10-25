@@ -4,7 +4,7 @@ export { answerSchema };
 import {preflightExtractionSchema} from './preflight-a4-schema.mjs';
 import {canonicalPublicName} from '../generator/slots.mjs';
 import {PUBLIC_CONTRACT} from './contract-projection-a4.mjs';
-export const EXTRACTION_VERSION='hr3-extraction-a4-v1';
+export const EXTRACTION_VERSION='hr3-extraction-a4-audit-v2';
 export const extractionSchema=preflightExtractionSchema;
 // Responses strict JSON schema uses anyOf rather than the algebraic oneOf.
 export function providerSchema(schema) {
@@ -118,6 +118,7 @@ export function validateExtraction(value,input) {
       const {payload,...metadata}=e;
       const unique=qs=>[...new Map(qs.map(q=>[JSON.stringify([q.turn_id,q.start,q.end]),q])).values()];
       events.push({...metadata,subject:canonicalPublicName(e.subject,'subjects'),predicate:canonicalPublicName(e.predicate,'predicates'),
+        predecessor_anchors:e.predecessor_anchors.map(a=>({...a,subject:canonicalPublicName(a.subject,'subjects'),predicate:canonicalPublicName(a.predicate,'predicates')})),
         payload:context?{type:'context',...context}:{type:'slots',...admittedSlots},context,claims,field_mask:claims.map(c=>c.field),
         source_quotes:unique([...core,...factQuotes,...reason_quotes]),reason_quotes});
     }

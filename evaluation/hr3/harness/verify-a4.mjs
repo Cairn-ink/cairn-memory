@@ -13,6 +13,7 @@ const scorerTests=readdirSync('evaluation/hr3/scorer/test').filter(n=>n.endsWith
 const steps=[
  node('strict-schema',h+'/strict-schema.mjs'),node('published-schemas',h+'/schemas-a4.mjs'),
  node('private-field-inventory',h+'/private-field-inventory.mjs'),node('inspected-references',h+'/inspected-references.mjs'),
+ node('runtime-closure',h+'/runtime-closure.mjs'),node('context-certificate',h+'/context-certification.mjs'),
  node('cap-certificate',h+'/cap-certification.mjs'),node('request-certificate',h+'/request-certification.mjs'),
  node('accounting',h+'/accounting-a4.mjs'),node('projection-schema',h+'/projection-schema.mjs'),node('budget',h+'/budget-a4.mjs'),node('continuation-projection',h+'/continuation-a4.mjs'),
  node('generator-tests','--import','./'+h+'/test/redirect-generator-temp.mjs','--test','--experimental-test-isolation=none','evaluation/hr3/generator/test/generator.test.mjs'),
@@ -23,6 +24,7 @@ const steps=[
  node('fake-pilot',h+'/cli.mjs','--stage','pilot','--inputs',artifacts+'/inputs','--out',artifacts+'/pilot','--carry-forward',h+'/reports/a4-carry-forward.json',...deps),
  node('leak-scan',h+'/leak-scan.mjs',artifacts+'/pilot',artifacts+'/inputs'),
  node('bound-report',h+'/cli.mjs','--bound-report',artifacts+'/pilot','--inputs',artifacts+'/inputs','--out',artifacts+'/bounds.json'),
+ node('certification-bundle',h+'/certification-bundle-a4.mjs'),
 ];
 const verification={version:'hr3-a4-offline-verification-v1',status:'RUNNING',artifacts,networkCalls:0,paidCalls:0,commands:[],
  freeze:{status:'PENDING_PRIMARY',command:'node '+h+'/freeze-a4.mjs',reason:'Primary runs freeze with git outside this sandbox.'}};

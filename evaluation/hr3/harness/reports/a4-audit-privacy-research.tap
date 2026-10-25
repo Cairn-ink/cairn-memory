@@ -1,0 +1,150 @@
+TAP version 13
+{"aliasAttack":{"families":1890,"rawIds":54,"candidates":408240,"events":605,"oldRecoveries":605,"newRecoveries":0,"possibleFamiliesPerFirstAlias":1890}}
+{"privateInventory":{"fields":92,"variants":470,"injectionChecks":9520,"hitsMissed":0}}
+# Subtest: reader IDs and every record/graph reference use source order while semantic content is preserved
+ok 1 - reader IDs and every record/graph reference use source order while semantic content is preserved
+  ---
+  duration_ms: 3.753369
+  type: 'test'
+  ...
+# Subtest: all control branches author neutral content/action IDs/namespaces before ingestion
+ok 2 - all control branches author neutral content/action IDs/namespaces before ingestion
+  ---
+  duration_ms: 13.912114
+  type: 'test'
+  ...
+# Subtest: exact reader requests for every arm and P payloads fail closed on private label injection
+ok 3 - exact reader requests for every arm and P payloads fail closed on private label injection
+  ---
+  duration_ms: 50.82202
+  type: 'test'
+  ...
+# Subtest: preparation inventory contains all four accepted probes, free and rejected dispatches, and both holds
+ok 4 - preparation inventory contains all four accepted probes, free and rejected dispatches, and both holds
+  ---
+  duration_ms: 30.026537
+  type: 'test'
+  ...
+# Subtest: preparation usage arithmetic is verified even when file hashes are recomputed
+ok 5 - preparation usage arithmetic is verified even when file hashes are recomputed
+  ---
+  duration_ms: 26.226119
+  type: 'test'
+  ...
+# Subtest: complete request certificate scans every arm and P ingestion without private labels
+ok 6 - complete request certificate scans every arm and P ingestion without private labels
+  ---
+  duration_ms: 16.116805
+  type: 'test'
+  ...
+# Subtest: detector reproduces the audited leak counts on preserved pre-isolation request bodies
+ok 7 - detector reproduces the audited leak counts on preserved pre-isolation request bodies
+  ---
+  duration_ms: 0.309396
+  type: 'test'
+  ...
+# Subtest: engineering reference questions are authored without private fixture labels
+ok 8 - engineering reference questions are authored without private fixture labels
+  ---
+  duration_ms: 826.452692
+  type: 'test'
+  ...
+# Subtest: full private-ID dictionary attack cannot recover source-order aliases
+ok 9 - full private-ID dictionary attack cannot recover source-order aliases
+  ---
+  duration_ms: 664.643022
+  type: 'test'
+  ...
+# Subtest: source-order mapping stays identical across private-label renaming, arms, checkpoints and references
+ok 10 - source-order mapping stays identical across private-label renaming, arms, checkpoints and references
+  ---
+  duration_ms: 4.063324
+  type: 'test'
+  ...
+# Subtest: frozen inventory matches authoring metadata and run routing; every variant rejects in every arm and P including nested JSON
+ok 11 - frozen inventory matches authoring metadata and run routing; every variant rejects in every arm and P including nested JSON
+  ---
+  duration_ms: 11159.727955
+  type: 'test'
+  ...
+# Subtest: all authored pilot and engineering source language remains acceptable to the expanded scanner
+ok 12 - all authored pilot and engineering source language remains acceptable to the expanded scanner
+  ---
+  duration_ms: 797.334109
+  type: 'test'
+  ...
+# Subtest: typed correction is erroneous; U generic links retain uninterpreted labels; O removes history
+ok 13 - typed correction is erroneous; U generic links retain uninterpreted labels; O removes history
+  ---
+  duration_ms: 0.829665
+  type: 'test'
+  ...
+# Subtest: typed refinement inherits only unspecified fields; U/O do not merge
+ok 14 - typed refinement inherits only unspecified fields; U/O do not merge
+  ---
+  duration_ms: 0.594301
+  type: 'test'
+  ...
+# Subtest: overlapping scopes produce residual cells only in T; U/O expose exact scope heads
+ok 15 - overlapping scopes produce residual cells only in T; U/O expose exact scope heads
+  ---
+  duration_ms: 0.592871
+  type: 'test'
+  ...
+# Subtest: future updates stay pending; retroactive corrections use observed information only
+ok 16 - future updates stay pending; retroactive corrections use observed information only
+  ---
+  duration_ms: 0.875925
+  type: 'test'
+  ...
+# Subtest: expiry never falls back, and explicit adoption can reactivate
+ok 17 - expiry never falls back, and explicit adoption can reactivate
+  ---
+  duration_ms: 0.787494
+  type: 'test'
+  ...
+# Subtest: complete multiple predecessor sets validate atomically and resolve in source order
+ok 18 - complete multiple predecessor sets validate atomically and resolve in source order
+  ---
+  duration_ms: 0.469709
+  type: 'test'
+  ...
+# Subtest: missing, nonunique, incompatible and historical anchors never enact; nonadopted never enacts
+ok 19 - missing, nonunique, incompatible and historical anchors never enact; nonadopted never enacts
+  ---
+  duration_ms: 0.830835
+  type: 'test'
+  ...
+# Subtest: literal queries and T1 Han bigrams/no English stopwords match frozen settings
+ok 20 - literal queries and T1 Han bigrams/no English stopwords match frozen settings
+  ---
+  duration_ms: 1.231673
+  type: 'test'
+  ...
+# Subtest: reducer/serializer/retrieval determinism and whole-record assembly budget
+ok 21 - reducer/serializer/retrieval determinism and whole-record assembly budget
+  ---
+  duration_ms: 2.043477
+  type: 'test'
+  ...
+# Subtest: hand-worked outputs and serializer bytes remain frozen for ten temporal/link cases
+ok 22 - hand-worked outputs and serializer bytes remain frozen for ten temporal/link cases
+  ---
+  duration_ms: 9.336292
+  type: 'test'
+  ...
+# Subtest: hosted RRF uses normalized equal .5 channel weights and frozen k=10
+ok 23 - hosted RRF uses normalized equal .5 channel weights and frozen k=10
+  ---
+  duration_ms: 0.295295
+  type: 'test'
+  ...
+1..23
+# tests 23
+# suites 0
+# pass 23
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 13644.69628

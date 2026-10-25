@@ -6,6 +6,8 @@ import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {PrivacyGuard,PRIVATE_FIELD_INVENTORY} from './privacy.mjs';
 import {verifiedInputs} from './inputs.mjs';
+import {runtimeClosure} from './runtime-closure.mjs';
+import {extractionInput} from './extraction.mjs';
 import {responseRequest} from './requests.mjs';
 import {canonical,hash} from './common.mjs';
 
@@ -19,10 +21,15 @@ export function scanRunPrivacy(stageDirectory,inputs,{allowPartial=false}={}) {
   const run=json('run.json'),summary=json('summary.json');if(!allowPartial)assert.equal(summary.complete,true);assert.equal(run.stage,'pilot');
   const {families}=verifiedInputs(inputs);assert.equal(families.length,60);
   assert.deepEqual(run.families,families.map(f=>f.family_id));
-  const readers=[],product=[],failures=[];
+  const readers=[],extractors=[],product=[],failures=[];
+  const savedExtractions=Object.keys(manifest.files).filter(p=>p.startsWith('extractions/')).map(p=>json(p));
   for(const f of families) {
     const statePath='states/'+f.family_id+'-P-final.json';if(allowPartial&&!existsSync(join(stageDirectory,statePath)))continue;
     const guard=new PrivacyGuard(f),state=json(statePath);
+    for(const batch of f.batches){const expected=responseRequest('extraction',extractionInput(f,batch.ordinal)),saved=savedExtractions.find(e=>canonical(e.body)===canonical(expected));
+      if(!saved){if(!allowPartial)assert.fail('Missing extraction request');continue;}
+      try{guard.check('extraction-request',saved.body,{batch:batch.ordinal});}catch(e){failures.push(e.message);}
+    }
     for(const op of state.operations.filter(o=>['core','mcp','constructor'].includes(o.surface))) {
       assert.ok(op.input,'Every P public-operation payload must be recorded, including refresh');
       try {guard.check('product-payload',op.input,{surface:op.surface,method:op.method});}catch(e){failures.push(e.message);}
@@ -41,6 +48,7 @@ export function scanRunPrivacy(stageDirectory,inputs,{allowPartial=false}={}) {
       }
       try {guard.check('reader-request',saved.body,{arm,checkpoint:cp.batch});}catch(e){failures.push(e.message);}
     }
+    extractors.push(...guard.scans.filter(s=>s.kind==='extraction-request').map(s=>({family:f.family_id,...s})));
     readers.push(...guard.scans.filter(s=>s.kind==='reader-request').map(s=>({family:f.family_id,...s})));
     product.push(...guard.scans.filter(s=>s.kind==='product-payload').map(s=>({family:f.family_id,...s})));
   }
@@ -48,9 +56,9 @@ export function scanRunPrivacy(stageDirectory,inputs,{allowPartial=false}={}) {
   const byArm=Object.fromEntries(['U','T','O','P'].map(arm=>[arm,{requests:readers.filter(r=>r.arm===arm).length,hits:hits(readers.filter(r=>r.arm===arm))}]));
   for(const row of Object.values(byArm))if(summary.complete)assert.equal(row.requests,120);else assert.ok(row.requests<=120);
   const sources=Object.fromEntries(['privacy.mjs','reports/private-field-inventory-a4.json','leak-scan.mjs','research.mjs','product.mjs','runner.mjs'].map(n=>['evaluation/hr3/harness/'+n,hash(readFileSync(new URL(n,import.meta.url)))]));
-  return {version:'hr3-exact-reader-privacy-scan-a4-v1',status:failures.length?'FAIL_PRIVACY':summary.complete?'PASS':'PASS_OBSERVED_PARTIAL_ONLY',completePilot:summary.complete,completedStageManifestSHA256:hash(manifestBytes),
-    readerRequests:{planned:480,missing:480-readers.length,total:readers.length,hits:hits(readers),byArm},productPayloads:{total:product.length,hits:hits(product)},
-    inventory:{sha256:hash(PRIVATE_FIELD_INVENTORY),fields:PRIVATE_FIELD_INVENTORY.fields.length,variants:new Set(PRIVATE_FIELD_INVENTORY.fields.flatMap(f=>f.variants)).size},pReturnedContextUnchanged:true,readers,product,sources};
+  return {runtimeClosureSHA256:hash(runtimeClosure().files),version:'hr3-exact-model-privacy-scan-a4-audit-v2',status:failures.length?'FAIL_PRIVACY':summary.complete?'PASS':'PASS_OBSERVED_PARTIAL_ONLY',completePilot:summary.complete,completedStageManifestSHA256:hash(manifestBytes),
+    extractionRequests:{planned:240,total:extractors.length,missing:240-extractors.length,hits:hits(extractors)},readerRequests:{planned:480,missing:480-readers.length,total:readers.length,hits:hits(readers),byArm},productPayloads:{total:product.length,hits:hits(product)},
+    inventory:{sha256:hash(PRIVATE_FIELD_INVENTORY),fields:PRIVATE_FIELD_INVENTORY.fields.length,variants:new Set(PRIVATE_FIELD_INVENTORY.fields.flatMap(f=>f.variants)).size},pReturnedContextUnchanged:true,extractors,readers,product,sources};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href) {
   const [stageDirectory,inputs,mode]=process.argv.slice(2);assert.ok(stageDirectory&&inputs&&(!mode||mode==='--partial')&&process.argv.length===(mode?5:4));

@@ -1,0 +1,1739 @@
+{
+  "version": "hr3-a4-context-conformance-v1",
+  "status": "PASS",
+  "runtimeClosureSHA256": "da297112b46280badda0fd6f06796d5532c2abae4f3bd6acf31066b899983aa7",
+  "adoptedContexts": 6,
+  "unresolvedContexts": 3,
+  "sharedTurnAmbiguities": 3,
+  "productAdoptedWrites": 6,
+  "cases": [
+    {
+      "language": "en",
+      "mode": "adopted",
+      "researchDispositions": {
+        "T": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "erroneous"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "U": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "historical"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "O": [
+          {
+            "event": "d1",
+            "outcome": "not_materialized",
+            "materializedViews": []
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ]
+      },
+      "commonLinks": [
+        {
+          "event": "d1",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "ctx",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "d2",
+          "unresolved": false,
+          "errors": []
+        }
+      ],
+      "productAdoptedContext": true
+    },
+    {
+      "language": "en",
+      "mode": "unresolved",
+      "researchDispositions": {
+        "T": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "erroneous"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "U": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "historical"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "O": [
+          {
+            "event": "d1",
+            "outcome": "not_materialized",
+            "materializedViews": []
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ]
+      },
+      "commonLinks": [
+        {
+          "event": "d1",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "ctx",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "d2",
+          "unresolved": false,
+          "errors": []
+        }
+      ],
+      "productAdoptedContext": false
+    },
+    {
+      "language": "en",
+      "mode": "shared-turn",
+      "researchDispositions": {
+        "T": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          }
+        ],
+        "U": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              },
+              {
+                "view": "history",
+                "status": "historical"
+              }
+            ]
+          }
+        ],
+        "O": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          }
+        ]
+      },
+      "commonLinks": [
+        {
+          "event": "d1",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "ctx",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "d2",
+          "unresolved": true,
+          "errors": [
+            "nonunique_anchor"
+          ]
+        }
+      ],
+      "productAdoptedContext": true
+    },
+    {
+      "language": "zh-Hant",
+      "mode": "adopted",
+      "researchDispositions": {
+        "T": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "erroneous"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "U": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "historical"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "O": [
+          {
+            "event": "d1",
+            "outcome": "not_materialized",
+            "materializedViews": []
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ]
+      },
+      "commonLinks": [
+        {
+          "event": "d1",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "ctx",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "d2",
+          "unresolved": false,
+          "errors": []
+        }
+      ],
+      "productAdoptedContext": true
+    },
+    {
+      "language": "zh-Hant",
+      "mode": "unresolved",
+      "researchDispositions": {
+        "T": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "erroneous"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "U": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "historical"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "O": [
+          {
+            "event": "d1",
+            "outcome": "not_materialized",
+            "materializedViews": []
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ]
+      },
+      "commonLinks": [
+        {
+          "event": "d1",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "ctx",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "d2",
+          "unresolved": false,
+          "errors": []
+        }
+      ],
+      "productAdoptedContext": false
+    },
+    {
+      "language": "zh-Hant",
+      "mode": "shared-turn",
+      "researchDispositions": {
+        "T": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          }
+        ],
+        "U": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              },
+              {
+                "view": "history",
+                "status": "historical"
+              }
+            ]
+          }
+        ],
+        "O": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          }
+        ]
+      },
+      "commonLinks": [
+        {
+          "event": "d1",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "ctx",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "d2",
+          "unresolved": true,
+          "errors": [
+            "nonunique_anchor"
+          ]
+        }
+      ],
+      "productAdoptedContext": true
+    },
+    {
+      "language": "mixed",
+      "mode": "adopted",
+      "researchDispositions": {
+        "T": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "erroneous"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "U": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "historical"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "O": [
+          {
+            "event": "d1",
+            "outcome": "not_materialized",
+            "materializedViews": []
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ]
+      },
+      "commonLinks": [
+        {
+          "event": "d1",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "ctx",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "d2",
+          "unresolved": false,
+          "errors": []
+        }
+      ],
+      "productAdoptedContext": true
+    },
+    {
+      "language": "mixed",
+      "mode": "unresolved",
+      "researchDispositions": {
+        "T": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "erroneous"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "U": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "historical"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "O": [
+          {
+            "event": "d1",
+            "outcome": "not_materialized",
+            "materializedViews": []
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ]
+      },
+      "commonLinks": [
+        {
+          "event": "d1",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "ctx",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "d2",
+          "unresolved": false,
+          "errors": []
+        }
+      ],
+      "productAdoptedContext": false
+    },
+    {
+      "language": "mixed",
+      "mode": "shared-turn",
+      "researchDispositions": {
+        "T": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          }
+        ],
+        "U": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              },
+              {
+                "view": "history",
+                "status": "historical"
+              }
+            ]
+          }
+        ],
+        "O": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          }
+        ]
+      },
+      "commonLinks": [
+        {
+          "event": "d1",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "ctx",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "d2",
+          "unresolved": true,
+          "errors": [
+            "nonunique_anchor"
+          ]
+        }
+      ],
+      "productAdoptedContext": true
+    }
+  ],
+  "rows": [
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 16736,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 335,
+      "sha256": "1d1c74b484c9d185bf613e38a36e21e8860cdb708867d9f64f1d850ccfa81cd3"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 16750,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 335,
+      "sha256": "1a56dec618f7e7eaa7fb868cdf98dde657f24d588f1ea1a585d00be714015273"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 16703,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 211,
+      "sha256": "b6fef4e31f0b44056191235154c1a7670706f73071ed0f86be422c127a026e43"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 16717,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 211,
+      "sha256": "50a32718acc5e477351fd0c79c57da0c667ddee599ba86e375547bb332d6930f"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/T/2",
+      "reservation": 19949,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "4c9eedb03db615fab82ad5026d80a1d8f1f88ace76ef06c6e98b9f189cf2e938"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/U/2",
+      "reservation": 19950,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "334024ec229c6857c312978212e74829e40554b749da229cd746f3a30765a556"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/O/2",
+      "reservation": 19427,
+      "limit": 32768,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "7129aabf9100ab9985b4e2d6dff7edcb05cd44c2ccdf5bef89092b33d6325162"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/P/2",
+      "reservation": 21107,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "7aa0aa0e4c233f4aa915b28b4d31f336c4f17ee05d04dc13749c5f699970bda9"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 16736,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 334,
+      "sha256": "1d1c74b484c9d185bf613e38a36e21e8860cdb708867d9f64f1d850ccfa81cd3"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 16750,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 334,
+      "sha256": "1a56dec618f7e7eaa7fb868cdf98dde657f24d588f1ea1a585d00be714015273"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 16703,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 211,
+      "sha256": "b6fef4e31f0b44056191235154c1a7670706f73071ed0f86be422c127a026e43"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 16717,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 211,
+      "sha256": "50a32718acc5e477351fd0c79c57da0c667ddee599ba86e375547bb332d6930f"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/T/2",
+      "reservation": 19956,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "5d5caf2c2476a8a6fb1e959da521d6dd4c7996ac33d78faaea865339c5122ccd"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/U/2",
+      "reservation": 19957,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "d45ea16d590a85ae7c813f0975a035a2df34361113451999da02599285b25f98"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/O/2",
+      "reservation": 19434,
+      "limit": 32768,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "82a65f6e5487611badb39ae5f6c844b75f7db211240c382fe035e39e61daaa85"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/P/2",
+      "reservation": 19979,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "abda520bb008c08244f0ce4e97235cd8260e22700eb1a37ea27a40d2da3f8b10"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 16736,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 339,
+      "sha256": "1d1c74b484c9d185bf613e38a36e21e8860cdb708867d9f64f1d850ccfa81cd3"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 16750,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 339,
+      "sha256": "1a56dec618f7e7eaa7fb868cdf98dde657f24d588f1ea1a585d00be714015273"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 16703,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 211,
+      "sha256": "b6fef4e31f0b44056191235154c1a7670706f73071ed0f86be422c127a026e43"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 16717,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 211,
+      "sha256": "50a32718acc5e477351fd0c79c57da0c667ddee599ba86e375547bb332d6930f"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/T/2",
+      "reservation": 19923,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "e30fc03954537e69f0c23285f1b35398a60e70d16479e254225a936feefe40f0"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/U/2",
+      "reservation": 20481,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "4ad8d4d69f6b3ad4f137a12317b35a2c16a2ed7c117c64104cb31d6e208f065a"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/O/2",
+      "reservation": 19923,
+      "limit": 32768,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "e30fc03954537e69f0c23285f1b35398a60e70d16479e254225a936feefe40f0"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/P/2",
+      "reservation": 21029,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "2445ad97c02bf11cbcb1995d055fca2cde86d1cdd774eea8d8c08a3036f669bb"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 16744,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 360,
+      "sha256": "f2719f9cbb4c765f4b64dddcce69de23d8bb7f114b62342fb06771a688703cae"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 16758,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 360,
+      "sha256": "df4b1176ef37dfb8853730f15df6d46ae1821bc640d6cf57d56525c9a9469e59"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 16703,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 211,
+      "sha256": "b6fef4e31f0b44056191235154c1a7670706f73071ed0f86be422c127a026e43"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 16717,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 211,
+      "sha256": "50a32718acc5e477351fd0c79c57da0c667ddee599ba86e375547bb332d6930f"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/T/2",
+      "reservation": 19957,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "239927f0745d8f54d96df857576694d515bc54d2ba1f866e043ebe1e298cbe50"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/U/2",
+      "reservation": 19958,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "2eb9852b9c60b8139e7c1ffbe38fb4e5154b36f9a516ffb0a484b7d82088ec5b"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/O/2",
+      "reservation": 19432,
+      "limit": 32768,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "c523a12f7a0959ce659a37948fdef4ec7015ec83053027fbe39d0f6b73639558"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/P/2",
+      "reservation": 21127,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "2d19481cb7fc22c304c5d53654cbe960fa07d352e1c5365c96c77ec4abee009a"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 16744,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 359,
+      "sha256": "f2719f9cbb4c765f4b64dddcce69de23d8bb7f114b62342fb06771a688703cae"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 16758,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 359,
+      "sha256": "df4b1176ef37dfb8853730f15df6d46ae1821bc640d6cf57d56525c9a9469e59"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 16703,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 211,
+      "sha256": "b6fef4e31f0b44056191235154c1a7670706f73071ed0f86be422c127a026e43"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 16717,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 211,
+      "sha256": "50a32718acc5e477351fd0c79c57da0c667ddee599ba86e375547bb332d6930f"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/T/2",
+      "reservation": 19964,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "27362ac3e5eee3b54aa3417af8cecb9750a179a6ade7b1beaaf45635f84112a7"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/U/2",
+      "reservation": 19965,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "3eb3b7efbf02ad63761eb4ef9856acb9a622f096609eeb52ee249032b3813569"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/O/2",
+      "reservation": 19439,
+      "limit": 32768,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "79cdd783ad05191e4ad9e2c15a6c4b90319004a4da4be9225e4dbd8fec7ebc4b"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/P/2",
+      "reservation": 19979,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "9066bd34048993be7f0852f6f7a76bafbaef49f926582a7da1e84b983aa773cd"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 16744,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 349,
+      "sha256": "f2719f9cbb4c765f4b64dddcce69de23d8bb7f114b62342fb06771a688703cae"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 16758,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 349,
+      "sha256": "df4b1176ef37dfb8853730f15df6d46ae1821bc640d6cf57d56525c9a9469e59"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 16703,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 211,
+      "sha256": "b6fef4e31f0b44056191235154c1a7670706f73071ed0f86be422c127a026e43"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 16717,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 211,
+      "sha256": "50a32718acc5e477351fd0c79c57da0c667ddee599ba86e375547bb332d6930f"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/T/2",
+      "reservation": 19929,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "43b87344ac28d3ecca3990258e4ada4def4ec2737cd2ec7d8cdfb29a3001039f"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/U/2",
+      "reservation": 20487,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "1e4e3417c85c9f2b08adf4ea87f9081c4987bb4d33fb41e907ea1671d06435f3"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/O/2",
+      "reservation": 19929,
+      "limit": 32768,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "43b87344ac28d3ecca3990258e4ada4def4ec2737cd2ec7d8cdfb29a3001039f"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/P/2",
+      "reservation": 21047,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "81eefb02f021c4ce20ffcd94bfae47d8c7082618c2f05f92033fbc3557c5e45c"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 16748,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 362,
+      "sha256": "b0bd0da391741c7ea27322d5bf25f2f2722b1c5bf74dde4aec6410b3882c7fdf"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 16762,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 362,
+      "sha256": "bb8d39072d4e2615ab2cab1345b9b8135f9e839b45aa12796ab0c04015f437b1"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 16703,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 211,
+      "sha256": "b6fef4e31f0b44056191235154c1a7670706f73071ed0f86be422c127a026e43"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 16717,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 211,
+      "sha256": "50a32718acc5e477351fd0c79c57da0c667ddee599ba86e375547bb332d6930f"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/T/2",
+      "reservation": 19961,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "70e1ca5bf982ee1c7be012da913ccdf0b5d8bc0e571c4e77f5d5fd2153a5b175"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/U/2",
+      "reservation": 19962,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "124df19307e9cc4c80f66a423c74eb7828af1f9569369bf4e67c0b996ca40181"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/O/2",
+      "reservation": 19422,
+      "limit": 32768,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "2ae88cf1c1bb629ac7bc5267c34950fb3effa0a46c7799811b90782653d22ccf"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/P/2",
+      "reservation": 21087,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "2d8fb55a76ee87a31babccd85bc49690226f4dc378d60f50773ebea625fbbd6e"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 16748,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 361,
+      "sha256": "b0bd0da391741c7ea27322d5bf25f2f2722b1c5bf74dde4aec6410b3882c7fdf"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 16762,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 361,
+      "sha256": "bb8d39072d4e2615ab2cab1345b9b8135f9e839b45aa12796ab0c04015f437b1"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 16703,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 211,
+      "sha256": "b6fef4e31f0b44056191235154c1a7670706f73071ed0f86be422c127a026e43"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 16717,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 211,
+      "sha256": "50a32718acc5e477351fd0c79c57da0c667ddee599ba86e375547bb332d6930f"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/T/2",
+      "reservation": 19968,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "eb6817f15850eb9b2d84cc012d8b76eeea25b3c8d91b827aec2238842aab9b8b"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/U/2",
+      "reservation": 19969,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "4a890f6fa951b280a34d549fbb616403a75965fe38320c536b23d4b7065a19a8"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/O/2",
+      "reservation": 19429,
+      "limit": 32768,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "1f4ae40d260dbda4aefe84b81617caaee421fca10f77c4b9962463b52d61be0e"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/P/2",
+      "reservation": 19979,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "53a890a27c78a052e96c721441fac1123478918a8235926286e06a30644ee3aa"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 16748,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 369,
+      "sha256": "b0bd0da391741c7ea27322d5bf25f2f2722b1c5bf74dde4aec6410b3882c7fdf"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 16762,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 369,
+      "sha256": "bb8d39072d4e2615ab2cab1345b9b8135f9e839b45aa12796ab0c04015f437b1"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 16703,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 211,
+      "sha256": "b6fef4e31f0b44056191235154c1a7670706f73071ed0f86be422c127a026e43"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 16717,
+      "limit": 20480,
+      "pass": true,
+      "outputTokens": 211,
+      "sha256": "50a32718acc5e477351fd0c79c57da0c667ddee599ba86e375547bb332d6930f"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/T/2",
+      "reservation": 19957,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "a67ea75a684daa06836670498cf678fe9a27056f50f8794c43fd1a8b7084ef17"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/U/2",
+      "reservation": 20515,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "6bbadf74397fb0bf2a3ddfdee33d65ec5118c07908689f3153b91ea8ae27eff0"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/O/2",
+      "reservation": 19957,
+      "limit": 32768,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "a67ea75a684daa06836670498cf678fe9a27056f50f8794c43fd1a8b7084ef17"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/P/2",
+      "reservation": 21119,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "c61466b9cd0da44e97c34f1c29a5d392d04361fb818b89ae0035b83b0fbfd36b"
+    }
+  ],
+  "sources": {
+    "evaluation/hr3/harness/context-certification.mjs": "8a2cb2d845952590af5df7d0ac551d74c59bf3558f7dfbffb16b47f1d4b9dc69",
+    "evaluation/hr3/harness/schema.mjs": "a39e28e52824ed40385f04230f0380484d2ed35dea17bf5ac2bb236710c015be",
+    "evaluation/hr3/harness/research.mjs": "3c665423b7e7a6b96730046e0fc6822ca51668fded92b24856554130664533de",
+    "evaluation/hr3/harness/product.mjs": "7ec4bc429f26e997b07ddac1eda9753b1ad0e85771a84ccdc940c7c022bdb96f",
+    "evaluation/hr3/harness/privacy.mjs": "b22502c0861284c3e5571d03f7a22ef252284001f2fd8e37f3ada7fc4a7ab684",
+    "evaluation/hr3/harness/requests.mjs": "4dc437ac903778a8207120ac055381d8f50e9ae37c8345eb7fc4e7c140cfe3de",
+    "evaluation/hr3/harness/reports/private-field-inventory-a4.json": "61b87ea898bc0b792b2d20c37e58a9ecae65958b342cba0920fa0d080df56b27"
+  },
+  "referenceContextProperty": "Frozen generator and engineering-stress unsupported_cause context events are authored commitment=unresolved. Zero adopted reference contexts is a generator-fixture property; these independent source witnesses exercise adopted contexts without changing generator gold."
+}

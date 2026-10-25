@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generateSplit } from '../../generator/deliver.mjs';
-import { buildBoundReport, componentBound, scoreBounds, LABEL, writeBoundReport } from '../bounds.mjs';
+import { buildBoundReport, componentBound, scoreBounds, LABEL, writeBoundReport, assertDescriptivePilot } from '../bounds.mjs';
 import { canonical, hash } from '../common.mjs';
 
 for (const C of [0, 1, null]) for (const O of [0, 1, null]) for (const R of [0, 1, null]) {
@@ -135,4 +135,16 @@ test('completed-stage report requires execution hashes, checks artifact bytes, a
   assert.throws(()=>writeBoundReport({stageDirectory:stage,inputs:root,out}),/artifact_hash_mismatch/);
   delete run.frozenArtifacts;stageSave('run.json',run);manifest();
   assert.throws(()=>writeBoundReport({stageDirectory:stage,inputs:root,out}),/execution_time_hashes_required/);
+});
+
+test('A-1.1 bound report emits no intervals, bootstrap estimates or uncertain contrasts',()=>{
+ const report=buildBoundReport({families,observations:families.map(f=>observation(f,{C:1,O:null,R:1,J:null})),metadata:{}});
+ assertDescriptivePilot(report);assert.match(report.inference,/A-1.1/);
+ assert.equal(report.continuationApproval,false);assert.equal(report.adjudication,false);
+ const fields=[];function keys(x){if(x&&typeof x==='object')for(const [k,v]of Object.entries(x)){fields.push(k);keys(v);}}keys(report);
+ for(const k of fields)assert.doesNotMatch(k,/confidence.?interval|bootstrap|contrast|standard.?error|percentile|quantile|p.?value/i);
+ assert.deepEqual(finalT(report).rates.J.bound,[0,1]);
+});
+for(const field of ['confidenceIntervals','bootstrapEstimate','contrastWithUncertainty','standardError','pValue'])test('A-1.1 rejects nested inferential metadata '+field,()=>{
+ assert.throws(()=>buildBoundReport({families,observations:[],metadata:{analysis:{[field]:[.1,.2]}}}),/inference_forbidden/);
 });

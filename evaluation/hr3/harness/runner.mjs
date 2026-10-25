@@ -3,6 +3,7 @@ import { mkdirSync, readdirSync, writeFileSync,readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { atomicJSON, canonical, fail } from './common.mjs';
 import { verifiedInputs, scorerGold } from './inputs.mjs';
+import {verifyPaidPreflight,PAID_PREFLIGHT_PATH} from './paid-preflight.mjs';
 import {budgetA4} from './budget-a4.mjs';
 import {FIRST_PILOT_LEDGER_SHA256,loadCarryForward} from './accounting.mjs';
 import { Ledger } from './ledger.mjs';
@@ -12,7 +13,7 @@ import {PrivacyGuard,sourceOrderAliases} from './privacy.mjs';
 import {STAGE_CONFIGURATION,ARM_CONFIGURATION} from './run-configuration.mjs';
 import { identifyEvents } from './event-identity.mjs';
 import { extract } from './extraction.mjs';
-import { materialize, literalQuery, retrieve } from './research.mjs';
+import { materialize, literalQuery, retrieve,resolveLinks } from './research.mjs';
 import { responseRequest } from './requests.mjs';
 import { verifyProductPin } from './pin.mjs';
 import { artifactManifest } from './artifacts.mjs';
@@ -34,23 +35,25 @@ export function verifyA4RunAccounting(carryForward) {
   if(canonical(budget)!==canonical(budgetA4())||!budget.availableCarryFits||!budget.accountingGate.completeThirdPilotMerged||budget.carryForward.sha256!==carried.manifestSHA256)fail('a4_complete_accounting_required');
   return carried;
 }
-export async function run({stage='smoke',inputs,out,transport=new FakeTransport(),counter,carryForward=null,progress=()=>{}}) {
-  if(!STAGE_CONFIGURATION.some(c=>c.stage===stage))fail('offline_stage_only');
+export async function run({stage='smoke',inputs,out,transport=new FakeTransport(),counter,carryForward=null,paidPreflight=PAID_PREFLIGHT_PATH,progress=()=>{}}) {
   const root=resolve(out);mkdirSync(root,{recursive:true,mode:0o700});if(readdirSync(root).length)fail('output_not_empty');
   const data=verifiedInputs(inputs),families=stage==='smoke'?data.families.slice(0,2):data.families;
   const productVerification=verifyProductPin();
   // Real runs must reconcile the entire accounting chain before opening a new
   // journal. Fake runs exercise the same limits with explicitly simulated cost.
   if(!(transport instanceof FakeTransport)) {
-    verifyA4RunAccounting(carryForward);
+    const carry=verifyA4RunAccounting(carryForward);
+    verifyPaidPreflight({path:paidPreflight,carry,inputs,out,stage});
   }
+  if(!STAGE_CONFIGURATION.some(c=>c.stage===stage))fail('offline_stage_only');
   const ledger=new Ledger(join(root,'ledger.jsonl'),{stage,plan:planFor(families),carryForward}),guarded=new GuardedTransport(transport,ledger);
   const {ProductAgent}=await import('./product.mjs');
   let ownedCounter=false;if(!counter){counter=await tokenCounter();ownedCounter=true;}if(counter.id!=='tiktoken-o200k_base')fail('actual_tokenizer_required');
   for(const directory of ['extractions','states','deliveries','answers','scores'])mkdirSync(join(root,directory),{mode:0o700});
   const observations=[],extractionSummary=[],privacyReports=[],written=['ledger.jsonl'];let stopped=null;
   const persist=(path,value)=>{atomicJSON(path,value);written.push(path.slice(root.length+1));};
-  persist(join(root,'run.json'),{stage,carryForward:ledger.configuration.carryForward??null,offline:transport instanceof FakeTransport,transport:transport.constructor.name,version:'hr3-run-a4-v1',productHeadline:'Pinned product + frozen public-operation agent + shared research extraction + slot reader.',protocol:'v0.3.4+E-1+E-2+A-1+A-2+A-3+A-4+A-4.1+A-4.2',productPin:'b2513501a6747a163ab1cefb7d37a16744c9621a',families:families.map(f=>f.family_id),inputVerification:data.verification,frozenArtifacts:frozenArtifacts(inputs),productVerification,tokenizer:counter.id,readiness:transport instanceof FakeTransport?'offline exercise only; paid gates pending':'paid engineering pilot under A-1: mechanical scoring only, referrals unresolved'});
+  persist(join(root,'run.json'),{stage,carryForward:ledger.configuration.carryForward??null,offline:transport instanceof FakeTransport,transport:transport.constructor.name,version:'hr3-run-a4-audit-v2',productHeadline:'Pinned product + frozen public-operation agent + shared research extraction + slot reader.',protocol:'v0.3.4+E-1+E-2+A-1+A-2+A-3+A-4+A-4.1+A-4.2+A-1.1',productPin:'b2513501a6747a163ab1cefb7d37a16744c9621a',families:families.map(f=>f.family_id),inputVerification:data.verification,frozenArtifacts:frozenArtifacts(inputs),productVerification,tokenizer:counter.id,readiness:transport instanceof FakeTransport?'offline exercise only; paid gates pending':'paid engineering pilot under A-1: mechanical scoring only, referrals unresolved'});
+  guarded.startSupervision(progress);
   try {
     for(const family of families) {
       const researchEmbedder=createEmbedder(guarded,{prefix:family.family_id+'/research-embedding'}),productEmbedder=createEmbedder(guarded,{channel:'product',prefix:family.family_id+'/product-embedding'});
@@ -64,13 +67,14 @@ export async function run({stage='smoke',inputs,out,transport=new FakeTransport(
           aliases.register(next);
           extractionSummary.push({family:family.family_id,batch:batch.ordinal,key:extraction.key,error:extraction.error,diagnostics:{...extraction.diagnostics,identities:raw.map((e,i)=>({raw_event_id:e.event_id,internal_key:next[i].event_id,reader_id:aliases.id(next[i].event_id)}))}});
           events.push(...next);
-          await product.ingest(next,batch.observed_at);await product.controls(family.controls,batch.ordinal);
+          const linkedEvents=resolveLinks(events);
+          await product.ingest(next,batch.observed_at,{linkedEvents});await product.controls(family.controls,batch.ordinal);
           if(ledger.snapshot().stopped)fail(ledger.snapshot().stopped);
           const checkpoint=family.checkpoints.find(c=>c.batch===batch.ordinal);if(!checkpoint)continue;
           const query=literalQuery(family.header,family.language);if(query!==checkpoint.query)fail('literal_query_mismatch');
           const controls=product.controlSnapshot();
           for(const {arm} of ARM_CONFIGURATION) {
-            const name=`${family.family_id}-${arm}-${checkpoint.batch}`,state=arm==='P'?product.state():materialize(arm,events,checkpoint.at);
+            const name=`${family.family_id}-${arm}-${checkpoint.batch}`,state=arm==='P'?product.state():materialize(arm,events,checkpoint.at,{linkedEvents});
             persist(join(root,'states',name+'.json'),state);
             const delivery=arm==='P'?await product.retrieve(query):await retrieve(state,{query,embedder:researchEmbedder,counter,controls,aliases});
             if(ledger.snapshot().stopped)fail(ledger.snapshot().stopped);
@@ -90,6 +94,7 @@ export async function run({stage='smoke',inputs,out,transport=new FakeTransport(
     }
   } catch(error) {stopped=error.code??error.message;written.push('failure.json');writeFileSync(join(root,'failure.json'),canonical({reason:stopped,ledger:ledger.snapshot()})+'\n',{mode:0o600});throw error;
   } finally {
+    guarded.stopSupervision();
     persist(join(root,'extraction-summary.json'),extractionSummary);
     persist(join(root,'privacy-scan.json'),{version:'hr3-private-label-scan-v1',hits:privacyReports.reduce((n,r)=>n+r.hits,0),families:privacyReports});
     written.push('scored.jsonl');writeFileSync(join(root,'scored.jsonl'),observations.map(canonical).join('\n')+(observations.length?'\n':''),{mode:0o600});

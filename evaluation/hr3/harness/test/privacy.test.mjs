@@ -36,7 +36,8 @@ test('all control branches author neutral content/action IDs/namespaces before i
     assert.equal(control.actions.filter(a=>a.call==='adoptMethodVersion').length,raw.actions.filter(a=>a.call==='adoptMethodVersion').length);
   }
   const aliases=namespaceAliases(family.namespace),control=aliases.payload(neutralControl(safetyControl(family)));
-  assert.deepEqual(findPrivateLabels(control.actions,[family.family_id,family.lineage_id]),[]);
+  assert.ok(findPrivateLabels(control.actions,[family.family_id,family.lineage_id]).length,'Control wrappers retain private batch/call/expected selectors and must never be projected.');
+  for(const action of control.actions.filter(a=>a.content))assert.deepEqual(findPrivateLabels({namespace:action.namespace,memory:{content:action.content}},[family.family_id,family.lineage_id]),[]);
   assert.equal(control.actions[0].content,control.actions.at(-1).content,'Replay keeps the exact named forgotten content');
   assert.notEqual(control.actions[0].namespace.ownerId,control.actions[2].namespace.ownerId);
 });

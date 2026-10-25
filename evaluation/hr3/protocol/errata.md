@@ -546,3 +546,24 @@ A-4 deliberately narrows answering to structured decision recovery and quotation
 - **Unchanged.** Output caps, the extraction ceiling of 20,480 from A-4.1, models and every other rule.
 - **Cost.** The reader bound becomes `240 × ((3×40,960+32,768)×0.40 + 4×2,176×1.60)/1M` = US$18.284544 (previously US$14.094336). The incremental conservative pilot bound becomes approximately US$28.12. With the verified carried exposure of US$2.136861040 through pilot3, the cumulative bound is approximately US$30.26, within A-4's US$50 cumulative engineering-pilot exposure cap.
 - **Review.** This amendment goes to non-author review together with the A-4 implementation and A-4.1 before any paid run.
+
+### A-1.1 (2026-10-25): analysis and adjudication-resource validation gate inference, not the engineering pilot (primary amendment; needs non-author confirmation)
+
+- **Problem.** §13 step 4 lists resource benchmarks and corrected-analysis validation (§15) before the pilot. A-1 waived only the calibration ordering and kept "all non-adjudication preflight requirements". Read literally, the 60-family engineering pilot must first wait for the full §15 analysis workload: 60 power cells and 12 coverage cells, 2,000 datasets per cell, 10,000 corrected draws, projected at about 23 hours and allocated at least 36. That analysis implementation does not exist yet.
+- **Recorded deviation.** The three paid engineering pilots so far (A-1 through A-3) ran without §15 validation or the §15 subscription benchmark. Neither had been performed. Their reports contain only mechanical score bounds and no intervals or inference, so no reported number depended on the missing validation. This is recorded as a deviation, not cured retroactively.
+- **Change.** For engineering pilots under A-1 (and A-4 §7), these items move from "before the pilot" to "before development and before any interval or inferential claim":
+  - the §15 corrected-analysis validation, including the A-4 §9 bootstrap/power/coverage rerun with amended score vectors;
+  - the §15 subscription and adjudication resource benchmark and projections.
+
+  Engineering pilot reports stay "Uncalibrated engineering pilot — mechanical score bounds; no adjudication". They publish **no confidence intervals, bootstrap estimates or contrasts with uncertainty**; A-1 already makes them descriptive only.
+- **Rationale.** The pilot's purpose is execution validity. The analysis validation does not use pilot data, and §15 and A-4 §9 forbid pilot effect sizes from determining sample size or thresholds. Ordering it first delays the engineering check without protecting any reported quantity.
+- **Unchanged and still binding before the paid pilot:**
+  - the output, request, embedding and privacy certificates;
+  - conformance;
+  - allocation and fresh seed;
+  - reconciled cumulative accounting under the US$50 cap;
+  - one fresh run;
+  - a primary freeze;
+  - non-author review.
+  - §15's run-supervision and stop rules: attended execution, progress checks at least every minute, and stops on accounting or model mismatch, unexplained usage, authorization exposure, three transport failures or five minutes without progress.
+  - Development still requires every original continuation requirement (A-1), including §15 analysis validation, measured resources and calibration v2.

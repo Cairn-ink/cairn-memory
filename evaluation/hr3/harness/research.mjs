@@ -32,7 +32,7 @@ function record(e,fields=e.claims,scope=e.scope,status='active',support=[e]) {
 }
 function materializeSlots(arm,raw,atISO) {
   if(!['T','U','O'].includes(arm))throw Error('unknown_arm');
-  const at=Date.parse(atISO),events=resolveLinks(raw.filter(e=>Date.parse(e.observed_at)<=at)),committed=events.filter(adopted),active=committed.filter(e=>eligible(e,at)&&!e.unresolved);
+  const at=Date.parse(atISO),events=raw,committed=events.filter(adopted),active=committed.filter(e=>eligible(e,at)&&!e.unresolved);
   const unresolved=events.filter(e=>e.commitment==='unresolved'||adopted(e)&&e.unresolved).map(e=>record(e,e.claims,e.scope,'unresolved'));
   if(arm!=='T') {
     const groups=new Map();for(const e of active){const k=key(e);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(e);}
@@ -97,8 +97,8 @@ function materializeSlots(arm,raw,atISO) {
   }
   return {arm,at:atISO,current:[...current,...unresolved],history,pending:committed.filter(e=>!eligible(e,at)).map(e=>record(e)),events};
 }
-export function ingestionLosses(raw,atISO) {
-  const linked=resolveLinks(raw);
+export function ingestionLosses(raw,atISO,{linkedEvents}={}) {
+  const linked=linkedEvents??resolveLinks(raw.filter(e=>Date.parse(e.observed_at)<=Date.parse(atISO)));
   return linked.map((e,i)=>{const prior=linked.slice(0,i),anchors=e.predecessor_anchors.map(a=>{
     const matches=prior.filter(p=>p.source_turns.includes(a.source_turn)&&normalize(p.subject)===normalize(a.subject)&&normalize(p.predicate)===normalize(a.predicate));
     const p=matches.length===1?matches[0]:null;
@@ -107,20 +107,26 @@ export function ingestionLosses(raw,atISO) {
       historical:p?prior.some(z=>!z.unresolved&&adopted(z)&&['correction','reversal','expiry'].includes(z.change_type)&&z.replacement_extent==='entire_predecessor'&&z.targets.includes(p.event_id)&&intervalStart(z)<=Date.parse(e.observed_at)):null};
   });return {event:e.event_id,source_turns:e.source_turns,anchors,link_errors:e.link_errors,
     commitment_filtered:e.commitment!=='adopted'&&e.commitment!=='unresolved',unresolved_extent:e.replacement_extent==='unresolved',
-    outcome:e.unresolved?'unresolved_record':e.commitment==='adopted'?'retained':'commitment_filter',at:atISO};});
+    outcome:e.commitment==='unresolved'||adopted(e)&&e.unresolved?'unresolved_record':adopted(e)?'retained':'commitment_filter',at:atISO};});
 }
-export function materialize(arm,raw,atISO) {
+export function materialize(arm,raw,atISO,{linkedEvents}={}) {
   const isContext=e=>e.payload?.type==='context'||!!e.context;
-  const slots=raw.filter(e=>!isContext(e)),context=raw.filter(isContext).filter(e=>Date.parse(e.observed_at)<=Date.parse(atISO));
-  const state=materializeSlots(arm,slots,atISO),at=Date.parse(atISO),linked=resolveLinks(context),eligibleContext=linked.filter(e=>adopted(e)&&eligible(e,at)&&!e.unresolved);
+  const common=linkedEvents??resolveLinks(raw.filter(e=>Date.parse(e.observed_at)<=Date.parse(atISO)));
+  const slots=common.filter(e=>!isContext(e)),linked=common.filter(isContext);
+  const state=materializeSlots(arm,slots,atISO),at=Date.parse(atISO),eligibleContext=linked.filter(e=>adopted(e)&&eligible(e,at)&&!e.unresolved);
   const groups=new Map();for(const e of eligibleContext){const k=key(e);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(e);}
   const heads=[...groups.values()].map(es=>es.sort(arm==='U'?effectiveOrder:orderEvents).at(-1)),headIds=new Set(heads.map(e=>e.event_id));
   state.current.push(...heads.map(e=>record(e,[],e.scope,live(e,at)?'active':'no_active_decision')),
     ...linked.filter(e=>e.commitment==='unresolved'||adopted(e)&&e.unresolved).map(e=>record(e,[],e.scope,'unresolved')));
   if(arm!=='O')state.history.push(...eligibleContext.filter(e=>!headIds.has(e.event_id)||!live(e,at)).map(e=>record(e,[],e.scope,live(e,at)?'historical':'expired')));
   state.pending.push(...linked.filter(e=>adopted(e)&&!eligible(e,at)).map(e=>record(e,[],e.scope,'pending')));
-  if(arm!=='O')state.events=resolveLinks(raw.filter(e=>Date.parse(e.observed_at)<=at));
-  state.ingestionLosses=ingestionLosses(raw,atISO).map(row=>({...row,arm}));return state;
+  if(arm!=='O')state.events=common;
+  state.linkDecisions=common.map(e=>({event:e.event_id,targets:e.targets,unresolved:e.unresolved,link_errors:e.link_errors}));
+  state.ingestionLosses=ingestionLosses(raw,atISO,{linkedEvents:common}).map(row=>{
+    const materializedViews=['current','history','pending'].flatMap(view=>state[view].filter(r=>r.id===row.event).map(r=>({view,status:r.status})));
+    const outcome=materializedViews.some(r=>r.status==='unresolved')?'unresolved_record':materializedViews.length?'retained':row.commitment_filtered?'commitment_filter':'not_materialized';
+    return {...row,arm,eligibility_outcome:row.outcome,outcome,materializedViews};
+  });return state;
 }
 export function compactSlots(fields) {
   return Object.fromEntries(fields.map(({field,value})=>[field==='value'?'route':field,value.type==='Text'?value.text:value.type==='Boolean'?value.value:value.type==='Quantity'?{decimal:value.decimal,unit:value.unit}:value]));

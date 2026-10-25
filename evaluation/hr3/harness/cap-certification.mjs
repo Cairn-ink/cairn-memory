@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// Offline §13 gate. No transport, credentials, subprocesses, or network clients.
+import {runtimeClosure} from './runtime-closure.mjs';
+import {hash as closureHash} from './common.mjs';
+// Offline §13 gate. Dependency probes import definitions only; no paid transport or keys.
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -64,7 +66,7 @@ function provenance() {
     'evaluation/hr3/protocol/protocol-v0.3.4.md', 'evaluation/hr3/protocol/errata.md',
     'evaluation/hr3/generator/freeze.json', ...SOURCE_NAMES.map(n => `evaluation/hr3/generator/${n}`),
     ...['references-a4.mjs','contract-projection-a4.mjs','prompts-a4.mjs','preflight-a4-schema.mjs','schema.mjs', 'requests.mjs', 'inputs.mjs', 'extraction.mjs', 'cap-certification.mjs', 'cap-stress-fixtures.mjs', 'reports/inspected-heldout-references.json', 'reports/cap-certification-a2-pre-cap-revision.json'].map(n => `evaluation/hr3/harness/${n}`),
-    ...['schema.mjs', 'canonical.mjs', 'citations.mjs', 'scorer.mjs'].map(n => `evaluation/hr3/scorer/${n}`),
+    ...['schema.mjs', 'canonical.mjs', 'citations.mjs', 'slots.mjs','contract.mjs','scorer.mjs'].map(n => `evaluation/hr3/scorer/${n}`),
   ];
   assert.equal(sha256(readFileSync(local(names[0]))), freeze.protocol_sha256);
   const errata = readFileSync(local(names[1]), 'utf8');
@@ -145,7 +147,7 @@ export function certify({ progress = () => {} } = {}) {
       return [operation,{previousWorstTokens:inspected.previousWorstTokens[operation],engineeringWorstTokens:stressWorst,comparable:false}];
     }));
     return {
-      version: 'hr3-cap-certification-a4-v1', protocol: 'v0.3.4 + A-4/A-4.1', seed: DEFAULT_SEED,
+      runtimeClosureSHA256:closureHash(runtimeClosure().files),version: 'hr3-cap-certification-a4-audit-v2', protocol: 'v0.3.4 + A-4/A-4.1', seed: DEFAULT_SEED,
       status: Object.values(gates).every(g => g.pass) ? 'PASS' : 'FAIL_AMENDMENT_REQUIRED',
       minimumMarginPercent: MINIMUM_MARGIN_PERCENT, historicalDominance, stressSpec:STRESS_SPEC,
       inspectedHeldOutManifest:{path:'evaluation/hr3/harness/reports/inspected-heldout-references.json',sha256:sources['evaluation/hr3/harness/reports/inspected-heldout-references.json']},

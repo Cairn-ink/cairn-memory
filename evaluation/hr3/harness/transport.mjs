@@ -9,20 +9,35 @@ export class GuardedTransport {
   constructor(transport,ledger,{now=()=>Date.now(),stallMs=300000,timeoutMs=60000}={}) {
     this.transport=transport;this.ledger=ledger;this.now=now;this.lastProgress=now();this.stallMs=stallMs;this.timeoutMs=timeoutMs;
   }
+  checkProgress() {
+    if(this.supervisionError)throw this.supervisionError;
+    let state;try{state=this.ledger.snapshot();}catch(error){try{fail('accounting_mismatch:'+error.message);}catch(mismatch){this.supervisionError=mismatch;throw mismatch;}}
+    if(state.stopped)fail('stopped:'+state.stopped);
+    if(this.now()-this.lastProgress>=this.stallMs){this.ledger.stop('five_minutes_without_progress');fail('five_minutes_without_progress');}
+    return state;
+  }
+  startSupervision(progress=()=>{}) {
+    if(this.supervisor)fail('supervision_already_started');
+    // Mechanical checks supplement, never attest, the primary's attendance.
+    this.supervisor=setInterval(()=>{try{const ledger=this.checkProgress();progress({kind:'supervision',ledger});}catch(error){this.supervisionError=error;this.activeController?.abort();this.rejectActive?.(error);}},60000);
+  }
+  stopSupervision(){clearInterval(this.supervisor);this.supervisor=null;}
   async send(request,{signal}={}) {
     for(let attempt=0;attempt<2;attempt++) {
-      if(this.now()-this.lastProgress>=this.stallMs){this.ledger.stop('five_minutes_without_progress');fail('five_minutes_without_progress');}
+      this.checkProgress();
       const call={...request,logicalId:request.id,id:request.id+`/attempt-${attempt}`};validateRequest(call);this.ledger.reserve(call);
       let reply;
-      const controller=new AbortController();const abort=()=>controller.abort();signal?.addEventListener('abort',abort,{once:true});
+      const controller=new AbortController();this.activeController=controller;const abort=()=>controller.abort();signal?.addEventListener('abort',abort,{once:true});
       let timer;
       try {
         if(signal?.aborted)throw new TransportError('aborted');
-        reply=await Promise.race([this.transport.send(call,{signal:controller.signal}),new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(new TransportError('dispatch_timeout'));},this.timeoutMs);})]);
+        reply=await Promise.race([new Promise((_,reject)=>{this.rejectActive=reject;}),this.transport.send(call,{signal:controller.signal}),new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(new TransportError('dispatch_timeout'));},this.timeoutMs);})]);
       } catch(error) {
+        if(this.supervisionError)throw this.supervisionError;
         if(!(error instanceof TransportError)){this.ledger.stop('transport_contract_error');throw error;}
         this.ledger.failure(call.id);if(attempt===1)return {status:'transport_exhausted',outputText:null};continue;
-      } finally {clearTimeout(timer);signal?.removeEventListener('abort',abort);}
+      } finally {clearTimeout(timer);this.activeController=null;this.rejectActive=null;signal?.removeEventListener('abort',abort);}
+      this.checkProgress();
       if(reply.model!==request.body.model){this.ledger.stop('model_mismatch');fail('model_mismatch');}
       this.ledger.settle(call.id,reply);this.lastProgress=this.now();return reply;
     }

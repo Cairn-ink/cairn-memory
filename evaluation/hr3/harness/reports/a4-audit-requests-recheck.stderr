@@ -1,0 +1,13 @@
+(node:15) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+pilot: complete provider requests 20/60
+pilot: complete provider requests 40/60
+evaluation/hr3/harness/request-certification.mjs:91
+            const d=await retrieve(materialize(arm,events,cp.at,{linkedEvents}),{query:literalQuery(family.header,family.language),counter,embedder:certificateEmbedder(),aliases:sourceOrderAliases(events)});
+                                                                 ^
+
+ReferenceError: linkedEvents is not defined
+    at certifyRequests (evaluation/hr3/harness/request-certification.mjs:91:66)
+    at async evaluation/hr3/harness/request-certification.mjs:113:16
+
+Node.js v22.16.0

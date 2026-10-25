@@ -1,0 +1,322 @@
+TAP version 13
+# Subtest: audit aliases: zh-Hant predecessor names resolve through the public alias table
+not ok 1 - audit aliases: zh-Hant predecessor names resolve through the public alias table
+  ---
+  duration_ms: 7.60702
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/a4-audit.test.mjs:10:43'
+  failureType: 'testCodeFailure'
+  error: |-
+    pilot-correction-L01-W1
+    
+    2 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 2
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/a4-audit.test.mjs:11:145)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: audit aliases: mixed predecessor names resolve through the public alias table
+not ok 2 - audit aliases: mixed predecessor names resolve through the public alias table
+  ---
+  duration_ms: 5.499066
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/a4-audit.test.mjs:10:43'
+  failureType: 'testCodeFailure'
+  error: |-
+    pilot-correction-L04-W2
+    
+    2 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 2
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/a4-audit.test.mjs:11:145)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: audit common links: shared-turn context ambiguity is identical in T/U/O and P diagnostics
+not ok 3 - audit common links: shared-turn context ambiguity is identical in T/U/O and P diagnostics
+  ---
+  duration_ms: 3.271944
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/a4-audit.test.mjs:16:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'active'
+    - 'unresolved'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'unresolved'
+  actual: 'active'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/a4-audit.test.mjs:18:128)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: audit context coverage: certificates exercise adopted, unresolved and shared-turn context branches
+not ok 4 - audit context coverage: certificates exercise adopted, unresolved and shared-turn context branches
+  ---
+  duration_ms: 0.53619
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/a4-audit.test.mjs:21:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot find module 'evaluation/hr3/harness/context-certification.mjs' imported from evaluation/hr3/harness/test/a4-audit.test.mjs"
+  code: 'ERR_MODULE_NOT_FOUND'
+  stack: |-
+    finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    moduleResolve (node:internal/modules/esm/resolve:860:10)
+    defaultResolve (node:internal/modules/esm/resolve:984:11)
+    ModuleLoader.defaultResolve (node:internal/modules/esm/loader:780:12)
+    #cachedDefaultResolve (node:internal/modules/esm/loader:704:25)
+    #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:739:38)
+    nextStep (node:internal/modules/customization_hooks:185:26)
+    resolve (evaluation/hr3/harness/dependencies.mjs:9:12)
+    nextStep (node:internal/modules/customization_hooks:185:26)
+    resolveWithHooks (node:internal/modules/customization_hooks:391:10)
+  ...
+# Subtest: audit P addresses: omitted original receipt indices and sameAs aliases use delivered positions without changing blocks
+not ok 5 - audit P addresses: omitted original receipt indices and sameAs aliases use delivered positions without changing blocks
+  ---
+  duration_ms: 418.679398
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/a4-audit.test.mjs:24:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/a4-audit.test.mjs:28:98)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: audit paid gate: missing preflight cannot open a journal or dispatch
+not ok 6 - audit paid gate: missing preflight cannot open a journal or dispatch
+  ---
+  duration_ms: 585.701747
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/a4-audit.test.mjs:30:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /paid_preflight/. Input:
+    
+    'Error: must_not_dispatch'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'must_not_dispatch'
+  stack: |-
+    Object.send (evaluation/hr3/harness/test/a4-audit.test.mjs:32:202)
+    GuardedTransport.send (evaluation/hr3/harness/transport.mjs:21:50)
+    extract (evaluation/hr3/harness/extraction.mjs:11:31)
+    run (evaluation/hr3/harness/runner.mjs:61:34)
+    async waitForActual (node:assert:566:5)
+    async Function.rejects (node:assert:687:25)
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/a4-audit.test.mjs:32:2)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/a4-audit.test.mjs:32:2)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: audit freeze closure: graph and independent loader include scorer, real runner and pinned product dependencies
+not ok 7 - audit freeze closure: graph and independent loader include scorer, real runner and pinned product dependencies
+  ---
+  duration_ms: 0.52795
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/a4-audit.test.mjs:34:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot find module 'evaluation/hr3/harness/runtime-closure.mjs' imported from evaluation/hr3/harness/test/a4-audit.test.mjs"
+  code: 'ERR_MODULE_NOT_FOUND'
+  stack: |-
+    finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    moduleResolve (node:internal/modules/esm/resolve:860:10)
+    defaultResolve (node:internal/modules/esm/resolve:984:11)
+    ModuleLoader.defaultResolve (node:internal/modules/esm/loader:780:12)
+    #cachedDefaultResolve (node:internal/modules/esm/loader:704:25)
+    #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:739:38)
+    nextStep (node:internal/modules/customization_hooks:185:26)
+    resolve (evaluation/hr3/harness/dependencies.mjs:9:12)
+    nextStep (node:internal/modules/customization_hooks:185:26)
+    resolveWithHooks (node:internal/modules/customization_hooks:391:10)
+  ...
+# Subtest: audit recursive privacy: independent authoring injection 0
+not ok 8 - audit recursive privacy: independent authoring injection 0
+  ---
+  duration_ms: 8.608126
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/a4-audit.test.mjs:38:50'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+    
+      assert.ok(findPrivateLabels(body).length)
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: 0
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/a4-audit.test.mjs:38:128)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: audit recursive privacy: independent authoring injection 1
+not ok 9 - audit recursive privacy: independent authoring injection 1
+  ---
+  duration_ms: 0.172193
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/a4-audit.test.mjs:38:50'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+    
+      assert.ok(findPrivateLabels(body).length)
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: 0
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/a4-audit.test.mjs:38:128)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: audit recursive privacy: independent authoring injection 2
+not ok 10 - audit recursive privacy: independent authoring injection 2
+  ---
+  duration_ms: 0.142382
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/a4-audit.test.mjs:38:50'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+    
+      assert.ok(findPrivateLabels(body).length)
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: 0
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/a4-audit.test.mjs:38:128)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: audit recursive privacy: independent authoring injection 3
+not ok 11 - audit recursive privacy: independent authoring injection 3
+  ---
+  duration_ms: 0.110612
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/a4-audit.test.mjs:38:50'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+    
+      assert.ok(findPrivateLabels(body).length)
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: 0
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/a4-audit.test.mjs:38:128)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: audit extractor privacy: complete body is scanned before cache or transport
+not ok 12 - audit extractor privacy: complete body is scanned before cache or transport
+  ---
+  duration_ms: 3.28828
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/a4-audit.test.mjs:39:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /private_label_leak:extraction-request/. Input:
+    
+    'Error: must_not_dispatch'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'must_not_dispatch'
+  stack: |-
+    Object.send (evaluation/hr3/harness/test/a4-audit.test.mjs:40:197)
+    extract (evaluation/hr3/harness/extraction.mjs:11:31)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/a4-audit.test.mjs:40:117)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (evaluation/hr3/harness/test/a4-audit.test.mjs:40:96)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 0
+# fail 12
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1098.628549

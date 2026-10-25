@@ -77,13 +77,13 @@ export class ProductAgent {
     if(cursor<text.length)segments.push({origin:`product-format:${e.event_id}`,start:cursor,text:text.slice(cursor)});
     this.contentOrigins.set(normalize(text),{segments,normalize:true,truncate:null});
   }
-  async ingest(events,at) {
+  async ingest(events,at,{linkedEvents}={}) {
     const incoming=freshEvents(this.events,events);
     this.aliases.register(incoming);this.events.push(...incoming);
-    const linked=resolveLinks(this.events);const fresh=new Set(incoming.map(e=>e.event_id));
+    const linked=linkedEvents??resolveLinks(this.events);const fresh=new Set(incoming.map(e=>e.event_id));
     for(const e of linked.filter(e=>fresh.has(e.event_id))) {
       if(e.commitment!=='adopted'){this.log.push({surface:'agent',method:'skip_nonadopted',event:e.event_id,source_turns:e.source_turns,reason:'commitment_filter',commitment:e.commitment});continue;}
-      if(e.unresolved){this.log.push({surface:'agent',method:'unresolved_mapping',event:e.event_id,errors:e.link_errors,anchor_diagnostics:ingestionLosses(this.events,at).find(row=>row.event===e.event_id)?.anchors});continue;}
+      if(e.unresolved){this.log.push({surface:'agent',method:'unresolved_mapping',event:e.event_id,errors:e.link_errors,anchor_diagnostics:ingestionLosses(this.events,at,{linkedEvents:linked}).find(row=>row.event===e.event_id)?.anchors});continue;}
       this.pending.push(e);
     }
     const due=this.pending.filter(e=>intervalStart(e)<=Date.parse(at)).sort((a,b)=>intervalStart(a)-intervalStart(b)||orderEvents(a,b));
@@ -201,7 +201,7 @@ export class ProductAgent {
       for(let i=0;i<4;i++){const input={readSet:[this.namespace],types:['memory','card'],intent,budget:{maxItems:128,maxMs:5000}};this.privacy.check('product-payload',input,{surface:'core',method:'refreshContextIndex'});const result=await this.core.refreshContextIndex(input,TOKEN);refresh.push(result);this.log.push({surface:'core',method:'refreshContextIndex',input:structuredClone(input),intent,result});if(!result.ok||result.value.status==='complete')break;}
       const candidates=await this.toolEnvelope('find_memory_candidates',{query,types:['memory','card'],intent,semantic:true,limit:24,deadlineMs:5000});
       const response=await this.tool('read_memory_context',{query,types:['memory','card'],intent,semantic:true,maxTokens:2000,maxItems:12,deadlineMs:5000});
-      diagnostics[intent]={refresh,candidates,metadata:response._meta??null,error:response.isError??false};
+      diagnostics[intent]={sourceAddresses:[],refresh,candidates,metadata:response._meta??null,error:response.isError??false};
       blocks[intent]=response.content.filter(c=>c.type==='text').map(c=>c.text).join('\n');
       if(response.isError)continue;
       const wire=JSON.parse(blocks[intent]);const items=wire.value.items;
@@ -211,17 +211,18 @@ export class ProductAgent {
         delivered.push(bodyMap?{...unit(intent,i,'body',null,item.body,'product:'+item.ref.id),...bodyMap}:unit(intent,i,'body',null,item.body,'product:'+item.ref.id));
         for(let j=0;j<item.sources.length;j++) {
           const s=item.sources[j];
+          diagnostics[intent].sourceAddresses.push({item:i,deliveredSource:j,originalReceiptIndex:s.index});
           let text=s.excerpt;
           if(s.sameAsBody)text=item.body;
           if(s.sameAs){const previous=items[s.sameAs.item];const src=previous.sources[s.sameAs.source];text=src.sameAsBody?previous.body:src.excerpt;}
           if(typeof text!=='string')throw Error('unsupported_product_source_alias');
           const map=s.sameAsBody?bodyMap:this.receiptOrigin(text);
-          delivered.push(map?{...unit(intent,i,'receipt',s.index,text,'product-receipt:'+item.ref.id),...map}:unit(intent,i,'receipt',s.index,text,'product-receipt:'+item.ref.id));
+          delivered.push(map?{...unit(intent,i,'receipt',j,text,'product-receipt:'+item.ref.id),...map}:unit(intent,i,'receipt',j,text,'product-receipt:'+item.ref.id));
         }
       }
     }
     return {blocks,delivered,diagnostics};
   }
-  state() {return {version:'hr3-product-agent-a4-v1',arm:'P',readerAliases:this.aliases.diagnostics(),namespaceAliases:this.namespaceAliases.diagnostics(),pending:this.pending.map(e=>e.event_id),schedules:[...this.schedules.values()].map(({event,...s})=>({...s,event_id:event.event_id})),refs:[...this.refs],controls:this.controlSnapshot(),operations:this.log};}
+  state() {return {version:'hr3-product-agent-a4-audit-v2',arm:'P',readerAliases:this.aliases.diagnostics(),namespaceAliases:this.namespaceAliases.diagnostics(),pending:this.pending.map(e=>e.event_id),schedules:[...this.schedules.values()].map(({event,...s})=>({...s,event_id:event.event_id})),refs:[...this.refs],controls:this.controlSnapshot(),operations:this.log};}
   async close() {try{await this.client?.close();await this.server?.close();}finally{this.core?.close();if(this.directory)rmSync(this.directory,{recursive:true,force:true});}}
 }

@@ -1,0 +1,55 @@
+{
+  "status": "PASS",
+  "commands": [
+    {
+      "command": "node --check evaluation/hr3/harness/bounds.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/certification-bundle-a4.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/cli.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/paid-preflight.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/paid-requirements-a4.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/runner.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/test/bounds.test.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/test/ledger.test.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/test/paid-preflight.test.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "command": "node --check evaluation/hr3/harness/transport.mjs",
+      "exitCode": 0,
+      "stderr": ""
+    }
+  ]
+}
