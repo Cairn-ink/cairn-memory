@@ -246,7 +246,7 @@ checked independently; valid events survive, and zero survivors is a successful
 empty extraction. Within-batch duplicate event IDs exclude all events sharing
 that ID. Before arm fan-out, `event-identity.mjs` replaces retained provider IDs
 with canonical JSON keys `[family_id, batch_ordinal, raw_event_id]`. Raw IDs,
-internal keys, and opaque reader aliases are recorded in extraction diagnostics. Source-turn predecessor
+internal keys, and source-order reader aliases are recorded in extraction diagnostics. Source-turn predecessor
 anchors and semantic fields are preserved. P selects only newly received keys,
 including when an already received batch is submitted again.
 Cached records and `extraction-summary.json` retain event indices/IDs, all
@@ -274,7 +274,7 @@ node evaluation/hr3/harness/verify-a3.mjs
 ```
 
 Each invocation creates a fresh `artifacts/a3-verification-*` destination.
-The sequence checks both
+The sequence first regenerates the private-field inventory, then checks both
 provider schemas and replays the fixtures, then regenerates the inspected
 exclusion manifest, projection schema, output certificate, complete-request
 certificate, and budget in that order. It then runs all generator tests, all integration tests, and
@@ -370,9 +370,12 @@ these identifier errors and reselections without changing extraction semantics.
 ## Private-label isolation after the A-3 recheck
 
 Global keys and original fixture labels remain private diagnostics. The research
-serializer uses 128-bit opaque record aliases consistently for record IDs,
-predecessors and supporting-event references, and record-local opaque aliases
-for reason-node IDs and edge endpoints. Claims, scope, intervals, source quotes,
+serializer uses per-family first-appearance aliases `r1`, `r2`, … consistently for record IDs,
+predecessors and supporting-event references, and record-local first-appearance
+aliases `n1`, `n2`, … for reason-node IDs and edge endpoints. One registry is
+populated before arm fan-out, shared across arms/checkpoints and P receipts;
+private keys are used only for equality. No identifier is hashed, parsed or
+sorted to choose an alias. Mappings remain in private diagnostics. Claims, scope, intervals, source quotes,
 causal direction and update policies are preserved. Internal reducer-state
 fixtures stay unchanged; only their serializer hash expectations change.
 
@@ -399,7 +402,7 @@ comparisons between both saved P delivery blocks and the corresponding raw MCP
 responses. Any label hit fails verification. The complete-request certificate
 uses the same isolation and guards before measuring framing bounds. Its
 historical audit reservation figures retain the old finding; current regression
-rows and worst-body measurements are recertified with the opaque aliases.
+rows and worst-body measurements are recertified with source-order aliases.
 
 The first privacy-guarded request certification stopped on the administrative
 "Engineering stress" prefix in independently authored reference questions.
@@ -407,3 +410,23 @@ Those questions now use the neutral "At this checkpoint" prefix before request
 construction. Requested answer content and source structures are unchanged.
 The stopped verification record is retained in
 `reports/a3-privacy-first-failure.json`; the guard was not weakened.
+
+`private-field-inventory.mjs` derives and freezes
+`reports/private-field-inventory-a3.json` from pilot/engineering fixture metadata,
+allocation authoring metadata (without rendering held-out worlds), and the
+executable stage/arm configuration in `run-configuration.mjs`. New nonpublic
+fixture fields default to private. It includes stage, arm, multi-hop membership,
+expiry mode, other authoring labels and their snake/camel/Pascal/kebab and
+membership naming variants. Shared public schema keys such as status, batch,
+language and source-supported change types retain their semantic meaning.
+The scanner matches metadata keys, including nested serialized JSON and Unicode
+escapes; ordinary source words such as stage, arm, pilot, test and expiry remain
+valid prose. Tests scan all authored pilot/engineering source language unchanged.
+
+The regression enumerates every allocated family identifier and all observed
+cached raw event IDs at all four batches. It verifies that the old unkeyed-hash
+dictionary recovers the old aliases and none of the new aliases. Independently,
+renaming private labels leaves every arm's serialized evidence identical, and
+all family candidates at a fixed source position share the same alias. Source
+order is the only information exposed by these aliases. The internal state JSON
+in the hand-worked references remains identical; only serializer hashes change.

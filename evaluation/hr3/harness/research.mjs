@@ -1,4 +1,4 @@
-import {readerId,readerNodeId} from './privacy.mjs';
+import {sourceOrderAliases} from './privacy.mjs';
 import { canonical, normalize, compare, cells, scopeOf, intervalStart, intervalEnd, orderEvents, effectiveOrder } from './common.mjs';
 const key=e=>canonical([normalize(e.subject),normalize(e.predicate),cells(e.scope)]);
 const adopted=e=>e.commitment==='adopted';
@@ -94,12 +94,12 @@ export function materialize(arm,raw,atISO) {
   return {arm,at:atISO,current:[...current,...unresolved],history,pending:committed.filter(e=>!eligible(e,at)).map(e=>record(e)),events};
 }
 // Frozen serializer: body indexes interpretations; receipts are separate assembly units.
-export function serializeRecord(r) {
+export function serializeRecord(r,aliases) {
   const {receipts,...record}=r;
-  const body={...record,id:readerId(r.id),predecessors:r.predecessors?.map(readerId),supporting_events:r.supporting_events?.map(readerId),
-    reason_nodes:r.reason_nodes?.map(n=>({...n,id:readerNodeId(r.id,n.id)})),reason_edges:r.reason_edges?.map(e=>({...e,from:readerNodeId(r.id,e.from),to:readerNodeId(r.id,e.to)}))};
+  const body={...record,id:aliases.id(r.id),predecessors:r.predecessors?.map(id=>aliases.id(id)),supporting_events:r.supporting_events?.map(id=>aliases.id(id)),
+    reason_nodes:r.reason_nodes?.map(n=>({...n,id:aliases.node(r.id,n.id)})),reason_edges:r.reason_edges?.map(e=>({...e,from:aliases.node(r.id,e.from),to:aliases.node(r.id,e.to)}))};
   for(const k of Object.keys(body))if(body[k]===false||body[k]===undefined||Array.isArray(body[k])&&!body[k].length)delete body[k];
-  return {id:readerId(r.id)+':'+canonical(r.scope),body:canonical(body),receipts:receipts.map(q=>({text:q.quote,origin:q.turn_id,start:q.start,normalize:false,truncate:null}))};
+  return {id:aliases.id(r.id)+':'+canonical(r.scope),body:canonical(body),receipts:receipts.map(q=>({text:q.quote,origin:q.turn_id,start:q.start,normalize:false,truncate:null}))};
 }
 const STOP=new Set(('a an and are as at be been being but by can could did do does doing for from had has have he her hers him his how i if in into is it its me my no nor not of on or our ours she so than that the their theirs them then there these they this those to too us was we were what when where which who why will with would you your yours').split(' '));
 export function tokenizeT1(text) {
@@ -118,10 +118,10 @@ export function literalQuery(header,language) {
   const en=prefix+' decision correction change reason',zh=prefix+' 決定 修正 變更 原因';
   return language==='en'?en:language==='zh-Hant'?zh:en+'\n'+zh;
 }
-export async function retrieve(state,{query,embedder,counter,controls=[]}) {
+export async function retrieve(state,{query,embedder,counter,controls=[],aliases=sourceOrderAliases(state.events??[])}) {
   const delivered=[],blocks={},diagnostics={};
   for(const intent of ['current','history']) {
-    const records=[...state[intent].map(serializeRecord),...controls.filter(r=>r[intent]).map(r=>({id:r.id,body:r.body,receipts:r.receipts??[]}))];
+    const records=[...state[intent].map(r=>serializeRecord(r,aliases)),...controls.filter(r=>r[intent]).map(r=>({id:r.id,body:r.body,receipts:r.receipts??[]}))];
     const lexical=bm25(records,query),semantic=[];
     if(records.length) {
       const vectors=[];for(let i=0;i<records.length;i+=64)vectors.push(...await embedder.embed(records.slice(i,i+64).map(r=>r.body)));

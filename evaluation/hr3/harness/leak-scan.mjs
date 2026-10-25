@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {PrivacyGuard} from './privacy.mjs';
+import {PrivacyGuard,PRIVATE_FIELD_INVENTORY} from './privacy.mjs';
 import {verifiedInputs} from './inputs.mjs';
 import {responseRequest} from './requests.mjs';
 import {canonical,hash} from './common.mjs';
@@ -44,10 +44,10 @@ export function scanRunPrivacy(stageDirectory,inputs) {
   const hits=rows=>rows.reduce((n,r)=>n+r.hits.length,0);
   const byArm=Object.fromEntries(['U','T','O','P'].map(arm=>[arm,{requests:readers.filter(r=>r.arm===arm).length,hits:hits(readers.filter(r=>r.arm===arm))}]));
   for(const row of Object.values(byArm))assert.equal(row.requests,120);
-  const sources=Object.fromEntries(['privacy.mjs','leak-scan.mjs','research.mjs','product.mjs','runner.mjs'].map(n=>['evaluation/hr3/harness/'+n,hash(readFileSync(new URL(n,import.meta.url)))]));
+  const sources=Object.fromEntries(['privacy.mjs','reports/private-field-inventory-a3.json','leak-scan.mjs','research.mjs','product.mjs','runner.mjs'].map(n=>['evaluation/hr3/harness/'+n,hash(readFileSync(new URL(n,import.meta.url)))]));
   return {version:'hr3-exact-reader-privacy-scan-v1',status:failures.length?'FAIL':'PASS',completedStageManifestSHA256:hash(manifestBytes),
     readerRequests:{total:readers.length,hits:hits(readers),byArm},productPayloads:{total:product.length,hits:hits(product)},
-    pReturnedContextUnchanged:true,readers,product,sources};
+    inventory:{sha256:hash(PRIVATE_FIELD_INVENTORY),fields:PRIVATE_FIELD_INVENTORY.fields.length,variants:new Set(PRIVATE_FIELD_INVENTORY.fields.flatMap(f=>f.variants)).size},pReturnedContextUnchanged:true,readers,product,sources};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href) {
   const [stageDirectory,inputs]=process.argv.slice(2);assert.ok(stageDirectory&&inputs&&process.argv.length===4);

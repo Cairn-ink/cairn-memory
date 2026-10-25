@@ -1,0 +1,70 @@
+{
+  "commands": [
+    {
+      "command": "node evaluation/hr3/harness/private-field-inventory.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a3-verification-Kmgy1D/private-field-inventory.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a3-verification-Kmgy1D/private-field-inventory.stdout": "ddb134074d8c08c6556205cb485f6c293f26b2e1f0d408c1e2bafcfc5feedfde"
+      },
+      "name": "private-field-inventory",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/strict-schema.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a3-verification-Kmgy1D/strict-schema.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a3-verification-Kmgy1D/strict-schema.stdout": "fe31d294ca9e3d839543aab2f0bddb140bc503b6bf19de8fd9794abbab50f7b3"
+      },
+      "name": "strict-schema",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/replay-a3.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a3-verification-Kmgy1D/offline-replay.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a3-verification-Kmgy1D/offline-replay.stdout": "6a266a6955979fb6bb73f125458a358010c4c413715955567d888999798a5846"
+      },
+      "name": "offline-replay",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/inspected-references.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a3-verification-Kmgy1D/inspected-references.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a3-verification-Kmgy1D/inspected-references.stdout": "49ef6808e9326e14b80b96d566a9b6517f1ca3bcf0551da740eb94a4d5ac693f"
+      },
+      "name": "inspected-references",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/projection-schema.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a3-verification-Kmgy1D/projection-schema.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a3-verification-Kmgy1D/projection-schema.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "name": "projection-schema",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/cap-certification.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a3-verification-Kmgy1D/cap-certificate.stderr": "8327a32062ed024aa458d09de91d6f6f386350548ba77f2af8debec056d002cb",
+        "evaluation/hr3/harness/artifacts/a3-verification-Kmgy1D/cap-certificate.stdout": "12805061f489544cd683b7374e514d969d02be7c35320c58d4b6b1759fc513e1"
+      },
+      "name": "cap-certificate",
+      "signal": null
+    }
+  ],
+  "networkCalls": 0,
+  "paidCalls": 0,
+  "status": "INTERRUPTED",
+  "version": "hr3-a3-audited-offline-verification-v3",
+  "driverExitCode": 130,
+  "reason": "Complete private authoring inventory also covers AST and control administrative metadata before final verification."
+}

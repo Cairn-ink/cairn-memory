@@ -6,7 +6,8 @@ import {FIRST_PILOT_LEDGER_SHA256} from './accounting.mjs';
 import { Ledger } from './ledger.mjs';
 import { GuardedTransport, FakeTransport, createEmbedder } from './transport.mjs';
 import { extractionDiagnostics } from './extraction-diagnostics.mjs';
-import {PrivacyGuard,readerId} from './privacy.mjs';
+import {PrivacyGuard,sourceOrderAliases} from './privacy.mjs';
+import {STAGE_CONFIGURATION,ARM_CONFIGURATION} from './run-configuration.mjs';
 import { identifyEvents } from './event-identity.mjs';
 import { extract } from './extraction.mjs';
 import { materialize, literalQuery, retrieve } from './research.mjs';
@@ -24,7 +25,7 @@ export function planFor(families) {
     ...['research','product'].map(channel=>({operation:channel+'-embedding',ids:ids+channel+'-embedding/\\d+/attempt-[01]$',maxDispatches:families.length*1000}))];
 }
 export async function run({stage='smoke',inputs,out,transport=new FakeTransport(),counter,carryForward=null,progress=()=>{}}) {
-  if(!['smoke','pilot'].includes(stage))fail('offline_stage_only');
+  if(!STAGE_CONFIGURATION.some(c=>c.stage===stage))fail('offline_stage_only');
   const root=resolve(out);mkdirSync(root,{recursive:true,mode:0o700});if(readdirSync(root).length)fail('output_not_empty');
   const data=verifiedInputs(inputs),families=stage==='smoke'?data.families.slice(0,2):data.families;
   const productVerification=verifyProductPin();
@@ -39,24 +40,25 @@ export async function run({stage='smoke',inputs,out,transport=new FakeTransport(
   try {
     for(const family of families) {
       const researchEmbedder=createEmbedder(guarded,{prefix:family.family_id+'/research-embedding'}),productEmbedder=createEmbedder(guarded,{channel:'product',prefix:family.family_id+'/product-embedding'});
-      const privacy=new PrivacyGuard(family);
-      const product=await ProductAgent.open({privacy,namespace:family.namespace,embedder:productEmbedder,counter,onAuthorizationExposure:()=>ledger.stop('authorization_exposure')});const events=[];
+      const privacy=new PrivacyGuard(family),aliases=sourceOrderAliases();
+      const product=await ProductAgent.open({privacy,aliases,namespace:family.namespace,embedder:productEmbedder,counter,onAuthorizationExposure:()=>ledger.stop('authorization_exposure')});const events=[];
       try {
         for(const batch of family.batches) {
           const extraction=await extract({family,batch:batch.ordinal,transport:guarded,cache:join(root,'extractions')});
           written.push('extractions/'+extraction.key+'.json');
           const raw=extraction.value?.events??[],next=identifyEvents(family.family_id,batch.ordinal,raw);
-          extractionSummary.push({family:family.family_id,batch:batch.ordinal,key:extraction.key,error:extraction.error,diagnostics:{...extraction.diagnostics,identities:raw.map((e,i)=>({raw_event_id:e.event_id,internal_key:next[i].event_id,reader_id:readerId(next[i].event_id)}))}});
+          aliases.register(next);
+          extractionSummary.push({family:family.family_id,batch:batch.ordinal,key:extraction.key,error:extraction.error,diagnostics:{...extraction.diagnostics,identities:raw.map((e,i)=>({raw_event_id:e.event_id,internal_key:next[i].event_id,reader_id:aliases.id(next[i].event_id)}))}});
           events.push(...next);
           await product.ingest(next,batch.observed_at);await product.controls(family.controls,batch.ordinal);
           if(ledger.snapshot().stopped)fail(ledger.snapshot().stopped);
           const checkpoint=family.checkpoints.find(c=>c.batch===batch.ordinal);if(!checkpoint)continue;
           const query=literalQuery(family.header,family.language);if(query!==checkpoint.query)fail('literal_query_mismatch');
           const controls=product.controlSnapshot();
-          for(const arm of ['U','T','O','P']) {
+          for(const {arm} of ARM_CONFIGURATION) {
             const name=`${family.family_id}-${arm}-${checkpoint.batch}`,state=arm==='P'?product.state():materialize(arm,events,checkpoint.at);
             persist(join(root,'states',name+'.json'),state);
-            const delivery=arm==='P'?await product.retrieve(query):await retrieve(state,{query,embedder:researchEmbedder,counter,controls});
+            const delivery=arm==='P'?await product.retrieve(query):await retrieve(state,{query,embedder:researchEmbedder,counter,controls,aliases});
             if(ledger.snapshot().stopped)fail(ledger.snapshot().stopped);
             persist(join(root,'deliveries',name+'.json'),delivery);
             const readerInput={question:checkpoint.question,checkpoint:checkpoint.batch,focal_turn:checkpoint.focal_turn,requested_predecessor_turns:checkpoint.requested_predecessor_turns,delivered:delivery.blocks};

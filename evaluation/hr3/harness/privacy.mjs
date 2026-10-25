@@ -1,16 +1,31 @@
 import {canonical,hash,fail} from './common.mjs';
 
-// Private global keys are never emitted. The same opaque alias is used for a
-// record and all references to it; graph node aliases are local to that record.
-export const readerId=key=>'r'+hash(String(key)).slice(0,32);
-export const readerNodeId=(record,node)=>'n'+hash([record,node]).slice(0,32);
+import {readFileSync} from 'node:fs';
 
+// One registry per family, populated before arm fan-out in first-appearance
+// order. Keys are used only for equality, never parsed, hashed or sorted.
+export function sourceOrderAliases(events=[]) {
+  const records=new Map(),nodes=new Map();
+  const assign=(map,key,prefix)=>{if(!map.has(key))map.set(key,prefix+(map.size+1));return map.get(key);};
+  const id=key=>{if(!records.has(key))fail('unregistered_reader_identity');return records.get(key);};
+  const node=(record,key)=>{id(record);const map=nodes.get(record);if(!map?.has(key))fail('unregistered_reader_node');return map.get(key);};
+  const register=incoming=>{for(const e of incoming) {
+    assign(records,e.event_id,'r');if(!nodes.has(e.event_id))nodes.set(e.event_id,new Map());
+    for(const n of e.reason_nodes??[])assign(nodes.get(e.event_id),n.id,'n');
+    for(const edge of e.reason_edges??[])for(const key of [edge.from,edge.to])assign(nodes.get(e.event_id),key,'n');
+  }};
+  register(events);
+  return {register,id,node,diagnostics:()=>[...records].map(([internal_key,reader_id])=>({internal_key,reader_id,nodes:[...nodes.get(internal_key)].map(([private_id,reader_id])=>({private_id,reader_id}))}))};
+}
+
+export const PRIVATE_FIELD_INVENTORY=JSON.parse(readFileSync(new URL('./reports/private-field-inventory-a3.json',import.meta.url)));
+const privateFieldNames=new Set(PRIVATE_FIELD_INVENTORY.fields.flatMap(f=>f.variants).map(name=>name.replace(/[^a-z0-9]/gi,'').toLowerCase()));
+const privateField=key=>privateFieldNames.has(key.replace(/[^a-z0-9]/gi,'').toLowerCase());
 const identifierPatterns=[
-  ['split_identifier',/\b(?:pilot|engineering|development|test)(?:[-_:/][a-z0-9_.:/-]+)?\b/i],
+  ['split_identifier',/\b(?:pilot|engineering|development|test)(?:[-_:/][a-z0-9_.:/-]+)\b/i],
   ['condition_identifier',/\b(?:correction|reversal|refinement|scope_change|expiry|unchanged)[-_](?:L\d|W\d|R\d)[a-z0-9_.:/-]*\b/i],
   ['lineage_identifier',/\bL\d{2}(?:-R\d+)?-W\d+\b/i],
   ['private_condition_code',/\b(?:two_edge_serial|three_edge_serial|conjunctive_mediated|alternative_mediated|authored_rationale_topology|reason_strata)\b/i],
-  ['private_metadata_key',/["'](?:family_id|lineage_id|familyId|lineageId|causal_class|split|schema_version|seed|fixture_id|bank_id|world_id|allocation_id|condition_id|change_type_id|case_id|private_label|authored_change_type)["']\s*:/i],
 ];
 
 export function privateLabels(family={}) {
@@ -28,6 +43,7 @@ export function findPrivateLabels(value,labels=[]) {
   function inspect(text,path) {
     text=text.replace(/\\u([0-9a-f]{4})/gi,(_,hex)=>String.fromCharCode(parseInt(hex,16))).replace(/\\"/g,'"');
     for(const label of labels)if(text.toLowerCase().includes(label.toLowerCase()))add('private_identifier',label,path);
+    for(const match of text.matchAll(/["']([^"']+)["']\s*:/g))if(privateField(match[1]))add('private_metadata_key',match[1],path);
     for(const [kind,pattern] of identifierPatterns){const match=text.match(pattern);if(match)add(kind,match[0],path);}
   }
   function add(kind,label,path){const key=canonical([kind,label,path]);if(!seen.has(key)){seen.add(key);hits.push({kind,label,path});}}
@@ -38,7 +54,7 @@ export function findPrivateLabels(value,labels=[]) {
       inspect(v,path);
       if(/^[\s]*[\[{]/.test(v)){let parsed;try{parsed=JSON.parse(v);}catch{return;}visit(parsed,path+'#json',depth+1);}
     } else if(Array.isArray(v))v.forEach((x,i)=>visit(x,path+'/'+i,depth+1));
-    else if(v&&typeof v==='object')for(const [key,child] of Object.entries(v))visit(child,path+'/'+key,depth+1);
+    else if(v&&typeof v==='object')for(const [key,child] of Object.entries(v)){if(privateField(key))add('private_metadata_key',key,path);visit(child,path+'/'+key,depth+1);}
   }
   visit(value,'$');return hits;
 }
@@ -51,7 +67,7 @@ export class PrivacyGuard {
     if(hits.length)fail('private_label_leak:'+kind);
     return value;
   }
-  report(){return {version:'hr3-private-label-scan-v1',scans:this.scans.length,hits:this.scans.reduce((n,r)=>n+r.hits.length,0),records:this.scans};}
+  report(){return {version:'hr3-private-label-scan-v2',inventorySHA256:hash(PRIVATE_FIELD_INVENTORY),scans:this.scans.length,hits:this.scans.reduce((n,r)=>n+r.hits.length,0),records:this.scans};}
 }
 
 // These are authored control assertions, not redactions of P's returned text.

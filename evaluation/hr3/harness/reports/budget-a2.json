@@ -111,7 +111,7 @@
     "evaluation/hr3/harness/budget-a2.mjs": "3265337ff2c9b304f49a0ad1ac8417d69c2b9f1bae00e99ed5f2c8327781f989",
     "evaluation/hr3/harness/accounting.mjs": "fffd4dad3f57d44a57879b5529d58f1323bd9945fba0d6b5bc942555d9617ea0",
     "evaluation/hr3/harness/reports/a3-carry-forward.json": "3627dec5c16ffdd79f782229d1ecc83f09bf69377d31f2791ce586902931e3b7",
-    "evaluation/hr3/harness/reports/request-certification-a3.json": "bf2ff8fff1e0397e45e5b5c14d3a7746c87388fc0f981e965df162fa45b4ecc9",
+    "evaluation/hr3/harness/reports/request-certification-a3.json": "fefccf0223e9851e278c452b586879a404c938cdd53e0a52e02ed6518da0938d",
     "evaluation/hr3/harness/requests.mjs": "6372f7ca96800a2ef409f892bd0674c76256361072afe3549f642eb33a22fd2b",
     "evaluation/hr3/harness/ledger.mjs": "aff48f3c4093c7de9e71031c2d976e033ff4599f2b9ee2972f71601c7a13bc4d",
     "evaluation/hr3/harness/projection-schema.mjs": "6d1c9e0f24674d74f96221086dffdb19cc9e20f959cfe2129e49c9428d6372cc",

@@ -18,6 +18,7 @@ if(!existsSync(firstFailure)&&existsSync(h+'/reports/a3-verification.json')) {
 const node=(name,...args)=>({name,args});
 const dependencies=['--mcp-dependencies','adapters/mcp/node_modules','--tokenizer-dependencies','adapters/openai/node_modules'];
 const steps=[
+  node('private-field-inventory',h+'/private-field-inventory.mjs'),
   node('strict-schema',h+'/strict-schema.mjs'),
   node('offline-replay',h+'/replay-a3.mjs'),
   node('inspected-references',h+'/inspected-references.mjs'),

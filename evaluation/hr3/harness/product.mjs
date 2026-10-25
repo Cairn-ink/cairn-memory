@@ -6,7 +6,7 @@ import { mkdtempSync, chmodSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { canonical, normalize, hash, orderEvents, intervalStart } from './common.mjs';
-import {PrivacyGuard,readerId,neutralControl,namespaceAliases} from './privacy.mjs';
+import {PrivacyGuard,sourceOrderAliases,neutralControl,namespaceAliases} from './privacy.mjs';
 import { freshEvents } from './event-identity.mjs';
 import { resolveLinks, unit } from './research.mjs';
 const ok=r=>{if(!r.ok)throw Object.assign(Error(r.error.code),{code:r.error.code});return r.value;};
@@ -20,8 +20,8 @@ export function formatEvent(e) {
   return `${e.subject} ${e.predicate}; scope=${canonical(e.scope)}; valid=${canonical(e.effective_interval)}; ${e.claims.map(x=>`${x.field}=${canonical(x.value)}`).join('; ')}${e.reason_edges.length?' Reasons: '+e.reason_edges.flatMap(x=>x.source_quotes.map(q=>q.quote)).join(' '):''}`;
 }
 export class ProductAgent {
-  static async open({namespace,embedder,counter,tempRoot=tmpdir(),onAuthorizationExposure=()=>{},privacy=new PrivacyGuard()}={}) {
-    const self=new ProductAgent();self.namespaceAliases=namespaceAliases(namespace);namespace=self.namespaceAliases.own;self.namespace=namespace;self.privacy=privacy;self.embedder=embedder;counter={id:counter.id,countTokens:counter.countTokens};self.counter=counter;
+  static async open({namespace,embedder,counter,tempRoot=tmpdir(),onAuthorizationExposure=()=>{},privacy=new PrivacyGuard(),aliases=sourceOrderAliases()}={}) {
+    const self=new ProductAgent();self.aliases=aliases;self.namespaceAliases=namespaceAliases(namespace);namespace=self.namespaceAliases.own;self.namespace=namespace;self.privacy=privacy;self.embedder=embedder;counter={id:counter.id,countTokens:counter.countTokens};self.counter=counter;
     self.directory=mkdtempSync(join(tempRoot,'hr3-p-'));chmodSync(self.directory,0o700);self.path=join(self.directory,'store.sqlite');
     self.onAuthorizationExposure=onAuthorizationExposure;self.privacy.check('product-payload',{namespace},{surface:'constructor',method:'namespace'});self.log=[{surface:'constructor',method:'namespace',input:{namespace}}];self.events=[];self.refs=new Map();self.pending=[];self.schedules=new Map();self.contentOrigins=new Map();self.receiptOrigins=new Map();self.symbols={};self.controlRecords=[];self.forgottenIds=new Set();
     const allowed=new Set([canonical(namespace)]);
@@ -46,7 +46,7 @@ export class ProductAgent {
     const quotes=[...e.source_quotes].sort((a,b)=>e.source_turns.indexOf(a.turn_id)-e.source_turns.indexOf(b.turn_id)||a.start-b.start);
     this.log.push({surface:'agent',method:'receipt_selection',event:e.event_id,omitted:quotes.slice(4)});
     return quotes.slice(0,4).map((q,i)=>{
-      const excerpt=normalize(q.quote).slice(0,800),receipt={client:'hr3',sessionId:'hr3-public-agent',eventId:`${readerId(e.event_id)}/${i}`,role:'user',excerpt};
+      const excerpt=normalize(q.quote).slice(0,800),receipt={client:'hr3',sessionId:'hr3-public-agent',eventId:`${this.aliases.id(e.event_id)}/${i}`,role:'user',excerpt};
       this.receiptOrigins.set(excerpt,{segments:[{origin:q.turn_id,start:q.start,text:q.quote}],normalize:true,truncate:800});return receipt;
     });
   }
@@ -63,7 +63,7 @@ export class ProductAgent {
   }
   async ingest(events,at) {
     const incoming=freshEvents(this.events,events);
-    this.events.push(...incoming);
+    this.aliases.register(incoming);this.events.push(...incoming);
     const linked=resolveLinks(this.events);const fresh=new Set(incoming.map(e=>e.event_id));
     for(const e of linked.filter(e=>fresh.has(e.event_id))) {
       if(e.commitment!=='adopted'){this.log.push({surface:'agent',method:'skip_nonadopted',event:e.event_id});continue;}
@@ -206,6 +206,6 @@ export class ProductAgent {
     }
     return {blocks,delivered,diagnostics};
   }
-  state() {return {namespaceAliases:this.namespaceAliases.diagnostics(),pending:this.pending.map(e=>e.event_id),schedules:[...this.schedules.values()].map(({event,...s})=>({...s,event_id:event.event_id})),refs:[...this.refs],controls:this.controlSnapshot(),operations:this.log};}
+  state() {return {readerAliases:this.aliases.diagnostics(),namespaceAliases:this.namespaceAliases.diagnostics(),pending:this.pending.map(e=>e.event_id),schedules:[...this.schedules.values()].map(({event,...s})=>({...s,event_id:event.event_id})),refs:[...this.refs],controls:this.controlSnapshot(),operations:this.log};}
   async close() {try{await this.client?.close();await this.server?.close();}finally{this.core?.close();if(this.directory)rmSync(this.directory,{recursive:true,force:true});}}
 }

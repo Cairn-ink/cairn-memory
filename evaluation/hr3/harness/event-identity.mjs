@@ -1,7 +1,7 @@
 import {canonical,fail} from './common.mjs';
 
 // This global key is private diagnostic identity. Public serializers and P
-// receipts use opaque reader aliases; the mapping is never reader evidence.
+// receipts use source-order reader aliases; the mapping is never reader evidence.
 export const eventKey=(family,batch,raw)=>canonical([family,batch,raw]);
 
 // Provider IDs are batch-local. This is the single shared boundary before

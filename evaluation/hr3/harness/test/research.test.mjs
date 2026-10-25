@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { materialize,resolveLinks,tokenizeT1,bm25,retrieve,literalQuery,serializeRecord } from '../research.mjs';
+import {sourceOrderAliases} from '../privacy.mjs';
 import { canonical,cells } from '../common.mjs';
 import { event,scope,tw,text,date } from './fixtures.mjs';
 const current=s=>s.current.filter(r=>r.status==='active');
@@ -46,7 +47,7 @@ test('literal queries and T1 Han bigrams/no English stopwords match frozen setti
  const scores=bm25([{id:'b',body:'car car'},{id:'a',body:'car car'},{id:'c',body:'unrelated'}],'car');assert.deepEqual(scores.map(r=>r.id),['a','b']);
 });
 test('reducer/serializer/retrieval determinism and whole-record assembly budget',async()=>{
- const raw=[event(1),event(2)],a=materialize('T',raw,date(2)),b=materialize('T',raw,date(2));assert.equal(canonical(a),canonical(b));assert.equal(canonical(serializeRecord(a.current[0])),canonical(serializeRecord(b.current[0])));
+ const raw=[event(1),event(2)],a=materialize('T',raw,date(2)),b=materialize('T',raw,date(2));assert.equal(canonical(a),canonical(b));assert.equal(canonical(serializeRecord(a.current[0],sourceOrderAliases(raw))),canonical(serializeRecord(b.current[0],sourceOrderAliases(raw))));
  const embedder={async embed(texts){return texts.map(()=>[1,0]);}},counter={countTokens:text=>text.length};
  const delivery=await retrieve(a,{query:'service',embedder,counter});assert.deepEqual(delivery,await retrieve(b,{query:'service',embedder,counter}));for(const d of Object.values(delivery.diagnostics))assert.ok(d.tokens<=2000);
  const huge=structuredClone(a);huge.current[0].fields[0].value=text('x'.repeat(5000));assert.equal((await retrieve(huge,{query:'service',embedder,counter})).diagnostics.current.selected,0);
@@ -54,7 +55,7 @@ test('reducer/serializer/retrieval determinism and whole-record assembly budget'
 test('hand-worked outputs and serializer bytes remain frozen for ten temporal/link cases',async()=>{
  const {readFileSync}=await import('node:fs'),{referenceCases}=await import('./fixtures.mjs'),{hash}=await import('../common.mjs');
  const expected=JSON.parse(readFileSync(new URL('./references.json',import.meta.url)));
- const actual=referenceCases().map(c=>({name:c.name,arms:Object.fromEntries(['U','T','O'].map(arm=>{const state=materialize(arm,c.events,c.at);return [arm,{state,serializer_sha256:hash(canonical([...state.current,...state.history].map(serializeRecord)))}];}))}));assert.equal(canonical(actual),canonical(expected));
+ const actual=referenceCases().map(c=>({name:c.name,arms:Object.fromEntries(['U','T','O'].map(arm=>{const state=materialize(arm,c.events,c.at);return [arm,{state,serializer_sha256:hash(canonical([...state.current,...state.history].map(r=>serializeRecord(r,sourceOrderAliases(c.events)))))}];}))}));assert.equal(canonical(actual),canonical(expected));
 });
 test('hosted RRF uses normalized equal .5 channel weights and frozen k=10',async()=>{
  const result=await retrieve(materialize('U',[event(1)],date(1)),{query:'service',embedder:{embed:async texts=>texts.map(()=>[1,0])},counter:{countTokens:()=>1}});

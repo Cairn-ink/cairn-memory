@@ -1,0 +1,781 @@
+{
+  "version": "hr3-private-field-inventory-v1",
+  "derivation": "All nonpublic top-level fixture and allocation authoring keys, reason membership keys, AST variant flags, and executable run routing keys; plus previously supported reserved private identifiers. Naming variants normalized across snake/camel/Pascal/kebab and is-prefixed membership flags.",
+  "publicSemanticFields": [
+    "language",
+    "change_type",
+    "namespace",
+    "header",
+    "query_scope",
+    "batches",
+    "checkpoints",
+    "controls",
+    "ast"
+  ],
+  "fields": [
+    {
+      "name": "aliases",
+      "variants": [
+        "Aliases",
+        "aliases",
+        "isAliases",
+        "is_aliases"
+      ],
+      "origins": [
+        "allocation.lineage.ancestry.aliases"
+      ]
+    },
+    {
+      "name": "allocation_id",
+      "variants": [
+        "AllocationId",
+        "allocation-id",
+        "allocationId",
+        "allocation_id",
+        "isAllocationId",
+        "is_allocation_id"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "ancestry",
+      "variants": [
+        "Ancestry",
+        "ancestry",
+        "isAncestry",
+        "is_ancestry"
+      ],
+      "origins": [
+        "allocation.lineage.ancestry"
+      ]
+    },
+    {
+      "name": "arm",
+      "variants": [
+        "Arm",
+        "arm",
+        "isArm",
+        "is_arm"
+      ],
+      "origins": [
+        "run_configuration.arm"
+      ]
+    },
+    {
+      "name": "authored_change_type",
+      "variants": [
+        "AuthoredChangeType",
+        "authored-change-type",
+        "authoredChangeType",
+        "authored_change_type",
+        "isAuthoredChangeType",
+        "is_authored_change_type"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "authored_rationale_topology",
+      "variants": [
+        "AuthoredRationaleTopology",
+        "authored-rationale-topology",
+        "authoredRationaleTopology",
+        "authored_rationale_topology",
+        "isAuthoredRationaleTopology",
+        "is_authored_rationale_topology"
+      ],
+      "origins": [
+        "allocation.lineage.authored_rationale_topology",
+        "pilot.family.authored_rationale_topology"
+      ]
+    },
+    {
+      "name": "authoring_path",
+      "variants": [
+        "AuthoringPath",
+        "authoring-path",
+        "authoringPath",
+        "authoring_path",
+        "isAuthoringPath",
+        "is_authoring_path"
+      ],
+      "origins": [
+        "pilot.family.controls[].authoring_path"
+      ]
+    },
+    {
+      "name": "bank_id",
+      "variants": [
+        "BankId",
+        "bank-id",
+        "bankId",
+        "bank_id",
+        "isBankId",
+        "is_bank_id"
+      ],
+      "origins": [
+        "allocation.lineage.ancestry.bank_id",
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "branch",
+      "variants": [
+        "Branch",
+        "branch",
+        "isBranch",
+        "is_branch"
+      ],
+      "origins": [
+        "pilot.family.controls[].branch"
+      ]
+    },
+    {
+      "name": "card",
+      "variants": [
+        "Card",
+        "card",
+        "isCard",
+        "is_card"
+      ],
+      "origins": [
+        "allocation.lineage.members[].card"
+      ]
+    },
+    {
+      "name": "card_authoring_path",
+      "variants": [
+        "CardAuthoringPath",
+        "card-authoring-path",
+        "cardAuthoringPath",
+        "card_authoring_path",
+        "isCardAuthoringPath",
+        "is_card_authoring_path"
+      ],
+      "origins": [
+        "allocation.lineage.members[].card_authoring_path"
+      ]
+    },
+    {
+      "name": "card_branch",
+      "variants": [
+        "CardBranch",
+        "card-branch",
+        "cardBranch",
+        "card_branch",
+        "isCardBranch",
+        "is_card_branch"
+      ],
+      "origins": [
+        "allocation.lineage.members[].card_branch"
+      ]
+    },
+    {
+      "name": "case_id",
+      "variants": [
+        "CaseId",
+        "case-id",
+        "caseId",
+        "case_id",
+        "isCaseId",
+        "is_case_id"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "causal_class",
+      "variants": [
+        "CausalClass",
+        "causal-class",
+        "causalClass",
+        "causal_class",
+        "isCausalClass",
+        "is_causal_class"
+      ],
+      "origins": [
+        "allocation.lineage.causal_class",
+        "engineering.family.causal_class",
+        "pilot.family.causal_class"
+      ]
+    },
+    {
+      "name": "certification",
+      "variants": [
+        "Certification",
+        "certification",
+        "isCertification",
+        "is_certification"
+      ],
+      "origins": [
+        "pilot.family.controls[].certification"
+      ]
+    },
+    {
+      "name": "change_type_id",
+      "variants": [
+        "ChangeTypeId",
+        "change-type-id",
+        "changeTypeId",
+        "change_type_id",
+        "isChangeTypeId",
+        "is_change_type_id"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "condition_id",
+      "variants": [
+        "ConditionId",
+        "condition-id",
+        "conditionId",
+        "condition_id",
+        "isConditionId",
+        "is_condition_id"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "derivatives",
+      "variants": [
+        "Derivatives",
+        "derivatives",
+        "isDerivatives",
+        "is_derivatives"
+      ],
+      "origins": [
+        "allocation.lineage.ancestry.derivatives"
+      ]
+    },
+    {
+      "name": "execution_status",
+      "variants": [
+        "ExecutionStatus",
+        "execution-status",
+        "executionStatus",
+        "execution_status",
+        "isExecutionStatus",
+        "is_execution_status"
+      ],
+      "origins": [
+        "pilot.family.controls[].execution_status"
+      ]
+    },
+    {
+      "name": "expiry_mode",
+      "variants": [
+        "ExpiryMode",
+        "expiry-mode",
+        "expiryMode",
+        "expiry_mode",
+        "isExpiryMode",
+        "is_expiry_mode"
+      ],
+      "origins": [
+        "allocation.lineage.expiry_mode",
+        "pilot.family.expiry_mode"
+      ]
+    },
+    {
+      "name": "family_id",
+      "variants": [
+        "FamilyId",
+        "family-id",
+        "familyId",
+        "family_id",
+        "isFamilyId",
+        "is_family_id"
+      ],
+      "origins": [
+        "allocation.lineage.members[].family_id",
+        "engineering.family.family_id",
+        "pilot.family.family_id"
+      ]
+    },
+    {
+      "name": "fixture_id",
+      "variants": [
+        "FixtureId",
+        "fixture-id",
+        "fixtureId",
+        "fixture_id",
+        "isFixtureId",
+        "is_fixture_id"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "focal_changes",
+      "variants": [
+        "FocalChanges",
+        "focal-changes",
+        "focalChanges",
+        "focal_changes",
+        "isFocalChanges",
+        "is_focal_changes"
+      ],
+      "origins": [
+        "pilot.family.ast.focal_changes"
+      ]
+    },
+    {
+      "name": "freshness",
+      "variants": [
+        "Freshness",
+        "freshness",
+        "isFreshness",
+        "is_freshness"
+      ],
+      "origins": [
+        "allocation.lineage.freshness"
+      ]
+    },
+    {
+      "name": "future_effective",
+      "variants": [
+        "FutureEffective",
+        "future-effective",
+        "futureEffective",
+        "future_effective",
+        "isFutureEffective",
+        "is_future_effective"
+      ],
+      "origins": [
+        "pilot.family.ast.variant.future_effective"
+      ]
+    },
+    {
+      "name": "grammar",
+      "variants": [
+        "Grammar",
+        "grammar",
+        "isGrammar",
+        "is_grammar"
+      ],
+      "origins": [
+        "allocation.lineage.ancestry.grammar"
+      ]
+    },
+    {
+      "name": "historyIsCurrent",
+      "variants": [
+        "HistoryIsCurrent",
+        "history-is-current",
+        "historyIsCurrent",
+        "history_is_current",
+        "isHistoryIsCurrent",
+        "is_history_is_current"
+      ],
+      "origins": [
+        "pilot.family.controls[].historyIsCurrent"
+      ]
+    },
+    {
+      "name": "independentArtifactAudit",
+      "variants": [
+        "IndependentArtifactAudit",
+        "independent-artifact-audit",
+        "independentArtifactAudit",
+        "independent_artifact_audit",
+        "isIndependentArtifactAudit",
+        "is_independent_artifact_audit"
+      ],
+      "origins": [
+        "pilot.family.controls[].independentArtifactAudit"
+      ]
+    },
+    {
+      "name": "interval_convention",
+      "variants": [
+        "IntervalConvention",
+        "interval-convention",
+        "intervalConvention",
+        "interval_convention",
+        "isIntervalConvention",
+        "is_interval_convention"
+      ],
+      "origins": [
+        "pilot.family.ast.interval_convention"
+      ]
+    },
+    {
+      "name": "lineage_id",
+      "variants": [
+        "LineageId",
+        "isLineageId",
+        "is_lineage_id",
+        "lineage-id",
+        "lineageId",
+        "lineage_id"
+      ],
+      "origins": [
+        "allocation.lineage.lineage_id",
+        "engineering.family.lineage_id",
+        "pilot.family.lineage_id"
+      ]
+    },
+    {
+      "name": "member",
+      "variants": [
+        "Member",
+        "isMember",
+        "is_member",
+        "member"
+      ],
+      "origins": [
+        "allocation.lineage.members[].member"
+      ]
+    },
+    {
+      "name": "minimumEdges",
+      "variants": [
+        "MinimumEdges",
+        "isMinimumEdges",
+        "is_minimum_edges",
+        "minimum-edges",
+        "minimumEdges",
+        "minimum_edges"
+      ],
+      "origins": [
+        "pilot.family.reason_strata[].minimumEdges"
+      ]
+    },
+    {
+      "name": "multi_hop",
+      "variants": [
+        "MultiHop",
+        "isMultiHop",
+        "is_multi_hop",
+        "multi-hop",
+        "multiHop",
+        "multi_hop"
+      ],
+      "origins": [
+        "allocation.lineage.multi_hop",
+        "pilot.family.multi_hop"
+      ]
+    },
+    {
+      "name": "multiHop",
+      "variants": [
+        "MultiHop",
+        "isMultiHop",
+        "is_multi_hop",
+        "multi-hop",
+        "multiHop",
+        "multi_hop"
+      ],
+      "origins": [
+        "pilot.family.reason_strata[].multiHop"
+      ]
+    },
+    {
+      "name": "multiplicity",
+      "variants": [
+        "Multiplicity",
+        "isMultiplicity",
+        "is_multiplicity",
+        "multiplicity"
+      ],
+      "origins": [
+        "allocation.lineage.multiplicity"
+      ]
+    },
+    {
+      "name": "nonAuthorSemanticAudit",
+      "variants": [
+        "NonAuthorSemanticAudit",
+        "isNonAuthorSemanticAudit",
+        "is_non_author_semantic_audit",
+        "non-author-semantic-audit",
+        "nonAuthorSemanticAudit",
+        "non_author_semantic_audit"
+      ],
+      "origins": [
+        "pilot.family.controls[].certification.nonAuthorSemanticAudit"
+      ]
+    },
+    {
+      "name": "paidReadiness",
+      "variants": [
+        "PaidReadiness",
+        "isPaidReadiness",
+        "is_paid_readiness",
+        "paid-readiness",
+        "paidReadiness",
+        "paid_readiness"
+      ],
+      "origins": [
+        "pilot.family.controls[].certification.paidReadiness"
+      ]
+    },
+    {
+      "name": "parent",
+      "variants": [
+        "Parent",
+        "isParent",
+        "is_parent",
+        "parent"
+      ],
+      "origins": [
+        "allocation.lineage.ancestry.parent"
+      ]
+    },
+    {
+      "name": "private_label",
+      "variants": [
+        "PrivateLabel",
+        "isPrivateLabel",
+        "is_private_label",
+        "private-label",
+        "privateLabel",
+        "private_label"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "private_labels",
+      "variants": [
+        "PrivateLabels",
+        "isPrivateLabels",
+        "is_private_labels",
+        "private-labels",
+        "privateLabels",
+        "private_labels"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "reason_strata",
+      "variants": [
+        "ReasonStrata",
+        "isReasonStrata",
+        "is_reason_strata",
+        "reason-strata",
+        "reasonStrata",
+        "reason_strata"
+      ],
+      "origins": [
+        "pilot.family.reason_strata"
+      ]
+    },
+    {
+      "name": "relation",
+      "variants": [
+        "Relation",
+        "isRelation",
+        "is_relation",
+        "relation"
+      ],
+      "origins": [
+        "allocation.lineage.ancestry.relation"
+      ]
+    },
+    {
+      "name": "rendered_world_audit_members",
+      "variants": [
+        "RenderedWorldAuditMembers",
+        "isRenderedWorldAuditMembers",
+        "is_rendered_world_audit_members",
+        "rendered-world-audit-members",
+        "renderedWorldAuditMembers",
+        "rendered_world_audit_members"
+      ],
+      "origins": [
+        "allocation.lineage.rendered_world_audit_members"
+      ]
+    },
+    {
+      "name": "retroactive",
+      "variants": [
+        "Retroactive",
+        "isRetroactive",
+        "is_retroactive",
+        "retroactive"
+      ],
+      "origins": [
+        "pilot.family.ast.variant.retroactive"
+      ]
+    },
+    {
+      "name": "safety",
+      "variants": [
+        "Safety",
+        "isSafety",
+        "is_safety",
+        "safety"
+      ],
+      "origins": [
+        "allocation.lineage.members[].safety"
+      ]
+    },
+    {
+      "name": "schema_version",
+      "variants": [
+        "SchemaVersion",
+        "isSchemaVersion",
+        "is_schema_version",
+        "schema-version",
+        "schemaVersion",
+        "schema_version"
+      ],
+      "origins": [
+        "pilot.family.schema_version"
+      ]
+    },
+    {
+      "name": "schemaAndLifecycle",
+      "variants": [
+        "SchemaAndLifecycle",
+        "isSchemaAndLifecycle",
+        "is_schema_and_lifecycle",
+        "schema-and-lifecycle",
+        "schemaAndLifecycle",
+        "schema_and_lifecycle"
+      ],
+      "origins": [
+        "pilot.family.controls[].certification.schemaAndLifecycle"
+      ]
+    },
+    {
+      "name": "scoring",
+      "variants": [
+        "Scoring",
+        "isScoring",
+        "is_scoring",
+        "scoring"
+      ],
+      "origins": [
+        "pilot.family.controls[].scoring"
+      ]
+    },
+    {
+      "name": "seed",
+      "variants": [
+        "Seed",
+        "isSeed",
+        "is_seed",
+        "seed"
+      ],
+      "origins": [
+        "pilot.family.seed"
+      ]
+    },
+    {
+      "name": "separate_assertion",
+      "variants": [
+        "SeparateAssertion",
+        "isSeparateAssertion",
+        "is_separate_assertion",
+        "separate-assertion",
+        "separateAssertion",
+        "separate_assertion"
+      ],
+      "origins": [
+        "pilot.family.controls[].separate_assertion"
+      ]
+    },
+    {
+      "name": "split",
+      "variants": [
+        "Split",
+        "isSplit",
+        "is_split",
+        "split"
+      ],
+      "origins": [
+        "allocation.lineage.split",
+        "engineering.family.split",
+        "pilot.family.split"
+      ]
+    },
+    {
+      "name": "stage",
+      "variants": [
+        "Stage",
+        "isStage",
+        "is_stage",
+        "stage"
+      ],
+      "origins": [
+        "run_configuration.stage"
+      ]
+    },
+    {
+      "name": "time_zone",
+      "variants": [
+        "TimeZone",
+        "isTimeZone",
+        "is_time_zone",
+        "time-zone",
+        "timeZone",
+        "time_zone"
+      ],
+      "origins": [
+        "pilot.family.ast.time_zone"
+      ]
+    },
+    {
+      "name": "unresolved_protocol",
+      "variants": [
+        "UnresolvedProtocol",
+        "isUnresolvedProtocol",
+        "is_unresolved_protocol",
+        "unresolved-protocol",
+        "unresolvedProtocol",
+        "unresolved_protocol"
+      ],
+      "origins": [
+        "pilot.family.controls[].unresolved_protocol"
+      ]
+    },
+    {
+      "name": "variant",
+      "variants": [
+        "Variant",
+        "isVariant",
+        "is_variant",
+        "variant"
+      ],
+      "origins": [
+        "pilot.family.ast.variant"
+      ]
+    },
+    {
+      "name": "world_id",
+      "variants": [
+        "WorldId",
+        "isWorldId",
+        "is_world_id",
+        "world-id",
+        "worldId",
+        "world_id"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    }
+  ],
+  "sources": {
+    "evaluation/hr3/harness/private-field-inventory.mjs": "953bfeb11d9752ea5fa64c3d8518a06fba764ede0cdaef5004fe9f2fa8e2a2e9",
+    "evaluation/hr3/harness/run-configuration.mjs": "cde03c70a4ee26ac362c27628341103bda45722d1ec8b558fb8c139529226ebb",
+    "evaluation/hr3/harness/cap-stress-fixtures.mjs": "c1eef36b796b00c840de2040b7546a4ffe842557d0d178b03a10b95a28573b16",
+    "evaluation/hr3/generator/generate.mjs": "94609a66255c243ef2e0fe648f2037466a70c39f659c3980edeef1004eaffa8c",
+    "evaluation/hr3/generator/inventory.mjs": "f4f972a3c3ec8ab5016669c525798581102c461bbba3017fabb14accfb866811",
+    "evaluation/hr3/generator/artifacts/pilot/families.jsonl": "27d377df73f024a98e65c563b81e398dfb9640cfa1af10361a9552149bb51925"
+  }
+}
