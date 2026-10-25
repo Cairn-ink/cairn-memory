@@ -1,0 +1,70 @@
+{
+  "version": "hr3-a6-primary-review-attestation-v1",
+  "status": "PASS",
+  "suppliedBy": "primary",
+  "nonAuthor": true,
+  "reviewer": "A-6.1 numerical amendment: non-author Codex protocol auditor (gpt-6.1-sol, xhigh), \"A-6.1 acceptable — yes\" (one P2 wording change applied). Trivia licenses: independent non-author reviewer, four rounds (P1s on provenance authentication, cross-family proof replay; P2s on CLI binding, exemption binding, empty-metadata fallback) all fixed; fresh independent non-author reviewer on the final state: no findings, \"Trivia licenses acceptable — yes\". A-6 implementation: fresh non-author Codex implementation auditor (gpt-6.1-sol, xhigh) at e08b1404: no P0/P1; \"A-6 implementation acceptable for the fifth paid pilot — yes\". Two nonblocking P2s recorded as follow-ups: restore three runner regression cases; verify-a6 hard-codes UNLOCKED provenance. Lock evidence for the primary final verification: run as `setsid -w cairn-heavy node evaluation/hr3/harness/verify-a6.mjs`; wrapper output \"lock acquired\" at 01:39:52 on 2026-10-26, verify exit 0, 25/25 steps exit 0 (reports/a6-verification.json). The UNLOCKED label in that report is the hard-coded metadata noted by the auditor. Earlier amendments A-4, A-4.1, A-4.2 and A-1.1 were audited for pilot four (implementation audit verdict yes on 3aef2f02).",
+  "decision": "acceptable_for_paid_pilot",
+  "amendments": [
+    "A-4",
+    "A-4.1",
+    "A-4.2",
+    "A-1.1",
+    "A-6",
+    "A-6.1"
+  ],
+  "freezeSHA256": "edd12647ef5f7529fb45fe7039f487670e80705b875b4abd09e98ce2d4d494d7",
+  "closureSHA256": "be5e1f7f462d1522bc785f9e8ee7039336e30d557800c0b3e54987f68c1000fa",
+  "evidenceBindings": {
+    "semanticInventory": {
+      "path": "evaluation/hr3/harness/reports/a6-semantic-inventory.json",
+      "sha256": "63daaa90c5288d1646488f712d33477c03e1bc8cc8d7d4f83021b03afa20deb4"
+    },
+    "output": {
+      "path": "evaluation/hr3/harness/reports/cap-certification-a6.json",
+      "sha256": "f8c923cbe0eb4de104403e52a0b394700d1b8576c27caa3bcfe9cd417c99e2cf"
+    },
+    "requests": {
+      "path": "evaluation/hr3/harness/reports/request-certification-a6.json",
+      "sha256": "f107966c75ee0d1ab24edf23c8d9570d0c2f29d853be79f1165f3d2edc569d96"
+    },
+    "embeddings": {
+      "path": "evaluation/hr3/harness/reports/embedding-certification-a6.json",
+      "sha256": "c4a2e53e269c9aca65e29ce2908fa986191503578f4599d9af81006bf1f97357"
+    },
+    "privacy": {
+      "path": "evaluation/hr3/harness/reports/privacy-scan-a6.json",
+      "sha256": "892635eebd0ed8d5a8c56fb627aa0b4ba520797752b2c33597ec6004bf7a1f3c"
+    },
+    "conformance": {
+      "path": "evaluation/hr3/harness/reports/conformance-certification-a6.json",
+      "sha256": "733ec94594695f41c9c497b3882995ef825995f7608e7af1febad4dc44d4e2c3"
+    },
+    "allocation": {
+      "path": "evaluation/hr3/harness/reports/allocation-certification-a6.json",
+      "sha256": "a3339ee52fe76caee73dbf809f484bb0dd5a3535d09685b956da8798c6e4a045"
+    },
+    "accounting": {
+      "path": "evaluation/hr3/harness/reports/accounting-certification-a6.json",
+      "sha256": "693f89f7248949d2ae2e1ff4e58ec768d2a3e753bede159ffe7ef950bf55e4a0"
+    },
+    "supervision": {
+      "path": "evaluation/hr3/harness/reports/primary-a6/supervision.json",
+      "sha256": "8045729b958a90f7e696f050b32c7649f9b15b0ed2c23a99f545d87f3f84bdc9"
+    },
+    "freshRun": {
+      "path": "evaluation/hr3/harness/reports/primary-a6/fresh-run.json",
+      "sha256": "396d8854d2c78f7d0c47506d1ba30d3a9885d2b3e1f5831fedda88ea79b48901"
+    },
+    "freeze": {
+      "path": "evaluation/hr3/harness/freeze.json",
+      "sha256": "edd12647ef5f7529fb45fe7039f487670e80705b875b4abd09e98ce2d4d494d7"
+    }
+  },
+  "runtimeClosureSHA256": "be5e1f7f462d1522bc785f9e8ee7039336e30d557800c0b3e54987f68c1000fa",
+  "sources": {
+    "evaluation/hr3/harness/freeze.json": "edd12647ef5f7529fb45fe7039f487670e80705b875b4abd09e98ce2d4d494d7",
+    "evaluation/hr3/protocol/errata.md": "0a5f74d8e72ca582f37568d45e49c91198c0525281a77879b4822de1eb1f2a35",
+    "evaluation/hr3/harness/reports/a6-verification.json": "ef02a38ce54604119e8573d09e19478407c0ff0702714f68a5238cd7bf615fab"
+  }
+}
