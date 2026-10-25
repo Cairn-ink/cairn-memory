@@ -37,6 +37,17 @@ test('frozen long-history gate traverses capture, cold recall and packed answer'
   const [long, capacity, dated] = report.cases;
   assert.equal(long.family, longCase.name);
   assert.equal(long.sourceWindows, longCase.expectedWindowCount);
+  assert.deepEqual(report.sourceWindowCoverage.longWindows.windows, [
+    { ordinal: 1, retention: 'retained' },
+    { ordinal: 2, retention: 'retained' },
+    { ordinal: 3, retention: 'retained' },
+  ]);
+  assert.equal(report.sourceWindowCoverage.longWindows.scope, 'capture-members-only/current-read');
+  assert.equal(report.sourceWindowCoverage.longWindows.coverage, 'complete');
+  assert.equal(report.sourceWindowCoverage.longWindows.selection, 'unavailable');
+  assert.equal(report.sourceWindowCoverage.omittedSource.coverage, 'none');
+  assert.deepEqual(report.sourceWindowCoverage.omittedSource.windows,
+    [{ ordinal: 1, retention: 'unmatched' }]);
   assert.ok(long.questions.every(row => row.stages.answerContextPresent));
   assert.ok(long.questions.every(row => row.stages.candidateVisible === false &&
     row.routingCueVisible === true && row.deliverySucceeded === true));
@@ -90,6 +101,8 @@ for (const [fault, expectedCapture, expectedAdmitted, expectedFailure] of [
     assert.ok(report.batchOutcomes.datedAB.every(row => row.capture === 'not-run'));
     assert.ok(report.batchOutcomes.faultControls.every(row => row.capture === 'not-run'));
     assert.equal(report.cases[0].status, 'completed');
+    assert.equal(report.sourceWindowCoverage.longWindows.coverage, 'complete');
+    assert.equal(report.sourceWindowCoverage.omittedSource, 'not-run');
     assert.equal(report.cases[1].status, 'incomplete');
     assert.equal(report.cases[2].status, 'not-run');
     assert.ok(report.cases[0].questions.every(row => row.status === 'completed' && row.deliverySucceeded));

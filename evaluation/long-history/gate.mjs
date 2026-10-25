@@ -4,6 +4,7 @@ import { performance } from 'node:perf_hooks';
 import { openMemoryCore } from '../../core/contract.mjs';
 import { countOpenAITokens } from '../../adapters/openai/index.mjs';
 import { packMixedAnswer } from '../longmemeval/mixed-answer.mjs';
+import { createIndexedSourceWindowObserver } from '../architecture/source-window-coverage.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { VERSION, longCase, capacityCase, datedCase, faultControls } from './fixtures.mjs';
 
@@ -208,6 +209,7 @@ export async function runGate({ fault = null } = {}) {
       faultControls: faultBatchNames.map(control => ({ control, ...notRunBatch() })) },
     controls: Object.fromEntries(Object.keys(faultControls).map(control => [control, 'not-run'])),
     controlStages: Object.fromEntries(Object.keys(faultControls).map(control => [control, { status: 'not-run' }])),
+    sourceWindowCoverage: { longWindows: 'not-run', omittedSource: 'not-run' },
     denominators: { requiredPassages: 7, plannedCaptureBatches: 208,
       plannedAdmittedMemories: 1030, attemptedCaptureBatches: 0, captureBatches: 0,
       failedCaptureBatches: 0, notRunCaptureBatches: 208,
@@ -239,9 +241,9 @@ export async function runGate({ fault = null } = {}) {
     else report.denominators.failedCaptureBatches++;
     return value;
   };
-  const captureTracked = async (core, input, family, index) => {
+  const captureTracked = async (core, input, family, index, observer = null) => {
     let response;
-    try { response = await timeWrite(() => core.capture(input)); }
+    try { response = await timeWrite(() => observer ? observer.capture(core, input) : core.capture(input)); }
     catch (error) { recordCapture(family, index, { ok: false }); throw error; }
     return { response, value: recordCapture(family, index, response) };
   };
@@ -260,8 +262,9 @@ export async function runGate({ fault = null } = {}) {
     const longFrames = [];
     const longStore = opened(workspace, 'long.sqlite', scriptedModel(metrics, longFrames));
     dbPaths.push(longStore.path);
+    const longWindowObserver = createIndexedSourceWindowObserver();
     let captured = await captureTracked(longStore.core,
-      captureInput('long', longCase.messages), 'longWindows', 0);
+      captureInput('long', longCase.messages), 'longWindows', 0, longWindowObserver);
     assertGate(captured.response.ok, 'long_capture');
     let result = captured.value;
     assertGate(result.classification.status === 'applied', 'long_classification');
@@ -269,6 +272,14 @@ export async function runGate({ fault = null } = {}) {
     assertGate(result.admission.memories.length === 3, 'long_admission');
     const longMemories = result.admission.memories;
     longStore.reopen();
+    report.sourceWindowCoverage.longWindows = longWindowObserver.finish({
+      inspectAdmission: input => longStore.core.inspectAdmission(input),
+      get: input => longStore.core.get(input),
+    });
+    assertGate(report.sourceWindowCoverage.longWindows.status === 'observed' &&
+      report.sourceWindowCoverage.longWindows.coverage === 'complete' &&
+      report.sourceWindowCoverage.longWindows.uniqueRetainedCount === longCase.expectedWindowCount,
+    'long_source_window_coverage');
     const longRows = [];
     for (const [index, question] of longCase.questions.entries()) {
       const requiredSource = longCase.messages[0].content.slice(index * 800, (index + 1) * 800).trimEnd();
@@ -415,9 +426,9 @@ async function runFaultControls(workspace, metrics, dbPaths, report) {
   const controls = report.controls, outcomes = report.batchOutcomes.faultControls;
   const stageRows = report.controlStages;
   const record = (control, result) => { outcomes[faultBatchNames.indexOf(control)] = { control, ...result }; };
-  const captureFault = async (control, store, input) => {
+  const captureFault = async (control, store, input, observer = null) => {
     let response;
-    try { response = await store.core.capture(input); }
+    try { response = await (observer ? observer.capture(store.core, input) : store.core.capture(input)); }
     catch (error) { record(control, { capture: 'failed', admitted: null, classification: 'not-run' }); throw error; }
     const value = response.ok ? response.value : null;
     const classification = value?.classification?.status ?? 'not-run';
@@ -454,9 +465,18 @@ async function runFaultControls(workspace, metrics, dbPaths, report) {
     finalReturned: 'not-run', answerContextPresent: 'not-run' };
 
   test = fixture('omitted.sqlite', { extract: 'omit' });
+  const omittedWindowObserver = createIndexedSourceWindowObserver();
   response = ok(await captureFault('omittedSource', test.store,
-    captureInput('omitted', [message('fault-2', 'faultmarker omitted source')])));
+    captureInput('omitted', [message('fault-2', 'faultmarker omitted source')]), omittedWindowObserver));
   test.store.reopen();
+  report.sourceWindowCoverage.omittedSource = omittedWindowObserver.finish({
+    inspectAdmission: input => test.store.core.inspectAdmission(input),
+    get: input => test.store.core.get(input),
+  });
+  assertGate(report.sourceWindowCoverage.omittedSource.status === 'observed' &&
+    report.sourceWindowCoverage.omittedSource.coverage === 'none' &&
+    report.sourceWindowCoverage.omittedSource.uniqueUnmatchedCount === 1,
+  'omitted_source_window_coverage');
   controls.omittedSource = response.admission.memories.length === 0 &&
     ok(test.store.core.list({ namespace })).memories.length === 0;
   stageRows.omittedSource = { retained: false, candidateVisible: 'not-run',
