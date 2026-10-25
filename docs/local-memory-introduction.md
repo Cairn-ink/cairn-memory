@@ -12,7 +12,7 @@ npx @cairn-ink/memory status
 npx @cairn-ink/memory uninstall --local
 ```
 
-This checkout prepares 0.6.0; before publication use
+Installer 0.6.0 was published on 2026-10-25; a checkout can also run
 `node packages/setup/bin/memory.mjs setup --local`. A fresh interactive `setup`
 asks once for local or cloud storage; non-interactive runs need `--local` or
 `--cloud`. Existing cloud users keep their flow. Local mode registers

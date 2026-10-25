@@ -4,14 +4,13 @@ Set up Cairn memory for Claude Code and Codex: local MCP tools or cloud
 automatic memory.
 Requires Node ≥22.16 and the selected CLI on PATH. The installer itself has no
 runtime dependencies.
-This checkout prepares **installer 0.6.0**. The Claude plugin stays **0.3.2**.
-The release must be published before `npx` can use these new flows.
+**Installer 0.6.0** was published on 2026-10-25. The Claude plugin stays **0.3.2**.
 
 ## Setup / 安裝
 
 ```sh
 npx @cairn-ink/memory setup
-# Use this checkout before publication / 發布前執行這份原始碼
+# Or run this checkout directly / 或直接執行這份原始碼
 node packages/setup/bin/memory.mjs setup
 ```
 
