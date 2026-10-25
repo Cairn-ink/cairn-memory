@@ -1,0 +1,19 @@
+{
+  "base": "4aa9327b",
+  "output": "cli.stdout[0]",
+  "positionConvention": "one-based line numbers in the pinned help",
+  "additions": [
+    {
+      "feature": "bge-m3 §20 (v0.14.2 frozen contract), explicit model management and local provider usage",
+      "insertBeforePinnedLine": 9,
+      "previousPinnedLine": "    --context-embedder openai --context-embed-model MODEL --context-embed-dimensions N --context-embed-max-requests N --context-embed-max-usd X [--check-config]",
+      "nextPinnedLine": "  cairn-memory assets import|derive|delete|export [see docs/assets-local.md]",
+      "lines": [
+        "  cairn-memory model install|verify bge-m3 --dir ABS [--check-config]",
+        "  cairn-memory --db ABS --owner ID --context-read context-read-v1",
+        "    --context-embedder local --context-embed-model bge-m3 --context-embed-dimensions 1024",
+        "    --context-embed-pack ABS --context-embed-max-requests N [--context-embed-threads T]"
+      ]
+    }
+  ]
+}

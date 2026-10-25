@@ -1,3 +1,4 @@
+import { contextOptions } from '../../core/context-read-input.mjs';
 import { cardCurrentHostConfiguration } from './card-current-configuration.mjs';
 import { registerCardCurrentTools } from './card-current-tools.mjs';
 import { createAssetReadAccess } from './asset-access.mjs';
@@ -77,7 +78,13 @@ export function createCairnServer(options = {}) {
       Object.hasOwn(options,'contextEmbedding') && !contextConfigured) throw Error('invalid_mcp_configuration');
   const sources = Object.hasOwn(options, 'contextReadSources') ? contextReadSources(options.contextReadSources) : null;
   if (sources && !contextConfigured) throw Error('invalid_mcp_configuration');
-  if (options.contextEmbedding) object(options.contextEmbedding,['embedder','policy']);
+  if (options.contextEmbedding) {
+    object(options.contextEmbedding, ['embedder', 'policy', 'localStatus']);
+    if (Object.hasOwn(options.contextEmbedding, 'localStatus') || Object.hasOwn(options.contextEmbedding.policy ?? {}, 'maxBatchDocuments')) {
+      try { contextOptions({ version: 'context-read-v1', authority: { authorize() {}, isCurrent() {} }, ...options.contextEmbedding }); }
+      catch { throw Error('invalid_mcp_configuration'); }
+    }
+  }
   if (Object.hasOwn(options, 'contextCounter') && !contextConfigured) throw Error('invalid_mcp_configuration');
   const assetsConfigured=Object.hasOwn(options,'assets');
   if(assetsConfigured&&options.assets!=='local-v1')throw Error('invalid_mcp_configuration');

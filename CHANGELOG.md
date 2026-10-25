@@ -10,6 +10,14 @@
   included yet. Semantic recall needs a model key and sends selected text to
   the provider.
 
+## Unreleased — optional local bge-m3 embedder (contract §20)
+
+- **New opt-in local embedder.** It uses the bge-m3 model (`--context-embedder local --context-embed-model bge-m3`) and is an alternative to the OpenAI default, which is unchanged.
+- **Model pack.** The model ships as a pack that Cairn owns, installed explicitly with `cairn-memory model install|verify bge-m3 --dir ABS`. The pack is pinned to one revision, every artifact is sha256-verified, and retrieval never downloads anything.
+- **Isolation.** Inference runs in a supervised child process, and the base package gains no inference dependencies. Inputs over 8,192 tokens are refused rather than truncated.
+- **Vectors.** Local and hosted vectors are never mixed.
+- **Platforms.** Qualified on Linux x64 (including WSL2) and macOS arm64; other platforms are unverified. The production model catalog stays empty and fails closed until reviewed release data is published.
+
 ## Unreleased — local role profiles (U5c-1)
 
 - Add explicit current-method dependency review for private Cards, canonical v33 guards, and read-time invalidation across evidence, retrieval, organization and role guidance.
