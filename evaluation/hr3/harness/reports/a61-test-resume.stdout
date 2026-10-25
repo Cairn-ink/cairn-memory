@@ -1,0 +1,6 @@
+START harness-tests
+EXIT harness-tests 0
+START pilot-inputs
+EXIT pilot-inputs 0
+START fake-pilot
+EXIT fake-pilot 0

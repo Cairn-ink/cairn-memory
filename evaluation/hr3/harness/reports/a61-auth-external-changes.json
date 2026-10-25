@@ -1,0 +1,64 @@
+{
+  "version": "hr3-a61-concurrent-protected-change-readback-v1",
+  "entryCount": 138,
+  "currentCount": 139,
+  "changes": [
+    {
+      "path": "evaluation/hr3/scorer/README.md",
+      "before": "8948b53cda187ab3f7100597f88c6a26dca12958d21c739df00dacf0f4e2ffb5",
+      "after": "4fbe659f4cf62cb5ea3fdf428c90bff336d9741270060346b68075397b13baf5"
+    },
+    {
+      "path": "evaluation/hr3/scorer/REPORT.md",
+      "before": "6fd7f05705935a375b9126d053b11678503fa8bc26c20aaf63c3bdbffa2204c2",
+      "after": "230f7b7140be767789d53e161b7f1a884da6311cb5e5a60c60a154879a6d1acf"
+    },
+    {
+      "path": "evaluation/hr3/scorer/gold.schema.json",
+      "before": "9f1fc2f327d0a3200fc30f70c5d9dfb85e90e51640c2b99ad5fcc4a9dab8416c",
+      "after": "ed26148914616d61828b692cca5a680524615d79924de50293fa370eb20bc2d7"
+    },
+    {
+      "path": "evaluation/hr3/scorer/schema.mjs",
+      "before": "23325dfb64184e503d0d7d3f3458157cae76256cf11381a39522215bd07d52d2",
+      "after": "2a37afc209ec6ae8b038bac39be7bb8a2b726f65d36dc411330b449e57574286"
+    },
+    {
+      "path": "evaluation/hr3/scorer/scorer.mjs",
+      "before": "5ca47e020c143bf0321029a8d353b3aa5b0dea489a723fc33924894c6af7d4c6",
+      "after": "6625163a615fb01232077abe7045528e78ead8b73555d6d21ff7b431ef5a5a4b"
+    },
+    {
+      "path": "evaluation/hr3/scorer/support.mjs",
+      "before": "a6cd273c77518716cab9ec8071d1608b7b57a06152277ad518eff8e8d6986fdc",
+      "after": "f54506db79dca20133cb7c536b52e379b6d1bab5b28543c8137364ab046d9d73"
+    },
+    {
+      "path": "evaluation/hr3/scorer/support.schema.json",
+      "before": "314cf9c16f5123f6f16365c2e1f0c71535a586b7c489ed9a925f1fb2b110aea6",
+      "after": "1d9bb57ea735b9157f805dfef3fb5b96b6dbd9a6b8929664b5bac70a87b4af6c"
+    },
+    {
+      "path": "evaluation/hr3/scorer/test/trivia-fixtures.mjs",
+      "before": "2532242314538c331c12eac641edad4020a76e20d201657a68e0ccb17cdb6308",
+      "after": "e516392652d15c00149d293a29e5208b64e3b4b14dbd4decb50f7fbac852e363"
+    },
+    {
+      "path": "evaluation/hr3/scorer/test/trivia-regression.test.mjs",
+      "before": "428a94faed256d5a29df5a325417516cdcc3c9968d6b5fcbface6c1d2638bdb8",
+      "after": "4887ad494101287887ae653610d95c67e0f3700506a01b02797da4800e97fbdf"
+    },
+    {
+      "path": "evaluation/hr3/scorer/test/trivia-target.test.mjs",
+      "before": null,
+      "after": "39da5197495848262300a51d1a0861e4d08e43816c5e9ba5d76bec9a64a5b017"
+    },
+    {
+      "path": "evaluation/hr3/scorer/test/trivia.test.mjs",
+      "before": "fbc2fb484ff96c3ea1fb34a040d208eeff38f3d12f66f0c01f8a476f77317fa8",
+      "after": "5f120793fa234db96334d32d7f768c02f50912794874ace86e30e4200bbe4541"
+    }
+  ],
+  "claim": "These are externally observed protected-file changes; this task wrote only harness/integration.",
+  "verificationStopped": true
+}

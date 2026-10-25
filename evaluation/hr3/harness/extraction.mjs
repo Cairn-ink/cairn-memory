@@ -4,7 +4,7 @@ import { atomicJSON, hash, fail, canonical } from './common.mjs';
 import {PrivacyGuard} from './privacy.mjs';
 import { responseRequest } from './requests.mjs';
 import { validateExtraction } from './schema.mjs';
-export const CACHE_VERSION='hr3-extraction-cache-a4-audit-v2';
+export const CACHE_VERSION='hr3-extraction-cache-a6-v1';
 export function extractionInput(family,batch) {const b=family.batches.find(x=>x.ordinal===batch);return structuredClone({observed_at:b.observed_at,public_header:family.header,turns:b.turns});}
 export async function extract({family,batch,transport,cache,alternative=false}) {
   const input=extractionInput(family,batch), body=responseRequest('extraction',input,{alternative}),key=hash(body),path=join(cache,key+'.json');new PrivacyGuard(family).check('extraction-request',body);mkdirSync(cache,{recursive:true,mode:0o700});

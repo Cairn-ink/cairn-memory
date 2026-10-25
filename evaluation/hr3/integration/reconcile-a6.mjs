@@ -1,0 +1,22 @@
+#!/usr/bin/env node
+// Local reconciliation/manifest publication only; no generation or dispatch.
+import assert from 'node:assert/strict';import {readFileSync,writeFileSync,readdirSync,statSync} from 'node:fs';
+import {adaptGenerator,adaptExtraction,restore,hash} from './adapters.mjs';import {fieldMapping} from './field-map.mjs';
+import {verifiedInputs} from '../harness/inputs.mjs';import {extractionReference} from '../harness/references-a4.mjs';import {extractionInput} from '../harness/extraction.mjs';import {extractionSchema} from '../harness/schema.mjs';
+const root='evaluation/hr3/integration',data=verifiedInputs('evaluation/hr3/generator/artifacts/pilot'),paths={generator:new Set(),extraction:new Set()},cases=[];
+function inventory(kind,source){const recursive=new Set();function walk(v,p){recursive.add(p);if(Array.isArray(v))v.forEach(x=>walk(x,p+'/*'));else if(v&&typeof v==='object')for(const [k,x]of Object.entries(v))walk(x,p+'/'+k);}walk(source,'$');
+ const independent=new Set(),queue=[['$',source]];while(queue.length){const [p,v]=queue.shift();independent.add(p);if(Array.isArray(v))for(const x of v)queue.push([p+'/*',x]);else if(v&&typeof v==='object')for(const [k,x]of Object.entries(v))queue.push([p+'/'+k,x]);}assert.deepEqual([...recursive].sort(),[...independent].sort());for(const p of recursive)paths[kind].add(p);
+}
+for(const family of data.families){const gold=data.gold.find(x=>x.family_id===family.family_id),support=data.support.find(x=>x.family_id===family.family_id);
+ for(const cp of family.checkpoints){const a=adaptGenerator(family,gold,support,cp.batch),source={family,goldRow:gold,supportRow:support,batch:cp.batch};assert.deepEqual(restore(a),source);inventory('generator',source);cases.push({kind:'generator',family:family.family_id,batch:cp.batch,sourceHash:a.audit.sourceHash,restoredHash:hash(restore(a))});}
+ let previous=[];for(const batch of family.batches){const source={family:family.family_id,namespace:family.namespace,batch:batch.ordinal,wire:extractionReference(family,batch.ordinal),input:extractionInput(family,batch.ordinal),previous},a=adaptExtraction(source);assert.deepEqual(restore(a),source);inventory('extraction',source);cases.push({kind:'extraction',family:family.family_id,batch:batch.ordinal,sourceHash:a.audit.sourceHash,restoredHash:hash(restore(a)),admitted:a.events.length,unresolved:a.linked.filter(e=>e.unresolved).length});previous.push(...a.events);}
+}
+function schema(s,p){paths.extraction.add(p);if(s.$ref)return schema(extractionSchema.$defs[s.$ref.split('/').at(-1)],p);for(const b of s.anyOf??s.oneOf??[])schema(b,p);for(const [k,v]of Object.entries(s.properties??{}))schema(v,p+'/'+k);if(s.items)schema(s.items,p+'/*');}schema(extractionSchema,'$/wire');
+const fields=Object.entries(paths).flatMap(([kind,ps])=>[...ps].sort().map(path=>({kind,path,...fieldMapping(kind,path)})));
+const reconciliation={version:'hr3-integration-reconciliation-a6-v1',status:'PASS_LOCAL_LOSSLESS_RECONCILIATION',paidReadiness:false,counts:{generatorCheckpoints:120,extractionBatches:240,fields:fields.length},crossCheck:{routes:['recursive source-object path enumeration','independent breadth-first object/array enumeration'],differences:0},wireSchemaCoverage:'Every closed A-6 schema branch additionally enumerated, including independently excluded incompatible Value domains.',fields,cases};
+writeFileSync(root+'/reconciliation-fields.json',JSON.stringify(reconciliation,null,2)+'\n');
+const sources={};function walk(dir){return readdirSync(dir,{withFileTypes:true}).flatMap(e=>{const p=dir+'/'+e.name;assert.ok(!e.isSymbolicLink(),'Unexpected integration symlink');return e.isDirectory()?walk(p):[p];});}
+const recursive=walk(root).sort(),independent=readdirSync(root,{recursive:true}).map(n=>root+'/'+n).filter(p=>statSync(p).isFile()).sort();assert.deepEqual(recursive,independent);
+for(const p of recursive){const self=p===root+'/delivery.json',b=readFileSync(p);sources[p]={sha256:self?null:hash(b),bytes:self?null:b.length};}
+writeFileSync(root+'/delivery.json',JSON.stringify({version:'hr3-integration-delivery-a6-v1',status:'PASS_LOCAL_INVENTORY_NOT_PAID_READINESS',count:recursive.length,routes:['recursive Dirent walk','independent native recursive readdir plus stat'],selfEntry:'delivery.json included with null bytes/digest to avoid self-reference',files:sources},null,2)+'\n');
+console.log(JSON.stringify({status:reconciliation.status,counts:reconciliation.counts,deliveryFiles:recursive.length,crossCheckDifferences:0,paidReadiness:false}));

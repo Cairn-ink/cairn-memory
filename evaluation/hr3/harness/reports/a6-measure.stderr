@@ -1,0 +1,26 @@
+(node:3) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+pilot: 10/60 complete families
+pilot: 20/60 complete families
+pilot: 30/60 complete families
+pilot: 40/60 complete families
+pilot: 50/60 complete families
+pilot: 60/60 complete families
+engineering: 10/180 complete families
+engineering: 20/180 complete families
+engineering: 30/180 complete families
+engineering: 40/180 complete families
+engineering: 50/180 complete families
+engineering: 60/180 complete families
+engineering: 70/180 complete families
+engineering: 80/180 complete families
+engineering: 90/180 complete families
+engineering: 100/180 complete families
+engineering: 110/180 complete families
+engineering: 120/180 complete families
+engineering: 130/180 complete families
+engineering: 140/180 complete families
+engineering: 150/180 complete families
+engineering: 160/180 complete families
+engineering: 170/180 complete families
+engineering: 180/180 complete families

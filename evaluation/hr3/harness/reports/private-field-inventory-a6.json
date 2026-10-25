@@ -1,0 +1,4764 @@
+{
+  "version": "hr3-private-field-inventory-a6-v2",
+  "templatePlaceholderMap": {
+    "path": "private_generator_support.optional_trivia.emission_inputs[].variables",
+    "declaredKeys": [
+      "a",
+      "at",
+      "b",
+      "batch",
+      "c",
+      "collision",
+      "date",
+      "fact",
+      "fields",
+      "from",
+      "fromFact",
+      "labels",
+      "other",
+      "predecessors",
+      "predicate",
+      "record",
+      "route",
+      "scope",
+      "subject",
+      "to",
+      "toFact",
+      "turn"
+    ],
+    "source": "evaluation/hr3/generator/bank.mjs",
+    "grammar": "/\\{(\\w+)\\}/g",
+    "policy": "Only declared placeholder keys are excluded at this exact private-map path; values are still recursively scanned. Undeclared keys fail closed."
+  },
+  "publicContractBoundary": {
+    "path": "public_contract",
+    "policy": "Only exact deterministic re-projections of generator/public-contract.json; private keys remain forbidden everywhere else."
+  },
+  "derivation": "Recursive leaf/container decisions against explicit public paths, closed model schema keys and listed public product-operation fields. Every AST event, control action, checkpoint and expected-state object is visited. Schema-colliding key names are documented separately; no authoring subtree is exempt; declared placeholder map identifiers are not field names and their values remain private. Reserved private identifiers remain covered.",
+  "productSchemaBindings": {
+    "core/private-card-input.mjs": [
+      "occurredAt",
+      "drafting",
+      "bindings",
+      "applicability",
+      "sources",
+      "memoryRefs",
+      "sourcePolicy",
+      "sourceId",
+      "contentIdentity",
+      "completeness"
+    ],
+    "core/method-package-input.mjs": [
+      "files",
+      "mediaType",
+      "path",
+      "basedOn",
+      "expectedPackageRevision",
+      "bindingNamespace",
+      "package",
+      "packageId",
+      "versionId",
+      "manifestIdentity",
+      "roleId",
+      "roleKey",
+      "change",
+      "items",
+      "reasonRefs",
+      "summary",
+      "paths"
+    ],
+    "core/card-current-input.mjs": [
+      "currentDependencies",
+      "context",
+      "packages",
+      "snapshot",
+      "expectedDependencyRevision"
+    ]
+  },
+  "publicSemanticPaths": [
+    "language",
+    "change_type",
+    "namespace",
+    "namespace.ownerId",
+    "namespace.scope",
+    "namespace.projectId",
+    "header",
+    "header.subject",
+    "header.predicate",
+    "header.scope_text",
+    "batches",
+    "batches.*",
+    "batches.*.ordinal",
+    "batches.*.observed_at",
+    "batches.*.effective_at",
+    "batches.*.turns",
+    "batches.*.turns.*",
+    "batches.*.turns.*.turn_id",
+    "batches.*.turns.*.speaker",
+    "batches.*.turns.*.text",
+    "ast.events",
+    "ast.events.*",
+    "ast.events.*.event_id",
+    "ast.events.*.source_turns",
+    "ast.events.*.observed_at",
+    "ast.events.*.kind",
+    "ast.events.*.commitment",
+    "ast.events.*.change_type",
+    "ast.events.*.subject",
+    "ast.events.*.predicate",
+    "ast.events.*.scope",
+    "ast.events.*.effective_interval",
+    "ast.events.*.predecessor_anchors",
+    "ast.events.*.replacement_extent",
+    "ast.events.*.source_quotes",
+    "ast.events.*.claims",
+    "ast.events.*.scope.any",
+    "ast.events.*.scope.any.*",
+    "ast.events.*.scope.any.*.all",
+    "ast.events.*.scope.any.*.all.*",
+    "ast.events.*.scope.any.*.all.*.field",
+    "ast.events.*.scope.any.*.all.*.values",
+    "ast.events.*.scope.any.*.all.*.values.*",
+    "ast.events.*.effective_interval.from",
+    "ast.events.*.effective_interval.to",
+    "ast.events.*.source_turns.*",
+    "ast.events.*.predecessor_anchors.*",
+    "ast.events.*.predecessor_anchors.*.source_turn",
+    "ast.events.*.predecessor_anchors.*.record_name",
+    "ast.events.*.predecessor_anchors.*.subject",
+    "ast.events.*.predecessor_anchors.*.predicate",
+    "ast.events.*.source_quotes.*",
+    "ast.events.*.source_quotes.*.turn_id",
+    "ast.events.*.source_quotes.*.start",
+    "ast.events.*.source_quotes.*.end",
+    "ast.events.*.source_quotes.*.offset_unit",
+    "ast.events.*.source_quotes.*.quote",
+    "ast.events.*.claims.*",
+    "ast.events.*.claims.*.field",
+    "ast.events.*.claims.*.value",
+    "ast.events.*.claims.*.value.type",
+    "ast.events.*.claims.*.value.text",
+    "ast.events.*.claims.*.value.value",
+    "ast.events.*.claims.*.value.decimal",
+    "ast.events.*.claims.*.value.unit",
+    "ast.events.*.claims.*.value.iso",
+    "ast.events.*.claims.*.value.lower",
+    "ast.events.*.claims.*.value.upper",
+    "ast.events.*.claims.*.value.lowerClosed",
+    "ast.events.*.claims.*.value.upperClosed"
+  ],
+  "publicSchemaKeys": [
+    "*",
+    "actionId",
+    "all",
+    "anchor",
+    "anchors",
+    "any",
+    "applicability",
+    "approval",
+    "authoredInput",
+    "basedOn",
+    "batches",
+    "bindingNamespace",
+    "bindings",
+    "body",
+    "bodyRevision",
+    "budget",
+    "cap",
+    "cardId",
+    "change",
+    "change_type",
+    "checkpoint",
+    "citations",
+    "claims",
+    "commitment",
+    "completeness",
+    "confidence",
+    "content",
+    "contentIdentity",
+    "context",
+    "current",
+    "currentDependencies",
+    "deadlineMs",
+    "decimal",
+    "dependencies",
+    "drafting",
+    "effective_at",
+    "effective_interval",
+    "end",
+    "event_id",
+    "events",
+    "excerpt",
+    "expectedBodyRevision",
+    "expectedDependencyRevision",
+    "expectedPackageRevision",
+    "expectedRevision",
+    "f",
+    "field",
+    "files",
+    "filing",
+    "focal_turn",
+    "from",
+    "header",
+    "id",
+    "index",
+    "input",
+    "intent",
+    "iso",
+    "item",
+    "items",
+    "kind",
+    "language",
+    "limit",
+    "lower",
+    "lowerClosed",
+    "manifestIdentity",
+    "maxItems",
+    "maxMs",
+    "maxTokens",
+    "mediaType",
+    "memory",
+    "memoryId",
+    "memoryRefs",
+    "metadata",
+    "name",
+    "namespace",
+    "namespaceIndex",
+    "ns",
+    "observed_at",
+    "occurredAt",
+    "occurrence",
+    "offset_unit",
+    "old",
+    "ordinal",
+    "origin",
+    "ownerId",
+    "package",
+    "packageId",
+    "packages",
+    "path",
+    "paths",
+    "payload",
+    "predecessor_anchors",
+    "predecessor_refs",
+    "predecessor_turn",
+    "predicate",
+    "projectId",
+    "public_contract",
+    "public_header",
+    "query",
+    "question",
+    "quote",
+    "readSet",
+    "reason",
+    "reasonRefs",
+    "reason_quotes",
+    "receipts",
+    "record_name",
+    "records",
+    "replacement_extent",
+    "requested_predecessor_turns",
+    "rev",
+    "reviewState",
+    "revision",
+    "role",
+    "roleId",
+    "roleKey",
+    "route",
+    "rows",
+    "sameAs",
+    "sameAsBody",
+    "scope",
+    "scope_text",
+    "semantic",
+    "snapshot",
+    "source",
+    "sourceId",
+    "sourceMemoryId",
+    "sourcePolicy",
+    "sourceRevision",
+    "source_quotes",
+    "source_turn",
+    "source_turns",
+    "sources",
+    "speaker",
+    "start",
+    "state",
+    "status",
+    "subject",
+    "summary",
+    "support",
+    "text",
+    "title",
+    "to",
+    "turn_id",
+    "turns",
+    "type",
+    "types",
+    "unit",
+    "upper",
+    "upperClosed",
+    "valid",
+    "value",
+    "values",
+    "version",
+    "versionId"
+  ],
+  "pathDecisions": [
+    {
+      "path": "ast",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.change_type",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.claims",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.claims.*.field",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.claims.*.value",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.claims.*.value.decimal",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.claims.*.value.text",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.claims.*.value.type",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.claims.*.value.unit",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.claims.*.value.value",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.commitment",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.distractor",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.effective_interval",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.effective_interval.from",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.effective_interval.to",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.event_id",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.field_mask",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.kind",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.observed_at",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.predecessor_anchors",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.predecessor_anchors.*.predicate",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.predecessor_anchors.*.record_name",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.predecessor_anchors.*.source_turn",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.predecessor_anchors.*.subject",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.predicate",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.reason_edges",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.reason_edges.*.from",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_edges.*.support",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_edges.*.support.*.*.end",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_edges.*.support.*.*.offset_unit",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_edges.*.support.*.*.quote",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_edges.*.support.*.*.start",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_edges.*.support.*.*.turn_id",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_edges.*.to",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.citations",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.predicate",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.qualifiers",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.scope",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.scope.any",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.scope.any.*.all",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.scope.any.*.all.*.field",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.scope.any.*.all.*.values",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.subject",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.valid",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.valid.from",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.valid.to",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.value",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.value.iso",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.value.text",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.claim.value.type",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.reason_nodes.*.id",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.record_name",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "ast.events.*.replacement_extent",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.scope",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.scope.any",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.scope.any.*.all",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.scope.any.*.all.*.field",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.scope.any.*.all.*.values",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.source_quotes",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.source_quotes.*.end",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.source_quotes.*.offset_unit",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.source_quotes.*.quote",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.source_quotes.*.start",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.source_quotes.*.turn_id",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.source_turns",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.events.*.subject",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.focal_changes",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.interval_convention",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.time_zone",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.variant",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.variant.future_effective",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "ast.variant.retroactive",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "authored_rationale_topology",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "batches",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "batches.*.effective_at",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "batches.*.observed_at",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "batches.*.ordinal",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "batches.*.turns",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "batches.*.turns.*.speaker",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "batches.*.turns.*.text",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "batches.*.turns.*.turn_id",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "causal_class",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "change_type",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "checkpoints",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "checkpoints.*.at",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "checkpoints.*.batch",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "checkpoints.*.focal_turn",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "checkpoints.*.primary",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "checkpoints.*.query",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "checkpoints.*.question",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "checkpoints.*.requested_predecessor_turns",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.actionId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.authority",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.batch",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.call",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.content",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.expected",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.expected.dependencyEligible",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.expected.error",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.expected.mutation",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.expected.suppressed",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.expectedRevision",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.namespace",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.namespace.ownerId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.namespace.projectId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.namespace.scope",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.actionId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.applicability",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.basedOn",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.bindingNamespace",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.bindingNamespace.ownerId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.bindingNamespace.projectId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.bindingNamespace.scope",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.bindings",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.body",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.cardId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies.context",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies.context.readSet",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies.context.readSet.*.ownerId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies.context.readSet.*.projectId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies.context.readSet.*.scope",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies.context.roleId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies.packages",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies.packages.*.package",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.currentDependencies.packages.*.snapshot",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.drafting",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.expectedDependencyRevision",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.expectedPackageRevision",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.expectedRevision",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.files",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.files.*.mediaType",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.files.*.path",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.files.*.text",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.input",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.input.authoredInput",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.input.authoredInput.occurredAt",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.input.authoredInput.text",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.input.body",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.input.title",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.namespace",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.namespace.ownerId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.namespace.projectId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.namespace.scope",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.package",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.readSet",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.readSet.*.ownerId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.readSet.*.projectId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.readSet.*.scope",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.roleId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.title",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.payload.version",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.actions.*.returns",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.actions.*.target",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.authoring_path",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.branch",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.certification",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.certification.nonAuthorSemanticAudit",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.certification.paidReadiness",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.certification.schemaAndLifecycle",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.checkpoints",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.checkpoints.*.batch",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.checkpoints.*.body",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.checkpoints.*.currentEligible",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.checkpoints.*.historyEligible",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.checkpoints.*.overwrittenBodyRecoverable",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.execution_status",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.expected",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.expected.foreignExposed",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.expected.independentCopyEligible",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.expected.namedRecordExposed",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.expected.receiptsExposed",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.expected.replayResurrection",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.foreignNamespace",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.foreignNamespace.ownerId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.foreignNamespace.projectId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.foreignNamespace.scope",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.historyIsCurrent",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.independentArtifactAudit",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.kind",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.namespace",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.namespace.ownerId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.namespace.projectId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.namespace.scope",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.readSet",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.readSet.*.ownerId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.readSet.*.projectId",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.readSet.*.scope",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "controls.*.scoring",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.separate_assertion",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.targetRecord",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "controls.*.unresolved_protocol",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "expiry_mode",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "family_id",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "header",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "header.predicate",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "header.scope_text",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "header.subject",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "language",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "lineage_id",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "multi_hop",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "namespace",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "namespace.ownerId",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "namespace.projectId",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "namespace.scope",
+      "public": true,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "query_scope",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "query_scope.any",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "query_scope.any.*.all",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "reason_strata",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "reason_strata.*.batch",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "reason_strata.*.minimumEdges",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "reason_strata.*.multiHop",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "reason_strata.*.status",
+      "public": false,
+      "publicSchemaCollision": true
+    },
+    {
+      "path": "schema_version",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "seed",
+      "public": false,
+      "publicSchemaCollision": false
+    },
+    {
+      "path": "split",
+      "public": false,
+      "publicSchemaCollision": false
+    }
+  ],
+  "fields": [
+    {
+      "name": "acceptedGraphs",
+      "variants": [
+        "AcceptedGraphs",
+        "accepted-graphs",
+        "acceptedGraphs",
+        "accepted_graphs",
+        "isAcceptedGraphs",
+        "is_accepted_graphs"
+      ],
+      "origins": [
+        "private_generator_support.checkpoints[].acceptedGraphs"
+      ]
+    },
+    {
+      "name": "actions",
+      "variants": [
+        "Actions",
+        "actions",
+        "isActions",
+        "is_actions"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions"
+      ]
+    },
+    {
+      "name": "aliases",
+      "variants": [
+        "Aliases",
+        "aliases",
+        "isAliases",
+        "is_aliases"
+      ],
+      "origins": [
+        "allocation.lineage.ancestry.aliases"
+      ]
+    },
+    {
+      "name": "allocation_id",
+      "variants": [
+        "AllocationId",
+        "allocation-id",
+        "allocationId",
+        "allocation_id",
+        "isAllocationId",
+        "is_allocation_id"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "amendment",
+      "variants": [
+        "Amendment",
+        "amendment",
+        "isAmendment",
+        "is_amendment"
+      ],
+      "origins": [
+        "allocation.lineage.fixture_amendment.amendment"
+      ]
+    },
+    {
+      "name": "ancestry",
+      "variants": [
+        "Ancestry",
+        "ancestry",
+        "isAncestry",
+        "is_ancestry"
+      ],
+      "origins": [
+        "allocation.lineage.ancestry"
+      ]
+    },
+    {
+      "name": "arm",
+      "variants": [
+        "Arm",
+        "arm",
+        "isArm",
+        "is_arm"
+      ],
+      "origins": [
+        "run_configuration.arm"
+      ]
+    },
+    {
+      "name": "assertion_spans",
+      "variants": [
+        "AssertionSpans",
+        "assertion-spans",
+        "assertionSpans",
+        "assertion_spans",
+        "isAssertionSpans",
+        "is_assertion_spans"
+      ],
+      "origins": [
+        "private_generator_support.checkpoints[].assertion_spans"
+      ]
+    },
+    {
+      "name": "ast",
+      "variants": [
+        "Ast",
+        "ast",
+        "isAst",
+        "is_ast"
+      ],
+      "origins": [
+        "engineering.family.ast",
+        "pilot.family.ast"
+      ]
+    },
+    {
+      "name": "at",
+      "variants": [
+        "At",
+        "at",
+        "isAt",
+        "is_at"
+      ],
+      "origins": [
+        "engineering.family.checkpoints.*.at",
+        "pilot.family.checkpoints.*.at"
+      ]
+    },
+    {
+      "name": "authentication_version",
+      "variants": [
+        "AuthenticationVersion",
+        "authentication-version",
+        "authenticationVersion",
+        "authentication_version",
+        "isAuthenticationVersion",
+        "is_authentication_version"
+      ],
+      "origins": [
+        "private_trivia_authority.authentication_version"
+      ]
+    },
+    {
+      "name": "authored_change_type",
+      "variants": [
+        "AuthoredChangeType",
+        "authored-change-type",
+        "authoredChangeType",
+        "authored_change_type",
+        "isAuthoredChangeType",
+        "is_authored_change_type"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "authored_rationale_topology",
+      "variants": [
+        "AuthoredRationaleTopology",
+        "authored-rationale-topology",
+        "authoredRationaleTopology",
+        "authored_rationale_topology",
+        "isAuthoredRationaleTopology",
+        "is_authored_rationale_topology"
+      ],
+      "origins": [
+        "allocation.lineage.authored_rationale_topology",
+        "pilot.family.authored_rationale_topology"
+      ]
+    },
+    {
+      "name": "authoring_path",
+      "variants": [
+        "AuthoringPath",
+        "authoring-path",
+        "authoringPath",
+        "authoring_path",
+        "isAuthoringPath",
+        "is_authoring_path"
+      ],
+      "origins": [
+        "pilot.family.controls.*.authoring_path"
+      ]
+    },
+    {
+      "name": "authority",
+      "variants": [
+        "Authority",
+        "authority",
+        "isAuthority",
+        "is_authority"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions.*.authority"
+      ]
+    },
+    {
+      "name": "bank_id",
+      "variants": [
+        "BankId",
+        "bank-id",
+        "bankId",
+        "bank_id",
+        "isBankId",
+        "is_bank_id"
+      ],
+      "origins": [
+        "allocation.lineage.ancestry.bank_id",
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "batch",
+      "variants": [
+        "Batch",
+        "batch",
+        "isBatch",
+        "is_batch"
+      ],
+      "origins": [
+        "engineering.family.checkpoints.*.batch",
+        "pilot.family.checkpoints.*.batch",
+        "pilot.family.controls.*.actions.*.batch",
+        "pilot.family.controls.*.checkpoints.*.batch",
+        "pilot.family.reason_strata.*.batch",
+        "private_generator_support.checkpoints[].batch",
+        "private_name_registry.bindings[].entries[].location.batch"
+      ]
+    },
+    {
+      "name": "bindings_private",
+      "variants": [
+        "BindingsPrivate",
+        "bindings-private",
+        "bindingsPrivate",
+        "bindings_private",
+        "isBindingsPrivate",
+        "is_bindings_private"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "branch",
+      "variants": [
+        "Branch",
+        "branch",
+        "isBranch",
+        "is_branch"
+      ],
+      "origins": [
+        "pilot.family.controls.*.branch"
+      ]
+    },
+    {
+      "name": "call",
+      "variants": [
+        "Call",
+        "call",
+        "isCall",
+        "is_call"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions.*.call"
+      ]
+    },
+    {
+      "name": "card",
+      "variants": [
+        "Card",
+        "card",
+        "isCard",
+        "is_card"
+      ],
+      "origins": [
+        "allocation.lineage.members[].card"
+      ]
+    },
+    {
+      "name": "card_authoring_path",
+      "variants": [
+        "CardAuthoringPath",
+        "card-authoring-path",
+        "cardAuthoringPath",
+        "card_authoring_path",
+        "isCardAuthoringPath",
+        "is_card_authoring_path"
+      ],
+      "origins": [
+        "allocation.lineage.members[].card_authoring_path"
+      ]
+    },
+    {
+      "name": "card_branch",
+      "variants": [
+        "CardBranch",
+        "card-branch",
+        "cardBranch",
+        "card_branch",
+        "isCardBranch",
+        "is_card_branch"
+      ],
+      "origins": [
+        "allocation.lineage.members[].card_branch"
+      ]
+    },
+    {
+      "name": "case_id",
+      "variants": [
+        "CaseId",
+        "case-id",
+        "caseId",
+        "case_id",
+        "isCaseId",
+        "is_case_id"
+      ],
+      "origins": [
+        "private_scoring_case.triviaCase.case_id",
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "causal_class",
+      "variants": [
+        "CausalClass",
+        "causal-class",
+        "causalClass",
+        "causal_class",
+        "isCausalClass",
+        "is_causal_class"
+      ],
+      "origins": [
+        "allocation.lineage.causal_class",
+        "engineering.family.causal_class",
+        "pilot.family.causal_class"
+      ]
+    },
+    {
+      "name": "certification",
+      "variants": [
+        "Certification",
+        "certification",
+        "isCertification",
+        "is_certification"
+      ],
+      "origins": [
+        "pilot.family.controls.*.certification"
+      ]
+    },
+    {
+      "name": "change_type_id",
+      "variants": [
+        "ChangeTypeId",
+        "change-type-id",
+        "changeTypeId",
+        "change_type_id",
+        "isChangeTypeId",
+        "is_change_type_id"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "char",
+      "variants": [
+        "Char",
+        "char",
+        "isChar",
+        "is_char"
+      ],
+      "origins": [
+        "private_authenticated_support.positions[].char"
+      ]
+    },
+    {
+      "name": "checkpoints",
+      "variants": [
+        "Checkpoints",
+        "checkpoints",
+        "isCheckpoints",
+        "is_checkpoints"
+      ],
+      "origins": [
+        "engineering.family.checkpoints",
+        "pilot.family.checkpoints",
+        "pilot.family.controls.*.checkpoints",
+        "private_generator_support.checkpoints"
+      ]
+    },
+    {
+      "name": "claim",
+      "variants": [
+        "Claim",
+        "claim",
+        "isClaim",
+        "is_claim"
+      ],
+      "origins": [
+        "engineering.family.ast.events.*.reason_nodes.*.claim",
+        "pilot.family.ast.events.*.reason_nodes.*.claim"
+      ]
+    },
+    {
+      "name": "condition_id",
+      "variants": [
+        "ConditionId",
+        "condition-id",
+        "conditionId",
+        "condition_id",
+        "isConditionId",
+        "is_condition_id"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "controls",
+      "variants": [
+        "Controls",
+        "controls",
+        "isControls",
+        "is_controls"
+      ],
+      "origins": [
+        "pilot.family.controls"
+      ]
+    },
+    {
+      "name": "currentEligible",
+      "variants": [
+        "CurrentEligible",
+        "current-eligible",
+        "currentEligible",
+        "current_eligible",
+        "isCurrentEligible",
+        "is_current_eligible"
+      ],
+      "origins": [
+        "pilot.family.controls.*.checkpoints.*.currentEligible"
+      ]
+    },
+    {
+      "name": "dependencyEligible",
+      "variants": [
+        "DependencyEligible",
+        "dependency-eligible",
+        "dependencyEligible",
+        "dependency_eligible",
+        "isDependencyEligible",
+        "is_dependency_eligible"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions.*.expected.dependencyEligible"
+      ]
+    },
+    {
+      "name": "derivatives",
+      "variants": [
+        "Derivatives",
+        "derivatives",
+        "isDerivatives",
+        "is_derivatives"
+      ],
+      "origins": [
+        "allocation.lineage.ancestry.derivatives"
+      ]
+    },
+    {
+      "name": "distractor",
+      "variants": [
+        "Distractor",
+        "distractor",
+        "isDistractor",
+        "is_distractor"
+      ],
+      "origins": [
+        "engineering.family.ast.events.*.distractor",
+        "pilot.family.ast.events.*.distractor"
+      ]
+    },
+    {
+      "name": "edges",
+      "variants": [
+        "Edges",
+        "edges",
+        "isEdges",
+        "is_edges"
+      ],
+      "origins": [
+        "private_generator_support.checkpoints[].acceptedGraphs[].edges"
+      ]
+    },
+    {
+      "name": "emission_inputs",
+      "variants": [
+        "EmissionInputs",
+        "emission-inputs",
+        "emissionInputs",
+        "emission_inputs",
+        "isEmissionInputs",
+        "is_emission_inputs"
+      ],
+      "origins": [
+        "private_generator_support.optional_trivia.emission_inputs"
+      ]
+    },
+    {
+      "name": "emission_inputs_sha256",
+      "variants": [
+        "EmissionInputsSha256",
+        "emission-inputs-sha256",
+        "emissionInputsSha256",
+        "emission_inputs_sha256",
+        "isEmissionInputsSha256",
+        "is_emission_inputs_sha256"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-correction-L01-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L01-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L02-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L02-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L03-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L03-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L04-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L04-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L05-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L05-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L06-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L06-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W2.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W1.emission_inputs_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W2.emission_inputs_sha256"
+      ]
+    },
+    {
+      "name": "entries",
+      "variants": [
+        "Entries",
+        "entries",
+        "isEntries",
+        "is_entries"
+      ],
+      "origins": [
+        "private_name_registry.bindings[].entries"
+      ]
+    },
+    {
+      "name": "error",
+      "variants": [
+        "Error",
+        "error",
+        "isError",
+        "is_error"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions.*.expected.error"
+      ]
+    },
+    {
+      "name": "execution_status",
+      "variants": [
+        "ExecutionStatus",
+        "execution-status",
+        "executionStatus",
+        "execution_status",
+        "isExecutionStatus",
+        "is_execution_status"
+      ],
+      "origins": [
+        "pilot.family.controls.*.execution_status"
+      ]
+    },
+    {
+      "name": "expected",
+      "variants": [
+        "Expected",
+        "expected",
+        "isExpected",
+        "is_expected"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions.*.expected",
+        "pilot.family.controls.*.expected"
+      ]
+    },
+    {
+      "name": "expected_case_sha256",
+      "variants": [
+        "ExpectedCaseSha256",
+        "expected-case-sha256",
+        "expectedCaseSha256",
+        "expected_case_sha256",
+        "isExpectedCaseSha256",
+        "is_expected_case_sha256"
+      ],
+      "origins": [
+        "private_case_authentication.expected_case_sha256"
+      ]
+    },
+    {
+      "name": "expiry_mode",
+      "variants": [
+        "ExpiryMode",
+        "expiry-mode",
+        "expiryMode",
+        "expiry_mode",
+        "isExpiryMode",
+        "is_expiry_mode"
+      ],
+      "origins": [
+        "allocation.lineage.expiry_mode",
+        "pilot.family.expiry_mode"
+      ]
+    },
+    {
+      "name": "family_handles",
+      "variants": [
+        "FamilyHandles",
+        "family-handles",
+        "familyHandles",
+        "family_handles",
+        "isFamilyHandles",
+        "is_family_handles"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles"
+      ]
+    },
+    {
+      "name": "family_handles_sha256",
+      "variants": [
+        "FamilyHandlesSha256",
+        "family-handles-sha256",
+        "familyHandlesSha256",
+        "family_handles_sha256",
+        "isFamilyHandlesSha256",
+        "is_family_handles_sha256"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles_sha256"
+      ]
+    },
+    {
+      "name": "family_id",
+      "variants": [
+        "FamilyId",
+        "family-id",
+        "familyId",
+        "family_id",
+        "isFamilyId",
+        "is_family_id"
+      ],
+      "origins": [
+        "allocation.lineage.members[].family_id",
+        "engineering.family.family_id",
+        "pilot.family.family_id",
+        "private_generator_support.family_id",
+        "private_scoring_case.triviaCase.family_id",
+        "private_trivia_authority.family_handles.pilot-correction-L01-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-correction-L01-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-correction-L02-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-correction-L02-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-correction-L03-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-correction-L03-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-correction-L04-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-correction-L04-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-correction-L05-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-correction-L05-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-correction-L06-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-correction-L06-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W2.family_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W1.family_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W2.family_id"
+      ]
+    },
+    {
+      "name": "field_mask",
+      "variants": [
+        "FieldMask",
+        "field-mask",
+        "fieldMask",
+        "field_mask",
+        "isFieldMask",
+        "is_field_mask"
+      ],
+      "origins": [
+        "engineering.family.ast.events.*.field_mask",
+        "pilot.family.ast.events.*.field_mask"
+      ]
+    },
+    {
+      "name": "fixture_amendment",
+      "variants": [
+        "FixtureAmendment",
+        "fixture-amendment",
+        "fixtureAmendment",
+        "fixture_amendment",
+        "isFixtureAmendment",
+        "is_fixture_amendment"
+      ],
+      "origins": [
+        "allocation.lineage.fixture_amendment"
+      ]
+    },
+    {
+      "name": "fixture_id",
+      "variants": [
+        "FixtureId",
+        "fixture-id",
+        "fixtureId",
+        "fixture_id",
+        "isFixtureId",
+        "is_fixture_id"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "focal_changes",
+      "variants": [
+        "FocalChanges",
+        "focal-changes",
+        "focalChanges",
+        "focal_changes",
+        "isFocalChanges",
+        "is_focal_changes"
+      ],
+      "origins": [
+        "pilot.family.ast.focal_changes"
+      ]
+    },
+    {
+      "name": "foreignExposed",
+      "variants": [
+        "ForeignExposed",
+        "foreign-exposed",
+        "foreignExposed",
+        "foreign_exposed",
+        "isForeignExposed",
+        "is_foreign_exposed"
+      ],
+      "origins": [
+        "pilot.family.controls.*.expected.foreignExposed"
+      ]
+    },
+    {
+      "name": "foreignNamespace",
+      "variants": [
+        "ForeignNamespace",
+        "foreign-namespace",
+        "foreignNamespace",
+        "foreign_namespace",
+        "isForeignNamespace",
+        "is_foreign_namespace"
+      ],
+      "origins": [
+        "pilot.family.controls.*.foreignNamespace"
+      ]
+    },
+    {
+      "name": "forgotten",
+      "variants": [
+        "Forgotten",
+        "forgotten",
+        "isForgotten",
+        "is_forgotten"
+      ],
+      "origins": [
+        "private_name_registry.forgotten"
+      ]
+    },
+    {
+      "name": "freeze_sha256",
+      "variants": [
+        "FreezeSha256",
+        "freeze-sha256",
+        "freezeSha256",
+        "freeze_sha256",
+        "isFreezeSha256",
+        "is_freeze_sha256"
+      ],
+      "origins": [
+        "private_authenticated_support.producer.freeze_sha256",
+        "private_case_authentication.freeze_sha256"
+      ]
+    },
+    {
+      "name": "freshness",
+      "variants": [
+        "Freshness",
+        "freshness",
+        "isFreshness",
+        "is_freshness"
+      ],
+      "origins": [
+        "allocation.lineage.freshness"
+      ]
+    },
+    {
+      "name": "future_effective",
+      "variants": [
+        "FutureEffective",
+        "future-effective",
+        "futureEffective",
+        "future_effective",
+        "isFutureEffective",
+        "is_future_effective"
+      ],
+      "origins": [
+        "pilot.family.ast.variant.future_effective"
+      ]
+    },
+    {
+      "name": "grammar",
+      "variants": [
+        "Grammar",
+        "grammar",
+        "isGrammar",
+        "is_grammar"
+      ],
+      "origins": [
+        "allocation.lineage.ancestry.grammar"
+      ]
+    },
+    {
+      "name": "handle_sha256",
+      "variants": [
+        "HandleSha256",
+        "handle-sha256",
+        "handleSha256",
+        "handle_sha256",
+        "isHandleSha256",
+        "is_handle_sha256"
+      ],
+      "origins": [
+        "private_authenticated_support.producer.handle_sha256",
+        "private_case_authentication.handle_sha256"
+      ]
+    },
+    {
+      "name": "historyEligible",
+      "variants": [
+        "HistoryEligible",
+        "history-eligible",
+        "historyEligible",
+        "history_eligible",
+        "isHistoryEligible",
+        "is_history_eligible"
+      ],
+      "origins": [
+        "pilot.family.controls.*.checkpoints.*.historyEligible"
+      ]
+    },
+    {
+      "name": "historyIsCurrent",
+      "variants": [
+        "HistoryIsCurrent",
+        "history-is-current",
+        "historyIsCurrent",
+        "history_is_current",
+        "isHistoryIsCurrent",
+        "is_history_is_current"
+      ],
+      "origins": [
+        "pilot.family.controls.*.historyIsCurrent"
+      ]
+    },
+    {
+      "name": "identity",
+      "variants": [
+        "Identity",
+        "identity",
+        "isIdentity",
+        "is_identity"
+      ],
+      "origins": [
+        "private_name_registry.bindings[].identity"
+      ]
+    },
+    {
+      "name": "identity_partition",
+      "variants": [
+        "IdentityPartition",
+        "identity-partition",
+        "identityPartition",
+        "identity_partition",
+        "isIdentityPartition",
+        "is_identity_partition"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "independent_review",
+      "variants": [
+        "IndependentReview",
+        "independent-review",
+        "independentReview",
+        "independent_review",
+        "isIndependentReview",
+        "is_independent_review"
+      ],
+      "origins": [
+        "private_trivia_authority.independent_review"
+      ]
+    },
+    {
+      "name": "independentArtifactAudit",
+      "variants": [
+        "IndependentArtifactAudit",
+        "independent-artifact-audit",
+        "independentArtifactAudit",
+        "independent_artifact_audit",
+        "isIndependentArtifactAudit",
+        "is_independent_artifact_audit"
+      ],
+      "origins": [
+        "pilot.family.controls.*.independentArtifactAudit"
+      ]
+    },
+    {
+      "name": "independentCopyEligible",
+      "variants": [
+        "IndependentCopyEligible",
+        "independent-copy-eligible",
+        "independentCopyEligible",
+        "independent_copy_eligible",
+        "isIndependentCopyEligible",
+        "is_independent_copy_eligible"
+      ],
+      "origins": [
+        "pilot.family.controls.*.expected.independentCopyEligible"
+      ]
+    },
+    {
+      "name": "interval_convention",
+      "variants": [
+        "IntervalConvention",
+        "interval-convention",
+        "intervalConvention",
+        "interval_convention",
+        "isIntervalConvention",
+        "is_interval_convention"
+      ],
+      "origins": [
+        "pilot.family.ast.interval_convention"
+      ]
+    },
+    {
+      "name": "lineage_id",
+      "variants": [
+        "LineageId",
+        "isLineageId",
+        "is_lineage_id",
+        "lineage-id",
+        "lineageId",
+        "lineage_id"
+      ],
+      "origins": [
+        "allocation.lineage.lineage_id",
+        "engineering.family.lineage_id",
+        "pilot.family.lineage_id",
+        "private_trivia_authority.family_handles.pilot-correction-L01-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-correction-L01-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-correction-L02-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-correction-L02-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-correction-L03-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-correction-L03-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-correction-L04-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-correction-L04-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-correction-L05-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-correction-L05-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-correction-L06-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-correction-L06-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W2.lineage_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W1.lineage_id",
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W2.lineage_id"
+      ]
+    },
+    {
+      "name": "literal",
+      "variants": [
+        "Literal",
+        "isLiteral",
+        "is_literal",
+        "literal"
+      ],
+      "origins": [
+        "private_authenticated_support.rules[].literal"
+      ]
+    },
+    {
+      "name": "literal_index",
+      "variants": [
+        "LiteralIndex",
+        "isLiteralIndex",
+        "is_literal_index",
+        "literal-index",
+        "literalIndex",
+        "literal_index"
+      ],
+      "origins": [
+        "private_generator_support.optional_trivia.origins[].segments[].parts[].literal_index"
+      ]
+    },
+    {
+      "name": "literal_offset",
+      "variants": [
+        "LiteralOffset",
+        "isLiteralOffset",
+        "is_literal_offset",
+        "literal-offset",
+        "literalOffset",
+        "literal_offset"
+      ],
+      "origins": [
+        "private_authenticated_support.positions[].literal_offset"
+      ]
+    },
+    {
+      "name": "location",
+      "variants": [
+        "Location",
+        "isLocation",
+        "is_location",
+        "location"
+      ],
+      "origins": [
+        "private_name_registry.bindings[].entries[].location"
+      ]
+    },
+    {
+      "name": "member",
+      "variants": [
+        "Member",
+        "isMember",
+        "is_member",
+        "member"
+      ],
+      "origins": [
+        "allocation.lineage.members[].member"
+      ]
+    },
+    {
+      "name": "minimumEdges",
+      "variants": [
+        "MinimumEdges",
+        "isMinimumEdges",
+        "is_minimum_edges",
+        "minimum-edges",
+        "minimumEdges",
+        "minimum_edges"
+      ],
+      "origins": [
+        "pilot.family.reason_strata.*.minimumEdges"
+      ]
+    },
+    {
+      "name": "multi_hop",
+      "variants": [
+        "MultiHop",
+        "isMultiHop",
+        "is_multi_hop",
+        "multi-hop",
+        "multiHop",
+        "multi_hop"
+      ],
+      "origins": [
+        "allocation.lineage.multi_hop",
+        "pilot.family.multi_hop"
+      ]
+    },
+    {
+      "name": "multiHop",
+      "variants": [
+        "MultiHop",
+        "isMultiHop",
+        "is_multi_hop",
+        "multi-hop",
+        "multiHop",
+        "multi_hop"
+      ],
+      "origins": [
+        "pilot.family.reason_strata.*.multiHop"
+      ]
+    },
+    {
+      "name": "multiplicity",
+      "variants": [
+        "Multiplicity",
+        "isMultiplicity",
+        "is_multiplicity",
+        "multiplicity"
+      ],
+      "origins": [
+        "allocation.lineage.multiplicity"
+      ]
+    },
+    {
+      "name": "mutation",
+      "variants": [
+        "Mutation",
+        "isMutation",
+        "is_mutation",
+        "mutation"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions.*.expected.mutation"
+      ]
+    },
+    {
+      "name": "name_diagnostics",
+      "variants": [
+        "NameDiagnostics",
+        "isNameDiagnostics",
+        "is_name_diagnostics",
+        "name-diagnostics",
+        "nameDiagnostics",
+        "name_diagnostics"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "name_errors",
+      "variants": [
+        "NameErrors",
+        "isNameErrors",
+        "is_name_errors",
+        "name-errors",
+        "nameErrors",
+        "name_errors"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "namedRecordExposed",
+      "variants": [
+        "NamedRecordExposed",
+        "isNamedRecordExposed",
+        "is_named_record_exposed",
+        "named-record-exposed",
+        "namedRecordExposed",
+        "named_record_exposed"
+      ],
+      "origins": [
+        "pilot.family.controls.*.expected.namedRecordExposed"
+      ]
+    },
+    {
+      "name": "namespace_sha256",
+      "variants": [
+        "NamespaceSha256",
+        "isNamespaceSha256",
+        "is_namespace_sha256",
+        "namespace-sha256",
+        "namespaceSha256",
+        "namespace_sha256"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-correction-L01-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L01-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L02-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L02-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L03-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L03-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L04-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L04-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L05-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L05-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L06-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L06-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W2.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W1.namespace_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W2.namespace_sha256"
+      ]
+    },
+    {
+      "name": "naming_registry",
+      "variants": [
+        "NamingRegistry",
+        "isNamingRegistry",
+        "is_naming_registry",
+        "naming-registry",
+        "namingRegistry",
+        "naming_registry"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "nonAuthorSemanticAudit",
+      "variants": [
+        "NonAuthorSemanticAudit",
+        "isNonAuthorSemanticAudit",
+        "is_non_author_semantic_audit",
+        "non-author-semantic-audit",
+        "nonAuthorSemanticAudit",
+        "non_author_semantic_audit"
+      ],
+      "origins": [
+        "pilot.family.controls.*.certification.nonAuthorSemanticAudit"
+      ]
+    },
+    {
+      "name": "observed",
+      "variants": [
+        "Observed",
+        "isObserved",
+        "is_observed",
+        "observed"
+      ],
+      "origins": [
+        "private_name_registry.bindings[].entries[].location.observed"
+      ]
+    },
+    {
+      "name": "optional_offsets",
+      "variants": [
+        "OptionalOffsets",
+        "isOptionalOffsets",
+        "is_optional_offsets",
+        "optional-offsets",
+        "optionalOffsets",
+        "optional_offsets"
+      ],
+      "origins": [
+        "private_authenticated_support.rules[].optional_offsets"
+      ]
+    },
+    {
+      "name": "optional_trivia",
+      "variants": [
+        "OptionalTrivia",
+        "isOptionalTrivia",
+        "is_optional_trivia",
+        "optional-trivia",
+        "optionalTrivia",
+        "optional_trivia"
+      ],
+      "origins": [
+        "private_generator_support.optional_trivia"
+      ]
+    },
+    {
+      "name": "origins",
+      "variants": [
+        "Origins",
+        "isOrigins",
+        "is_origins",
+        "origins"
+      ],
+      "origins": [
+        "private_generator_support.optional_trivia.origins"
+      ]
+    },
+    {
+      "name": "overwrittenBodyRecoverable",
+      "variants": [
+        "OverwrittenBodyRecoverable",
+        "isOverwrittenBodyRecoverable",
+        "is_overwritten_body_recoverable",
+        "overwritten-body-recoverable",
+        "overwrittenBodyRecoverable",
+        "overwritten_body_recoverable"
+      ],
+      "origins": [
+        "pilot.family.controls.*.checkpoints.*.overwrittenBodyRecoverable"
+      ]
+    },
+    {
+      "name": "paidReadiness",
+      "variants": [
+        "PaidReadiness",
+        "isPaidReadiness",
+        "is_paid_readiness",
+        "paid-readiness",
+        "paidReadiness",
+        "paid_readiness"
+      ],
+      "origins": [
+        "pilot.family.controls.*.certification.paidReadiness"
+      ]
+    },
+    {
+      "name": "parent",
+      "variants": [
+        "Parent",
+        "isParent",
+        "is_parent",
+        "parent"
+      ],
+      "origins": [
+        "allocation.lineage.ancestry.parent"
+      ]
+    },
+    {
+      "name": "parent_bank",
+      "variants": [
+        "ParentBank",
+        "isParentBank",
+        "is_parent_bank",
+        "parent-bank",
+        "parentBank",
+        "parent_bank"
+      ],
+      "origins": [
+        "allocation.lineage.fixture_amendment.parent_bank"
+      ]
+    },
+    {
+      "name": "parts",
+      "variants": [
+        "Parts",
+        "isParts",
+        "is_parts",
+        "parts"
+      ],
+      "origins": [
+        "private_generator_support.optional_trivia.origins[].segments[].parts"
+      ]
+    },
+    {
+      "name": "pilot-correction-L01-W1",
+      "variants": [
+        "PilotCorrectionL01W1",
+        "isPilotCorrectionL01W1",
+        "is_pilot_correction_l01_w1",
+        "pilot-correction-l01-w1",
+        "pilotCorrectionL01W1",
+        "pilot_correction_l01_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-correction-L01-W1"
+      ]
+    },
+    {
+      "name": "pilot-correction-L01-W2",
+      "variants": [
+        "PilotCorrectionL01W2",
+        "isPilotCorrectionL01W2",
+        "is_pilot_correction_l01_w2",
+        "pilot-correction-l01-w2",
+        "pilotCorrectionL01W2",
+        "pilot_correction_l01_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-correction-L01-W2"
+      ]
+    },
+    {
+      "name": "pilot-correction-L02-W1",
+      "variants": [
+        "PilotCorrectionL02W1",
+        "isPilotCorrectionL02W1",
+        "is_pilot_correction_l02_w1",
+        "pilot-correction-l02-w1",
+        "pilotCorrectionL02W1",
+        "pilot_correction_l02_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-correction-L02-W1"
+      ]
+    },
+    {
+      "name": "pilot-correction-L02-W2",
+      "variants": [
+        "PilotCorrectionL02W2",
+        "isPilotCorrectionL02W2",
+        "is_pilot_correction_l02_w2",
+        "pilot-correction-l02-w2",
+        "pilotCorrectionL02W2",
+        "pilot_correction_l02_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-correction-L02-W2"
+      ]
+    },
+    {
+      "name": "pilot-correction-L03-W1",
+      "variants": [
+        "PilotCorrectionL03W1",
+        "isPilotCorrectionL03W1",
+        "is_pilot_correction_l03_w1",
+        "pilot-correction-l03-w1",
+        "pilotCorrectionL03W1",
+        "pilot_correction_l03_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-correction-L03-W1"
+      ]
+    },
+    {
+      "name": "pilot-correction-L03-W2",
+      "variants": [
+        "PilotCorrectionL03W2",
+        "isPilotCorrectionL03W2",
+        "is_pilot_correction_l03_w2",
+        "pilot-correction-l03-w2",
+        "pilotCorrectionL03W2",
+        "pilot_correction_l03_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-correction-L03-W2"
+      ]
+    },
+    {
+      "name": "pilot-correction-L04-W1",
+      "variants": [
+        "PilotCorrectionL04W1",
+        "isPilotCorrectionL04W1",
+        "is_pilot_correction_l04_w1",
+        "pilot-correction-l04-w1",
+        "pilotCorrectionL04W1",
+        "pilot_correction_l04_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-correction-L04-W1"
+      ]
+    },
+    {
+      "name": "pilot-correction-L04-W2",
+      "variants": [
+        "PilotCorrectionL04W2",
+        "isPilotCorrectionL04W2",
+        "is_pilot_correction_l04_w2",
+        "pilot-correction-l04-w2",
+        "pilotCorrectionL04W2",
+        "pilot_correction_l04_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-correction-L04-W2"
+      ]
+    },
+    {
+      "name": "pilot-correction-L05-W1",
+      "variants": [
+        "PilotCorrectionL05W1",
+        "isPilotCorrectionL05W1",
+        "is_pilot_correction_l05_w1",
+        "pilot-correction-l05-w1",
+        "pilotCorrectionL05W1",
+        "pilot_correction_l05_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-correction-L05-W1"
+      ]
+    },
+    {
+      "name": "pilot-correction-L05-W2",
+      "variants": [
+        "PilotCorrectionL05W2",
+        "isPilotCorrectionL05W2",
+        "is_pilot_correction_l05_w2",
+        "pilot-correction-l05-w2",
+        "pilotCorrectionL05W2",
+        "pilot_correction_l05_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-correction-L05-W2"
+      ]
+    },
+    {
+      "name": "pilot-correction-L06-W1",
+      "variants": [
+        "PilotCorrectionL06W1",
+        "isPilotCorrectionL06W1",
+        "is_pilot_correction_l06_w1",
+        "pilot-correction-l06-w1",
+        "pilotCorrectionL06W1",
+        "pilot_correction_l06_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-correction-L06-W1"
+      ]
+    },
+    {
+      "name": "pilot-correction-L06-W2",
+      "variants": [
+        "PilotCorrectionL06W2",
+        "isPilotCorrectionL06W2",
+        "is_pilot_correction_l06_w2",
+        "pilot-correction-l06-w2",
+        "pilotCorrectionL06W2",
+        "pilot_correction_l06_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-correction-L06-W2"
+      ]
+    },
+    {
+      "name": "pilot-expiry-L01-W1",
+      "variants": [
+        "PilotExpiryL01W1",
+        "isPilotExpiryL01W1",
+        "is_pilot_expiry_l01_w1",
+        "pilot-expiry-l01-w1",
+        "pilotExpiryL01W1",
+        "pilot_expiry_l01_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W1"
+      ]
+    },
+    {
+      "name": "pilot-expiry-L01-W2",
+      "variants": [
+        "PilotExpiryL01W2",
+        "isPilotExpiryL01W2",
+        "is_pilot_expiry_l01_w2",
+        "pilot-expiry-l01-w2",
+        "pilotExpiryL01W2",
+        "pilot_expiry_l01_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W2"
+      ]
+    },
+    {
+      "name": "pilot-expiry-L02-R3-W1",
+      "variants": [
+        "PilotExpiryL02R3W1",
+        "isPilotExpiryL02R3W1",
+        "is_pilot_expiry_l02_r3_w1",
+        "pilot-expiry-l02-r3-w1",
+        "pilotExpiryL02R3W1",
+        "pilot_expiry_l02_r3_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W1"
+      ]
+    },
+    {
+      "name": "pilot-expiry-L02-R3-W2",
+      "variants": [
+        "PilotExpiryL02R3W2",
+        "isPilotExpiryL02R3W2",
+        "is_pilot_expiry_l02_r3_w2",
+        "pilot-expiry-l02-r3-w2",
+        "pilotExpiryL02R3W2",
+        "pilot_expiry_l02_r3_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W2"
+      ]
+    },
+    {
+      "name": "pilot-expiry-L03-R3-W1",
+      "variants": [
+        "PilotExpiryL03R3W1",
+        "isPilotExpiryL03R3W1",
+        "is_pilot_expiry_l03_r3_w1",
+        "pilot-expiry-l03-r3-w1",
+        "pilotExpiryL03R3W1",
+        "pilot_expiry_l03_r3_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W1"
+      ]
+    },
+    {
+      "name": "pilot-expiry-L03-R3-W2",
+      "variants": [
+        "PilotExpiryL03R3W2",
+        "isPilotExpiryL03R3W2",
+        "is_pilot_expiry_l03_r3_w2",
+        "pilot-expiry-l03-r3-w2",
+        "pilotExpiryL03R3W2",
+        "pilot_expiry_l03_r3_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W2"
+      ]
+    },
+    {
+      "name": "pilot-expiry-L04-R3-W1",
+      "variants": [
+        "PilotExpiryL04R3W1",
+        "isPilotExpiryL04R3W1",
+        "is_pilot_expiry_l04_r3_w1",
+        "pilot-expiry-l04-r3-w1",
+        "pilotExpiryL04R3W1",
+        "pilot_expiry_l04_r3_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W1"
+      ]
+    },
+    {
+      "name": "pilot-expiry-L04-R3-W2",
+      "variants": [
+        "PilotExpiryL04R3W2",
+        "isPilotExpiryL04R3W2",
+        "is_pilot_expiry_l04_r3_w2",
+        "pilot-expiry-l04-r3-w2",
+        "pilotExpiryL04R3W2",
+        "pilot_expiry_l04_r3_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W2"
+      ]
+    },
+    {
+      "name": "pilot-expiry-L05-R3-W1",
+      "variants": [
+        "PilotExpiryL05R3W1",
+        "isPilotExpiryL05R3W1",
+        "is_pilot_expiry_l05_r3_w1",
+        "pilot-expiry-l05-r3-w1",
+        "pilotExpiryL05R3W1",
+        "pilot_expiry_l05_r3_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W1"
+      ]
+    },
+    {
+      "name": "pilot-expiry-L05-R3-W2",
+      "variants": [
+        "PilotExpiryL05R3W2",
+        "isPilotExpiryL05R3W2",
+        "is_pilot_expiry_l05_r3_w2",
+        "pilot-expiry-l05-r3-w2",
+        "pilotExpiryL05R3W2",
+        "pilot_expiry_l05_r3_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W2"
+      ]
+    },
+    {
+      "name": "pilot-expiry-L06-R3-W1",
+      "variants": [
+        "PilotExpiryL06R3W1",
+        "isPilotExpiryL06R3W1",
+        "is_pilot_expiry_l06_r3_w1",
+        "pilot-expiry-l06-r3-w1",
+        "pilotExpiryL06R3W1",
+        "pilot_expiry_l06_r3_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W1"
+      ]
+    },
+    {
+      "name": "pilot-expiry-L06-R3-W2",
+      "variants": [
+        "PilotExpiryL06R3W2",
+        "isPilotExpiryL06R3W2",
+        "is_pilot_expiry_l06_r3_w2",
+        "pilot-expiry-l06-r3-w2",
+        "pilotExpiryL06R3W2",
+        "pilot_expiry_l06_r3_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W2"
+      ]
+    },
+    {
+      "name": "pilot-refinement-L01-W1",
+      "variants": [
+        "PilotRefinementL01W1",
+        "isPilotRefinementL01W1",
+        "is_pilot_refinement_l01_w1",
+        "pilot-refinement-l01-w1",
+        "pilotRefinementL01W1",
+        "pilot_refinement_l01_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W1"
+      ]
+    },
+    {
+      "name": "pilot-refinement-L01-W2",
+      "variants": [
+        "PilotRefinementL01W2",
+        "isPilotRefinementL01W2",
+        "is_pilot_refinement_l01_w2",
+        "pilot-refinement-l01-w2",
+        "pilotRefinementL01W2",
+        "pilot_refinement_l01_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W2"
+      ]
+    },
+    {
+      "name": "pilot-refinement-L02-W1",
+      "variants": [
+        "PilotRefinementL02W1",
+        "isPilotRefinementL02W1",
+        "is_pilot_refinement_l02_w1",
+        "pilot-refinement-l02-w1",
+        "pilotRefinementL02W1",
+        "pilot_refinement_l02_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W1"
+      ]
+    },
+    {
+      "name": "pilot-refinement-L02-W2",
+      "variants": [
+        "PilotRefinementL02W2",
+        "isPilotRefinementL02W2",
+        "is_pilot_refinement_l02_w2",
+        "pilot-refinement-l02-w2",
+        "pilotRefinementL02W2",
+        "pilot_refinement_l02_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W2"
+      ]
+    },
+    {
+      "name": "pilot-refinement-L03-W1",
+      "variants": [
+        "PilotRefinementL03W1",
+        "isPilotRefinementL03W1",
+        "is_pilot_refinement_l03_w1",
+        "pilot-refinement-l03-w1",
+        "pilotRefinementL03W1",
+        "pilot_refinement_l03_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W1"
+      ]
+    },
+    {
+      "name": "pilot-refinement-L03-W2",
+      "variants": [
+        "PilotRefinementL03W2",
+        "isPilotRefinementL03W2",
+        "is_pilot_refinement_l03_w2",
+        "pilot-refinement-l03-w2",
+        "pilotRefinementL03W2",
+        "pilot_refinement_l03_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W2"
+      ]
+    },
+    {
+      "name": "pilot-refinement-L04-W1",
+      "variants": [
+        "PilotRefinementL04W1",
+        "isPilotRefinementL04W1",
+        "is_pilot_refinement_l04_w1",
+        "pilot-refinement-l04-w1",
+        "pilotRefinementL04W1",
+        "pilot_refinement_l04_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W1"
+      ]
+    },
+    {
+      "name": "pilot-refinement-L04-W2",
+      "variants": [
+        "PilotRefinementL04W2",
+        "isPilotRefinementL04W2",
+        "is_pilot_refinement_l04_w2",
+        "pilot-refinement-l04-w2",
+        "pilotRefinementL04W2",
+        "pilot_refinement_l04_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W2"
+      ]
+    },
+    {
+      "name": "pilot-refinement-L05-W1",
+      "variants": [
+        "PilotRefinementL05W1",
+        "isPilotRefinementL05W1",
+        "is_pilot_refinement_l05_w1",
+        "pilot-refinement-l05-w1",
+        "pilotRefinementL05W1",
+        "pilot_refinement_l05_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W1"
+      ]
+    },
+    {
+      "name": "pilot-refinement-L05-W2",
+      "variants": [
+        "PilotRefinementL05W2",
+        "isPilotRefinementL05W2",
+        "is_pilot_refinement_l05_w2",
+        "pilot-refinement-l05-w2",
+        "pilotRefinementL05W2",
+        "pilot_refinement_l05_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W2"
+      ]
+    },
+    {
+      "name": "pilot-refinement-L06-W1",
+      "variants": [
+        "PilotRefinementL06W1",
+        "isPilotRefinementL06W1",
+        "is_pilot_refinement_l06_w1",
+        "pilot-refinement-l06-w1",
+        "pilotRefinementL06W1",
+        "pilot_refinement_l06_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W1"
+      ]
+    },
+    {
+      "name": "pilot-refinement-L06-W2",
+      "variants": [
+        "PilotRefinementL06W2",
+        "isPilotRefinementL06W2",
+        "is_pilot_refinement_l06_w2",
+        "pilot-refinement-l06-w2",
+        "pilotRefinementL06W2",
+        "pilot_refinement_l06_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W2"
+      ]
+    },
+    {
+      "name": "pilot-reversal-L01-W1",
+      "variants": [
+        "PilotReversalL01W1",
+        "isPilotReversalL01W1",
+        "is_pilot_reversal_l01_w1",
+        "pilot-reversal-l01-w1",
+        "pilotReversalL01W1",
+        "pilot_reversal_l01_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W1"
+      ]
+    },
+    {
+      "name": "pilot-reversal-L01-W2",
+      "variants": [
+        "PilotReversalL01W2",
+        "isPilotReversalL01W2",
+        "is_pilot_reversal_l01_w2",
+        "pilot-reversal-l01-w2",
+        "pilotReversalL01W2",
+        "pilot_reversal_l01_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W2"
+      ]
+    },
+    {
+      "name": "pilot-reversal-L02-W1",
+      "variants": [
+        "PilotReversalL02W1",
+        "isPilotReversalL02W1",
+        "is_pilot_reversal_l02_w1",
+        "pilot-reversal-l02-w1",
+        "pilotReversalL02W1",
+        "pilot_reversal_l02_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W1"
+      ]
+    },
+    {
+      "name": "pilot-reversal-L02-W2",
+      "variants": [
+        "PilotReversalL02W2",
+        "isPilotReversalL02W2",
+        "is_pilot_reversal_l02_w2",
+        "pilot-reversal-l02-w2",
+        "pilotReversalL02W2",
+        "pilot_reversal_l02_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W2"
+      ]
+    },
+    {
+      "name": "pilot-reversal-L03-W1",
+      "variants": [
+        "PilotReversalL03W1",
+        "isPilotReversalL03W1",
+        "is_pilot_reversal_l03_w1",
+        "pilot-reversal-l03-w1",
+        "pilotReversalL03W1",
+        "pilot_reversal_l03_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W1"
+      ]
+    },
+    {
+      "name": "pilot-reversal-L03-W2",
+      "variants": [
+        "PilotReversalL03W2",
+        "isPilotReversalL03W2",
+        "is_pilot_reversal_l03_w2",
+        "pilot-reversal-l03-w2",
+        "pilotReversalL03W2",
+        "pilot_reversal_l03_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W2"
+      ]
+    },
+    {
+      "name": "pilot-reversal-L04-W1",
+      "variants": [
+        "PilotReversalL04W1",
+        "isPilotReversalL04W1",
+        "is_pilot_reversal_l04_w1",
+        "pilot-reversal-l04-w1",
+        "pilotReversalL04W1",
+        "pilot_reversal_l04_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W1"
+      ]
+    },
+    {
+      "name": "pilot-reversal-L04-W2",
+      "variants": [
+        "PilotReversalL04W2",
+        "isPilotReversalL04W2",
+        "is_pilot_reversal_l04_w2",
+        "pilot-reversal-l04-w2",
+        "pilotReversalL04W2",
+        "pilot_reversal_l04_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W2"
+      ]
+    },
+    {
+      "name": "pilot-reversal-L05-W1",
+      "variants": [
+        "PilotReversalL05W1",
+        "isPilotReversalL05W1",
+        "is_pilot_reversal_l05_w1",
+        "pilot-reversal-l05-w1",
+        "pilotReversalL05W1",
+        "pilot_reversal_l05_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W1"
+      ]
+    },
+    {
+      "name": "pilot-reversal-L05-W2",
+      "variants": [
+        "PilotReversalL05W2",
+        "isPilotReversalL05W2",
+        "is_pilot_reversal_l05_w2",
+        "pilot-reversal-l05-w2",
+        "pilotReversalL05W2",
+        "pilot_reversal_l05_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W2"
+      ]
+    },
+    {
+      "name": "pilot-reversal-L06-W1",
+      "variants": [
+        "PilotReversalL06W1",
+        "isPilotReversalL06W1",
+        "is_pilot_reversal_l06_w1",
+        "pilot-reversal-l06-w1",
+        "pilotReversalL06W1",
+        "pilot_reversal_l06_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W1"
+      ]
+    },
+    {
+      "name": "pilot-reversal-L06-W2",
+      "variants": [
+        "PilotReversalL06W2",
+        "isPilotReversalL06W2",
+        "is_pilot_reversal_l06_w2",
+        "pilot-reversal-l06-w2",
+        "pilotReversalL06W2",
+        "pilot_reversal_l06_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W2"
+      ]
+    },
+    {
+      "name": "pilot-scope_change-L01-W1",
+      "variants": [
+        "PilotScopeChangeL01W1",
+        "isPilotScopeChangeL01W1",
+        "is_pilot_scope_change_l01_w1",
+        "pilot-scope-change-l01-w1",
+        "pilotScopeChangeL01W1",
+        "pilot_scope_change_l01_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W1"
+      ]
+    },
+    {
+      "name": "pilot-scope_change-L01-W2",
+      "variants": [
+        "PilotScopeChangeL01W2",
+        "isPilotScopeChangeL01W2",
+        "is_pilot_scope_change_l01_w2",
+        "pilot-scope-change-l01-w2",
+        "pilotScopeChangeL01W2",
+        "pilot_scope_change_l01_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W2"
+      ]
+    },
+    {
+      "name": "pilot-scope_change-L02-W1",
+      "variants": [
+        "PilotScopeChangeL02W1",
+        "isPilotScopeChangeL02W1",
+        "is_pilot_scope_change_l02_w1",
+        "pilot-scope-change-l02-w1",
+        "pilotScopeChangeL02W1",
+        "pilot_scope_change_l02_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W1"
+      ]
+    },
+    {
+      "name": "pilot-scope_change-L02-W2",
+      "variants": [
+        "PilotScopeChangeL02W2",
+        "isPilotScopeChangeL02W2",
+        "is_pilot_scope_change_l02_w2",
+        "pilot-scope-change-l02-w2",
+        "pilotScopeChangeL02W2",
+        "pilot_scope_change_l02_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W2"
+      ]
+    },
+    {
+      "name": "pilot-scope_change-L03-W1",
+      "variants": [
+        "PilotScopeChangeL03W1",
+        "isPilotScopeChangeL03W1",
+        "is_pilot_scope_change_l03_w1",
+        "pilot-scope-change-l03-w1",
+        "pilotScopeChangeL03W1",
+        "pilot_scope_change_l03_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W1"
+      ]
+    },
+    {
+      "name": "pilot-scope_change-L03-W2",
+      "variants": [
+        "PilotScopeChangeL03W2",
+        "isPilotScopeChangeL03W2",
+        "is_pilot_scope_change_l03_w2",
+        "pilot-scope-change-l03-w2",
+        "pilotScopeChangeL03W2",
+        "pilot_scope_change_l03_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W2"
+      ]
+    },
+    {
+      "name": "pilot-scope_change-L04-W1",
+      "variants": [
+        "PilotScopeChangeL04W1",
+        "isPilotScopeChangeL04W1",
+        "is_pilot_scope_change_l04_w1",
+        "pilot-scope-change-l04-w1",
+        "pilotScopeChangeL04W1",
+        "pilot_scope_change_l04_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W1"
+      ]
+    },
+    {
+      "name": "pilot-scope_change-L04-W2",
+      "variants": [
+        "PilotScopeChangeL04W2",
+        "isPilotScopeChangeL04W2",
+        "is_pilot_scope_change_l04_w2",
+        "pilot-scope-change-l04-w2",
+        "pilotScopeChangeL04W2",
+        "pilot_scope_change_l04_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W2"
+      ]
+    },
+    {
+      "name": "pilot-scope_change-L05-W1",
+      "variants": [
+        "PilotScopeChangeL05W1",
+        "isPilotScopeChangeL05W1",
+        "is_pilot_scope_change_l05_w1",
+        "pilot-scope-change-l05-w1",
+        "pilotScopeChangeL05W1",
+        "pilot_scope_change_l05_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W1"
+      ]
+    },
+    {
+      "name": "pilot-scope_change-L05-W2",
+      "variants": [
+        "PilotScopeChangeL05W2",
+        "isPilotScopeChangeL05W2",
+        "is_pilot_scope_change_l05_w2",
+        "pilot-scope-change-l05-w2",
+        "pilotScopeChangeL05W2",
+        "pilot_scope_change_l05_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W2"
+      ]
+    },
+    {
+      "name": "pilot-scope_change-L06-W1",
+      "variants": [
+        "PilotScopeChangeL06W1",
+        "isPilotScopeChangeL06W1",
+        "is_pilot_scope_change_l06_w1",
+        "pilot-scope-change-l06-w1",
+        "pilotScopeChangeL06W1",
+        "pilot_scope_change_l06_w1"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W1"
+      ]
+    },
+    {
+      "name": "pilot-scope_change-L06-W2",
+      "variants": [
+        "PilotScopeChangeL06W2",
+        "isPilotScopeChangeL06W2",
+        "is_pilot_scope_change_l06_w2",
+        "pilot-scope-change-l06-w2",
+        "pilotScopeChangeL06W2",
+        "pilot_scope_change_l06_w2"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W2"
+      ]
+    },
+    {
+      "name": "position",
+      "variants": [
+        "Position",
+        "isPosition",
+        "is_position",
+        "position"
+      ],
+      "origins": [
+        "private_authenticated_support.positions[].position"
+      ]
+    },
+    {
+      "name": "positions",
+      "variants": [
+        "Positions",
+        "isPositions",
+        "is_positions",
+        "positions"
+      ],
+      "origins": [
+        "private_authenticated_support.positions",
+        "private_generator_support.optional_trivia.origins[].positions"
+      ]
+    },
+    {
+      "name": "previous_snapshot",
+      "variants": [
+        "PreviousSnapshot",
+        "isPreviousSnapshot",
+        "is_previous_snapshot",
+        "previous-snapshot",
+        "previousSnapshot",
+        "previous_snapshot"
+      ],
+      "origins": [
+        "allocation.lineage.fixture_amendment.previous_snapshot"
+      ]
+    },
+    {
+      "name": "primary",
+      "variants": [
+        "Primary",
+        "isPrimary",
+        "is_primary",
+        "primary"
+      ],
+      "origins": [
+        "pilot.family.checkpoints.*.primary"
+      ]
+    },
+    {
+      "name": "private",
+      "variants": [
+        "Private",
+        "isPrivate",
+        "is_private",
+        "private"
+      ],
+      "origins": [
+        "private_trivia_authority.private"
+      ]
+    },
+    {
+      "name": "private_identity_registry",
+      "variants": [
+        "PrivateIdentityRegistry",
+        "isPrivateIdentityRegistry",
+        "is_private_identity_registry",
+        "private-identity-registry",
+        "privateIdentityRegistry",
+        "private_identity_registry"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "private_label",
+      "variants": [
+        "PrivateLabel",
+        "isPrivateLabel",
+        "is_private_label",
+        "private-label",
+        "privateLabel",
+        "private_label"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "private_labels",
+      "variants": [
+        "PrivateLabels",
+        "isPrivateLabels",
+        "is_private_labels",
+        "private-labels",
+        "privateLabels",
+        "private_labels"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "producer",
+      "variants": [
+        "Producer",
+        "isProducer",
+        "is_producer",
+        "producer"
+      ],
+      "origins": [
+        "private_authenticated_support.producer"
+      ]
+    },
+    {
+      "name": "production",
+      "variants": [
+        "Production",
+        "isProduction",
+        "is_production",
+        "production"
+      ],
+      "origins": [
+        "private_authenticated_support.rules[].production",
+        "private_generator_support.optional_trivia.emission_inputs[].production",
+        "private_generator_support.optional_trivia.origins[].segments[].production"
+      ]
+    },
+    {
+      "name": "qualifiers",
+      "variants": [
+        "Qualifiers",
+        "isQualifiers",
+        "is_qualifiers",
+        "qualifiers"
+      ],
+      "origins": [
+        "engineering.family.ast.events.*.reason_nodes.*.claim.qualifiers",
+        "pilot.family.ast.events.*.reason_nodes.*.claim.qualifiers"
+      ]
+    },
+    {
+      "name": "query_scope",
+      "variants": [
+        "QueryScope",
+        "isQueryScope",
+        "is_query_scope",
+        "query-scope",
+        "queryScope",
+        "query_scope"
+      ],
+      "origins": [
+        "pilot.family.query_scope"
+      ]
+    },
+    {
+      "name": "reason_edges",
+      "variants": [
+        "ReasonEdges",
+        "isReasonEdges",
+        "is_reason_edges",
+        "reason-edges",
+        "reasonEdges",
+        "reason_edges"
+      ],
+      "origins": [
+        "engineering.family.ast.events.*.reason_edges",
+        "pilot.family.ast.events.*.reason_edges"
+      ]
+    },
+    {
+      "name": "reason_nodes",
+      "variants": [
+        "ReasonNodes",
+        "isReasonNodes",
+        "is_reason_nodes",
+        "reason-nodes",
+        "reasonNodes",
+        "reason_nodes"
+      ],
+      "origins": [
+        "engineering.family.ast.events.*.reason_nodes",
+        "pilot.family.ast.events.*.reason_nodes"
+      ]
+    },
+    {
+      "name": "reason_strata",
+      "variants": [
+        "ReasonStrata",
+        "isReasonStrata",
+        "is_reason_strata",
+        "reason-strata",
+        "reasonStrata",
+        "reason_strata"
+      ],
+      "origins": [
+        "pilot.family.reason_strata"
+      ]
+    },
+    {
+      "name": "receiptsExposed",
+      "variants": [
+        "ReceiptsExposed",
+        "isReceiptsExposed",
+        "is_receipts_exposed",
+        "receipts-exposed",
+        "receiptsExposed",
+        "receipts_exposed"
+      ],
+      "origins": [
+        "pilot.family.controls.*.expected.receiptsExposed"
+      ]
+    },
+    {
+      "name": "registry_sha256",
+      "variants": [
+        "RegistrySha256",
+        "isRegistrySha256",
+        "is_registry_sha256",
+        "registry-sha256",
+        "registrySha256",
+        "registry_sha256"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-correction-L01-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L01-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L02-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L02-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L03-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L03-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L04-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L04-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L05-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L05-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L06-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L06-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W2.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W1.registry_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W2.registry_sha256"
+      ]
+    },
+    {
+      "name": "relation",
+      "variants": [
+        "Relation",
+        "isRelation",
+        "is_relation",
+        "relation"
+      ],
+      "origins": [
+        "allocation.lineage.ancestry.relation",
+        "allocation.lineage.fixture_amendment.relation"
+      ]
+    },
+    {
+      "name": "rendered_world_audit_members",
+      "variants": [
+        "RenderedWorldAuditMembers",
+        "isRenderedWorldAuditMembers",
+        "is_rendered_world_audit_members",
+        "rendered-world-audit-members",
+        "renderedWorldAuditMembers",
+        "rendered_world_audit_members"
+      ],
+      "origins": [
+        "allocation.lineage.rendered_world_audit_members"
+      ]
+    },
+    {
+      "name": "replayResurrection",
+      "variants": [
+        "ReplayResurrection",
+        "isReplayResurrection",
+        "is_replay_resurrection",
+        "replay-resurrection",
+        "replayResurrection",
+        "replay_resurrection"
+      ],
+      "origins": [
+        "pilot.family.controls.*.expected.replayResurrection"
+      ]
+    },
+    {
+      "name": "retroactive",
+      "variants": [
+        "Retroactive",
+        "isRetroactive",
+        "is_retroactive",
+        "retroactive"
+      ],
+      "origins": [
+        "pilot.family.ast.variant.retroactive"
+      ]
+    },
+    {
+      "name": "returns",
+      "variants": [
+        "Returns",
+        "isReturns",
+        "is_returns",
+        "returns"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions.*.returns"
+      ]
+    },
+    {
+      "name": "rule",
+      "variants": [
+        "Rule",
+        "isRule",
+        "is_rule",
+        "rule"
+      ],
+      "origins": [
+        "private_authenticated_support.positions[].rule"
+      ]
+    },
+    {
+      "name": "rules",
+      "variants": [
+        "Rules",
+        "isRules",
+        "is_rules",
+        "rules"
+      ],
+      "origins": [
+        "private_authenticated_support.rules",
+        "private_trivia_authority.rules"
+      ]
+    },
+    {
+      "name": "rules_sha256",
+      "variants": [
+        "RulesSha256",
+        "isRulesSha256",
+        "is_rules_sha256",
+        "rules-sha256",
+        "rulesSha256",
+        "rules_sha256"
+      ],
+      "origins": [
+        "private_authenticated_support.producer.rules_sha256",
+        "private_generator_support.optional_trivia.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L01-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L01-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L02-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L02-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L03-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L03-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L04-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L04-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L05-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L05-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L06-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L06-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W2.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W1.rules_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W2.rules_sha256",
+        "private_trivia_authority.rules_sha256"
+      ]
+    },
+    {
+      "name": "safety",
+      "variants": [
+        "Safety",
+        "isSafety",
+        "is_safety",
+        "safety"
+      ],
+      "origins": [
+        "allocation.lineage.members[].safety"
+      ]
+    },
+    {
+      "name": "schema_version",
+      "variants": [
+        "SchemaVersion",
+        "isSchemaVersion",
+        "is_schema_version",
+        "schema-version",
+        "schemaVersion",
+        "schema_version"
+      ],
+      "origins": [
+        "pilot.family.schema_version"
+      ]
+    },
+    {
+      "name": "schemaAndLifecycle",
+      "variants": [
+        "SchemaAndLifecycle",
+        "isSchemaAndLifecycle",
+        "is_schema_and_lifecycle",
+        "schema-and-lifecycle",
+        "schemaAndLifecycle",
+        "schema_and_lifecycle"
+      ],
+      "origins": [
+        "pilot.family.controls.*.certification.schemaAndLifecycle"
+      ]
+    },
+    {
+      "name": "scoring",
+      "variants": [
+        "Scoring",
+        "isScoring",
+        "is_scoring",
+        "scoring"
+      ],
+      "origins": [
+        "pilot.family.controls.*.scoring"
+      ]
+    },
+    {
+      "name": "seed",
+      "variants": [
+        "Seed",
+        "isSeed",
+        "is_seed",
+        "seed"
+      ],
+      "origins": [
+        "pilot.family.seed",
+        "private_trivia_authority.family_handles.pilot-correction-L01-W1.seed",
+        "private_trivia_authority.family_handles.pilot-correction-L01-W2.seed",
+        "private_trivia_authority.family_handles.pilot-correction-L02-W1.seed",
+        "private_trivia_authority.family_handles.pilot-correction-L02-W2.seed",
+        "private_trivia_authority.family_handles.pilot-correction-L03-W1.seed",
+        "private_trivia_authority.family_handles.pilot-correction-L03-W2.seed",
+        "private_trivia_authority.family_handles.pilot-correction-L04-W1.seed",
+        "private_trivia_authority.family_handles.pilot-correction-L04-W2.seed",
+        "private_trivia_authority.family_handles.pilot-correction-L05-W1.seed",
+        "private_trivia_authority.family_handles.pilot-correction-L05-W2.seed",
+        "private_trivia_authority.family_handles.pilot-correction-L06-W1.seed",
+        "private_trivia_authority.family_handles.pilot-correction-L06-W2.seed",
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W1.seed",
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W2.seed",
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W1.seed",
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W2.seed",
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W1.seed",
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W2.seed",
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W1.seed",
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W2.seed",
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W1.seed",
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W2.seed",
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W1.seed",
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W2.seed",
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W1.seed",
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W2.seed",
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W1.seed",
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W2.seed",
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W1.seed",
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W2.seed",
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W1.seed",
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W2.seed",
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W1.seed",
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W2.seed",
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W1.seed",
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W2.seed",
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W1.seed",
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W2.seed",
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W1.seed",
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W2.seed",
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W1.seed",
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W2.seed",
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W1.seed",
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W2.seed",
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W1.seed",
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W2.seed",
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W1.seed",
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W2.seed",
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W1.seed",
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W2.seed",
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W1.seed",
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W2.seed",
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W1.seed",
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W2.seed",
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W1.seed",
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W2.seed",
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W1.seed",
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W2.seed",
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W1.seed",
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W2.seed"
+      ]
+    },
+    {
+      "name": "segments",
+      "variants": [
+        "Segments",
+        "isSegments",
+        "is_segments",
+        "segments"
+      ],
+      "origins": [
+        "private_generator_support.optional_trivia.origins[].segments"
+      ]
+    },
+    {
+      "name": "separate_assertion",
+      "variants": [
+        "SeparateAssertion",
+        "isSeparateAssertion",
+        "is_separate_assertion",
+        "separate-assertion",
+        "separateAssertion",
+        "separate_assertion"
+      ],
+      "origins": [
+        "pilot.family.controls.*.separate_assertion"
+      ]
+    },
+    {
+      "name": "sha256",
+      "variants": [
+        "Sha256",
+        "isSha256",
+        "is_sha256",
+        "sha256"
+      ],
+      "origins": [
+        "private_name_registry.bindings[].entries[].anchor.sha256"
+      ]
+    },
+    {
+      "name": "source_turn_order",
+      "variants": [
+        "SourceTurnOrder",
+        "isSourceTurnOrder",
+        "is_source_turn_order",
+        "source-turn-order",
+        "sourceTurnOrder",
+        "source_turn_order"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "source_turns_sha256",
+      "variants": [
+        "SourceTurnsSha256",
+        "isSourceTurnsSha256",
+        "is_source_turns_sha256",
+        "source-turns-sha256",
+        "sourceTurnsSha256",
+        "source_turns_sha256"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-correction-L01-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L01-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L02-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L02-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L03-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L03-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L04-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L04-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L05-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L05-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L06-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L06-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W2.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W1.source_turns_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W2.source_turns_sha256"
+      ]
+    },
+    {
+      "name": "spans",
+      "variants": [
+        "Spans",
+        "isSpans",
+        "is_spans",
+        "spans"
+      ],
+      "origins": [
+        "private_generator_support.checkpoints[].assertion_spans[].spans"
+      ]
+    },
+    {
+      "name": "split",
+      "variants": [
+        "Split",
+        "isSplit",
+        "is_split",
+        "split"
+      ],
+      "origins": [
+        "allocation.lineage.split",
+        "engineering.family.split",
+        "pilot.family.split"
+      ]
+    },
+    {
+      "name": "stage",
+      "variants": [
+        "Stage",
+        "isStage",
+        "is_stage",
+        "stage"
+      ],
+      "origins": [
+        "run_configuration.stage"
+      ]
+    },
+    {
+      "name": "suppressed",
+      "variants": [
+        "Suppressed",
+        "isSuppressed",
+        "is_suppressed",
+        "suppressed"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions.*.expected.suppressed"
+      ]
+    },
+    {
+      "name": "target",
+      "variants": [
+        "Target",
+        "isTarget",
+        "is_target",
+        "target"
+      ],
+      "origins": [
+        "pilot.family.controls.*.actions.*.target"
+      ]
+    },
+    {
+      "name": "targetRecord",
+      "variants": [
+        "TargetRecord",
+        "isTargetRecord",
+        "is_target_record",
+        "target-record",
+        "targetRecord",
+        "target_record"
+      ],
+      "origins": [
+        "pilot.family.controls.*.targetRecord"
+      ]
+    },
+    {
+      "name": "template",
+      "variants": [
+        "Template",
+        "isTemplate",
+        "is_template",
+        "template"
+      ],
+      "origins": [
+        "private_generator_support.optional_trivia.emission_inputs[].template"
+      ]
+    },
+    {
+      "name": "template_bank_sha256",
+      "variants": [
+        "TemplateBankSha256",
+        "isTemplateBankSha256",
+        "is_template_bank_sha256",
+        "template-bank-sha256",
+        "templateBankSha256",
+        "template_bank_sha256"
+      ],
+      "origins": [
+        "private_trivia_authority.family_handles.pilot-correction-L01-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L01-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L02-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L02-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L03-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L03-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L04-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L04-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L05-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L05-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L06-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-correction-L06-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L01-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L02-R3-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L03-R3-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L04-R3-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L05-R3-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-expiry-L06-R3-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L01-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L02-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L03-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L04-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L05-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-refinement-L06-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L01-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L02-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L03-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L04-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L05-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-reversal-L06-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L01-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L02-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L03-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L04-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L05-W2.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W1.template_bank_sha256",
+        "private_trivia_authority.family_handles.pilot-scope_change-L06-W2.template_bank_sha256"
+      ]
+    },
+    {
+      "name": "time_zone",
+      "variants": [
+        "TimeZone",
+        "isTimeZone",
+        "is_time_zone",
+        "time-zone",
+        "timeZone",
+        "time_zone"
+      ],
+      "origins": [
+        "pilot.family.ast.time_zone"
+      ]
+    },
+    {
+      "name": "triviaCase",
+      "variants": [
+        "TriviaCase",
+        "isTriviaCase",
+        "is_trivia_case",
+        "trivia-case",
+        "triviaCase",
+        "trivia_case"
+      ],
+      "origins": [
+        "private_scoring_case.triviaCase"
+      ]
+    },
+    {
+      "name": "turn",
+      "variants": [
+        "Turn",
+        "isTurn",
+        "is_turn",
+        "turn"
+      ],
+      "origins": [
+        "private_name_registry.bindings[].entries[].location.turn"
+      ]
+    },
+    {
+      "name": "unresolved_protocol",
+      "variants": [
+        "UnresolvedProtocol",
+        "isUnresolvedProtocol",
+        "is_unresolved_protocol",
+        "unresolved-protocol",
+        "unresolvedProtocol",
+        "unresolved_protocol"
+      ],
+      "origins": [
+        "pilot.family.controls.*.unresolved_protocol"
+      ]
+    },
+    {
+      "name": "valid_name",
+      "variants": [
+        "ValidName",
+        "isValidName",
+        "is_valid_name",
+        "valid-name",
+        "validName",
+        "valid_name"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    },
+    {
+      "name": "variables",
+      "variants": [
+        "Variables",
+        "isVariables",
+        "is_variables",
+        "variables"
+      ],
+      "origins": [
+        "private_generator_support.optional_trivia.emission_inputs[].variables"
+      ]
+    },
+    {
+      "name": "variant",
+      "variants": [
+        "Variant",
+        "isVariant",
+        "is_variant",
+        "variant"
+      ],
+      "origins": [
+        "pilot.family.ast.variant"
+      ]
+    },
+    {
+      "name": "world_id",
+      "variants": [
+        "WorldId",
+        "isWorldId",
+        "is_world_id",
+        "world-id",
+        "worldId",
+        "world_id"
+      ],
+      "origins": [
+        "reserved_private_identifier"
+      ]
+    }
+  ],
+  "sources": {
+    "evaluation/hr3/harness/private-field-inventory.mjs": "590b07e7e21b8304375ff09859c5e99661c3638bb8569836e1177089e716193b",
+    "evaluation/hr3/harness/name-registry-a6.mjs": "91825fd6a812ec236db0b5d861e6c77a2a8ae4af97c5c994607611615efd57a1",
+    "evaluation/hr3/harness/public-paths-a4.mjs": "7b1d3a114da8a38b880d828d40674aaf1b5d1608c3653efe9b52c6205d7f3935",
+    "evaluation/hr3/harness/preflight-a6-schema.mjs": "9c8a3dca6622a218211952604ef698b866e3132e56ccaa4f66601bd31ec2c7c4",
+    "evaluation/hr3/scorer/schema.mjs": "2a37afc209ec6ae8b038bac39be7bb8a2b726f65d36dc411330b449e57574286",
+    "evaluation/hr3/scorer/support.mjs": "6242ca29489920467475712889d9bb99de33f79962a9bf48f40a3f3b972184ae",
+    "evaluation/hr3/harness/run-configuration.mjs": "cde03c70a4ee26ac362c27628341103bda45722d1ec8b558fb8c139529226ebb",
+    "evaluation/hr3/harness/cap-stress-fixtures.mjs": "c1eef36b796b00c840de2040b7546a4ffe842557d0d178b03a10b95a28573b16",
+    "evaluation/hr3/generator/freeze.json": "548fd3913d76a3e8943a9224dfb1a050f569421de93244ec4b5859a12b25fa8a",
+    "evaluation/hr3/harness/trivia-authority-a6.mjs": "0847c9f727f3b0a85f2758775ee52bd5b420ca22ffd58919c5a10ea721f28c56",
+    "evaluation/hr3/generator/generate.mjs": "1accf1beaaaa0354ac3d94ed728afa07082846d613e6d07a3bcc58983cd38288",
+    "evaluation/hr3/generator/bank.mjs": "47146d55e3a846ca651ed883d6a9d13175b6531c4dc535fed2af8092c7ffa451",
+    "evaluation/hr3/generator/inventory.mjs": "08960e14490862afe531c867ad21bc1c80c4bfde9e021111aef023700efc21f4",
+    "evaluation/hr3/generator/artifacts/pilot/support.jsonl": "edaff69313fb4b10509fdbd3b1a52d51a238a9b31e924022b3bf47ccab27fd85",
+    "evaluation/hr3/generator/artifacts/pilot/families.jsonl": "aa740987516a9333fe2dcc88aa7d10ad00336bb802b462ba52374aebf6375d60",
+    "core/private-card-input.mjs": "701ea7f75124be1ed84547d179e8fe6077a44114fe2410103a98022e9a735fd5",
+    "core/method-package-input.mjs": "e9ec687d06bc058005bc060c409d711ddada1d2da9b3bcff2e82a2f0c60dcb7b",
+    "core/card-current-input.mjs": "bc7207aeffceb667e6bd5c50808f08b259f70556d48d8cd11b3a50d4810618f1"
+  }
+}

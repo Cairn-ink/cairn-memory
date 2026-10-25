@@ -1,0 +1,18 @@
+{
+  "version": "hr3-carry-forward-v1",
+  "ledgers": [
+    {
+      "path": "evaluation/hr3/harness/test/fixtures/pilot4-3aef2f02-ledger.jsonl",
+      "sha256": "ed220b1c1ba59a1ba5b1ea421b1c75246594d9ce4a448454cbf4909c979156c9",
+      "inheritedManifest": {
+        "path": "evaluation/hr3/harness/reports/a4-carry-forward.json",
+        "sha256": "f110569bb55808e6f40e6cc5dec8d5ca1a91d9e64eb74f25336b6a293cdf92b6"
+      }
+    }
+  ],
+  "preparation": {
+    "complete": true,
+    "attestation": "Primary attestation: after the fourth engineering pilot (run directory paid-pilot4-3aef2f02, commit 3aef2f02) no paid OpenAI request was made for HR-3 preparation. A-6 migration, measurement mode, certification and fake pilots ran offline with zero dispatches and no key access. Every charge since pilot three is in the fourth-pilot ledger; there are no unledgered preparation receipts.",
+    "receipts": []
+  }
+}

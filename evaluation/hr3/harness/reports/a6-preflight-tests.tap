@@ -1,0 +1,58 @@
+TAP version 13
+# Subtest: A6 projection: all operation-relevant rules and worked examples round-trip exactly, including explicit nulls
+ok 1 - A6 projection: all operation-relevant rules and worked examples round-trip exactly, including explicit nulls
+  ---
+  duration_ms: 326.194667
+  type: 'test'
+  ...
+# Subtest: A6 projection: relevant aliases and every slot survive bilingual/mixed public context without arm dependence
+ok 2 - A6 projection: relevant aliases and every slot survive bilingual/mixed public context without arm dependence
+  ---
+  duration_ms: 5.698322
+  type: 'test'
+  ...
+# Subtest: A6 projection: inheritance and addressing examples remain independent bilingual full pairs
+ok 3 - A6 projection: inheritance and addressing examples remain independent bilingual full pairs
+  ---
+  duration_ms: 0.805394
+  type: 'test'
+  ...
+# Subtest: A6 schema: own/current-reference anchors replace old wire without restricting event-domain enums
+ok 4 - A6 schema: own/current-reference anchors replace old wire without restricting event-domain enums
+  ---
+  duration_ms: 1.029649
+  type: 'test'
+  ...
+# Subtest: A6 request: exact evidence survives both complete provider envelopes; model settings and all limits remain frozen
+ok 5 - A6 request: exact evidence survives both complete provider envelopes; model settings and all limits remain frozen
+  ---
+  duration_ms: 3.741218
+  type: 'test'
+  ...
+# Subtest: A6 feasibility: saved bodies independently reproduce the failing exact-byte 5% gate and source bindings
+ok 6 - A6 feasibility: saved bodies independently reproduce the failing exact-byte 5% gate and source bindings
+  ---
+  duration_ms: 8.497854
+  type: 'test'
+  ...
+# Subtest: A6 factoring: cyclic and absent exact references cannot silently discard or fabricate examples
+ok 7 - A6 factoring: cyclic and absent exact references cannot silently discard or fabricate examples
+  ---
+  duration_ms: 0.125163
+  type: 'test'
+  ...
+# Subtest: A6 accounting: all four ledgers verify exactly once with outstanding charges and unchanged ancestor retained
+ok 8 - A6 accounting: all four ledgers verify exactly once with outstanding charges and unchanged ancestor retained
+  ---
+  duration_ms: 283.789905
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 657.929653

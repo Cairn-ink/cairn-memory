@@ -12,11 +12,16 @@
     "updates",
     "citations",
     "answer",
-    "examples"
+    "examples",
+    "name_tokens",
+    "extraction",
+    "example_exclusions",
+    "reader",
+    "worked_examples"
   ],
   "properties": {
     "version": {
-      "const": "hr3-public-contract-a4-v1"
+      "const": "hr3-public-contract-a6-v1"
     },
     "languages": {
       "type": "array",
@@ -650,8 +655,3213 @@
           }
         }
       }
+    },
+    "name_tokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pattern",
+        "complete_tokens",
+        "prefix_exclusion",
+        "anchoring",
+        "normalization",
+        "own_name",
+        "predecessor_refs"
+      ],
+      "properties": {
+        "pattern": {
+          "type": "string"
+        },
+        "complete_tokens": {
+          "type": "boolean"
+        },
+        "prefix_exclusion": {
+          "type": "string"
+        },
+        "anchoring": {
+          "type": "string"
+        },
+        "normalization": {
+          "type": "string"
+        },
+        "own_name": {
+          "type": "string"
+        },
+        "predecessor_refs": {
+          "type": "string"
+        }
+      },
+      "const": {
+        "pattern": "[A-Za-z0-9_-]+",
+        "complete_tokens": true,
+        "prefix_exclusion": "A name must match the complete token: both adjacent characters must be outside [A-Za-z0-9_-]. demo7 inside demo70 or demo7_suffix is invalid.",
+        "anchoring": "Own-name and reference quote equals the submitted name before normalization, in a source_turns current-batch turn, exact one-based overlapping occurrence. Roles are semantic assertions, never inferred from substring presence.",
+        "normalization": "NFKC, collapse whitespace and trim; preserve case. No case folding, phonetics, punctuation deletion or undeclared aliases.",
+        "own_name": "The newly introduced record, not the old record in correct record ...; null if absent.",
+        "predecessor_refs": "Quote each referenced record once at its current-batch mention; never guess an earlier turn. The private gold-free registry supplies target event/source identities before arm fan-out."
+      }
+    },
+    "extraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "crosswalk",
+        "orthogonal_fields",
+        "source_coverage",
+        "causal_clauses",
+        "admission",
+        "context",
+        "slots",
+        "registry"
+      ],
+      "properties": {
+        "crosswalk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "commitment",
+            "change_type",
+            "replacement_extent"
+          ],
+          "properties": {
+            "kind": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "commitment": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "change_type": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "replacement_extent": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "orthogonal_fields": {
+          "type": "string"
+        },
+        "source_coverage": {
+          "type": "string"
+        },
+        "causal_clauses": {
+          "type": "string"
+        },
+        "admission": {
+          "type": "string"
+        },
+        "context": {
+          "type": "string"
+        },
+        "slots": {
+          "type": "string"
+        },
+        "registry": {
+          "type": "string"
+        }
+      }
+    },
+    "example_exclusions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reserved_name_prefix",
+        "worlds",
+        "policy"
+      ],
+      "properties": {
+        "reserved_name_prefix": {
+          "type": "string"
+        },
+        "worlds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "policy": {
+          "type": "string"
+        }
+      },
+      "const": {
+        "reserved_name_prefix": "demo",
+        "worlds": [
+          "research",
+          "calibration"
+        ],
+        "policy": "All worked-example worlds, names, routes, source texts, outputs and case-specific mappings are excluded from research/calibration authoring. Shared primitives such as Boolean false and canonical units are not banned. Reserve the demo name namespace; never use examples as sampled worlds."
+      }
+    },
+    "reader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recovery",
+        "unresolved",
+        "history",
+        "selection",
+        "addresses"
+      ],
+      "properties": {
+        "recovery": {
+          "type": "string"
+        },
+        "unresolved": {
+          "type": "string"
+        },
+        "history": {
+          "type": "string"
+        },
+        "selection": {
+          "type": "string"
+        },
+        "addresses": {
+          "type": "string"
+        }
+      }
+    },
+    "worked_examples": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "common_input",
+        "authorship",
+        "excluded_from",
+        "extraction",
+        "citation_address",
+        "inheritance_pairs",
+        "slot_recovery",
+        "causal_selection"
+      ],
+      "properties": {
+        "common_input": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "observed_at",
+            "public_header"
+          ],
+          "properties": {
+            "observed_at": {
+              "type": "string"
+            },
+            "public_header": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "subject",
+                "predicate"
+              ],
+              "properties": {
+                "subject": {
+                  "type": "string"
+                },
+                "predicate": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "authorship": {
+          "type": "string"
+        },
+        "excluded_from": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "extraction": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "language",
+                  "batches",
+                  "explanation"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "batches": {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "turns",
+                            "expected"
+                          ],
+                          "properties": {
+                            "turns": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "turn_id",
+                                  "text"
+                                ],
+                                "properties": {
+                                  "turn_id": {
+                                    "type": "string"
+                                  },
+                                  "text": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            },
+                            "expected": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "event_id",
+                                  "source_turns",
+                                  "observed_at",
+                                  "kind",
+                                  "commitment",
+                                  "change_type",
+                                  "subject",
+                                  "predicate",
+                                  "payload",
+                                  "scope",
+                                  "effective_interval",
+                                  "record_name",
+                                  "predecessor_refs",
+                                  "replacement_extent",
+                                  "reason_quotes",
+                                  "source_quotes"
+                                ],
+                                "properties": {
+                                  "event_id": {
+                                    "type": "string"
+                                  },
+                                  "source_turns": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "observed_at": {
+                                    "type": "string"
+                                  },
+                                  "kind": {
+                                    "type": "string"
+                                  },
+                                  "commitment": {
+                                    "type": "string"
+                                  },
+                                  "change_type": {
+                                    "type": "string"
+                                  },
+                                  "subject": {
+                                    "type": "string"
+                                  },
+                                  "predicate": {
+                                    "type": "string"
+                                  },
+                                  "payload": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "type",
+                                      "route",
+                                      "approval",
+                                      "cap"
+                                    ],
+                                    "properties": {
+                                      "type": {
+                                        "type": "string"
+                                      },
+                                      "route": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "value",
+                                          "anchors"
+                                        ],
+                                        "properties": {
+                                          "value": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "type",
+                                              "text"
+                                            ],
+                                            "properties": {
+                                              "type": {
+                                                "type": "string"
+                                              },
+                                              "text": {
+                                                "type": "string"
+                                              }
+                                            }
+                                          },
+                                          "anchors": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "additionalProperties": false,
+                                              "required": [
+                                                "turn_id",
+                                                "quote",
+                                                "occurrence"
+                                              ],
+                                              "properties": {
+                                                "turn_id": {
+                                                  "type": "string"
+                                                },
+                                                "quote": {
+                                                  "type": "string"
+                                                },
+                                                "occurrence": {
+                                                  "type": "integer"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      "approval": {
+                                        "type": "null"
+                                      },
+                                      "cap": {
+                                        "type": "null"
+                                      }
+                                    }
+                                  },
+                                  "scope": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "any"
+                                    ],
+                                    "properties": {
+                                      "any": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "additionalProperties": false,
+                                          "required": [
+                                            "all"
+                                          ],
+                                          "properties": {
+                                            "all": {
+                                              "type": "array",
+                                              "items": {}
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "effective_interval": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "from",
+                                      "to"
+                                    ],
+                                    "properties": {
+                                      "from": {
+                                        "type": "string"
+                                      },
+                                      "to": {
+                                        "type": "null"
+                                      }
+                                    }
+                                  },
+                                  "record_name": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "name",
+                                      "anchor"
+                                    ],
+                                    "properties": {
+                                      "name": {
+                                        "type": "string"
+                                      },
+                                      "anchor": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "turn_id",
+                                          "quote",
+                                          "occurrence"
+                                        ],
+                                        "properties": {
+                                          "turn_id": {
+                                            "type": "string"
+                                          },
+                                          "quote": {
+                                            "type": "string"
+                                          },
+                                          "occurrence": {
+                                            "type": "integer"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "predecessor_refs": {
+                                    "type": "array",
+                                    "items": {}
+                                  },
+                                  "replacement_extent": {
+                                    "type": "string"
+                                  },
+                                  "reason_quotes": {
+                                    "type": "array",
+                                    "items": {}
+                                  },
+                                  "source_quotes": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "turn_id",
+                                        "quote",
+                                        "occurrence"
+                                      ],
+                                      "properties": {
+                                        "turn_id": {
+                                          "type": "string"
+                                        },
+                                        "quote": {
+                                          "type": "string"
+                                        },
+                                        "occurrence": {
+                                          "type": "integer"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "turns",
+                            "expected"
+                          ],
+                          "properties": {
+                            "turns": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "turn_id",
+                                  "text"
+                                ],
+                                "properties": {
+                                  "turn_id": {
+                                    "type": "string"
+                                  },
+                                  "text": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            },
+                            "expected": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "event_id",
+                                  "source_turns",
+                                  "observed_at",
+                                  "kind",
+                                  "commitment",
+                                  "change_type",
+                                  "subject",
+                                  "predicate",
+                                  "payload",
+                                  "scope",
+                                  "effective_interval",
+                                  "record_name",
+                                  "predecessor_refs",
+                                  "replacement_extent",
+                                  "reason_quotes",
+                                  "source_quotes"
+                                ],
+                                "properties": {
+                                  "event_id": {
+                                    "type": "string"
+                                  },
+                                  "source_turns": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "observed_at": {
+                                    "type": "string"
+                                  },
+                                  "kind": {
+                                    "type": "string"
+                                  },
+                                  "commitment": {
+                                    "type": "string"
+                                  },
+                                  "change_type": {
+                                    "type": "string"
+                                  },
+                                  "subject": {
+                                    "type": "string"
+                                  },
+                                  "predicate": {
+                                    "type": "string"
+                                  },
+                                  "payload": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "type",
+                                      "route",
+                                      "approval",
+                                      "cap"
+                                    ],
+                                    "properties": {
+                                      "type": {
+                                        "type": "string"
+                                      },
+                                      "route": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "value",
+                                          "anchors"
+                                        ],
+                                        "properties": {
+                                          "value": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "type",
+                                              "text"
+                                            ],
+                                            "properties": {
+                                              "type": {
+                                                "type": "string"
+                                              },
+                                              "text": {
+                                                "type": "string"
+                                              }
+                                            }
+                                          },
+                                          "anchors": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "additionalProperties": false,
+                                              "required": [
+                                                "turn_id",
+                                                "quote",
+                                                "occurrence"
+                                              ],
+                                              "properties": {
+                                                "turn_id": {
+                                                  "type": "string"
+                                                },
+                                                "quote": {
+                                                  "type": "string"
+                                                },
+                                                "occurrence": {
+                                                  "type": "integer"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      "approval": {
+                                        "type": "null"
+                                      },
+                                      "cap": {
+                                        "type": "null"
+                                      }
+                                    }
+                                  },
+                                  "scope": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "any"
+                                    ],
+                                    "properties": {
+                                      "any": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "additionalProperties": false,
+                                          "required": [
+                                            "all"
+                                          ],
+                                          "properties": {
+                                            "all": {
+                                              "type": "array",
+                                              "items": {}
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "effective_interval": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "from",
+                                      "to"
+                                    ],
+                                    "properties": {
+                                      "from": {
+                                        "type": "string"
+                                      },
+                                      "to": {
+                                        "type": "null"
+                                      }
+                                    }
+                                  },
+                                  "record_name": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "name",
+                                      "anchor"
+                                    ],
+                                    "properties": {
+                                      "name": {
+                                        "type": "string"
+                                      },
+                                      "anchor": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "turn_id",
+                                          "quote",
+                                          "occurrence"
+                                        ],
+                                        "properties": {
+                                          "turn_id": {
+                                            "type": "string"
+                                          },
+                                          "quote": {
+                                            "type": "string"
+                                          },
+                                          "occurrence": {
+                                            "type": "integer"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "predecessor_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "record_name",
+                                        "anchor"
+                                      ],
+                                      "properties": {
+                                        "record_name": {
+                                          "type": "string"
+                                        },
+                                        "anchor": {
+                                          "type": "object",
+                                          "additionalProperties": false,
+                                          "required": [
+                                            "turn_id",
+                                            "quote",
+                                            "occurrence"
+                                          ],
+                                          "properties": {
+                                            "turn_id": {
+                                              "type": "string"
+                                            },
+                                            "quote": {
+                                              "type": "string"
+                                            },
+                                            "occurrence": {
+                                              "type": "integer"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "replacement_extent": {
+                                    "type": "string"
+                                  },
+                                  "reason_quotes": {
+                                    "type": "array",
+                                    "items": {}
+                                  },
+                                  "source_quotes": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "turn_id",
+                                        "quote",
+                                        "occurrence"
+                                      ],
+                                      "properties": {
+                                        "turn_id": {
+                                          "type": "string"
+                                        },
+                                        "quote": {
+                                          "type": "string"
+                                        },
+                                        "occurrence": {
+                                          "type": "integer"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "explanation": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "language",
+                  "turns",
+                  "expected",
+                  "invalid_alternative",
+                  "explanation"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "turns": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "turn_id",
+                        "text"
+                      ],
+                      "properties": {
+                        "turn_id": {
+                          "type": "string"
+                        },
+                        "text": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "expected": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "event_id",
+                        "source_turns",
+                        "observed_at",
+                        "kind",
+                        "commitment",
+                        "change_type",
+                        "subject",
+                        "predicate",
+                        "payload",
+                        "scope",
+                        "effective_interval",
+                        "record_name",
+                        "predecessor_refs",
+                        "replacement_extent",
+                        "reason_quotes",
+                        "source_quotes"
+                      ],
+                      "properties": {
+                        "event_id": {
+                          "type": "string"
+                        },
+                        "source_turns": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "observed_at": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "commitment": {
+                          "type": "string"
+                        },
+                        "change_type": {
+                          "type": "string"
+                        },
+                        "subject": {
+                          "type": "string"
+                        },
+                        "predicate": {
+                          "type": "string"
+                        },
+                        "payload": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "type",
+                            "route",
+                            "approval",
+                            "cap"
+                          ],
+                          "properties": {
+                            "type": {
+                              "type": "string"
+                            },
+                            "route": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "value",
+                                "anchors"
+                              ],
+                              "properties": {
+                                "value": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "type",
+                                    "text"
+                                  ],
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    },
+                                    "text": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "anchors": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "turn_id",
+                                      "quote",
+                                      "occurrence"
+                                    ],
+                                    "properties": {
+                                      "turn_id": {
+                                        "type": "string"
+                                      },
+                                      "quote": {
+                                        "type": "string"
+                                      },
+                                      "occurrence": {
+                                        "type": "integer"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "approval": {
+                              "type": "null"
+                            },
+                            "cap": {
+                              "type": "null"
+                            }
+                          }
+                        },
+                        "scope": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "any"
+                          ],
+                          "properties": {
+                            "any": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "all"
+                                ],
+                                "properties": {
+                                  "all": {
+                                    "type": "array",
+                                    "items": {}
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "effective_interval": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "properties": {
+                            "from": {
+                              "type": "null"
+                            },
+                            "to": {
+                              "type": "null"
+                            }
+                          }
+                        },
+                        "record_name": {
+                          "type": "null"
+                        },
+                        "predecessor_refs": {
+                          "type": "array",
+                          "items": {}
+                        },
+                        "replacement_extent": {
+                          "type": "string"
+                        },
+                        "reason_quotes": {
+                          "type": "array",
+                          "items": {}
+                        },
+                        "source_quotes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "turn_id",
+                              "quote",
+                              "occurrence"
+                            ],
+                            "properties": {
+                              "turn_id": {
+                                "type": "string"
+                              },
+                              "quote": {
+                                "type": "string"
+                              },
+                              "occurrence": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "invalid_alternative": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "commitment"
+                    ],
+                    "properties": {
+                      "commitment": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "explanation": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "language",
+                  "turns",
+                  "expected",
+                  "explanation"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "turns": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "turn_id",
+                        "text"
+                      ],
+                      "properties": {
+                        "turn_id": {
+                          "type": "string"
+                        },
+                        "text": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "expected": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "event_id",
+                        "source_turns",
+                        "observed_at",
+                        "kind",
+                        "commitment",
+                        "change_type",
+                        "subject",
+                        "predicate",
+                        "payload",
+                        "scope",
+                        "effective_interval",
+                        "record_name",
+                        "predecessor_refs",
+                        "replacement_extent",
+                        "reason_quotes",
+                        "source_quotes"
+                      ],
+                      "properties": {
+                        "event_id": {
+                          "type": "string"
+                        },
+                        "source_turns": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "observed_at": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "commitment": {
+                          "type": "string"
+                        },
+                        "change_type": {
+                          "type": "string"
+                        },
+                        "subject": {
+                          "type": "string"
+                        },
+                        "predicate": {
+                          "type": "string"
+                        },
+                        "payload": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "type",
+                            "route",
+                            "approval",
+                            "cap"
+                          ],
+                          "properties": {
+                            "type": {
+                              "type": "string"
+                            },
+                            "route": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "value",
+                                "anchors"
+                              ],
+                              "properties": {
+                                "value": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "type",
+                                    "text"
+                                  ],
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    },
+                                    "text": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "anchors": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "turn_id",
+                                      "quote",
+                                      "occurrence"
+                                    ],
+                                    "properties": {
+                                      "turn_id": {
+                                        "type": "string"
+                                      },
+                                      "quote": {
+                                        "type": "string"
+                                      },
+                                      "occurrence": {
+                                        "type": "integer"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "approval": {
+                              "type": "null"
+                            },
+                            "cap": {
+                              "type": "null"
+                            }
+                          }
+                        },
+                        "scope": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "any"
+                          ],
+                          "properties": {
+                            "any": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "all"
+                                ],
+                                "properties": {
+                                  "all": {
+                                    "type": "array",
+                                    "items": {}
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "effective_interval": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "properties": {
+                            "from": {
+                              "type": "string"
+                            },
+                            "to": {
+                              "type": "null"
+                            }
+                          }
+                        },
+                        "record_name": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "name",
+                            "anchor"
+                          ],
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "anchor": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "turn_id",
+                                "quote",
+                                "occurrence"
+                              ],
+                              "properties": {
+                                "turn_id": {
+                                  "type": "string"
+                                },
+                                "quote": {
+                                  "type": "string"
+                                },
+                                "occurrence": {
+                                  "type": "integer"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "predecessor_refs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "record_name",
+                              "anchor"
+                            ],
+                            "properties": {
+                              "record_name": {
+                                "type": "string"
+                              },
+                              "anchor": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "turn_id",
+                                  "quote",
+                                  "occurrence"
+                                ],
+                                "properties": {
+                                  "turn_id": {
+                                    "type": "string"
+                                  },
+                                  "quote": {
+                                    "type": "string"
+                                  },
+                                  "occurrence": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "replacement_extent": {
+                          "type": "string"
+                        },
+                        "reason_quotes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "turn_id",
+                              "quote",
+                              "occurrence"
+                            ],
+                            "properties": {
+                              "turn_id": {
+                                "type": "string"
+                              },
+                              "quote": {
+                                "type": "string"
+                              },
+                              "occurrence": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        },
+                        "source_quotes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "turn_id",
+                              "quote",
+                              "occurrence"
+                            ],
+                            "properties": {
+                              "turn_id": {
+                                "type": "string"
+                              },
+                              "quote": {
+                                "type": "string"
+                              },
+                              "occurrence": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "explanation": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "language",
+                  "turns",
+                  "expected",
+                  "explanation"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "turns": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "turn_id",
+                        "text"
+                      ],
+                      "properties": {
+                        "turn_id": {
+                          "type": "string"
+                        },
+                        "text": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "expected": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "event_id",
+                        "source_turns",
+                        "observed_at",
+                        "kind",
+                        "commitment",
+                        "change_type",
+                        "subject",
+                        "predicate",
+                        "payload",
+                        "scope",
+                        "effective_interval",
+                        "record_name",
+                        "predecessor_refs",
+                        "replacement_extent",
+                        "reason_quotes",
+                        "source_quotes"
+                      ],
+                      "properties": {
+                        "event_id": {
+                          "type": "string"
+                        },
+                        "source_turns": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "observed_at": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "commitment": {
+                          "type": "string"
+                        },
+                        "change_type": {
+                          "type": "string"
+                        },
+                        "subject": {
+                          "type": "string"
+                        },
+                        "predicate": {
+                          "type": "string"
+                        },
+                        "payload": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "type",
+                            "route",
+                            "approval",
+                            "cap"
+                          ],
+                          "properties": {
+                            "type": {
+                              "type": "string"
+                            },
+                            "route": {
+                              "type": "null"
+                            },
+                            "approval": {
+                              "type": "null"
+                            },
+                            "cap": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "value",
+                                "anchors"
+                              ],
+                              "properties": {
+                                "value": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "type",
+                                    "decimal",
+                                    "unit"
+                                  ],
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    },
+                                    "decimal": {
+                                      "type": "string"
+                                    },
+                                    "unit": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "anchors": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "turn_id",
+                                      "quote",
+                                      "occurrence"
+                                    ],
+                                    "properties": {
+                                      "turn_id": {
+                                        "type": "string"
+                                      },
+                                      "quote": {
+                                        "type": "string"
+                                      },
+                                      "occurrence": {
+                                        "type": "integer"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "scope": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "any"
+                          ],
+                          "properties": {
+                            "any": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "all"
+                                ],
+                                "properties": {
+                                  "all": {
+                                    "type": "array",
+                                    "items": {}
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "effective_interval": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "properties": {
+                            "from": {
+                              "type": "string"
+                            },
+                            "to": {
+                              "type": "null"
+                            }
+                          }
+                        },
+                        "record_name": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "name",
+                            "anchor"
+                          ],
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "anchor": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "turn_id",
+                                "quote",
+                                "occurrence"
+                              ],
+                              "properties": {
+                                "turn_id": {
+                                  "type": "string"
+                                },
+                                "quote": {
+                                  "type": "string"
+                                },
+                                "occurrence": {
+                                  "type": "integer"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "predecessor_refs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "record_name",
+                              "anchor"
+                            ],
+                            "properties": {
+                              "record_name": {
+                                "type": "string"
+                              },
+                              "anchor": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "turn_id",
+                                  "quote",
+                                  "occurrence"
+                                ],
+                                "properties": {
+                                  "turn_id": {
+                                    "type": "string"
+                                  },
+                                  "quote": {
+                                    "type": "string"
+                                  },
+                                  "occurrence": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "replacement_extent": {
+                          "type": "string"
+                        },
+                        "reason_quotes": {
+                          "type": "array",
+                          "items": {}
+                        },
+                        "source_quotes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "turn_id",
+                              "quote",
+                              "occurrence"
+                            ],
+                            "properties": {
+                              "turn_id": {
+                                "type": "string"
+                              },
+                              "quote": {
+                                "type": "string"
+                              },
+                              "occurrence": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "explanation": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "language",
+                  "turns",
+                  "expected",
+                  "explanation"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "turns": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "turn_id",
+                        "text"
+                      ],
+                      "properties": {
+                        "turn_id": {
+                          "type": "string"
+                        },
+                        "text": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "expected": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "event_id",
+                        "source_turns",
+                        "observed_at",
+                        "kind",
+                        "commitment",
+                        "change_type",
+                        "subject",
+                        "predicate",
+                        "payload",
+                        "scope",
+                        "effective_interval",
+                        "record_name",
+                        "predecessor_refs",
+                        "replacement_extent",
+                        "reason_quotes",
+                        "source_quotes"
+                      ],
+                      "properties": {
+                        "event_id": {
+                          "type": "string"
+                        },
+                        "source_turns": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "observed_at": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "commitment": {
+                          "type": "string"
+                        },
+                        "change_type": {
+                          "type": "string"
+                        },
+                        "subject": {
+                          "type": "string"
+                        },
+                        "predicate": {
+                          "type": "string"
+                        },
+                        "payload": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "type",
+                            "route",
+                            "approval",
+                            "cap"
+                          ],
+                          "properties": {
+                            "type": {
+                              "type": "string"
+                            },
+                            "route": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "value",
+                                "anchors"
+                              ],
+                              "properties": {
+                                "value": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "type",
+                                    "text"
+                                  ],
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    },
+                                    "text": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "anchors": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "turn_id",
+                                      "quote",
+                                      "occurrence"
+                                    ],
+                                    "properties": {
+                                      "turn_id": {
+                                        "type": "string"
+                                      },
+                                      "quote": {
+                                        "type": "string"
+                                      },
+                                      "occurrence": {
+                                        "type": "integer"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "approval": {
+                              "type": "null"
+                            },
+                            "cap": {
+                              "type": "null"
+                            }
+                          }
+                        },
+                        "scope": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "any"
+                          ],
+                          "properties": {
+                            "any": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "all"
+                                ],
+                                "properties": {
+                                  "all": {
+                                    "type": "array",
+                                    "items": {}
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "effective_interval": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "properties": {
+                            "from": {
+                              "type": "string"
+                            },
+                            "to": {
+                              "type": "null"
+                            }
+                          }
+                        },
+                        "record_name": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "name",
+                            "anchor"
+                          ],
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "anchor": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "turn_id",
+                                "quote",
+                                "occurrence"
+                              ],
+                              "properties": {
+                                "turn_id": {
+                                  "type": "string"
+                                },
+                                "quote": {
+                                  "type": "string"
+                                },
+                                "occurrence": {
+                                  "type": "integer"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "predecessor_refs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "record_name",
+                              "anchor"
+                            ],
+                            "properties": {
+                              "record_name": {
+                                "type": "string"
+                              },
+                              "anchor": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "turn_id",
+                                  "quote",
+                                  "occurrence"
+                                ],
+                                "properties": {
+                                  "turn_id": {
+                                    "type": "string"
+                                  },
+                                  "quote": {
+                                    "type": "string"
+                                  },
+                                  "occurrence": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "replacement_extent": {
+                          "type": "string"
+                        },
+                        "reason_quotes": {
+                          "type": "array",
+                          "items": {}
+                        },
+                        "source_quotes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "turn_id",
+                              "quote",
+                              "occurrence"
+                            ],
+                            "properties": {
+                              "turn_id": {
+                                "type": "string"
+                              },
+                              "quote": {
+                                "type": "string"
+                              },
+                              "occurrence": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "explanation": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "language",
+                  "turns",
+                  "expected",
+                  "explanation"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "turns": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "turn_id",
+                        "text"
+                      ],
+                      "properties": {
+                        "turn_id": {
+                          "type": "string"
+                        },
+                        "text": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "expected": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "event_id",
+                        "source_turns",
+                        "observed_at",
+                        "kind",
+                        "commitment",
+                        "change_type",
+                        "subject",
+                        "predicate",
+                        "payload",
+                        "scope",
+                        "effective_interval",
+                        "record_name",
+                        "predecessor_refs",
+                        "replacement_extent",
+                        "reason_quotes",
+                        "source_quotes"
+                      ],
+                      "properties": {
+                        "event_id": {
+                          "type": "string"
+                        },
+                        "source_turns": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "observed_at": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "commitment": {
+                          "type": "string"
+                        },
+                        "change_type": {
+                          "type": "string"
+                        },
+                        "subject": {
+                          "type": "string"
+                        },
+                        "predicate": {
+                          "type": "string"
+                        },
+                        "payload": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "type",
+                            "text",
+                            "anchors"
+                          ],
+                          "properties": {
+                            "type": {
+                              "type": "string"
+                            },
+                            "text": {
+                              "type": "string"
+                            },
+                            "anchors": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "turn_id",
+                                  "quote",
+                                  "occurrence"
+                                ],
+                                "properties": {
+                                  "turn_id": {
+                                    "type": "string"
+                                  },
+                                  "quote": {
+                                    "type": "string"
+                                  },
+                                  "occurrence": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "scope": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "any"
+                          ],
+                          "properties": {
+                            "any": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "all"
+                                ],
+                                "properties": {
+                                  "all": {
+                                    "type": "array",
+                                    "items": {}
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "effective_interval": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "properties": {
+                            "from": {
+                              "type": "null"
+                            },
+                            "to": {
+                              "type": "null"
+                            }
+                          }
+                        },
+                        "record_name": {
+                          "type": "null"
+                        },
+                        "predecessor_refs": {
+                          "type": "array",
+                          "items": {}
+                        },
+                        "replacement_extent": {
+                          "type": "string"
+                        },
+                        "reason_quotes": {
+                          "type": "array",
+                          "items": {}
+                        },
+                        "source_quotes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "turn_id",
+                              "quote",
+                              "occurrence"
+                            ],
+                            "properties": {
+                              "turn_id": {
+                                "type": "string"
+                              },
+                              "quote": {
+                                "type": "string"
+                              },
+                              "occurrence": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "explanation": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "citation_address": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "language",
+              "delivered",
+              "valid_receipt",
+              "valid_body",
+              "invalid_body",
+              "repeat",
+              "explanation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "language": {
+                "type": "string"
+              },
+              "delivered": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "intent",
+                  "items"
+                ],
+                "properties": {
+                  "intent": {
+                    "type": "string"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "body",
+                        "sources"
+                      ],
+                      "properties": {
+                        "body": {
+                          "type": "string"
+                        },
+                        "sources": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "index",
+                              "excerpt"
+                            ],
+                            "properties": {
+                              "index": {
+                                "type": "integer"
+                              },
+                              "excerpt": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "valid_receipt": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "intent",
+                  "item",
+                  "unit",
+                  "source",
+                  "quote",
+                  "occurrence"
+                ],
+                "properties": {
+                  "intent": {
+                    "type": "string"
+                  },
+                  "item": {
+                    "type": "integer"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "integer"
+                  },
+                  "quote": {
+                    "type": "string"
+                  },
+                  "occurrence": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "valid_body": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "intent",
+                  "item",
+                  "unit",
+                  "source",
+                  "quote",
+                  "occurrence"
+                ],
+                "properties": {
+                  "intent": {
+                    "type": "string"
+                  },
+                  "item": {
+                    "type": "integer"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "null"
+                  },
+                  "quote": {
+                    "type": "string"
+                  },
+                  "occurrence": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "invalid_body": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "intent",
+                  "item",
+                  "unit",
+                  "source",
+                  "quote",
+                  "occurrence"
+                ],
+                "properties": {
+                  "intent": {
+                    "type": "string"
+                  },
+                  "item": {
+                    "type": "integer"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "null"
+                  },
+                  "quote": {
+                    "type": "string"
+                  },
+                  "occurrence": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "repeat": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "unit_text",
+                  "valid"
+                ],
+                "properties": {
+                  "unit_text": {
+                    "type": "string"
+                  },
+                  "valid": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "intent",
+                      "item",
+                      "unit",
+                      "source",
+                      "quote",
+                      "occurrence"
+                    ],
+                    "properties": {
+                      "intent": {
+                        "type": "string"
+                      },
+                      "item": {
+                        "type": "integer"
+                      },
+                      "unit": {
+                        "type": "string"
+                      },
+                      "source": {
+                        "type": "integer"
+                      },
+                      "quote": {
+                        "type": "string"
+                      },
+                      "occurrence": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              },
+              "explanation": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "inheritance_pairs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "language",
+              "predecessor",
+              "variants",
+              "expected_current",
+              "explanation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "language": {
+                "type": "string"
+              },
+              "predecessor": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "turn_id",
+                  "text"
+                ],
+                "properties": {
+                  "turn_id": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                }
+              },
+              "variants": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "explicit_preservation",
+                    "turn",
+                    "supplied_slots"
+                  ],
+                  "properties": {
+                    "explicit_preservation": {
+                      "type": "boolean"
+                    },
+                    "turn": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "turn_id",
+                        "text"
+                      ],
+                      "properties": {
+                        "turn_id": {
+                          "type": "string"
+                        },
+                        "text": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "supplied_slots": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "route",
+                        "approval",
+                        "cap"
+                      ],
+                      "properties": {
+                        "route": {
+                          "type": "null"
+                        },
+                        "approval": {
+                          "type": "null"
+                        },
+                        "cap": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "type",
+                            "decimal",
+                            "unit"
+                          ],
+                          "properties": {
+                            "type": {
+                              "type": "string"
+                            },
+                            "decimal": {
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "expected_current": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "status",
+                  "rows"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string"
+                  },
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "scope",
+                        "valid",
+                        "route",
+                        "approval",
+                        "cap",
+                        "citations"
+                      ],
+                      "properties": {
+                        "scope": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "any"
+                          ],
+                          "properties": {
+                            "any": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "all"
+                                ],
+                                "properties": {
+                                  "all": {
+                                    "type": "array",
+                                    "items": {}
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "valid": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "properties": {
+                            "from": {
+                              "type": "string"
+                            },
+                            "to": {
+                              "type": "null"
+                            }
+                          }
+                        },
+                        "route": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "state",
+                            "value"
+                          ],
+                          "properties": {
+                            "state": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "approval": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "state",
+                            "value"
+                          ],
+                          "properties": {
+                            "state": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "boolean"
+                            }
+                          }
+                        },
+                        "cap": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "state",
+                            "value"
+                          ],
+                          "properties": {
+                            "state": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "decimal",
+                                "unit"
+                              ],
+                              "properties": {
+                                "decimal": {
+                                  "type": "string"
+                                },
+                                "unit": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "citations": {
+                          "type": "array",
+                          "items": {}
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "explanation": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "slot_recovery": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "language",
+              "complete_replacement",
+              "missing_predecessor",
+              "expiry_current",
+              "explanation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "language": {
+                "type": "string"
+              },
+              "complete_replacement": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "turn",
+                  "current_after_effective"
+                ],
+                "properties": {
+                  "turn": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "turn_id",
+                      "text"
+                    ],
+                    "properties": {
+                      "turn_id": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "current_after_effective": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "status",
+                      "rows"
+                    ],
+                    "properties": {
+                      "status": {
+                        "type": "string"
+                      },
+                      "rows": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "scope",
+                            "valid",
+                            "route",
+                            "approval",
+                            "cap",
+                            "citations"
+                          ],
+                          "properties": {
+                            "scope": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "any"
+                              ],
+                              "properties": {
+                                "any": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "all"
+                                    ],
+                                    "properties": {
+                                      "all": {
+                                        "type": "array",
+                                        "items": {}
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "valid": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "from",
+                                "to"
+                              ],
+                              "properties": {
+                                "from": {
+                                  "type": "string"
+                                },
+                                "to": {
+                                  "type": "null"
+                                }
+                              }
+                            },
+                            "route": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "state",
+                                "value"
+                              ],
+                              "properties": {
+                                "state": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "approval": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "state",
+                                "value"
+                              ],
+                              "properties": {
+                                "state": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "type": "null"
+                                }
+                              }
+                            },
+                            "cap": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "state",
+                                "value"
+                              ],
+                              "properties": {
+                                "state": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "type": "null"
+                                }
+                              }
+                            },
+                            "citations": {
+                              "type": "array",
+                              "items": {}
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "missing_predecessor": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "status",
+                  "rows"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string"
+                  },
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "scope",
+                        "valid",
+                        "route",
+                        "approval",
+                        "cap",
+                        "citations"
+                      ],
+                      "properties": {
+                        "scope": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "any"
+                          ],
+                          "properties": {
+                            "any": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "all"
+                                ],
+                                "properties": {
+                                  "all": {
+                                    "type": "array",
+                                    "items": {}
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "valid": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "properties": {
+                            "from": {
+                              "type": "string"
+                            },
+                            "to": {
+                              "type": "null"
+                            }
+                          }
+                        },
+                        "route": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "state",
+                            "value"
+                          ],
+                          "properties": {
+                            "state": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "null"
+                            }
+                          }
+                        },
+                        "approval": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "state",
+                            "value"
+                          ],
+                          "properties": {
+                            "state": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "null"
+                            }
+                          }
+                        },
+                        "cap": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "state",
+                            "value"
+                          ],
+                          "properties": {
+                            "state": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "decimal",
+                                "unit"
+                              ],
+                              "properties": {
+                                "decimal": {
+                                  "type": "string"
+                                },
+                                "unit": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "citations": {
+                          "type": "array",
+                          "items": {}
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "expiry_current": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "status",
+                  "rows"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string"
+                  },
+                  "rows": {
+                    "type": "array",
+                    "items": {}
+                  }
+                }
+              },
+              "explanation": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "causal_selection": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "language",
+              "serial",
+              "conjunctive",
+              "alternative",
+              "invalid_additions",
+              "missing_delivery",
+              "factual_unstated",
+              "explanation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "language": {
+                "type": "string"
+              },
+              "serial": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "source",
+                  "required_quotes",
+                  "insufficient_endpoints"
+                ],
+                "properties": {
+                  "source": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "turn_id",
+                      "text"
+                    ],
+                    "properties": {
+                      "turn_id": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required_quotes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "insufficient_endpoints": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "conjunctive": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "source",
+                  "required_quotes",
+                  "insufficient_quotes"
+                ],
+                "properties": {
+                  "source": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "turn_id",
+                      "text"
+                    ],
+                    "properties": {
+                      "turn_id": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required_quotes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "insufficient_quotes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "alternative": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "sources",
+                  "accepted_alternatives"
+                ],
+                "properties": {
+                  "sources": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "turn_id",
+                        "text"
+                      ],
+                      "properties": {
+                        "turn_id": {
+                          "type": "string"
+                        },
+                        "text": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "accepted_alternatives": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "invalid_additions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "missing_delivery": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "status",
+                  "support"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string"
+                  },
+                  "support": {
+                    "type": "array",
+                    "items": {}
+                  }
+                }
+              },
+              "factual_unstated": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "status",
+                  "support"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string"
+                  },
+                  "support": {
+                    "type": "array",
+                    "items": {}
+                  }
+                }
+              },
+              "explanation": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:hr3:public-contract:a4:v1"
+  "$id": "urn:hr3:public-contract:a6:v1"
 }

@@ -98,22 +98,24 @@ export function coveredSpans(resolved) {
   }
   return ranges;
 }
-export function covers(span, ranges) {
-  // Source quotations often include leading/trailing whitespace that product
-  // normalization removes. It carries no requirement to cite absent trivia.
-  const leading = span.text.match(/^\s*/u)[0].length;
-  const trailing = span.text.match(/\s*$/u)[0].length;
-  span = { ...span, start: span.start + leading, end: span.end - trailing, text: span.text.slice(leading, span.text.length - trailing) };
-  if (span.start >= span.end) return false;
-  let cursor = span.start;
-  for (const r of ranges.filter(r => r.origin === span.origin).sort((a, b) => a.start - b.start || a.end - b.end)) {
-    if (r.start > cursor) break;
-    const start = Math.max(span.start, r.start), end = Math.min(span.end, r.end);
-    if (end > start && span.text.slice(start - span.start, end - span.start) !== r.text.slice(start - r.start, end - r.start)) return false;
-    if (r.end > cursor) cursor = r.end;
-    if (cursor >= span.end) return true;
+export function covers(span, ranges, optionalTrivia = () => false) {
+  const covered = new Uint8Array(span.text.length);
+  for (const range of ranges) {
+    if (range.origin !== span.origin) continue;
+    const from = Math.max(span.start, range.start), to = Math.min(span.end, range.end);
+    if (to <= from) continue;
+    // Even optional positions cannot license changed source text.
+    if (span.text.slice(from - span.start, to - span.start) !== range.text.slice(from - range.start, to - range.start)) return false;
+    covered.fill(1, from - span.start, to - span.start);
   }
-  return false;
+  let substantive = false;
+  for (let i = 0; i < span.text.length; i++) {
+    if (optionalTrivia(span.origin, span.start + i, span.text[i])) continue;
+    if (!covered[i]) return false;
+    if (!/[\s\p{P}]/u.test(span.text[i])) substantive = true;
+  }
+  // A punctuation/whitespace-only span cannot establish a causal proposition.
+  return substantive;
 }
 
 export function supportBundle(question, answer, delivery) {

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
-export const VERSION = 'hr3-generator-a4-v1';
-export const DEFAULT_SEED = 'hr3-worlds-a4-pilot-v1';
+export const VERSION = 'hr3-generator-a6-v1';
+export const DEFAULT_SEED = 'hr3-worlds-a6-pilot-v1';
 export const ALLOCATION_SEED = 'hr3-worlds-v1';
 export const TYPES = ['correction', 'reversal', 'refinement', 'scope_change', 'expiry'];
 export const CAUSES = ['direct', 'unstated', 'two_edge_serial', 'three_edge_serial', 'conjunctive_mediated', 'alternative_mediated'];

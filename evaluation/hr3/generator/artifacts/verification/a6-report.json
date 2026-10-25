@@ -1,0 +1,174 @@
+{
+  "version": "hr3-generator-a6-verification-v1",
+  "scope": "evaluation/hr3/generator/",
+  "base": {
+    "branch": "experiment/hr3-update-policy",
+    "head": "12355a8e"
+  },
+  "committed": false,
+  "api_calls": 0,
+  "credentials_read": false,
+  "changed_files": [
+    "evaluation/hr3/generator/README.md",
+    "evaluation/hr3/generator/artifacts/pilot/manifest.json",
+    "evaluation/hr3/generator/artifacts/previous-12355a8e/archive-manifest.json",
+    "evaluation/hr3/generator/artifacts/previous-12355a8e/freeze.json",
+    "evaluation/hr3/generator/artifacts/previous-12355a8e/pilot/manifest.json",
+    "evaluation/hr3/generator/artifacts/verification/a6-report.json",
+    "evaluation/hr3/generator/artifacts/verification/a6-tests.tap",
+    "evaluation/hr3/generator/bank.mjs",
+    "evaluation/hr3/generator/common.mjs",
+    "evaluation/hr3/generator/contract.mjs",
+    "evaluation/hr3/generator/deliver.mjs",
+    "evaluation/hr3/generator/examples.mjs",
+    "evaluation/hr3/generator/freeze.json",
+    "evaluation/hr3/generator/freeze.mjs",
+    "evaluation/hr3/generator/generate.mjs",
+    "evaluation/hr3/generator/public-contract.json",
+    "evaluation/hr3/generator/public-contract.schema.json",
+    "evaluation/hr3/generator/test/generator.test.mjs",
+    "evaluation/hr3/generator/trivia-rules.json",
+    "evaluation/hr3/generator/trivia.mjs",
+    "evaluation/hr3/generator/validate.mjs"
+  ],
+  "changed_file_cross_check": {
+    "routes": [
+      "git diff --name-only + git ls-files --others --exclude-standard",
+      "git status --porcelain=v1 -z --untracked-files=all"
+    ],
+    "count": 21,
+    "exit_codes": [
+      0,
+      0,
+      0
+    ]
+  },
+  "delivery_cross_check": {
+    "manifest": "freeze.json",
+    "routes": [
+      "explicit recursive filesystem walk",
+      "recursive readdir Dirent enumeration"
+    ],
+    "count": 106
+  },
+  "commands": [
+    {
+      "command": "node --test --experimental-test-isolation=none evaluation/hr3/generator/test/generator.test.mjs",
+      "exit_code": 1,
+      "result": "First A-6 run: 51/52 passed. Existing A-4 guard incorrectly banned expected example outputs throughout the public contract; corrected guard to check alias tables."
+    },
+    {
+      "command": "node --test --experimental-test-isolation=none evaluation/hr3/generator/test/generator.test.mjs",
+      "exit_code": 0,
+      "result": "Final 53 tests passed, zero failed.",
+      "log": "artifacts/verification/a6-tests.tap"
+    },
+    {
+      "command": "node evaluation/hr3/generator/cli.mjs --split pilot --out evaluation/hr3/generator/artifacts/pilot",
+      "exit_code": 0,
+      "result": "60 families, 30 lineages, 0 rejected; pilot only."
+    },
+    {
+      "command": "Offline archive/source/provenance/readback integrity assertions",
+      "exit_code": 0,
+      "result": "9 archived files, 8 unchanged engineering files, 7 pilot data hashes, 23 current source hashes, 60 fresh source fingerprints, 480 private source origins and 1568 optional positions."
+    },
+    {
+      "command": "git diff --check -- evaluation/hr3/generator",
+      "exit_code": 0
+    },
+    {
+      "command": "node evaluation/hr3/generator/freeze.mjs",
+      "exit_code": 0,
+      "result": "Independent filesystem enumeration routes match. Initial count 105 before this report; final delivery count 106."
+    }
+  ],
+  "a6_clauses": [
+    {
+      "clause": "2",
+      "coverage": "Public complete ASCII name-token/prefix/occurrence/case rules. Independently authored bilingual own demoLira/new demoNeso versus current-mention predecessor extraction examples; no earlier-turn guess. Syntax helper is role-blind. Gold-free runtime linking remains harness-owned."
+    },
+    {
+      "clause": "3",
+      "coverage": "Public extraction crosswalk and strict core/schema/assignment/reason precedence; bilingual orthogonal fields/rejected proposal, two-turn serial reason anchors, cap-only null-slot, complete/future and anchored non-slot context worked examples."
+    },
+    {
+      "clause": "4",
+      "coverage": "Bilingual decoded receipt/body citations and unit-local repeated occurrences; two bilingual partial-refinement pairs (four variants) with identical intended semantics with/without a preservation sentence; complete replacement, absent predecessor, expiry/unresolved boundaries and complete serial/conjunctive/alternative causal selection."
+    },
+    {
+      "clause": "5",
+      "coverage": "32 explicit production/language/literal-offset licenses, recorded before rendering. Private UTF-16 source positions derive from literal-versus-interpolated emission provenance. Round-trip validation protects every interpolation and literal causal word/operator, including decimal/dotted identifier punctuation and Unicode. No gold/answer-dependent punctuation deletion. No new marks enter source text, questions, extraction turns or G_correct."
+    },
+    {
+      "clause": "7 generator row",
+      "coverage": "New deterministic world seed; 60/60 genuinely different source fingerprints; unchanged allocation seed, multiplicities, languages, causal/control counts and source productions. Naming counterbalance and 18 matched-world leakage checks pass. Only pilot delivery regenerated; development/test generation remains blocked. Previous pilot/freeze archived byte-for-byte."
+    }
+  ],
+  "public_contract": {
+    "version": "hr3-public-contract-a6-v1",
+    "path": "public-contract.json",
+    "schema": "public-contract.schema.json",
+    "worked_examples": {
+      "extraction": 12,
+      "citation_address": 2,
+      "inheritance_pairs": 2,
+      "inheritance_variants": 4,
+      "slot_recovery": 2,
+      "causal_selection": 2
+    },
+    "exclusion": "Reserved demo namespace and all worked-example worlds excluded from research/calibration. Shared primitives and public vocabulary are not banned.",
+    "authorship": "Independent teaching fixtures in examples.mjs; no paid-pilot names, values, answers or cases imported. Freshness tests use prior source fingerprints and allocation metadata, not copied case fixtures."
+  },
+  "trivia": {
+    "version": "hr3-optional-trivia-a6-v1",
+    "rules": "trivia-rules.json",
+    "registry": "support.optional_trivia",
+    "licenses": 32,
+    "source_origins": 480,
+    "optional_positions": 1568,
+    "licensed_roles": [
+      "sentence-final literal . or 。",
+      "literal source-production joining space"
+    ],
+    "other_punctuation": "Protected, including all punctuation inside substitutions and all literal causal qualifiers/operators.",
+    "independent_review": "pending; provisional offline artifacts only"
+  },
+  "pilot": {
+    "seed": "hr3-worlds-a6-pilot-v1",
+    "allocation_seed": "hr3-worlds-v1",
+    "families": 60,
+    "lineages": 30,
+    "multiplicity": 2,
+    "per_type": 12,
+    "languages": {
+      "zh-Hant": 33,
+      "en": 18,
+      "mixed": 9
+    },
+    "card_families": 40,
+    "safety_families": 20,
+    "card_authoring_paths": {
+      "confirm_with_dependencies": 24,
+      "declare_separately": 16
+    },
+    "multi_hop": 40,
+    "unstated": 10,
+    "rejected": 0,
+    "archive": "artifacts/previous-12355a8e/",
+    "new_ancestry_roots": false,
+    "heldout_rendered": false
+  },
+  "ambiguities_resolved": [
+    "A-6 does not prescribe the private registry's container name; support.optional_trivia records absolute UTF-16 positions, literal/interpolated segments and the license-file hash while leaving existing support spans unchanged.",
+    "Character whitelist eligibility is not blanket permission: only explicitly listed sentence-final stops and joining spaces are optional. Internal punctuation, values, names and causal qualifiers remain protected.",
+    "Name anchoring checks exact complete tokens before normalization and does not infer own/reference roles; runtime registry/resolver and admission remain harness responsibilities.",
+    "Example exclusion applies to independent worked-example worlds and their reserved naming namespace, not ubiquitous primitives such as false or registered units."
+  ],
+  "open_preconditions": [
+    "A-6 section 5 requires independent license review before generation. No reviewed literal-offset license set was supplied. The requested offline pilot is explicitly provisional; this freeze does not assert that review has passed or authorize paid execution.",
+    "Public examples must reach the model through a complete deterministic projection. The full canonical JSON alone is 49669 bytes; with 4096 framing units its lower-bound reservation is 53765, above current A-6 extraction/reader ceilings. Harness must certify a smaller complete projection or obtain a numerical amendment. No requirement was dropped, no limit raised and no dispatch performed.",
+    "Non-author/primary execution freeze, complete request/output/token/embedding/budget certificates and sibling scorer/integration/calibration work remain external gates."
+  ],
+  "paid_execution_authorized": false
+}

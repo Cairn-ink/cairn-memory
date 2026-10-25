@@ -1,0 +1,24 @@
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Current errata binding
++ actual - expected
+
++ '0a5f74d8e72ca582f37568d45e49c91198c0525281a77879b4822de1eb1f2a35'
+- '05102088c42ea22fa596d6cfd06cff028db88a561125caa4167cdac388decc1d'
+
+    at provenance (evaluation/hr3/harness/cap-certification.mjs:76:10)
+    at certify (evaluation/hr3/harness/cap-certification.mjs:86:19)
+    at evaluation/hr3/harness/cap-certification.mjs:190:18
+    at ModuleJob.run (node:internal/modules/esm/module_job:274:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:644:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: '0a5f74d8e72ca582f37568d45e49c91198c0525281a77879b4822de1eb1f2a35',
+  expected: '05102088c42ea22fa596d6cfd06cff028db88a561125caa4167cdac388decc1d',
+  operator: 'strictEqual'
+}
+
+Node.js v22.16.0

@@ -1,7 +1,7 @@
 {
   "sourceHashes": {
     "ledger": "c99218c1504cfe99fb2eac25f4a8c1f5d51998bed5a55e7b1bd1e00a10951033",
-    "transport": "3154d628ee8fbd74ef159e1b6d26fa5d83390582bb7e858b49193eeb6cb13260"
+    "transport": "992a180901f997a7f314dae2588ada24b863ad774b05eabb0b0c1663545f3012"
   },
   "result": {
     "reply": null,
@@ -15,7 +15,7 @@
     "reply": null,
     "error": "stopped:accounting_contention_exhausted"
   },
-  "elapsed": 205.2223439999998,
+  "elapsed": 76.51628900000014,
   "dispatches": 1,
   "stop": {
     "id": "exhausted/attempt-0",
@@ -27,12 +27,12 @@
   },
   "responses": [
     {
-      "path": "evaluation/hr3/harness/artifacts/ledger-contention-f8aLU1/ledger.jsonl.responses/51773ae6a2bf6b9fd4265796a84304c7b149af04b20e0d6bc6f818a752963120.json",
+      "path": "evaluation/hr3/harness/artifacts/ledger-contention-Aj9U8R/ledger.jsonl.responses/51773ae6a2bf6b9fd4265796a84304c7b149af04b20e0d6bc6f818a752963120.json",
       "value": {
-        "bodySHA256": "d1f6ba5f6b77732178cf4a7e0c819ea25b28877ef7fe4e2a47c4b522d4fac1cd",
+        "bodySHA256": "29553c6fe253b2bccc0162340eb330f75d0b6ab7b9781d42631d4b145c223410",
         "id": "exhausted/attempt-0",
         "logicalId": "exhausted",
-        "operation": "extraction",
+        "operation": "reader",
         "response": {
           "model": "gpt-4.1-mini-2025-04-14",
           "outputText": "{\"exact\":\"paid reply 假回覆\"}",
@@ -49,7 +49,7 @@
     }
   ],
   "snapshot": {
-    "total": 13449200,
+    "total": 16444400,
     "reservations": 1,
     "unsettled": [
       "exhausted/attempt-0"
@@ -59,7 +59,7 @@
       "product": 0
     },
     "byStage": {
-      "pilot": 13449200
+      "pilot": 16444400
     },
     "failures": 0,
     "stopped": "accounting_contention_exhausted"

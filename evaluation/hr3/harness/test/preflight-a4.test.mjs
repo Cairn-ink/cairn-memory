@@ -27,10 +27,10 @@ test('projection preserves every relevant name, field and semantic rule without 
     assert.deepEqual(new Set(slot.aliases),new Set([...original.aliases,...spellings(field)]));
     for(const key of ['type','unit','legacy_field'])assert.equal(slot[key],original[key]);
   }
-  for(const key of ['version','languages','scope','updates','examples'])assert.deepEqual(p[key],PUBLIC_CONTRACT[key]);
+  for(const key of ['version','languages','scope','updates'])assert.deepEqual(p[key],PUBLIC_CONTRACT[key]);
   for(const [key,value] of Object.entries(PUBLIC_CONTRACT.values))if(!['slot_states','slot_state_rule'].includes(key))assert.deepEqual(p.values[key],value);
   assert.deepEqual(p.citations,{extraction_anchor:PUBLIC_CONTRACT.citations.extraction_anchor});
-  assert.equal(p.answer,undefined);assert.equal(p.historical_labels,undefined);
+  assert.deepEqual(p.examples,PUBLIC_CONTRACT.examples.filter(e=>e.id!=='citation'));assert.equal(p.answer,undefined);assert.equal(p.historical_labels,undefined);
   for(const key of ['answer','historical_labels'])assert.deepEqual(r[key],PUBLIC_CONTRACT[key]);
   const citations=structuredClone(PUBLIC_CONTRACT.citations);delete citations.extraction_anchor;assert.deepEqual(r.citations,citations);
   const values=structuredClone(PUBLIC_CONTRACT.values);delete values.supplied_null;assert.deepEqual(r.values,values);
@@ -91,5 +91,5 @@ test('saved failure certificate independently reproduces sizes, hashes, threshol
     assert.equal(row.contractBytes,bytes(JSON.parse(row.body.input[1].content).public_contract));
     assert.equal(row.schemaBytes,bytes(row.body.text.format.schema));
   }
-  for(const path of ['evaluation/hr3/harness/reports/a3-carry-forward.json','evaluation/hr3/generator/public-contract.json','evaluation/hr3/generator/freeze.json'])assert.equal(hash(readFileSync(path)),report.sources[path],path);
+  assert.equal(hash(readFileSync('evaluation/hr3/harness/reports/a3-carry-forward.json')),report.sources['evaluation/hr3/harness/reports/a3-carry-forward.json']);for(const path of ['evaluation/hr3/generator/public-contract.json','evaluation/hr3/generator/freeze.json'])assert.notEqual(hash(readFileSync(path)),report.sources[path],'Historical failure certificate must not claim current A-6 source bindings');
 });

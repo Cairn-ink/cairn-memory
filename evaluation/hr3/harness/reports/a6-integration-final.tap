@@ -1,0 +1,166 @@
+TAP version 13
+# Subtest: independent source admission, T/U/O updates and delivery preserve intended differences
+ok 1 - independent source admission, T/U/O updates and delivery preserve intended differences
+  ---
+  duration_ms: 23.108952
+  type: 'test'
+  ...
+# Subtest: independent admitted input uses actual P public writes, logs missing anchors and has no fallback archive
+ok 2 - independent admitted input uses actual P public writes, logs missing anchors and has no fallback archive
+  ---
+  duration_ms: 267.929309
+  type: 'test'
+  ...
+# Subtest: A6 integration: closed extraction/name fields restore losslessly with independent complete field inventories
+ok 3 - A6 integration: closed extraction/name fields restore losslessly with independent complete field inventories
+  ---
+  duration_ms: 1.076679
+  type: 'test'
+  ...
+# Subtest: A6 integration: private optional-trivia provenance is losslessly retained and licensed by the producer hash
+ok 4 - A6 integration: private optional-trivia provenance is losslessly retained and licensed by the producer hash
+  ---
+  duration_ms: 32.937008
+  type: 'test'
+  ...
+# Subtest: A6 integration: independently resolved equivalent streams preserve the previous reducers and serializer bytes
+ok 5 - A6 integration: independently resolved equivalent streams preserve the previous reducers and serializer bytes
+  ---
+  duration_ms: 1.65601
+  type: 'test'
+  ...
+# Subtest: A6 integration: named identities cannot retrieve O/P correction loss; P receives actual correct_memory only
+ok 6 - A6 integration: named identities cannot retrieve O/P correction loss; P receives actual correct_memory only
+  ---
+  duration_ms: 214.568919
+  type: 'test'
+  ...
+# Subtest: A6 integration: forgotten product target cannot authorize another named write or resurrect its body
+ok 7 - A6 integration: forgotten product target cannot authorize another named write or resurrect its body
+  ---
+  duration_ms: 155.964488
+  type: 'test'
+  ...
+# Subtest: A6 integration: bilingual partial refinements with/without preservation have identical intended semantics in every arm
+ok 8 - A6 integration: bilingual partial refinements with/without preservation have identical intended semantics in every arm
+  ---
+  duration_ms: 432.831837
+  type: 'test'
+  ...
+# Subtest: all 120 pilot slot checkpoints validate, restore exactly and earn witnessed full credit
+ok 9 - all 120 pilot slot checkpoints validate, restore exactly and earn witnessed full credit
+  ---
+  duration_ms: 1770.814528
+  type: 'test'
+  ...
+# Subtest: independent A-4 challenge slots, predecessor identities and selected quotations pass unchanged
+ok 10 - independent A-4 challenge slots, predecessor identities and selected quotations pass unchanged
+  ---
+  duration_ms: 9.890649
+  type: 'test'
+  ...
+# Subtest: complete quotation unions preserve serial, conjunctive and alternative private plans
+ok 11 - complete quotation unions preserve serial, conjunctive and alternative private plans
+  ---
+  duration_ms: 42.167051
+  type: 'test'
+  ...
+# Subtest: source corruption, offset drift, topology mismatches and nonempty gold citations are rejected
+ok 12 - source corruption, offset drift, topology mismatches and nonempty gold citations are rejected
+  ---
+  duration_ms: 1.146891
+  type: 'test'
+  ...
+# Subtest: superseded graph answers are rejected with no conversion fallback
+ok 13 - superseded graph answers are rejected with no conversion fallback
+  ---
+  duration_ms: 0.370097
+  type: 'test'
+  ...
+# Subtest: audit extension fields survive; checksum tampering is detected
+ok 14 - audit extension fields survive; checksum tampering is detected
+  ---
+  duration_ms: 1.527468
+  type: 'test'
+  ...
+# Subtest: removed, changed and endpoint-only delivery cannot establish a complete explanation
+ok 15 - removed, changed and endpoint-only delivery cannot establish a complete explanation
+  ---
+  duration_ms: 36.61913
+  type: 'test'
+  ...
+# Subtest: unknown unit referrals keep correctness gold and support delivery isolated
+ok 16 - unknown unit referrals keep correctness gold and support delivery isolated
+  ---
+  duration_ms: 10.202036
+  type: 'test'
+  ...
+# Subtest: qualification counts only actual designated referrals, preserving frozen order
+ok 17 - qualification counts only actual designated referrals, preserving frozen order
+  ---
+  duration_ms: 0.475179
+  type: 'test'
+  ...
+# Subtest: confusion keeps pending distinct from reject and splits truth
+ok 18 - confusion keeps pending distinct from reject and splits truth
+  ---
+  duration_ms: 0.124603
+  type: 'test'
+  ...
+# Subtest: gate remains incomplete with absent judgments and never uses truth as a verdict
+ok 19 - gate remains incomplete with absent judgments and never uses truth as a verdict
+  ---
+  duration_ms: 1.004818
+  type: 'test'
+  ...
+# Subtest: two isolated matching judgments resolve; missing quotas still block pass
+ok 20 - two isolated matching judgments resolve; missing quotas still block pass
+  ---
+  duration_ms: 0.648372
+  type: 'test'
+  ...
+# Subtest: disagreement and nulls require a third independent session; agreement computed before resolution
+ok 21 - disagreement and nulls require a third independent session; agreement computed before resolution
+  ---
+  duration_ms: 0.56759
+  type: 'test'
+  ...
+# Subtest: gate rejects stale payloads, reused sessions, duplicates and malformed findings
+ok 22 - gate rejects stale payloads, reused sessions, duplicates and malformed findings
+  ---
+  duration_ms: 0.201163
+  type: 'test'
+  ...
+# Subtest: mechanically forced zero does not excuse unresolved support pass
+ok 23 - mechanically forced zero does not excuse unresolved support pass
+  ---
+  duration_ms: 0.237574
+  type: 'test'
+  ...
+# Subtest: complete synthetic gate fixture passes all thresholds without treating reused worlds as independent
+ok 24 - complete synthetic gate fixture passes all thresholds without treating reused worlds as independent
+  ---
+  duration_ms: 31.041207
+  type: 'test'
+  ...
+# Subtest: gate thresholds detect false acceptance, support failures and style error concentration
+ok 25 - gate thresholds detect false acceptance, support failures and style error concentration
+  ---
+  duration_ms: 28.493821
+  type: 'test'
+  ...
+# Subtest: deadline and effective expiry witnesses use selected quotations; incomplete selections fail
+ok 26 - deadline and effective expiry witnesses use selected quotations; incomplete selections fail
+  ---
+  duration_ms: 319.001287
+  type: 'test'
+  ...
+1..26
+# tests 26
+# suites 0
+# pass 26
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4937.268631

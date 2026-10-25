@@ -7,11 +7,11 @@ import {certify,readerReference,extractionReference,referenceDelivery,pilotRefer
 import {extractionInput} from '../extraction.mjs';
 import {validateExtraction,answerSchema} from '../schema.mjs';
 import {validate} from '../../scorer/schema.mjs';
-import {scorerGold} from '../inputs.mjs';
-import {score} from '../../scorer/scorer.mjs';
+import {scorerCase} from '../inputs.mjs';
+import {score} from '../scoring-a6.mjs';
 import {engineeringStressFixtures} from '../cap-stress-fixtures.mjs';
 import {hash} from '../common.mjs';
-const read=()=>JSON.parse(readFileSync(new URL('../reports/cap-certification-a4.json',import.meta.url)));
+const read=()=>JSON.parse(readFileSync(new URL('../reports/cap-certification-a6.json',import.meta.url)));
 test('A-4 certificate reproduces all 240 pilot/engineering families without held-out rendering',()=>{
  const actual=certify();assert.deepEqual(actual,read());assert.equal(actual.status,'PASS');
  assert.deepEqual(actual.counts.map(c=>[c.families,c.checkpoints,c.extractionBatches]),[[60,120,240],[180,360,720]]);
@@ -25,8 +25,8 @@ test('every maximal serialized output recounts under the actual tokenizer and cl
  finally{encoder.free();}
 });
 test('slot references preserve complete C/O and causal selection with no known false R claim',()=>{
- for(const b of pilotReferenceBundles())for(const cp of b.family.checkpoints){const answer=readerReference(b,cp.batch),gold=scorerGold(b.family,cp,b.gold,b.support);
-  assert.deepEqual(validate(answerSchema,answer),[]);const s=score(gold,{answer,delivered:referenceDelivery(b.family,cp.batch)});
+ for(const b of pilotReferenceBundles())for(const cp of b.family.checkpoints){const answer=readerReference(b,cp.batch),{gold,scoringOptions}=scorerCase(b.family,cp,b.gold,b.support);
+  assert.deepEqual(validate(answerSchema,answer),[]);const s=score(gold,{answer,delivered:referenceDelivery(b.family,cp.batch)},scoringOptions);
   assert.equal(s.valid,true);assert.equal(s.scores.C,1);assert.equal(s.scores.O,1);assert.notEqual(s.scores.R,0);
   if(answer.reason.status==='not_stated')assert.equal(s.scores.R,1);
   assert.deepEqual(answer.old.records.map(r=>r.predecessor_turn).sort(),cp.requested_predecessor_turns.slice().sort());

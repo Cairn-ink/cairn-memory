@@ -1,11 +1,11 @@
 {
   "ledgerSHA256": "c99218c1504cfe99fb2eac25f4a8c1f5d51998bed5a55e7b1bd1e00a10951033",
   "owner": {
-    "pid": 5331,
-    "starttime": "16631892",
+    "pid": 11264,
+    "starttime": "19203109",
     "bootId": "64e66476-8267-45df-93c9-7087141c2627",
     "namespace": "4026532257",
-    "nonce": "45bff73a-6598-4b4e-b83f-1c2b75110fc7"
+    "nonce": "66c4de85-d5e8-49ac-986c-9bb38149952c"
   },
   "attempts": [
     {
@@ -15,13 +15,13 @@
         "reclaimed": [],
         "waiting": [
           {
-            "marker": "v2.5331.16631892.64e66476-8267-45df-93c9-7087141c2627.4026532257.45bff73a-6598-4b4e-b83f-1c2b75110fc7",
+            "marker": "v2.11264.19203109.64e66476-8267-45df-93c9-7087141c2627.4026532257.66c4de85-d5e8-49ac-986c-9bb38149952c",
             "owner": {
               "bootId": "64e66476-8267-45df-93c9-7087141c2627",
               "namespace": "4026532257",
-              "nonce": "45bff73a-6598-4b4e-b83f-1c2b75110fc7",
-              "pid": 5331,
-              "starttime": "16631892"
+              "nonce": "66c4de85-d5e8-49ac-986c-9bb38149952c",
+              "pid": 11264,
+              "starttime": "19203109"
             },
             "reason": "identity_matches",
             "state": "live"
@@ -31,13 +31,13 @@
       "unlinks": [],
       "writerIntents": [
         {
-          "marker": "v2.5331.16631892.64e66476-8267-45df-93c9-7087141c2627.4026532257.45bff73a-6598-4b4e-b83f-1c2b75110fc7",
+          "marker": "v2.11264.19203109.64e66476-8267-45df-93c9-7087141c2627.4026532257.66c4de85-d5e8-49ac-986c-9bb38149952c",
           "owner": {
             "bootId": "64e66476-8267-45df-93c9-7087141c2627",
             "namespace": "4026532257",
-            "nonce": "45bff73a-6598-4b4e-b83f-1c2b75110fc7",
-            "pid": 5331,
-            "starttime": "16631892"
+            "nonce": "66c4de85-d5e8-49ac-986c-9bb38149952c",
+            "pid": 11264,
+            "starttime": "19203109"
           },
           "reason": "identity_matches",
           "state": "live"
@@ -51,13 +51,13 @@
         "reclaimed": [],
         "waiting": [
           {
-            "marker": "v2.5331.16631892.64e66476-8267-45df-93c9-7087141c2627.4026532257.45bff73a-6598-4b4e-b83f-1c2b75110fc7",
+            "marker": "v2.11264.19203109.64e66476-8267-45df-93c9-7087141c2627.4026532257.66c4de85-d5e8-49ac-986c-9bb38149952c",
             "owner": {
               "bootId": "64e66476-8267-45df-93c9-7087141c2627",
               "namespace": "4026532257",
-              "nonce": "45bff73a-6598-4b4e-b83f-1c2b75110fc7",
-              "pid": 5331,
-              "starttime": "16631892"
+              "nonce": "66c4de85-d5e8-49ac-986c-9bb38149952c",
+              "pid": 11264,
+              "starttime": "19203109"
             },
             "reason": "identity_matches",
             "state": "live"
@@ -67,13 +67,13 @@
       "unlinks": [],
       "writerIntents": [
         {
-          "marker": "v2.5331.16631892.64e66476-8267-45df-93c9-7087141c2627.4026532257.45bff73a-6598-4b4e-b83f-1c2b75110fc7",
+          "marker": "v2.11264.19203109.64e66476-8267-45df-93c9-7087141c2627.4026532257.66c4de85-d5e8-49ac-986c-9bb38149952c",
           "owner": {
             "bootId": "64e66476-8267-45df-93c9-7087141c2627",
             "namespace": "4026532257",
-            "nonce": "45bff73a-6598-4b4e-b83f-1c2b75110fc7",
-            "pid": 5331,
-            "starttime": "16631892"
+            "nonce": "66c4de85-d5e8-49ac-986c-9bb38149952c",
+            "pid": 11264,
+            "starttime": "19203109"
           },
           "reason": "identity_matches",
           "state": "live"
@@ -87,13 +87,13 @@
         "reclaimed": [],
         "waiting": [
           {
-            "marker": "v2.5331.16631892.64e66476-8267-45df-93c9-7087141c2627.4026532257.45bff73a-6598-4b4e-b83f-1c2b75110fc7",
+            "marker": "v2.11264.19203109.64e66476-8267-45df-93c9-7087141c2627.4026532257.66c4de85-d5e8-49ac-986c-9bb38149952c",
             "owner": {
               "bootId": "64e66476-8267-45df-93c9-7087141c2627",
               "namespace": "4026532257",
-              "nonce": "45bff73a-6598-4b4e-b83f-1c2b75110fc7",
-              "pid": 5331,
-              "starttime": "16631892"
+              "nonce": "66c4de85-d5e8-49ac-986c-9bb38149952c",
+              "pid": 11264,
+              "starttime": "19203109"
             },
             "reason": "identity_matches",
             "state": "live"
@@ -103,13 +103,13 @@
       "unlinks": [],
       "writerIntents": [
         {
-          "marker": "v2.5331.16631892.64e66476-8267-45df-93c9-7087141c2627.4026532257.45bff73a-6598-4b4e-b83f-1c2b75110fc7",
+          "marker": "v2.11264.19203109.64e66476-8267-45df-93c9-7087141c2627.4026532257.66c4de85-d5e8-49ac-986c-9bb38149952c",
           "owner": {
             "bootId": "64e66476-8267-45df-93c9-7087141c2627",
             "namespace": "4026532257",
-            "nonce": "45bff73a-6598-4b4e-b83f-1c2b75110fc7",
-            "pid": 5331,
-            "starttime": "16631892"
+            "nonce": "66c4de85-d5e8-49ac-986c-9bb38149952c",
+            "pid": 11264,
+            "starttime": "19203109"
           },
           "reason": "identity_matches",
           "state": "live"
@@ -121,19 +121,19 @@
     "error": null,
     "id": 1,
     "record": {
-      "bodyHash": "d1f6ba5f6b77732178cf4a7e0c819ea25b28877ef7fe4e2a47c4b522d4fac1cd",
+      "bodyHash": "29553c6fe253b2bccc0162340eb330f75d0b6ab7b9781d42631d4b145c223410",
       "bound": {
-        "input": 16215,
+        "input": 32407,
         "inputRate": 400,
-        "output": 4352,
+        "output": 2176,
         "outputRate": 1600
       },
-      "digest": "8309518deb34dd640d6a830da3b7046fd32baebf7b8a0019d367b4a41b076bfe",
+      "digest": "7111a7211727a2b108fffa5f2ce035f9bdc22980aab5669218953beb816cc05b",
       "id": "writer-with-live-owner",
       "logicalId": "writer-with-live-owner",
-      "operation": "extraction",
+      "operation": "reader",
       "prior": "0e5962d4413bdcad15786425356c38f2e011bce1d90639aed6802fd88fd73068",
-      "reserved": 13449200,
+      "reserved": 16444400,
       "stage": "pilot",
       "type": "reserve"
     },
@@ -141,13 +141,13 @@
       "reclaimed": [],
       "waiting": [
         {
-          "marker": "v2.5331.16631892.64e66476-8267-45df-93c9-7087141c2627.4026532257.45bff73a-6598-4b4e-b83f-1c2b75110fc7",
+          "marker": "v2.11264.19203109.64e66476-8267-45df-93c9-7087141c2627.4026532257.66c4de85-d5e8-49ac-986c-9bb38149952c",
           "owner": {
             "bootId": "64e66476-8267-45df-93c9-7087141c2627",
             "namespace": "4026532257",
-            "nonce": "45bff73a-6598-4b4e-b83f-1c2b75110fc7",
-            "pid": 5331,
-            "starttime": "16631892"
+            "nonce": "66c4de85-d5e8-49ac-986c-9bb38149952c",
+            "pid": 11264,
+            "starttime": "19203109"
           },
           "reason": "identity_matches",
           "state": "live"

@@ -1,0 +1,28 @@
+TAP version 13
+# Subtest: evaluation/hr3/integration/test/integration.test.mjs
+not ok 1 - evaluation/hr3/integration/test/integration.test.mjs
+  ---
+  duration_ms: 0.929847
+  type: 'test'
+  error: "Cannot find package '@modelcontextprotocol/client' imported from evaluation/hr3/harness/product.mjs"
+  code: 'ERR_MODULE_NOT_FOUND'
+  stack: |-
+    Object.getPackageJSONURL (node:internal/modules/package_json_reader:256:9)
+    packageResolve (node:internal/modules/esm/resolve:768:81)
+    moduleResolve (node:internal/modules/esm/resolve:854:18)
+    defaultResolve (node:internal/modules/esm/resolve:984:11)
+    ModuleLoader.defaultResolve (node:internal/modules/esm/loader:780:12)
+    #cachedDefaultResolve (node:internal/modules/esm/loader:704:25)
+    ModuleLoader.resolve (node:internal/modules/esm/loader:687:38)
+    ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:305:38)
+    ModuleJob._link (node:internal/modules/esm/module_job:137:49)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 198.095021

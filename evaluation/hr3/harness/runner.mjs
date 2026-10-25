@@ -2,9 +2,9 @@ import {projectContract,familyContractContext} from './contract-projection-a4.mj
 import { mkdirSync, readdirSync, writeFileSync,readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { atomicJSON, canonical, fail } from './common.mjs';
-import { verifiedInputs, scorerGold } from './inputs.mjs';
+import { verifiedInputs, scorerCase } from './inputs.mjs';
 import {verifyPaidPreflight,PAID_PREFLIGHT_PATH} from './paid-preflight.mjs';
-import {budgetA4} from './budget-a4.mjs';
+import {accountingA6,A6_CARRY} from './accounting-a6.mjs';
 import {FIRST_PILOT_LEDGER_SHA256,loadCarryForward} from './accounting.mjs';
 import { Ledger } from './ledger.mjs';
 import { GuardedTransport, FakeTransport, createEmbedder } from './transport.mjs';
@@ -20,21 +20,23 @@ import { artifactManifest } from './artifacts.mjs';
 import { frozenArtifacts } from './bounds.mjs';
 import { tokenCounter,verifyInstalledDependencies } from './dependencies.mjs';
 import { validate, answerSchema } from '../scorer/schema.mjs';
-import { score } from '../scorer/scorer.mjs';
+import {SEED as SCORER_VERSION} from '../scorer/scorer.mjs';
+import {score} from './scoring-a6.mjs';
 export function planFor(families) {
   const ids='^(?:'+families.map(f=>f.family_id.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|')+')/';
   return [{operation:'extraction',ids:ids+'extract/[1-4]/attempt-[01]$',maxDispatches:families.length*8},
     {operation:'reader',ids:ids+'reader/[UTOP]/[24]/attempt-[01]$',maxDispatches:families.length*16},
     ...['research','product'].map(channel=>({operation:channel+'-embedding',ids:ids+channel+'-embedding/\\d+/attempt-[01]$',maxDispatches:families.length*1000}))];
 }
-export function verifyA4RunAccounting(carryForward) {
-  if(!carryForward)fail('verified_complete_carry_forward_required');
-  const carried=loadCarryForward(carryForward);
-  if(!carried.preparationComplete||!carried.exposure.sourceHashes.includes(FIRST_PILOT_LEDGER_SHA256))fail('verified_complete_carry_forward_required');
-  const budget=JSON.parse(readFileSync(new URL('./reports/budget-a4.json',import.meta.url)));
-  if(canonical(budget)!==canonical(budgetA4())||!budget.availableCarryFits||!budget.accountingGate.completeThirdPilotMerged||budget.carryForward.sha256!==carried.manifestSHA256)fail('a4_complete_accounting_required');
+export function verifyA6RunAccounting(carryForward) {
+  if(carryForward!==A6_CARRY)fail('a6_complete_accounting_required');
+  const carried=loadCarryForward(carryForward),verified=accountingA6();
+  if(!carried.preparationComplete)fail('a6_preparation_completeness_required');
+  if(!verified.completeLedgerChain||canonical(carried)!==canonical(verified.carry)||verified.planning.cumulativeBoundNanodollars>50e9)fail('a6_complete_accounting_required');
   return carried;
 }
+// Historical import name only; the fifth pilot cannot use the old carry.
+export const verifyA4RunAccounting=verifyA6RunAccounting;
 export async function run({stage='smoke',inputs,out,transport=new FakeTransport(),counter,carryForward=null,paidPreflight=PAID_PREFLIGHT_PATH,progress=()=>{}}) {
   const dependencyConfiguration=verifyInstalledDependencies();
   const root=resolve(out);mkdirSync(root,{recursive:true,mode:0o700});if(readdirSync(root).length)fail('output_not_empty');
@@ -43,8 +45,11 @@ export async function run({stage='smoke',inputs,out,transport=new FakeTransport(
   // Real runs must reconcile the entire accounting chain before opening a new
   // journal. Fake runs exercise the same limits with explicitly simulated cost.
   if(!(transport instanceof FakeTransport)) {
-    const carry=verifyA4RunAccounting(carryForward);
+    if(!carryForward)fail('verified_complete_carry_forward_required');
+    const carry=loadCarryForward(carryForward);
+    if(!carry.preparationComplete&&carryForward!==A6_CARRY)fail('verified_complete_carry_forward_required');
     verifyPaidPreflight({path:paidPreflight,carry,inputs,out,stage});
+    verifyA6RunAccounting(carryForward);
   }
   if(!STAGE_CONFIGURATION.some(c=>c.stage===stage))fail('offline_stage_only');
   const ledger=new Ledger(join(root,'ledger.jsonl'),{stage,plan:planFor(families),carryForward}),guarded=new GuardedTransport(transport,ledger);
@@ -53,18 +58,18 @@ export async function run({stage='smoke',inputs,out,transport=new FakeTransport(
   for(const directory of ['extractions','states','deliveries','answers','scores'])mkdirSync(join(root,directory),{mode:0o700});
   const observations=[],extractionSummary=[],privacyReports=[],written=['ledger.jsonl','ledger.jsonl.head.json'];let stopped=null;
   const persist=(path,value)=>{atomicJSON(path,value);written.push(path.slice(root.length+1));};
-  persist(join(root,'run.json'),{stage,carryForward:ledger.configuration.carryForward??null,offline:transport instanceof FakeTransport,transport:transport.constructor.name,version:'hr3-run-a4-recheck-v4',dependencyConfiguration,productHeadline:'Pinned product + frozen public-operation agent + shared research extraction + slot reader.',protocol:'v0.3.4+E-1+E-2+A-1+A-2+A-3+A-4+A-4.1+A-4.2+A-1.1',productPin:'b2513501a6747a163ab1cefb7d37a16744c9621a',families:families.map(f=>f.family_id),inputVerification:data.verification,frozenArtifacts:frozenArtifacts(inputs),productVerification,tokenizer:counter.id,readiness:transport instanceof FakeTransport?'offline exercise only; paid gates pending':'paid engineering pilot under A-1: mechanical scoring only, referrals unresolved'});
+  persist(join(root,'run.json'),{stage,carryForward:ledger.configuration.carryForward??null,offline:transport instanceof FakeTransport,transport:transport.constructor.name,version:'hr3-run-a6-v1',dependencyConfiguration,productHeadline:'Pinned product + frozen public-operation agent + shared research extraction + slot reader.',scorerVersion:SCORER_VERSION,protocol:'v0.3.4+E-1+E-2+A-1+A-2+A-3+A-4+A-4.1+A-4.2+A-1.1+A-6+A-6.1',productPin:'b2513501a6747a163ab1cefb7d37a16744c9621a',families:families.map(f=>f.family_id),inputVerification:data.verification,frozenArtifacts:frozenArtifacts(inputs),productVerification,tokenizer:counter.id,readiness:transport instanceof FakeTransport?'offline exercise only; paid gates pending':'paid engineering pilot under A-1: mechanical scoring only, referrals unresolved'});
   guarded.startSupervision(progress);
   try {
     for(const family of families) {
-      const researchEmbedder=createEmbedder(guarded,{prefix:family.family_id+'/research-embedding'}),productEmbedder=createEmbedder(guarded,{channel:'product',prefix:family.family_id+'/product-embedding'});
       const privacy=new PrivacyGuard(family),aliases=sourceOrderAliases();
+      const researchEmbedder=createEmbedder(guarded,{prefix:family.family_id+'/research-embedding',privacy}),productEmbedder=createEmbedder(guarded,{channel:'product',prefix:family.family_id+'/product-embedding',privacy});
       const product=await ProductAgent.open({privacy,aliases,namespace:family.namespace,embedder:productEmbedder,counter,onAuthorizationExposure:async()=>{await guarded.stop('authorization_exposure');}});const events=[];
       try {
         for(const batch of family.batches) {
           const extraction=await extract({family,batch:batch.ordinal,transport:guarded,cache:join(root,'extractions')});
           written.push('extractions/'+extraction.key+'.json');
-          const raw=extraction.value?.events??[],next=identifyEvents(family.family_id,batch.ordinal,raw);
+          const raw=extraction.value?.events??[],next=identifyEvents(family.family_id,batch.ordinal,raw,family.namespace);
           aliases.register(next);
           extractionSummary.push({family:family.family_id,batch:batch.ordinal,key:extraction.key,error:extraction.error,diagnostics:{...extraction.diagnostics,identities:raw.map((e,i)=>({raw_event_id:e.event_id,internal_key:next[i].event_id,reader_id:aliases.id(next[i].event_id)}))}});
           events.push(...next);
@@ -86,8 +91,8 @@ export async function run({stage='smoke',inputs,out,transport=new FakeTransport(
             let answer=null;try{if(reply.status==='completed')answer=JSON.parse(reply.outputText);}catch{}
             const errors=validate(answerSchema,answer);persist(join(root,'answers',name+'.json'),{body,reply,answer,errors});
             // Only the scoring function receives gold/support; readers never receive these values.
-            const gold=scorerGold(family,checkpoint,data.gold.find(g=>g.family_id===family.family_id),data.support.find(s=>s.family_id===family.family_id));
-            const result=score(gold,{answer,delivered:delivery.delivered});persist(join(root,'scores',name+'.json'),result);observations.push({family:family.family_id,arm,batch:checkpoint.batch,...result});
+            const {gold,scoringOptions}=scorerCase(family,checkpoint,data.gold.find(g=>g.family_id===family.family_id),data.support.find(s=>s.family_id===family.family_id));
+            const result=score(gold,{answer,delivered:delivery.delivered},scoringOptions);persist(join(root,'scores',name+'.json'),result);observations.push({family:family.family_id,arm,batch:checkpoint.batch,...result});
           }
           progress({family:family.family_id,batch:checkpoint.batch,observations:observations.length,ledger:await guarded.snapshot({forReport:true})});
         }

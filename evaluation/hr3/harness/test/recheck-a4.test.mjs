@@ -9,7 +9,7 @@ import {hash,canonical} from '../common.mjs';
 import {plan} from './fixtures.mjs';
 
 function scratch(t){const dir=mkdtempSync('evaluation/hr3/harness/artifacts/recheck-test-');t.after(()=>rmSync(dir,{recursive:true,force:true}));return dir;}
-const request=id=>({id,operation:'extraction',body:responseRequest('extraction',{})});
+const request=id=>({id,operation:'reader',body:responseRequest('reader',{})});
 for(const defect of ['deleted','empty','valid-prefix','configuration-replaced','configuration-missing'])test('recheck ledger '+defect+' stops before reservation and dispatch',async t=>{
  const path=join(scratch(t),'ledger.jsonl'),ledger=new Ledger(path,{plan});
  const prefix=readFileSync(path);ledger.reserve(request('accepted'));const before=readFileSync(path);
@@ -83,7 +83,7 @@ test('recheck dependencies: execution and closure use the same approved configur
 });
 
 test('recheck context embeddings: all nine cases measure and validate both channels',async()=>{
- let module;if(process.env.HR3_RECHECK_OLD_CONTEXT){const url=new URL('../context-certification.mjs',import.meta.url).href;let source=readFileSync(new URL('./fixtures/context-certification-feb05af6.mjs.txt',import.meta.url),'utf8');source=source.replace(/from '(\.\/[^']+)'/g,(_,p)=>'from '+JSON.stringify(new URL(p,url).href)).replace(/import\('(\.\/[^']+)'\)/g,(_,p)=>'import('+JSON.stringify(new URL(p,url).href)+')').replaceAll('import.meta.url',JSON.stringify(url));module=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));}else module=await import('../context-certification.mjs');const r=await module.contextConformance();assert.ok(r.embeddingMeasurements?.length>0);
+ let module;if(process.env.HR3_RECHECK_OLD_CONTEXT){const url=new URL('../context-certification.mjs',import.meta.url).href;let source=readFileSync(new URL('./fixtures/context-certification-feb05af6.mjs.txt',import.meta.url),'utf8');source=source.replace(/from '(\.\/[^']+)'/g,(_,p)=>'from '+JSON.stringify(new URL(p,url).href)).replace(/import\('(\.\/[^']+)'\)/g,(_,p)=>'import('+JSON.stringify(new URL(p,url).href)+')').replaceAll('import.meta.url',JSON.stringify(url));module=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));}else module=await import('../context-certification.mjs');const r=await module.contextConformance({measurementOnly:true});assert.ok(r.embeddingMeasurements?.length>0);
  for(const c of r.cases)for(const channel of ['research','product']){const rows=r.embeddingMeasurements.filter(m=>m.language===c.language&&m.contextMode===c.mode&&m.channel===channel);assert.ok(rows.length>0,c.language+'/'+c.mode+'/'+channel);for(const m of rows){assert.equal(m.units,m.inputUnits.reduce((a,b)=>a+b,0));assert.equal(m.maxInputUnits,Math.max(...m.inputUnits));assert.match(m.bodySHA256,/^[a-f0-9]{64}$/);assert.ok(m.requestBytes>0&&m.requestBytes<=2097152);assert.ok(m.maxInputUnits<=8192&&m.units<=300000);}}
 });
 test('recheck context embeddings: context samples participate in every maximum and cumulative projection',async()=>{

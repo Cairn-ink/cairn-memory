@@ -10,16 +10,16 @@ import { responseRequest } from '../requests.mjs';
 import { validateExtraction } from '../schema.mjs';
 import { hash,canonical } from '../common.mjs';
 import { publicFamily,event,plan } from './fixtures.mjs';
-function fixture(t,modes=[]) {const dir=mkdtempSync(join(tmpdir(),'hr3-extract-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));const ledger=new Ledger(join(dir,'ledger.jsonl'),{plan}),fake=new FakeTransport({modes});return {dir,fake,ledger,transport:new GuardedTransport(fake,ledger),cache:join(dir,'cache'),family:publicFamily()};}
+function fixture(t,modes=[]) {const dir=mkdtempSync(join(tmpdir(),'hr3-extract-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));const ledger=new Ledger(join(dir,'ledger.jsonl'),{plan}),fake={calls:[],replies:{},async send(r){this.calls.push(r);const mode=modes.shift();return {status:mode==='truncated'?'incomplete':'completed',outputText:mode==='malformed'?'{':JSON.stringify(this.replies[hash(r.body)]??{events:[]})};}};return {dir,fake,ledger,transport:fake,cache:join(dir,'cache'),family:publicFamily()};}
 test('four source-only independent requests; strict caps, no private family fields or previous state',async t=>{
  const f=fixture(t);f.family.ast={secret:'private'};f.family.gold={secret:'private'};f.family.controls=[{secret:'private'}];
- const input=extractionInput(f.family,1);assert.deepEqual(Object.keys(input),['observed_at','public_header','turns']);const body=responseRequest('extraction',input);assert.equal(JSON.stringify(body).includes('private'),false);
+ const input=extractionInput(f.family,1);assert.deepEqual(Object.keys(input),['observed_at','public_header','turns']);const body=responseRequest('extraction',input);assert.equal(JSON.stringify(body).includes('secret'),false);
  assert.equal(body.max_output_tokens,4352);assert.equal(body.store,false);assert.equal(body.temperature,0);assert.equal(body.text.format.strict,true);
 });
 test('cached valid replies replay with no dispatch; corrupted replay fails closed',async t=>{
  const f=fixture(t);const value={events:[rawEvent()]};
  const body=responseRequest('extraction',extractionInput(f.family,1));f.fake.replies[hash(body)]=value;
- const a=await extract({...f,batch:1});assert.equal(a.error,null);const b=await extract({...f,batch:1});assert.equal(canonical(a),canonical(b));assert.equal(f.fake.calls.length,1);assert.equal(f.ledger.snapshot().reservations,1);
+ const a=await extract({...f,batch:1});assert.equal(a.error,null);const b=await extract({...f,batch:1});assert.equal(canonical(a),canonical(b));assert.equal(f.fake.calls.length,1);assert.equal(f.ledger.snapshot().reservations,0);
  const file=join(f.cache,readdirSync(f.cache)[0]),corrupt=JSON.parse(readFileSync(file));corrupt.value.events=[];writeFileSync(file,canonical(corrupt));await assert.rejects(extract({...f,batch:1}),/cache_corrupt/);
 });
 test('malformed and truncated replies are cached failures, never quality retried',async t=>{
@@ -41,9 +41,9 @@ test('fake replies are deterministic, schema-valid and can be malformed on deman
 
 // Provider wire fixture is independent of legacy internal reducer fixtures.
 function rawEvent(patch={}) {
- const {batch,ordinal,claims,field_mask,reason_nodes,reason_edges,...e}=event(1);
+ const {batch,ordinal,claims,field_mask,reason_nodes,reason_edges,source_turn_order,...e}=event(1);
  const anchors=e.source_quotes.map(({turn_id,quote})=>({turn_id,quote,occurrence:1}));
- return {...e,source_quotes:anchors,payload:{type:'slots',route:{value:claims[0].value,anchors},approval:null,cap:null},reason_quotes:[],...patch};
+ return {...e,record_name:null,source_quotes:anchors,payload:{type:'slots',route:{value:claims[0].value,anchors},approval:null,cap:null},reason_quotes:[],...patch};
 }
 test('provider quote fixtures stay separate from internal offset fixtures',()=>{
  const internal=event(1),before=structuredClone(internal),provider=rawEvent();

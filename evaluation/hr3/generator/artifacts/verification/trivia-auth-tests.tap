@@ -1,0 +1,383 @@
+TAP version 13
+# Subtest: all 310 specifications: exact allocation, disclosed revisions and split-disjoint banks; no held-out rendering
+ok 1 - all 310 specifications: exact allocation, disclosed revisions and split-disjoint banks; no held-out rendering
+  ---
+  duration_ms: 18.210279
+  type: 'test'
+  ...
+# Subtest: 30 engineering worlds validate independently before the pilot; pilot counts are exact
+ok 2 - 30 engineering worlds validate independently before the pilot; pilot counts are exact
+  ---
+  duration_ms: 0.198524
+  type: 'test'
+  ...
+# Subtest: same seed has byte-identical families, gold, support and rejection log; world seeds are independent
+ok 3 - same seed has byte-identical families, gold, support and rejection log; world seeds are independent
+  ---
+  duration_ms: 1278.943076
+  type: 'test'
+  ...
+# Subtest: hand-worked typed outcomes: erroneous history, partial field inheritance, scopes and no expiry fallback
+ok 4 - hand-worked typed outcomes: erroneous history, partial field inheritance, scopes and no expiry fallback
+  ---
+  duration_ms: 18.474092
+  type: 'test'
+  ...
+# Subtest: future writes stay pending at both probes; correction can apply retroactively
+ok 5 - future writes stay pending at both probes; correction can apply retroactively
+  ---
+  duration_ms: 10.382479
+  type: 'test'
+  ...
+# Subtest: causal classes encode AND/OR, serial paths, absent reasons, no implicit shortcuts
+ok 6 - causal classes encode AND/OR, serial paths, absent reasons, no implicit shortcuts
+  ---
+  duration_ms: 36.059035
+  type: 'test'
+  ...
+# Subtest: all eight Card branches, authority refusals, separate assertion and forget/foreign isolation
+ok 7 - all eight Card branches, authority refusals, separate assertion and forget/foreign isolation
+  ---
+  duration_ms: 0.470618
+  type: 'test'
+  ...
+# Subtest: normalization, rational units, extensional scopes and equivalent duplicate collapse
+ok 8 - normalization, rational units, extensional scopes and equivalent duplicate collapse
+  ---
+  duration_ms: 8.994809
+  type: 'test'
+  ...
+# Subtest: closed schema accepts all five Value variants and rejects extras, bad ranges and malformed output
+ok 9 - closed schema accepts all five Value variants and rejects extras, bad ranges and malformed output
+  ---
+  duration_ms: 6.103092
+  type: 'test'
+  ...
+# Subtest: validator rejects observed_order
+ok 10 - validator rejects observed_order
+  ---
+  duration_ms: 5.44173
+  type: 'test'
+  ...
+# Subtest: validator rejects anchor_resolution
+ok 11 - validator rejects anchor_resolution
+  ---
+  duration_ms: 5.563915
+  type: 'test'
+  ...
+# Subtest: validator rejects historical_anchor
+ok 12 - validator rejects historical_anchor
+  ---
+  duration_ms: 5.556616
+  type: 'test'
+  ...
+# Subtest: validator rejects empty_scope
+ok 13 - validator rejects empty_scope
+  ---
+  duration_ms: 3.764748
+  type: 'test'
+  ...
+# Subtest: validator rejects span_quote
+ok 14 - validator rejects span_quote
+  ---
+  duration_ms: 10.515904
+  type: 'test'
+  ...
+# Subtest: validator rejects batch_byte_limit
+ok 15 - validator rejects batch_byte_limit
+  ---
+  duration_ms: 5.425748
+  type: 'test'
+  ...
+# Subtest: validator rejects gold_leakage
+ok 16 - validator rejects gold_leakage
+  ---
+  duration_ms: 5.507215
+  type: 'test'
+  ...
+# Subtest: validator rejects semantic_current
+ok 17 - validator rejects semantic_current
+  ---
+  duration_ms: 13.360075
+  type: 'test'
+  ...
+# Subtest: validator rejects semantic_history
+ok 18 - validator rejects semantic_history
+  ---
+  duration_ms: 8.403348
+  type: 'test'
+  ...
+# Subtest: validator rejects causal_topology
+ok 19 - validator rejects causal_topology
+  ---
+  duration_ms: 10.541713
+  type: 'test'
+  ...
+# Subtest: validator rejects empty_edge_support
+ok 20 - validator rejects empty_edge_support
+  ---
+  duration_ms: 10.330517
+  type: 'test'
+  ...
+# Subtest: validator rejects requested_predecessor_set
+ok 21 - validator rejects requested_predecessor_set
+  ---
+  duration_ms: 6.876975
+  type: 'test'
+  ...
+# Subtest: validator rejects source_erroneous
+ok 22 - validator rejects source_erroneous
+  ---
+  duration_ms: 5.342989
+  type: 'test'
+  ...
+# Subtest: rejected-candidate logging is deterministic, retains IDs and does not silently replace failures
+ok 23 - rejected-candidate logging is deterministic, retains IDs and does not silently replace failures
+  ---
+  duration_ms: 1588.62059
+  type: 'test'
+  ...
+# Subtest: CLI writes deterministic complete bytes and disk-verified hashes; rejects overwrite and unknown splits
+ok 24 - CLI writes deterministic complete bytes and disk-verified hashes; rejects overwrite and unknown splits
+  ---
+  duration_ms: 3098.801147
+  type: 'test'
+  ...
+Source manifest cross-check: 23 files (explicit delivery map vs filesystem directories).
+# Subtest: frozen source delivery list cross-checks root and test directory enumeration
+ok 25 - frozen source delivery list cross-checks root and test directory enumeration
+  ---
+  duration_ms: 1.221727
+  type: 'test'
+  ...
+# Subtest: correctness projection never adds support text, offsets, citations or delivery labels
+ok 26 - correctness projection never adds support text, offsets, citations or delivery labels
+  ---
+  duration_ms: 10.97545
+  type: 'test'
+  ...
+# Subtest: semantic validator rejects reversed causal support even when offsets and quotations remain exact
+ok 27 - semantic validator rejects reversed causal support even when offsets and quotations remain exact
+  ---
+  duration_ms: 11.416204
+  type: 'test'
+  ...
+# Subtest: inventory validator rejects cross-lineage aliases and missing causal allocations
+ok 28 - inventory validator rejects cross-lineage aliases and missing causal allocations
+  ---
+  duration_ms: 12.356565
+  type: 'test'
+  ...
+# Subtest: R3 effective reason strata match frozen counts at both checkpoints, including expiry
+ok 29 - R3 effective reason strata match frozen counts at both checkpoints, including expiry
+  ---
+  duration_ms: 1.275513
+  type: 'test'
+  ...
+# Subtest: gold-derived guard rejects a shortcut even when legacy topology says multi-hop
+ok 30 - gold-derived guard rejects a shortcut even when legacy topology says multi-hop
+  ---
+  duration_ms: 7.218293
+  type: 'test'
+  ...
+# Subtest: E-2 fixtures cover both authoring paths in every Card branch without ambiguous null redeclaration
+ok 31 - E-2 fixtures cover both authoring paths in every Card branch without ambiguous null redeclaration
+  ---
+  duration_ms: 0.347506
+  type: 'test'
+  ...
+# Subtest: R3 revisions disclose retired same-split parents; held-out freshness remains a post-calibration gate
+ok 32 - R3 revisions disclose retired same-split parents; held-out freshness remains a post-calibration gate
+  ---
+  duration_ms: 0.392988
+  type: 'test'
+  ...
+# Subtest: ancestry validation rejects cross-split parents, cycles and falsely independent R3 roots
+ok 33 - ancestry validation rejects cross-split parents, cycles and falsely independent R3 roots
+  ---
+  duration_ms: 19.206511
+  type: 'test'
+  ...
+# Subtest: ancestry validation rejects active/retired alias reuse, including cross-split reuse
+ok 34 - ancestry validation rejects active/retired alias reuse, including cross-split reuse
+  ---
+  duration_ms: 20.647177
+  type: 'test'
+  ...
+# Subtest: 8 development and 30 test replacements remain provisional; no fresh banks instantiated
+ok 35 - 8 development and 30 test replacements remain provisional; no fresh banks instantiated
+  ---
+  duration_ms: 0.328276
+  type: 'test'
+  ...
+# Subtest: A-4 contract schema, bilingual aliases and fixed historical vocabulary have no answer mappings
+ok 36 - A-4 contract schema, bilingual aliases and fixed historical vocabulary have no answer mappings
+  ---
+  duration_ms: 3.964842
+  type: 'test'
+  ...
+# Subtest: A-4 every question names slots, complete label vocabulary and exact predecessor turns
+ok 37 - A-4 every question names slots, complete label vocabulary and exact predecessor turns
+  ---
+  duration_ms: 4.626924
+  type: 'test'
+  ...
+# Subtest: A-4 slot rows agree with independently replayed private semantics; absent is not false or unavailable
+ok 38 - A-4 slot rows agree with independently replayed private semantics; absent is not false or unavailable
+  ---
+  duration_ms: 8.038196
+  type: 'test'
+  ...
+# Subtest: A-4 equivalent row partitions, exact quantity conversions and duplicates collapse without hiding contradictions
+ok 39 - A-4 equivalent row partitions, exact quantity conversions and duplicates collapse without hiding contradictions
+  ---
+  duration_ms: 6.02991
+  type: 'test'
+  ...
+# Subtest: A-4 independent matched worlds make question/contract-only answers non-identifiable and names are balanced
+ok 40 - A-4 independent matched worlds make question/contract-only answers non-identifiable and names are balanced
+  ---
+  duration_ms: 1301.070394
+  type: 'test'
+  ...
+# Subtest: A-4 inspected registry excludes exact families, lineages, ancestors and both retained hash forms
+ok 41 - A-4 inspected registry excludes exact families, lineages, ancestors and both retained hash forms
+  ---
+  duration_ms: 11.854811
+  type: 'test'
+  ...
+# Subtest: A-4 rejects slot errors independently of the retained private causal projection
+ok 42 - A-4 rejects slot errors independently of the retained private causal projection
+  ---
+  duration_ms: 25.890242
+  type: 'test'
+  ...
+# Subtest: A-4 history scope partitions and requested-record ordering compare extensionally
+ok 43 - A-4 history scope partitions and requested-record ordering compare extensionally
+  ---
+  duration_ms: 14.378964
+  type: 'test'
+  ...
+# Subtest: A-6 public bilingual worked examples and schema are independently authored and excluded from worlds
+ok 44 - A-6 public bilingual worked examples and schema are independently authored and excluded from worlds
+  ---
+  duration_ms: 4.333528
+  type: 'test'
+  ...
+# Subtest: A-6 own/reference examples anchor complete current-batch tokens without earlier-turn guesses
+ok 45 - A-6 own/reference examples anchor complete current-batch tokens without earlier-turn guesses
+  ---
+  duration_ms: 12.757552
+  type: 'test'
+  ...
+# Subtest: A-6 name token syntax, adjacent-token boundaries, exact occurrence and case rules
+ok 46 - A-6 name token syntax, adjacent-token boundaries, exact occurrence and case rules
+  ---
+  duration_ms: 0.435558
+  type: 'test'
+  ...
+# Subtest: A-6 worked receipt/body addresses and unit-local repeat occurrence stay exact
+ok 47 - A-6 worked receipt/body addresses and unit-local repeat occurrence stay exact
+  ---
+  duration_ms: 0.298325
+  type: 'test'
+  ...
+# Subtest: A-6 bilingual partial-refinement pairs inherit identically with and without an explicit preservation sentence
+ok 48 - A-6 bilingual partial-refinement pairs inherit identically with and without an explicit preservation sentence
+  ---
+  duration_ms: 0.609961
+  type: 'test'
+  ...
+# Subtest: A-6 independent causal selection examples retain all serial/conjunctive/sufficiency clauses
+ok 49 - A-6 independent causal selection examples retain all serial/conjunctive/sufficiency clauses
+  ---
+  duration_ms: 0.325016
+  type: 'test'
+  ...
+# Subtest: A-6 trivia is licensed by predeclared literal provenance and protects all interpolations and operators
+ok 50 - A-6 trivia is licensed by predeclared literal provenance and protects all interpolations and operators
+  ---
+  duration_ms: 413.973188
+  type: 'test'
+  ...
+# Subtest: A-6 literal rendering preserves source words and final punctuation is the only licensed causal omission
+ok 51 - A-6 literal rendering preserves source words and final punctuation is the only licensed causal omission
+  ---
+  duration_ms: 0.672588
+  type: 'test'
+  ...
+# Subtest: A-6 fresh pilot has new source worlds with frozen allocation, controls, multiplicity and naming balance
+ok 52 - A-6 fresh pilot has new source worlds with frozen allocation, controls, multiplicity and naming balance
+  ---
+  duration_ms: 72.920337
+  type: 'test'
+  ...
+# Subtest: A-6 trivia provenance changes no existing source production and inserts no earlier-turn IDs
+ok 53 - A-6 trivia provenance changes no existing source production and inserts no earlier-turn IDs
+  ---
+  duration_ms: 2.952844
+  type: 'test'
+  ...
+# Subtest: P1-2 actual emission rejects alternative parse licensing interpolated separators (en)
+ok 54 - P1-2 actual emission rejects alternative parse licensing interpolated separators (en)
+  ---
+  duration_ms: 1.074569
+  type: 'test'
+  ...
+# Subtest: P1-1 forged edge/fact literals cannot license an interpolated decimal (en)
+ok 55 - P1-1 forged edge/fact literals cannot license an interpolated decimal (en)
+  ---
+  duration_ms: 0.219044
+  type: 'test'
+  ...
+# Subtest: Authenticated emission rejects labels, licenses, drift and substituted literals (en)
+ok 56 - Authenticated emission rejects labels, licenses, drift and substituted literals (en)
+  ---
+  duration_ms: 0.992068
+  type: 'test'
+  ...
+# Subtest: P1-2 actual emission rejects alternative parse licensing interpolated separators (zh-Hant)
+ok 57 - P1-2 actual emission rejects alternative parse licensing interpolated separators (zh-Hant)
+  ---
+  duration_ms: 0.612451
+  type: 'test'
+  ...
+# Subtest: P1-1 forged edge/fact literals cannot license an interpolated decimal (zh-Hant)
+ok 58 - P1-1 forged edge/fact literals cannot license an interpolated decimal (zh-Hant)
+  ---
+  duration_ms: 0.162663
+  type: 'test'
+  ...
+# Subtest: Authenticated emission rejects labels, licenses, drift and substituted literals (zh-Hant)
+ok 59 - Authenticated emission rejects labels, licenses, drift and substituted literals (zh-Hant)
+  ---
+  duration_ms: 0.755413
+  type: 'test'
+  ...
+# Subtest: Family validation uses independent world/bank replay rather than the candidate input tape
+ok 60 - Family validation uses independent world/bank replay rather than the candidate input tape
+  ---
+  duration_ms: 19.660119
+  type: 'test'
+  ...
+# Subtest: Frozen consumer handle binds family, namespace, source, emission inputs, registry, rules and templates
+ok 61 - Frozen consumer handle binds family, namespace, source, emission inputs, registry, rules and templates
+  ---
+  duration_ms: 10.256998
+  type: 'test'
+  ...
+# Subtest: Trivia authentication repair preserves source bytes, questions, G_correct and extraction inputs
+ok 62 - Trivia authentication repair preserves source bytes, questions, G_correct and extraction inputs
+  ---
+  duration_ms: 206.624152
+  type: 'test'
+  ...
+1..62
+# tests 62
+# suites 0
+# pass 62
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 10261.15172

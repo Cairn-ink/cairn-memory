@@ -1,0 +1,50 @@
+{
+  "version": "hr3-a6-postflight-v2",
+  "status": "PASS_MIGRATION_MEASUREMENTS_AND_PRESERVATION_NOT_PAID_READINESS",
+  "sourceBindingsChecked": {
+    "measurement-a6.json": 1519,
+    "cap-certification-a6.json": 44,
+    "private-field-inventory-a6.json": 14
+  },
+  "protectedPreexistingSiblingFiles": 132,
+  "protectedChanges": [],
+  "integrationDeliveryFilesChecked": 18926,
+  "diagnosticLogsNormalized": 6,
+  "commandsChecked": 19,
+  "suites": {
+    "generator-tests": {
+      "pass": 53,
+      "fail": 0,
+      "skipped": 0,
+      "exitCode": 0
+    },
+    "scorer-tests": {
+      "pass": 74,
+      "fail": 0,
+      "skipped": 0,
+      "exitCode": 0
+    },
+    "integration-tests": {
+      "pass": 26,
+      "fail": 0,
+      "skipped": 0,
+      "exitCode": 0
+    },
+    "harness-tests": {
+      "pass": 354,
+      "fail": 0,
+      "skipped": 0,
+      "exitCode": 0
+    }
+  },
+  "headUnchanged": true,
+  "scope": [
+    "evaluation/hr3/harness/",
+    "evaluation/hr3/integration/"
+  ],
+  "inputGateExit": 1,
+  "paidReadiness": false,
+  "networkCalls": 0,
+  "paidCalls": 0,
+  "freezeRun": false
+}

@@ -10,7 +10,7 @@ import {responseRequest,validateRequest} from '../requests.mjs';
 import {GuardedTransport} from '../transport.mjs';
 import {plan} from './fixtures.mjs';
 
-const request=id=>({id,operation:'extraction',body:responseRequest('extraction',{})});
+const request=id=>({id,operation:'reader',body:responseRequest('reader',{})});
 function fixture(t){const dir=fs.mkdtempSync('evaluation/hr3/harness/artifacts/ledger-race-');t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));return join(dir,'ledger.jsonl');}
 function implementation(hooks={}){
  const baseline=process.env.HR3_LEDGER_RACE_BASELINE==='1',source=fs.readFileSync(new URL(baseline?'./fixtures/ledger-3e49f0a4.mjs.txt':'../ledger.mjs',import.meta.url),'utf8');

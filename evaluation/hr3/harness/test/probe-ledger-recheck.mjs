@@ -18,7 +18,7 @@ for(const defect of ['deleted','valid-prefix','configuration-replaced']){
   const dir=mkdtempSync(h+'/artifacts/ledger-replay-');
   try{
    const path=join(dir,'ledger.jsonl'),ledger=new Writer(path,{plan,carryForward:h+'/reports/a4-carry-forward.json'}),prefix=readFileSync(path);
-   const request=id=>({id,operation:'extraction',body:responseRequest('extraction',{})});
+   const request=id=>({id,operation:'reader',body:responseRequest('reader',{})});
    ledger.reserve(request('accepted'));const beforeExposure=ledger.snapshot().total;
    if(defect==='deleted')rmSync(path);
    else if(defect==='valid-prefix')writeFileSync(path,prefix);

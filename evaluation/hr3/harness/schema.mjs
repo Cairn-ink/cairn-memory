@@ -1,11 +1,12 @@
 import { answerSchema, validate } from '../scorer/schema.mjs';
 import { cells, fail, DIMENSIONS } from './common.mjs';
 export { answerSchema };
-import {preflightExtractionSchema} from './preflight-a4-schema.mjs';
+import {preflightExtractionSchemaA6} from './preflight-a6-schema.mjs';
+import {nameToken} from './name-registry-a6.mjs';
 import {canonicalPublicName} from '../generator/slots.mjs';
 import {PUBLIC_CONTRACT} from './contract-projection-a4.mjs';
-export const EXTRACTION_VERSION='hr3-extraction-a4-audit-v2';
-export const extractionSchema=preflightExtractionSchema;
+export const EXTRACTION_VERSION='hr3-extraction-a6-v1';
+export const extractionSchema=preflightExtractionSchemaA6;
 // Responses strict JSON schema uses anyOf rather than the algebraic oneOf.
 export function providerSchema(schema) {
   const out=JSON.parse(JSON.stringify(schema, (key,value)=>key==='$schema'||key==='title'?undefined:value));
@@ -49,6 +50,7 @@ function withoutOffsets(value) {
   for(const e of copy?.events??[]) {
     for(const q of [...(e?.source_quotes??[]),...(e?.reason_quotes??[]),...(e?.payload?.anchors??[])])strip(q);
     for(const slot of ['route','approval','cap'])for(const q of e?.payload?.[slot]?.anchors??[])strip(q);
+    strip(e?.record_name?.anchor);for(const ref of e?.predecessor_refs??[])strip(ref?.anchor);
   }
   return copy;
 }
@@ -117,8 +119,13 @@ export function validateExtraction(value,input) {
     else {
       const {payload,...metadata}=e;
       const unique=qs=>[...new Map(qs.map(q=>[JSON.stringify([q.turn_id,q.start,q.end]),q])).values()];
+      const name_errors=[];
+      const named=(name,q)=>{const a=q&&anchor(q);if(!nameToken(name)||!a||a.quote!==name)return null;const text=turns.get(a.turn_id);if(/[A-Za-z0-9_-]/.test(text[a.start-1]??'')||/[A-Za-z0-9_-]/.test(text[a.end]??''))return null;return a;};
+      const own=e.record_name===null?null:named(e.record_name.name,e.record_name.anchor);
+      if(e.record_name&&!own)name_errors.push('invalid_record_name');
+      const refs=e.predecessor_refs.map(r=>{const a=named(r.record_name,r.anchor);if(!a)name_errors.push('invalid_predecessor_ref');return {...r,anchor:a??r.anchor,valid_name:!!a};});
       events.push({...metadata,subject:canonicalPublicName(e.subject,'subjects'),predicate:canonicalPublicName(e.predicate,'predicates'),
-        predecessor_anchors:e.predecessor_anchors.map(a=>({...a,subject:canonicalPublicName(a.subject,'subjects'),predicate:canonicalPublicName(a.predicate,'predicates')})),
+        record_name:e.record_name?{name:e.record_name.name,anchor:own??e.record_name.anchor}:null,predecessor_refs:refs,name_errors:[...new Set(name_errors)],source_turn_order:input.turns.map(t=>t.turn_id),
         payload:context?{type:'context',...context}:{type:'slots',...admittedSlots},context,claims,field_mask:claims.map(c=>c.field),
         source_quotes:unique([...core,...factQuotes,...reason_quotes]),reason_quotes});
     }

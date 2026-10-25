@@ -31,8 +31,8 @@ test('strict checker rejects the observed const-without-type and type-beside-ref
   assert.throws(()=>checkStrictSchema({anyOf:[{type:'object',properties:{},required:[]}]}),/closed object/);
 });
 test('A-4 prompts announce supplied slots, anchored context and complete quoted explanations',()=>{
- assert.match(EXTRACTION_PROMPT,/Each supplied slot/);assert.match(EXTRACTION_PROMPT,/Context carries anchored/);
- assert.match(READER_PROMPT,/every requested predecessor_turn/);assert.match(READER_PROMPT,/complete serial\/conjunctive explanation/);
+ assert.match(EXTRACTION_PROMPT,/independent assignment\/reason admission/);assert.match(EXTRACTION_PROMPT,/current-batch/);
+ assert.match(READER_PROMPT,/old records match requested turns/);assert.match(READER_PROMPT,/complete serial\/conjunctive explanation/);
  assert.ok(!EXTRACTION_PROMPT.includes('field_mask'));assert.ok(!READER_PROMPT.includes('Reason edges'));
 });
 test('all 240 first-pilot bodies/replies replay reproducibly as a separate engineering diagnostic',()=>{

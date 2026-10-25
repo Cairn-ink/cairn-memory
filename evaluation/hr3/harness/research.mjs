@@ -4,27 +4,8 @@ const key=e=>canonical([normalize(e.subject),normalize(e.predicate),cells(e.scop
 const adopted=e=>e.commitment==='adopted';
 const eligible=(e,at)=>intervalStart(e)<=at;
 const live=(e,at)=>eligible(e,at)&&intervalEnd(e)>at;
-export function resolveLinks(events) {
-  const prior=[], retired=new Map(),ids=new Set();
-  return [...events].sort(orderEvents).map(e=>{
-    const targets=[],errors=[];
-    if(ids.has(e.event_id))errors.push('duplicate_event_id');ids.add(e.event_id);
-    for(const a of e.predecessor_anchors) {
-      const matches=prior.filter(p=>p.source_turns.includes(a.source_turn)&&normalize(p.subject)===normalize(a.subject)&&normalize(p.predicate)===normalize(a.predicate));
-      if(matches.length!==1){errors.push(matches.length?'nonunique_anchor':'missing_anchor');continue;}
-      const p=matches[0];
-      if(!adopted(p)||p.unresolved||normalize(p.subject)!==normalize(e.subject)||normalize(p.predicate)!==normalize(e.predicate)||!cells(p.scope).some(c=>cells(e.scope).some(d=>canonical(c)===canonical(d)))||(retired.get(p.event_id)??Infinity)<=Date.parse(e.observed_at))errors.push('incompatible_or_historical_anchor');
-      targets.push(p);
-    }
-    if(new Set(targets).size!==targets.length)errors.push('duplicate_anchor');
-    if(e.change_type!=='initial'&&e.change_type!=='unchanged'&&!e.predecessor_anchors.length)errors.push('missing_predecessor');
-    if(e.replacement_extent==='unresolved')errors.push('unresolved_extent');
-    targets.sort(orderEvents);
-    const event={...structuredClone(e),targets:targets.map(p=>p.event_id),unresolved:errors.length>0,link_errors:errors};
-    if(!event.unresolved&&adopted(event)&&['correction','reversal','expiry'].includes(event.change_type)&&event.replacement_extent==='entire_predecessor')for(const p of targets)retired.set(p.event_id,intervalStart(event));
-    prior.push(event);return event;
-  });
-}
+export {resolveNamedLinks as resolveLinks} from './name-registry-a6.mjs';
+import {resolveNamedLinks as resolveLinks} from './name-registry-a6.mjs';
 export function distinctQuotes(events) {return [...new Map(events.flatMap(e=>(e.source_quotes??[]).map(q=>[canonical([q.turn_id,q.start,q.end]),q]))).values()];}
 function evidence(events) {return distinctQuotes(events);}
 function record(e,fields=e.claims,scope=e.scope,status='active',support=[e]) {
@@ -99,15 +80,9 @@ function materializeSlots(arm,raw,atISO) {
 }
 export function ingestionLosses(raw,atISO,{linkedEvents}={}) {
   const linked=linkedEvents??resolveLinks(raw.filter(e=>Date.parse(e.observed_at)<=Date.parse(atISO)));
-  return linked.map((e,i)=>{const prior=linked.slice(0,i),anchors=e.predecessor_anchors.map(a=>{
-    const matches=prior.filter(p=>p.source_turns.includes(a.source_turn)&&normalize(p.subject)===normalize(a.subject)&&normalize(p.predicate)===normalize(a.predicate));
-    const p=matches.length===1?matches[0]:null;
-    return {source_turn:a.source_turn,record_name:a.record_name,missing:matches.length===0,nonunique:matches.length>1,
-      incompatible:p?!adopted(p)||p.unresolved||!cells(p.scope).some(c=>cells(e.scope).some(d=>canonical(c)===canonical(d))):null,
-      historical:p?prior.some(z=>!z.unresolved&&adopted(z)&&['correction','reversal','expiry'].includes(z.change_type)&&z.replacement_extent==='entire_predecessor'&&z.targets.includes(p.event_id)&&intervalStart(z)<=Date.parse(e.observed_at)):null};
-  });return {event:e.event_id,source_turns:e.source_turns,anchors,link_errors:e.link_errors,
+  return linked.map(e=>({event:e.event_id,source_turns:e.source_turns,anchors:e.name_diagnostics?.references??[],registration:e.name_diagnostics?.registration??null,link_errors:e.link_errors,
     commitment_filtered:e.commitment!=='adopted'&&e.commitment!=='unresolved',unresolved_extent:e.replacement_extent==='unresolved',
-    outcome:e.commitment==='unresolved'||adopted(e)&&e.unresolved?'unresolved_record':adopted(e)?'retained':'commitment_filter',at:atISO};});
+    outcome:e.commitment==='unresolved'||adopted(e)&&e.unresolved?'unresolved_record':adopted(e)?'retained':'commitment_filter',at:atISO}));
 }
 export function materialize(arm,raw,atISO,{linkedEvents}={}) {
   const isContext=e=>e.payload?.type==='context'||!!e.context;

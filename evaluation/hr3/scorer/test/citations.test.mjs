@@ -14,7 +14,10 @@ test('normalization maps fullwidth, ligatures, combining characters and whitespa
   assert.equal(r.start, 0);
   assert.equal(r.end, 11);
   assert(covers({ origin: 'turn-1', start: 2, end: raw.length - 2, text: raw.slice(2, -2) }, coveredSpans([r])));
-  assert(covers({ origin: 'turn-1', start: 0, end: raw.length, text: raw }, coveredSpans([r])));
+  assert(!covers({ origin: 'turn-1', start: 0, end: raw.length, text: raw }, coveredSpans([r])));
+  // The caller supplies source licenses; coverage never infers edge whitespace.
+  const edgeSpaces = new Set([0, 1, raw.length - 2, raw.length - 1]);
+  assert(covers({ origin: 'turn-1', start: 0, end: raw.length, text: raw }, coveredSpans([r]), (origin, position) => origin === 'turn-1' && edgeSpaces.has(position)));
   unit.segments[0].text = 'ﬃ e\u0301';
   assert.equal(materializeUnit(unit).text, 'ffi é');
   assert(!covers({ origin: 'turn-1', start: 0, end: 1, text: 'ﬃ' }, coveredSpans([resolve(unit, 'f')])));

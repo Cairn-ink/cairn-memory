@@ -1,0 +1,154 @@
+TAP version 13
+# Subtest: independent source admission, T/U/O updates and delivery preserve intended differences
+not ok 1 - independent source admission, T/U/O updates and delivery preserve intended differences
+  ---
+  duration_ms: 1.480107
+  type: 'test'
+  location: 'evaluation/hr3/integration/test/pipeline-a4.test.mjs:23:1'
+  failureType: 'testCodeFailure'
+  error: 'malformed_extraction'
+  code: 'malformed_extraction'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    validateExtraction (evaluation/hr3/harness/schema.mjs:76:44)
+    admitted (evaluation/hr3/integration/test/pipeline-a4.test.mjs:22:55)
+    TestContext.<anonymous> (evaluation/hr3/integration/test/pipeline-a4.test.mjs:24:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: independent admitted input uses actual P public writes, logs missing anchors and has no fallback archive
+not ok 2 - independent admitted input uses actual P public writes, logs missing anchors and has no fallback archive
+  ---
+  duration_ms: 377.942201
+  type: 'test'
+  location: 'evaluation/hr3/integration/test/pipeline-a4.test.mjs:40:1'
+  failureType: 'testCodeFailure'
+  error: 'malformed_extraction'
+  code: 'malformed_extraction'
+  stack: |-
+    fail (evaluation/hr3/harness/common.mjs:9:51)
+    validateExtraction (evaluation/hr3/harness/schema.mjs:76:44)
+    admitted (evaluation/hr3/integration/test/pipeline-a4.test.mjs:22:55)
+    TestContext.<anonymous> (evaluation/hr3/integration/test/pipeline-a4.test.mjs:43:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: all 120 pilot slot checkpoints validate, restore exactly and earn witnessed full credit
+ok 3 - all 120 pilot slot checkpoints validate, restore exactly and earn witnessed full credit
+  ---
+  duration_ms: 1820.516138
+  type: 'test'
+  ...
+# Subtest: independent A-4 challenge slots, predecessor identities and selected quotations pass unchanged
+ok 4 - independent A-4 challenge slots, predecessor identities and selected quotations pass unchanged
+  ---
+  duration_ms: 9.870436
+  type: 'test'
+  ...
+# Subtest: complete quotation unions preserve serial, conjunctive and alternative private plans
+ok 5 - complete quotation unions preserve serial, conjunctive and alternative private plans
+  ---
+  duration_ms: 41.822232
+  type: 'test'
+  ...
+# Subtest: source corruption, offset drift, topology mismatches and nonempty gold citations are rejected
+ok 6 - source corruption, offset drift, topology mismatches and nonempty gold citations are rejected
+  ---
+  duration_ms: 1.035849
+  type: 'test'
+  ...
+# Subtest: superseded graph answers are rejected with no conversion fallback
+ok 7 - superseded graph answers are rejected with no conversion fallback
+  ---
+  duration_ms: 0.348536
+  type: 'test'
+  ...
+# Subtest: audit extension fields survive; checksum tampering is detected
+ok 8 - audit extension fields survive; checksum tampering is detected
+  ---
+  duration_ms: 1.660051
+  type: 'test'
+  ...
+# Subtest: removed, changed and endpoint-only delivery cannot establish a complete explanation
+ok 9 - removed, changed and endpoint-only delivery cannot establish a complete explanation
+  ---
+  duration_ms: 36.714622
+  type: 'test'
+  ...
+# Subtest: unknown unit referrals keep correctness gold and support delivery isolated
+ok 10 - unknown unit referrals keep correctness gold and support delivery isolated
+  ---
+  duration_ms: 10.763085
+  type: 'test'
+  ...
+# Subtest: qualification counts only actual designated referrals, preserving frozen order
+ok 11 - qualification counts only actual designated referrals, preserving frozen order
+  ---
+  duration_ms: 0.438278
+  type: 'test'
+  ...
+# Subtest: confusion keeps pending distinct from reject and splits truth
+ok 12 - confusion keeps pending distinct from reject and splits truth
+  ---
+  duration_ms: 0.127073
+  type: 'test'
+  ...
+# Subtest: gate remains incomplete with absent judgments and never uses truth as a verdict
+ok 13 - gate remains incomplete with absent judgments and never uses truth as a verdict
+  ---
+  duration_ms: 1.08276
+  type: 'test'
+  ...
+# Subtest: two isolated matching judgments resolve; missing quotas still block pass
+ok 14 - two isolated matching judgments resolve; missing quotas still block pass
+  ---
+  duration_ms: 0.638712
+  type: 'test'
+  ...
+# Subtest: disagreement and nulls require a third independent session; agreement computed before resolution
+ok 15 - disagreement and nulls require a third independent session; agreement computed before resolution
+  ---
+  duration_ms: 0.585191
+  type: 'test'
+  ...
+# Subtest: gate rejects stale payloads, reused sessions, duplicates and malformed findings
+ok 16 - gate rejects stale payloads, reused sessions, duplicates and malformed findings
+  ---
+  duration_ms: 0.288166
+  type: 'test'
+  ...
+# Subtest: mechanically forced zero does not excuse unresolved support pass
+ok 17 - mechanically forced zero does not excuse unresolved support pass
+  ---
+  duration_ms: 0.213784
+  type: 'test'
+  ...
+# Subtest: complete synthetic gate fixture passes all thresholds without treating reused worlds as independent
+ok 18 - complete synthetic gate fixture passes all thresholds without treating reused worlds as independent
+  ---
+  duration_ms: 31.903393
+  type: 'test'
+  ...
+# Subtest: gate thresholds detect false acceptance, support failures and style error concentration
+ok 19 - gate thresholds detect false acceptance, support failures and style error concentration
+  ---
+  duration_ms: 27.416335
+  type: 'test'
+  ...
+# Subtest: deadline and effective expiry witnesses use selected quotations; incomplete selections fail
+ok 20 - deadline and effective expiry witnesses use selected quotations; incomplete selections fail
+  ---
+  duration_ms: 329.839999
+  type: 'test'
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 18
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4060.998807

@@ -19,7 +19,7 @@ export function sourceOrderAliases(events=[]) {
   return {register,id,node,diagnostics:()=>[...records].map(([internal_key,reader_id])=>({internal_key,reader_id,nodes:[...nodes.get(internal_key)].map(([private_id,reader_id])=>({private_id,reader_id}))}))};
 }
 
-export const PRIVATE_FIELD_INVENTORY=JSON.parse(readFileSync(new URL('./reports/private-field-inventory-a4.json',import.meta.url)));
+export const PRIVATE_FIELD_INVENTORY=JSON.parse(readFileSync(new URL('./reports/private-field-inventory-a6.json',import.meta.url)));
 const privateFieldNames=new Set(PRIVATE_FIELD_INVENTORY.fields.flatMap(f=>f.variants).map(name=>name.replace(/[^a-z0-9]/gi,'').toLowerCase()));
 const privateField=key=>privateFieldNames.has(key.replace(/[^a-z0-9]/gi,'').toLowerCase());
 const identifierPatterns=[

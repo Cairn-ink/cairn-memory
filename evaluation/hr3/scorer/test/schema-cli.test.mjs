@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { answerSchema, goldSchema, submissionSchema, validate } from '../schema.mjs';
+import { answerSchema, goldSchema, submissionSchema, supportSchema, validate } from '../schema.mjs';
 import { fixture, copy } from './fixtures.mjs';
+import { unlicensedFixture } from './unlicensed-fixtures.mjs';
 
 test('published JSON schemas match executable closed schemas', async () => {
-  for (const [name, schema] of Object.entries({ answer: answerSchema, gold: goldSchema, submission: submissionSchema })) {
+  for (const [name, schema] of Object.entries({ answer: answerSchema, gold: goldSchema, submission: submissionSchema, support: supportSchema })) {
     assert.deepEqual(JSON.parse(await readFile(new URL(`../${name}.schema.json`, import.meta.url))), schema);
   }
 });
@@ -58,7 +59,11 @@ async function cliTest(fn) {
     const files = { gold: join(dir, 'gold.json'), answers: join(dir, 'answers.json'), out: join(dir, 'out.json') };
     await writeFile(files.gold, JSON.stringify(gold));
     await writeFile(files.answers, JSON.stringify(submission));
-    const run = (args = ['--gold', files.gold, '--answers', files.answers, '--out', files.out]) => spawnSync(process.execPath, [resolve('evaluation/hr3/scorer/cli.mjs'), ...args], { encoding: 'utf8' });
+    const trusted = unlicensedFixture(gold), binding = join(dir, 'binding.json'), authority = join(dir, 'authority.json');
+    await writeFile(binding, JSON.stringify(trusted.binding));
+    await writeFile(authority, trusted.bytes);
+    const run = (args = ['--gold', files.gold, '--answers', files.answers, '--out', files.out,
+      '--trivia-binding', binding, '--trivia-freeze', authority, '--trivia-freeze-sha256', trusted.pin]) => spawnSync(process.execPath, [resolve('evaluation/hr3/scorer/cli.mjs'), ...args], { encoding: 'utf8' });
     await fn({ dir, files, run });
   } finally { await rm(dir, { recursive: true, force: true }); }
 }

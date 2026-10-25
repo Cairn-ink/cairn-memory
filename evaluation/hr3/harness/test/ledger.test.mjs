@@ -9,7 +9,7 @@ import { GuardedTransport,FakeTransport,TransportError } from '../transport.mjs'
 import { extractionInput } from '../extraction.mjs';
 import { plan,publicFamily } from './fixtures.mjs';
 function fixture(t,options={}){const dir=mkdtempSync(join(tmpdir(),'hr3-ledger-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));const path=join(dir,'ledger.jsonl');return {dir,path,ledger:new Ledger(path,{plan,...options})};}
-const request=(id='one')=>({id,operation:'extraction',body:responseRequest('extraction',extractionInput(publicFamily(),1))});
+const request=(id='one')=>({id,operation:'reader',body:responseRequest('reader',{})});
 test('reservation is durable before dispatch, settlement releases only known usage by request ID',async t=>{
  const {ledger,path}=fixture(t);const fake=new FakeTransport();const guarded=new GuardedTransport({async send(r,o){const rows=readFileSync(path,'utf8').trim().split('\n').map(JSON.parse);assert.equal(rows.at(-1).type,'reserve');assert.equal(rows.at(-1).id,r.id);return fake.send(r,o);}},ledger);
  await guarded.send(request());assert.equal(ledger.snapshot().unsettled.length,0);assert.equal(new Ledger(path,{plan}).snapshot().total,ledger.snapshot().total);
@@ -41,7 +41,7 @@ test('five-minute lack of progress and dispatch timeout are supervised',async t=
 test('strict body models, no tools/prior state, caps and byte/embed bounds',()=>{
  for(const change of [{tools:[]},{previous_response_id:'x'},{store:true},{temperature:1},{max_output_tokens:4353}])assert.throws(()=>validateRequest({...request(),body:{...request().body,...change}}),/request_shape/);
  const alt=responseRequest('extraction',{}, {alternative:true});assert.equal(alt.temperature,undefined);assert.deepEqual(alt.reasoning,{effort:'none'});assert.equal(alt.max_output_tokens,4352);
- assert.throws(()=>validateRequest({operation:'reader',body:responseRequest('reader',{text:'x'.repeat(40000)})}),/byte_bound/);
+ assert.throws(()=>validateRequest({operation:'reader',body:responseRequest('reader',{text:'x'.repeat(60000)})}),/byte_bound/);
  for(const input of [Array(65).fill('x'),['x'.repeat(8192)],Array(64).fill('x'.repeat(5000))])assert.throws(()=>validateRequest({operation:'product-embedding',body:embeddingRequest(input)}),/embedding_bound/);
 });
 test('unlisted calls, embedding unit allowances and corrupt journals fail closed',t=>{
@@ -54,9 +54,9 @@ test('stage transitions share one operational ledger and preserve stage totals',
  const development=new Ledger(path,{stage:'development',plan});const second=development.reserve(request('dev-one'));
  assert.equal(development.snapshot().total,first.reserved+second.reserved);assert.equal(development.snapshot().byStage.pilot,first.reserved);assert.equal(development.snapshot().byStage.development,second.reserved);
 });
-test('A-4.2 reserves and settles unchanged output ceilings at amended input bounds and unchanged prices',t=>{
+test('A-6.1 reserves and settles unchanged output ceilings at amended input bounds and unchanged prices',t=>{
  const {ledger}=fixture(t);
- for(const [operation,alternative,output,inputCeiling,inputRate,outputRate] of [['reader',false,2176,40960,400,1600],['extraction',false,4352,20480,400,1600],['extraction',true,4352,20480,750,4500]]){
+ for(const [operation,alternative,output,inputCeiling,inputRate,outputRate] of [['reader',false,2176,57344,400,1600],['extraction',false,4352,40960,400,1600],['extraction',true,4352,40960,750,4500]]){
   const body=responseRequest(operation,{}, {alternative}),id=operation+'-'+alternative;
   const reservation=ledger.reserve({id,operation,body});
   assert.equal(reservation.bound.output,output);assert.ok(reservation.bound.input<=inputCeiling);

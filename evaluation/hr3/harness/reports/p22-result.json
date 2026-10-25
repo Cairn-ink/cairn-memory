@@ -1,0 +1,117 @@
+{
+  "version": "hr3-p22-no-trivia-binding-focused-v1",
+  "status": "PASS_FOCUSED_ONLY_NOT_RECERTIFIED",
+  "commands": [
+    {
+      "name": "p22-baseline",
+      "arguments": [
+        "node",
+        "--test",
+        "--experimental-test-isolation=none",
+        "--test-name-pattern=P2-2",
+        "evaluation/hr3/harness/test/trivia-consumers-a6.test.mjs"
+      ],
+      "exitCode": 1,
+      "counts": {
+        "tests": 2,
+        "pass": 0,
+        "fail": 2,
+        "skipped": 0
+      },
+      "logs": {
+        "evaluation/hr3/harness/reports/p22-baseline.stdout": "ede394dce0d20d65c82d0c96cbf53e6f06f730e89b3d3b9c9809b535f768f70b",
+        "evaluation/hr3/harness/reports/p22-baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "p22-focused",
+      "arguments": [
+        "node",
+        "--test",
+        "--experimental-test-isolation=none",
+        "evaluation/hr3/harness/test/trivia-consumers-a6.test.mjs",
+        "evaluation/hr3/harness/test/placeholder-inventory-a6.test.mjs"
+      ],
+      "exitCode": 1,
+      "counts": {
+        "tests": 20,
+        "pass": 19,
+        "fail": 1,
+        "skipped": 0
+      },
+      "logs": {
+        "evaluation/hr3/harness/reports/p22-focused.stdout": "c8ba593ac44cd51e61fc8b72bc8cb511cf2db939ea8e4a032fbade8f7658ad77",
+        "evaluation/hr3/harness/reports/p22-focused.stderr": "43e8c9532f3af4a44cd303eb021ab47a90d11af82eeceb89dd69d59928a993d0"
+      }
+    },
+    {
+      "name": "p22-focused-final",
+      "arguments": [
+        "node",
+        "--test",
+        "--experimental-test-isolation=none",
+        "evaluation/hr3/harness/test/trivia-consumers-a6.test.mjs",
+        "evaluation/hr3/harness/test/placeholder-inventory-a6.test.mjs"
+      ],
+      "exitCode": 0,
+      "counts": {
+        "tests": 20,
+        "pass": 20,
+        "fail": 0,
+        "skipped": 0
+      },
+      "logs": {
+        "evaluation/hr3/harness/reports/p22-focused-final.stdout": "699c51c7ec0269bea6ab94b193484528f8a0f3aebc375ca3825ca72df9695004",
+        "evaluation/hr3/harness/reports/p22-focused-final.stderr": "1714b266cfc857425c8dac4fc72b14ee5f78b9f17fc8bf0c7ee45e71abb0a1bd"
+      }
+    },
+    {
+      "name": "p22-integration-focused",
+      "arguments": [
+        "node",
+        "--test",
+        "--experimental-test-isolation=none",
+        "--test-name-pattern=^(independent A-4 challenge|complete quotation unions|removed, changed|unknown unit referrals|audit extension|source corruption|superseded graph)",
+        "evaluation/hr3/integration/test/integration.test.mjs"
+      ],
+      "exitCode": 0,
+      "counts": {
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "skipped": 0
+      },
+      "logs": {
+        "evaluation/hr3/harness/reports/p22-integration-focused.stdout": "5cc931284cf8a66c1c22ffb349cbced07606c0d2cbe944765f645f1616b6b3b3",
+        "evaluation/hr3/harness/reports/p22-integration-focused.stderr": "b9575f2e41fc38ace48e91551e6bb265825a75da548dd8eb50449dec92a1a9b0"
+      }
+    }
+  ],
+  "preFixScoringSHA256": "c255cccbcbd67cf8c464e7aa969f4d95a60c6a3bbc5459cc2346c9d620869793",
+  "sources": {
+    "evaluation/hr3/harness/scoring-a6.mjs": "0cddb989be8a41bee3f06ed9685e458c43a1d0cb36350940b4df362218d40ea8",
+    "evaluation/hr3/harness/unlicensed-authority-a6.mjs": "dc4d83e70b7c04761b4d5c5ea1a1580f7f571764416a47f29263b06fbd41f4f9",
+    "evaluation/hr3/harness/test/trivia-consumers-a6.test.mjs": "59139d0fb8b770bec213df757fb42254f6d21c3600c027bf21b36f32fb56d5af",
+    "evaluation/hr3/integration/adapters.mjs": "0c98a68f335d0196b71217961a428c1633296a9882d230a235ad7215e05590c5"
+  },
+  "protectedFilesUnchangedDuringFocusedWork": 140,
+  "newRegressionTests": 4,
+  "existingFocusedTestsPreserved": 16,
+  "finalHarnessFocused": {
+    "passed": 20,
+    "failed": 0,
+    "exitCode": 0
+  },
+  "finalIntegrationFocused": {
+    "passed": 7,
+    "failed": 0,
+    "exitCode": 0
+  },
+  "fullHarnessSuite": "NOT_RUN_DEPENDS_ON_IN_FLIGHT_SCORER",
+  "fullRecertification": "NOT_RUN_PRIMARY_OWNS_STABLE_SOURCE_START",
+  "providerDispatches": 0,
+  "newPaidReservations": 0,
+  "paidReadiness": false,
+  "freeze": "NOT_RUN",
+  "commit": "NOT_RUN"
+}

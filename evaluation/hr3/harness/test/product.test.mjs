@@ -28,7 +28,7 @@ test('partial amendments preserve predecessor, whole reversal supersedes it, amb
 test('future activation and adapter scheduled expiry use public operations without fallback',async t=>{
  const p=await fixture(t),first=event(1,{effective_interval:{from:date(1),to:date(2)}});await p.ingest([first],date(1));const id=p.refs.get('e1').id;
  await p.ingest([],date(2));assert.equal(p.inspect(id).value.memory.state,'historical');assert.ok(p.log.some(l=>l.method==='adapter-scheduled'));
- const future=event(3,{change_type:'initial',predecessor_anchors:[],effective_interval:{from:date(4),to:null}});await p.ingest([future],date(3));assert.equal(p.refs.has('e3'),false);await p.ingest([],date(4));assert.equal(p.refs.has('e3'),true);
+ const future=event(3,{change_type:'initial',predecessor_refs:[],effective_interval:{from:date(4),to:null}});await p.ingest([future],date(3));assert.equal(p.refs.has('e3'),false);await p.ingest([],date(4));assert.equal(p.refs.has('e3'),true);
 });
 test('isolated file stores and all E-2 Card branches use real public revisions; unauthorized controls refuse',async t=>{
  const a=await fixture(t),b=await fixture(t);assert.notEqual(a.path,b.path);
@@ -59,7 +59,7 @@ test('P pin hashes cover the current public product implementation',async()=>{
 
 test('P freshness uses internal keys and never reprocesses an already ingested event',async t=>{
  const {identifyEvents}=await import('../event-identity.mjs');const p=await fixture(t);
- const first=identifyEvents('same-family',1,[event(1)]),second=identifyEvents('same-family',2,[event(1,{source_turns:['t2'],observed_at:date(2)})]);
+ const first=identifyEvents('same-family',1,[event(1)]),second=identifyEvents('same-family',2,[event(2,{event_id:'e1',change_type:'initial',predecessor_refs:[]})]);
  await p.ingest(first,date(1));await p.ingest(second,date(2));
  assert.equal(p.events.length,2);assert.equal(p.refs.size,2);
  const selections=p.log.filter(x=>x.method==='receipt_selection').length;

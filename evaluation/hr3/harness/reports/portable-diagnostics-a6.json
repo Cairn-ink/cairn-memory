@@ -1,0 +1,37 @@
+{
+  "version": "hr3-portable-diagnostics-a6-v1",
+  "policy": "Only new diagnostic logs; provider bodies, P blocks, scientific serializations, fixtures and journals unchanged.",
+  "count": 6,
+  "files": [
+    {
+      "path": "evaluation/hr3/harness/reports/a6-migration-integration.tap",
+      "beforeSHA256": "1b47ced5fca42a5dd291feb6fd1bfa035e447dbebde933a0dc82baf3e32005cf",
+      "afterSHA256": "35707daae63a086f58d07cc5fe1ad936acfc766072d7db756423f384b2d725dc"
+    },
+    {
+      "path": "evaluation/hr3/harness/reports/a6-integration-third.tap",
+      "beforeSHA256": "e50c157c1d06bd791d16a8a2ea19710d09aabcaa68ed1ca62e738a7067b4b8fd",
+      "afterSHA256": "2276c65afd17173f5c68ac6fb0f0e76c7d56c85cf803e9168f836fc5db9f25a5"
+    },
+    {
+      "path": "evaluation/hr3/harness/reports/a6-harness-third.tap",
+      "beforeSHA256": "6bc9f3431ae183240325f67103d28095861c76ba8eb3874b6581d123776eceaf",
+      "afterSHA256": "0fee9524098b387b0fb67ca6331f8d1c96e6db39106ed6e8e5a659deaf151929"
+    },
+    {
+      "path": "evaluation/hr3/harness/reports/a6-harness-second.tap",
+      "beforeSHA256": "7ccfe01187bee55175d6e554604f0eb4a657d040d99b7feb0df9d0a09ffab0f3",
+      "afterSHA256": "b6ba60954aec05fe376f84eeb558958a46344742bf6608c0be76cb70809e0424"
+    },
+    {
+      "path": "evaluation/hr3/harness/reports/a6-integration-second.tap",
+      "beforeSHA256": "f5af742df345f131c413d4058553f5330e0473fb4891b7f7212c82428978fff3",
+      "afterSHA256": "f31f8d191490c7ea8b44c38d70ccc4ee159db527ad36d412ecf3645c29179cd4"
+    },
+    {
+      "path": "evaluation/hr3/harness/reports/a6-migration-harness.tap",
+      "beforeSHA256": "8d9e9c3d9371e0bb5c9aa52d061bf029c22ea40460cc201829923bff1fc15113",
+      "afterSHA256": "b242c61c6e4946d9012224a3c2a1efa934315533d95bc86b6ae9518cf1c09bc5"
+    }
+  ]
+}

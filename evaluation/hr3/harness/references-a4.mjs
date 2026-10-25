@@ -41,7 +41,11 @@ export function extractionReference(family,ordinal) {
     if(value.type==='Quantity') {const m=coreQuote.match(/(?:daily request cap|每日請求上限) = [^，,。.]+/u);quote=m?.[0]??quote;}
     payload[slot]={value,anchors:[anchorQuote(quote)]};
    }}
-  return {event_id:'e'+(i+1),source_turns,observed_at,kind,commitment,change_type,subject,predicate,payload,scope,effective_interval,predecessor_anchors,replacement_extent,reason_quotes,source_quotes:anchors};
+  const namingAnchor=name=>{for(const t of input.turns.filter(t=>source_turns.includes(t.turn_id))){let start=-1;while((start=t.text.indexOf(name,start+1))>=0){if(!/[A-Za-z0-9_-]/.test(t.text[start-1]??'')&&!/[A-Za-z0-9_-]/.test(t.text[start+name.length]??''))return cleanAnchor({turn_id:t.turn_id,start,quote:name},input);}}return null;};
+  const own=event.record_name&&namingAnchor(event.record_name);
+  const record_name=own?{name:event.record_name,anchor:own}:null;
+  const predecessor_refs=predecessor_anchors.map(a=>{const anchor=namingAnchor(a.record_name);assert.ok(anchor,'Reference fixture must name its predecessor in the current batch');return {record_name:a.record_name,anchor};});
+  return {event_id:'e'+(i+1),source_turns,observed_at,kind,commitment,change_type,subject,predicate,payload,scope,effective_interval,record_name,predecessor_refs,replacement_extent,reason_quotes,source_quotes:anchors};
  });
  const admitted=validateExtraction({events},input);assert.equal(admitted.diagnostics.rejectedEvents,0);
  return {events};

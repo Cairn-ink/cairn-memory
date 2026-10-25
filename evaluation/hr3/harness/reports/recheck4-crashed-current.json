@@ -1,25 +1,25 @@
 {
   "ledgerSHA256": "c99218c1504cfe99fb2eac25f4a8c1f5d51998bed5a55e7b1bd1e00a10951033",
-  "ownerPid": 4497,
-  "observerPid": 4508,
+  "ownerPid": 10521,
+  "observerPid": 10541,
   "exit": {
     "code": null,
     "signal": "SIGKILL"
   },
-  "marker": "v2.4497.16631738.64e66476-8267-45df-93c9-7087141c2627.4026532257.464f78a8-c892-49ef-95d8-4c846c7bbb64",
+  "marker": "v2.10521.19202947.64e66476-8267-45df-93c9-7087141c2627.4026532257.ad9501c2-fa2a-4cb7-a4a2-6ced2de46023",
   "recovered": {
     "error": null,
     "id": 2,
     "report": {
       "reclaimed": [
         {
-          "marker": "v2.4497.16631738.64e66476-8267-45df-93c9-7087141c2627.4026532257.464f78a8-c892-49ef-95d8-4c846c7bbb64",
+          "marker": "v2.10521.19202947.64e66476-8267-45df-93c9-7087141c2627.4026532257.ad9501c2-fa2a-4cb7-a4a2-6ced2de46023",
           "owner": {
             "bootId": "64e66476-8267-45df-93c9-7087141c2627",
             "namespace": "4026532257",
-            "nonce": "464f78a8-c892-49ef-95d8-4c846c7bbb64",
-            "pid": 4497,
-            "starttime": "16631738"
+            "nonce": "ad9501c2-fa2a-4cb7-a4a2-6ced2de46023",
+            "pid": 10521,
+            "starttime": "19202947"
           },
           "reason": "process_missing",
           "state": "dead"
@@ -41,7 +41,7 @@
     },
     "unlinks": [
       {
-        "marker": "v2.4497.16631738.64e66476-8267-45df-93c9-7087141c2627.4026532257.464f78a8-c892-49ef-95d8-4c846c7bbb64",
+        "marker": "v2.10521.19202947.64e66476-8267-45df-93c9-7087141c2627.4026532257.ad9501c2-fa2a-4cb7-a4a2-6ced2de46023",
         "underLock": true
       }
     ]
@@ -50,19 +50,19 @@
     "error": null,
     "id": 1,
     "record": {
-      "bodyHash": "d1f6ba5f6b77732178cf4a7e0c819ea25b28877ef7fe4e2a47c4b522d4fac1cd",
+      "bodyHash": "29553c6fe253b2bccc0162340eb330f75d0b6ab7b9781d42631d4b145c223410",
       "bound": {
-        "input": 16215,
+        "input": 32407,
         "inputRate": 400,
-        "output": 4352,
+        "output": 2176,
         "outputRate": 1600
       },
-      "digest": "c2b1416348dea6d398b231195887ffbb1427de9a2315e267cfb68f5f22be863c",
+      "digest": "6b9bb5ef2a846345eb6865e21a29c615a218b78ed50685a2c6a1c59df77ed4b3",
       "id": "fresh-after-crash",
       "logicalId": "fresh-after-crash",
-      "operation": "extraction",
+      "operation": "reader",
       "prior": "0e5962d4413bdcad15786425356c38f2e011bce1d90639aed6802fd88fd73068",
-      "reserved": 13449200,
+      "reserved": 16444400,
       "stage": "pilot",
       "type": "reserve"
     },
@@ -79,13 +79,13 @@
     "report": {
       "reclaimed": [
         {
-          "marker": "v2.4497.16631738.64e66476-8267-45df-93c9-7087141c2627.4026532257.464f78a8-c892-49ef-95d8-4c846c7bbb64",
+          "marker": "v2.10521.19202947.64e66476-8267-45df-93c9-7087141c2627.4026532257.ad9501c2-fa2a-4cb7-a4a2-6ced2de46023",
           "owner": {
             "bootId": "64e66476-8267-45df-93c9-7087141c2627",
             "namespace": "4026532257",
-            "nonce": "464f78a8-c892-49ef-95d8-4c846c7bbb64",
-            "pid": 4497,
-            "starttime": "16631738"
+            "nonce": "ad9501c2-fa2a-4cb7-a4a2-6ced2de46023",
+            "pid": 10521,
+            "starttime": "19202947"
           },
           "reason": "process_missing",
           "state": "dead"
@@ -95,7 +95,7 @@
     },
     "unlinks": [
       {
-        "marker": "v2.4497.16631738.64e66476-8267-45df-93c9-7087141c2627.4026532257.464f78a8-c892-49ef-95d8-4c846c7bbb64",
+        "marker": "v2.10521.19202947.64e66476-8267-45df-93c9-7087141c2627.4026532257.ad9501c2-fa2a-4cb7-a4a2-6ced2de46023",
         "underLock": true
       }
     ]

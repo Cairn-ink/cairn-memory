@@ -7,7 +7,7 @@ import {hash,atomicJSON} from './common.mjs';
 import {decodeExtraction} from './extraction.mjs';
 import {sourceOrderAliases} from './privacy.mjs';
 import {identifyEvents,freshEvents} from './event-identity.mjs';
-import {resolveLinks} from './research.mjs';
+import {resolveLinks} from './historical-links-a3.mjs';
 import {extractionInput} from './extraction.mjs';
 import {extractionDiagnostics} from './extraction-diagnostics.mjs';
 

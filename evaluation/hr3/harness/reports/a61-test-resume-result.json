@@ -1,0 +1,346 @@
+{
+  "version": "hr3-a6.1-authorized-test-resume-stopped-v1",
+  "status": "FAIL_PROTECTED_INPUT_CHANGED",
+  "blockingStep": "fake-pilot",
+  "resumeExitCode": 1,
+  "heavyLock": "UNLOCKED_DIRECT_RUN_AUTHORIZED_BY_PRIMARY",
+  "artifacts": "evaluation/hr3/harness/artifacts/a61-test-resume-tsrf5m8k",
+  "parentVerification": "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/verification.json",
+  "suiteResults": {
+    "generator-tests": {
+      "tests": 62,
+      "pass": 62,
+      "fail": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "rerun": false
+    },
+    "scorer-tests": {
+      "tests": 100,
+      "pass": 100,
+      "fail": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "rerun": false
+    },
+    "integration-tests": {
+      "tests": 26,
+      "pass": 26,
+      "fail": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "rerun": false
+    },
+    "harness-tests": {
+      "tests": 371,
+      "pass": 371,
+      "fail": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "rerun": true
+    }
+  },
+  "changedTestSources": {
+    "evaluation/hr3/harness/test/a4.test.mjs": "c084c8856d95c9e0bd0977f2db86a5c67e36b11d877597daad7c5242e20ded1b",
+    "evaluation/hr3/harness/test/a3-audit.test.mjs": "bbef28b46bbcf78eca84792df3588f07d4b62c2deb908d95f041cc57bd5ec52e"
+  },
+  "protectedChanges": [
+    {
+      "path": "evaluation/hr3/scorer/support.mjs",
+      "entrySHA256": "f54506db79dca20133cb7c536b52e379b6d1bab5b28543c8137364ab046d9d73",
+      "observedSHA256": "8808162b41fc1d70088eddc9a16dde645e3ee32668ba424ab0ba31813a23e39c"
+    },
+    {
+      "path": "evaluation/hr3/scorer/scorer.mjs",
+      "entrySHA256": "6625163a615fb01232077abe7045528e78ead8b73555d6d21ff7b431ef5a5a4b",
+      "observedSHA256": "316cb9ec6b3d9b46401a9f17d40ceea38ae74737d66fd92653c3e030c3e2c4d0"
+    },
+    {
+      "path": "evaluation/hr3/scorer/cli.mjs",
+      "entrySHA256": "7fdc7f7d2ed1654d843a6ee6a59fe679cfcf3e9fb38c3216cddb93b97bce6f47",
+      "observedSHA256": "b67ffbecaddd81f6df8a4874a4d119f9ad8d7ec1d2298ac0d1520730926fe53a"
+    }
+  ],
+  "fakePilot": {
+    "exitCode": 0,
+    "complete": true,
+    "attempted": 480,
+    "offline": true,
+    "transport": "FakeTransport",
+    "simulatedReservations": 2661,
+    "simulatedSettlements": 2661,
+    "allRequestIdsFake": true,
+    "providerDispatches": 0,
+    "newPaidReservations": 0,
+    "currentCheckoutCertified": false
+  },
+  "notRun": [
+    "leak-scan",
+    "bound-report",
+    "integration-reconciliation",
+    "certification-bundle"
+  ],
+  "paidReadiness": false,
+  "freeze": "PENDING_PRIMARY",
+  "commands": [
+    {
+      "command": "node evaluation/hr3/harness/strict-schema.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/strict-schema.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/strict-schema.stdout": "55abd6fa95f708d806c10006891f429be3d90d3333feb6479a89053c0b9969d7"
+      },
+      "name": "strict-schema",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/schemas-a4.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/published-schemas.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/published-schemas.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "name": "published-schemas",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/private-field-inventory.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/private-field-inventory.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/private-field-inventory.stdout": "17d8f48c4214e022da852e1701240c55728cd0f616a57d46c030fd722a66d5ab"
+      },
+      "name": "private-field-inventory",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/inspected-references.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/inspected-references.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/inspected-references.stdout": "49ef6808e9326e14b80b96d566a9b6517f1ca3bcf0551da740eb94a4d5ac693f"
+      },
+      "name": "inspected-references",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/runtime-closure.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/runtime-closure.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/runtime-closure.stdout": "ca7da228b19d275baeb84b840419dbda096df059f613a88a367889c7f88aa0a3"
+      },
+      "name": "runtime-closure",
+      "signal": null
+    },
+    {
+      "command": "node --test --experimental-test-isolation=none evaluation/hr3/harness/test/placeholder-inventory-a6.test.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/placeholder-inventory-tests.stderr": "b67fd1fa47edb33a5dc3f5c33c0848a1cff30b2a02051845e38589a65f59f2e2",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/placeholder-inventory-tests.stdout": "5426efc2af6627aa6498a5bdfb1f44932c05f3512efa9a5680a53e1f2ac88b66"
+      },
+      "name": "placeholder-inventory-tests",
+      "signal": null
+    },
+    {
+      "command": "node --test --experimental-test-isolation=none evaluation/hr3/harness/test/trivia-consumers-a6.test.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/authenticated-consumers.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/authenticated-consumers.stdout": "0f68788c9a65d18b420341e0130a51a6bb710ed296b14c274cb50d7324bf7b2b"
+      },
+      "name": "authenticated-consumers",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/context-certification.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/context-certificate.stderr": "13fc109cb5faa92e321b84fa67c96c725fa512357e90224a9bcb5d3ed88ae38e",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/context-certificate.stdout": "ed7a082b6d65531b8754ac519d2a98ae3018449d4736a28257f146dcdcdffbf3"
+      },
+      "name": "context-certificate",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/cap-certification.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/output-certificate.stderr": "8327a32062ed024aa458d09de91d6f6f386350548ba77f2af8debec056d002cb",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/output-certificate.stdout": "6c3d88d81d28bdab0793c77641d50e3b42fa83c7b964b9114ed0de30a9563796"
+      },
+      "name": "output-certificate",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/preflight-a6.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/input-feasibility.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/input-feasibility.stdout": "a1e0e6ff0cb582bd3c62ed2661064c99e9f6ae2d8f5e131bc4482cc7031667b1"
+      },
+      "name": "input-feasibility",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/request-certification.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/request-embedding-certificate.stderr": "b54f0956e20238d6b075943bac93606e343d94d42d4f7ece49c95fed3fb6c050",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/request-embedding-certificate.stdout": "9684a8d62d7b0b6a75007599957635d0e77da2f4884b392adc1c12513c06ab3b"
+      },
+      "name": "request-embedding-certificate",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/accounting-a6.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/accounting.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/accounting.stdout": "43fcfd3bf009606a08d2815060d67dd5a7885753aae8f562ad51fd700c9d7044"
+      },
+      "name": "accounting",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/projection-schema.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/projection-schema.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/projection-schema.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "name": "projection-schema",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/budget-a6.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/budget.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/budget.stdout": "da29f29873d3c739ef42c31753df48fa48d3409e6060749806f187217489e78f"
+      },
+      "name": "budget",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/continuation-a6.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/continuation-projection.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/continuation-projection.stdout": "d86817dd0e62d328ebd4d7bceea44346562e566d286ffcc0cf697c5c6ded5760"
+      },
+      "name": "continuation-projection",
+      "signal": null
+    },
+    {
+      "command": "node --import ./evaluation/hr3/harness/test/redirect-generator-temp.mjs --test --experimental-test-isolation=none evaluation/hr3/generator/test/generator.test.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/generator-tests.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/generator-tests.stdout": "a91380e425a25dd9a0adf7367f910518d80da167c2671eb80c8e406f6d3aa600"
+      },
+      "name": "generator-tests",
+      "signal": null
+    },
+    {
+      "command": "node --import ./evaluation/hr3/harness/test/redirect-generator-temp.mjs --test --experimental-test-isolation=none evaluation/hr3/scorer/test/canonical.test.mjs evaluation/hr3/scorer/test/citations.test.mjs evaluation/hr3/scorer/test/contract.test.mjs evaluation/hr3/scorer/test/schema-cli.test.mjs evaluation/hr3/scorer/test/scorer.test.mjs evaluation/hr3/scorer/test/trivia-regression.test.mjs evaluation/hr3/scorer/test/trivia-target.test.mjs evaluation/hr3/scorer/test/trivia.test.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/scorer-tests.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/scorer-tests.stdout": "3a081a296f99d137bbbeb6be36d6d36212010a8cce0ef75da281342a663456b0"
+      },
+      "name": "scorer-tests",
+      "signal": null
+    },
+    {
+      "command": "node --test --experimental-test-isolation=none evaluation/hr3/integration/test/integration.test.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/integration-tests.stderr": "e056a600f0a672b263dd07887f266076e92616144ca83d90a6118116cd5fe063",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/integration-tests.stdout": "0c06a8c0ce37851ff7f6a45554b199dd0c5052449a8a487a2b97906412f9ddf4"
+      },
+      "name": "integration-tests",
+      "signal": null
+    },
+    {
+      "name": "harness-tests",
+      "command": "node evaluation/hr3/harness/test.mjs --mcp-dependencies adapters/mcp/node_modules --tokenizer-dependencies adapters/openai/node_modules",
+      "exitCode": 0,
+      "signal": null,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-test-resume-tsrf5m8k/harness-tests.stdout": "2c3bef1c304e774656fb7745ec90aef2b00de74cb6f9dabb3873082594f60573",
+        "evaluation/hr3/harness/artifacts/a61-test-resume-tsrf5m8k/harness-tests.stderr": "00855304565c7f63c6a90eaa6b5b69c981215b8c6f976b06f355e5a3c7c7e472"
+      }
+    },
+    {
+      "name": "pilot-inputs",
+      "command": "node evaluation/hr3/generator/cli.mjs --split pilot --out evaluation/hr3/harness/artifacts/a61-test-resume-tsrf5m8k/inputs",
+      "exitCode": 0,
+      "signal": null,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-test-resume-tsrf5m8k/pilot-inputs.stdout": "7eed4dde07e2eacd347a911c4ac905db43e1636c158fd758231db82b9adb0612",
+        "evaluation/hr3/harness/artifacts/a61-test-resume-tsrf5m8k/pilot-inputs.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "fake-pilot",
+      "command": "node evaluation/hr3/harness/cli.mjs --stage pilot --inputs evaluation/hr3/harness/artifacts/a61-test-resume-tsrf5m8k/inputs --out evaluation/hr3/harness/artifacts/a61-test-resume-tsrf5m8k/pilot --carry-forward evaluation/hr3/harness/reports/a6-carry-forward.json --mcp-dependencies adapters/mcp/node_modules --tokenizer-dependencies adapters/openai/node_modules",
+      "exitCode": 0,
+      "signal": null,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-test-resume-tsrf5m8k/fake-pilot.stdout": "de1cdbacbbb4424eb78cc202c37478ce89c0b3646717022d51dfc8c8909559da",
+        "evaluation/hr3/harness/artifacts/a61-test-resume-tsrf5m8k/fake-pilot.stderr": "5b82852ad90f9ce1aaaae1bdfd0ba582bce33a4c0f9c302b8ea2bf3ac1795849"
+      }
+    }
+  ],
+  "otherProtectedFilesUnchangedAtStop": 136,
+  "endOfReportingProtectedChanges": [
+    {
+      "path": "evaluation/hr3/scorer/README.md",
+      "entrySHA256": "4fbe659f4cf62cb5ea3fdf428c90bff336d9741270060346b68075397b13baf5",
+      "observedSHA256": "d4fdb63cdd26266dd176164d2fe193a469803145383085d9f4e44bf3075450bd"
+    },
+    {
+      "path": "evaluation/hr3/scorer/cli.mjs",
+      "entrySHA256": "7fdc7f7d2ed1654d843a6ee6a59fe679cfcf3e9fb38c3216cddb93b97bce6f47",
+      "observedSHA256": "b67ffbecaddd81f6df8a4874a4d119f9ad8d7ec1d2298ac0d1520730926fe53a"
+    },
+    {
+      "path": "evaluation/hr3/scorer/scorer.mjs",
+      "entrySHA256": "6625163a615fb01232077abe7045528e78ead8b73555d6d21ff7b431ef5a5a4b",
+      "observedSHA256": "316cb9ec6b3d9b46401a9f17d40ceea38ae74737d66fd92653c3e030c3e2c4d0"
+    },
+    {
+      "path": "evaluation/hr3/scorer/support.mjs",
+      "entrySHA256": "f54506db79dca20133cb7c536b52e379b6d1bab5b28543c8137364ab046d9d73",
+      "observedSHA256": "8808162b41fc1d70088eddc9a16dde645e3ee32668ba424ab0ba31813a23e39c"
+    },
+    {
+      "path": "evaluation/hr3/scorer/test/trivia-cli.test.mjs",
+      "entrySHA256": null,
+      "observedSHA256": "7c9a5de2efa505db032514a711c0a097890b6780b4367e4184106cc622ce7c07"
+    },
+    {
+      "path": "evaluation/hr3/scorer/test/trivia-fixtures.mjs",
+      "entrySHA256": "e516392652d15c00149d293a29e5208b64e3b4b14dbd4decb50f7fbac852e363",
+      "observedSHA256": "c74d8e181e539da580ef2a69f73e474661e3c3ceca67010b3fd895a13a566fde"
+    },
+    {
+      "path": "evaluation/hr3/scorer/test/trivia-regression.test.mjs",
+      "entrySHA256": "4887ad494101287887ae653610d95c67e0f3700506a01b02797da4800e97fbdf",
+      "observedSHA256": "308724f42d8bbf5753dcae176fe6d5000c6bb0c56071da7d7f4d0a93f4091962"
+    },
+    {
+      "path": "evaluation/hr3/scorer/test/trivia-target.test.mjs",
+      "entrySHA256": "39da5197495848262300a51d1a0861e4d08e43816c5e9ba5d76bec9a64a5b017",
+      "observedSHA256": "9f86b8d3a4272d012b3df792f73402d50069edf740aae80941ff737052f491a7"
+    },
+    {
+      "path": "evaluation/hr3/scorer/test/trivia.test.mjs",
+      "entrySHA256": "5f120793fa234db96334d32d7f768c02f50912794874ace86e30e4200bbe4541",
+      "observedSHA256": "7081ce714843ff7c55d42ec6ddb491a5af1615daebace6a523ff25cfb3a292df"
+    }
+  ],
+  "endOfReportingSourceCount": 140
+}

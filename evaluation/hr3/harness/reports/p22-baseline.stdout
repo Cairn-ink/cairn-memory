@@ -1,0 +1,50 @@
+TAP version 13
+# Subtest: P2-2 en: unrelated no-trivia token cannot downgrade a licensed same-question target
+not ok 1 - P2-2 en: unrelated no-trivia token cannot downgrade a licensed same-question target
+  ---
+  duration_ms: 51.49553
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/trivia-consumers-a6.test.mjs:79:40'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/trivia-consumers-a6.test.mjs:92:9)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: P2-2 zh-Hant: unrelated no-trivia token cannot downgrade a licensed same-question target
+not ok 2 - P2-2 zh-Hant: unrelated no-trivia token cannot downgrade a licensed same-question target
+  ---
+  duration_ms: 37.094989
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/trivia-consumers-a6.test.mjs:79:40'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/trivia-consumers-a6.test.mjs:92:9)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 171.747429

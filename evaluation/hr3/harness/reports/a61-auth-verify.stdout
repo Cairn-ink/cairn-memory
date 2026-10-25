@@ -1,0 +1,12 @@
+START strict-schema
+EXIT strict-schema 0
+START published-schemas
+EXIT published-schemas 0
+START private-field-inventory
+EXIT private-field-inventory 0
+START inspected-references
+EXIT inspected-references 0
+START runtime-closure
+EXIT runtime-closure 0
+START authenticated-consumers
+EXIT authenticated-consumers 1

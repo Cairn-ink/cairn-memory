@@ -1,0 +1,18 @@
+START strict-schema
+EXIT strict-schema 0
+START published-schemas
+EXIT published-schemas 0
+START private-inventory
+EXIT private-inventory 0
+START inspected-references
+EXIT inspected-references 0
+START runtime-closure
+EXIT runtime-closure 0
+START accounting
+EXIT accounting 0
+START budget
+EXIT budget 0
+START continuation
+EXIT continuation 0
+START output-certificate
+EXIT output-certificate 1

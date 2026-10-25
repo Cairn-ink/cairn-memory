@@ -1,0 +1,130 @@
+TAP version 13
+# Subtest: A6 placeholder inventory: P formatter record alias passes without public-path exemptions
+ok 1 - A6 placeholder inventory: P formatter record alias passes without public-path exemptions
+  ---
+  duration_ms: 206.443621
+  type: 'test'
+  ...
+# Subtest: A6 placeholder inventory: private values under every formatter key remain rejected
+ok 2 - A6 placeholder inventory: private values under every formatter key remain rejected
+  ---
+  duration_ms: 1.09456
+  type: 'test'
+  ...
+# Subtest: A6 placeholder inventory: undeclared map keys fail closed and declared values stay recursive
+ok 3 - A6 placeholder inventory: undeclared map keys fail closed and declared values stay recursive
+  ---
+  duration_ms: 3.873752
+  type: 'test'
+  ...
+# Subtest: A6 placeholder inventory: genuine record metadata outside variables remains inventoried
+ok 4 - A6 placeholder inventory: genuine record metadata outside variables remains inventoried
+  ---
+  duration_ms: 0.426288
+  type: 'test'
+  ...
+# Subtest: A6 authenticated consumers: harness and integration retain opaque freeze-bound proofs in every language
+ok 5 - A6 authenticated consumers: harness and integration retain opaque freeze-bound proofs in every language
+  ---
+  duration_ms: 106.789581
+  type: 'test'
+  ...
+# Subtest: A6 authenticated consumers: candidate offsets and changed source tapes never grant a license
+ok 6 - A6 authenticated consumers: candidate offsets and changed source tapes never grant a license
+  ---
+  duration_ms: 1.715731
+  type: 'test'
+  ...
+# Subtest: A6 authenticated consumers: JSON replay reauthenticates source data; cloned normalized proofs remain protected
+ok 7 - A6 authenticated consumers: JSON replay reauthenticates source data; cloned normalized proofs remain protected
+  ---
+  duration_ms: 7.887525
+  type: 'test'
+  ...
+# Subtest: A6 authenticated challenge consumer: opaque identity survives; declared offsets cannot license punctuation omission
+ok 8 - A6 authenticated challenge consumer: opaque identity survives; declared offsets cannot license punctuation omission
+  ---
+  duration_ms: 13.936575
+  type: 'test'
+  ...
+# Subtest: A6 authenticated consumer boundary: fixed trusted pin and sole four-argument adapter; no declaration fallback
+ok 9 - A6 authenticated consumer boundary: fixed trusted pin and sole four-argument adapter; no declaration fallback
+  ---
+  duration_ms: 0.478488
+  type: 'test'
+  ...
+# Subtest: A6 private authentication and identity registries are rejected from model-visible inputs
+ok 10 - A6 private authentication and identity registries are rejected from model-visible inputs
+  ---
+  duration_ms: 0.322856
+  type: 'test'
+  ...
+# Subtest: A6 runtime embedding inputs reject private identity metadata before dispatch
+ok 11 - A6 runtime embedding inputs reject private identity metadata before dispatch
+  ---
+  duration_ms: 0.394937
+  type: 'test'
+  ...
+# Subtest: A6 real harness scoring path tolerates authenticated final period omission in English and Chinese
+ok 12 - A6 real harness scoring path tolerates authenticated final period omission in English and Chinese
+  ---
+  duration_ms: 80.535968
+  type: 'test'
+  ...
+# Subtest: A6 harness guard rejects cross-family proof replay with one pin and the same trusted question/query
+ok 13 - A6 harness guard rejects cross-family proof replay with one pin and the same trusted question/query
+  ---
+  duration_ms: 26.925776
+  type: 'test'
+  ...
+# Subtest: A6 harness guard distinguishes checkpoints and queries while sharing the same observation binding across arms
+ok 14 - A6 harness guard distinguishes checkpoints and queries while sharing the same observation binding across arms
+  ---
+  duration_ms: 91.583034
+  type: 'test'
+  ...
+# Subtest: A6 harness scoring errors on missing forged or cloned bindings instead of silently dropping trivia
+ok 15 - A6 harness scoring errors on missing forged or cloned bindings instead of silently dropping trivia
+  ---
+  duration_ms: 10.247922
+  type: 'test'
+  ...
+# Subtest: A6 harness scoring rejects a changed actual question even when the proof and expected token are genuine
+ok 16 - A6 harness scoring rejects a changed actual question even when the proof and expected token are genuine
+  ---
+  duration_ms: 4.655776
+  type: 'test'
+  ...
+# Subtest: P2-2 en: unrelated no-trivia token cannot downgrade a licensed same-question target
+ok 17 - P2-2 en: unrelated no-trivia token cannot downgrade a licensed same-question target
+  ---
+  duration_ms: 27.272673
+  type: 'test'
+  ...
+# Subtest: P2-2 zh-Hant: unrelated no-trivia token cannot downgrade a licensed same-question target
+ok 18 - P2-2 zh-Hant: unrelated no-trivia token cannot downgrade a licensed same-question target
+  ---
+  duration_ms: 24.417107
+  type: 'test'
+  ...
+# Subtest: P2-2 no-trivia authority: unknown family case question and source cannot self-declare absence
+ok 19 - P2-2 no-trivia authority: unknown family case question and source cannot self-declare absence
+  ---
+  duration_ms: 8.334932
+  type: 'test'
+  ...
+# Subtest: P2-2 no-trivia binding: same-question cases cannot exchange tokens or cloned gold
+ok 20 - P2-2 no-trivia binding: same-question cases cannot exchange tokens or cloned gold
+  ---
+  duration_ms: 22.638944
+  type: 'test'
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 20
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 733.620773

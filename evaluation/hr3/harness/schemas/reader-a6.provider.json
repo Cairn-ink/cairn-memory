@@ -1,0 +1,414 @@
+{
+  "type": "object",
+  "properties": {
+    "current": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "active",
+            "no_active_decision",
+            "unresolved"
+          ],
+          "type": "string"
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Row"
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "status",
+        "rows"
+      ],
+      "additionalProperties": false
+    },
+    "old": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "available",
+            "unavailable",
+            "none"
+          ],
+          "type": "string"
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "predecessor_turn": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "previously_adopted",
+                  "erroneous",
+                  "expired",
+                  "unavailable",
+                  "unresolved"
+                ],
+                "type": "string"
+              },
+              "rows": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Row"
+                },
+                "minItems": 0
+              }
+            },
+            "required": [
+              "predecessor_turn",
+              "status",
+              "rows"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "status",
+        "records"
+      ],
+      "additionalProperties": false
+    },
+    "reason": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "stated",
+            "not_stated",
+            "unavailable"
+          ],
+          "type": "string"
+        },
+        "support": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Citation"
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "status",
+        "support"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "current",
+    "old",
+    "reason"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "Row": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "valid": {
+          "$ref": "#/$defs/Interval"
+        },
+        "route": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "value",
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_specified",
+                    "unavailable",
+                    "unresolved"
+                  ],
+                  "type": "string"
+                },
+                "value": {
+                  "type": "null"
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "approval": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "value",
+                  "type": "string"
+                },
+                "value": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_specified",
+                    "unavailable",
+                    "unresolved"
+                  ],
+                  "type": "string"
+                },
+                "value": {
+                  "type": "null"
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "cap": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "value",
+                  "type": "string"
+                },
+                "value": {
+                  "type": "object",
+                  "properties": {
+                    "decimal": {
+                      "type": "string",
+                      "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)$"
+                    },
+                    "unit": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "decimal",
+                    "unit"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_specified",
+                    "unavailable",
+                    "unresolved"
+                  ],
+                  "type": "string"
+                },
+                "value": {
+                  "type": "null"
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Citation"
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "scope",
+        "valid",
+        "route",
+        "approval",
+        "cap",
+        "citations"
+      ],
+      "additionalProperties": false
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "any": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "all": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "enum": [
+                        "country",
+                        "plan",
+                        "channel"
+                      ],
+                      "type": "string"
+                    },
+                    "values": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "field",
+                    "values"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 0
+              }
+            },
+            "required": [
+              "all"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "any"
+      ],
+      "additionalProperties": false
+    },
+    "Interval": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "Citation": {
+      "type": "object",
+      "properties": {
+        "intent": {
+          "enum": [
+            "current",
+            "history"
+          ],
+          "type": "string"
+        },
+        "item": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unit": {
+          "enum": [
+            "body",
+            "receipt"
+          ],
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quote": {
+          "type": "string"
+        },
+        "occurrence": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "intent",
+        "item",
+        "unit",
+        "source",
+        "quote",
+        "occurrence"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

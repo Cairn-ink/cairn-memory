@@ -1,0 +1,265 @@
+{
+  "version": "hr3-optional-trivia-licenses-a6-v1",
+  "offset_unit": "utf16",
+  "eligible_punctuation": ".,;:，。；：、",
+  "policy": "Only the explicitly enumerated literal offsets are optional; all other positions, including every interpolation, remain protected. No punctuation deletion or answer-dependent inference.",
+  "review": "Pending independent review before paid execution.",
+  "rules": [
+    {
+      "production": "initial",
+      "language": "en",
+      "literal_index": 7,
+      "literal_offset": 15,
+      "character": ".",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "initial",
+      "language": "zh",
+      "literal_index": 7,
+      "literal_offset": 8,
+      "character": "。",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "correction",
+      "language": "en",
+      "literal_index": 8,
+      "literal_offset": 15,
+      "character": ".",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "correction",
+      "language": "zh",
+      "literal_index": 8,
+      "literal_offset": 8,
+      "character": "。",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "reversal",
+      "language": "en",
+      "literal_index": 8,
+      "literal_offset": 15,
+      "character": ".",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "reversal",
+      "language": "zh",
+      "literal_index": 8,
+      "literal_offset": 8,
+      "character": "。",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "refinement",
+      "language": "en",
+      "literal_index": 8,
+      "literal_offset": 15,
+      "character": ".",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "refinement",
+      "language": "zh",
+      "literal_index": 8,
+      "literal_offset": 8,
+      "character": "。",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "scope_change",
+      "language": "en",
+      "literal_index": 8,
+      "literal_offset": 15,
+      "character": ".",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "scope_change",
+      "language": "zh",
+      "literal_index": 8,
+      "literal_offset": 8,
+      "character": "。",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "expiry",
+      "language": "en",
+      "literal_index": 6,
+      "literal_offset": 25,
+      "character": ".",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "expiry",
+      "language": "zh",
+      "literal_index": 6,
+      "literal_offset": 8,
+      "character": "。",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "expiry_lapse",
+      "language": "en",
+      "literal_index": 6,
+      "literal_offset": 121,
+      "character": ".",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "expiry_lapse",
+      "language": "zh",
+      "literal_index": 6,
+      "literal_offset": 36,
+      "character": "。",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "idle",
+      "language": "en",
+      "literal_index": 0,
+      "literal_offset": 52,
+      "character": ".",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "idle",
+      "language": "zh",
+      "literal_index": 0,
+      "literal_offset": 12,
+      "character": "。",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "fact",
+      "language": "en",
+      "literal_index": 1,
+      "literal_offset": 0,
+      "character": ".",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "fact",
+      "language": "zh",
+      "literal_index": 1,
+      "literal_offset": 0,
+      "character": "。",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "edge",
+      "language": "en",
+      "literal_index": 2,
+      "literal_offset": 0,
+      "character": ".",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "edge",
+      "language": "zh",
+      "literal_index": 2,
+      "literal_offset": 0,
+      "character": "。",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "joint",
+      "language": "en",
+      "literal_index": 3,
+      "literal_offset": 24,
+      "character": ".",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "joint",
+      "language": "zh",
+      "literal_index": 3,
+      "literal_offset": 11,
+      "character": "。",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "alternative",
+      "language": "en",
+      "literal_index": 0,
+      "literal_offset": 71,
+      "character": ".",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "alternative",
+      "language": "zh",
+      "literal_index": 0,
+      "literal_offset": 24,
+      "character": "。",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "unstated",
+      "language": "en",
+      "literal_index": 0,
+      "literal_offset": 36,
+      "character": ".",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "unstated",
+      "language": "zh",
+      "literal_index": 0,
+      "literal_offset": 10,
+      "character": "。",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "distractor",
+      "language": "en",
+      "literal_index": 10,
+      "literal_offset": 125,
+      "character": ".",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "distractor",
+      "language": "zh",
+      "literal_index": 10,
+      "literal_offset": 35,
+      "character": "。",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "source_join",
+      "language": "en",
+      "literal_index": 0,
+      "literal_offset": 0,
+      "character": " ",
+      "role": "between source productions"
+    },
+    {
+      "production": "source_join",
+      "language": "zh",
+      "literal_index": 0,
+      "literal_offset": 0,
+      "character": " ",
+      "role": "between source productions"
+    },
+    {
+      "production": "deadline_note",
+      "language": "en",
+      "literal_index": 0,
+      "literal_offset": 63,
+      "character": ".",
+      "role": "sentence-final separator"
+    },
+    {
+      "production": "deadline_note",
+      "language": "zh",
+      "literal_index": 0,
+      "literal_offset": 22,
+      "character": "。",
+      "role": "sentence-final separator"
+    }
+  ]
+}

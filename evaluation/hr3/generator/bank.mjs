@@ -13,16 +13,26 @@ export const SENTENCES = {
   alternative: { en:'Each of those two mediated paths independently suffices for this change.', zh:'上述兩條經過中介的路徑，任一條都足以促成這次變更。' },
   unstated: { en:'No reason for this change was stated.', zh:'這次變更沒有說明原因。' },
   distractor: { en:'Unadopted proposal for {subject}: use {route}. Rejected suggestion: use {other}. Quotation only, not adopted: “use {route}”. An unrelated service {collision} uses {route}. A separate proposal for {subject}: use {route}, only {scope} on {date}. Someone guessed that paint colour caused the focal change; this is unsupported speculation and is not an established reason.', zh:'尚未採用的提案：{subject}改用 {route}。已否決的建議：改用 {other}。僅為引述、未被採用：「改用 {route}」。另一個無關的服務{collision}使用 {route}。另有{subject}的提案，使用 {route}，只涉及{scope}，日期是 {date}。有人猜測油漆顏色造成焦點變更，但這是未獲支持的猜測，並非已確認的原因。' },
+  source_join: {en:' ',zh:' '},
+  deadline_note: {en:'This is an explicit expiry deadline; expiry adopts no successor.',zh:'這是明確的到期日；到期後不會自動採用接續決定。'},
   question: { en:'At checkpoint after batch {batch} ({at}), recover {subject} {predicate} for {scope}. Request all three slots: route, approval, cap. Focal change turn: {turn}. Exact requested predecessor turns (with record names): {predecessors}. Historical label vocabulary (shared, not case-specific): {labels}. Use the closed slot answer form: current status and rows; old status and records with predecessor_turn, status and rows; reason status and support. Each row includes scope, source-claimed valid interval, route/approval/cap slots with state and value, and citations. Select a complete causal explanation from delivered evidence, including all serial and conjunctive clauses or one complete sufficient alternative. Use only information already observed.', zh:'在第 {batch} 批之後的檢查點（{at}），回答{subject}對{scope}的{predicate}。請回答全部三個欄位：route（路線）、approval（需經核准）、cap（每日請求上限）。焦點變更發言：{turn}。確切要求的前身發言（含紀錄名稱）：{predecessors}。共用歷史標籤詞彙（並非本案答案）：{labels}。使用封閉欄位回答格式：current 含 status、rows；old 含 status、records，每筆含 predecessor_turn、status、rows；reason 含 status、support。每列含 scope、來源宣告的 valid 區間、route/approval/cap 各自的 state、value，以及 citations。從已交付證據選出完整因果解釋，包含所有串聯及合取子句，或一條完整且充分的替代路徑。只能使用已觀察到的資訊。' },
 };
-export function sentence(key, language, vars = {}) {
-  const render = lang => SENTENCES[key][lang].replace(/\{(\w+)\}/g, (_,name) => {
-    if (!(name in vars)) throw new Error(`Missing sentence slot ${key}.${name}`);
-    return vars[name];
-  });
-  // Mixed worlds switch languages at sentence/turn boundaries, rather than duplicating translations.
-  return render(language === 'zh-Hant' ? 'zh' : 'en');
+// Trace source emission before any answers exist; substitutions are indivisible
+// protected spans even when their characters resemble template punctuation.
+export function renderSentence(key,language,vars={}) {
+  const lang=language==='zh-Hant'?'zh':'en',template=SENTENCES[key]?.[lang];
+  if(template===undefined)throw new Error(`Unknown production ${key}/${lang}`);
+  const parts=[];let text='',cursor=0,literalIndex=0;
+  const literal=chunk=>{const start=text.length;text+=chunk;parts.push({kind:'literal',literal_index:literalIndex++,start,end:text.length});};
+  for(const match of template.matchAll(/\{(\w+)\}/g)) {
+    literal(template.slice(cursor,match.index));const name=match[1];
+    if(!(name in vars))throw new Error(`Missing sentence slot ${key}.${name}`);
+    const start=text.length;text+=String(vars[name]);parts.push({kind:'interpolated',name,start,end:text.length});cursor=match.index+match[0].length;
+  }
+  literal(template.slice(cursor));
+  return {production:key,language:lang,text,parts};
 }
+export function sentence(key,language,vars={}) {return renderSentence(key,language,vars).text;}
 export function fieldText(fields, language) {
   const zh = language === 'zh-Hant';
   return fields.map(({field,value}) => {

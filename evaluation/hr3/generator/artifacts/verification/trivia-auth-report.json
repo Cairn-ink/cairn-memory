@@ -1,0 +1,137 @@
+{
+  "version": "hr3-trivia-emission-auth-repair-v1",
+  "scope": "evaluation/hr3/generator/",
+  "review": {
+    "verdict": "Trivia licenses acceptable — no",
+    "findings": [
+      "P1-2 alternative parse accepted by generator validation",
+      "P1-1 false literal provenance accepted by scorer; scorer integration is assigned to the next worker"
+    ],
+    "license_contents": "32 licenses passed the review; unchanged in this repair"
+  },
+  "api_calls": 0,
+  "network_calls": 0,
+  "committed": false,
+  "credentials_read": false,
+  "changed_files": [
+    "README.md",
+    "artifacts/pilot/manifest.json",
+    "artifacts/pilot/support.jsonl",
+    "artifacts/verification/trivia-auth-baseline.json",
+    "artifacts/verification/trivia-auth-report.json",
+    "artifacts/verification/trivia-auth-tests.tap",
+    "deliver.mjs",
+    "freeze.json",
+    "freeze.mjs",
+    "generate.mjs",
+    "test/generator.test.mjs",
+    "trivia.mjs",
+    "validate.mjs"
+  ],
+  "changed_count": 13,
+  "change_basis": "This turn relative to the at-entry snapshot; pre-existing uncommitted A-6 and sibling changes are not attributed to this repair.",
+  "file_cross_check": {
+    "routes": [
+      "Node manual readdir walk + SHA-256",
+      "Python pathlib rglob + hashlib SHA-256"
+    ],
+    "baseline_files": 106,
+    "final_files": 109,
+    "count": 13,
+    "exit_codes": [
+      0,
+      0
+    ],
+    "includes_ignored_payloads": true
+  },
+  "implementation": {
+    "registry_version": "hr3-optional-trivia-a6-v2",
+    "capture": "World authoring snapshots turn id, production id, exact bank template, language and interpolated variable values before appendSource. Registry boundaries and rendered text never supply authoritative variable values.",
+    "validation": "validateTriviaRegistry requires independent trusted emission inputs, re-emits them and requires exact source bytes, segments/parts/boundaries, all optional positions and the complete canonical registry. validateFamily regenerates trusted inputs from its trusted lineage/member/seed instead of trusting the candidate tape.",
+    "authentication": "Canonical per-family handles bind family/lineage/seed/namespace/source, registry, emission tape, rule bytes and template bank. Both manifest and freeze publish all 60 handles; freeze additionally hashes the table and pilot manifest and independently re-generates all actual authoring inputs before pinning them.",
+    "consumer": "verifyFamilyTrivia({family,registry}, trustedHandle) checks the externally pinned handle, replays authenticated inputs and returns a deeply frozen detached registry copy. Never obtain the trusted handle from the candidate submission.",
+    "interface": "README.md authentication repair section; exported API in trivia.mjs"
+  },
+  "adversarial_tests": [
+    "P1-2 original single edge versus edge + join + edge, English and Chinese, with identical source strings; English positions 10 and 11 remain protected.",
+    "P1-1 forged edge/fact boundaries licensing the decimal in Gauge 1.5 (and Chinese counterpart); rejected before license compilation.",
+    "Mislabeled interpolation, extra/missing positions, missing production, part/segment offset drift, changed language, literal/template substitution, mutated variable input and incorrect rule digest.",
+    "Missing trusted input tape/handle, recomputed candidate digest against pinned original handle, cross-family/namespace/seed/source replay, and mutation after verification."
+  ],
+  "preservation": {
+    "method": "Direct Buffer equality for six complete unchanged pilot payloads; SHA-256 byte checks for every per-family projection, plus direct old/new comparison of support outside optional_trivia and all origin parts/positions.",
+    "unchanged_complete_payloads": 6,
+    "source_families": 60,
+    "questions": 120,
+    "G_correct": 120,
+    "extraction_inputs": 240,
+    "support_graph_and_span_sets": 60,
+    "licensed_source_origins": 480,
+    "changed_pilot_payloads": [
+      "support.jsonl: private trivia version and independently recorded emission inputs",
+      "manifest.json: source/payload hashes and private authenticated family handles"
+    ],
+    "source_words_changed": false,
+    "questions_changed": false,
+    "correctness_gold_changed": false,
+    "extraction_turns_changed": false,
+    "licensed_positions_changed": false,
+    "baseline": "artifacts/verification/trivia-auth-baseline.json"
+  },
+  "commands": [
+    {
+      "command": "node --test --experimental-test-isolation=none evaluation/hr3/generator/test/generator.test.mjs",
+      "phase": "after implementation",
+      "exit_code": 0,
+      "tests": 62,
+      "passed": 62,
+      "failed": 0
+    },
+    {
+      "command": "node evaluation/hr3/generator/cli.mjs --split pilot --out evaluation/hr3/generator/artifacts/.trivia-auth-regenerated",
+      "exit_code": 0,
+      "families": 60,
+      "rejected": 0
+    },
+    {
+      "command": "Byte-preservation assertions and installation of support/manifest only",
+      "exit_code": 0,
+      "result": "Six payloads unchanged; 60 source families, 120 questions, 120 G_correct and 240 extraction inputs byte-identical. Temporary output removed."
+    },
+    {
+      "command": "node evaluation/hr3/generator/freeze.mjs",
+      "exit_code": 0,
+      "result": "Initial post-regeneration freeze: 108 files before this report; final delivery 109."
+    },
+    {
+      "command": "node --test --experimental-test-isolation=none evaluation/hr3/generator/test/generator.test.mjs",
+      "phase": "after regeneration and freeze",
+      "exit_code": 0,
+      "tests": 62,
+      "passed": 62,
+      "failed": 0,
+      "log": "artifacts/verification/trivia-auth-tests.tap"
+    },
+    {
+      "command": "Consumer verification of all frozen family handles and current source hashes",
+      "exit_code": 0,
+      "authenticated_families": 60,
+      "current_source_hashes": 23
+    },
+    {
+      "command": "Refresh manifest source hashes after final README interface clarification",
+      "exit_code": 0,
+      "result": "Only source-hash metadata changed; payloads unchanged."
+    },
+    {
+      "command": "git diff --check -- evaluation/hr3/generator",
+      "exit_code": 0
+    }
+  ],
+  "limits": [
+    "No scorer, harness or protocol files edited; no sibling suites run.",
+    "Scorer P1-1 integration must adopt the v2 registry and call the exported authenticated verifier before compiling licenses.",
+    "A digest is not a secret signature. The expected freeze/manifest must be trusted and externally pinned; self-declared candidate hashes cannot establish trust.",
+    "The repair still requires non-author re-review and downstream recertification; it authorizes no paid execution."
+  ]
+}

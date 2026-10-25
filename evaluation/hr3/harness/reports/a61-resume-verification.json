@@ -1,0 +1,135 @@
+{
+  "version": "hr3-a61-resumed-recertification-v1",
+  "status": "FAIL_STOPPED_AT_CERTIFICATE",
+  "heavyLock": "UNLOCKED_DIRECT_RUN_AUTHORIZED_BY_PRIMARY",
+  "paidReadiness": false,
+  "networkCalls": 0,
+  "paidCalls": 0,
+  "newPaidReservations": 0,
+  "freezeRun": false,
+  "generatorErrataBinding": "0a5f74d8e72ca582f37568d45e49c91198c0525281a77879b4822de1eb1f2a35",
+  "commands": [
+    {
+      "name": "output-certificate",
+      "command": "node evaluation/hr3/harness/cap-certification.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/reports/a61-resume/output-certificate.stdout": "6c3d88d81d28bdab0793c77641d50e3b42fa83c7b964b9114ed0de30a9563796",
+        "evaluation/hr3/harness/reports/a61-resume/output-certificate.stderr": "8327a32062ed024aa458d09de91d6f6f386350548ba77f2af8debec056d002cb"
+      }
+    },
+    {
+      "name": "context-certificate",
+      "command": "node evaluation/hr3/harness/context-certification.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/reports/a61-resume/context-certificate.stdout": "ed7a082b6d65531b8754ac519d2a98ae3018449d4736a28257f146dcdcdffbf3",
+        "evaluation/hr3/harness/reports/a61-resume/context-certificate.stderr": "1714b266cfc857425c8dac4fc72b14ee5f78b9f17fc8bf0c7ee45e71abb0a1bd"
+      }
+    },
+    {
+      "name": "request-embedding-certificate",
+      "command": "node evaluation/hr3/harness/request-certification.mjs",
+      "exitCode": 1,
+      "logs": {
+        "evaluation/hr3/harness/reports/a61-resume/request-embedding-certificate.stdout": "bca7d7979c3b2a2e6e8a78438fe9ff1de869f90b763b7173d939be7a99805c9c",
+        "evaluation/hr3/harness/reports/a61-resume/request-embedding-certificate.stderr": "a130c795e72719d8978dd8adfb3d87e00af61097ef7721ea766bde770f431e8a"
+      }
+    }
+  ],
+  "blockingStep": "request-embedding-certificate",
+  "blockingIssue": {
+    "file": "evaluation/hr3/harness/request-certification.mjs",
+    "line": 108,
+    "condition": "accounting.preparationComplete",
+    "actual": false,
+    "required": true,
+    "record": "evaluation/hr3/harness/reports/accounting-input-a6.json",
+    "recordSupplied": false,
+    "attestationProducedByHarness": false
+  },
+  "componentChecks": {
+    "requestBodies": {
+      "pass": true,
+      "families": 240,
+      "requests": 5282,
+      "failures": 0,
+      "contextRequests": 72
+    },
+    "embeddings": {
+      "cumulativeProjection": {
+        "research": {
+          "maxMeasuredFamilyUnits": 29998,
+          "conservativeFamilies": 2060,
+          "availableCarryUnits": 1799591,
+          "twoTransportFailureReservations": 6758,
+          "projectedCompleteRunUnits": 63602229,
+          "limit": 64000000,
+          "withinAllowance": true,
+          "scope": "Fixture-grammar bound over all reference and independent context requests, using the largest complete measured family. Replacement banks require recertification. At most two transport failures precede the cumulative third-failure stop."
+        },
+        "product": {
+          "maxMeasuredFamilyUnits": 12574,
+          "conservativeFamilies": 1860,
+          "availableCarryUnits": 436859,
+          "twoTransportFailureReservations": 6526,
+          "projectedCompleteRunUnits": 23831025,
+          "limit": 64000000,
+          "withinAllowance": true,
+          "scope": "Fixture-grammar bound over all reference and independent context requests, using the largest complete measured family. Replacement banks require recertification. At most two transport failures precede the cumulative third-failure stop."
+        }
+      },
+      "requests": 12902,
+      "maxInputUnits": 1220,
+      "maxRequestUnits": 3379,
+      "maxRequestBytes": 3798,
+      "unitsByChannel": {
+        "research": 8700088,
+        "product": 2150887
+      },
+      "contextRequests": 138,
+      "contextCasesMeasured": 9,
+      "contextMeasurementsIncludedBeforeProjection": true,
+      "cumulativeLimits": {
+        "research": 64000000,
+        "product": 64000000
+      },
+      "enforcement": "validateRequest checks every per-input/request body; ledger cumulatively reserves every retry before dispatch with no reset. Certificate repeated fixture measurements are offline, not billable counters."
+    },
+    "privacy": {
+      "hits": 0,
+      "standaloneCertificateEmitted": false
+    }
+  },
+  "notRunAfterFailure": [
+    "generator suite",
+    "scorer suite",
+    "integration suite",
+    "harness suite",
+    "full 480-answer fake pilot",
+    "complete leak/arm-blinding/gold-leak scan",
+    "bound report",
+    "standalone embedding/conformance/allocation certificate bundle",
+    "freeze"
+  ],
+  "postFailureExternalChange": {
+    "primaryPreparationRecordNowPresent": true,
+    "readOnlyReconciliation": {
+      "preparationComplete": true,
+      "completeLedgerChain": true,
+      "carriedExposureNanodollars": 4145077720,
+      "cumulativeBoundNanodollars": 42487733720
+    },
+    "failedAttemptAccountingSources": {
+      "evaluation/hr3/harness/reports/accounting-input-a6.json": "5f3b0dbc4cf46c5f5c316bbd399edf6e01e507686f4cd911174dea2c463b2bdb",
+      "evaluation/hr3/harness/reports/a6-carry-forward.json": "18955b9f6941ea53e12f4edf35304ba24ec7eecdf5fc11fd30f242fec22fe69e"
+    },
+    "currentAccountingSources": {
+      "evaluation/hr3/harness/reports/accounting-input-a6.json": "88d56ad4c7d8e41a32a6e2ee835f173356892a567dd01f3913314d906b506c65",
+      "evaluation/hr3/harness/reports/a6-carry-forward.json": "90cb33625eb96e39af0d9f8d7a954ffae995b8a99e515d17fbdb41e1d1bbd840"
+    },
+    "failedCertificateNowStale": true,
+    "certificateRerunAfterFailure": false,
+    "stopInstructionRetained": true
+  }
+}

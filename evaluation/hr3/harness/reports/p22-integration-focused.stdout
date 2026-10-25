@@ -1,0 +1,52 @@
+TAP version 13
+# Subtest: independent A-4 challenge slots, predecessor identities and selected quotations pass unchanged
+ok 1 - independent A-4 challenge slots, predecessor identities and selected quotations pass unchanged
+  ---
+  duration_ms: 16.174106
+  type: 'test'
+  ...
+# Subtest: complete quotation unions preserve serial, conjunctive and alternative private plans
+ok 2 - complete quotation unions preserve serial, conjunctive and alternative private plans
+  ---
+  duration_ms: 47.853004
+  type: 'test'
+  ...
+# Subtest: source corruption, offset drift, topology mismatches and nonempty gold citations are rejected
+ok 3 - source corruption, offset drift, topology mismatches and nonempty gold citations are rejected
+  ---
+  duration_ms: 1.230562
+  type: 'test'
+  ...
+# Subtest: superseded graph answers are rejected with no conversion fallback
+ok 4 - superseded graph answers are rejected with no conversion fallback
+  ---
+  duration_ms: 0.348246
+  type: 'test'
+  ...
+# Subtest: audit extension fields survive; checksum tampering is detected
+ok 5 - audit extension fields survive; checksum tampering is detected
+  ---
+  duration_ms: 2.114809
+  type: 'test'
+  ...
+# Subtest: removed, changed and endpoint-only delivery cannot establish a complete explanation
+ok 6 - removed, changed and endpoint-only delivery cannot establish a complete explanation
+  ---
+  duration_ms: 38.904269
+  type: 'test'
+  ...
+# Subtest: unknown unit referrals keep correctness gold and support delivery isolated
+ok 7 - unknown unit referrals keep correctness gold and support delivery isolated
+  ---
+  duration_ms: 10.274399
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2020.444194

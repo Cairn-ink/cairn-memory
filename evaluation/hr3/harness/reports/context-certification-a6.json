@@ -1,0 +1,3860 @@
+{
+  "version": "hr3-a6-context-conformance-v1",
+  "status": "PASS",
+  "runtimeClosureSHA256": "be5e1f7f462d1522bc785f9e8ee7039336e30d557800c0b3e54987f68c1000fa",
+  "adoptedContexts": 6,
+  "unresolvedContexts": 3,
+  "sharedTurnAmbiguities": 3,
+  "productAdoptedWrites": 3,
+  "cases": [
+    {
+      "language": "en",
+      "mode": "adopted",
+      "researchDispositions": {
+        "T": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "erroneous"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "U": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "historical"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "O": [
+          {
+            "event": "d1",
+            "outcome": "not_materialized",
+            "materializedViews": []
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ]
+      },
+      "commonLinks": [
+        {
+          "event": "d1",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "ctx",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "d2",
+          "unresolved": false,
+          "errors": []
+        }
+      ],
+      "productAdoptedContext": true
+    },
+    {
+      "language": "en",
+      "mode": "unresolved",
+      "researchDispositions": {
+        "T": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "erroneous"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "U": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "historical"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "O": [
+          {
+            "event": "d1",
+            "outcome": "not_materialized",
+            "materializedViews": []
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ]
+      },
+      "commonLinks": [
+        {
+          "event": "d1",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "ctx",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "d2",
+          "unresolved": false,
+          "errors": []
+        }
+      ],
+      "productAdoptedContext": false
+    },
+    {
+      "language": "en",
+      "mode": "shared-turn",
+      "researchDispositions": {
+        "T": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          }
+        ],
+        "U": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              },
+              {
+                "view": "history",
+                "status": "historical"
+              }
+            ]
+          }
+        ],
+        "O": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          }
+        ]
+      },
+      "commonLinks": [
+        {
+          "event": "d1",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "ctx",
+          "unresolved": true,
+          "errors": [
+            "colliding_record_name"
+          ]
+        },
+        {
+          "event": "d2",
+          "unresolved": true,
+          "errors": [
+            "ambiguous_named_predecessor"
+          ]
+        }
+      ],
+      "productAdoptedContext": false
+    },
+    {
+      "language": "zh-Hant",
+      "mode": "adopted",
+      "researchDispositions": {
+        "T": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "erroneous"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "U": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "historical"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "O": [
+          {
+            "event": "d1",
+            "outcome": "not_materialized",
+            "materializedViews": []
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ]
+      },
+      "commonLinks": [
+        {
+          "event": "d1",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "ctx",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "d2",
+          "unresolved": false,
+          "errors": []
+        }
+      ],
+      "productAdoptedContext": true
+    },
+    {
+      "language": "zh-Hant",
+      "mode": "unresolved",
+      "researchDispositions": {
+        "T": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "erroneous"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "U": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "historical"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "O": [
+          {
+            "event": "d1",
+            "outcome": "not_materialized",
+            "materializedViews": []
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ]
+      },
+      "commonLinks": [
+        {
+          "event": "d1",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "ctx",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "d2",
+          "unresolved": false,
+          "errors": []
+        }
+      ],
+      "productAdoptedContext": false
+    },
+    {
+      "language": "zh-Hant",
+      "mode": "shared-turn",
+      "researchDispositions": {
+        "T": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          }
+        ],
+        "U": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              },
+              {
+                "view": "history",
+                "status": "historical"
+              }
+            ]
+          }
+        ],
+        "O": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          }
+        ]
+      },
+      "commonLinks": [
+        {
+          "event": "d1",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "ctx",
+          "unresolved": true,
+          "errors": [
+            "colliding_record_name"
+          ]
+        },
+        {
+          "event": "d2",
+          "unresolved": true,
+          "errors": [
+            "ambiguous_named_predecessor"
+          ]
+        }
+      ],
+      "productAdoptedContext": false
+    },
+    {
+      "language": "mixed",
+      "mode": "adopted",
+      "researchDispositions": {
+        "T": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "erroneous"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "U": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "historical"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "O": [
+          {
+            "event": "d1",
+            "outcome": "not_materialized",
+            "materializedViews": []
+          },
+          {
+            "event": "ctx",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ]
+      },
+      "commonLinks": [
+        {
+          "event": "d1",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "ctx",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "d2",
+          "unresolved": false,
+          "errors": []
+        }
+      ],
+      "productAdoptedContext": true
+    },
+    {
+      "language": "mixed",
+      "mode": "unresolved",
+      "researchDispositions": {
+        "T": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "erroneous"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "U": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "history",
+                "status": "historical"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ],
+        "O": [
+          {
+            "event": "d1",
+            "outcome": "not_materialized",
+            "materializedViews": []
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          }
+        ]
+      },
+      "commonLinks": [
+        {
+          "event": "d1",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "ctx",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "d2",
+          "unresolved": false,
+          "errors": []
+        }
+      ],
+      "productAdoptedContext": false
+    },
+    {
+      "language": "mixed",
+      "mode": "shared-turn",
+      "researchDispositions": {
+        "T": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          }
+        ],
+        "U": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              },
+              {
+                "view": "history",
+                "status": "historical"
+              }
+            ]
+          }
+        ],
+        "O": [
+          {
+            "event": "d1",
+            "outcome": "retained",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "active"
+              }
+            ]
+          },
+          {
+            "event": "ctx",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          },
+          {
+            "event": "d2",
+            "outcome": "unresolved_record",
+            "materializedViews": [
+              {
+                "view": "current",
+                "status": "unresolved"
+              }
+            ]
+          }
+        ]
+      },
+      "commonLinks": [
+        {
+          "event": "d1",
+          "unresolved": false,
+          "errors": []
+        },
+        {
+          "event": "ctx",
+          "unresolved": true,
+          "errors": [
+            "colliding_record_name"
+          ]
+        },
+        {
+          "event": "d2",
+          "unresolved": true,
+          "errors": [
+            "ambiguous_named_predecessor"
+          ]
+        }
+      ],
+      "productAdoptedContext": false
+    }
+  ],
+  "rows": [
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 32876,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 400,
+      "sha256": "761d54689c38e1c5e31e43f468d6c30256e46fbbccb8fe54a85da87b9a9a33b6"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 32890,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 400,
+      "sha256": "17583198e68474084b51ecf966075b9e76cf954f3b4f4f21c7a24df688fd6339"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 32844,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 248,
+      "sha256": "b61f8c83060a4a010ced13751b3cb0189a77b025803abd781352ec8816cfa2eb"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 32858,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 248,
+      "sha256": "dccb64391626f951a7269d5ec80ea9cc947feb2341eee9d40612c6af58254a81"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/T/2",
+      "reservation": 34241,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "3a750eb55aed7462870b213a02bb56bc64d25aa367d96995b620655c9e4f1ae7"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/U/2",
+      "reservation": 34242,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "2678e50447af20280484abe81cbcb1201a520c89b1ab4fd585f5141854ab850b"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/O/2",
+      "reservation": 33705,
+      "limit": 49152,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "c7a61e94562b9f52abe292f9ce224da004c8f36b6bc943f5cc44c50f8baabefe"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/P/2",
+      "reservation": 35468,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "6b595e5234f8cc05160645ed74845cff8ab1d14c3424b50e97ea7a9a2358e073"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 32876,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 399,
+      "sha256": "761d54689c38e1c5e31e43f468d6c30256e46fbbccb8fe54a85da87b9a9a33b6"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 32890,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 399,
+      "sha256": "17583198e68474084b51ecf966075b9e76cf954f3b4f4f21c7a24df688fd6339"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 32844,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 248,
+      "sha256": "b61f8c83060a4a010ced13751b3cb0189a77b025803abd781352ec8816cfa2eb"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 32858,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 248,
+      "sha256": "dccb64391626f951a7269d5ec80ea9cc947feb2341eee9d40612c6af58254a81"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/T/2",
+      "reservation": 34248,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "49182604b587330c8c9c36f0998110929ec0018f2b3f1d20ef4539ea0c1c89a9"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/U/2",
+      "reservation": 34249,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "7058b5670068e19d5cf7613550ea502e51d2146e6d4971716542d094be0744bb"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/O/2",
+      "reservation": 33712,
+      "limit": 49152,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "f00a97a6a4f70da7ce3002b7f702451e61ddd565c68d20d0765d6eb20badeeb3"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/P/2",
+      "reservation": 34272,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "951ab69137d5d4dd609f803620948190715ea76918d2698270e1281c779a2f22"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 32876,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 397,
+      "sha256": "761d54689c38e1c5e31e43f468d6c30256e46fbbccb8fe54a85da87b9a9a33b6"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 32890,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 397,
+      "sha256": "17583198e68474084b51ecf966075b9e76cf954f3b4f4f21c7a24df688fd6339"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 32844,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 248,
+      "sha256": "b61f8c83060a4a010ced13751b3cb0189a77b025803abd781352ec8816cfa2eb"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 32858,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 248,
+      "sha256": "dccb64391626f951a7269d5ec80ea9cc947feb2341eee9d40612c6af58254a81"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/T/2",
+      "reservation": 34216,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "057ab96b48ae5003c5418ae41906006330f1ed8e8067b1397c7d99896a47d741"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/U/2",
+      "reservation": 34806,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "1f0b4f0e22a2db5a5f7380afa136c9e6d06506ab921e1d44d547e78d8b2b010b"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/O/2",
+      "reservation": 34216,
+      "limit": 49152,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "057ab96b48ae5003c5418ae41906006330f1ed8e8067b1397c7d99896a47d741"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/P/2",
+      "reservation": 34230,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "e49e8ed6a07b163f13bfd570308e1df647aa1aec8f596560209bb86d9447000b"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 32884,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 432,
+      "sha256": "ae0a0bc2d2bc613843556ce5ca0b2066a21ea597e18a0f07266f2f2d58701ab9"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 32898,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 432,
+      "sha256": "e2e27fe82dcf2b6e16f69579192070293b4ffd96a73605af38adfad5dc08fd30"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 32844,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 248,
+      "sha256": "b61f8c83060a4a010ced13751b3cb0189a77b025803abd781352ec8816cfa2eb"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 32858,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 248,
+      "sha256": "dccb64391626f951a7269d5ec80ea9cc947feb2341eee9d40612c6af58254a81"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/T/2",
+      "reservation": 34249,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "41f5fd2f0d0d1f50b64dad3645b80c60fbac086e0557c93c33724594493ce1d8"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/U/2",
+      "reservation": 34250,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "315dbb12ab4771038e2d491f2215f7c4b9155f47dd291c2fed4ed318b694efd3"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/O/2",
+      "reservation": 33710,
+      "limit": 49152,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "e1b237dfe29057696c5a9602de5add355dbd5d3e379bde87892d6d11e07dd9cc"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/P/2",
+      "reservation": 35488,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "beb8e3d7dfdb5ab277a7d48f21d54c59c119c7a7503871f0c8839731edbd1e84"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 32884,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 431,
+      "sha256": "ae0a0bc2d2bc613843556ce5ca0b2066a21ea597e18a0f07266f2f2d58701ab9"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 32898,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 431,
+      "sha256": "e2e27fe82dcf2b6e16f69579192070293b4ffd96a73605af38adfad5dc08fd30"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 32844,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 248,
+      "sha256": "b61f8c83060a4a010ced13751b3cb0189a77b025803abd781352ec8816cfa2eb"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 32858,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 248,
+      "sha256": "dccb64391626f951a7269d5ec80ea9cc947feb2341eee9d40612c6af58254a81"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/T/2",
+      "reservation": 34256,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "3186dd79a25e7125beffc70609d6bd268a6f180c9ad0c4066981947ac64cbae4"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/U/2",
+      "reservation": 34257,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "d63eff052708ab4768878103b6a71b1ebd2bafda334d8b944664cce5195deb38"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/O/2",
+      "reservation": 33717,
+      "limit": 49152,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "b0f2f2858c479accb49a46ac03637525c3b40da19e0a4e0566332c8b5b6aa413"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/P/2",
+      "reservation": 34272,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "efea239ce73f2a53d5584db1819e6b01994251b04c09cafde82437876bd850a5"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 32884,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 417,
+      "sha256": "ae0a0bc2d2bc613843556ce5ca0b2066a21ea597e18a0f07266f2f2d58701ab9"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 32898,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 417,
+      "sha256": "e2e27fe82dcf2b6e16f69579192070293b4ffd96a73605af38adfad5dc08fd30"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 32844,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 248,
+      "sha256": "b61f8c83060a4a010ced13751b3cb0189a77b025803abd781352ec8816cfa2eb"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 32858,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 248,
+      "sha256": "dccb64391626f951a7269d5ec80ea9cc947feb2341eee9d40612c6af58254a81"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/T/2",
+      "reservation": 34222,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "c9e926ab4e52661ae209b73ba96ed87c531bd3febb96931099025e7f14c1c9c0"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/U/2",
+      "reservation": 34812,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "13d7f22ac6d03391905b83265a27554be99252ff8568036daef9100be2f24f91"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/O/2",
+      "reservation": 34222,
+      "limit": 49152,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "c9e926ab4e52661ae209b73ba96ed87c531bd3febb96931099025e7f14c1c9c0"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/P/2",
+      "reservation": 34242,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "e2b1370f61ebd13bc6b33e04ecfed72f243f575326e27b98febaf6481fb9a425"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 32888,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 424,
+      "sha256": "5e47e562cdea0b747474ddfa6dc8c3348082f63a8f27790250176f5a5599ab5a"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 32902,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 424,
+      "sha256": "e32e8f18bbba0eca6f6c8d2a90799fc94a1a7d7167c6ca9bfe34c969cf00f2b0"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 32844,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 248,
+      "sha256": "b61f8c83060a4a010ced13751b3cb0189a77b025803abd781352ec8816cfa2eb"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 32858,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 248,
+      "sha256": "dccb64391626f951a7269d5ec80ea9cc947feb2341eee9d40612c6af58254a81"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/T/2",
+      "reservation": 34253,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "bf181cef86a2614bb984b11608b52aeb5f43dbbd7eecad73d868dbf6b414fc24"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/U/2",
+      "reservation": 34254,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "c806b1566a5ba05092b2a47111b4b809864fc0c4ded854df76969851eae673cf"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/O/2",
+      "reservation": 33700,
+      "limit": 49152,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "0aa53e073677e1ad81f18385f47982f14cce69007d6fcdb6ab683a8f0637e1c9"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/P/2",
+      "reservation": 35448,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "bd521434ae114eebed929dac5093e90eaa7742005e718f169c7d886ac3fb4045"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 32888,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 423,
+      "sha256": "5e47e562cdea0b747474ddfa6dc8c3348082f63a8f27790250176f5a5599ab5a"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 32902,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 423,
+      "sha256": "e32e8f18bbba0eca6f6c8d2a90799fc94a1a7d7167c6ca9bfe34c969cf00f2b0"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 32844,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 248,
+      "sha256": "b61f8c83060a4a010ced13751b3cb0189a77b025803abd781352ec8816cfa2eb"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 32858,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 248,
+      "sha256": "dccb64391626f951a7269d5ec80ea9cc947feb2341eee9d40612c6af58254a81"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/T/2",
+      "reservation": 34260,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "4b477e35d19d0075ba16d29bb506dcae8fb475e1608c43e7efd7f76ce260200b"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/U/2",
+      "reservation": 34261,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "a4c53e2e9cb13d6a2c8947aeb410ff0b8c69b65376ccef0ecfac2fae96027090"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/O/2",
+      "reservation": 33707,
+      "limit": 49152,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "d39fd6e25d1865b223e9cba62e1d306cb8017e54c7af54446aa7bbb704e2cab2"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/P/2",
+      "reservation": 34272,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "c085747d00db6425e01739a8bc961021c37a66adb2cf0e129abd28610d62ea0c"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 32888,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 427,
+      "sha256": "5e47e562cdea0b747474ddfa6dc8c3348082f63a8f27790250176f5a5599ab5a"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/0",
+      "reservation": 32902,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 427,
+      "sha256": "e32e8f18bbba0eca6f6c8d2a90799fc94a1a7d7167c6ca9bfe34c969cf00f2b0"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 32844,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 248,
+      "sha256": "b61f8c83060a4a010ced13751b3cb0189a77b025803abd781352ec8816cfa2eb"
+    },
+    {
+      "operation": "extraction",
+      "id": "context/extract/1",
+      "reservation": 32858,
+      "limit": 40960,
+      "pass": true,
+      "outputTokens": 248,
+      "sha256": "dccb64391626f951a7269d5ec80ea9cc947feb2341eee9d40612c6af58254a81"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/T/2",
+      "reservation": 34250,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "6793c534fe3551f22ec1c7fc9b54730cb47f2a60b943060ac210f6661f70599a"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/U/2",
+      "reservation": 34840,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "fd4d669e09a1d902cdb78f50a3f9fa0e37b0ddf77c5374e37596193f5e426b9e"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/O/2",
+      "reservation": 34250,
+      "limit": 49152,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "6793c534fe3551f22ec1c7fc9b54730cb47f2a60b943060ac210f6661f70599a"
+    },
+    {
+      "operation": "reader",
+      "id": "context/reader/P/2",
+      "reservation": 34290,
+      "limit": 57344,
+      "pass": true,
+      "outputTokens": 33,
+      "sha256": "e4ee7dc40816b9c7eaf602b7eeb6da3f055ffc184c0826f25a81f8c3e72871d9"
+    }
+  ],
+  "embeddingMeasurements": [
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        290
+      ],
+      "units": 599,
+      "maxInputUnits": 309,
+      "requestBytes": 760,
+      "bodySHA256": "ae063b760e6d94e49194da4d7b8a9cfb901668eda9ae878fa1e170b41ba53317"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        287
+      ],
+      "units": 287,
+      "maxInputUnits": 287,
+      "requestBytes": 412,
+      "bodySHA256": "4954e37d458a02386909edc60f996cedc7bc75e5550ff2c4b4fd756fdadf6539"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        290
+      ],
+      "units": 599,
+      "maxInputUnits": 309,
+      "requestBytes": 760,
+      "bodySHA256": "ae063b760e6d94e49194da4d7b8a9cfb901668eda9ae878fa1e170b41ba53317"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        288
+      ],
+      "units": 288,
+      "maxInputUnits": 288,
+      "requestBytes": 413,
+      "bodySHA256": "bac0ef87bdc67f48ad12ea58bb384bc028d42ed054c0ca05d55b451548e9c438"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        290
+      ],
+      "units": 599,
+      "maxInputUnits": 309,
+      "requestBytes": 760,
+      "bodySHA256": "ae063b760e6d94e49194da4d7b8a9cfb901668eda9ae878fa1e170b41ba53317"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 2,
+      "inputUnits": [
+        231,
+        306
+      ],
+      "units": 537,
+      "maxInputUnits": 306,
+      "requestBytes": 669,
+      "bodySHA256": "50fcd10233f4e684f3e3ac2262fc9f00750d75b15a70fbff656c012a6a229569"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 2,
+      "inputUnits": [
+        231,
+        306
+      ],
+      "units": 537,
+      "maxInputUnits": 306,
+      "requestBytes": 669,
+      "bodySHA256": "50fcd10233f4e684f3e3ac2262fc9f00750d75b15a70fbff656c012a6a229569"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "adopted",
+      "family": "independent-context-en-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        297
+      ],
+      "units": 606,
+      "maxInputUnits": 309,
+      "requestBytes": 767,
+      "bodySHA256": "ff6281d49f249634ec1b00565eb0e9400111d5faeee4d952e6596a1a535b34f7"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        287
+      ],
+      "units": 287,
+      "maxInputUnits": 287,
+      "requestBytes": 412,
+      "bodySHA256": "4954e37d458a02386909edc60f996cedc7bc75e5550ff2c4b4fd756fdadf6539"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        297
+      ],
+      "units": 606,
+      "maxInputUnits": 309,
+      "requestBytes": 767,
+      "bodySHA256": "ff6281d49f249634ec1b00565eb0e9400111d5faeee4d952e6596a1a535b34f7"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        288
+      ],
+      "units": 288,
+      "maxInputUnits": 288,
+      "requestBytes": 413,
+      "bodySHA256": "bac0ef87bdc67f48ad12ea58bb384bc028d42ed054c0ca05d55b451548e9c438"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        297
+      ],
+      "units": 606,
+      "maxInputUnits": 309,
+      "requestBytes": 767,
+      "bodySHA256": "ff6281d49f249634ec1b00565eb0e9400111d5faeee4d952e6596a1a535b34f7"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        306
+      ],
+      "units": 306,
+      "maxInputUnits": 306,
+      "requestBytes": 419,
+      "bodySHA256": "6ddede6e3cced18e5db5c1cfe5b16f63ee2e84cdda279bb1da3ede63fae305f9"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        306
+      ],
+      "units": 306,
+      "maxInputUnits": 306,
+      "requestBytes": 419,
+      "bodySHA256": "6ddede6e3cced18e5db5c1cfe5b16f63ee2e84cdda279bb1da3ede63fae305f9"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "unresolved",
+      "family": "independent-context-en-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 3,
+      "inputUnits": [
+        284,
+        291,
+        297
+      ],
+      "units": 872,
+      "maxInputUnits": 297,
+      "requestBytes": 1066,
+      "bodySHA256": "2d132f6b7a23e9beeb65a4ea88364c8cf1d9e2d7953c90e66593272e58de0f15"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 3,
+      "inputUnits": [
+        284,
+        291,
+        297
+      ],
+      "units": 872,
+      "maxInputUnits": 297,
+      "requestBytes": 1066,
+      "bodySHA256": "2d132f6b7a23e9beeb65a4ea88364c8cf1d9e2d7953c90e66593272e58de0f15"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        291
+      ],
+      "units": 291,
+      "maxInputUnits": 291,
+      "requestBytes": 416,
+      "bodySHA256": "367e406bea85b79cb0137d3baa7d0ca7c0fc6dbe795cebef214f56f260621e2e"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 3,
+      "inputUnits": [
+        284,
+        291,
+        297
+      ],
+      "units": 872,
+      "maxInputUnits": 297,
+      "requestBytes": 1066,
+      "bodySHA256": "2d132f6b7a23e9beeb65a4ea88364c8cf1d9e2d7953c90e66593272e58de0f15"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        256
+      ],
+      "units": 256,
+      "maxInputUnits": 256,
+      "requestBytes": 369,
+      "bodySHA256": "35f6985bdf0895e66a7a981a7eb367559f704cdf216bd1a5004d84c06c8e2f6e"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        256
+      ],
+      "units": 256,
+      "maxInputUnits": 256,
+      "requestBytes": 369,
+      "bodySHA256": "35f6985bdf0895e66a7a981a7eb367559f704cdf216bd1a5004d84c06c8e2f6e"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "en",
+      "contextMode": "shared-turn",
+      "family": "independent-context-en-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        295
+      ],
+      "units": 604,
+      "maxInputUnits": 309,
+      "requestBytes": 765,
+      "bodySHA256": "e777acf69a2f083ed12c53d22947e76ac45bfd8885cdfd1f0143a00ec801fbb6"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        287
+      ],
+      "units": 287,
+      "maxInputUnits": 287,
+      "requestBytes": 412,
+      "bodySHA256": "4954e37d458a02386909edc60f996cedc7bc75e5550ff2c4b4fd756fdadf6539"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        295
+      ],
+      "units": 604,
+      "maxInputUnits": 309,
+      "requestBytes": 765,
+      "bodySHA256": "e777acf69a2f083ed12c53d22947e76ac45bfd8885cdfd1f0143a00ec801fbb6"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        288
+      ],
+      "units": 288,
+      "maxInputUnits": 288,
+      "requestBytes": 413,
+      "bodySHA256": "bac0ef87bdc67f48ad12ea58bb384bc028d42ed054c0ca05d55b451548e9c438"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        295
+      ],
+      "units": 604,
+      "maxInputUnits": 309,
+      "requestBytes": 765,
+      "bodySHA256": "e777acf69a2f083ed12c53d22947e76ac45bfd8885cdfd1f0143a00ec801fbb6"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 2,
+      "inputUnits": [
+        236,
+        306
+      ],
+      "units": 542,
+      "maxInputUnits": 306,
+      "requestBytes": 674,
+      "bodySHA256": "b902a1ec6fe5ff1d7269e49eb06b710b3fe6ec88221eff2efc909e3ae2c28ac9"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 2,
+      "inputUnits": [
+        236,
+        306
+      ],
+      "units": 542,
+      "maxInputUnits": 306,
+      "requestBytes": 674,
+      "bodySHA256": "b902a1ec6fe5ff1d7269e49eb06b710b3fe6ec88221eff2efc909e3ae2c28ac9"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "adopted",
+      "family": "independent-context-zh-Hant-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        302
+      ],
+      "units": 611,
+      "maxInputUnits": 309,
+      "requestBytes": 772,
+      "bodySHA256": "94db7a7049421a8af6fe800e46aa1569398fd27661bcff1877544686dbe0a45e"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        287
+      ],
+      "units": 287,
+      "maxInputUnits": 287,
+      "requestBytes": 412,
+      "bodySHA256": "4954e37d458a02386909edc60f996cedc7bc75e5550ff2c4b4fd756fdadf6539"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        302
+      ],
+      "units": 611,
+      "maxInputUnits": 309,
+      "requestBytes": 772,
+      "bodySHA256": "94db7a7049421a8af6fe800e46aa1569398fd27661bcff1877544686dbe0a45e"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        288
+      ],
+      "units": 288,
+      "maxInputUnits": 288,
+      "requestBytes": 413,
+      "bodySHA256": "bac0ef87bdc67f48ad12ea58bb384bc028d42ed054c0ca05d55b451548e9c438"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        302
+      ],
+      "units": 611,
+      "maxInputUnits": 309,
+      "requestBytes": 772,
+      "bodySHA256": "94db7a7049421a8af6fe800e46aa1569398fd27661bcff1877544686dbe0a45e"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        306
+      ],
+      "units": 306,
+      "maxInputUnits": 306,
+      "requestBytes": 419,
+      "bodySHA256": "6ddede6e3cced18e5db5c1cfe5b16f63ee2e84cdda279bb1da3ede63fae305f9"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        306
+      ],
+      "units": 306,
+      "maxInputUnits": 306,
+      "requestBytes": 419,
+      "bodySHA256": "6ddede6e3cced18e5db5c1cfe5b16f63ee2e84cdda279bb1da3ede63fae305f9"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "unresolved",
+      "family": "independent-context-zh-Hant-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 3,
+      "inputUnits": [
+        284,
+        291,
+        300
+      ],
+      "units": 875,
+      "maxInputUnits": 300,
+      "requestBytes": 1069,
+      "bodySHA256": "d47aca45a9bbfd1fe8ffb0de4cfd8108ef4895dee058b2e4c0ad333bae936bf8"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 3,
+      "inputUnits": [
+        284,
+        291,
+        300
+      ],
+      "units": 875,
+      "maxInputUnits": 300,
+      "requestBytes": 1069,
+      "bodySHA256": "d47aca45a9bbfd1fe8ffb0de4cfd8108ef4895dee058b2e4c0ad333bae936bf8"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        291
+      ],
+      "units": 291,
+      "maxInputUnits": 291,
+      "requestBytes": 416,
+      "bodySHA256": "367e406bea85b79cb0137d3baa7d0ca7c0fc6dbe795cebef214f56f260621e2e"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 3,
+      "inputUnits": [
+        284,
+        291,
+        300
+      ],
+      "units": 875,
+      "maxInputUnits": 300,
+      "requestBytes": 1069,
+      "bodySHA256": "d47aca45a9bbfd1fe8ffb0de4cfd8108ef4895dee058b2e4c0ad333bae936bf8"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        259
+      ],
+      "units": 259,
+      "maxInputUnits": 259,
+      "requestBytes": 372,
+      "bodySHA256": "ad88804aee7ce492a041bda629a77b64a8080b7e354378dcf4ae6abfd66f4919"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        259
+      ],
+      "units": 259,
+      "maxInputUnits": 259,
+      "requestBytes": 372,
+      "bodySHA256": "ad88804aee7ce492a041bda629a77b64a8080b7e354378dcf4ae6abfd66f4919"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "zh-Hant",
+      "contextMode": "shared-turn",
+      "family": "independent-context-zh-Hant-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        285
+      ],
+      "units": 594,
+      "maxInputUnits": 309,
+      "requestBytes": 755,
+      "bodySHA256": "854a2cc506aca482532003481ffb9fac4d65e884474c222bad934d08500b36c9"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        287
+      ],
+      "units": 287,
+      "maxInputUnits": 287,
+      "requestBytes": 412,
+      "bodySHA256": "4954e37d458a02386909edc60f996cedc7bc75e5550ff2c4b4fd756fdadf6539"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        285
+      ],
+      "units": 594,
+      "maxInputUnits": 309,
+      "requestBytes": 755,
+      "bodySHA256": "854a2cc506aca482532003481ffb9fac4d65e884474c222bad934d08500b36c9"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        288
+      ],
+      "units": 288,
+      "maxInputUnits": 288,
+      "requestBytes": 413,
+      "bodySHA256": "bac0ef87bdc67f48ad12ea58bb384bc028d42ed054c0ca05d55b451548e9c438"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        285
+      ],
+      "units": 594,
+      "maxInputUnits": 309,
+      "requestBytes": 755,
+      "bodySHA256": "854a2cc506aca482532003481ffb9fac4d65e884474c222bad934d08500b36c9"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 2,
+      "inputUnits": [
+        306,
+        226
+      ],
+      "units": 532,
+      "maxInputUnits": 306,
+      "requestBytes": 664,
+      "bodySHA256": "4c59217025f4f97545ea57d589c0afd53d5cf8097bc75d66d48dd4af7654621f"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 2,
+      "inputUnits": [
+        306,
+        226
+      ],
+      "units": 532,
+      "maxInputUnits": 306,
+      "requestBytes": 664,
+      "bodySHA256": "4c59217025f4f97545ea57d589c0afd53d5cf8097bc75d66d48dd4af7654621f"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "adopted",
+      "family": "independent-context-mixed-adopted",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        292
+      ],
+      "units": 601,
+      "maxInputUnits": 309,
+      "requestBytes": 762,
+      "bodySHA256": "2f71a79daafce2d487d56c6647bf3d3fdc40daf4e751ef4219da2110b310e75a"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        287
+      ],
+      "units": 287,
+      "maxInputUnits": 287,
+      "requestBytes": 412,
+      "bodySHA256": "4954e37d458a02386909edc60f996cedc7bc75e5550ff2c4b4fd756fdadf6539"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        292
+      ],
+      "units": 601,
+      "maxInputUnits": 309,
+      "requestBytes": 762,
+      "bodySHA256": "2f71a79daafce2d487d56c6647bf3d3fdc40daf4e751ef4219da2110b310e75a"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        288
+      ],
+      "units": 288,
+      "maxInputUnits": 288,
+      "requestBytes": 413,
+      "bodySHA256": "bac0ef87bdc67f48ad12ea58bb384bc028d42ed054c0ca05d55b451548e9c438"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 2,
+      "inputUnits": [
+        309,
+        292
+      ],
+      "units": 601,
+      "maxInputUnits": 309,
+      "requestBytes": 762,
+      "bodySHA256": "2f71a79daafce2d487d56c6647bf3d3fdc40daf4e751ef4219da2110b310e75a"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        306
+      ],
+      "units": 306,
+      "maxInputUnits": 306,
+      "requestBytes": 419,
+      "bodySHA256": "6ddede6e3cced18e5db5c1cfe5b16f63ee2e84cdda279bb1da3ede63fae305f9"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        306
+      ],
+      "units": 306,
+      "maxInputUnits": 306,
+      "requestBytes": 419,
+      "bodySHA256": "6ddede6e3cced18e5db5c1cfe5b16f63ee2e84cdda279bb1da3ede63fae305f9"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "unresolved",
+      "family": "independent-context-mixed-unresolved",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 3,
+      "inputUnits": [
+        284,
+        291,
+        314
+      ],
+      "units": 889,
+      "maxInputUnits": 314,
+      "requestBytes": 1083,
+      "bodySHA256": "814320ca977745d0acf005fe66f62f30d988b285fab2bb48cbf5798fa9cad5fc"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 3,
+      "inputUnits": [
+        284,
+        291,
+        314
+      ],
+      "units": 889,
+      "maxInputUnits": 314,
+      "requestBytes": 1083,
+      "bodySHA256": "814320ca977745d0acf005fe66f62f30d988b285fab2bb48cbf5798fa9cad5fc"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        291
+      ],
+      "units": 291,
+      "maxInputUnits": 291,
+      "requestBytes": 416,
+      "bodySHA256": "367e406bea85b79cb0137d3baa7d0ca7c0fc6dbe795cebef214f56f260621e2e"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 3,
+      "inputUnits": [
+        284,
+        291,
+        314
+      ],
+      "units": 889,
+      "maxInputUnits": 314,
+      "requestBytes": 1083,
+      "bodySHA256": "814320ca977745d0acf005fe66f62f30d988b285fab2bb48cbf5798fa9cad5fc"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "research",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        271
+      ],
+      "units": 271,
+      "maxInputUnits": 271,
+      "requestBytes": 384,
+      "bodySHA256": "9933e4631ba255b81f51360250b9f056000cd91894b313b395f7de7700fff0c4"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        271
+      ],
+      "units": 271,
+      "maxInputUnits": 271,
+      "requestBytes": 384,
+      "bodySHA256": "9933e4631ba255b81f51360250b9f056000cd91894b313b395f7de7700fff0c4"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    },
+    {
+      "language": "mixed",
+      "contextMode": "shared-turn",
+      "family": "independent-context-mixed-shared-turn",
+      "mode": "constant",
+      "channel": "product",
+      "inputs": 1,
+      "inputUnits": [
+        35
+      ],
+      "units": 35,
+      "maxInputUnits": 35,
+      "requestBytes": 110,
+      "bodySHA256": "ebcb7a16903e4d1e8bd9c9a48f7b216531bffd84110c82017145d7337da7c522"
+    }
+  ],
+  "sources": {
+    "evaluation/hr3/harness/context-certification.mjs": "e9426f4decc3217c43e2499d654d2e57e37b83a4eb239ce455811d56d5bb7efb",
+    "evaluation/hr3/harness/embedding-measurement-a4.mjs": "adf9c89003f4288b1a30d4cb3aae7a907961f4a199d785d8f7d542dfbf9658ec",
+    "evaluation/hr3/harness/schema.mjs": "8738adede8ce63f4d1c8b054a77e89f3af3b5d8baa106a6af0d6857b884e7137",
+    "evaluation/hr3/harness/research.mjs": "f2ef016c4451706fa1c4eb308383d1489437ca7f1d617662900599891fe574d1",
+    "evaluation/hr3/harness/product.mjs": "c516032050a89b3518288f631f4aa0db258adc6d343b24630eb009fa8d74da06",
+    "evaluation/hr3/harness/privacy.mjs": "b8b57fe226ef1d5fbb2a46cdd87bdd712b8261bec22516a3ebc9d60a9b79ed5d",
+    "evaluation/hr3/harness/requests.mjs": "6db67a85af9cd49f2b8795b6c0787ecfd0009187d0ec3a483b5dfcce4ee5036b",
+    "evaluation/hr3/harness/reports/private-field-inventory-a6.json": "8e60c3282a059ef60bc82ed4a1ac0b224d81f3ab91267297afd0657d68c81936"
+  },
+  "referenceContextProperty": "Frozen generator and engineering-stress unsupported_cause context events are authored commitment=unresolved. Zero adopted reference contexts is a generator-fixture property; these independent source witnesses exercise adopted contexts without changing generator gold."
+}

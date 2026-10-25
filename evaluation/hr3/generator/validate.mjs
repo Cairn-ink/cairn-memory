@@ -1,9 +1,11 @@
+import { generateFamily } from './generate.mjs';
+import { validateTriviaRegistry } from './trivia.mjs';
 import { reasonStratum } from './reason-strata.mjs';
 import { assert, canonical, CELLS, DOMAIN, cellsOf, scopeFromCells, claim, TYPES, CAUSES } from './common.mjs';
 import { SPLITS, GRAMMAR } from './inventory.mjs';
 import { canonicalGold } from './canonicalize.mjs';
 import { slotGold, slotRowsKey, slotHistoryKey } from './slots.mjs';
-import { HISTORICAL_LABELS, PUBLIC_CONTRACT } from './contract.mjs';
+import { HISTORICAL_LABELS, PUBLIC_CONTRACT, assertExampleFree } from './contract.mjs';
 import { namingPool } from './inventory.mjs';
 
 const VALUE_KEYS = {Text:['type','text'],Boolean:['type','value'],Quantity:['type','decimal','unit'],Instant:['type','iso'],Range:['type','lower','upper','lowerClosed','upperClosed','unit']};
@@ -171,6 +173,7 @@ export function validateInventory(inv) {
     for (const type of TYPES) for (let c=0;c<CAUSES.length;c++) assert(lineages.filter(l=>l.type===type && l.causal_class===CAUSES[c]).length===spec.causalLineages[c],'causal_allocation');
   }
   assert(inv.lineages.reduce((sum,l)=>sum+l.rendered_world_audit_members.length,0)===690,'rendered_audit_allocation');
+  for(const l of ancestryRows)assertExampleFree(l.bank);
   return {lineages:ids.size,retiredLineages:inv.retired_lineages.length,banks:banks.size,lexicalAliases:aliases.size};
 }
 
@@ -227,7 +230,7 @@ const topology = c => {
 export function validateFamily(bundle, lineage) {
   const {family:f,gold,support} = bundle;
   keys(bundle,['family','gold','support']);
-  keys(gold,['family_id','lineage_id','checkpoints']); keys(support,['family_id','checkpoints']);
+  keys(gold,['family_id','lineage_id','checkpoints']); keys(support,['family_id','checkpoints','optional_trivia']);
   assert(f.family_id===gold.family_id && f.family_id===support.family_id,'bundle_identity');
   assert(gold.lineage_id===f.lineage_id,'bundle_identity');
   assert(canonical(gold.checkpoints.map(c=>c.batch))==='[2,4]' && canonical(support.checkpoints.map(c=>c.batch))==='[2,4]','gold_checkpoint_set');
@@ -377,5 +380,10 @@ export function validateFamily(bundle, lineage) {
     assert(canonical(control.foreignNamespace)!==canonical(f.namespace) && canonical(control.readSet)===canonical([f.namespace]),'foreign_namespace');
     assert(control.expected.independentCopyEligible && !control.expected.replayResurrection && !control.expected.namedRecordExposed,'forget_control');
   }
+  assertExampleFree({header:f.header,batches:f.batches});
+  // Independent authoring replay uses the trusted lineage/member/seed, never
+  // candidate registry boundaries, text-derived values or candidate input tape.
+  const trusted=generateFamily(lineage,member,f.seed);
+  validateTriviaRegistry(support.optional_trivia,turns,trusted.support.optional_trivia.emission_inputs);
   return {family_id:f.family_id,structural:'pass',semantic_ast_gold:'pass',source_span_edges:'pass',non_author_audit:'pending'};
 }

@@ -11,7 +11,10 @@ import { reasonStratum } from '../reason-strata.mjs';
 import { generateFamily, correctnessOnly, extractionInput } from '../generate.mjs';
 import { generateSplit, SOURCE_NAMES } from '../deliver.mjs';
 import { validateInventory, validateFamily, validateValue, validateAnswer, validateLegacyAnswer, validateScope } from '../validate.mjs';
-import { publicContract, validatePublicContract, HISTORICAL_LABELS } from '../contract.mjs';
+import { renderSentence, SENTENCES } from '../bank.mjs';
+import { appendSource, captureEmission, triviaRegistry, validateTriviaRegistry, validateTriviaRules, TRIVIA_RULES, createFamilyTriviaHandle, verifyFamilyTrivia } from '../trivia.mjs';
+import { workedExamples } from '../examples.mjs';
+import { publicContract, validatePublicContract, HISTORICAL_LABELS, validNameAnchor, assertExampleFree } from '../contract.mjs';
 import { slotRowsKey, slotHistoryKey } from '../slots.mjs';
 import { leakageReport, matchedWorlds } from '../leakage.mjs';
 import { inspectedRegistry, assertUninspected } from '../exclusions.mjs';
@@ -200,6 +203,7 @@ test('CLI writes deterministic complete bytes and disk-verified hashes; rejects 
     assert.equal(first.status,0,first.stderr); assert.equal(second.status,0,second.stderr);
     const manifest=JSON.parse(await readFile(path.join(a,'manifest.json'),'utf8'));
     assert.equal(manifest.counts.families,60); assert.equal(manifest.counts.rejected,0);
+    assert.equal(Object.keys(manifest.optional_trivia.family_handles).length,60);
     const listing=(await readdir(a)).sort(); assert.equal(listing.length,8);
     assert.deepEqual(listing,[...Object.keys(manifest.hashes),'manifest.json'].sort());
     for (const file of listing) { const one=await readFile(path.join(a,file)),two=await readFile(path.join(b,file)); assert(one.equals(two),file); if (file!=='manifest.json') assert.equal(sha256(one),manifest.hashes[file].sha256); }
@@ -210,7 +214,7 @@ test('CLI writes deterministic complete bytes and disk-verified hashes; rejects 
 });
 
 test('frozen source delivery list cross-checks root and test directory enumeration',async()=>{
-  const rootNames=(await readdir(root)).filter(n=>n.endsWith('.mjs') || n==='answer.schema.json' || n==='README.md' || n==='public-contract.json' || n==='public-contract.schema.json');
+  const rootNames=(await readdir(root)).filter(n=>n.endsWith('.mjs') || n==='answer.schema.json' || n==='README.md' || n==='public-contract.json' || n==='public-contract.schema.json' || n==='trivia-rules.json');
   const tests=(await readdir(path.join(root,'test'))).filter(n=>n.endsWith('.mjs')).map(n=>`test/${n}`);
   assert.deepEqual([...SOURCE_NAMES].sort(),[...rootNames,...tests].sort());
   console.log(`Source manifest cross-check: ${SOURCE_NAMES.length} files (explicit delivery map vs filesystem directories).`);
@@ -231,7 +235,9 @@ test('correctness projection never adds support text, offsets, citations or deli
   assert.notEqual(bundle.gold.checkpoints[1].private_causal.current.claims[0].value.text,'mutation');
   const input=extractionInput(bundle.family,2);
   assert.deepEqual(Object.keys(input).sort(),['observed_at','public_contract','public_header','turns']);
-  assert(!/"(?:ast|change_type|causal_class|G_correct|expected|controls|acceptedGraphs)":/.test(canonical(input)));
+  const {public_contract,...sourceInput}=input;
+  assert.deepEqual(public_contract,publicContract());
+  assert(!/"(?:ast|change_type|causal_class|G_correct|expected|controls|acceptedGraphs|optional_trivia)":/.test(canonical(sourceInput)));
   assert.throws(()=>extractionInput(bundle.family,5));
 });
 
@@ -371,7 +377,7 @@ test('A-4 contract schema, bilingual aliases and fixed historical vocabulary hav
   for(const row of [...contract.aliases.subjects,...contract.aliases.predicates,...contract.aliases.fields]) {
     for(const lang of ['zh-Hant','en','mixed'])assert(row[lang].length>0);
   }
-  assert(!/"(?:lineage_id|change_type|expected|acceptedGraphs|event_id|causal_class)":/.test(canonical(contract)));
+  assert(!/"(?:lineage_id|change_type|expected|acceptedGraphs|event_id|causal_class)":/.test(canonical(contract.aliases)));
   const bad=clone(contract);bad.hidden='answer';assert.throws(()=>validatePublicContract(bad),{code:'contract_schema'});
   const badSlot=clone(contract);badSlot.slots[0].type='number';
   // The published schema fixes slot domain definitions, not just object shape.
@@ -463,4 +469,271 @@ test('A-4 history scope partitions and requested-record ordering compare extensi
   for(const r of cp.G_correct.old.records)r.rows=r.rows.flatMap(row=>cellsOf(row.scope).map(cell=>({...clone(row),scope:{any:[{all:Object.entries(cell).map(([field,value])=>({field,values:[value]}))}]}})));
   assert.equal(slotHistoryKey(cp.G_correct.old),original);
   assert.doesNotThrow(()=>validateFamily(bundle,lineage));
+});
+
+test('A-6 public bilingual worked examples and schema are independently authored and excluded from worlds',()=>{
+  const c=publicContract();assert.equal(c.version,'hr3-public-contract-a6-v1');
+  assert.deepEqual(c.worked_examples,workedExamples());assert.deepEqual(c.worked_examples.excluded_from,['research','calibration']);
+  for(const group of ['extraction','citation_address','inheritance_pairs','slot_recovery','causal_selection']){
+    const examples=c.worked_examples[group];assert(examples.length>=2);
+    assert.deepEqual([...new Set(examples.map(e=>e.language))].sort(),['en','zh-Hant']);
+    for(const e of examples)assert(e.id.startsWith('demo'));
+  }
+  assert.deepEqual(c.extraction.crosswalk.kind,['fact','preference','decision','instruction','context']);
+  const bad=clone(c);bad.worked_examples.extraction[0].batches[0].expected[0].record_name.hidden='extra';
+  assert.throws(()=>validatePublicContract(bad),{code:'contract_schema'});
+  assert.throws(()=>assertExampleFree({batches:[{text:'Record demoIndependent: adopt route demoOther.'}]}),{code:'public_example_world_exclusion'});
+  for(const {family}of pilot.bundles)assert.doesNotThrow(()=>assertExampleFree({batches:family.batches,header:family.header}));
+});
+
+test('A-6 own/reference examples anchor complete current-batch tokens without earlier-turn guesses',()=>{
+  const examples=publicContract().worked_examples.extraction;
+  for(const example of examples){
+    const batches=example.batches??[{turns:example.turns,expected:example.expected}];
+    for(const batch of batches){
+      const turns=new Map(batch.turns.map(t=>[t.turn_id,t.text]));
+      for(const event of batch.expected){
+        const used=new Set();
+        const check=a=>{assert(event.source_turns.includes(a.turn_id));assert(turns.has(a.turn_id));let start=-1;for(let i=0;i<a.occurrence;i++)start=turns.get(a.turn_id).indexOf(a.quote,start+1);assert(start>=0);used.add(a.turn_id);};
+        for(const a of event.source_quotes)check(a);
+        if(event.record_name){check(event.record_name.anchor);assert(validNameAnchor(event.record_name.name,event.record_name.anchor,turns));}
+        for(const r of event.predecessor_refs){check(r.anchor);assert(validNameAnchor(r.record_name,r.anchor,turns));}
+        for(const a of event.reason_quotes)check(a);
+        if(event.payload.type==='slots')for(const name of ['route','approval','cap'])for(const a of event.payload[name]?.anchors??[])check(a);
+        else for(const a of event.payload.anchors)check(a);
+        assert.deepEqual([...used].sort(),event.source_turns.slice().sort());
+        for(const key of ['kind','commitment','change_type','replacement_extent'])assert(publicContract().extraction.crosswalk[key].includes(event[key]));
+      }
+    }
+    if(example.id.startsWith('demo-own-reference-')){
+      const event=batches[1].expected[0];assert.equal(event.record_name.name,'demoNeso');assert.equal(event.predecessor_refs[0].record_name,'demoLira');
+      assert.equal(event.record_name.anchor.turn_id,'demo-decision');assert.equal(event.predecessor_refs[0].anchor.turn_id,'demo-decision');
+      assert.equal(event.commitment,'adopted');assert.equal(event.change_type,'correction');
+    }
+    if(example.id.startsWith('demo-reason-anchors-'))assert.deepEqual(batches[0].expected[0].source_turns,['demo-decision','demo-cause']);
+    if(example.id.startsWith('demo-cap-only-')){const p=batches[0].expected[0].payload;assert.equal(p.route,null);assert.equal(p.approval,null);assert.equal(p.cap.value.type,'Quantity');}
+    if(example.id.startsWith('demo-future-complete-'))assert(Date.parse(batches[0].expected[0].effective_interval.from)>Date.parse(batches[0].expected[0].observed_at));
+  }
+});
+
+test('A-6 name token syntax, adjacent-token boundaries, exact occurrence and case rules',()=>{
+  assert.equal(publicContract().name_tokens.pattern,'[A-Za-z0-9_-]+');
+  const turns=new Map([['demo-turn','demo70 demo7_suffix demo7-suffix (demo7) demo7 Demo7']]);
+  const a=occurrence=>({turn_id:'demo-turn',quote:'demo7',occurrence});
+  for(const n of [1,2,3])assert.equal(validNameAnchor('demo7',a(n),turns),false);
+  for(const n of [4,5])assert.equal(validNameAnchor('demo7',a(n),turns),true);
+  assert.equal(validNameAnchor('demo7',a(6),turns),false);
+  for(const name of ['demo.name','demo name','demo+name','ｄｅｍｏ7',''])assert.equal(validNameAnchor(name,{turn_id:'demo-turn',quote:name,occurrence:1},turns),false);
+  assert.equal(validNameAnchor('demo7',{...a(4),quote:'Demo7'},turns),false);
+  assert.equal(validNameAnchor('Demo7',{turn_id:'demo-turn',quote:'Demo7',occurrence:1},turns),true);
+});
+
+test('A-6 worked receipt/body addresses and unit-local repeat occurrence stay exact',()=>{
+  for(const e of publicContract().worked_examples.citation_address){
+    const item=e.delivered.items[0];const r=e.valid_receipt,b=e.valid_body;
+    assert.equal(r.intent,'history');assert.equal(r.item,0);assert.equal(r.unit,'receipt');assert.equal(r.source,item.sources[0].index);assert.equal(r.quote,item.sources[0].excerpt);
+    assert.equal(b.unit,'body');assert.equal(b.source,null);assert.equal(b.quote,item.body);
+    assert(!item.body.includes(e.invalid_body.quote));
+    const first=e.repeat.unit_text.indexOf(e.repeat.valid.quote),second=e.repeat.unit_text.indexOf(e.repeat.valid.quote,first+1);
+    assert(second>first);assert.equal(e.repeat.valid.occurrence,2);assert.equal(e.repeat.valid.item,0);assert.equal(e.repeat.valid.source,0);
+  }
+});
+
+test('A-6 bilingual partial-refinement pairs inherit identically with and without an explicit preservation sentence',()=>{
+  for(const e of publicContract().worked_examples.inheritance_pairs){
+    assert.deepEqual(e.variants.map(v=>v.explicit_preservation),[false,true]);
+    assert(e.variants[1].turn.text.startsWith(e.variants[0].turn.text));
+    const expected=e.expected_current.rows[0];assert.equal(expected.route.value,'demoRoute9');assert.equal(expected.approval.value,false);
+    for(const v of e.variants){
+      assert.equal(v.supplied_slots.route,null);assert.equal(v.supplied_slots.approval,null);
+      assert.deepEqual(valueKey(v.supplied_slots.cap),valueKey({type:'Quantity',...expected.cap.value}));
+    }
+  }
+  for(const e of publicContract().worked_examples.slot_recovery){
+    assert.deepEqual(e.expiry_current,{status:'no_active_decision',rows:[]});
+    assert.equal(e.complete_replacement.current_after_effective.rows[0].approval.state,'not_specified');
+    assert.equal(e.missing_predecessor.rows[0].approval.state,'unavailable');
+  }
+});
+
+test('A-6 independent causal selection examples retain all serial/conjunctive/sufficiency clauses',()=>{
+  for(const e of publicContract().worked_examples.causal_selection){
+    assert.equal(e.serial.required_quotes.length,2);for(const q of e.serial.required_quotes)assert(e.serial.source.text.includes(q));
+    assert.equal(e.conjunctive.required_quotes.length,2);for(const q of e.conjunctive.required_quotes)assert(e.conjunctive.source.text.includes(q));
+    assert.notDeepEqual(e.conjunctive.insufficient_quotes,e.conjunctive.required_quotes);
+    assert.equal(e.alternative.accepted_alternatives.length,2);
+    e.alternative.accepted_alternatives.forEach((path,i)=>{assert.equal(path.length,3);for(const q of path)assert(e.alternative.sources[i].text.includes(q));});
+    assert.deepEqual(e.missing_delivery,{status:'unavailable',support:[]});assert.deepEqual(e.factual_unstated,{status:'not_stated',support:[]});
+  }
+});
+
+test('A-6 trivia is licensed by predeclared literal provenance and protects all interpolations and operators',()=>{
+  assert.equal(validateTriviaRules(),true);
+  for(const language of ['en','zh-Hant'])for(const key of ['edge','joint','fact']){
+    const vars={fromFact:'demoDevice.v2 at 1.5 😀 (why?!)',toFact:'demoValve-1 >= demoThreshold',a:'demo-A',b:'demo_B',c:'demoC',fact:'demoGauge = -1.5 requests/hour'};
+    const turn={turn_id:'demo-provenance',text:''},origin={turn_id:turn.turn_id,positions:[],segments:[]};
+    const inputs=[captureEmission(turn.turn_id,key,language,vars)];
+    appendSource(turn,origin,key,language,vars);
+    const registry=triviaRegistry(new Map([[turn.turn_id,origin]]),inputs);assert(validateTriviaRegistry(registry,new Map([[turn.turn_id,turn]]),inputs));
+    const optional=new Set(origin.positions);assert.equal(optional.size,1);assert(optional.has(turn.text.length-1));
+    for(const part of origin.segments[0].parts)if(part.kind==='interpolated')for(let i=part.start;i<part.end;i++)assert(!optional.has(i));
+    for(let i=0;i<turn.text.length-1;i++)assert(!optional.has(i),'all literal causal words, qualifiers and operators remain protected');
+    const bad=clone(registry);bad.origins[0].positions.push(0);assert.throws(()=>validateTriviaRegistry(bad,new Map([[turn.turn_id,turn]]),inputs),{code:'trivia_positions'});
+  }
+  for(const bundle of pilot.bundles){
+    const turns=new Map(bundle.family.batches.flatMap(b=>b.turns).map(t=>[t.turn_id,t]));
+    const lineage=inv.lineages.find(l=>l.lineage_id===bundle.family.lineage_id),member=lineage.members.find(m=>m.family_id===bundle.family.family_id);
+    const trusted=generateFamily(lineage,member,bundle.family.seed).support.optional_trivia.emission_inputs;
+    assert(validateTriviaRegistry(bundle.support.optional_trivia,turns,trusted));
+    for(const o of bundle.support.optional_trivia.origins)for(const p of o.positions)assert(['.','。',' '].includes(turns.get(o.turn_id).text[p]));
+    const input=extractionInput(bundle.family,2);assert(!Object.hasOwn(input,'optional_trivia'));assert(!Object.hasOwn(correctnessOnly(bundle.gold.checkpoints[0]),'optional_trivia'));
+  }
+});
+
+test('A-6 literal rendering preserves source words and final punctuation is the only licensed causal omission',()=>{
+  for(const [production,langs]of Object.entries(SENTENCES))for(const [lang,template]of Object.entries(langs)){
+    const vars=Object.fromEntries([...template.matchAll(/\{(\w+)\}/g)].map(m=>[m[1],`demo-${m[1]}.1.5 -> +2`]));
+    assert.equal(renderSentence(production,lang==='zh'?'zh-Hant':'en',vars).text,template.replace(/\{(\w+)\}/g,(_,k)=>vars[k]));
+  }
+  assert(TRIVIA_RULES.rules.every(r=>r.role==='sentence-final separator'||r.production==='source_join'));
+  const turn={turn_id:'demo-trivia',text:''},origin={turn_id:'demo-trivia',positions:[],segments:[]};appendSource(turn,origin,'edge','en',{fromFact:'A',toFact:'B'});
+  assert.equal(turn.text,'A caused B.');assert.deepEqual(origin.positions,[10]);
+  const protectedPositions=Array.from({length:turn.text.length},(_,i)=>i).filter(i=>!origin.positions.includes(i));
+  assert(protectedPositions.every(i=>i<turn.text.indexOf('.')));
+  assert(protectedPositions.some(i=>i>0&&i<turn.text.indexOf('B')),'endpoint-only citations leave required causal operator content uncovered');
+});
+
+test('A-6 fresh pilot has new source worlds with frozen allocation, controls, multiplicity and naming balance',async()=>{
+  assert.equal(DEFAULT_SEED,'hr3-worlds-a6-pilot-v1');
+  const old=JSON.parse(await readFile(path.join(root,'artifacts/previous-12355a8e/archive-manifest.json'),'utf8'));
+  assert.equal(old.source_head,'12355a8e');assert.equal(Object.keys(old.source_fingerprints).length,60);
+  for(const {family}of pilot.bundles)assert.notEqual(sha256(canonical(family.batches)),old.source_fingerprints[family.family_id]);
+  const oldManifest=JSON.parse(await readFile(path.join(root,'artifacts/previous-12355a8e/pilot/manifest.json'),'utf8'));
+  assert.equal(pilot.bundles.length,oldManifest.counts.families);assert.equal(pilot.rejections.length,0);
+  const oldInventory=JSON.parse(await readFile(path.join(root,'artifacts/previous-12355a8e/pilot/lineage-inventory.json'),'utf8'));
+  const allocation=x=>x.lineages.map(l=>({id:l.lineage_id,split:l.split,type:l.type,cause:l.causal_class,multiplicity:l.multiplicity,parent:l.ancestry.parent,members:l.members}));
+  assert.deepEqual(allocation(inv),allocation(oldInventory));
+  const report=leakageReport(pilot.bundles);assert.equal(report.matchedPairs,18);assert.equal(report.questionContractOnlyDeterministicPairAccuracyUpperBound,0.5);
+  assert.equal(pilot.bundles.filter(b=>b.family.controls.some(c=>c.kind==='card')).length,40);
+  assert.equal(pilot.bundles.filter(b=>b.family.controls.some(c=>c.kind==='named_forget_replay_foreign')).length,20);
+});
+
+
+test('A-6 trivia provenance changes no existing source production and inserts no earlier-turn IDs',async()=>{
+  const previous=JSON.parse(await readFile(path.join(root,'artifacts/previous-12355a8e/pilot/grammar-and-sentence-bank.json'),'utf8'));
+  for(const [key,value]of Object.entries(previous.sentences))assert.deepEqual(SENTENCES[key],value);
+  for(const {family}of pilot.bundles)for(const b of family.batches)for(const t of b.turns)assert(!/\bb[1-4]-focal\b/.test(t.text));
+});
+
+// Independent authoring records are captured before rendering and are kept
+// separate from the untrusted registries deliberately forged below.
+function triviaFixture(language,emissions) {
+  const turn={turn_id:'demo-auth-source',text:''},origin={turn_id:'demo-auth-source',positions:[],segments:[]},inputs=[];
+  for(const [production,variables]of emissions) {
+    inputs.push(captureEmission(turn.turn_id,production,language,variables));
+    appendSource(turn,origin,production,language,variables);
+  }
+  return {turn,turns:new Map([[turn.turn_id,turn]]),inputs,registry:triviaRegistry(new Map([[turn.turn_id,origin]]),inputs)};
+}
+for(const language of ['en','zh-Hant']) {
+  test(`P1-2 actual emission rejects alternative parse licensing interpolated separators (${language})`,()=>{
+    const en=language==='en';
+    const original=triviaFixture(language,[['edge',{fromFact:'A',toFact:en?'B. C caused D.':'B。 因為C，所以造成D。'}]]);
+    const alternative=triviaFixture(language,[['edge',{fromFact:'A',toFact:'B'}],['source_join',{}],['edge',{fromFact:'C',toFact:en?'D.':'D。'}]]);
+    assert.equal(original.turn.text,alternative.turn.text);
+    assert(validateTriviaRegistry(original.registry,original.turns,original.inputs));
+    const newlyLicensed=alternative.registry.origins[0].positions.filter(p=>!original.registry.origins[0].positions.includes(p));
+    assert(newlyLicensed.length>=2);if(en)assert.deepEqual(newlyLicensed,[10,11]);
+    assert.throws(()=>validateTriviaRegistry(alternative.registry,original.turns,original.inputs),{code:'trivia_emission_inputs'});
+    const family={family_id:'demoAuthFamily',lineage_id:'demoAuthLineage',seed:'demo-auth-world',namespace:{ownerId:'demoAuthOwner'},batches:[{turns:[original.turn]}]};
+    const pinned=createFamilyTriviaHandle(family,original.registry,original.inputs);
+    const recomputed=createFamilyTriviaHandle(family,alternative.registry,alternative.inputs);assert.notDeepEqual(recomputed,pinned);
+    assert.throws(()=>verifyFamilyTrivia({family,registry:alternative.registry},pinned),{code:'trivia_authentication'});
+    const forged=clone(alternative.registry);forged.emission_inputs=clone(original.inputs);
+    assert.throws(()=>validateTriviaRegistry(forged,original.turns,original.inputs),{code:'trivia_emission_parts'});
+    assert.throws(()=>validateTriviaRegistry(original.registry,original.turns),{code:'trivia_trusted_emissions_required'});
+  });
+  test(`P1-1 forged edge/fact literals cannot license an interpolated decimal (${language})`,()=>{
+    const en=language==='en',f=triviaFixture(language,[['edge',{fromFact:en?'Gauge 1.5':'量測值1.5',toFact:en?'alarm':'警報'}]]);
+    const decimal=f.turn.text.indexOf('.'),end=f.turn.text.length;
+    assert(decimal>=0&&!f.registry.origins[0].positions.includes(decimal));
+    const literal=(literal_index,start,end)=>({kind:'literal',literal_index,start,end});
+    const interpolation=(name,start,end)=>({kind:'interpolated',name,start,end});
+    const bad=clone(f.registry);
+    // The previous consumer accepted these complete but false boundaries:
+    // an English edge's alleged final '.' is really the decimal in 1.5,
+    // followed by a fact whose mandatory literal prefix was never emitted.
+    bad.origins[0].segments=[
+      {production:'edge',language:'en',start:0,end:decimal+1,parts:[literal(0,0,0),interpolation('fromFact',0,decimal),literal(1,decimal,decimal),interpolation('toFact',decimal,decimal),literal(2,decimal,decimal+1)]},
+      {production:'fact',language:en?'en':'zh',start:decimal+1,end,parts:[literal(0,decimal+1,decimal+1),interpolation('fact',decimal+1,end-1),literal(1,end-1,end)]}
+    ];
+    bad.origins[0].positions=[decimal,end-1];
+    assert.equal(f.turn.text.slice(decimal,decimal+1),'.');
+    assert.throws(()=>validateTriviaRegistry(bad,f.turns,f.inputs),{code:'trivia_emission_parts'});
+  });
+  test(`Authenticated emission rejects labels, licenses, drift and substituted literals (${language})`,()=>{
+    const f=triviaFixture(language,[['edge',{fromFact:'demoGauge.v2 = 1.5',toFact:'demoAlarm'}]]);
+    const changes=[
+      r=>{r.origins[0].segments[0].parts.find(p=>p.kind==='interpolated').kind='literal';},
+      r=>{r.origins[0].positions.push(f.turn.text.indexOf('.'));},
+      r=>{r.origins[0].positions.pop();},
+      r=>{r.origins[0].segments[0].parts[1].end++;},
+      r=>{r.origins[0].segments[0].start++;},
+      r=>{r.origins[0].segments.pop();},
+      r=>{r.origins[0].segments[0].language=language==='en'?'zh':'en';},
+      r=>{r.emission_inputs[0].template=r.emission_inputs[0].template.replace(language==='en'?' caused ':'所以造成',' -> ');},
+      r=>{r.emission_inputs[0].variables.toFact='demoForged';},
+      r=>{r.origins[0].unlicensed_literal='.';},
+      r=>{r.rules_sha256='0'.repeat(64);},
+    ];
+    for(const mutate of changes){const bad=clone(f.registry);mutate(bad);assert.throws(()=>validateTriviaRegistry(bad,f.turns,f.inputs));}
+    const changed=clone(f.inputs);changed[0].template+='.';
+    assert.throws(()=>validateTriviaRegistry(f.registry,f.turns,changed),{code:'trivia_template'});
+    const wrongTurns=new Map([[f.turn.turn_id,{...f.turn,text:f.turn.text.replace(language==='en'?' caused ':'所以造成',' -> ')}]]);
+    assert.throws(()=>validateTriviaRegistry(f.registry,wrongTurns,f.inputs),{code:'trivia_source_correspondence'});
+    const snapshot=clone(f.inputs),variables={fromFact:'demoOriginal',toFact:'demoOther'};
+    const captured=captureEmission('demo-turn','edge',language,variables);variables.fromFact='changed after authoring';
+    assert.equal(captured.variables.fromFact,'demoOriginal');assert.deepEqual(f.inputs,snapshot);
+  });
+}
+
+test('Family validation uses independent world/bank replay rather than the candidate input tape',()=>{
+  const {bundle,lineage}=choose('reversal');
+  bundle.support.optional_trivia.emission_inputs[0].variables.record='demoForged';
+  assert.throws(()=>validateFamily(bundle,lineage),{code:'trivia_emission_inputs'});
+});
+
+test('Frozen consumer handle binds family, namespace, source, emission inputs, registry, rules and templates',()=>{
+  const {family,support}=choose('reversal').bundle,registry=support.optional_trivia;
+  const handle=createFamilyTriviaHandle(family,registry,registry.emission_inputs);
+  const verified=verifyFamilyTrivia({family,registry},handle);
+  assert.deepEqual(verified,registry);assert(Object.isFrozen(verified));assert(Object.isFrozen(verified.origins[0].segments));
+  assert.notEqual(verified,registry);
+  const bad=clone(registry);bad.origins[0].positions.pop();
+  assert.throws(()=>verifyFamilyTrivia({family,registry:bad},handle),{code:'trivia_authentication'});
+  const badInputs=clone(registry);badInputs.emission_inputs[0].variables.record='demoForged';
+  assert.throws(()=>verifyFamilyTrivia({family,registry:badInputs},handle),{code:'trivia_authentication'});
+  for(const change of [f=>{f.family_id='demo-other-family';},f=>{f.lineage_id='demo-other-lineage';},f=>{f.namespace.ownerId='demo-other-owner';},f=>{f.seed='demo-other-seed';},f=>{f.batches[0].turns[0].text+=' ';}]) {
+    const changed=clone(family);change(changed);assert.throws(()=>verifyFamilyTrivia({family:changed,registry},handle),{code:'trivia_authentication'});
+  }
+  assert.throws(()=>verifyFamilyTrivia({family,registry}),{code:'trivia_trusted_handle_required'});
+  registry.origins[0].positions.pop();assert.notDeepEqual(verified,registry,'verified copy is insulated from later candidate mutation');
+  assert.throws(()=>{verified.origins[0].positions.push(0);},TypeError);
+});
+
+
+test('Trivia authentication repair preserves source bytes, questions, G_correct and extraction inputs',async()=>{
+  const baseline=JSON.parse(await readFile(path.join(root,'artifacts/verification/trivia-auth-baseline.json'),'utf8'));
+  assert.equal(sha256(jsonl(pilot.bundles.map(b=>b.family))),baseline.pilot_payload_hashes['families.jsonl']);
+  assert.equal(sha256(jsonl(pilot.bundles.map(b=>b.gold))),baseline.pilot_payload_hashes['gold.jsonl']);
+  for(const {family,gold,support}of pilot.bundles) {
+    const before=baseline.families.find(f=>f.family_id===family.family_id);
+    assert.equal(sha256(canonical(family.batches)),before.source_sha256);
+    for(const cp of family.checkpoints)assert.equal(sha256(cp.question),before.questions.find(c=>c.batch===cp.batch).sha256);
+    for(const cp of gold.checkpoints)assert.equal(sha256(canonical(cp.G_correct)),before.G_correct.find(c=>c.batch===cp.batch).sha256);
+    const emittedFamily=JSON.parse(canonical(family));
+    for(const b of family.batches)assert.equal(sha256(JSON.stringify(extractionInput(emittedFamily,b.ordinal))),before.extraction_inputs.find(x=>x.batch===b.ordinal).sha256);
+    assert.equal(sha256(canonical(support.checkpoints)),before.support_checkpoints_sha256);
+    assert.equal(sha256(canonical(support.optional_trivia.origins)),before.trivia_origins_sha256);
+  }
 });

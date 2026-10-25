@@ -1,0 +1,88 @@
+TAP version 13
+# Subtest: A6 names: English, Chinese and mixed references resolve across batches with public subject/predicate aliases
+ok 1 - A6 names: English, Chinese and mixed references resolve across batches with public subject/predicate aliases
+  ---
+  duration_ms: 4.252057
+  type: 'test'
+  ...
+# Subtest: A6 names: missing own declaration retains admitted facts but supplies no future binding
+ok 2 - A6 names: missing own declaration retains admitted facts but supplies no future binding
+  ---
+  duration_ms: 0.962007
+  type: 'test'
+  ...
+# Subtest: A6 names: invalid prefix/own annotations keep facts unresolved and never become receipts
+ok 3 - A6 names: invalid prefix/own annotations keep facts unresolved and never become receipts
+  ---
+  duration_ms: 0.702613
+  type: 'test'
+  ...
+# Subtest: A6 names: structural missing annotations fail the whole wire; invalid core never salvages reasons
+ok 4 - A6 names: structural missing annotations fail the whole wire; invalid core never salvages reasons
+  ---
+  duration_ms: 0.408077
+  type: 'test'
+  ...
+# Subtest: A6 names: own collision is unresolved before retirement and all colliding claims remain ambiguous
+ok 5 - A6 names: own collision is unresolved before retirement and all colliding claims remain ambiguous
+  ---
+  duration_ms: 0.625521
+  type: 'test'
+  ...
+# Subtest: A6 names: self and duplicate references fail closed; multi-target links are all or none
+ok 6 - A6 names: self and duplicate references fail closed; multi-target links are all or none
+  ---
+  duration_ms: 1.768402
+  type: 'test'
+  ...
+# Subtest: A6 names: rejected/colliding candidates are never disambiguated by adoption or audience
+ok 7 - A6 names: rejected/colliding candidates are never disambiguated by adoption or audience
+  ---
+  duration_ms: 0.489999
+  type: 'test'
+  ...
+# Subtest: A6 names: exact names preserve case; public canonical subject collisions share a key
+ok 8 - A6 names: exact names preserve case; public canonical subject collisions share a key
+  ---
+  duration_ms: 0.710133
+  type: 'test'
+  ...
+# Subtest: A6 names: forward references never retry using later declarations or checkpoints
+ok 9 - A6 names: forward references never retry using later declarations or checkpoints
+  ---
+  duration_ms: 0.789864
+  type: 'test'
+  ...
+# Subtest: A6 names: same-batch source order and frozen event order must both precede a reference
+ok 10 - A6 names: same-batch source order and frozen event order must both precede a reference
+  ---
+  duration_ms: 0.635692
+  type: 'test'
+  ...
+# Subtest: A6 names: incompatible scopes, retired and forgotten targets remain identity tombstones
+ok 11 - A6 names: incompatible scopes, retired and forgotten targets remain identity tombstones
+  ---
+  duration_ms: 1.140401
+  type: 'test'
+  ...
+# Subtest: A6 names: replay is idempotent; namespace/family keys prevent cross-world lookup
+ok 12 - A6 names: replay is idempotent; namespace/family keys prevent cross-world lookup
+  ---
+  duration_ms: 0.407857
+  type: 'test'
+  ...
+# Subtest: A6 names: registry is identity-only, never retrieval/receipts/body material
+ok 13 - A6 names: registry is identity-only, never retrieval/receipts/body material
+  ---
+  duration_ms: 3.27172
+  type: 'test'
+  ...
+1..13
+# tests 13
+# suites 0
+# pass 13
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 41.928688

@@ -1,0 +1,362 @@
+[
+  {
+    "file": "evaluation/hr3/harness/accounting-a6.mjs",
+    "sha256": "e644033bdb7ad501ba2a36d4edf8fcaa1fa907c9069e5ef61d112f25be64b04e",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/artifacts.mjs",
+    "sha256": "7d85474924a17a2d75ca878c83029aabd6aad9e88cde6cf820724462c38f3427",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/bounds.mjs",
+    "sha256": "d95cdd92a117e205e0914369988e3c4de8dd15f232556468cf8d09d2d923cd5d",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/cap-certification.mjs",
+    "sha256": "6276eb322e13bccb1ce2493750b8b1be9f135bfb13d08be5ca7542ec26cc48a8",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/context-certification.mjs",
+    "sha256": "1675bf94949800e1da0185ed7fe0316328ccdc8b0d9ab62045e44dda2e3913a7",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/contract-projection-a4.mjs",
+    "sha256": "667aaa3e03dec1ce6864021695ea85ab017949e484108d04ec99b8478812c3c6",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/contract-projection-a6.mjs",
+    "sha256": "1ed78007ebb93fc29a8df4b6c7b1f393cbb4a46b4cca3de237e5437c85789921",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/event-identity.mjs",
+    "sha256": "6b93a1cd457e6f715c9ead3293b4b4bbbe354fb70867df3fe305be0db233acba",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/extraction.mjs",
+    "sha256": "c474d590132dda5fdfea1247ac5e9d9e30840d5a5b866deef34427f57058bd99",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/freeze-a6.mjs",
+    "sha256": "939b479083c198376c28d0fffc30ec0ddddb5e63563661c07f8e6229e8566a34",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/historical-links-a3.mjs",
+    "sha256": "ecc058676ce9c5871778140bc7a9facab9dd00e1354342bf0cb2f3bb41c2ff3d",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/inheritance-a6.mjs",
+    "sha256": "83491a45c5b4dcdaf84ee2a9c107c3cd97a95c27d05baca9ee3f996d0d7fd833",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/inputs.mjs",
+    "sha256": "837d35578f27d1af7565ccc85edd6966500175995e76616b35bfa67d09187498",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/leak-scan.mjs",
+    "sha256": "18f626153f2e4d003213890241662ad3f747e3a856cd1ad3fb17f4f2990afdf9",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/measure-a6.mjs",
+    "sha256": "adc8ba125192bc78d0425441b2304c8f1af21a170084cbbd884d098de3e310c9",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/measure-p-ties-a6.mjs",
+    "sha256": "d81b0c883d4ff26e347669896b7ba021b1b58f2b35458de0af409cd340fd42e4",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/name-registry-a6.mjs",
+    "sha256": "91825fd6a812ec236db0b5d861e6c77a2a8ae4af97c5c994607611615efd57a1",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/paid-preflight.mjs",
+    "sha256": "d69a753bc34a83ba98a1da9400b2bc5965481c6c2b4cd94492846a07259357ac",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/paid-requirements-a4.mjs",
+    "sha256": "04ce54a59399c5ed5f500277d584c9f779a7157eb3d0399042ce2a875dc8963f",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/preflight-a4.mjs",
+    "sha256": "8b6d76d996b0d71cd2d9d6ba4293e0a70a71c4e14bc41c1f0aaa30bdf8020411",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/preflight-a6-schema.mjs",
+    "sha256": "9c8a3dca6622a218211952604ef698b866e3132e56ccaa4f66601bd31ec2c7c4",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/preflight-a6.mjs",
+    "sha256": "75b103cad4817f58ba36b544d870d90fdec8eb0fd657df1aead4cc897df7f85d",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/privacy.mjs",
+    "sha256": "b8b57fe226ef1d5fbb2a46cdd87bdd712b8261bec22516a3ebc9d60a9b79ed5d",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/private-field-inventory.mjs",
+    "sha256": "5f014decd328ab42a248477f410669ddda87234c125a89123e357ff677619b50",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/product.mjs",
+    "sha256": "c516032050a89b3518288f631f4aa0db258adc6d343b24630eb009fa8d74da06",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/projection-options-a6.mjs",
+    "sha256": "8fcbfe968a09932e9bc10ed44cc44c793b01e700792e630313513816995c40ee",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/prompts-a4.mjs",
+    "sha256": "7f9119ba177f3cc6e755a914f116aed34a7d261c86b67257cb434bca0c2bd05b",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/prompts-a6.mjs",
+    "sha256": "2472558c959fc860042f399cbe570d489fb18eda1a8396a48f16bc5f31dfe463",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/public-paths-a4.mjs",
+    "sha256": "7b1d3a114da8a38b880d828d40674aaf1b5d1608c3653efe9b52c6205d7f3935",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/references-a4.mjs",
+    "sha256": "deea97a32718099ec4fe7c16bed99bf9b3dbc303ae7e2d49df69fbf2b602686d",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/replay-a3.mjs",
+    "sha256": "4574af30c69c555d24649cca4d6a0e672d4dc7fe9e4a073228fd068078ab3232",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/request-certification.mjs",
+    "sha256": "ad21793abd32cd63b462388e7195354538031a64c3557a7c7f930f698fc818a0",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/requests.mjs",
+    "sha256": "1050467275cb6bf02658cac2d49a3518b5d258c4f141923540ff7df0431c3738",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/research.mjs",
+    "sha256": "f2ef016c4451706fa1c4eb308383d1489437ca7f1d617662900599891fe574d1",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/runner.mjs",
+    "sha256": "774a871eb22a1cd67c9256b0f38ffe52be0aea79b61012863d636ede3c71408b",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/runtime-closure.mjs",
+    "sha256": "fa2dae18adf489cf37974e4066872b9e1735b9ce985fb15d067149a1b16455f3",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/schema.mjs",
+    "sha256": "8738adede8ce63f4d1c8b054a77e89f3af3b5d8baa106a6af0d6857b884e7137",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/schemas-a4.mjs",
+    "sha256": "e3b561b928ddfe61d2e8d209afaa9a65e55fd722d2b34cb41cf1987a8004e7e6",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test.mjs",
+    "sha256": "72d0bfc62dd49cc7e04c3182a6e1d6dfd2c2408a83bd5759e36ffa0f921ce1e6",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/a3-audit.test.mjs",
+    "sha256": "b7e55ff6fb0247b011fa1ae42d96df34baaeb99438c50792db3d2608ca7b4833",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/a3.test.mjs",
+    "sha256": "771fa9e219a5a4b0fb693a2fcbee70809e8e037b9ac8cc0751d1baf6d6d42c8c",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/a4-audit.test.mjs",
+    "sha256": "c88a251e0ce6e3d5eb117f9f475c9b3a5800681fb09e94afa200ae48653be353",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/a4.test.mjs",
+    "sha256": "1eb71bdb22126fbf0fefef3427c7e8d64504547eada98faf3aa91248b2890f7e",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/budget-a2.test.mjs",
+    "sha256": "db80608a17054572d8185a478dba60b4e71be0b260d94a208d44749044b2a509",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/cap-certification.test.mjs",
+    "sha256": "5ad9aafc8339e85234a468f5ffeefa1130871f7f259f5c917d87517f6327e7a7",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/extraction.test.mjs",
+    "sha256": "4f8dd71dd909e4f0b6999904194f6d922ba2dde4c352407cf86c11d255b0e559",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/fixtures.mjs",
+    "sha256": "a16cb53a1de5b7c3049b855a0d0f5bdb69c803a3a7f78597767f7763541e824f",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/ledger-contention-a4.test.mjs",
+    "sha256": "aee0d50382538f320858897ac81d571921cd1002aed12c1ab70867a871f585db",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/ledger-race-a4.test.mjs",
+    "sha256": "c7520e6e89d87cd1bd442fa22f3e7d971053d57f067138d817c10c7e7799fd76",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/ledger.test.mjs",
+    "sha256": "9bb6e772c7fba6c41547868a82ef7e908631ebf7034df5ad1d092da8b1958155",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/measurement-a6.test.mjs",
+    "sha256": "2bc395b0eb6c33b058edef9ce645b7ee189e7af9442c06f9a620c984fcd945ad",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/name-fixtures-a6.mjs",
+    "sha256": "4486a348c70cda3f2be8a6d8f65f6a17785e69087bb05eac845505bfae0d0ad5",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/names-a6.test.mjs",
+    "sha256": "024c4af857d37fb0bac1156ca458a0419b2f30e928a80ad6d71219bfab23ae2e",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/paid-preflight.test.mjs",
+    "sha256": "4d79e301ab2a9a319d18496ad49058eb96dda34fb977267527c8c15d8163986e",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/preflight-a4.test.mjs",
+    "sha256": "5acb8f9bc674e3d88730533b7e27200868735e27e561f71f889a3a253e78776c",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/preflight-a6.test.mjs",
+    "sha256": "9ed26475d45c88861d8b38377a652ec9c3a3532e40b5ce71dca08c9c1cc01a8d",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/probe-ledger-recheck.mjs",
+    "sha256": "7a80e00e044558d7fb70b9cc6e3d4a6f2e7c7ec76a6fb28b12f5c52f709bb2ec",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/product.test.mjs",
+    "sha256": "e07bdca2601a6ed14f7db4ebbb99b9fa73b1343440ae8d259d3ab069cf921e9a",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/recheck-a4.test.mjs",
+    "sha256": "6536fec05d74916cc9e6181129b54781f801220c85a160bf3776b040d85893b8",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/redirect-generator-temp.mjs",
+    "sha256": "4451be9a3476e20a380f7289a9df87bf0af680fe57a55e589df982b86630b8b9",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/research.test.mjs",
+    "sha256": "c2caf60ce9cef32fb691b313b214d9c3538766e0b4e05aa4e840e5d5b4724bc2",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/runner.test.mjs",
+    "sha256": "3a4a94b3f36d448b23d86cefb2c7b26dd0b75b83848e76a30a81931b958a81a9",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/test/writer-owner-worker.mjs",
+    "sha256": "6ca1154527c4582342ad4131055482fa2c8d3dc781a9907ebe94a3029601ed8a",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/transport.mjs",
+    "sha256": "b355d974588536d11e8a9f3484fdaa5196c7d16c65f82f4d1a7c7b7a2c4aff5c",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/harness/verify-a6.mjs",
+    "sha256": "fcd1cab908aa272fe42d28200861a3d88628185b1a9eb9bb4cfdc221961909d9",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/integration/adapters.mjs",
+    "sha256": "b6bd90e100a53e5768917740ea2593f5d4cdfdb5060e016bd41b634af042c8ba",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/integration/field-map.mjs",
+    "sha256": "357bd8e19a8189916b4f0888b81076297d0dbb2c718a25abe1300b1a643e7f71",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/integration/reconcile-a6.mjs",
+    "sha256": "01302b703be9a795c732ef428c41ed9a0a1675d9065449acf230d21f0d452fe1",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/integration/test/fixtures-a4.mjs",
+    "sha256": "d2b06e29ba3109aadd19a1e7a3463218e2a8c839ac19d92ce360e17b7ee3503b",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/integration/test/integration.test.mjs",
+    "sha256": "d215cf2628b0d8ff22cf7f15beddbf199985bf61ed1f059f7c8ddf9a4d785a94",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/integration/test/pipeline-a4.test.mjs",
+    "sha256": "491a1bac5ba58425cafd19a39cc1293e8d06073382ccbcff23cd8963ef54fd9a",
+    "exitCode": 0
+  },
+  {
+    "file": "evaluation/hr3/integration/test/pipeline-a6.test.mjs",
+    "sha256": "24647c2ab359d56d837e5342b1cf283235101909851a3fc4e7cb3e34656d8142",
+    "exitCode": 0
+  }
+]

@@ -4,6 +4,7 @@ import { cardControl, safetyControl } from './controls.mjs';
 import { reasonStratum } from './reason-strata.mjs';
 import { canonicalGold } from './canonicalize.mjs';
 import { slotGold } from './slots.mjs';
+import { appendSource, captureEmission, triviaRegistry } from './trivia.mjs';
 import { publicContract, HISTORICAL_LABELS } from './contract.mjs';
 
 const interval = (from,to = null) => ({from,to});
@@ -36,13 +37,13 @@ function reasonStructure(lineage, language, changeType) {
   }[lineage.causal_class];
   return {facts,graphs};
 }
-function addReasons(turn, event, lineage, language) {
+function addReasons(turn, event, lineage, language,appendText) {
   const {facts,graphs} = reasonStructure(lineage,language,event.change_type);
   const nodes = [...new Set(graphs.flat(2))];
   const spans = new Map();
   const append = (key,vars) => {
-    const fragment = sentence(key,language,vars), start = turn.text.length + 1;
-    turn.text += ` ${fragment}`;
+    const start = turn.text.length + 1;
+    appendText(turn,'source_join',language);appendText(turn,key,language,vars);
     return sourceSpan(turn,start,turn.text.length);
   };
   if (!graphs.length && (event.change_type !== 'expiry' || lineage.expiry_mode !== 'deadline')) append('unstated');
@@ -72,7 +73,12 @@ export function generateFamily(lineage, member, seed = DEFAULT_SEED) {
     header:{subject,predicate,scope_text:scopeText(scope(),language)},query_scope:scope(),
     batches:Array.from({length:4},(_,i) => ({ordinal:i+1,observed_at:at(i+1,'02'),effective_at:effective(i+1),turns:[]})),
     checkpoints:[],controls:[],ast:{events:[],focal_changes:[],time_zone:'Asia/Taipei',interval_convention:'[from,to)',variant:{future_effective:type === 'reversal' && member.member%2 === 1,retroactive:type === 'correction' && member.member%2 === 1}}};
-  const events = [], accepted = [];
+  const events = [], accepted = [], origins=new Map(),emissionInputs=[];
+  const appendText=(turn,key,lang,vars={})=>{
+    if(!origins.has(turn.turn_id))origins.set(turn.turn_id,{turn_id:turn.turn_id,positions:[],segments:[]});
+    emissionInputs.push(captureEmission(turn.turn_id,key,lang,vars));
+    appendSource(turn,origins.get(turn.turn_id),key,lang,vars);
+  };
   // All six permutations occur once per type at each member position. A separate
   // stream assigns subjects, so neither identifier encodes type or version.
   const perms=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
@@ -89,8 +95,8 @@ export function generateFamily(lineage, member, seed = DEFAULT_SEED) {
     const predecessors = predecessorIndices.map(i => events[i]);
     const predNames = predecessors.map(e => e.record_name).join(', ');
     const vars = {record,predecessors:predNames,subject,predicate,fields:fieldText(fields,language),scope:scopeText(audience,language),from,to:to??(language === 'zh-Hant'?'無上限（不含終點）':'unbounded (exclusive endpoint)')};
-    turn.text = sentence(changeType === 'initial'?'initial':changeType === 'expiry' && lineage.expiry_mode !== 'deadline' ? 'expiry_lapse' : changeType,language,vars);
-    if (type === 'expiry' && lineage.expiry_mode === 'deadline' && changeType === 'initial') turn.text += language === 'zh-Hant'?' 這是明確的到期日；到期後不會自動採用接續決定。':' This is an explicit expiry deadline; expiry adopts no successor.';
+    appendText(turn,changeType === 'initial'?'initial':changeType === 'expiry' && lineage.expiry_mode !== 'deadline' ? 'expiry_lapse' : changeType,language,vars);
+    if (type === 'expiry' && lineage.expiry_mode === 'deadline' && changeType === 'initial') {appendText(turn,'source_join',language);appendText(turn,'deadline_note',language);}
     const event = eventBase(`${family.family_id}/e${batchNo}`,turn,batch,{record_name:record,change_type:changeType,subject,predicate,claims:fields,scope:audience,effective_interval:interval(from,to),
       predecessor_anchors:predecessors.map(e => ({source_turn:e.source_turns[0],record_name:e.record_name,subject:e.subject,predicate:e.predicate})),
       replacement_extent:['refinement','scope_change'].includes(changeType)?'partial':'entire_predecessor',field_mask:fields.map(x => x.field)});
@@ -98,7 +104,7 @@ export function generateFamily(lineage, member, seed = DEFAULT_SEED) {
       // E-1: the existing expiry source explicitly connects the passed deadline
       // to expiry. Preserve rationale paths as alternatives to this trigger.
       const triggerSpan = changeType === 'expiry' && lineage.expiry_mode === 'deadline' ? sourceSpan(turn) : null;
-      const graphs = addReasons(turn,event,lineage,language);
+      const graphs = addReasons(turn,event,lineage,language,appendText);
       if (triggerSpan) {
         const node = (id,pred,value) => ({id,claim:{subject:event.subject,predicate:pred,value,scope:event.scope,valid:event.effective_interval,qualifiers:[],citations:[]}});
         if (!event.reason_nodes.some(n => n.id === 'decision')) event.reason_nodes.push(node('decision','causal_condition',text('expiry_change')));
@@ -125,12 +131,13 @@ export function generateFamily(lineage, member, seed = DEFAULT_SEED) {
     const firstScope = type === 'scope_change'?scope(['TW']):scope(), finalScope = type === 'scope_change'?scope(['JP','TW']):scope();
     const start = batch => family.ast.variant.retroactive?effective(1):family.ast.variant.future_effective?effective(batch+1):effective(batch);
     first = emit(2,type,firstFields,firstScope,[0],start(2));
-    family.batches[2].turns.push({turn_id:'b3-focal',speaker:'user',text:sentence('idle',language)});
+    const idle={turn_id:'b3-focal',speaker:'user',text:''};appendText(idle,'idle',language);family.batches[2].turns.push(idle);
     last = emit(4,type,finalFields,finalScope,type === 'scope_change'?[0,1]:[1],start(4));
   }
   for (const batch of family.batches) {
     const distractLanguage = language === 'mixed' ? 'zh-Hant' : language;
-    const turn = {turn_id:`b${batch.ordinal}-distractor`,speaker:'user',text:sentence('distractor',distractLanguage,{subject,route:routes[1],other:routes[2],collision:`${subject} Annex`,scope:'JP/pro/app',date:effective(4)})};
+    const turn = {turn_id:`b${batch.ordinal}-distractor`,speaker:'user',text:''};
+    appendText(turn,'distractor',distractLanguage,{subject,route:routes[1],other:routes[2],collision:`${subject} Annex`,scope:'JP/pro/app',date:effective(4)});
     batch.turns.push(turn);
     const variants = [
       ['proposal','proposed',subject,scope(),routes[1]],
@@ -155,7 +162,7 @@ export function generateFamily(lineage, member, seed = DEFAULT_SEED) {
   if (member.card) family.controls.push(cardControl(family,member.card_branch,member.card_authoring_path));
   if (member.safety) family.controls.push(safetyControl(family));
   const gold = {family_id:family.family_id,lineage_id:family.lineage_id,checkpoints:[]};
-  const support = {family_id:family.family_id,checkpoints:[]};
+  const support = {family_id:family.family_id,checkpoints:[],optional_trivia:triviaRegistry(origins,emissionInputs)};
   for (const checkpoint of family.checkpoints) {
     const isFinal = checkpoint.batch === 4, focal = isFinal?last:first;
     const historical = focal.predecessor_anchors.map(anchor => events.find(e => e.source_turns.includes(anchor.source_turn)));

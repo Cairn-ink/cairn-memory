@@ -8,5 +8,7 @@ const prefix=fileURLToPath(new URL('../../generator/test/.cli-',import.meta.url)
 const target=fileURLToPath(new URL('../artifacts/a3-generator-cli-',import.meta.url));
 const scorerPrefix=fileURLToPath(new URL('../../scorer/.test-contract-',import.meta.url));
 const scorerTarget=fileURLToPath(new URL('../artifacts/a4-scorer-contract-',import.meta.url));
-fs.promises.mkdtemp=(path,...args)=>original(path===prefix?target:path===scorerPrefix?scorerTarget:path,...args);
+const scorerCLIPrefix=fileURLToPath(new URL('../../scorer/.test-tmp-',import.meta.url));
+const scorerCLITarget=fileURLToPath(new URL('../artifacts/a6-scorer-cli-',import.meta.url));
+fs.promises.mkdtemp=(path,...args)=>original(path===prefix?target:path===scorerPrefix?scorerTarget:path===scorerCLIPrefix?scorerCLITarget:path,...args);
 syncBuiltinESMExports();

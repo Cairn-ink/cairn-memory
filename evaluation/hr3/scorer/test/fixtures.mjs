@@ -1,3 +1,4 @@
+import { SUPPORT_VERSION, TRIVIA_VERSION } from '../support.mjs';
 // Independently written synthetic engineering examples, never calibration data.
 export const copy = structuredClone;
 export const text = text => ({ type: 'Text', text });
@@ -19,6 +20,7 @@ export function fixture() {
     { id: 'bc', origin: 'turn-2', start: 0, end: 11, text: 'B caused C.' },
   ];
   const gold = {
+    supportVersion: SUPPORT_VERSION, supportTrivia: { version: TRIVIA_VERSION, producer: null, rules: [], positions: [] },
     question: 'At the checkpoint, give route, approval and cap for all cells, predecessor turn-old with its historical label, and the complete explanation for turn-2.',
     current: { status: 'active', rows: [row()] },
     old: { status: 'available', records: [{ predecessor_turn: 'turn-old', status: 'previously_adopted', rows: [row('birch')] }] },

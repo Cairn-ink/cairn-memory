@@ -1,0 +1,4 @@
+~/.local/bin/cairn-heavy: line 8: ~/.cache/cairn-heavy-tests.lock: Read-only file system
+[cairn-heavy] 23:10:32 waiting for lock ~/.cache/cairn-heavy-tests.lock (pid 4)
+flock: 9: Bad file descriptor
+[cairn-heavy] 23:10:32 lock acquired

@@ -1,10 +1,11 @@
+import './pipeline-a6.test.mjs';
 import './pipeline-a4.test.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from '../../challenge/generate.mjs';
 import { generateSplit } from '../../generator/deliver.mjs';
 import { adaptGenerator, adaptChallenge, goldWitness, restore, hash, stable } from '../adapters.mjs';
-import { score } from '../../scorer/scorer.mjs';
+import { score } from '../../harness/scoring-a6.mjs';
 import { validate, goldSchema, submissionSchema } from '../../scorer/schema.mjs';
 import { qualification, confusion } from '../mechanical.mjs';
 import { calibrationGate } from '../gate.mjs';
@@ -20,14 +21,14 @@ test('all 120 pilot slot checkpoints validate, restore exactly and earn witnesse
   const a=adaptGenerator(family,gold,support,cp.batch);assert.deepEqual(validate(goldSchema,a.gold),[]);
   assert.deepEqual(restore(a),{family,goldRow:gold,supportRow:support,batch:cp.batch});
   const submission=goldWitness(a.gold);assert.deepEqual(validate(submissionSchema,submission),[]);
-  assert.deepEqual(score(a.gold,submission).scores,{C:1,O:1,R:1,J:1});
+  assert.deepEqual(score(a.gold,submission,a.scoringOptions).scores,{C:1,O:1,R:1,J:1});
   assert.ok(!Object.hasOwn(submission.answer.reason,'nodes'));assert.ok(!Object.hasOwn(submission.answer.current,'claims'));
  }
 });
 test('independent A-4 challenge slots, predecessor identities and selected quotations pass unchanged',()=>{
  const {row,world}=a4Fixture(),a=adaptChallenge(row,world);assert.deepEqual(a.submission.answer,row.candidate);
  assert.deepEqual(restore(a),{row,world});assert.equal(a.submission.delivered[2].intent,'history');
- const r=score(a.gold,a.submission);assert.deepEqual(r.scores,{C:1,O:1,R:null,J:null});assert.equal(r.reason.correctness,1);assert.ok(r.referrals.some(f=>f.pass==='support'));
+ const r=score(a.gold,a.submission,a.scoringOptions);assert.deepEqual(r.scores,{C:1,O:1,R:null,J:null});assert.equal(r.reason.correctness,1);assert.ok(r.referrals.some(f=>f.pass==='support'));
  assert.equal(fieldMapping('challenge','$/row/candidate/reason/support/*/quote').destination,'submission.answer/reason/support/*/quote');
 });
 test('complete quotation unions preserve serial, conjunctive and alternative private plans',()=>{
@@ -35,8 +36,8 @@ test('complete quotation unions preserve serial, conjunctive and alternative pri
   const {row,world}=a4Fixture();row.delivered.pop();
   if(style==='conjunctive'){row.gold.acceptedGraphs[0].edges[1]={from:'B',to:'C'};row.gold.acceptedGraphs[0].edges[0]={from:'A',to:'C'};world.edge_support[0].to='C';}
   if(style==='alternative')row.gold.acceptedGraphs.push({edges:[{from:'B',to:'C'}]});
-  world.gold=clone(row.gold);const a=adaptChallenge(row,world);assert.equal(score(a.gold,a.submission).scores.R,1);
-  if(style!=='alternative'){a.submission.answer.reason.support.pop();assert.notEqual(score(a.gold,a.submission).scores.R,1);}
+  world.gold=clone(row.gold);const a=adaptChallenge(row,world);assert.equal(score(a.gold,a.submission,a.scoringOptions).scores.R,1);
+  if(style!=='alternative'){a.submission.answer.reason.support.pop();assert.notEqual(score(a.gold,a.submission,a.scoringOptions).scores.R,1);}
  }
 });
 test('source corruption, offset drift, topology mismatches and nonempty gold citations are rejected',()=>{
@@ -61,12 +62,12 @@ test('removed, changed and endpoint-only delivery cannot establish a complete ex
   if(variant==='removed')row.delivered=[];
   if(variant==='modified'){row.delivered[0].text='A does not cause B.';row.candidate.reason.support[0].quote=row.delivered[0].text;}
   if(variant==='endpoint')row.candidate.reason.support.pop();
-  const a=adaptChallenge(row,world),r=score(a.gold,a.submission);assert.deepEqual(a.submission.answer,row.candidate);
+  const a=adaptChallenge(row,world),r=score(a.gold,a.submission,a.scoringOptions);assert.deepEqual(a.submission.answer,row.candidate);
   if(variant==='adequate')assert.equal(r.scores.R,1);else assert.notEqual(r.scores.R,1);
  }
 });
 test('unknown unit referrals keep correctness gold and support delivery isolated',()=>{
- const {row,world}=a4Fixture();row.candidate.current.rows[0].cap.value.unit='unregistered-unit';const a=adaptChallenge(row,world),r=score(a.gold,a.submission);assert.ok(r.referrals.length);
+ const {row,world}=a4Fixture();row.candidate.current.rows[0].cap.value.unit='unregistered-unit';const a=adaptChallenge(row,world),r=score(a.gold,a.submission,a.scoringOptions);assert.ok(r.referrals.length);
  for(const f of r.referrals){assert.equal(f.question,row.question);assert.ok(!Object.hasOwn(f,'true_label'));if(f.pass==='correctness'){assert.ok(f.G_correct);assert.ok(!Object.hasOwn(f,'delivered'));assert.ok(!stable(f.G_correct).includes('supportSpans'));}else {assert.ok(f.delivered);assert.ok(!Object.hasOwn(f,'G_correct'));}}
 });
 test('qualification counts only actual designated referrals, preserving frozen order', () => {
@@ -161,8 +162,8 @@ test('gate thresholds detect false acceptance, support failures and style error 
 test('deadline and effective expiry witnesses use selected quotations; incomplete selections fail',()=>{
  let n=0;
  for(const b of pilot.filter(b=>b.family.change_type==='expiry'))for(const cp of b.family.checkpoints){
-  const {gold}=adaptGenerator(b.family,b.gold,b.support,cp.batch),w=goldWitness(gold);assert.equal(score(gold,w).scores.R,1);
-  if(gold.reason.status==='stated'){w.answer.reason.support=[];assert.notEqual(score(gold,w).scores.R,1);}else assert.equal(gold.reason.acceptedGraphs.length,0);n++;
+  const {gold,scoringOptions}=adaptGenerator(b.family,b.gold,b.support,cp.batch),w=goldWitness(gold);assert.equal(score(gold,w,scoringOptions).scores.R,1);
+  if(gold.reason.status==='stated'){w.answer.reason.support=[];assert.notEqual(score(gold,w,scoringOptions).scores.R,1);}else assert.equal(gold.reason.acceptedGraphs.length,0);n++;
  }
  assert.equal(n,24);
 });

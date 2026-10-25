@@ -1,0 +1,1 @@
+{"status":"PASS_LOCAL_LOSSLESS_RECONCILIATION","counts":{"generatorCheckpoints":120,"extractionBatches":240,"fields":727},"deliveryFiles":18926,"crossCheckDifferences":0,"paidReadiness":false}

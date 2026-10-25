@@ -10,7 +10,7 @@ import {loadCarryForward,verifyCarrySnapshot} from '../accounting.mjs';
 import {responseRequest,embeddingRequest,validateRequest,EMBEDDING} from '../requests.mjs';
 import {plan} from './fixtures.mjs';
 const h='evaluation/hr3/harness',baseline=process.env.HR3_CONTENTION_BASELINE==='1';
-const request=id=>({id,operation:'extraction',body:responseRequest('extraction',{})});
+const request=id=>({id,operation:'reader',body:responseRequest('reader',{})});
 function implementation({watchdogMs=60000,captureInterval=null}={}){
  const sources=Object.fromEntries(['ledger','transport'].map(name=>[name,fs.readFileSync(new URL(baseline?'./fixtures/'+name+'-2221f923.mjs.txt':'../'+name+'.mjs',import.meta.url),'utf8')]));
  if(baseline){assert.equal(hash(sources.ledger),'f67e392aa9c95db171f5c9ff33806771ddeb4f6941d6baff33098af017a4a396');assert.equal(hash(sources.transport),'2d9ecd49ae1607711248bba55390d7801e6eb9bfa9b85feeb3e61e1d8ddd93be');}

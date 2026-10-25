@@ -1,3 +1,10 @@
+import {readFileSync} from 'node:fs';
+import {SUPPORT_VERSION} from '../scorer/support.mjs';
+import {authenticatedGeneratorTrivia,trustedScoringOptions} from '../harness/trivia-authority-a6.mjs';
+import {unlicensedScoringOptions} from '../harness/scoring-a6.mjs';
+import {validateExtraction} from '../harness/schema.mjs';
+import {identifyEvents} from '../harness/event-identity.mjs';
+import {resolveNamedLinks} from '../harness/name-registry-a6.mjs';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { validateGold } from '../scorer/scorer.mjs';
@@ -16,10 +23,10 @@ function project(answer, causal) {
     old: { status: answer.old.status, records: answer.old.records.map(r => ({ predecessor_turn: r.predecessor_turn, status: r.status, rows: r.rows.map(withoutCitations) })) },
     reason: { status: answer.reason.status, nodes: causal.reason.nodes.map(n => ({ id: n.id, claim: withoutCitations(n.claim) })) } };
 }
-function finish(kind, source, gold, submission, extras) {
+function finish(kind, source, gold, submission, extras,scoringOptions={}) {
   validateGold(gold);
   if (submission) requireThat(validate(submissionSchema, submission).length === 0, 'Adapted A-4 submission schema invalid');
-  return { gold, submission, audit: { version: 'hr3-integration-a4-v2', kind, sourceHash: hash(source), source: copy(source), ...extras } };
+  return { gold, submission, scoringOptions, audit: { version: 'hr3-integration-a6-v1', kind, sourceHash: hash(source), source: copy(source), ...extras } };
 }
 export function restore(adapted) {
   requireThat(hash(adapted.audit.source) === adapted.audit.sourceHash, 'Audit source hash mismatch');
@@ -50,20 +57,24 @@ export function adaptGenerator(family, goldRow, supportRow, batch) {
   sc.assertion_spans.forEach(a => a.spans.forEach(span));
   const graphs = sc.acceptedGraphs.map(g => ({ edges: g.edges.map(e => ({ from: e.from, to: e.to, support: e.support.map(a => a.map(span)) })) }));
   const p = project(answer, gc.private_causal);
-  const gold = { question: checkpoint.question, ...p, reason: { ...p.reason, acceptedGraphs: graphs }, supportSpans: r.spans };
+  const {supportTrivia,scoringOptions}=authenticatedGeneratorTrivia(family,supportRow.optional_trivia,checkpoint);
+  const gold = { supportVersion:SUPPORT_VERSION,supportTrivia,question: checkpoint.question, ...p, reason: { ...p.reason, acceptedGraphs: graphs }, supportSpans: r.spans };
   return finish('generator', { family, goldRow, supportRow, batch }, gold, null, {
     defects: [{ code: 'NON_SCORER_METADATA', fields: ['family authoring/control metadata', 'family_id', 'lineage_id', 'batch', 'assertion_spans.event_id', 'offset_unit'], disposition: 'retained verbatim in audit source; no scorer slot' }],
     conventions: ['Slot citations and quoted-support placeholders must be empty in source gold.', 'Private causal nodes remain gold only; verified quotation/UTF-16 source spans are interned in stable encounter order.'],
-  });
+  },scoringOptions);
 }
 const addr = c => ({ intent: c.intent, item: c.item, unit: c.unit, source: c.source });
 const unitKey = u => stable([u.item, u.unit, u.source]);
 // Only A-4 challenge input is accepted. The superseded graph-answer bank must
 // be replaced by its owner; it is never reinterpreted as slot/quotation input.
-export function adaptChallenge(row, world) {
+export function adaptChallenge(row, world,trustedTarget) {
   requireThat(row.world_id === world.id && row.question === world.question && isDeepStrictEqual(row.gold, world.gold), 'Challenge world/gold join mismatch');
   requireThat(validate(answerSchema, row.candidate).length === 0, 'Candidate requires an A-4 slot answer');
+  requireThat(row.gold.supportVersion===SUPPORT_VERSION&&row.gold.supportTrivia,'A-6 support provenance required');
   const p = project(row.gold.answer, row.gold.private_causal), r = registry();
+  const hasTrivia=Boolean(world.gold.supportTrivia?.producer||world.gold.supportTrivia?.rules?.length||world.gold.supportTrivia?.positions?.length);
+  if(hasTrivia)requireThat(trustedTarget?.family&&trustedTarget?.checkpoint&&trustedTarget.checkpoint.question===world.question,'Trusted challenge trivia target required');
   const base = new Map(), addresses = new Map();
   for (const u of world.delivered) {
     requireThat(!base.has(unitKey(u)), 'Duplicate source delivery address'); base.set(unitKey(u), u);
@@ -81,7 +92,8 @@ export function adaptChallenge(row, world) {
     requireThat(plan.length === 1, 'Missing/duplicate edge support plan');
     return { from: e.from, to: e.to, support: plan[0].alternatives.map(a => a.map(span)) };
   }) }));
-  const gold = { question: row.question, ...p, reason: { ...p.reason, acceptedGraphs }, supportSpans: r.spans };
+  const gold = { supportVersion:SUPPORT_VERSION,supportTrivia:world.gold.supportTrivia,question: row.question, ...p, reason: { ...p.reason, acceptedGraphs }, supportSpans: r.spans };
+  const scoringOptions=trustedTarget?trustedScoringOptions(trustedTarget.family,{...trustedTarget.checkpoint,query_id:world.id}):unlicensedScoringOptions(world,gold);
   const delivered = row.delivered.map(u => {
     const original = base.get(unitKey(u)), address = addresses.get(unitKey(u));
     requireThat(address, 'Missing authored delivery intent');
@@ -93,7 +105,7 @@ export function adaptChallenge(row, world) {
     defects: [{ code: 'NON_SCORER_METADATA', fields: ['row labels/provenance/group/referral/representation', 'world authoring metadata'], disposition: 'retained verbatim in audit; excluded from scoring/judge bundles' },
       { code: 'DELIVERY_PROVENANCE_LIMIT', fields: ['delivered.text'], disposition: 'final authored text only; no normalization/truncation ancestry inferred' }],
     conventions: ['A-4 slot rows, predecessor identities and quotation choices pass unchanged.', 'Private graph/support plans are gold-only; all delivery intents are explicitly authored.'],
-  });
+  },scoringOptions);
 }
 // A diagnostic gold witness delivers authored spans and selects the complete
 // first accepted path/union. It is never a live reader or arm fallback.
@@ -106,4 +118,13 @@ export function goldWitness(gold) {
   const support = [...new Set((gold.reason.acceptedGraphs[0]?.edges ?? []).flatMap(e => e.support[0]))].map(citation);
   return { answer: { current: { status: gold.current.status, rows: gold.current.rows.map(row) }, old: { status: gold.old.status, records: gold.old.records.map(r => ({ predecessor_turn: r.predecessor_turn, status: r.status, rows: r.rows.map(row) })) },
     reason: { status: gold.reason.status, support } }, delivered };
+}
+
+// Independent adapter boundary: keep raw wire/admission/name decisions separately
+// and losslessly. No source IDs or predecessor turns are inferred from gold.
+export function adaptExtraction({family,namespace=null,batch,wire,input,previous=[]}) {
+  const admitted=validateExtraction(wire,input),events=identifyEvents(family,batch,admitted.events,namespace);
+  const linked=resolveNamedLinks([...previous,...events]);
+  const source={family,namespace,batch,wire,input,previous};
+  return {events,linked,diagnostics:admitted.diagnostics,audit:{version:'hr3-extraction-integration-a6-v1',source:copy(source),sourceHash:hash(source)}};
 }

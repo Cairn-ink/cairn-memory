@@ -1,0 +1,389 @@
+{
+  "version": "hr3-a6.1-placeholder-recertification-stopped-v1",
+  "status": "FAIL_STOPPED_AT_FIRST_FAILURE",
+  "blockingStep": "harness-tests",
+  "verifierExitCode": 1,
+  "heavyLock": "UNLOCKED_DIRECT_RUN_AUTHORIZED_BY_PRIMARY",
+  "artifacts": "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH",
+  "commands": [
+    {
+      "command": "node evaluation/hr3/harness/strict-schema.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/strict-schema.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/strict-schema.stdout": "55abd6fa95f708d806c10006891f429be3d90d3333feb6479a89053c0b9969d7"
+      },
+      "name": "strict-schema",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/schemas-a4.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/published-schemas.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/published-schemas.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "name": "published-schemas",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/private-field-inventory.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/private-field-inventory.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/private-field-inventory.stdout": "17d8f48c4214e022da852e1701240c55728cd0f616a57d46c030fd722a66d5ab"
+      },
+      "name": "private-field-inventory",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/inspected-references.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/inspected-references.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/inspected-references.stdout": "49ef6808e9326e14b80b96d566a9b6517f1ca3bcf0551da740eb94a4d5ac693f"
+      },
+      "name": "inspected-references",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/runtime-closure.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/runtime-closure.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/runtime-closure.stdout": "ca7da228b19d275baeb84b840419dbda096df059f613a88a367889c7f88aa0a3"
+      },
+      "name": "runtime-closure",
+      "signal": null
+    },
+    {
+      "command": "node --test --experimental-test-isolation=none evaluation/hr3/harness/test/placeholder-inventory-a6.test.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/placeholder-inventory-tests.stderr": "b67fd1fa47edb33a5dc3f5c33c0848a1cff30b2a02051845e38589a65f59f2e2",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/placeholder-inventory-tests.stdout": "5426efc2af6627aa6498a5bdfb1f44932c05f3512efa9a5680a53e1f2ac88b66"
+      },
+      "name": "placeholder-inventory-tests",
+      "signal": null
+    },
+    {
+      "command": "node --test --experimental-test-isolation=none evaluation/hr3/harness/test/trivia-consumers-a6.test.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/authenticated-consumers.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/authenticated-consumers.stdout": "0f68788c9a65d18b420341e0130a51a6bb710ed296b14c274cb50d7324bf7b2b"
+      },
+      "name": "authenticated-consumers",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/context-certification.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/context-certificate.stderr": "13fc109cb5faa92e321b84fa67c96c725fa512357e90224a9bcb5d3ed88ae38e",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/context-certificate.stdout": "ed7a082b6d65531b8754ac519d2a98ae3018449d4736a28257f146dcdcdffbf3"
+      },
+      "name": "context-certificate",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/cap-certification.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/output-certificate.stderr": "8327a32062ed024aa458d09de91d6f6f386350548ba77f2af8debec056d002cb",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/output-certificate.stdout": "6c3d88d81d28bdab0793c77641d50e3b42fa83c7b964b9114ed0de30a9563796"
+      },
+      "name": "output-certificate",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/preflight-a6.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/input-feasibility.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/input-feasibility.stdout": "a1e0e6ff0cb582bd3c62ed2661064c99e9f6ae2d8f5e131bc4482cc7031667b1"
+      },
+      "name": "input-feasibility",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/request-certification.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/request-embedding-certificate.stderr": "b54f0956e20238d6b075943bac93606e343d94d42d4f7ece49c95fed3fb6c050",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/request-embedding-certificate.stdout": "9684a8d62d7b0b6a75007599957635d0e77da2f4884b392adc1c12513c06ab3b"
+      },
+      "name": "request-embedding-certificate",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/accounting-a6.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/accounting.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/accounting.stdout": "43fcfd3bf009606a08d2815060d67dd5a7885753aae8f562ad51fd700c9d7044"
+      },
+      "name": "accounting",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/projection-schema.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/projection-schema.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/projection-schema.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "name": "projection-schema",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/budget-a6.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/budget.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/budget.stdout": "da29f29873d3c739ef42c31753df48fa48d3409e6060749806f187217489e78f"
+      },
+      "name": "budget",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/continuation-a6.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/continuation-projection.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/continuation-projection.stdout": "d86817dd0e62d328ebd4d7bceea44346562e566d286ffcc0cf697c5c6ded5760"
+      },
+      "name": "continuation-projection",
+      "signal": null
+    },
+    {
+      "command": "node --import ./evaluation/hr3/harness/test/redirect-generator-temp.mjs --test --experimental-test-isolation=none evaluation/hr3/generator/test/generator.test.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/generator-tests.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/generator-tests.stdout": "a91380e425a25dd9a0adf7367f910518d80da167c2671eb80c8e406f6d3aa600"
+      },
+      "name": "generator-tests",
+      "signal": null
+    },
+    {
+      "command": "node --import ./evaluation/hr3/harness/test/redirect-generator-temp.mjs --test --experimental-test-isolation=none evaluation/hr3/scorer/test/canonical.test.mjs evaluation/hr3/scorer/test/citations.test.mjs evaluation/hr3/scorer/test/contract.test.mjs evaluation/hr3/scorer/test/schema-cli.test.mjs evaluation/hr3/scorer/test/scorer.test.mjs evaluation/hr3/scorer/test/trivia-regression.test.mjs evaluation/hr3/scorer/test/trivia-target.test.mjs evaluation/hr3/scorer/test/trivia.test.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/scorer-tests.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/scorer-tests.stdout": "3a081a296f99d137bbbeb6be36d6d36212010a8cce0ef75da281342a663456b0"
+      },
+      "name": "scorer-tests",
+      "signal": null
+    },
+    {
+      "command": "node --test --experimental-test-isolation=none evaluation/hr3/integration/test/integration.test.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/integration-tests.stderr": "e056a600f0a672b263dd07887f266076e92616144ca83d90a6118116cd5fe063",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/integration-tests.stdout": "0c06a8c0ce37851ff7f6a45554b199dd0c5052449a8a487a2b97906412f9ddf4"
+      },
+      "name": "integration-tests",
+      "signal": null
+    },
+    {
+      "command": "node evaluation/hr3/harness/test.mjs --mcp-dependencies adapters/mcp/node_modules --tokenizer-dependencies adapters/openai/node_modules",
+      "exitCode": 1,
+      "logs": {
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/harness-tests.stderr": "1d25accbd5f2357898918cf9798c672db089471163ddb12807bc54763d564821",
+        "evaluation/hr3/harness/artifacts/a61-placeholder-verification-o3kJZH/harness-tests.stdout": "a225c2624b55ffd6cba22d503f8497ff37a020262f1403f22b7f46a4594fffab"
+      },
+      "name": "harness-tests",
+      "signal": null
+    }
+  ],
+  "suiteResults": {
+    "placeholder-inventory-tests": {
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "exitCode": 0
+    },
+    "authenticated-consumers": {
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "skipped": 0,
+      "exitCode": 0
+    },
+    "generator-tests": {
+      "tests": 62,
+      "pass": 62,
+      "fail": 0,
+      "skipped": 0,
+      "exitCode": 0
+    },
+    "scorer-tests": {
+      "tests": 100,
+      "pass": 100,
+      "fail": 0,
+      "skipped": 0,
+      "exitCode": 0
+    },
+    "integration-tests": {
+      "tests": 26,
+      "pass": 26,
+      "fail": 0,
+      "skipped": 0,
+      "exitCode": 0
+    },
+    "harness-tests": {
+      "tests": 371,
+      "pass": 369,
+      "fail": 2,
+      "skipped": 0,
+      "exitCode": 1
+    }
+  },
+  "inventory": {
+    "fields": 205,
+    "declaredPlaceholders": 22,
+    "recordBlanketExemption": false,
+    "formatterChanged": false,
+    "publicPathsChanged": false
+  },
+  "requests": [
+    {
+      "kind": "extraction/primary",
+      "reservation": 34504,
+      "limit": 40960,
+      "marginPercent": 15.76171875,
+      "sha256": "713f0b5ecc28fba4b232f47f520ae2cea16d20c8ed8db37db9bdef18409f16d0"
+    },
+    {
+      "kind": "extraction/alternative",
+      "reservation": 34518,
+      "limit": 40960,
+      "marginPercent": 15.727539062500002,
+      "sha256": "9750be3b0b183d80f019e1c9f2db059184696b132c1e747d556c243695ff098f"
+    },
+    {
+      "kind": "reader/T",
+      "reservation": 43572,
+      "limit": 57344,
+      "marginPercent": 24.016462053571427,
+      "sha256": "1dde559035a79815e484ac065dda66ca7a4d01eac7da92343d051bc679d91d59"
+    },
+    {
+      "kind": "reader/U",
+      "reservation": 44396,
+      "limit": 57344,
+      "marginPercent": 22.579520089285715,
+      "sha256": "6de55d3d01c9ec54701ce6fa6357ed06a42198b27c14bc14532923e9a48e2e21"
+    },
+    {
+      "kind": "reader/O",
+      "reservation": 42251,
+      "limit": 49152,
+      "marginPercent": 14.040120442708334,
+      "sha256": "9d15254069c151cba1a11479ef96f0e5663662bfcfe4bb64523850467ff130b2"
+    },
+    {
+      "kind": "reader/P",
+      "reservation": 49422,
+      "limit": 57344,
+      "marginPercent": 13.814871651785715,
+      "sha256": "ff90c8237509a9db18bc18fbd99e8fc877ce4e0ed989b51fb6c15deda7066be4"
+    }
+  ],
+  "outputs": {
+    "reader": {
+      "pass": true,
+      "cap": 2176,
+      "worstTokens": 1774,
+      "margin": 402,
+      "marginPercent": 18.474264705882355,
+      "worstStructure": "engineering-stress/reader/scope_change/alternative_mediated/4/supported_union",
+      "familyId": "engineering-cap-scope_change-alternative_mediated-zh-Hant-B0"
+    },
+    "extraction": {
+      "pass": true,
+      "cap": 4352,
+      "worstTokens": 2276,
+      "margin": 2076,
+      "marginPercent": 47.70220588235294,
+      "worstStructure": "engineering-stress/extraction/scope_change/alternative_mediated/4/all_explicit_events",
+      "familyId": "engineering-cap-scope_change-alternative_mediated-zh-Hant-B0"
+    }
+  },
+  "embeddings": {
+    "cumulativeProjection": {
+      "research": {
+        "maxMeasuredFamilyUnits": 29998,
+        "conservativeFamilies": 2060,
+        "availableCarryUnits": 1799591,
+        "twoTransportFailureReservations": 6758,
+        "projectedCompleteRunUnits": 63602229,
+        "limit": 64000000,
+        "withinAllowance": true,
+        "scope": "Fixture-grammar bound over all reference and independent context requests, using the largest complete measured family. Replacement banks require recertification. At most two transport failures precede the cumulative third-failure stop."
+      },
+      "product": {
+        "maxMeasuredFamilyUnits": 12574,
+        "conservativeFamilies": 1860,
+        "availableCarryUnits": 436859,
+        "twoTransportFailureReservations": 6526,
+        "projectedCompleteRunUnits": 23831025,
+        "limit": 64000000,
+        "withinAllowance": true,
+        "scope": "Fixture-grammar bound over all reference and independent context requests, using the largest complete measured family. Replacement banks require recertification. At most two transport failures precede the cumulative third-failure stop."
+      }
+    },
+    "requests": 12902,
+    "maxInputUnits": 1220,
+    "maxRequestUnits": 3379,
+    "maxRequestBytes": 3798,
+    "unitsByChannel": {
+      "research": 8700088,
+      "product": 2150887
+    },
+    "contextRequests": 138,
+    "contextCasesMeasured": 9,
+    "contextMeasurementsIncludedBeforeProjection": true,
+    "cumulativeLimits": {
+      "research": 64000000,
+      "product": 64000000
+    },
+    "enforcement": "validateRequest checks every per-input/request body; ledger cumulatively reserves every retry before dispatch with no reset. Certificate repeated fixture measurements are offline, not billable counters."
+  },
+  "context": {
+    "status": "PASS",
+    "adoptedContexts": 6,
+    "unresolvedContexts": 3,
+    "sharedTurnAmbiguities": 3
+  },
+  "privacy": {
+    "certificateRequestHits": 0,
+    "completeFakePilotLeakScan": "NOT_RUN_AFTER_FAILURE"
+  },
+  "accounting": {
+    "preparationComplete": true,
+    "incrementalNanodollars": 38342656000,
+    "carriedNanodollars": 4145077720,
+    "cumulativeNanodollars": 42487733720
+  },
+  "protectedFilesUnchanged": 139,
+  "providerDispatches": 0,
+  "newPaidReservations": 0,
+  "fullFakePilotComplete": false,
+  "freeze": "PENDING_PRIMARY",
+  "paidReadiness": false,
+  "failures": [
+    {
+      "test": "A6 runtime requires the fourth-pilot chain and a primary preparation completeness record",
+      "location": "evaluation/hr3/harness/test/a4.test.mjs:97",
+      "reason": "Stale test expects the now-complete primary preparation record to be rejected."
+    },
+    {
+      "test": "complete request certificate covers auditor U/T requests, all provider framing and maximal structures",
+      "location": "evaluation/hr3/harness/test/a3-audit.test.mjs:116",
+      "reason": "Historical A-4 certificate limits are compared to active A-6.1 constants."
+    }
+  ]
+}

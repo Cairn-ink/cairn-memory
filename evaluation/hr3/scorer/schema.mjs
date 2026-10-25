@@ -1,3 +1,4 @@
+import { SUPPORT_VERSION, TRIVIA_VERSION } from './support.mjs';
 // Closed A-4 §4 answers; private §7 causal graphs remain in gold only.
 const str = { type: 'string' };
 const arr = (items, minItems = 0) => ({ type: 'array', items, minItems });
@@ -36,7 +37,10 @@ const answer = obj({ current: current('Row'), old: old('Row'),
   reason: obj({ status: enumeration('stated', 'not_stated', 'unavailable'), support: arr(ref('Citation')) }) });
 const span = obj({ id: str, origin: str, start: { type: 'integer', minimum: 0 }, end: { type: 'integer', minimum: 1 }, text: str });
 const goldEdge = obj({ from: str, to: str, support: arr(arr(str, 1), 1) });
-const gold = obj({ question: str, current: current('GoldRow'), old: old('GoldRow'), reason: obj({ status: enumeration('stated', 'not_stated', 'unavailable'), nodes: arr(node('GoldClaim')), acceptedGraphs: arr(obj({ edges: arr(goldEdge, 1) })) }), supportSpans: arr(span) });
+const triviaRule = obj({ id: str, production: str, language: str, literal: str, optional_offsets: arr({ type: 'integer', minimum: 0 }, 1) });
+const triviaPosition = obj({ origin: str, position: { type: 'integer', minimum: 0 }, char: { type: 'string', minLength: 1 }, rule: str, literal_offset: { type: 'integer', minimum: 0 } });
+const supportTrivia = obj({ version: { const: TRIVIA_VERSION }, producer: nullable(obj({ version: str, rules_sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' }, freeze_sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' }, handle_sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' } })), rules: arr(triviaRule), positions: arr(triviaPosition) });
+const gold = obj({ supportVersion: { const: SUPPORT_VERSION }, supportTrivia, question: str, current: current('GoldRow'), old: old('GoldRow'), reason: obj({ status: enumeration('stated', 'not_stated', 'unavailable'), nodes: arr(node('GoldClaim')), acceptedGraphs: arr(obj({ edges: arr(goldEdge, 1) })) }), supportSpans: arr(span) });
 const address = obj({ intent: enumeration('current', 'history'), item: { type: 'integer', minimum: 0 }, unit: enumeration('body', 'receipt'), source: nullable({ type: 'integer', minimum: 0 }) });
 // Each segment is an actually delivered slice, after normalization and before
 // concatenation. Omitted text is never supplied. No raw document is needed.
@@ -56,7 +60,8 @@ function root(title, shape) {
   return { $schema: 'https://json-schema.org/draft/2020-12/schema', title, ...shape, $defs: referenced };
 }
 export const answerSchema = root('HR-3 A-4 slot answer v2', answer);
-export const goldSchema = root('HR-3 A-4 private gold v2', gold);
+export const supportSchema = root(SUPPORT_VERSION, obj({ supportVersion: { const: SUPPORT_VERSION }, supportTrivia }));
+export const goldSchema = root('HR-3 A-6 case-bound authenticated support gold v5', gold);
 export const submissionSchema = root('HR-3 A-4 scorer submission v2', obj({ answer, delivered: arr(ref('DeliveredUnit')) }));
 
 // Deliberately small evaluator for exactly the JSON Schema vocabulary above.

@@ -1,7 +1,7 @@
 // Validator only. There is deliberately no writer/CLI for readiness or review.
 import assert from 'node:assert/strict';import {readFileSync,existsSync} from 'node:fs';import {isAbsolute} from 'node:path';
 import {hash,canonical,fail} from './common.mjs';import {requirementsForStage,ANALYSIS_DESIGN} from './paid-requirements-a4.mjs';import {runtimeClosure} from './runtime-closure.mjs';
-export const PAID_PREFLIGHT_PATH='evaluation/hr3/harness/reports/paid-preflight-a4.json';
+export const PAID_PREFLIGHT_PATH='evaluation/hr3/harness/reports/paid-preflight-a6.json';
 const check=(ok,reason)=>{if(!ok)fail('paid_preflight:'+reason);};
 function verified(spec,name){check(spec&&typeof spec.path==='string'&&!isAbsolute(spec.path)&&!spec.path.split(/[\\/]/).includes('..'),'missing_'+name);check(existsSync(spec.path),'missing_'+name);const bytes=readFileSync(spec.path);check(hash(bytes)===spec.sha256,'stale_'+name);return JSON.parse(bytes);}
 function bindings(report,name){check(report.sources&&Object.keys(report.sources).length>0,'missing_sources_'+name);for(const [p,digest]of Object.entries(report.sources)){check(!isAbsolute(p)&&!p.split(/[\\/]/).includes('..')&&existsSync(p),'missing_source_'+name);check(hash(readFileSync(p))===digest,'stale_source_'+name);}}
@@ -21,7 +21,7 @@ function analysisResults(report){
 export function verifyPaidPreflight({path=PAID_PREFLIGHT_PATH,carry,inputs,out,stage='pilot'}={}){
  check(existsSync(path),'missing_record');let r;try{r=JSON.parse(readFileSync(path));}catch{fail('paid_preflight:malformed_record');}
  const applicable=requirementsForStage(stage);
- check(r.version==='hr3-paid-preflight-a4-v2'&&r.stage===stage&&r.scope===(stage==='pilot'?'one_uncalibrated_60_family_pilot':'one_'+stage+'_run'),'record_scope');
+ check(r.version==='hr3-paid-preflight-a6-v1'&&r.stage===stage&&r.scope===(stage==='pilot'?'one_uncalibrated_60_family_pilot':'one_'+stage+'_run'),'record_scope');
  const requirements=Object.fromEntries(applicable.map(x=>[x.id,x.clauses]));check(canonical(r.requirements)===canonical(requirements),'requirements_catalog');
  const evidence={};for(const {id}of applicable){evidence[id]=verified(r.evidence?.[id],id);check(evidence[id].status==='PASS','failed_'+id);bindings(evidence[id],id);}
  const closure=runtimeClosure();for(const [id,report]of Object.entries(evidence))check(report.runtimeClosureSHA256===hash(closure.files),'stale_binding_'+id);
@@ -32,11 +32,11 @@ export function verifyPaidPreflight({path=PAID_PREFLIGHT_PATH,carry,inputs,out,s
  check(embeddings.maxInputUnits<=8192&&embeddings.maxRequestUnits<=300000&&embeddings.maxRequestBytes<=2097152,'embedding_bounds');
  check(privacy.completePilot===true&&privacy.readerRequests?.total===480&&privacy.readerRequests.hits===0&&privacy.extractionRequests?.total===240&&privacy.extractionRequests.hits===0&&privacy.productPayloads?.hits===0&&privacy.pReturnedContextUnchanged,'privacy_coverage');
  check(conformance.fullFakePilot===480&&conformance.allSuitesPass===true&&conformance.context?.adoptedContexts>0&&conformance.context.unresolvedContexts>0&&conformance.context.sharedTurnAmbiguities>0,'conformance_coverage');
- check(allocation.families===60&&allocation.lineages===30&&typeof allocation.freshSeed==='string'&&allocation.freshSeed.trim()&&allocation.heldOutRendered===false&&Object.values(allocation.byType??{}).length===5&&Object.values(allocation.byType).every(x=>x===12)&&allocation.languagesVerified===true&&allocation.causalControlsVerified===true&&allocation.lineageMultiplicityVerified===true,'allocation');
+ check(allocation.families===60&&allocation.lineages===30&&allocation.freshSeed==='hr3-worlds-a6-pilot-v1'&&allocation.heldOutRendered===false&&Object.values(allocation.byType??{}).length===5&&Object.values(allocation.byType).every(x=>x===12)&&allocation.languagesVerified===true&&allocation.causalControlsVerified===true&&allocation.lineageMultiplicityVerified===true,'allocation');
  check(inputs&&allocation.inputManifest?.path===inputs+'/manifest.json'&&hash(readFileSync(allocation.inputManifest.path))===allocation.inputManifest.sha256,'input_manifest');
- check(carry&&accounting.carrySHA256===carry.manifestSHA256&&accounting.completeThirdPilotMerged===true&&Number.isSafeInteger(accounting.cumulativePilotBoundNanodollars)&&accounting.cumulativePilotBoundNanodollars>=0&&accounting.cumulativePilotBoundNanodollars<=50e9,'accounting');
+ check(carry&&accounting.carrySHA256===carry.manifestSHA256&&accounting.completeFourthPilotMerged===true&&Number.isSafeInteger(accounting.cumulativePilotBoundNanodollars)&&accounting.cumulativePilotBoundNanodollars>=0&&accounting.cumulativePilotBoundNanodollars<=50e9,'accounting');
  if(stage!=='pilot'){
- check(canonical(analysisCoverage.design)===canonical(ANALYSIS_DESIGN)&&analysisCoverage.scoreInterface==='hr3-scorer-a4-v2','analysis_design');
+ check(canonical(analysisCoverage.design)===canonical(ANALYSIS_DESIGN)&&analysisCoverage.scoreInterface==='hr3-scorer-a6-v5','analysis_design');
  for(const key of ['adapterParity','correctedVarianceCovariance','directCountParity','pairedSharedDraws','lineageSensitivity','iccMarginals','boundarySupplements','coverageAndMonteCarloPublished','undercoverageReviewed'])check(analysisCoverage.checks?.[key]===true,'analysis_'+key);
  analysisResults(analysisCoverage);
  check(analysisCoverage.powerDatasets===120000&&analysisCoverage.coverageDatasets===24000&&analysisCoverage.correctedDrawsPerDataset===10000&&analysisCoverage.lineageDrawsPerPowerDataset===10000,'analysis_workload');
@@ -49,8 +49,9 @@ export function verifyPaidPreflight({path=PAID_PREFLIGHT_PATH,carry,inputs,out,s
  check(freeze.runtimeClosure&&canonical(freeze.runtimeClosure.files)===canonical(closure.files)&&canonical(freeze.runtimeClosure.externalFiles)===canonical(closure.externalFiles),'freeze_closure');
  check(freeze.errataSHA256===hash(readFileSync('evaluation/hr3/protocol/errata.md')),'freeze_errata');
  for(const [p,spec]of Object.entries(freeze.hashes??{}))check(existsSync(p)&&hash(readFileSync(p))===spec.sha256,'stale_freeze_file');
+ check(canonical(review.amendments)===canonical(['A-4','A-4.1','A-4.2','A-1.1','A-6','A-6.1']),'review_amendments');
  check(review.testOnly!==true,'test_review_forbidden');
- check(review.suppliedBy==='primary'&&review.nonAuthor===true&&typeof review.reviewer==='string'&&review.reviewer.trim()&&review.decision===(stage==='pilot'?'acceptable_for_paid_pilot':'acceptable_for_'+stage)&&canonical(review.amendments)===canonical(['A-4','A-4.1','A-4.2','A-1.1']),'non_author_review');
+ check(review.suppliedBy==='primary'&&review.nonAuthor===true&&typeof review.reviewer==='string'&&review.reviewer.trim()&&review.decision===(stage==='pilot'?'acceptable_for_paid_pilot':'acceptable_for_'+stage)&&canonical(review.amendments)===canonical(['A-4','A-4.1','A-4.2','A-1.1','A-6','A-6.1']),'non_author_review');
  check(review.freezeSHA256===r.evidence.freeze.sha256&&review.closureSHA256===hash(closure.files)&&review.evidenceBindings&&canonical(review.evidenceBindings)===canonical(Object.fromEntries(Object.entries(r.evidence).filter(([k])=>k!=='review'))),'review_binding');
  return {status:'PASS',recordSHA256:hash(readFileSync(path)),reviewSHA256:r.evidence.review.sha256,requirements:applicable.map(x=>x.id)};
 }

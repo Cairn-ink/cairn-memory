@@ -24,7 +24,7 @@ const spec=path=>({path,sha256:hash(readFileSync(path))});
 function manifest(dir,ledgers,preparation={complete:true,receipts:[]}) {
   const path=join(dir,'carry-'+hash({ledgers,preparation})+'.json');save(path,{version:'hr3-carry-forward-v1',ledgers,preparation});return path;
 }
-const request=(id='new')=>({id,operation:'extraction',body:responseRequest('extraction',{})});
+const request=(id='new')=>({id,operation:'reader',body:responseRequest('reader',{})});
 
 test('cached corpus reproduces 55 collision families, 257 ID errors and 68 P reselections; internal keys remove all',()=>{
   const {table,...d}=identityDiagnostics(cachedPilotBatches());
@@ -32,7 +32,7 @@ test('cached corpus reproduces 55 collision families, 257 ID errors and 68 P res
   assert.equal(table.reduce((n,r)=>n+r.retainedEvents,0),605);
   const source=event(1),a=identifyEvents('family',1,[source]),b=identifyEvents('family',2,[source]),c=identifyEvents('other',1,[source]);
   assert.equal(a[0].event_id,eventKey('family',1,'e1'));assert.equal(new Set([...a,...b,...c].map(e=>e.event_id)).size,3);
-  assert.deepEqual(a[0].predecessor_anchors,source.predecessor_anchors);assert.equal(source.event_id,'e1');
+  assert.deepEqual(a[0].predecessor_refs,source.predecessor_refs);assert.equal(source.event_id,'e1');
   assert.throws(()=>identifyEvents('family',1,[source,source]),/duplicate_event_id_within_batch/);
 });
 
@@ -113,7 +113,15 @@ test('hash-verified exact preparation receipts participate in cumulative spendin
 
 test('complete request certificate covers auditor U/T requests, all provider framing and maximal structures',()=>{
   const r=JSON.parse(readFileSync(new URL('../reports/request-certification-a4.json',import.meta.url)));
-  assert.equal(r.status,r.rows.every(row=>row.pass)?'PASS':'FAIL_INPUT_MARGIN');assert.deepEqual(r.inputCaps,INPUT_CAPS);assert.equal(r.counts.families,240);
+  // Frozen historical authority: A-4.1 extraction and A-4.2 reader ceilings.
+  const historicalInputs={extraction:20480,reader:40960},historicalReaders={T:40960,U:40960,P:40960,O:32768};
+  assert.equal(r.status,r.rows.every(row=>row.pass)?'PASS':'FAIL_INPUT_MARGIN');assert.deepEqual(r.inputCaps,historicalInputs);assert.deepEqual(r.readerInputCaps,historicalReaders);assert.equal(r.counts.families,240);
+  for(const row of r.rows)assert.equal(row.limit,row.operation==='reader'?historicalReaders[row.arm]:historicalInputs.extraction);
+  // Active A-6.1 evidence is checked separately; never rewrite historical bodies.
+  const active=JSON.parse(readFileSync(new URL('../reports/request-certification-a6.json',import.meta.url)));
+  assert.equal(active.status,'PASS');assert.deepEqual(active.inputCaps,{extraction:40960,reader:57344});
+  const activeReaders={T:57344,U:57344,P:57344,O:49152};assert.deepEqual(active.readerInputCaps,activeReaders);
+  for(const row of active.rows)assert.equal(row.limit,row.operation==='reader'?activeReaders[row.arm]:40960);
   assert.deepEqual(r.historicalAuditReservations.map(x=>[x.arm,x.reservation]),[['U',20855],['T',24133]]);
   assert.ok(r.rows.every(row=>row.pass===(row.reservation*100<=row.limit*95)));assert.equal(r.minimumMarginPercent,5);
   assert.deepEqual([...new Set(r.rows.filter(x=>x.operation==='reader').map(x=>x.arm))].sort(),['O','P','T','U']);
@@ -121,7 +129,7 @@ test('complete request certificate covers auditor U/T requests, all provider fra
   try {for(const [operation,worst] of Object.entries(r.worst)) {
     assert.equal(bytes(worst.body)+4096,worst.reservation);assert.equal(hash(worst.body),worst.sha256);
     assert.equal(encoder.encode(JSON.stringify(worst.body),[],[]).length,worst.providerBodyTokens);
-    const request={operation,body:worst.body,id:worst.arm?`${worst.family}/reader/${worst.arm}/${worst.batch}`:'certificate'};if(worst.reservation<=worst.limit)assert.equal(validateRequest(request).input,worst.reservation);else assert.throws(()=>validateRequest(request),/request_byte_bound/);
+    const request={operation,body:worst.body,id:worst.arm?`${worst.family}/reader/${worst.arm}/${worst.batch}`:'certificate'};assert.throws(()=>validateRequest(request),/public_contract_projection/,'Historical A-4 bodies are never accepted as A-6 dispatches');
   }}finally{encoder.free();}
   assert.throws(()=>validateRequest({operation:'reader',body:responseRequest('reader',{delivered:{current:'x'.repeat(INPUT_CAPS.reader),history:''}})}),/request_byte_bound/);
 });
@@ -139,7 +147,7 @@ test('real execution refuses missing or incomplete carry-forward input before an
 
 test('classified reader input ceilings used by the pilot budget are enforced before dispatch',()=>{
  const base={delivered:{current:'',history:''}},overhead=bytes(responseRequest('reader',base))+4096;
- const body=responseRequest('reader',{delivered:{current:'x'.repeat(33000-overhead),history:''}});
- assert.equal(validateRequest({id:'family/reader/U/4/attempt-0',operation:'reader',body}).input,33000);
+ const body=responseRequest('reader',{delivered:{current:'x'.repeat(50000-overhead),history:''}});
+ assert.equal(validateRequest({id:'family/reader/U/4/attempt-0',operation:'reader',body}).input,50000);
  assert.throws(()=>validateRequest({id:'family/reader/O/4/attempt-0',operation:'reader',body}),/request_byte_bound/);
 });

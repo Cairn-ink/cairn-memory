@@ -2,7 +2,7 @@
 import {runtimeClosure} from './runtime-closure.mjs';
 import {contextConformance} from './context-certification.mjs';
 import {measureEmbedding,summarizeEmbeddings} from './embedding-measurement-a4.mjs';
-import {prepareA4Accounting} from './accounting-a4.mjs';
+import {accountingA6 as prepareA4Accounting} from './accounting-a6.mjs';
 import {projectContract,familyContractContext} from './contract-projection-a4.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync,mkdirSync,mkdtempSync,rmSync,writeFileSync} from 'node:fs';
@@ -23,19 +23,19 @@ import {bytes,hash} from './common.mjs';
 export const INPUT_MARGIN_PERCENT=5;
 export function referenceEvents(family,batch,{auditIdentity=false}={}) {
   const raw=validateExtraction(extractionReference(family,batch),extractionInput(family,batch)).events;
-  return auditIdentity?raw.map((e,ordinal)=>({...e,event_id:`b${batch}/${e.event_id}`,batch,ordinal})):identifyEvents(family.family_id,batch,raw);
+  return auditIdentity?raw.map((e,ordinal)=>({...e,event_id:`b${batch}/${e.event_id}`,batch,ordinal})):identifyEvents(family.family_id,batch,raw,family.namespace);
 }
 export const readerInput=(cp,delivered)=>({public_contract:cp.public_contract,question:cp.question,checkpoint:cp.batch,focal_turn:cp.focal_turn,requested_predecessor_turns:cp.requested_predecessor_turns,delivered});
-export const embeddingMeasurements=[];let certificateFamily=null;
+export const embeddingMeasurements=[];let certificateFamily=null,certificatePrivacy=null;
 export function certificateEmbedder(mode='constant',channel='research') {
-  return {id:'offline-input-certificate-'+mode,revision:'1',dimensions:1536,normalization:'l2',async embed(texts){embeddingMeasurements.push(measureEmbedding(texts,{family:certificateFamily,mode,channel}));return texts.map(text=>{
+  return {id:'offline-input-certificate-'+mode,revision:'1',dimensions:1536,normalization:'l2',async embed(texts){certificatePrivacy?.check(channel+'-embedding',embeddingRequest(texts),{mode});embeddingMeasurements.push(measureEmbedding(texts,{family:certificateFamily,mode,channel}));return texts.map(text=>{
     const vector=Array(1536).fill(0);vector[mode==='constant'?0:parseInt(hash(text).slice(0,8),16)%1536]=1;return vector;
   });}};
 }
 
 export async function certifyRequests({progress=()=>{}}={}) {
   const repo=new URL('../../../',import.meta.url),local=p=>new URL(p,repo);
-  const accounting=prepareA4Accounting();assert.equal(accounting.complete,true,'Complete cumulative embedding accounting required');
+  const accounting=prepareA4Accounting();assert.equal(accounting.completeLedgerChain,true,'Complete cumulative embedding accounting required');
   useInstalledDependencies({mcp:fileURLToPath(local('adapters/mcp/node_modules')),tokenizer:fileURLToPath(local('adapters/openai/node_modules'))});
   const {ProductAgent}=await import('./product.mjs');
   const encoder=createRequire(local('adapters/openai/package.json'))('tiktoken').get_encoding('o200k_base');
@@ -56,13 +56,13 @@ export async function certifyRequests({progress=()=>{}}={}) {
     for(const cohort of [{split:'pilot',bundles:pilotReferenceBundles()},{split:'engineering-stress',bundles:engineeringStressFixtures()}]) {
       let n=0;
       for(const {family} of cohort.bundles) {
-        certificateFamily=family.family_id;const meta={split:cohort.split,family:family.family_id};for(const cp of family.checkpoints)cp.public_contract=projectContract('reader',familyContractContext(family,cp.question));currentPrivacy=new PrivacyGuard(family);const aliases=sourceOrderAliases();
+        certificateFamily=family.family_id;const meta={split:cohort.split,family:family.family_id};for(const cp of family.checkpoints)cp.public_contract=projectContract('reader',familyContractContext(family,cp.question));currentPrivacy=new PrivacyGuard(family);certificatePrivacy=currentPrivacy;const aliases=sourceOrderAliases();
         for(const b of family.batches)for(const alternative of [false,true])measure('extraction',extractionInput(family,b.ordinal),{...meta,batch:b.ordinal,alternative});
         // Every pilot P case, plus independent maximal graph/language/time
         // structures: alternative has the largest union, direct expiry adds
         // its distinct supported deadline-trigger graph. Other research arms
         // still cover the full 180-case engineering Cartesian product.
-        const productCase=cohort.split==='pilot'||family.causal_class==='alternative_mediated'||family.change_type==='expiry'&&family.causal_class==='direct';
+        const productCase=true;
         const product=productCase?await ProductAgent.open({privacy:currentPrivacy,aliases,namespace:family.namespace??{ownerId:'hr3-request-certificate',scope:'personal',projectId:null},embedder:certificateEmbedder('constant','product'),counter,tempRoot:temp}):null;
         const events=[];
         try {
@@ -102,18 +102,18 @@ export async function certifyRequests({progress=()=>{}}={}) {
     assert.ok(contextCoverage.embeddingMeasurements.length>0,'Independent context embeddings must be measured');
     embeddingMeasurements.push(...contextCoverage.embeddingMeasurements);
     const embeddingSummary=summarizeEmbeddings(embeddingMeasurements,accounting.carry.exposure.embedding),cumulative=embeddingSummary.cumulativeProjection;
-    const sources=Object.fromEntries(['references-a4.mjs','contract-projection-a4.mjs','prompts-a4.mjs','preflight-a4-schema.mjs','privacy.mjs','reports/private-field-inventory-a4.json','run-configuration.mjs','requests.mjs','schema.mjs','event-identity.mjs','request-certification.mjs','context-certification.mjs','embedding-measurement-a4.mjs','runtime-closure.mjs','public-paths-a4.mjs','accounting-a4.mjs','reports/a4-carry-forward.json','reports/accounting-input-a4.json','research.mjs','product.mjs','cap-certification.mjs','cap-stress-fixtures.mjs'].map(name=>['evaluation/hr3/harness/'+name,hash(readFileSync(new URL(name,import.meta.url)))]));
+    const sources=Object.fromEntries(['references-a4.mjs','contract-projection-a4.mjs','prompts-a4.mjs','preflight-a4-schema.mjs','privacy.mjs','reports/private-field-inventory-a6.json','run-configuration.mjs','requests.mjs','schema.mjs','event-identity.mjs','request-certification.mjs','context-certification.mjs','embedding-measurement-a4.mjs','runtime-closure.mjs','public-paths-a4.mjs','accounting-a6.mjs','reports/a6-carry-forward.json','reports/accounting-input-a6.json','research.mjs','product.mjs','cap-certification.mjs','cap-stress-fixtures.mjs'].map(name=>['evaluation/hr3/harness/'+name,hash(readFileSync(new URL(name,import.meta.url)))]));
     for(const spec of accounting.sourceSpecs)sources[spec.path]=spec.sha256;
     sources['evaluation/hr3/protocol/errata.md']=hash(readFileSync(local('evaluation/hr3/protocol/errata.md')));
-    return {runtimeClosureSHA256:hash(runtimeClosure().files),contextCoverage,version:'hr3-a4-complete-request-certificate-recheck-v3',status:rows.every(r=>r.pass)&&Object.values(cumulative).every(c=>c.withinAllowance)&&privacyReports.every(p=>p.hits===0)?'PASS':'FAIL_INPUT_EMBEDDING_OR_PRIVACY_GATE',minimumMarginPercent:INPUT_MARGIN_PERCENT,inputCaps:INPUT_CAPS,readerInputCaps:READER_INPUT_CAPS,
-      method:'Complete provider JSON body UTF-8 bytes + 4096 reservation; real o200k_base tokenizer; unmodified whole-item 2000-token intent delivery budgets. All pilot and all 180 independent engineering references for U/T/O with constant and hashed 1536-dimensional unit-vector fixtures. Actual public-operation P for all 60 pilot families and 36 independent maximal graph/language/boundary cases, using constant unit vectors. No held-out generation or network.',
+    return {runtimeClosureSHA256:hash(runtimeClosure().files),contextCoverage,version:'hr3-a6-complete-request-certificate-v1',status:accounting.preparationComplete&&rows.every(r=>r.pass)&&Object.values(cumulative).every(c=>c.withinAllowance)&&privacyReports.every(p=>p.hits===0)?'PASS':'FAIL_INPUT_EMBEDDING_OR_PRIVACY_GATE',minimumMarginPercent:INPUT_MARGIN_PERCENT,inputCaps:INPUT_CAPS,readerInputCaps:READER_INPUT_CAPS,
+      method:'Complete provider JSON body UTF-8 bytes + 4096 reservation; real o200k_base tokenizer; unmodified whole-item 2000-token intent delivery budgets. All pilot and all 180 independent engineering references for U/T/O with constant and hashed 1536-dimensional unit-vector fixtures. Actual public-operation P for all 60 pilot families and all 180 independent engineering cases, using constant unit vectors. No held-out generation or network.',
       limits:'Grammar/reference-structure certification, not a bound over unbounded schema spellings or every possible embedding ranking. P public identities and resulting exact token selections can vary between fresh stores; certify the observed bodies and retain their hashes.',
       embeddings:{...embeddingSummary,contextRequests:contextCoverage.embeddingMeasurements.length,contextCasesMeasured:new Set(contextCoverage.embeddingMeasurements.map(m=>m.family)).size,contextMeasurementsIncludedBeforeProjection:true,cumulativeLimits:{research:64000000,product:64000000},enforcement:'validateRequest checks every per-input/request body; ledger cumulatively reserves every retry before dispatch with no reset. Certificate repeated fixture measurements are offline, not billable counters.'},counts:{families:240,requests:rows.length},privacy:{hits:privacyReports.reduce((n,r)=>n+r.hits,0),families:privacyReports},historicalAuditReservations:[{arm:'U',reservation:20855},{arm:'T',reservation:24133}],auditRegressions:audit,worst,rows,sources,paidAuthorization:false};
-  } finally {encoder.free();rmSync(temp,{recursive:true,force:true});}
+  } finally {certificatePrivacy=null;certificateFamily=null;encoder.free();rmSync(temp,{recursive:true,force:true});}
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href) {
   const report=await certifyRequests({progress:m=>process.stderr.write(m+'\n')});
-  writeFileSync(new URL('./reports/request-certification-a4.json',import.meta.url),JSON.stringify(report,null,2)+'\n');
+  writeFileSync(new URL('./reports/request-certification-a6.json',import.meta.url),JSON.stringify(report,null,2)+'\n');
   process.stdout.write(JSON.stringify({status:report.status,counts:report.counts,worst:Object.fromEntries(Object.entries(report.worst).map(([k,{body,...v}])=>[k,v])),auditRegressions:report.auditRegressions})+'\n');
   process.exitCode=report.status==='PASS'?0:1;
 }

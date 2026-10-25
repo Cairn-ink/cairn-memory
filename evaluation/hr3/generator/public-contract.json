@@ -1,5 +1,5 @@
 {
-  "version": "hr3-public-contract-a4-v1",
+  "version": "hr3-public-contract-a6-v1",
   "languages": [
     "zh-Hant",
     "en",
@@ -585,5 +585,1732 @@
       "en": "The declared predicate alias dispatch 設定 equals dispatch configuration. NFKC maps full-width Ａ to A in scalar text. If delivered text is “A”, quote “Ａ” fails. If only “capacity fell” survived truncation, the omitted causal conclusion cannot be cited. A delivered sameAsBody may address that same body, never an absent receipt.",
       "zh-Hant": "派送設定與 dispatch configuration 依公開表對應。純量文字以 NFKC 將 Ａ 轉 A；若交付文字為 A，引用 Ａ 無效。若截斷後只剩「容量下降」，不能引用未交付的因果結論。sameAsBody 僅能指向實際交付的本文。"
     }
-  ]
+  ],
+  "name_tokens": {
+    "pattern": "[A-Za-z0-9_-]+",
+    "complete_tokens": true,
+    "prefix_exclusion": "A name must match the complete token: both adjacent characters must be outside [A-Za-z0-9_-]. demo7 inside demo70 or demo7_suffix is invalid.",
+    "anchoring": "Own-name and reference quote equals the submitted name before normalization, in a source_turns current-batch turn, exact one-based overlapping occurrence. Roles are semantic assertions, never inferred from substring presence.",
+    "normalization": "NFKC, collapse whitespace and trim; preserve case. No case folding, phonetics, punctuation deletion or undeclared aliases.",
+    "own_name": "The newly introduced record, not the old record in correct record ...; null if absent.",
+    "predecessor_refs": "Quote each referenced record once at its current-batch mention; never guess an earlier turn. The private gold-free registry supplies target event/source identities before arm fan-out."
+  },
+  "extraction": {
+    "crosswalk": {
+      "kind": [
+        "fact",
+        "preference",
+        "decision",
+        "instruction",
+        "context"
+      ],
+      "commitment": [
+        "adopted",
+        "proposed",
+        "quoted",
+        "rejected",
+        "unresolved"
+      ],
+      "change_type": [
+        "initial",
+        "correction",
+        "reversal",
+        "refinement",
+        "scope_change",
+        "expiry",
+        "unchanged"
+      ],
+      "replacement_extent": [
+        "entire_predecessor",
+        "partial",
+        "unresolved"
+      ]
+    },
+    "orthogonal_fields": "Correction is a change type, never a commitment. The old assertion was never adopted; we adopt its replacement means commitment adopted and change_type correction. A rejected proposal has commitment rejected and enacts no decision.",
+    "source_coverage": "List every current-batch turn used by event, slot, own-name/reference and reason anchors in source_turns. Never put an unavailable prior turn there. Copy exact quotes/actual local occurrences; harness computes offsets.",
+    "causal_clauses": "Copy every explicitly stated serial clause, conjunction and sufficiency qualification with its source association in reason_quotes independently of supplied slots; no invented graph/implicit edge. Deadline passage must explicitly cause expiry, not merely name a date.",
+    "admission": "Closed-wire structural validation precedes event/domain admission. Invalid core excludes the event and all attached reasons; no enum coercion, defaults or manufactured context repair. Bad individual assignments/quotes remain independently excluded under A-4. This crosswalk is instruction/domain validation, not provider-enum restrictions turning event rejection into batch rejection.",
+    "context": "Use anchored context payload only for independently source-stated non-slot context with valid core and its own exact text anchor. Do not emit an empty slots payload or duplicate every decision/reason into a context archive. Eligibility is unchanged.",
+    "slots": "Supply only anchored route/Text, approval/Boolean, cap/Quantity. Null means unsupplied; never fill inherited values. Preserve explicit replacement qualifications, audience cells and source-claimed intervals; observed time is not automatically effective time. Complete/partial replacement must be stated, never guessed.",
+    "registry": "Gold-free identity annotations only; no source-name snippets automatically added to factual/reason receipts. No slot values/history in the private registry, no registry in model input or memory. Collisions, invalid annotations, missing/duplicate/self/forward references stay unresolved before writes, with original policy eligibility. No retry using later batches or adoption/currentness/scope to pick a duplicate."
+  },
+  "example_exclusions": {
+    "reserved_name_prefix": "demo",
+    "worlds": [
+      "research",
+      "calibration"
+    ],
+    "policy": "All worked-example worlds, names, routes, source texts, outputs and case-specific mappings are excluded from research/calibration authoring. Shared primitives such as Boolean false and canonical units are not banned. Reserve the demo name namespace; never use examples as sampled worlds."
+  },
+  "reader": {
+    "recovery": "Partial refinement inherits unspecified fields from its identified predecessor without requiring an explicit keep sentence. Recover only values and relationships established by actual delivered evidence. Complete replacement clears selected predecessor fields. Missing delivery is not not_specified, false or zero.",
+    "unresolved": "An unresolved processing label does not negate explicit source facts. Use them only if sufficient under shared update meanings; never reconstruct missing predecessor content or assume unresolved-reference values are known.",
+    "history": "no_active_decision requires rows:[]; last-known expiry values belong only in requested expired history. Match exactly requested predecessor turns/statuses. Questions announce the complete shared vocabulary, never the case answer.",
+    "selection": "Select every necessary serial, conjunctive and sufficiency clause or one complete sufficient alternative associated with the focal change. No endpoint-only, unrelated, speculative, negated, earlier-change or blanket whole-context explanation. Missing delivered explanation is unavailable, not an automatic not_stated. Factual negative R remains support-not-applicable with no new negative witness.",
+    "addresses": "Use decoded actual delivered units; item is actual selected-intent array position, source is displayed receipt index. Exact occurrence is counted within that exact unit. Do not relocate addresses, change occurrences, strip punctuation, cite omitted text or retry. Legitimate delivered aliases and overlapping ambiguity retain existing rules. C/O citation diagnostics stay separate."
+  },
+  "worked_examples": {
+    "common_input": {
+      "observed_at": "2034-07-09T02:00:00.000Z",
+      "public_header": {
+        "subject": "demoService",
+        "predicate": "dispatch configuration"
+      }
+    },
+    "authorship": "independent engineering teaching examples, never paid-pilot submissions or case-specific repairs",
+    "excluded_from": [
+      "research",
+      "calibration"
+    ],
+    "extraction": [
+      {
+        "id": "demo-own-reference-en",
+        "language": "en",
+        "batches": [
+          {
+            "turns": [
+              {
+                "turn_id": "demo-start",
+                "text": "Record demoLira: we adopt route demoRoute9. All 12 cells apply, effective from 2034-07-08T16:00:00.000Z with no end."
+              }
+            ],
+            "expected": [
+              {
+                "event_id": "demo-event-demo-start",
+                "source_turns": [
+                  "demo-start"
+                ],
+                "observed_at": "2034-07-09T02:00:00.000Z",
+                "kind": "decision",
+                "commitment": "adopted",
+                "change_type": "initial",
+                "subject": "demoService",
+                "predicate": "dispatch configuration",
+                "payload": {
+                  "type": "slots",
+                  "route": {
+                    "value": {
+                      "type": "Text",
+                      "text": "demoRoute9"
+                    },
+                    "anchors": [
+                      {
+                        "turn_id": "demo-start",
+                        "quote": "demoRoute9",
+                        "occurrence": 1
+                      }
+                    ]
+                  },
+                  "approval": null,
+                  "cap": null
+                },
+                "scope": {
+                  "any": [
+                    {
+                      "all": []
+                    }
+                  ]
+                },
+                "effective_interval": {
+                  "from": "2034-07-08T16:00:00.000Z",
+                  "to": null
+                },
+                "record_name": {
+                  "name": "demoLira",
+                  "anchor": {
+                    "turn_id": "demo-start",
+                    "quote": "demoLira",
+                    "occurrence": 1
+                  }
+                },
+                "predecessor_refs": [],
+                "replacement_extent": "entire_predecessor",
+                "reason_quotes": [],
+                "source_quotes": [
+                  {
+                    "turn_id": "demo-start",
+                    "quote": "Record demoLira: we adopt route demoRoute9. All 12 cells apply, effective from 2034-07-08T16:00:00.000Z with no end.",
+                    "occurrence": 1
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "turns": [
+              {
+                "turn_id": "demo-decision",
+                "text": "Correct record demoLira: the old assertion was erroneous, never adopted; we adopt record demoNeso with route demoRoute4. This is a complete replacement for all 12 cells, effective from 2034-07-08T16:00:00.000Z with no end."
+              }
+            ],
+            "expected": [
+              {
+                "event_id": "demo-event-demo-decision",
+                "source_turns": [
+                  "demo-decision"
+                ],
+                "observed_at": "2034-07-09T02:00:00.000Z",
+                "kind": "decision",
+                "commitment": "adopted",
+                "change_type": "correction",
+                "subject": "demoService",
+                "predicate": "dispatch configuration",
+                "payload": {
+                  "type": "slots",
+                  "route": {
+                    "value": {
+                      "type": "Text",
+                      "text": "demoRoute4"
+                    },
+                    "anchors": [
+                      {
+                        "turn_id": "demo-decision",
+                        "quote": "demoRoute4",
+                        "occurrence": 1
+                      }
+                    ]
+                  },
+                  "approval": null,
+                  "cap": null
+                },
+                "scope": {
+                  "any": [
+                    {
+                      "all": []
+                    }
+                  ]
+                },
+                "effective_interval": {
+                  "from": "2034-07-08T16:00:00.000Z",
+                  "to": null
+                },
+                "record_name": {
+                  "name": "demoNeso",
+                  "anchor": {
+                    "turn_id": "demo-decision",
+                    "quote": "demoNeso",
+                    "occurrence": 1
+                  }
+                },
+                "predecessor_refs": [
+                  {
+                    "record_name": "demoLira",
+                    "anchor": {
+                      "turn_id": "demo-decision",
+                      "quote": "demoLira",
+                      "occurrence": 1
+                    }
+                  }
+                ],
+                "replacement_extent": "entire_predecessor",
+                "reason_quotes": [],
+                "source_quotes": [
+                  {
+                    "turn_id": "demo-decision",
+                    "quote": "Correct record demoLira: the old assertion was erroneous, never adopted; we adopt record demoNeso with route demoRoute4. This is a complete replacement for all 12 cells, effective from 2034-07-08T16:00:00.000Z with no end.",
+                    "occurrence": 1
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "explanation": "demoNeso is the new own name; demoLira is the referenced predecessor at its current mention. Both anchors use demo-decision, never an earlier-turn guess. An unadmitted name or two same-key demoLira identities leaves the update unresolved; never choose the newest or adopted entry."
+      },
+      {
+        "id": "demo-orthogonal-en",
+        "language": "en",
+        "turns": [
+          {
+            "turn_id": "demo-rejected",
+            "text": "Rejected proposal: use route demoRoute4 for all 12 cells."
+          }
+        ],
+        "expected": [
+          {
+            "event_id": "demo-event-demo-rejected",
+            "source_turns": [
+              "demo-rejected"
+            ],
+            "observed_at": "2034-07-09T02:00:00.000Z",
+            "kind": "decision",
+            "commitment": "rejected",
+            "change_type": "initial",
+            "subject": "demoService",
+            "predicate": "dispatch configuration",
+            "payload": {
+              "type": "slots",
+              "route": {
+                "value": {
+                  "type": "Text",
+                  "text": "demoRoute4"
+                },
+                "anchors": [
+                  {
+                    "turn_id": "demo-rejected",
+                    "quote": "demoRoute4",
+                    "occurrence": 1
+                  }
+                ]
+              },
+              "approval": null,
+              "cap": null
+            },
+            "scope": {
+              "any": [
+                {
+                  "all": []
+                }
+              ]
+            },
+            "effective_interval": {
+              "from": null,
+              "to": null
+            },
+            "record_name": null,
+            "predecessor_refs": [],
+            "replacement_extent": "unresolved",
+            "reason_quotes": [],
+            "source_quotes": [
+              {
+                "turn_id": "demo-rejected",
+                "quote": "Rejected proposal: use route demoRoute4 for all 12 cells.",
+                "occurrence": 1
+              }
+            ]
+          }
+        ],
+        "invalid_alternative": {
+          "commitment": "correction"
+        },
+        "explanation": "Correction is a change type, never a commitment. An adopted correction has commitment adopted; a rejected proposal enacts no decision."
+      },
+      {
+        "id": "demo-reason-anchors-en",
+        "language": "en",
+        "turns": [
+          {
+            "turn_id": "demo-decision",
+            "text": "Correct record demoLira: the old assertion was erroneous, never adopted; we adopt record demoNeso with route demoRoute4. This is a complete replacement for all 12 cells, effective from 2034-07-08T16:00:00.000Z with no end."
+          },
+          {
+            "turn_id": "demo-cause",
+            "text": "Capacity loss caused queues to grow. Queue growth caused this replacement."
+          }
+        ],
+        "expected": [
+          {
+            "event_id": "demo-event-demo-decision",
+            "source_turns": [
+              "demo-decision",
+              "demo-cause"
+            ],
+            "observed_at": "2034-07-09T02:00:00.000Z",
+            "kind": "decision",
+            "commitment": "adopted",
+            "change_type": "correction",
+            "subject": "demoService",
+            "predicate": "dispatch configuration",
+            "payload": {
+              "type": "slots",
+              "route": {
+                "value": {
+                  "type": "Text",
+                  "text": "demoRoute4"
+                },
+                "anchors": [
+                  {
+                    "turn_id": "demo-decision",
+                    "quote": "demoRoute4",
+                    "occurrence": 1
+                  }
+                ]
+              },
+              "approval": null,
+              "cap": null
+            },
+            "scope": {
+              "any": [
+                {
+                  "all": []
+                }
+              ]
+            },
+            "effective_interval": {
+              "from": "2034-07-08T16:00:00.000Z",
+              "to": null
+            },
+            "record_name": {
+              "name": "demoNeso",
+              "anchor": {
+                "turn_id": "demo-decision",
+                "quote": "demoNeso",
+                "occurrence": 1
+              }
+            },
+            "predecessor_refs": [
+              {
+                "record_name": "demoLira",
+                "anchor": {
+                  "turn_id": "demo-decision",
+                  "quote": "demoLira",
+                  "occurrence": 1
+                }
+              }
+            ],
+            "replacement_extent": "entire_predecessor",
+            "reason_quotes": [
+              {
+                "turn_id": "demo-cause",
+                "quote": "Capacity loss caused queues to grow.",
+                "occurrence": 1
+              },
+              {
+                "turn_id": "demo-cause",
+                "quote": "Queue growth caused this replacement.",
+                "occurrence": 1
+              }
+            ],
+            "source_quotes": [
+              {
+                "turn_id": "demo-decision",
+                "quote": "Correct record demoLira: the old assertion was erroneous, never adopted; we adopt record demoNeso with route demoRoute4. This is a complete replacement for all 12 cells, effective from 2034-07-08T16:00:00.000Z with no end.",
+                "occurrence": 1
+              }
+            ]
+          }
+        ],
+        "explanation": "source_turns lists current-batch demo-decision and demo-cause. Copy both complete clauses as reason_quotes without a graph. Invalid core still excludes all attached evidence."
+      },
+      {
+        "id": "demo-cap-only-en",
+        "language": "en",
+        "turns": [
+          {
+            "turn_id": "demo-amend",
+            "text": "Adopt record demoPico as a partial refinement of demoLira: change only cap to 5 requests/hour. Keep route and approval. All 12 cells apply, effective from 2034-07-08T16:00:00.000Z with no end."
+          }
+        ],
+        "expected": [
+          {
+            "event_id": "demo-event-demo-amend",
+            "source_turns": [
+              "demo-amend"
+            ],
+            "observed_at": "2034-07-09T02:00:00.000Z",
+            "kind": "decision",
+            "commitment": "adopted",
+            "change_type": "refinement",
+            "subject": "demoService",
+            "predicate": "dispatch configuration",
+            "payload": {
+              "type": "slots",
+              "route": null,
+              "approval": null,
+              "cap": {
+                "value": {
+                  "type": "Quantity",
+                  "decimal": "5",
+                  "unit": "requests/hour"
+                },
+                "anchors": [
+                  {
+                    "turn_id": "demo-amend",
+                    "quote": "5 requests/hour",
+                    "occurrence": 1
+                  }
+                ]
+              }
+            },
+            "scope": {
+              "any": [
+                {
+                  "all": []
+                }
+              ]
+            },
+            "effective_interval": {
+              "from": "2034-07-08T16:00:00.000Z",
+              "to": null
+            },
+            "record_name": {
+              "name": "demoPico",
+              "anchor": {
+                "turn_id": "demo-amend",
+                "quote": "demoPico",
+                "occurrence": 1
+              }
+            },
+            "predecessor_refs": [
+              {
+                "record_name": "demoLira",
+                "anchor": {
+                  "turn_id": "demo-amend",
+                  "quote": "demoLira",
+                  "occurrence": 1
+                }
+              }
+            ],
+            "replacement_extent": "partial",
+            "reason_quotes": [],
+            "source_quotes": [
+              {
+                "turn_id": "demo-amend",
+                "quote": "Adopt record demoPico as a partial refinement of demoLira: change only cap to 5 requests/hour. Keep route and approval. All 12 cells apply, effective from 2034-07-08T16:00:00.000Z with no end.",
+                "occurrence": 1
+              }
+            ]
+          }
+        ],
+        "explanation": "Only cap Quantity and its anchor are supplied; route and approval stay null. Do not fill inherited values during extraction."
+      },
+      {
+        "id": "demo-future-complete-en",
+        "language": "en",
+        "turns": [
+          {
+            "turn_id": "demo-future",
+            "text": "Adopt record demoVela as a complete replacement of demoLira: route demoRoute4; all 12 cells, effective from 2034-07-11T16:00:00.000Z with no end."
+          }
+        ],
+        "expected": [
+          {
+            "event_id": "demo-event-demo-future",
+            "source_turns": [
+              "demo-future"
+            ],
+            "observed_at": "2034-07-09T02:00:00.000Z",
+            "kind": "decision",
+            "commitment": "adopted",
+            "change_type": "reversal",
+            "subject": "demoService",
+            "predicate": "dispatch configuration",
+            "payload": {
+              "type": "slots",
+              "route": {
+                "value": {
+                  "type": "Text",
+                  "text": "demoRoute4"
+                },
+                "anchors": [
+                  {
+                    "turn_id": "demo-future",
+                    "quote": "demoRoute4",
+                    "occurrence": 1
+                  }
+                ]
+              },
+              "approval": null,
+              "cap": null
+            },
+            "scope": {
+              "any": [
+                {
+                  "all": []
+                }
+              ]
+            },
+            "effective_interval": {
+              "from": "2034-07-11T16:00:00.000Z",
+              "to": null
+            },
+            "record_name": {
+              "name": "demoVela",
+              "anchor": {
+                "turn_id": "demo-future",
+                "quote": "demoVela",
+                "occurrence": 1
+              }
+            },
+            "predecessor_refs": [
+              {
+                "record_name": "demoLira",
+                "anchor": {
+                  "turn_id": "demo-future",
+                  "quote": "demoLira",
+                  "occurrence": 1
+                }
+              }
+            ],
+            "replacement_extent": "entire_predecessor",
+            "reason_quotes": [],
+            "source_quotes": [
+              {
+                "turn_id": "demo-future",
+                "quote": "Adopt record demoVela as a complete replacement of demoLira: route demoRoute4; all 12 cells, effective from 2034-07-11T16:00:00.000Z with no end.",
+                "occurrence": 1
+              }
+            ]
+          }
+        ],
+        "explanation": "Complete replacement leaves unsupplied approval/cap null. observed_at is not the source-stated future effective time; the update remains pending."
+      },
+      {
+        "id": "demo-context-en",
+        "language": "en",
+        "turns": [
+          {
+            "turn_id": "demo-context",
+            "text": "Background condition for all 12 cells: demoSensor reported vibration."
+          }
+        ],
+        "expected": [
+          {
+            "event_id": "demo-event-demo-context",
+            "source_turns": [
+              "demo-context"
+            ],
+            "observed_at": "2034-07-09T02:00:00.000Z",
+            "kind": "context",
+            "commitment": "unresolved",
+            "change_type": "unchanged",
+            "subject": "demoService",
+            "predicate": "dispatch configuration",
+            "payload": {
+              "type": "context",
+              "text": "Background condition for all 12 cells: demoSensor reported vibration.",
+              "anchors": [
+                {
+                  "turn_id": "demo-context",
+                  "quote": "Background condition for all 12 cells: demoSensor reported vibration.",
+                  "occurrence": 1
+                }
+              ]
+            },
+            "scope": {
+              "any": [
+                {
+                  "all": []
+                }
+              ]
+            },
+            "effective_interval": {
+              "from": null,
+              "to": null
+            },
+            "record_name": null,
+            "predecessor_refs": [],
+            "replacement_extent": "unresolved",
+            "reason_quotes": [],
+            "source_quotes": [
+              {
+                "turn_id": "demo-context",
+                "quote": "Background condition for all 12 cells: demoSensor reported vibration.",
+                "occurrence": 1
+              }
+            ]
+          }
+        ],
+        "explanation": "This independently source-stated context uses its anchored context branch. It cannot repair a rejected decision or become a duplicate reason archive."
+      },
+      {
+        "id": "demo-own-reference-zh-Hant",
+        "language": "zh-Hant",
+        "batches": [
+          {
+            "turns": [
+              {
+                "turn_id": "demo-start",
+                "text": "紀錄 demoLira：我們採用路線 demoRoute9。適用全部 12 格，生效起點為 2034-07-08T16:00:00.000Z，無截止日。"
+              }
+            ],
+            "expected": [
+              {
+                "event_id": "demo-event-demo-start",
+                "source_turns": [
+                  "demo-start"
+                ],
+                "observed_at": "2034-07-09T02:00:00.000Z",
+                "kind": "decision",
+                "commitment": "adopted",
+                "change_type": "initial",
+                "subject": "demoService",
+                "predicate": "dispatch configuration",
+                "payload": {
+                  "type": "slots",
+                  "route": {
+                    "value": {
+                      "type": "Text",
+                      "text": "demoRoute9"
+                    },
+                    "anchors": [
+                      {
+                        "turn_id": "demo-start",
+                        "quote": "demoRoute9",
+                        "occurrence": 1
+                      }
+                    ]
+                  },
+                  "approval": null,
+                  "cap": null
+                },
+                "scope": {
+                  "any": [
+                    {
+                      "all": []
+                    }
+                  ]
+                },
+                "effective_interval": {
+                  "from": "2034-07-08T16:00:00.000Z",
+                  "to": null
+                },
+                "record_name": {
+                  "name": "demoLira",
+                  "anchor": {
+                    "turn_id": "demo-start",
+                    "quote": "demoLira",
+                    "occurrence": 1
+                  }
+                },
+                "predecessor_refs": [],
+                "replacement_extent": "entire_predecessor",
+                "reason_quotes": [],
+                "source_quotes": [
+                  {
+                    "turn_id": "demo-start",
+                    "quote": "紀錄 demoLira：我們採用路線 demoRoute9。適用全部 12 格，生效起點為 2034-07-08T16:00:00.000Z，無截止日。",
+                    "occurrence": 1
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "turns": [
+              {
+                "turn_id": "demo-decision",
+                "text": "更正紀錄 demoLira：舊斷言有誤、從未採用；我們改採紀錄 demoNeso，路線 demoRoute4。這是完整替換，適用全部 12 格，生效起點為 2034-07-08T16:00:00.000Z，無截止日。"
+              }
+            ],
+            "expected": [
+              {
+                "event_id": "demo-event-demo-decision",
+                "source_turns": [
+                  "demo-decision"
+                ],
+                "observed_at": "2034-07-09T02:00:00.000Z",
+                "kind": "decision",
+                "commitment": "adopted",
+                "change_type": "correction",
+                "subject": "demoService",
+                "predicate": "dispatch configuration",
+                "payload": {
+                  "type": "slots",
+                  "route": {
+                    "value": {
+                      "type": "Text",
+                      "text": "demoRoute4"
+                    },
+                    "anchors": [
+                      {
+                        "turn_id": "demo-decision",
+                        "quote": "demoRoute4",
+                        "occurrence": 1
+                      }
+                    ]
+                  },
+                  "approval": null,
+                  "cap": null
+                },
+                "scope": {
+                  "any": [
+                    {
+                      "all": []
+                    }
+                  ]
+                },
+                "effective_interval": {
+                  "from": "2034-07-08T16:00:00.000Z",
+                  "to": null
+                },
+                "record_name": {
+                  "name": "demoNeso",
+                  "anchor": {
+                    "turn_id": "demo-decision",
+                    "quote": "demoNeso",
+                    "occurrence": 1
+                  }
+                },
+                "predecessor_refs": [
+                  {
+                    "record_name": "demoLira",
+                    "anchor": {
+                      "turn_id": "demo-decision",
+                      "quote": "demoLira",
+                      "occurrence": 1
+                    }
+                  }
+                ],
+                "replacement_extent": "entire_predecessor",
+                "reason_quotes": [],
+                "source_quotes": [
+                  {
+                    "turn_id": "demo-decision",
+                    "quote": "更正紀錄 demoLira：舊斷言有誤、從未採用；我們改採紀錄 demoNeso，路線 demoRoute4。這是完整替換，適用全部 12 格，生效起點為 2034-07-08T16:00:00.000Z，無截止日。",
+                    "occurrence": 1
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "explanation": "demoNeso 是新紀錄自己的名字；demoLira 是本批提到的前身。兩個 anchor 都在 demo-decision，不猜較早發言。未採納名字或同鍵有兩筆 demoLira，則無法唯一連結；不能挑最新或已採用者。"
+      },
+      {
+        "id": "demo-orthogonal-zh-Hant",
+        "language": "zh-Hant",
+        "turns": [
+          {
+            "turn_id": "demo-rejected",
+            "text": "已否決的提案：改用路線 demoRoute4，適用全部 12 格。"
+          }
+        ],
+        "expected": [
+          {
+            "event_id": "demo-event-demo-rejected",
+            "source_turns": [
+              "demo-rejected"
+            ],
+            "observed_at": "2034-07-09T02:00:00.000Z",
+            "kind": "decision",
+            "commitment": "rejected",
+            "change_type": "initial",
+            "subject": "demoService",
+            "predicate": "dispatch configuration",
+            "payload": {
+              "type": "slots",
+              "route": {
+                "value": {
+                  "type": "Text",
+                  "text": "demoRoute4"
+                },
+                "anchors": [
+                  {
+                    "turn_id": "demo-rejected",
+                    "quote": "demoRoute4",
+                    "occurrence": 1
+                  }
+                ]
+              },
+              "approval": null,
+              "cap": null
+            },
+            "scope": {
+              "any": [
+                {
+                  "all": []
+                }
+              ]
+            },
+            "effective_interval": {
+              "from": null,
+              "to": null
+            },
+            "record_name": null,
+            "predecessor_refs": [],
+            "replacement_extent": "unresolved",
+            "reason_quotes": [],
+            "source_quotes": [
+              {
+                "turn_id": "demo-rejected",
+                "quote": "已否決的提案：改用路線 demoRoute4，適用全部 12 格。",
+                "occurrence": 1
+              }
+            ]
+          }
+        ],
+        "invalid_alternative": {
+          "commitment": "correction"
+        },
+        "explanation": "correction 是 change_type，從來不是 commitment；更正後採用的替代仍為 adopted。rejected 提案不實施決定。"
+      },
+      {
+        "id": "demo-reason-anchors-zh-Hant",
+        "language": "zh-Hant",
+        "turns": [
+          {
+            "turn_id": "demo-decision",
+            "text": "更正紀錄 demoLira：舊斷言有誤、從未採用；我們改採紀錄 demoNeso，路線 demoRoute4。這是完整替換，適用全部 12 格，生效起點為 2034-07-08T16:00:00.000Z，無截止日。"
+          },
+          {
+            "turn_id": "demo-cause",
+            "text": "容量損失造成佇列增長。佇列增長造成這次替換。"
+          }
+        ],
+        "expected": [
+          {
+            "event_id": "demo-event-demo-decision",
+            "source_turns": [
+              "demo-decision",
+              "demo-cause"
+            ],
+            "observed_at": "2034-07-09T02:00:00.000Z",
+            "kind": "decision",
+            "commitment": "adopted",
+            "change_type": "correction",
+            "subject": "demoService",
+            "predicate": "dispatch configuration",
+            "payload": {
+              "type": "slots",
+              "route": {
+                "value": {
+                  "type": "Text",
+                  "text": "demoRoute4"
+                },
+                "anchors": [
+                  {
+                    "turn_id": "demo-decision",
+                    "quote": "demoRoute4",
+                    "occurrence": 1
+                  }
+                ]
+              },
+              "approval": null,
+              "cap": null
+            },
+            "scope": {
+              "any": [
+                {
+                  "all": []
+                }
+              ]
+            },
+            "effective_interval": {
+              "from": "2034-07-08T16:00:00.000Z",
+              "to": null
+            },
+            "record_name": {
+              "name": "demoNeso",
+              "anchor": {
+                "turn_id": "demo-decision",
+                "quote": "demoNeso",
+                "occurrence": 1
+              }
+            },
+            "predecessor_refs": [
+              {
+                "record_name": "demoLira",
+                "anchor": {
+                  "turn_id": "demo-decision",
+                  "quote": "demoLira",
+                  "occurrence": 1
+                }
+              }
+            ],
+            "replacement_extent": "entire_predecessor",
+            "reason_quotes": [
+              {
+                "turn_id": "demo-cause",
+                "quote": "容量損失造成佇列增長。",
+                "occurrence": 1
+              },
+              {
+                "turn_id": "demo-cause",
+                "quote": "佇列增長造成這次替換。",
+                "occurrence": 1
+              }
+            ],
+            "source_quotes": [
+              {
+                "turn_id": "demo-decision",
+                "quote": "更正紀錄 demoLira：舊斷言有誤、從未採用；我們改採紀錄 demoNeso，路線 demoRoute4。這是完整替換，適用全部 12 格，生效起點為 2034-07-08T16:00:00.000Z，無截止日。",
+                "occurrence": 1
+              }
+            ]
+          }
+        ],
+        "explanation": "source_turns 列出本批 demo-decision 及 demo-cause。reason_quotes 逐句複製兩條完整因果子句，不發明圖；無效 core 仍排除全部附屬證據。"
+      },
+      {
+        "id": "demo-cap-only-zh-Hant",
+        "language": "zh-Hant",
+        "turns": [
+          {
+            "turn_id": "demo-amend",
+            "text": "採用紀錄 demoPico，部分修訂 demoLira：只把上限改為 5 requests/hour。保留路線與核准。適用全部 12 格，生效起點為 2034-07-08T16:00:00.000Z，無截止日。"
+          }
+        ],
+        "expected": [
+          {
+            "event_id": "demo-event-demo-amend",
+            "source_turns": [
+              "demo-amend"
+            ],
+            "observed_at": "2034-07-09T02:00:00.000Z",
+            "kind": "decision",
+            "commitment": "adopted",
+            "change_type": "refinement",
+            "subject": "demoService",
+            "predicate": "dispatch configuration",
+            "payload": {
+              "type": "slots",
+              "route": null,
+              "approval": null,
+              "cap": {
+                "value": {
+                  "type": "Quantity",
+                  "decimal": "5",
+                  "unit": "requests/hour"
+                },
+                "anchors": [
+                  {
+                    "turn_id": "demo-amend",
+                    "quote": "5 requests/hour",
+                    "occurrence": 1
+                  }
+                ]
+              }
+            },
+            "scope": {
+              "any": [
+                {
+                  "all": []
+                }
+              ]
+            },
+            "effective_interval": {
+              "from": "2034-07-08T16:00:00.000Z",
+              "to": null
+            },
+            "record_name": {
+              "name": "demoPico",
+              "anchor": {
+                "turn_id": "demo-amend",
+                "quote": "demoPico",
+                "occurrence": 1
+              }
+            },
+            "predecessor_refs": [
+              {
+                "record_name": "demoLira",
+                "anchor": {
+                  "turn_id": "demo-amend",
+                  "quote": "demoLira",
+                  "occurrence": 1
+                }
+              }
+            ],
+            "replacement_extent": "partial",
+            "reason_quotes": [],
+            "source_quotes": [
+              {
+                "turn_id": "demo-amend",
+                "quote": "採用紀錄 demoPico，部分修訂 demoLira：只把上限改為 5 requests/hour。保留路線與核准。適用全部 12 格，生效起點為 2034-07-08T16:00:00.000Z，無截止日。",
+                "occurrence": 1
+              }
+            ]
+          }
+        ],
+        "explanation": "只有 cap Quantity 及其 anchor。route、approval 為 null，抽取時不能填繼承值。"
+      },
+      {
+        "id": "demo-future-complete-zh-Hant",
+        "language": "zh-Hant",
+        "turns": [
+          {
+            "turn_id": "demo-future",
+            "text": "採用紀錄 demoVela，完整替換 demoLira：路線 demoRoute4；適用全部 12 格，自 2034-07-11T16:00:00.000Z 起生效，無截止日。"
+          }
+        ],
+        "expected": [
+          {
+            "event_id": "demo-event-demo-future",
+            "source_turns": [
+              "demo-future"
+            ],
+            "observed_at": "2034-07-09T02:00:00.000Z",
+            "kind": "decision",
+            "commitment": "adopted",
+            "change_type": "reversal",
+            "subject": "demoService",
+            "predicate": "dispatch configuration",
+            "payload": {
+              "type": "slots",
+              "route": {
+                "value": {
+                  "type": "Text",
+                  "text": "demoRoute4"
+                },
+                "anchors": [
+                  {
+                    "turn_id": "demo-future",
+                    "quote": "demoRoute4",
+                    "occurrence": 1
+                  }
+                ]
+              },
+              "approval": null,
+              "cap": null
+            },
+            "scope": {
+              "any": [
+                {
+                  "all": []
+                }
+              ]
+            },
+            "effective_interval": {
+              "from": "2034-07-11T16:00:00.000Z",
+              "to": null
+            },
+            "record_name": {
+              "name": "demoVela",
+              "anchor": {
+                "turn_id": "demo-future",
+                "quote": "demoVela",
+                "occurrence": 1
+              }
+            },
+            "predecessor_refs": [
+              {
+                "record_name": "demoLira",
+                "anchor": {
+                  "turn_id": "demo-future",
+                  "quote": "demoLira",
+                  "occurrence": 1
+                }
+              }
+            ],
+            "replacement_extent": "entire_predecessor",
+            "reason_quotes": [],
+            "source_quotes": [
+              {
+                "turn_id": "demo-future",
+                "quote": "採用紀錄 demoVela，完整替換 demoLira：路線 demoRoute4；適用全部 12 格，自 2034-07-11T16:00:00.000Z 起生效，無截止日。",
+                "occurrence": 1
+              }
+            ]
+          }
+        ],
+        "explanation": "完整替換未供應核准及上限，兩者留 null。observed_at 不等於來源明訂的未來 effective time；尚未生效。"
+      },
+      {
+        "id": "demo-context-zh-Hant",
+        "language": "zh-Hant",
+        "turns": [
+          {
+            "turn_id": "demo-context",
+            "text": "全部 12 格的背景狀況：demoSensor 回報震動。"
+          }
+        ],
+        "expected": [
+          {
+            "event_id": "demo-event-demo-context",
+            "source_turns": [
+              "demo-context"
+            ],
+            "observed_at": "2034-07-09T02:00:00.000Z",
+            "kind": "context",
+            "commitment": "unresolved",
+            "change_type": "unchanged",
+            "subject": "demoService",
+            "predicate": "dispatch configuration",
+            "payload": {
+              "type": "context",
+              "text": "全部 12 格的背景狀況：demoSensor 回報震動。",
+              "anchors": [
+                {
+                  "turn_id": "demo-context",
+                  "quote": "全部 12 格的背景狀況：demoSensor 回報震動。",
+                  "occurrence": 1
+                }
+              ]
+            },
+            "scope": {
+              "any": [
+                {
+                  "all": []
+                }
+              ]
+            },
+            "effective_interval": {
+              "from": null,
+              "to": null
+            },
+            "record_name": null,
+            "predecessor_refs": [],
+            "replacement_extent": "unresolved",
+            "reason_quotes": [],
+            "source_quotes": [
+              {
+                "turn_id": "demo-context",
+                "quote": "全部 12 格的背景狀況：demoSensor 回報震動。",
+                "occurrence": 1
+              }
+            ]
+          }
+        ],
+        "explanation": "這是獨立來源陳述的背景，使用有 anchor 的 context 分支；不能用來修補被拒絕的決定，不能把每筆理由另存成背景檔。"
+      }
+    ],
+    "citation_address": [
+      {
+        "id": "demo-address-en",
+        "language": "en",
+        "delivered": {
+          "intent": "history",
+          "items": [
+            {
+              "body": "{\"slots\":{\"route\":\"demoRoute4\"}}",
+              "sources": [
+                {
+                  "index": 0,
+                  "excerpt": "A shipping restriction caused the switch."
+                }
+              ]
+            }
+          ]
+        },
+        "valid_receipt": {
+          "intent": "history",
+          "item": 0,
+          "unit": "receipt",
+          "source": 0,
+          "quote": "A shipping restriction caused the switch.",
+          "occurrence": 1
+        },
+        "valid_body": {
+          "intent": "history",
+          "item": 0,
+          "unit": "body",
+          "source": null,
+          "quote": "{\"slots\":{\"route\":\"demoRoute4\"}}",
+          "occurrence": 1
+        },
+        "invalid_body": {
+          "intent": "history",
+          "item": 0,
+          "unit": "body",
+          "source": null,
+          "quote": "A shipping restriction caused the switch.",
+          "occurrence": 1
+        },
+        "repeat": {
+          "unit_text": "Queue rose. Queue rose.",
+          "valid": {
+            "intent": "history",
+            "item": 0,
+            "unit": "receipt",
+            "source": 0,
+            "quote": "Queue rose.",
+            "occurrence": 2
+          }
+        },
+        "explanation": "item is the zero-based actual history.items position; source is its displayed source index. The cause exists only in the receipt, not body/null. Count occurrences within that exact unit. Copy decoded delivered text; never relocate, substitute occurrences, strip punctuation or cite truncated suffixes. Existing legitimate-alias and ambiguous-overlap rules remain."
+      },
+      {
+        "id": "demo-address-zh-Hant",
+        "language": "zh-Hant",
+        "delivered": {
+          "intent": "history",
+          "items": [
+            {
+              "body": "{\"slots\":{\"route\":\"demoRoute4\"}}",
+              "sources": [
+                {
+                  "index": 0,
+                  "excerpt": "運輸限制造成這次切換。"
+                }
+              ]
+            }
+          ]
+        },
+        "valid_receipt": {
+          "intent": "history",
+          "item": 0,
+          "unit": "receipt",
+          "source": 0,
+          "quote": "運輸限制造成這次切換。",
+          "occurrence": 1
+        },
+        "valid_body": {
+          "intent": "history",
+          "item": 0,
+          "unit": "body",
+          "source": null,
+          "quote": "{\"slots\":{\"route\":\"demoRoute4\"}}",
+          "occurrence": 1
+        },
+        "invalid_body": {
+          "intent": "history",
+          "item": 0,
+          "unit": "body",
+          "source": null,
+          "quote": "運輸限制造成這次切換。",
+          "occurrence": 1
+        },
+        "repeat": {
+          "unit_text": "Queue rose. Queue rose.",
+          "valid": {
+            "intent": "history",
+            "item": 0,
+            "unit": "receipt",
+            "source": 0,
+            "quote": "Queue rose.",
+            "occurrence": 2
+          }
+        },
+        "explanation": "item 是實際 history.items 的零起算位置，source 是顯示的來源索引；原因只在 receipt，不能標為 body/null。occurrence 只在指定單位內計數。引用解碼後實際交付字串；不改地址、不換次數、不刪標點、不引用截斷掉的後綴；別名及重疊歧義依原規則。"
+      }
+    ],
+    "inheritance_pairs": [
+      {
+        "id": "demo-inheritance-en",
+        "language": "en",
+        "predecessor": {
+          "turn_id": "demo-start",
+          "text": "Record demoLira: adopt route demoRoute9, approval false, cap 17 requests/day; all 12 cells, effective from 2034-07-08T16:00:00.000Z with no end."
+        },
+        "variants": [
+          {
+            "explicit_preservation": false,
+            "turn": {
+              "turn_id": "demo-amend",
+              "text": "Adopt record demoPico as a partial refinement of demoLira: change only cap to 5 requests/hour. All 12 cells apply, effective from 2034-07-08T16:00:00.000Z with no end."
+            },
+            "supplied_slots": {
+              "route": null,
+              "approval": null,
+              "cap": {
+                "type": "Quantity",
+                "decimal": "5",
+                "unit": "requests/hour"
+              }
+            }
+          },
+          {
+            "explicit_preservation": true,
+            "turn": {
+              "turn_id": "demo-amend",
+              "text": "Adopt record demoPico as a partial refinement of demoLira: change only cap to 5 requests/hour. All 12 cells apply, effective from 2034-07-08T16:00:00.000Z with no end. Keep route and approval."
+            },
+            "supplied_slots": {
+              "route": null,
+              "approval": null,
+              "cap": {
+                "type": "Quantity",
+                "decimal": "5",
+                "unit": "requests/hour"
+              }
+            }
+          }
+        ],
+        "expected_current": {
+          "status": "active",
+          "rows": [
+            {
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "valid": {
+                "from": "2034-07-08T16:00:00.000Z",
+                "to": null
+              },
+              "route": {
+                "state": "value",
+                "value": "demoRoute9"
+              },
+              "approval": {
+                "state": "value",
+                "value": false
+              },
+              "cap": {
+                "state": "value",
+                "value": {
+                  "decimal": "120",
+                  "unit": "requests/day"
+                }
+              },
+              "citations": []
+            }
+          ]
+        },
+        "explanation": "Both have the same intended world semantics in every arm. Extraction supplies cap only; partial refinement inherits the delivered identified predecessor route/approval without a keep sentence. Missing predecessor evidence licenses no invented value."
+      },
+      {
+        "id": "demo-inheritance-zh-Hant",
+        "language": "zh-Hant",
+        "predecessor": {
+          "turn_id": "demo-start",
+          "text": "紀錄 demoLira：採用路線 demoRoute9、需經核准 = 否，上限 17 requests/day；適用全部 12 格，生效起點為 2034-07-08T16:00:00.000Z，無截止日。"
+        },
+        "variants": [
+          {
+            "explicit_preservation": false,
+            "turn": {
+              "turn_id": "demo-amend",
+              "text": "採用紀錄 demoPico，部分修訂 demoLira：只把上限改成 5 requests/hour。適用全部 12 格，生效起點為 2034-07-08T16:00:00.000Z，無截止日。"
+            },
+            "supplied_slots": {
+              "route": null,
+              "approval": null,
+              "cap": {
+                "type": "Quantity",
+                "decimal": "5",
+                "unit": "requests/hour"
+              }
+            }
+          },
+          {
+            "explicit_preservation": true,
+            "turn": {
+              "turn_id": "demo-amend",
+              "text": "採用紀錄 demoPico，部分修訂 demoLira：只把上限改成 5 requests/hour。適用全部 12 格，生效起點為 2034-07-08T16:00:00.000Z，無截止日。 保留路線及核准。"
+            },
+            "supplied_slots": {
+              "route": null,
+              "approval": null,
+              "cap": {
+                "type": "Quantity",
+                "decimal": "5",
+                "unit": "requests/hour"
+              }
+            }
+          }
+        ],
+        "expected_current": {
+          "status": "active",
+          "rows": [
+            {
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "valid": {
+                "from": "2034-07-08T16:00:00.000Z",
+                "to": null
+              },
+              "route": {
+                "state": "value",
+                "value": "demoRoute9"
+              },
+              "approval": {
+                "state": "value",
+                "value": false
+              },
+              "cap": {
+                "state": "value",
+                "value": {
+                  "decimal": "120",
+                  "unit": "requests/day"
+                }
+              },
+              "citations": []
+            }
+          ]
+        },
+        "explanation": "兩者在每個 arm 的世界語意相同：只供應 cap，部分修訂繼承已交付且已識別的前身之路線與核准，不須額外保留句。缺少前身證據時不能猜值。"
+      }
+    ],
+    "slot_recovery": [
+      {
+        "id": "demo-recovery-boundaries-en",
+        "language": "en",
+        "complete_replacement": {
+          "turn": {
+            "turn_id": "demo-future",
+            "text": "Adopt record demoVela as a complete replacement of demoLira: route demoRoute4; all 12 cells, effective from 2034-07-11T16:00:00.000Z with no end."
+          },
+          "current_after_effective": {
+            "status": "active",
+            "rows": [
+              {
+                "scope": {
+                  "any": [
+                    {
+                      "all": []
+                    }
+                  ]
+                },
+                "valid": {
+                  "from": "2034-07-11T16:00:00.000Z",
+                  "to": null
+                },
+                "route": {
+                  "state": "value",
+                  "value": "demoRoute4"
+                },
+                "approval": {
+                  "state": "not_specified",
+                  "value": null
+                },
+                "cap": {
+                  "state": "not_specified",
+                  "value": null
+                },
+                "citations": []
+              }
+            ]
+          }
+        },
+        "missing_predecessor": {
+          "status": "unresolved",
+          "rows": [
+            {
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "valid": {
+                "from": "2034-07-08T16:00:00.000Z",
+                "to": null
+              },
+              "route": {
+                "state": "unavailable",
+                "value": null
+              },
+              "approval": {
+                "state": "unavailable",
+                "value": null
+              },
+              "cap": {
+                "state": "value",
+                "value": {
+                  "decimal": "120",
+                  "unit": "requests/day"
+                }
+              },
+              "citations": []
+            }
+          ]
+        },
+        "expiry_current": {
+          "status": "no_active_decision",
+          "rows": []
+        },
+        "explanation": "Complete replacement clears predecessor fields first; not_specified differs from missing evidence. An unresolved processing label alone negates no explicit fact and supplies no missing predecessor value. Expiry last-known values belong only in requested expired history with matching predecessor_turn/status; C/O citation quality remains separate."
+      },
+      {
+        "id": "demo-recovery-boundaries-zh-Hant",
+        "language": "zh-Hant",
+        "complete_replacement": {
+          "turn": {
+            "turn_id": "demo-future",
+            "text": "採用紀錄 demoVela，完整替換 demoLira：路線 demoRoute4；適用全部 12 格，自 2034-07-11T16:00:00.000Z 起生效，無截止日。"
+          },
+          "current_after_effective": {
+            "status": "active",
+            "rows": [
+              {
+                "scope": {
+                  "any": [
+                    {
+                      "all": []
+                    }
+                  ]
+                },
+                "valid": {
+                  "from": "2034-07-11T16:00:00.000Z",
+                  "to": null
+                },
+                "route": {
+                  "state": "value",
+                  "value": "demoRoute4"
+                },
+                "approval": {
+                  "state": "not_specified",
+                  "value": null
+                },
+                "cap": {
+                  "state": "not_specified",
+                  "value": null
+                },
+                "citations": []
+              }
+            ]
+          }
+        },
+        "missing_predecessor": {
+          "status": "unresolved",
+          "rows": [
+            {
+              "scope": {
+                "any": [
+                  {
+                    "all": []
+                  }
+                ]
+              },
+              "valid": {
+                "from": "2034-07-08T16:00:00.000Z",
+                "to": null
+              },
+              "route": {
+                "state": "unavailable",
+                "value": null
+              },
+              "approval": {
+                "state": "unavailable",
+                "value": null
+              },
+              "cap": {
+                "state": "value",
+                "value": {
+                  "decimal": "120",
+                  "unit": "requests/day"
+                }
+              },
+              "citations": []
+            }
+          ]
+        },
+        "expiry_current": {
+          "status": "no_active_decision",
+          "rows": []
+        },
+        "explanation": "完整替換先清空前身欄位；未指定和缺少證據不同。unresolved 處理標籤本身不否定明確來源事實，也不供應缺失的前身值。到期的最後決定只放要求的 expired 歷史，匹配 predecessor_turn 與正確狀態；C/O 引用品質另行診斷。"
+      }
+    ],
+    "causal_selection": [
+      {
+        "id": "demo-causal-selection-en",
+        "language": "en",
+        "serial": {
+          "source": {
+            "turn_id": "demo-cause",
+            "text": "Capacity loss caused queues to grow. Queue growth caused this replacement."
+          },
+          "required_quotes": [
+            "Capacity loss caused queues to grow.",
+            "Queue growth caused this replacement."
+          ],
+          "insufficient_endpoints": [
+            "Capacity loss",
+            "this replacement"
+          ]
+        },
+        "conjunctive": {
+          "source": {
+            "turn_id": "demo-conjunction",
+            "text": "Only demoHeat and demoValve together caused demoQueue; neither alone suffices. demoQueue caused this replacement."
+          },
+          "required_quotes": [
+            "Only demoHeat and demoValve together caused demoQueue; neither alone suffices.",
+            "demoQueue caused this replacement."
+          ],
+          "insufficient_quotes": [
+            "demoQueue caused this replacement."
+          ]
+        },
+        "alternative": {
+          "sources": [
+            {
+              "turn_id": "demo-path-0",
+              "text": "demoRain caused demoRoad closure. demoRoad closure caused this replacement. This path independently suffices for this replacement."
+            },
+            {
+              "turn_id": "demo-path-1",
+              "text": "demoStrike caused demoDepot closure. demoDepot closure caused this replacement. This path independently suffices for this replacement."
+            }
+          ],
+          "accepted_alternatives": [
+            [
+              "demoRain caused demoRoad closure.",
+              "demoRoad closure caused this replacement.",
+              "This path independently suffices for this replacement."
+            ],
+            [
+              "demoStrike caused demoDepot closure.",
+              "demoDepot closure caused this replacement.",
+              "This path independently suffices for this replacement."
+            ]
+          ]
+        },
+        "invalid_additions": [
+          "Someone speculated demoPaint caused this replacement.",
+          "demoHeat did not cause this replacement.",
+          "demoHeat caused an earlier replacement."
+        ],
+        "missing_delivery": {
+          "status": "unavailable",
+          "support": []
+        },
+        "factual_unstated": {
+          "status": "not_stated",
+          "support": []
+        },
+        "explanation": "Select all serial links and necessary conjunction/sufficiency qualifications, or one complete sufficient alternative, associated with the focal change and source. Endpoints, background, speculation, negation, earlier changes and blanket whole-context selections do not suffice. Missing delivery is not a default not_stated; genuinely unstated reasons retain factual negative R/support-not-applicable. Deadline passage must explicitly cause expiry; a bare date is insufficient."
+      },
+      {
+        "id": "demo-causal-selection-zh-Hant",
+        "language": "zh-Hant",
+        "serial": {
+          "source": {
+            "turn_id": "demo-cause",
+            "text": "容量損失造成佇列增長。佇列增長造成這次替換。"
+          },
+          "required_quotes": [
+            "容量損失造成佇列增長。",
+            "佇列增長造成這次替換。"
+          ],
+          "insufficient_endpoints": [
+            "容量損失",
+            "這次替換"
+          ]
+        },
+        "conjunctive": {
+          "source": {
+            "turn_id": "demo-conjunction",
+            "text": "只有 demoHeat 和 demoValve 同時成立才造成 demoQueue，任一個單獨成立都不夠。 demoQueue 造成這次替換。"
+          },
+          "required_quotes": [
+            "只有 demoHeat 和 demoValve 同時成立才造成 demoQueue，任一個單獨成立都不夠。",
+            "demoQueue 造成這次替換。"
+          ],
+          "insufficient_quotes": [
+            "demoQueue 造成這次替換。"
+          ]
+        },
+        "alternative": {
+          "sources": [
+            {
+              "turn_id": "demo-path-0",
+              "text": "demoRain 造成 demoRoad 封閉。 demoRoad 封閉造成這次替換。 此路徑單獨足以促成這次替換。"
+            },
+            {
+              "turn_id": "demo-path-1",
+              "text": "demoStrike 造成 demoDepot 關閉。 demoDepot 關閉造成這次替換。 此路徑單獨足以促成這次替換。"
+            }
+          ],
+          "accepted_alternatives": [
+            [
+              "demoRain 造成 demoRoad 封閉。",
+              "demoRoad 封閉造成這次替換。",
+              "此路徑單獨足以促成這次替換。"
+            ],
+            [
+              "demoStrike 造成 demoDepot 關閉。",
+              "demoDepot 關閉造成這次替換。",
+              "此路徑單獨足以促成這次替換。"
+            ]
+          ]
+        },
+        "invalid_additions": [
+          "有人猜測 demoPaint 造成這次替換。",
+          "demoHeat 並未造成這次替換。",
+          "demoHeat 造成較早的替換。"
+        ],
+        "missing_delivery": {
+          "status": "unavailable",
+          "support": []
+        },
+        "factual_unstated": {
+          "status": "not_stated",
+          "support": []
+        },
+        "explanation": "選完整串聯鏈、必要合取及充分性限定，或完整充分的替代路徑；保持焦點變更與來源關聯。端點、無關背景、猜測、否定、較早變更或整段背景均不算完整選擇。缺交付不能預設 not_stated；事實上無陳述原因仍遵守既有負 R 及 support-not-applicable 規則。期限經過必須明說造成到期，裸日期不足。"
+      }
+    ]
+  }
 }

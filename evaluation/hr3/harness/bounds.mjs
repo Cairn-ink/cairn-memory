@@ -129,7 +129,7 @@ export function buildBoundReport({ families, observations, metadata }) {
       jointUnresolved:share(rows.filter(r => r.bounds.J[0] !== r.bounds.J[1])),
       anyReferredComponent:share(rows.filter(r => r.referrals.length)) });
   }
-  return { version:'hr3-a4-bounds-v1', label:LABEL, stage:'pilot', adjudication:false,
+  return { version:'hr3-a6-bounds-v1', label:LABEL, stage:'pilot', adjudication:false,
     stageStatus:metadata?.stageStatus ?? {complete:false,stopReason:null},
     continuationApproval:false,productHeadline:'Pinned product + frozen public-operation agent + shared research extraction + slot reader.',
     interpretation:'Conservative score bounds conditional on frozen mechanical decisions; not certified factual-accuracy bounds, not confidence intervals; endpoints need not be jointly attainable.',
@@ -168,7 +168,7 @@ export function writeBoundReport({ stageDirectory, inputs, out }) {
   check(canonical(run.families) === canonical(families.map(f => f.family_id)), 'stage_family_plan');
   check(summary.attempted === observations.length, 'summary_denominator_mismatch');
   check(typeof run.offline === 'boolean' && Number.isSafeInteger(summary.ledger.total) && summary.ledger.total >= 0, 'spend_metadata');
-  check(observations.every(o => o.version === 'hr3-scorer-a4-v2' && o.protocol === 'v0.3.4+A-4'), 'scorer_version');
+  check(observations.every(o => o.version === (run.scorerVersion??(run.protocol?.includes('A-6')?'hr3-scorer-a6-v3':'hr3-scorer-a4-v2')) && o.protocol === (run.protocol?.includes('A-6')?'v0.3.4+A-6':'v0.3.4+A-4')), 'scorer_version');
   const ledgerEvents=jsonl(join(stageDirectory,'ledger.jsonl'));
   if(ledgerEvents[0]?.configuration?.version==='hr3-ledger-a4-v2'){
     check(Object.hasOwn(manifest.files,'ledger.jsonl.head.json'),'missing_journal_head');
@@ -182,7 +182,7 @@ export function writeBoundReport({ stageDirectory, inputs, out }) {
     observedCohort:summary.complete && observations.length === 480 ? 'completed-pilot cohort' : 'partial observed cohort; not completed-pilot bounds'};
   const carried=billing.carried;
   const actualKnown=(run.offline?carried.unsettled.length===0:billing.unsettled.length===0)&&(!run.carryForward||run.carryForward.preparationComplete);
-  const metadata = { protocol:'v0.3.4', errata:run.protocol?.includes('A-3')?'revised E-1; E-2/A-1/A-2/A-3 (2026-10-25)':'revised E-1 and A-1 (2026-10-25); E-2', scorer:'hr3-scorer-a4-v2',
+  const metadata = { protocol:'v0.3.4', errata:run.protocol?.includes('A-3')?'revised E-1; E-2/A-1/A-2/A-3 (2026-10-25)':'revised E-1 and A-1 (2026-10-25); E-2', scorer:run.scorerVersion??(run.protocol?.includes('A-6')?'hr3-scorer-a6-v3':'hr3-scorer-a4-v2'),
     offline:run.offline, stageStatus,
     actualSpendUSD:actualKnown?(run.offline?carried.settled:billing.settled)/1e9:null,
     actualSpendKnown:actualKnown,

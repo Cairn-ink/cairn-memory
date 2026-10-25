@@ -1,14 +1,14 @@
 {
   "sourceHashes": {
     "ledger": "c99218c1504cfe99fb2eac25f4a8c1f5d51998bed5a55e7b1bd1e00a10951033",
-    "transport": "3154d628ee8fbd74ef159e1b6d26fa5d83390582bb7e858b49193eeb6cb13260"
+    "transport": "992a180901f997a7f314dae2588ada24b863ad774b05eabb0b0c1663545f3012"
   },
   "result": {
     "reply": null,
     "error": "five_minutes_without_progress"
   },
   "state": {
-    "total": 13449200,
+    "total": 16444400,
     "reservations": 1,
     "unsettled": [
       "elapsed/attempt-0"
@@ -18,7 +18,7 @@
       "product": 0
     },
     "byStage": {
-      "pilot": 13449200
+      "pilot": 16444400
     },
     "failures": 0,
     "stopped": "five_minutes_without_progress"
@@ -27,12 +27,12 @@
   "lastProgress": 0,
   "responses": [
     {
-      "path": "evaluation/hr3/harness/artifacts/ledger-contention-0oONb0/ledger.jsonl.responses/4c28a723dd8983b2a7eb4054b7840c475dfdb03ef551ef3dc2a04539a71e3250.json",
+      "path": "evaluation/hr3/harness/artifacts/ledger-contention-4J6xlC/ledger.jsonl.responses/4c28a723dd8983b2a7eb4054b7840c475dfdb03ef551ef3dc2a04539a71e3250.json",
       "value": {
-        "bodySHA256": "d1f6ba5f6b77732178cf4a7e0c819ea25b28877ef7fe4e2a47c4b522d4fac1cd",
+        "bodySHA256": "29553c6fe253b2bccc0162340eb330f75d0b6ab7b9781d42631d4b145c223410",
         "id": "elapsed/attempt-0",
         "logicalId": "elapsed",
-        "operation": "extraction",
+        "operation": "reader",
         "response": {
           "model": "gpt-4.1-mini-2025-04-14",
           "outputText": "{\"exact\":\"paid reply 假回覆\"}",

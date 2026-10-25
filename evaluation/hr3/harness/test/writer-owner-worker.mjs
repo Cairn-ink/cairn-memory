@@ -28,7 +28,7 @@ try{
    else if(operation==='identity')result.owner=writerOwnerIdentity();
    else if(operation==='snapshot')result.state=ledger.snapshot();
    else if(operation==='read')result.records=ledger.read().length;
-   else if(operation==='reserve')result.record=ledger.reserve({id:value,operation:'extraction',body:responseRequest('extraction',{})});
+   else if(operation==='reserve')result.record=ledger.reserve({id:value,operation:'reader',body:responseRequest('reader',{})});
    else if(operation!=='ping')throw Error('unknown_worker_command');
   }catch(error){result.error=error.code??error.message;result.writerIntents=error.writerIntents??[];}
   result.report=ledger.writerIntentReport??null;result.unlinks=[...unlinks];send(result);

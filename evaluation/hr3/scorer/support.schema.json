@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "hr3-support-a6-v3",
+  "type": "object",
+  "properties": {
+    "supportVersion": {
+      "const": "hr3-support-a6-v3"
+    },
+    "supportTrivia": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": "hr3-trivia-a6-v3"
+        },
+        "producer": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "version": {
+                  "type": "string"
+                },
+                "rules_sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "freeze_sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "handle_sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              },
+              "required": [
+                "version",
+                "rules_sha256",
+                "freeze_sha256",
+                "handle_sha256"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "production": {
+                "type": "string"
+              },
+              "language": {
+                "type": "string"
+              },
+              "literal": {
+                "type": "string"
+              },
+              "optional_offsets": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "id",
+              "production",
+              "language",
+              "literal",
+              "optional_offsets"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        },
+        "positions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "origin": {
+                "type": "string"
+              },
+              "position": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "char": {
+                "type": "string",
+                "minLength": 1
+              },
+              "rule": {
+                "type": "string"
+              },
+              "literal_offset": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "origin",
+              "position",
+              "char",
+              "rule",
+              "literal_offset"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "version",
+        "producer",
+        "rules",
+        "positions"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "supportVersion",
+    "supportTrivia"
+  ],
+  "additionalProperties": false,
+  "$defs": {}
+}

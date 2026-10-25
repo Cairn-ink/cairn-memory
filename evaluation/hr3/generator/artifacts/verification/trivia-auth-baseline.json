@@ -1,0 +1,2763 @@
+{
+  "version": "hr3-trivia-auth-baseline-v1",
+  "file_hashes": {
+    "README.md": "5b100ae85b5fcd0b3cdb84cd1da40db9d987c534d89cee8395b8fdc8d5385759",
+    "answer.schema.json": "e41a9bbf4d9bdf15f8d21087a460fcd19bd627c93f429d8577d3338e0d6a24fb",
+    "artifacts/engineering/families.jsonl": "4d324af7213f13484660b1597d5b2bfc70ff2884b04189554f4ccede6a1e6272",
+    "artifacts/engineering/gold.jsonl": "858607c7c9f0ad1c03aafa508a891ab72c3adc85d3d09d523d95dc6eceb748fb",
+    "artifacts/engineering/grammar-and-sentence-bank.json": "772d62e11716ec02a043935b440124947849a7aaa30f4dfa336fbf6cd09a7ebf",
+    "artifacts/engineering/lineage-inventory.json": "0a1de894e6134ff2e9e442d169b8010dc10bb8399b5c2300cb97625936b22d50",
+    "artifacts/engineering/manifest.json": "f2ed45aad2773ee31c1d1d768fdf372e8c82a45a74b6d2aaf37dbc2f1f898f8f",
+    "artifacts/engineering/rejected-candidates.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "artifacts/engineering/support.jsonl": "96a07024ece813720a54487b6ceaed746c96827b615c4be65d5eaca67fd4b374",
+    "artifacts/engineering/validation-audit.jsonl": "1f5ef6a570daaa650e6116ead4149a9fdfbc27a45d91e33dcdc67126fa0a2d55",
+    "artifacts/pilot/families.jsonl": "aa740987516a9333fe2dcc88aa7d10ad00336bb802b462ba52374aebf6375d60",
+    "artifacts/pilot/gold.jsonl": "e490a4b70f6237492359b2784af277fa0f340c244dd9e8701da17ca5d76d43b4",
+    "artifacts/pilot/grammar-and-sentence-bank.json": "8ec89e737d54aecbe7ebb6c8bf7a0551e8b85692cccb9cff819472ba4d905fe4",
+    "artifacts/pilot/lineage-inventory.json": "57bd1f6d49bf0f28d84f21e20fcea359a480ebbc8d9811391090c89f7bf994c1",
+    "artifacts/pilot/manifest.json": "49a1a93260b12de6e41c7c91bd3ad2171b9839e336a5dc085cc422c250575a54",
+    "artifacts/pilot/rejected-candidates.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "artifacts/pilot/support.jsonl": "a47709de489fb631df4945a1bd96bbf1eda1f447859099e2cca2031c1c5d9286",
+    "artifacts/pilot/validation-audit.jsonl": "67bebc096084dc4e0e5e0f31f447d40c650a75e96a27eb6072bc087376a92667",
+    "artifacts/previous-12355a8e/archive-manifest.json": "522cb33e0a4149e65dd92891115caca2de144ad0903067cceaa1e7ed48e6c5ec",
+    "artifacts/previous-12355a8e/freeze.json": "1514c3b4faa7f506ad12767d5e4029c76a1273fb04707614927b1251faaaaa7c",
+    "artifacts/previous-12355a8e/pilot/families.jsonl": "fe3681c8bd35c7d4f0079b261aeb65f24d2c53ee5c91287388aee44146e50c20",
+    "artifacts/previous-12355a8e/pilot/gold.jsonl": "c7a2b4c2c411b37630e04e19833a62cc7f7b70b07ca6d19907022819f09ea330",
+    "artifacts/previous-12355a8e/pilot/grammar-and-sentence-bank.json": "49464cacbc5fb9f7f130a715052cf59f12cc7eff134da2858e25b80b5179c810",
+    "artifacts/previous-12355a8e/pilot/lineage-inventory.json": "530707f31c77e17ce247b1061fb5383c0f26e1e2b255a8d3ac8e6252bc202278",
+    "artifacts/previous-12355a8e/pilot/manifest.json": "0df1a66afb8f9064711cc1b0b4539378815ba2b8197ae8d23aff63750980a933",
+    "artifacts/previous-12355a8e/pilot/rejected-candidates.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "artifacts/previous-12355a8e/pilot/support.jsonl": "9815148167864067405f7eadae69eeff7771df09275cf1aaa57e6ed417f6b487",
+    "artifacts/previous-12355a8e/pilot/validation-audit.jsonl": "67bebc096084dc4e0e5e0f31f447d40c650a75e96a27eb6072bc087376a92667",
+    "artifacts/previous-14504dfc/README.md": "a77d464f6c05cad1f4d359f5c6b34ba703e5e402b4c39aa964b35bf8de62018f",
+    "artifacts/previous-14504dfc/archive-manifest.json": "3726d324659294742a596d0a2357cc663b1db5f017b6ed24fbf9d446a2cf7a80",
+    "artifacts/previous-14504dfc/engineering/families.jsonl": "4d324af7213f13484660b1597d5b2bfc70ff2884b04189554f4ccede6a1e6272",
+    "artifacts/previous-14504dfc/engineering/gold.jsonl": "858607c7c9f0ad1c03aafa508a891ab72c3adc85d3d09d523d95dc6eceb748fb",
+    "artifacts/previous-14504dfc/engineering/grammar-and-sentence-bank.json": "4aa9dd064287fa141ecb34be5e34d18a4e8e21898bc7e060944aa01171f8fef8",
+    "artifacts/previous-14504dfc/engineering/lineage-inventory.json": "7e8323e99415120dde9b7a4b1f96a45a8e38dafaa40293debacc74986e293b31",
+    "artifacts/previous-14504dfc/engineering/manifest.json": "6a12c5493273f8d5dcbbe925f842455cb422d3ce9168f2313a911ccd2d6213a4",
+    "artifacts/previous-14504dfc/engineering/rejected-candidates.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "artifacts/previous-14504dfc/engineering/support.jsonl": "96a07024ece813720a54487b6ceaed746c96827b615c4be65d5eaca67fd4b374",
+    "artifacts/previous-14504dfc/engineering/validation-audit.jsonl": "1f5ef6a570daaa650e6116ead4149a9fdfbc27a45d91e33dcdc67126fa0a2d55",
+    "artifacts/previous-14504dfc/freeze.json": "76c1d2d878e25d49c0cc3c2a361b5a82345cb09ba5e0ca7077bde19fa75b42a7",
+    "artifacts/previous-14504dfc/pilot/families.jsonl": "27d377df73f024a98e65c563b81e398dfb9640cfa1af10361a9552149bb51925",
+    "artifacts/previous-14504dfc/pilot/gold.jsonl": "c980a3323c645ab6b1a1e93ed9de506347a5e7ed08316fa73d584770dfda6db7",
+    "artifacts/previous-14504dfc/pilot/grammar-and-sentence-bank.json": "4aa9dd064287fa141ecb34be5e34d18a4e8e21898bc7e060944aa01171f8fef8",
+    "artifacts/previous-14504dfc/pilot/lineage-inventory.json": "7e8323e99415120dde9b7a4b1f96a45a8e38dafaa40293debacc74986e293b31",
+    "artifacts/previous-14504dfc/pilot/manifest.json": "d896e39771b5b92334ec373d6adc74cb6a520afc4588edbe58985a0e3e0d9db0",
+    "artifacts/previous-14504dfc/pilot/rejected-candidates.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "artifacts/previous-14504dfc/pilot/support.jsonl": "230d7c1b7369bd5d60fbf800ed69c50769f0cd240d601bbb82fac159c8f1199b",
+    "artifacts/previous-14504dfc/pilot/validation-audit.jsonl": "67bebc096084dc4e0e5e0f31f447d40c650a75e96a27eb6072bc087376a92667",
+    "artifacts/previous-e5555ee3/archive-manifest.json": "3865352a0b1bb90cf44c0a5d964d321f2d3602d951b5ba70b7e13dada0627570",
+    "artifacts/previous-e5555ee3/freeze.json": "04e10b2c1f8910fc7e84ad5a570cfaf6a8f33e4b3787b620d130cb74bbd99413",
+    "artifacts/previous-e5555ee3/pilot/families.jsonl": "27d377df73f024a98e65c563b81e398dfb9640cfa1af10361a9552149bb51925",
+    "artifacts/previous-e5555ee3/pilot/gold.jsonl": "c980a3323c645ab6b1a1e93ed9de506347a5e7ed08316fa73d584770dfda6db7",
+    "artifacts/previous-e5555ee3/pilot/grammar-and-sentence-bank.json": "772d62e11716ec02a043935b440124947849a7aaa30f4dfa336fbf6cd09a7ebf",
+    "artifacts/previous-e5555ee3/pilot/lineage-inventory.json": "0a1de894e6134ff2e9e442d169b8010dc10bb8399b5c2300cb97625936b22d50",
+    "artifacts/previous-e5555ee3/pilot/manifest.json": "8ed64660d9623c5309b79d87dad20d44ca0faf6ba5f84bc0c694e4b4e84eee30",
+    "artifacts/previous-e5555ee3/pilot/rejected-candidates.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "artifacts/previous-e5555ee3/pilot/support.jsonl": "230d7c1b7369bd5d60fbf800ed69c50769f0cd240d601bbb82fac159c8f1199b",
+    "artifacts/previous-e5555ee3/pilot/validation-audit.jsonl": "67bebc096084dc4e0e5e0f31f447d40c650a75e96a27eb6072bc087376a92667",
+    "artifacts/previous-ff192c6b/README.md": "d41c014c87c81fc60b1a30c33110012bd25e8a1d267aad28edd413df3583d4e3",
+    "artifacts/previous-ff192c6b/archive-manifest.json": "d938ece31e7ce856d5b4d51281074f84c69ec9716f6311b11b3ae3ea1b7b5884",
+    "artifacts/previous-ff192c6b/engineering/families.jsonl": "410b8a9b6bd952d74fdd3ed3b1622da35e2d748a468fcfdde45ab4639f1f9676",
+    "artifacts/previous-ff192c6b/engineering/gold.jsonl": "007d42c09a9f8b2ca0ab8a65b4a82b2c81a295abe1fef7cfad453ea9ed88b7e0",
+    "artifacts/previous-ff192c6b/engineering/grammar-and-sentence-bank.json": "abab8f1a0e5cdd4234ac0a306da8b3451ee3e5a6c07d194fac4ce90ccca0fc5a",
+    "artifacts/previous-ff192c6b/engineering/lineage-inventory.json": "a23250d23e619d64772e86481d7e791b6e8575aba3f5e0e0f63c1ca1d01b50a5",
+    "artifacts/previous-ff192c6b/engineering/manifest.json": "6d535e7d3134dfb830fe1a7c44e21980a262759053b18cf0a330908f8cca1f91",
+    "artifacts/previous-ff192c6b/engineering/rejected-candidates.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "artifacts/previous-ff192c6b/engineering/support.jsonl": "86fd6004087dd23d6759f1deab1aa55c6edfab5f270ceed00d20ff5712bed2e4",
+    "artifacts/previous-ff192c6b/engineering/validation-audit.jsonl": "f6bd0017a6dc63c4634ae761ae2a699b2656ebc6cd6f54a2eae0a9a7e7678027",
+    "artifacts/previous-ff192c6b/freeze.json": "699e4aa6f95e13abe3c2a613384326765dbcf3e9d143814bde56f13e5811e421",
+    "artifacts/previous-ff192c6b/pilot/families.jsonl": "06b89366cb148a6ea017e7d34d4c350559171f75850d3df5594ce6c601d5a49a",
+    "artifacts/previous-ff192c6b/pilot/gold.jsonl": "04e8802cfe889f16eb5df5ee9df8e17dc5b3d437b8853d345266e5f1bfaa8a07",
+    "artifacts/previous-ff192c6b/pilot/grammar-and-sentence-bank.json": "abab8f1a0e5cdd4234ac0a306da8b3451ee3e5a6c07d194fac4ce90ccca0fc5a",
+    "artifacts/previous-ff192c6b/pilot/lineage-inventory.json": "a23250d23e619d64772e86481d7e791b6e8575aba3f5e0e0f63c1ca1d01b50a5",
+    "artifacts/previous-ff192c6b/pilot/manifest.json": "725ceb155af787e2b81d70e0424c6b4f0efe019bd87ccb59616780f4f7ab1f5c",
+    "artifacts/previous-ff192c6b/pilot/rejected-candidates.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "artifacts/previous-ff192c6b/pilot/support.jsonl": "a528ce04bbd0a883a15f98111c1a1189808b3dd34e305664be4c456401931c9c",
+    "artifacts/previous-ff192c6b/pilot/validation-audit.jsonl": "b9598f665b8b3314e4325ca20fd84c3becc0bdf7ea5526b37bcfebf1ed1273af",
+    "artifacts/verification/a4-report.json": "d1d958acd65e791da8d0712bebce973ff441c125a29fa5fc4ec3ece607b65ddb",
+    "artifacts/verification/a4-tests.tap": "88c83bc257b02d40a9ace790d680cfee96b5478ad7ed93f64eb10864d73bece5",
+    "artifacts/verification/a6-report.json": "0c7361369e7e925c8643ff5b85c679d9a2875aaa23a3241ca8b615520eee9bc8",
+    "artifacts/verification/a6-tests.tap": "3de7782aa93efd5d4a18b68f11735b9d5501836c59a7d63962d3d9d84b1e5fe3",
+    "artifacts/verification/inspection.jsonl": "76a6a9e85401b6532c1db958560d499f15798523ec9c2930d407a24321d26b06",
+    "artifacts/verification/r3-tests.tap": "64c21c8c6444bcf1103be275a9aede80e74ae7d057429a5608b5aabca05cd756",
+    "artifacts/verification/r4-tests.tap": "25b15d34d415e02dec033a09c00a10fc882edd987c14c159cb76d3d992e7a0b0",
+    "artifacts/verification/tests.tap": "a2d367cd5a4821202d73d8c643df2429fae4ad83910cf95c5f048110d917af62",
+    "bank.mjs": "47146d55e3a846ca651ed883d6a9d13175b6531c4dc535fed2af8092c7ffa451",
+    "canonicalize.mjs": "8b109736725a2b26961b927fdf19b2553a6fa3c42953b7d4383e80ba8e3f5374",
+    "cli.mjs": "9335b6d3c9eb4b8d89832095dd4f385602a89e4a4903ba3bc3bda90529c3e2b2",
+    "common.mjs": "01120fb1091eac67b65e6275ada5e18d7905a582934aa4b34cea9ea8fc3c2ca2",
+    "contract.mjs": "cf44eb3c0c879dd88e769be5c0a6f32c2e909df76f5a6f2af3e3f04f761a747a",
+    "controls.mjs": "1f568479cd7741b92037cc447f803f0aa10746b4d6a6ddc34ef4b8d2bfdccc32",
+    "deliver.mjs": "bce8097dc15451082b146737bb0c7a079337b0c8dad7a9eebe8f243dfd5d2fdc",
+    "examples.mjs": "ea9cb5ecf5acc270c9a66ba8fc70b555aa99d7acf73def3bdb1b50e33353ba1b",
+    "exclusions.mjs": "2b2b8718fc0bf1216718437e67b37abdc7ab3884f903436c626134e7a3495bcc",
+    "freeze.json": "c29d3177e8cb5a2649195185323549a184ee3ea2b157db5db1e933e0917a6a9f",
+    "freeze.mjs": "24c52a78b2017b9f3e9e0038ea40b7a9ba308bdfc37cecdebd4909a8a9ce7dd1",
+    "generate.mjs": "8c7bc232082072fcb3fc7bcc3c8c640f882cf9ef50470b9544ad1c2ba10e46f9",
+    "inventory.mjs": "08960e14490862afe531c867ad21bc1c80c4bfde9e021111aef023700efc21f4",
+    "leakage.mjs": "da4634fddd6a4dc2cc000398eaa810ffd4f5ba52a4f207c5eb996c174b129564",
+    "public-contract.json": "2372001122220503c6b06199fcb6fb694dcdf35c00313e6dc677bc44e490bc81",
+    "public-contract.schema.json": "ad1d07b14a3aa26207eeb12d063858a4030e8fc19251c7a903ca92a8c60fb956",
+    "reason-strata.mjs": "11e2c8721122005b68e27c0e07ad92efdf77ce3fe212cc97f8f2577027f3f60a",
+    "slots.mjs": "07714f72d3d8701a8477c98510d10f7a0f5334dfc5ae1876a2c2c837e8434b68",
+    "test/generator.test.mjs": "7d30a23afc38114d507d61d9b363a9f4ce75eafa7211a519d456f184c64a26d7",
+    "trivia-rules.json": "d9e631aec86fe33964c7748010840d14ae1d3cb7137e288068eb284968545f9f",
+    "trivia.mjs": "9a94c5105d288749e531c1b65ceacb176b2f2f6a80b6f5ec94df30d1ec421922",
+    "validate.mjs": "556a6bb1e3b3707e8b416f6bbd014c87538b5ae8dd09fdd6b39ecf35f13f57c5"
+  },
+  "pilot_payload_hashes": {
+    "families.jsonl": "aa740987516a9333fe2dcc88aa7d10ad00336bb802b462ba52374aebf6375d60",
+    "gold.jsonl": "e490a4b70f6237492359b2784af277fa0f340c244dd9e8701da17ca5d76d43b4",
+    "grammar-and-sentence-bank.json": "8ec89e737d54aecbe7ebb6c8bf7a0551e8b85692cccb9cff819472ba4d905fe4",
+    "lineage-inventory.json": "57bd1f6d49bf0f28d84f21e20fcea359a480ebbc8d9811391090c89f7bf994c1",
+    "manifest.json": "49a1a93260b12de6e41c7c91bd3ad2171b9839e336a5dc085cc422c250575a54",
+    "rejected-candidates.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "support.jsonl": "a47709de489fb631df4945a1bd96bbf1eda1f447859099e2cca2031c1c5d9286",
+    "validation-audit.jsonl": "67bebc096084dc4e0e5e0f31f447d40c650a75e96a27eb6072bc087376a92667"
+  },
+  "families": [
+    {
+      "family_id": "pilot-correction-L01-W1",
+      "source_sha256": "103c752d7c81bea355fee5e58e2388bfa7fb2dc296df9a7721324cb5f18aff2b",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "053c8fb2574f521b0fee2cf9095b4ab0a1776b93d10cac6815e31e0304a5cc36"
+        },
+        {
+          "batch": 4,
+          "sha256": "b2e2ea5a841d20895c4c2cea551f2e17ff7430ea612da65d116e2f3dc114a972"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "8b3954c010b363d04ecb60f3d2e6a39b59926e93f6865d7973b0a82027ff0057"
+        },
+        {
+          "batch": 4,
+          "sha256": "3783e29a0771e61025d76ea9ca94f4527cd178dd678f3d419ef3375935926799"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "9292a2df8fef80c6ca21485f385fc65039c5d7873a543d1b7897de0956b29f7b"
+        },
+        {
+          "batch": 2,
+          "sha256": "30122345e43711a0daf33f8ad031e7cc4d5b51080853084dc870ae4696f787e1"
+        },
+        {
+          "batch": 3,
+          "sha256": "be1c67e217870011c4e698b36c4186a9aef0df2b90503188a293ec289b58ef4d"
+        },
+        {
+          "batch": 4,
+          "sha256": "5f78ee52f9e019247d0ffe7b107f6ed88b0a5e40d48af058865f3a3da4f902d1"
+        }
+      ],
+      "support_checkpoints_sha256": "49f17c54cb92fe305f77c1024c590f1dd4f9cf59b00267d86acea4cf5bdf90a4",
+      "trivia_origins_sha256": "175f5c84af8ba60093d038d3f6c7542b965c85c0e885ccf53cebb7a3529aeb53"
+    },
+    {
+      "family_id": "pilot-correction-L01-W2",
+      "source_sha256": "909f8c29fffebb41f3d81e1e1c2cda5581233d3a5d5835abcba3bd4751d21d09",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "6882947e1ccbc79dfcfdb80d0c9e8d2b8632becc5dbc51121a517f0c571f80b0"
+        },
+        {
+          "batch": 4,
+          "sha256": "d78d4430926a5004adee4514e6e98ec46353a3ad4c5d0aebcc180324a96514d2"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "53789c144173a1d8845f37f71761e0e9d264903b80c92e5cab1e973de0869d69"
+        },
+        {
+          "batch": 4,
+          "sha256": "e0dec1ed3b07d1a3b227c17a3b64e0872709d0cd46fa7b3c8a512a73906797f0"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "568ce5973554df4693c25ee2386544e0f13d1a2a56bc20fce5ba7e3391c7bd2a"
+        },
+        {
+          "batch": 2,
+          "sha256": "055671075c743b8b31bd478959c1e598260cb46aba1595a442fd36637f2f5249"
+        },
+        {
+          "batch": 3,
+          "sha256": "d5982e24d72fa3109e1280d6eba97669335ebc1af9c421e235c7634e5e98b63c"
+        },
+        {
+          "batch": 4,
+          "sha256": "68c869b8b51d81b7ff2bb554384660eedf4ad5ae947d543b9506c7dc03af7a14"
+        }
+      ],
+      "support_checkpoints_sha256": "6ab094f10d9c457b4674f0b5c4fcdbab127d7eac322f6327adac11fc2e740239",
+      "trivia_origins_sha256": "175f5c84af8ba60093d038d3f6c7542b965c85c0e885ccf53cebb7a3529aeb53"
+    },
+    {
+      "family_id": "pilot-correction-L02-W1",
+      "source_sha256": "36f2f533576b87f531ce5ff78cfad837926ee5eec4b142900b124604102f6763",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "345a120b5f1b41f00d8b129b49fe50b22ca58c849864250be9f6363719302ac8"
+        },
+        {
+          "batch": 4,
+          "sha256": "2186529234941f85970940f999830137eb01d14e1eec178e812d79b9281302b5"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "34b60e0989c84970c2144ace073f71b9d0eb83a95c30e7e8a4d6c6fb4dd7fe84"
+        },
+        {
+          "batch": 4,
+          "sha256": "a72bd551a0415ba19de60dab844fd2de7c58ca18f67e1259b59b6e74602a1bfc"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "7b5e0e13a3503b9ca90c56532baa4f881f138b5a7a40bf81d57c7fe9067d168c"
+        },
+        {
+          "batch": 2,
+          "sha256": "a468a8728e4430b8170b72e0e45f9d552103c7497b0984c35ead24c0876b699a"
+        },
+        {
+          "batch": 3,
+          "sha256": "60b683415a14cdf3c8499407f480d77e4501cdc464c3f6faece54b593ff3d271"
+        },
+        {
+          "batch": 4,
+          "sha256": "c968bed0c3a90736e3c24aff47c807edde5653f21ee27e7a438e305e984ec287"
+        }
+      ],
+      "support_checkpoints_sha256": "7f89cbfbad6faacbbd3efe13f132d5d56271e00a7269e7a8aedae7101b3b64db",
+      "trivia_origins_sha256": "56990f47ee29a2485ac8d427ad89a1e8bfb705bb3f764cbb13699dcbf04bd561"
+    },
+    {
+      "family_id": "pilot-correction-L02-W2",
+      "source_sha256": "86e1daa236316b9714862b73307ae4c28aed57263c36c8f52b92c7f976449ce8",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "454b2ac6797b611874bb022ed9d822caa5a016e327703ca527d9354c94314010"
+        },
+        {
+          "batch": 4,
+          "sha256": "07886c0eb9ee15dd5fc998dfbdc42343d422e0ba458816d48d895d5c7a11704d"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "43c9fe291ec37e64e3566adbe920642705e4ad444bc0346c3c08753d61b832df"
+        },
+        {
+          "batch": 4,
+          "sha256": "3d46c2460a430c7321244150bbd6369aa644c499d10b08281295c4ec001ecd73"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "3ed4e4eb5f2d75e79bf5837be1c62ccad22cf52af1a66210efd19addcbc322b2"
+        },
+        {
+          "batch": 2,
+          "sha256": "707d9ed59e40f81ea522f35079be05322897b35e740cfadbfd83848cf8111820"
+        },
+        {
+          "batch": 3,
+          "sha256": "ffcbe70fb709d0b5accc52fe5b73206e522f19a67e460c90721e92b30fe4ea0b"
+        },
+        {
+          "batch": 4,
+          "sha256": "f4f299648c1bafc482e7c6e2a7430b3ae3df5dffc24f6427297066bd042dfe50"
+        }
+      ],
+      "support_checkpoints_sha256": "6ff1922518292eb05b8a59076078b4588e99f7819e65e7f5f766ca4fcc1014b0",
+      "trivia_origins_sha256": "56990f47ee29a2485ac8d427ad89a1e8bfb705bb3f764cbb13699dcbf04bd561"
+    },
+    {
+      "family_id": "pilot-correction-L03-W1",
+      "source_sha256": "a16e2e9c7a3d156d07c6fc6fa86912314debab882a7d26fc4ad8ebc5952ec740",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "844024e7ad6239708c6a8915134c830fec234a7c124c332357643a67a7a03cea"
+        },
+        {
+          "batch": 4,
+          "sha256": "303211dc64da8d5dc1b2b4e624a2b5f8637d5fc55c028de904b4901f5b92bc85"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "244a00852f5c88d614ce54892d7fb75ecf9660d33cd3c012298678fc14df6a8b"
+        },
+        {
+          "batch": 4,
+          "sha256": "88fab7600309a30b9b0cc1a8cf7171c27c36b50ae4a3c46ea1daa059e029702a"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "f9e52c4d4df4761237e9f4ccb13f8c16e30200e933bc75ea0de8530bbd5fe41d"
+        },
+        {
+          "batch": 2,
+          "sha256": "a803e5f320b112449ed58e543a7ca8260f95de46ade0b2f09529b830a72588a4"
+        },
+        {
+          "batch": 3,
+          "sha256": "1c2c96dcde5c4551de8216f120a961d4eeb479445e723d318562392a2eea1d3d"
+        },
+        {
+          "batch": 4,
+          "sha256": "a1152c1304a835d116974fe640d27a4a3aa10b6768a34b1f58a2a2912e691d48"
+        }
+      ],
+      "support_checkpoints_sha256": "f33fdf3e9c38e2436fe048746ad9afcfbb0b980ee435ce1699284de32f90130c",
+      "trivia_origins_sha256": "f2fde610d547701463ffed0c99eabcdf4b744dc154feda75c902c78b4a158f84"
+    },
+    {
+      "family_id": "pilot-correction-L03-W2",
+      "source_sha256": "87bc2ce5c9862357c89ee5ba6cbf10939f8fabe19cba33ffdbd3fd3fd426741c",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "3ca4c9b7edfeb1bd518f3d27015c5ae477c80e2432200254d00dd2ba45f952ea"
+        },
+        {
+          "batch": 4,
+          "sha256": "471a2a242db14e4193eb1538ba9eb03dc3b9921fa7d9af677025fa3aada752f1"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "4ce39e2a169b7520e815b00cad8588d948cb3994d1a8c1417a45ccf0ca7938d4"
+        },
+        {
+          "batch": 4,
+          "sha256": "7bef4da8b012e4c6d300c08e0995644b017e38b574d6b0417238ee608a441e23"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "370daed49a839e4d9a7450229782e8b301dc22596c63e9440a2d1b83ea75b6b7"
+        },
+        {
+          "batch": 2,
+          "sha256": "98d29e29c5ada575f45a7e8f7289ff77aa98fc9146b4f149cae75b3d248032f4"
+        },
+        {
+          "batch": 3,
+          "sha256": "b2da91d6e26110276f93c2d633773d9f5036f49f2ca08cc6fbe2b4c6fb4da7a4"
+        },
+        {
+          "batch": 4,
+          "sha256": "b125ceafc7272e440249c787e7e9b08edd19edde7fbedf8c413dc3eb10f68a26"
+        }
+      ],
+      "support_checkpoints_sha256": "8cb02a62c0b63c912d8da1ac40bbf12b8bf5a23132d3c83bf6d44a7e88729289",
+      "trivia_origins_sha256": "f2fde610d547701463ffed0c99eabcdf4b744dc154feda75c902c78b4a158f84"
+    },
+    {
+      "family_id": "pilot-correction-L04-W1",
+      "source_sha256": "52508f15b55a81119703a01703adefbca76e47dbc90f33336439f71b3d351a15",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "9bfa8c53419ddf9260ebbc682ed40d41b324b0b5f17de05b34d0b320f6966f13"
+        },
+        {
+          "batch": 4,
+          "sha256": "3241774529b079423630cb21e50444fcb9d7ead760b8386db93f2c5a80cf09fc"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "82fbdad7af24b83f6d172d3ffe32378c0e41bb710c3b652481013ac3031c9dff"
+        },
+        {
+          "batch": 4,
+          "sha256": "8ca59946e9c4a59836e3d77024b5ba2fd1c2a5ec19809d2550f262efa371fee9"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "1c0f2186540bf951bff811788fac0682e290217f666cfdd7829734947f15b3d9"
+        },
+        {
+          "batch": 2,
+          "sha256": "c6cb229b5ba59358081b620f52ec9f26d992fd12d0298dcd9267b01a54097ac9"
+        },
+        {
+          "batch": 3,
+          "sha256": "b10929cfb57892022e8dc70cc7c59cc9e4f24f9c66c161f35b74422980961c8e"
+        },
+        {
+          "batch": 4,
+          "sha256": "ef984fe6cc7c77cc7483b537cc1ea5404b8b3c8bffbc8bc98854c31041cd26ee"
+        }
+      ],
+      "support_checkpoints_sha256": "5ab746b497ae90c013581655d16b5a070bade5b0bbc3ef98986763d70a46a644",
+      "trivia_origins_sha256": "88302855052c6e5a2fa5149b05ca37446f95bb8ec6907db8b960c23191f340cc"
+    },
+    {
+      "family_id": "pilot-correction-L04-W2",
+      "source_sha256": "70b6129c3e263cc11c46aa80bbdcd9d798b711b4bfcde6163d36fc2c206b5e5e",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "731eb394a06fec25ef7f34312d5578e814200b8557a83269215444c4eff2a956"
+        },
+        {
+          "batch": 4,
+          "sha256": "c1736fa7909489563592105053abfef584e6b63cde4358ef97a5423127f09ce4"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "6a356f2d8fa96ee44f1ddd4e6f928892a20d3ca5626c11d4c02d3ddc4cac8d35"
+        },
+        {
+          "batch": 4,
+          "sha256": "684dbf192534fb06dff863ffbbee0d8c1a7abea2b9cc6e3d0fa0026a33ba287d"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "c402d5b41d33e1f06c6a2ffe7344de7a4b686528b8c82577d4afca524ff68acd"
+        },
+        {
+          "batch": 2,
+          "sha256": "0975686d2d64c8ebf7833067bb837effd7eaf756954384ad4d9e844021b16c69"
+        },
+        {
+          "batch": 3,
+          "sha256": "d9504bb7cb634470d679cc18a65372162c1ad9f55407bc85a5fc232ca7460b5d"
+        },
+        {
+          "batch": 4,
+          "sha256": "7552573634d531e609b9b28199911c881a0b48865f124f43a3d0103f0b843c43"
+        }
+      ],
+      "support_checkpoints_sha256": "3e588bdf72bc959c6c1074edcd52cfd80b86439a333eafcb1459857b84c898a3",
+      "trivia_origins_sha256": "ce2fc9780363f9fa66d0f7a3edb9ff88a784ee080fd9d33c815c8f1d6ba0fdbe"
+    },
+    {
+      "family_id": "pilot-correction-L05-W1",
+      "source_sha256": "b4e8686ed5047e36adffa43c7a87bf01d2b75f44fc7e9437a71c2cc6d106cccf",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "b42653cd66bfeab4ab457f8e7db63da9672b1a0454da7509b9f57f48c2372e0f"
+        },
+        {
+          "batch": 4,
+          "sha256": "05cf366380035ed4a109656cd8744922d2c7748119ce10bc435ebdcf2dad83e8"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "11e7742ebd10c3a72923dc60e9a75fa7b78e8363394a14a793dfbaaf98f1cb20"
+        },
+        {
+          "batch": 4,
+          "sha256": "664a6c6bc6b64fd493e887e87b50cccee4ddb87a3a99dc7a1c8b8bfc2e35d237"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "e714255427d80ef15dfe8c16e23d98404629688bba4ea5d2f54575bb6e094300"
+        },
+        {
+          "batch": 2,
+          "sha256": "7a54ba084cd04d1580842081e5cc4940f643d3938dc5e4aac128df5277f57c07"
+        },
+        {
+          "batch": 3,
+          "sha256": "2792e5d8d39ea19d6ba54beb3da7397bdec571d2ce6f01e4a43f50f66023dee0"
+        },
+        {
+          "batch": 4,
+          "sha256": "7b28000d39390663e921956bf4daefbfb6ff2565e455f78d87ba604340e601a9"
+        }
+      ],
+      "support_checkpoints_sha256": "15226043740f487c396b6fb4ec8e1c86f1361b7ccea4192d9c066952dbd082c6",
+      "trivia_origins_sha256": "7c9963fd620e235c379cba876ec9c17c69ea93020e8a0e9af88ddb102560f1f0"
+    },
+    {
+      "family_id": "pilot-correction-L05-W2",
+      "source_sha256": "1972af15bcb6453efa77f3c15722f321ab49e444cb08054a71822d85ca3c64de",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "bb17fe63463d290964b711300e7ac3ff3254ff503b0af42765d2c5f064e44067"
+        },
+        {
+          "batch": 4,
+          "sha256": "49173b060c944163b491651e7dff77af6826f3156457a38aab12f221735c3a6b"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "5e2a3485b823e941312ba9ff49364365818359129eb92d8f0690b612bfd5871f"
+        },
+        {
+          "batch": 4,
+          "sha256": "cb90ad8c0eb47b72dcb68937e727c69d93afb891da7a05876e7eb8502dd01819"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "f52b80858c5bb41fd3deac01234cfdd5825dab4e07828f86f1a5c28ef6b71dfe"
+        },
+        {
+          "batch": 2,
+          "sha256": "847ec6f0518b0c68734e99afe6edbc45b1b6123a79508d9a04cf06ea3afd495e"
+        },
+        {
+          "batch": 3,
+          "sha256": "1171e579729e8c8fff8624c40059eda2b5f810837e3c284b2b73d34e4011c945"
+        },
+        {
+          "batch": 4,
+          "sha256": "8cc6c8d3512bdc7344eebd7ec3241ebc4a75fd1b5e7e5b2658797a1e8aa38d54"
+        }
+      ],
+      "support_checkpoints_sha256": "5a7155cdb1916240406deee37ea2995fcb44165934f7c3b131bd3a3d57f80dda",
+      "trivia_origins_sha256": "023409fc8c65f7a2d3bca8b900cb17f99408e6353a7b34a80ad3514bc7b4acea"
+    },
+    {
+      "family_id": "pilot-correction-L06-W1",
+      "source_sha256": "943c26398cf8a7ea4d99d877f0bc45c9720aa77f01b91c4ab306853fd0a30531",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "e0874e11e5a788fdead6f2f1bf8cc63fb26e41a17cc247d40b4195dd39a14773"
+        },
+        {
+          "batch": 4,
+          "sha256": "266e38f3b9eb86871de9da147c07cad3be00a3f04bb83de99fbe2ab88a088379"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "68f00c611309de7505e93c106eee1295868dfa2eabfdc457205cafed0eb3fabe"
+        },
+        {
+          "batch": 4,
+          "sha256": "45f8b61eef9058c325648ea20d5f3f232fdc45e5c165dd5084bdda7be5196629"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "b685f5f8ea8baff59c36a7008ac46af989b21f8374e59e83f8c221f5ab185f38"
+        },
+        {
+          "batch": 2,
+          "sha256": "fb1e4f9bae148b950891455aee93e9fb8a8ca5293bc6aaece001d74300214df5"
+        },
+        {
+          "batch": 3,
+          "sha256": "4afba397a8d3d187a83273adc7a7ef1f17835ac8975d492b8312dd2c94b45f5f"
+        },
+        {
+          "batch": 4,
+          "sha256": "11247415c3e04313f01f0459996b1b27c4816d5ca5a9f2243de352e957c5edc2"
+        }
+      ],
+      "support_checkpoints_sha256": "85e6c3121590392d605699240c166d26c370225f3a4b2219d32ae225ac12f0c1",
+      "trivia_origins_sha256": "3cab2425c5ff95a8190d3d016d63b0eb628cd661fc8e9fb0b20e78ce4bda0368"
+    },
+    {
+      "family_id": "pilot-correction-L06-W2",
+      "source_sha256": "99ed0aec50b959a4ea17c8bc985a563ee363a796ea1ca3f0b85b05ebb03ef656",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "c1b86b9e238c2ca0582bcac048dde4d7d51a15b09c81cb57d93468e9d9b65f19"
+        },
+        {
+          "batch": 4,
+          "sha256": "fad0c71616973f3ef89de3407360480786be6ffa89bbd3edc45c4b9e63eb0dd2"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "8c03c1ab3daecf96b896126484b5b3bf977fae51ec4264dd989e85fe3efdcd7e"
+        },
+        {
+          "batch": 4,
+          "sha256": "b324d871dd366b4e390717d862d0f9e38319ecb76ac140b4309cd8a5d99b9025"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "93951f727564f5fc0864ec51e8699699a9210087235030bad819d3a2d339b08d"
+        },
+        {
+          "batch": 2,
+          "sha256": "49b1519153e5506e9bc92366f51dc6500074e9a3b0506b3fef488352edea14e0"
+        },
+        {
+          "batch": 3,
+          "sha256": "4b2589656fe365bc6206774645fa7f9f61890ac3e81e62ad2538c9494d6dd704"
+        },
+        {
+          "batch": 4,
+          "sha256": "d89a628241bacee60f06682278cf88bf95aa304d35076937b98565fbf1e5583c"
+        }
+      ],
+      "support_checkpoints_sha256": "46ac0e200b2baee37114a9ac304d62fa9bafd06ad8300a29f2484ef702bf6f36",
+      "trivia_origins_sha256": "3cab2425c5ff95a8190d3d016d63b0eb628cd661fc8e9fb0b20e78ce4bda0368"
+    },
+    {
+      "family_id": "pilot-reversal-L01-W1",
+      "source_sha256": "e5105103851e7d04a7bab11facd57b35ad85fe4f9c0cc1aedbf800bd2c186047",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "4c8c876cc018569310f1a19064ce34a5e34d5fcb16dd370943327865e113a773"
+        },
+        {
+          "batch": 4,
+          "sha256": "137156a1091b86acb67e13a42e2dbab5b80f8da992e8af51cb8e870051e18b6d"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "38823dde491c3652be6397b6df1193a0426aa0439eb0a0e6f680ca64add3d807"
+        },
+        {
+          "batch": 4,
+          "sha256": "e1d164e088c6f1f2ebd93f3443a9a46079b043c6dd9b5c4e041b5d112724cbd1"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "dbc3a52e221a6bb6dd79d2d434a204ebc49a4cd33520734e339593212da5ca53"
+        },
+        {
+          "batch": 2,
+          "sha256": "467709ee4dcc2a228f7f53d21e015d81c87dc5c09a75647318c4dfda33144168"
+        },
+        {
+          "batch": 3,
+          "sha256": "98eaf1f55ae85f53401068958cc5ae8a402983a89e4b9edc2a7f5185bdff97d1"
+        },
+        {
+          "batch": 4,
+          "sha256": "18241381f1835d84c715b336940e412a953e0c46a138e71913c933c68dcba072"
+        }
+      ],
+      "support_checkpoints_sha256": "e271c79964ecc65bce460d177cc55989eed5e37a7987c8ad2e015c78ec83e6cd",
+      "trivia_origins_sha256": "a8599e83ab5a3b1845ff511a29c7d99688a36b71e0a15164ca78fccd31d02e22"
+    },
+    {
+      "family_id": "pilot-reversal-L01-W2",
+      "source_sha256": "711469ded49abd09e409287de7ee7d4de40bd3be82e7b134b9c245ac01f7d3da",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "b3be158d2f1d6f2ab229356c7f54c824266ce945be708f53aa9b339e371d62db"
+        },
+        {
+          "batch": 4,
+          "sha256": "89fa0356e70ea9901826143d02a33bd91b5c8c01b6437b712e6389acb46d322c"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "1fd0d6bdbd0aedb9ade8484c6feadf51a445b76cfa3c0da8de33c096a3e1517f"
+        },
+        {
+          "batch": 4,
+          "sha256": "82e4296df83d9df352c77910b1061be7ff68accf4a83447b3c3abb404b6f3730"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "c469346ae635c20fdade810a14bb44e33b8258a03cf62c9c490fd6ca0a4b0420"
+        },
+        {
+          "batch": 2,
+          "sha256": "e80486dba9871c85feff6f8a0cb94bc1f57552297141177c2877cde4e0ccb442"
+        },
+        {
+          "batch": 3,
+          "sha256": "542ddedcb10a1302ad695e5a112cb4aaacffda0163d5ec0bae8f49faa849a2d2"
+        },
+        {
+          "batch": 4,
+          "sha256": "2e5f47ca0a6f0be41c0031a57e4756b5c661f74b6e79d796065c98fdb6cb3c89"
+        }
+      ],
+      "support_checkpoints_sha256": "f89430521d45fb0c98dcdd9eaa487295d3faa2c73d9c6844c7788cf5b7e0a99e",
+      "trivia_origins_sha256": "a8599e83ab5a3b1845ff511a29c7d99688a36b71e0a15164ca78fccd31d02e22"
+    },
+    {
+      "family_id": "pilot-reversal-L02-W1",
+      "source_sha256": "146c3248c0ca5f819e0c8141fa3bd3c9007e4bcb766f657d85d18135701bbd55",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "8e86211389ff9c3385542fa5b17acf139e7b1ad598fec92cde3cf80aa261e961"
+        },
+        {
+          "batch": 4,
+          "sha256": "1defa59ccec101417154851096e853fcdc6c338d50d5874da3ab67d40f08c1db"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "c52d504873cc27aed7b9f9d21553355e6f6b184d96de8882a0ff7d9d3e29a5a7"
+        },
+        {
+          "batch": 4,
+          "sha256": "5bf8efa5140c023f76a8e44d5a7b8f0db8aaaef6a8d1d112b86ba2d6499b14bf"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "ef1003baa8021e443443fb98dcd7d1c20b503f75fde4c6f09f52641a1f0624f7"
+        },
+        {
+          "batch": 2,
+          "sha256": "5e41f2c13f98109e00eb422b13e4af79cf80e7e4d197696d8b96f7c06b6005df"
+        },
+        {
+          "batch": 3,
+          "sha256": "3567ce753d489c77eca474223f316afea28e7e2d19e4d48286b89f887c1fada2"
+        },
+        {
+          "batch": 4,
+          "sha256": "0a11fad77dc3b87ba616916d9b3c0fbc2e78de208c69f64db434ae346482d3f0"
+        }
+      ],
+      "support_checkpoints_sha256": "0f83bbc1adffe6b101531ae1ff5551d22603d9a145588dede01b6e159f4aaefe",
+      "trivia_origins_sha256": "bcb2ebbbdf56df872bfe0c9ba7167dbeae84c871b0a1f352aeb6e6c5d533a6f9"
+    },
+    {
+      "family_id": "pilot-reversal-L02-W2",
+      "source_sha256": "f2667bca5e459bc9e1f5993bd2523e912e558c90a98886ecb91f6122baa0e0af",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "2b957e4d6c1314cfb45e61a3f8b94ca8af61e978cee06ef93501e0dd2bae690e"
+        },
+        {
+          "batch": 4,
+          "sha256": "93f2d63b5ac50edc3eeefb639cdce050aaf7ecebc8c8812ac105685ae5640996"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "b438ba4dea58d3e1312d63a3f7045f8a92d33f41987b74e144be2e7f63ebcb2e"
+        },
+        {
+          "batch": 4,
+          "sha256": "0b60f532a645f5ed22f9fc8d0c3ec3b73c23f073dec4debc3beb31d9bd8411d5"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "1925cfb045a1f72203cc9046d7383d5718fd8d01738e702fe1953fc90f42ce05"
+        },
+        {
+          "batch": 2,
+          "sha256": "5863a42779d138d175358f1c37381efc1ca4a55544dacdc17332d523a8285998"
+        },
+        {
+          "batch": 3,
+          "sha256": "ffebd41e3b0675f0fc45d41e9c62fdc092be5e7cd048af12517aad17cb4f762f"
+        },
+        {
+          "batch": 4,
+          "sha256": "93958f2879304936cb7cf9668bf6c8dab6b8f87365a5fe23cbc8442bfda8c1ca"
+        }
+      ],
+      "support_checkpoints_sha256": "2b36812c4c7cef02d92a6a126a977290af3a9baf64c0330d374c47216680e847",
+      "trivia_origins_sha256": "e9fea50fc967c2f09d8dae5b273b63f83793ea642bb54aa3a6e8bf12650801cf"
+    },
+    {
+      "family_id": "pilot-reversal-L03-W1",
+      "source_sha256": "975414564864162206b52e826493e6a91097f4f7f98ee038d9b3aebab5e5b763",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "232e8b2458d48decfa4c500ede92e141e844fe4e0756b13e9b54a03a206d0423"
+        },
+        {
+          "batch": 4,
+          "sha256": "67259f0296ef656f72de490859ad9674569ddd6663528ebb22ecdbe3588bcdf3"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "f43a7f066c61094199f14cbe971ff060a4e131728793c45b075658368980d0b4"
+        },
+        {
+          "batch": 4,
+          "sha256": "886877137e417f423814f95d291516b5e204c38cbf2ed0cbb2751bf60c522217"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "bc595370abe7edbb464d01dd3920c615f82368eef37aca6cb24d9eced8dbeaa9"
+        },
+        {
+          "batch": 2,
+          "sha256": "40b5c767e2c83f59063b812a15536760f7e1e6bae634a72836d5d16612b2c7a8"
+        },
+        {
+          "batch": 3,
+          "sha256": "8001c22ee307dfd96c4ebf390d5c134a0f96e3394dd661ed3955eee385b3845b"
+        },
+        {
+          "batch": 4,
+          "sha256": "75e040251e718894d02e77b167847799d04c7f544ac7479d02ee62dc0667b8bd"
+        }
+      ],
+      "support_checkpoints_sha256": "1bf9c309ff57d4c5b13bd92bc302b6a67bd4281c5b64a05509f5cb20dc0de495",
+      "trivia_origins_sha256": "b22c9b9a4c1cdc3d0e3f40a06d00be7ffefdf50b0264b467455bbca128a9b416"
+    },
+    {
+      "family_id": "pilot-reversal-L03-W2",
+      "source_sha256": "60bd4ed46180066c41d9ad158809477a0f520548d2d08f8a3e490eef29f2b265",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "ac3ef694db1707e51af89258973e8ab0c941c7c8428919267933e6827ba8f8c6"
+        },
+        {
+          "batch": 4,
+          "sha256": "164e02cf281617f54a4a340991bb4e92dadc430cd324d7061a38f2d22e1025ac"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "fc4feea68dee37a3172c56cbfa8d2f3a5991555a4707d7a608f0625da81bc252"
+        },
+        {
+          "batch": 4,
+          "sha256": "81ee55384660218496f04985dc986eeafa841d87b1b76f237ac36f0b274fe55e"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "e47904b7dbb6a88366b96388504344b434b2c84b34872014b78b7b07adea4850"
+        },
+        {
+          "batch": 2,
+          "sha256": "88cb40cde43a2688596f496917978b8f99f855be986233d4d27131930bbbff9e"
+        },
+        {
+          "batch": 3,
+          "sha256": "9e26591bb682ae03050f38a426bbf3c493a046b459100f4424340affc3428c3f"
+        },
+        {
+          "batch": 4,
+          "sha256": "1e1859aeb4c910066efba88e9d16c8f2b131726414ad1cffe1e4d2ddc155a75d"
+        }
+      ],
+      "support_checkpoints_sha256": "2560d4a9b4739758b058406a23f17ebd6cfa01aef0ad6985bc4244211000129e",
+      "trivia_origins_sha256": "b22c9b9a4c1cdc3d0e3f40a06d00be7ffefdf50b0264b467455bbca128a9b416"
+    },
+    {
+      "family_id": "pilot-reversal-L04-W1",
+      "source_sha256": "8e20621cae16af8efa6e11836f8b95e4db4e821ac8c550d0e426b6dd83ae362f",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "e38b4636428a24431b8b44214f428a5200115250163bb772ec6d35ee041171eb"
+        },
+        {
+          "batch": 4,
+          "sha256": "5dacfa097ac6987aa8996c400ae02e775c9906dc32adc59cda3eff4c360cf5d1"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "bc72af6347dc897c63cef44f274c15c0b5bb6dcf39d45fec702aba16976eff5b"
+        },
+        {
+          "batch": 4,
+          "sha256": "afa74698a52d08a9ac779adf4398d04657c18c2929dc78b25ec68e32ce6992ce"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "a747077d4c10c6834de036e2fb397eb0b385c030988634a020646880dd83dff1"
+        },
+        {
+          "batch": 2,
+          "sha256": "84b2fccb0e3e2c673d7e28f5b736621f4c84b007d7e20a071ebdaa5072704e1d"
+        },
+        {
+          "batch": 3,
+          "sha256": "3b7e84ad51786e861d2b508f08de929fea55566fe2669e2e9e6f756f0578d765"
+        },
+        {
+          "batch": 4,
+          "sha256": "6abc94a42b954d5a2e0c32b95b7d33190b7dab92194efb43a63395b534545278"
+        }
+      ],
+      "support_checkpoints_sha256": "2f05566ab7976aed8868473eb78cdfc787cd762372c171411a0c6d39c9dce5cb",
+      "trivia_origins_sha256": "4037569642138a9b52ceac51866f636be576918d3d4e27c477de112368a52dbd"
+    },
+    {
+      "family_id": "pilot-reversal-L04-W2",
+      "source_sha256": "52b171517337ca0e8866863b5c45d5c1a0fd3c5d68fb1193c9c67c58bfa2d899",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "eaa1fc44730c1558dc7dc1854e3743b320b767d40d8962fea1f55bb25554ddd0"
+        },
+        {
+          "batch": 4,
+          "sha256": "adf7e39405d19ba7e34744991724a51dde3d277de0c54e6c95ac608601a31b78"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "ddd9190fc080df573839e86842857b1b415da347e12a3f0ce01f7ae2ddcbf98e"
+        },
+        {
+          "batch": 4,
+          "sha256": "8fac7a901ab3f3afc0704afadd284cc2177c94080c1bc863550b313d8c31c66f"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "7d29ea01980e653de4f1b3b0e03be21669dd0e6bb2989084a9946ee14ac33b12"
+        },
+        {
+          "batch": 2,
+          "sha256": "15eeba821dba6d694f8ad292e7da81efaf93a72110748ebf146fe42bfdb6bfc0"
+        },
+        {
+          "batch": 3,
+          "sha256": "23f4a27fee174e3227af19abd491094b8b09851e13460a0d76c936138e4d431d"
+        },
+        {
+          "batch": 4,
+          "sha256": "f559a686b189d1ddcc6b27005c7ad6a9054c20ef8c25232746b8b6a3db64a563"
+        }
+      ],
+      "support_checkpoints_sha256": "17e5a2b3e01676ff8b71ae776474498726910235fa43316069ea8165e7760f4a",
+      "trivia_origins_sha256": "4037569642138a9b52ceac51866f636be576918d3d4e27c477de112368a52dbd"
+    },
+    {
+      "family_id": "pilot-reversal-L05-W1",
+      "source_sha256": "74c04c992f6c1c5a7edca393b6434a5a8646d75e27aa611efd3594fd21c39a53",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "fd547e95f21bbd006abada5284b0f6c671c3e64147f59030113e02329516d2c8"
+        },
+        {
+          "batch": 4,
+          "sha256": "5d140ebab878e8737134f8eda4b8adabc80b17308cb45a04aca42d4f15d3d9dd"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "7381cd766b694ae911b81a1c74c800da04b79fa993934c0bd6a93176b1511cfb"
+        },
+        {
+          "batch": 4,
+          "sha256": "1a6d08969246c7868686656e0c9e3d23534dd9b269a57c7260266a9e679ce4b1"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "17a5e58cedb9670262b5655623d3f8967ddc9e9516dcdeef9d5456bb0d9d1af8"
+        },
+        {
+          "batch": 2,
+          "sha256": "4f22745f9595fb59ef6570152691df79ae2634c71ab3aa0b2d9636bd62fbf536"
+        },
+        {
+          "batch": 3,
+          "sha256": "cec34426468ac59250aff901a4cc64e5ecc9af96700ee1cb4f898bd8494682b1"
+        },
+        {
+          "batch": 4,
+          "sha256": "2c43b90401880c30655acc08e381d0861ad59566251412ae5ef96f2dfe100f38"
+        }
+      ],
+      "support_checkpoints_sha256": "327e12a1900f6cea74da6b66ff9c5c0ee522e95a77f8f4bb4eee6dee07bfd03e",
+      "trivia_origins_sha256": "73e9093c85cf54883b71ad87f98715eabc6ed4b8834babf7f2e9851666fd5047"
+    },
+    {
+      "family_id": "pilot-reversal-L05-W2",
+      "source_sha256": "135046eb9429f8b59edb3b988fb62d9265096ce36a79c6ad2f213bc632979c01",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "3f9e3a43fefcbddf829d1dcf935e0d6d13c0bb2ea7c0823cb998a6c8f00cdeec"
+        },
+        {
+          "batch": 4,
+          "sha256": "da1c20687230c903bf7e7ad8510f861166e01117b270e067579a0f8fc1554f88"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "e33f65ba8425b859d2ad63d78381c3890f709710d139362dd9d896bc50062995"
+        },
+        {
+          "batch": 4,
+          "sha256": "96bb2c29ddf1f162eb48f72c098703ef0b5d464632b70e00c4119f1b933575db"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "b59c7360208f525dcd7746bdf1846a6ff310b7a5a8d285f644ff4678fe1b88eb"
+        },
+        {
+          "batch": 2,
+          "sha256": "8ec390c5d99f4a3fcfd9d15fe70673f142505563cc3ee152da1c63d29582411a"
+        },
+        {
+          "batch": 3,
+          "sha256": "180fe62eee15c20f3f1b65e067be5e7b041e715d0126ebf48f27474319f8fcab"
+        },
+        {
+          "batch": 4,
+          "sha256": "55d4d994e0f7c5ed9c3df5f16a17b91c8a456f9129c49dbfc01c79a0d3c82985"
+        }
+      ],
+      "support_checkpoints_sha256": "f7d947a9cbb097bf9a7252dd2dc1f58d08ea637cd491df5c3006d6089344fa59",
+      "trivia_origins_sha256": "73e9093c85cf54883b71ad87f98715eabc6ed4b8834babf7f2e9851666fd5047"
+    },
+    {
+      "family_id": "pilot-reversal-L06-W1",
+      "source_sha256": "f2d54a2e65d2a1fad100b3929c50108e118519068f26bcb95585547a0a07bb57",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "9f717375bd0a5fb9dd8d933f4474a9cdfc7eb9802bc5350447c63a491260e635"
+        },
+        {
+          "batch": 4,
+          "sha256": "c04ad4766937ee0bf37df8a5061a5ca6c62db510db2da28cd5085ea4f5cbd047"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "7fa2a2f9d9d4419661459c11bf8243e89df28739bf16f73b7c14b553aa108690"
+        },
+        {
+          "batch": 4,
+          "sha256": "64c545e305618bb7aa3b211e81351c5f81dd35b38119d56ac94a861d62dd5d29"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "8cc1a76f3a8664d22776131ccec4c653e7706a105e5eeaab658f0a61ffe0bf72"
+        },
+        {
+          "batch": 2,
+          "sha256": "429da8174d69b92a6305d3ac54bd7f14d4b58e8fa4ca4064b7cc46e7ecedc369"
+        },
+        {
+          "batch": 3,
+          "sha256": "8e5ef8a5c1d4ca10b7d6f6260210f9c96d3016d35b900780ac31414165011fde"
+        },
+        {
+          "batch": 4,
+          "sha256": "b69330ad041d5a8b1dd724c589b11719686b7bc42e98374949647d975ddf7c19"
+        }
+      ],
+      "support_checkpoints_sha256": "6442c73a608d9e2f654176f24b8d801c538e161de9c06c1ee09273feb9cf92ea",
+      "trivia_origins_sha256": "46fe2ae6e2e1e64cd7ffd02e592ac7bae30b952393a80a442cc98a5f954decc5"
+    },
+    {
+      "family_id": "pilot-reversal-L06-W2",
+      "source_sha256": "df23bf83653618993d175f33135e8a9da9f03a3225c96223f5e032955a20504e",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "ed2c0c26c13f7db7b26de0357a1097b3901dce55e0b37d4f35c830db100dc117"
+        },
+        {
+          "batch": 4,
+          "sha256": "ffcf386f576abbc998e64f57e6ea5ba69544ede0ae8246224cec153e5f4b41ec"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "874d344b42540958c6306cfabcceb00854795d1248ae3f17d9715c35e5a7d669"
+        },
+        {
+          "batch": 4,
+          "sha256": "5814f4cc9de15231608d89ba7773afd811f6cbdddc8d7672ff298d7cd9a29ce3"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "36bbce2aaf68e4e8337fa1853724ad3f0413933b1ead8eb2695c5b8495c1aca9"
+        },
+        {
+          "batch": 2,
+          "sha256": "4f029b699451d2a4752f07c82da443b5025fc50fea966ca85fc00670025e0201"
+        },
+        {
+          "batch": 3,
+          "sha256": "5084729e16e74870b7b7c08c03ceae426e5e28220aec1305ae45dad85a64cd1f"
+        },
+        {
+          "batch": 4,
+          "sha256": "cdbb936b6071d314c0ffb16514eaf1eb39daca9ab9bffaa9d3743692e6d40abc"
+        }
+      ],
+      "support_checkpoints_sha256": "2139447e00b6ea625f5c017903156d726d74c7e5fbc48466920d7b2e3a43b75c",
+      "trivia_origins_sha256": "bdbaae1a60ce7a712808de86c86b1eaa3ad2c6380433145d28e0f18fb10c7db0"
+    },
+    {
+      "family_id": "pilot-refinement-L01-W1",
+      "source_sha256": "4279c3bed842c3463fa820f921e5ec823ca5d6a92df0a2ea5b473e0918ef7984",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "869ca74ae2d2cded543c6f806348e7dcd9260fa544010da19147834b263672dd"
+        },
+        {
+          "batch": 4,
+          "sha256": "63af1622bec078c6c836237b9574d3c9cc999a94e639eea23e5cf8e685cc9326"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "f80511fe2907f427f2329b67147481c41e859c4c5df7feafd5fd7b96fa07d0d4"
+        },
+        {
+          "batch": 4,
+          "sha256": "ffa49ef7292db140918e813ad27bd3d797b53a0d7f20c6a0837aa7a57a5f34a0"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "c939f458f1c24a310aed29afd95b3752c5de43377415850d3d7c995a526b37ae"
+        },
+        {
+          "batch": 2,
+          "sha256": "faf4faac86fc0a8cc325fbf53d7c533d6815006cb205fd86dbbeba720894b9d3"
+        },
+        {
+          "batch": 3,
+          "sha256": "dfc04e9858d00c42422fd161b1efd3c7e02777ea6f258af68df49114cec58151"
+        },
+        {
+          "batch": 4,
+          "sha256": "83dcf8bdd35132f48000d6e266c2817498ebc8fbdd36634562482745bd1ad4a1"
+        }
+      ],
+      "support_checkpoints_sha256": "a3ff496e97e80e99e37677daf43c5a835a7608da17712fb334ecc508b8d754ec",
+      "trivia_origins_sha256": "9dd665a484085ea139bcc0595933fa3823a94d5dcd0b864be9ee2fa4a0b964e0"
+    },
+    {
+      "family_id": "pilot-refinement-L01-W2",
+      "source_sha256": "040f8c74c03944023a54d1819a56249c7431a545ced1e57625e696cc90352c5b",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "60488e2298f4ad50a9dad16df742a5cca20bd59d63891217f0227813295ff8d3"
+        },
+        {
+          "batch": 4,
+          "sha256": "88fa7f7a8e3fde5e5fc5a93d141e2b1aa06678f5a94bc1d735b1e175a2cb8a44"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "e475d49835aa96668b31123093142526dc33e1c9a45a4bd4e45f17ed3925a931"
+        },
+        {
+          "batch": 4,
+          "sha256": "c44bcd643f9ae897cdfc99f13bf5c416730fd9e4d969693612ce60dcb16c776f"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "2284381e270f5e37df191fa64bc30f191739ca070d4067a0187fe94ec70a1d54"
+        },
+        {
+          "batch": 2,
+          "sha256": "78ed36f63a54f98a9c77e912c4dc5bcca7ed8fb3030ada614b7040e7d03494d3"
+        },
+        {
+          "batch": 3,
+          "sha256": "04942d5a1bfd816336644824bd0175a533fc5ff99b8cd8b183be18489db1d048"
+        },
+        {
+          "batch": 4,
+          "sha256": "e9d8efc45e2a9f62c2d9a42cd629e0e441089454d9cc0d480b9c0859d3c2af19"
+        }
+      ],
+      "support_checkpoints_sha256": "2c9b506127343b688ac35b8d32e97b4d00caed5723794b22f3e1ebdad058b97e",
+      "trivia_origins_sha256": "de19dfd2e813d26c3b3d7a4a2c85c66df5fbf5ee1f8b22b3b3b150e3bb993a93"
+    },
+    {
+      "family_id": "pilot-refinement-L02-W1",
+      "source_sha256": "7e859e33eb59dacbd0ff293fbadf058f102f4f7a99ddf198ec1203f13a218c75",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "6b72ad9d9f046d3c8a9464246358db17060a9b368b0780d4717bbe5816ef7ea1"
+        },
+        {
+          "batch": 4,
+          "sha256": "a48beea9f9bd1bff59fcc7938b63b5c8ed47b869f8cfe2d2125e7e0b1d9a7a1d"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "07cf3772d13f53723437c863fa6c47a705335ea87fc39e05a395e7f6542a4641"
+        },
+        {
+          "batch": 4,
+          "sha256": "d3b9c1ab8feebe09269421c5ccd67e24eb1109d2ef8782a76972f2c9144e04f5"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "7a9c47a0a3ccc5d37d54f59784fbd5885fc161b478ea28d29c1c9c96151a6bfd"
+        },
+        {
+          "batch": 2,
+          "sha256": "2fc557c3dc1b9b8ba5b48292148ca757eb6218572973f74bdfae384030b54b6c"
+        },
+        {
+          "batch": 3,
+          "sha256": "3224871a7abad6ed615fd7f1da73567ed1fe3b1def358b384b9df6832eaccbfa"
+        },
+        {
+          "batch": 4,
+          "sha256": "14ca3f309b2a98f87f5f5a833d90b7c01a1fd612805683096c336a28f300f720"
+        }
+      ],
+      "support_checkpoints_sha256": "d2b2d379c7f71553df3d3d42e61a3995ad9aaabe12fb9d0de7872dd0a0dab8ac",
+      "trivia_origins_sha256": "cee8e96233158e531535205f7be6381ab34b1da0e5dd289098413b9d62473d94"
+    },
+    {
+      "family_id": "pilot-refinement-L02-W2",
+      "source_sha256": "4f6129f22c61885f62bb61b6471c186c9eddd7c38529f5a6751a9cb22338e409",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "577c0abf7766bd78714ae55c18a477ca0f195f4ff6035403029d0d4f85909734"
+        },
+        {
+          "batch": 4,
+          "sha256": "ea34154ae744452c205a48b8f88196ba5cbd12853b122d1e5aa8f7d9bbd90603"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "1d3f3c08edfcc9dacfc93c5e715025b45d802550ad7a6eba75a7d1e2ab1609ed"
+        },
+        {
+          "batch": 4,
+          "sha256": "14922ca98077c4bb57b98523e2bf34fc41a1bda7c99761d3b73a21a3fc5c628a"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "ff0ce5dbbfc3caec68a3a739f6b5e8267571989f834137627dc5bbb9eb9b6557"
+        },
+        {
+          "batch": 2,
+          "sha256": "2e06d6766d44718d4fe9e0d351e1feba54ea7e9d8cef6aac8ad4df06a397739f"
+        },
+        {
+          "batch": 3,
+          "sha256": "0446a17a78d0d4a089992c8a296347b5272b9264b216b243c804954f6352431b"
+        },
+        {
+          "batch": 4,
+          "sha256": "de51374731dce9018b8cb13081f53920ca9fef6fc28d8d1dac3b6b315b1ec543"
+        }
+      ],
+      "support_checkpoints_sha256": "79d649723f198057e74b68979efd6eabc3cb100b0bd78a1af5ba56044de9a421",
+      "trivia_origins_sha256": "cee8e96233158e531535205f7be6381ab34b1da0e5dd289098413b9d62473d94"
+    },
+    {
+      "family_id": "pilot-refinement-L03-W1",
+      "source_sha256": "6363a5795094f567b5317d3263dce5b7685f04d1e813a8d1085fcfd15eb6731a",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "18764701cf0a3f6543815d936b4578ecbc50d2d11f1d34c288c1a26326eeec38"
+        },
+        {
+          "batch": 4,
+          "sha256": "6d3553a417bc39e0f7e4757ab89426e1c231dc50f057d04f166e9c1f40b3feba"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "46ea2c604ad9bbc64eeeb128879a4d0d7895345f79c38c57a6a3c432a5ad4cac"
+        },
+        {
+          "batch": 4,
+          "sha256": "08e3adcc73e920e8c379449a466af727a3fcedc53be543726587532e692e2fd1"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "915ca082b1180b7e5a61e94311faedfbfa593d02e16f5599a0448b92737ae3b5"
+        },
+        {
+          "batch": 2,
+          "sha256": "cd461dbc4f16c8dbc2afa65c7ebb60c929dc0e1e9c94e14b4ab6f99df72e6783"
+        },
+        {
+          "batch": 3,
+          "sha256": "7a10e7c00d4263d85e2593851eb700158d2eff70d917a85eb3a3860d607dc99b"
+        },
+        {
+          "batch": 4,
+          "sha256": "ba7150ffaa22ba5de5a4d674cabac641462b51fbc115af687e2242bbd37442d7"
+        }
+      ],
+      "support_checkpoints_sha256": "7301f6cfab7570c116bb2406c8a957010b079a400a1144002f1e791f415ad364",
+      "trivia_origins_sha256": "beeca24f9bc8ec42d9ab5c6e12569d8b1c30e6eda02779bc726ab7b990bda350"
+    },
+    {
+      "family_id": "pilot-refinement-L03-W2",
+      "source_sha256": "9a9c52247e3cc483007dc4ad63e610947581f4011f0f2c8e4de499dbebad2bf5",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "6cb045161190e13c98553b5082374f3b55f2e32115b3cbf637dc1daa087b38fc"
+        },
+        {
+          "batch": 4,
+          "sha256": "624e3e6cce210eb1f9cc3ce81a211855acfd69b21cbe5ba45010b3045f00df4d"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "ac8371f1f7e1e7a238a741eef24397bc7e76273fcfe66e284795dee35b3d9f53"
+        },
+        {
+          "batch": 4,
+          "sha256": "21affc9a862b275f55b6de48432fcb3ee2c8904397a3b5a2b1e4e4ab38db727b"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "bd9334147d4cb5b1cd3839f94f6b79e35db888f1526e420560a585825837a58e"
+        },
+        {
+          "batch": 2,
+          "sha256": "2075bc9c99f3ba9ab587a2db77210fb393d0f43749d81efdb7fcf8ec601f45f5"
+        },
+        {
+          "batch": 3,
+          "sha256": "85db322437ddaf51aa090b15b219a576649a81b4b05cf070fcb677eebc6a3963"
+        },
+        {
+          "batch": 4,
+          "sha256": "edaa6fb6b0916061998f6c06555023c1b842edcbd23e0cc3ec9b8024ef970cca"
+        }
+      ],
+      "support_checkpoints_sha256": "63e8e809693b1eea478c42ea92028fee09d5d8ae36d92ab181e22ccbbe3d3343",
+      "trivia_origins_sha256": "ab9fa24400272da0c28ee1f3b3f5f9788254c19a61119e7180c7e27539e0ae97"
+    },
+    {
+      "family_id": "pilot-refinement-L04-W1",
+      "source_sha256": "433fc5e3e00c438c41ca59a465e776c8e5a8c0e8f367062aa0d6e0312444c642",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "b26b2fa8586e19fafe67cd93014f7b15b953c4d58223656859244641638e894b"
+        },
+        {
+          "batch": 4,
+          "sha256": "4ee573b653e07b68ac0512dbe85e31636fdaa2da0bfca64272900e0740fcced3"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "532ba15b2ea304fbe790b435b9332544f67822706ae39376cc335a1495f97e50"
+        },
+        {
+          "batch": 4,
+          "sha256": "74ecd85b7edaf88aa5a9a906fd72df45aa6802f1c3d5f295d3fe8302455db14a"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "bffc004f1e78fac41548ba49ba10f48d325535f67b3cdb37d5d8f8702f505ada"
+        },
+        {
+          "batch": 2,
+          "sha256": "209b8d795a3b886bbc4705af380ca9eb4fd2b45a3ab8f02e3b5cfbc29a6acc2b"
+        },
+        {
+          "batch": 3,
+          "sha256": "c9c82bb9650fffb260dbea8983f968818225666cf624319c3b7899dbb4c1766d"
+        },
+        {
+          "batch": 4,
+          "sha256": "c36eefb50e361353a66da0eee3c601e66eefc280cfd97885b2dde34655e2035e"
+        }
+      ],
+      "support_checkpoints_sha256": "d38b6ceab39a27a81fe4d9799943a1544c3fbc87ae6c156369078d9d2884c0af",
+      "trivia_origins_sha256": "26d9f086c6481b813cd38225a4f99f190b8a6ac452565fec545edecc2ef5dd4c"
+    },
+    {
+      "family_id": "pilot-refinement-L04-W2",
+      "source_sha256": "56469f52fbd77d4da1306572ee17127a1a9fe82d4e77fe8da0aab46dcaa70769",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "836940de6063f50114f458656fb021db3313de3cf5d4e39f84bf52d64088d540"
+        },
+        {
+          "batch": 4,
+          "sha256": "6e9dab83d3f3076fe08128f13c21993e2d0353a56f2a92ef3c8f3f979e637714"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "391abc57852773df3a0262ec5a8df8436f8b37594113d542fe65bad0277047b0"
+        },
+        {
+          "batch": 4,
+          "sha256": "001215f912ead590de9d1ad02cc0a17eb4ac5fb5702a1f59b7af44226f7b875e"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "9651c634e7e6a65c72acec01fa9d714dc30961144f1f6260a031e13f76695ed1"
+        },
+        {
+          "batch": 2,
+          "sha256": "1d70308ca4aacf09174cd9c5b2d7dd99d0d7f9c6be62a1a1cb767fc622bec5af"
+        },
+        {
+          "batch": 3,
+          "sha256": "ade4078f9d838f12f653c6e27410d55af031eeebe3b7277af9a38fc41c8dc79d"
+        },
+        {
+          "batch": 4,
+          "sha256": "18357d0eec28799847d0eb80a2bc829a2956d945e276ae456f90d9b056d95574"
+        }
+      ],
+      "support_checkpoints_sha256": "0ae357635c11ce85a21c780a91248ebc75ffe18090614990fb400a55e617b8bf",
+      "trivia_origins_sha256": "a86ceea6416ccc917ef5f9e2c95d6a3f452628862b44fa88b4b42e4b227f4294"
+    },
+    {
+      "family_id": "pilot-refinement-L05-W1",
+      "source_sha256": "2a75052350565b16d2fa7084f134205be3b82dd454f2a0c2a7c81d17c813ac97",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "338b09330d5b2640acc23a6c8c618706465e2a1391b6fa827b160eda62edfdf8"
+        },
+        {
+          "batch": 4,
+          "sha256": "2590425551b1d22e7cb6b8ef788039eb65c20eef3e1a0851ef79404e5c0d31ef"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "a8a7a79f29c2065aa0728be0a8300043f212a28af83ae504d0aa759992be06bb"
+        },
+        {
+          "batch": 4,
+          "sha256": "d687071bd2e4376dc623d4f58ec51cb1b15224cccfd53af1c841a9c486dfdbc1"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "28fc17d1eabe223ef11d21ace8cb49f2212554723bde0ac33a98c07616b85b88"
+        },
+        {
+          "batch": 2,
+          "sha256": "c97a7c2fee7fc6e06e0b41a51dece74a3b5f9e9d6743a0c6fe8d74b76056ecf4"
+        },
+        {
+          "batch": 3,
+          "sha256": "ec0b61435394f6c2212643f7243417dc4c7ecc523666918ceaa5a911b02476da"
+        },
+        {
+          "batch": 4,
+          "sha256": "b87605fb0af029fe85ab5d83ec43550d284a4985550f370f37a81314069deee1"
+        }
+      ],
+      "support_checkpoints_sha256": "a57f6a0b7742b7d486f299cc848050b2065bcd2c5422230959f67f34d6410b34",
+      "trivia_origins_sha256": "8656b8da12ebc8b10d998b18bc3ad8209ddca8faab6abf0ef9959127601a50e2"
+    },
+    {
+      "family_id": "pilot-refinement-L05-W2",
+      "source_sha256": "3ea69c247979da1e9b17a2a29939bdfb1a5e34159e61700ace61124edc645bae",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "3cc27c661e87f7cbb61331f5036ed9a08b5dc8e5d1bc3350abfc0beb87590487"
+        },
+        {
+          "batch": 4,
+          "sha256": "51094bd3a32f6fbda0220db57030d79e1fc404d27bcfc5ab14c7033bff972738"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "e3e3004c995543f2773bff437c3e136d1d48cceaaab783d1f6c811cae29db69b"
+        },
+        {
+          "batch": 4,
+          "sha256": "6cd9190a3823f01e500977a32de39a625eba13b97f204077cfbadb757dfd497d"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "0c7bfda40f6b904d4bedd54263b1dd3c2c95b462e1f9c38bdccf3fc8b9272861"
+        },
+        {
+          "batch": 2,
+          "sha256": "f8bf769fa7c1ee7a9bdffa09501eb95f2db7c6c3ecfff93662936cedb378c567"
+        },
+        {
+          "batch": 3,
+          "sha256": "7d872cd70918f8c82b39c7f7ef89cc6e382e47f59c2107742fdfa3b475f781b7"
+        },
+        {
+          "batch": 4,
+          "sha256": "80d4a9faef1ea192d908ec09e3c4547ab08a1cfaffc1a8f412528bf43af83485"
+        }
+      ],
+      "support_checkpoints_sha256": "22952c8a7469c6bef328f421f63e7de8953240ead79da06db2a8b7b2ae7e5fd9",
+      "trivia_origins_sha256": "8656b8da12ebc8b10d998b18bc3ad8209ddca8faab6abf0ef9959127601a50e2"
+    },
+    {
+      "family_id": "pilot-refinement-L06-W1",
+      "source_sha256": "1feaf2cc9d69cf4284912d7a060e9fab53a7c98105077c6240e6dd1af517ad16",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "7be4e5370aaf1484bcb4d717d7a6e38a85b4309e5146507d7dee156c8bc484fc"
+        },
+        {
+          "batch": 4,
+          "sha256": "fa93a40678a01971cb235f4fd01a929bf291ac1ff8f3285d543020257981bb2b"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "cb884529353adc4f75a440e77818f6680b55f3fe6399f27b7893146790837bf9"
+        },
+        {
+          "batch": 4,
+          "sha256": "0d947d88a6c1e6bf5a95591548aa605c69dd145bcccad07696d637522d2f21b2"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "59f5b7fe5bfcab41ac68ee64baa83d9e8ecd07f5fc854909fe9a1eb8bbd6b4f7"
+        },
+        {
+          "batch": 2,
+          "sha256": "e1035d72bdc36f079be65ab7959c55bb11152ca1c0cfeeace15032c1a4efc277"
+        },
+        {
+          "batch": 3,
+          "sha256": "cd7d1c9a86ed10cca8088185f7bc29f79cec7b2a965d2cacc30ffc6f7561a3ab"
+        },
+        {
+          "batch": 4,
+          "sha256": "0967c3e1a99c634051a64a116a29d12af3f7e3faf0534e2cd12c1857324536b3"
+        }
+      ],
+      "support_checkpoints_sha256": "6d3d24afc6c585f16592e120859c394ba2e32e43c1264b7059ae3b657a321de2",
+      "trivia_origins_sha256": "e53350b85add57ad6b58d456325435543c37216804de15f683c5665db1a1ee62"
+    },
+    {
+      "family_id": "pilot-refinement-L06-W2",
+      "source_sha256": "b78528dcc36bcf9fe68038cbc806a260d9942c3ebcbae3603f18bca7f66000a5",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "291852f482c4cf9c96d06f13b80b7627be5798963574448b35802a3b29c74179"
+        },
+        {
+          "batch": 4,
+          "sha256": "ce4cdd954527823b92aeebb264320a40326ac54886feea9f22dad57b8335da33"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "5e63e62c097720cd02bb180f68bd6285d87bac0e341807cf2fade4e77b233cd4"
+        },
+        {
+          "batch": 4,
+          "sha256": "175610b94ec0bffb226396e824fd1c83a44d8f2a49c37dee35e61db3794036dd"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "5bab5ad6981201d3173d2fdad13050ba630393eec39bb88df3db60355ffac170"
+        },
+        {
+          "batch": 2,
+          "sha256": "e528b4f799fdc2289348493799e6598d6733c3f06e1c19b7d5c906ea70d79de8"
+        },
+        {
+          "batch": 3,
+          "sha256": "3e771b2273fbfe8d212ceb5add86330ed3c3226dce2ef624a7952bd345f1c84f"
+        },
+        {
+          "batch": 4,
+          "sha256": "df9e54f209ac61174b792a8b224cd241b05113dddb10de10c3aa9a7d479b85e5"
+        }
+      ],
+      "support_checkpoints_sha256": "7e099c2d58715dceca3c22b2a84d4c9743a8437be62e426fd4b1f4888f2880c6",
+      "trivia_origins_sha256": "e53350b85add57ad6b58d456325435543c37216804de15f683c5665db1a1ee62"
+    },
+    {
+      "family_id": "pilot-scope_change-L01-W1",
+      "source_sha256": "6b2b78d7d506e3cc8ccb867f7cad52caae2521297eb2985e581ad726c7804e2d",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "971f19815164fedb7dc0aebf08db41e2a13252feb986faae3df0aacf02ee4cd8"
+        },
+        {
+          "batch": 4,
+          "sha256": "fd33ceb2409257a3aec28f309f6c2b94138b65e222f06188830a4d6b0ac411da"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "19136e2ea1d96303283084c6470fa36ec400a27ad1bd756805ee97d7f91258f1"
+        },
+        {
+          "batch": 4,
+          "sha256": "e880436f338f0b3466f04b0b7ed55fae8fff16fd4357f3f88c4407c06a9ffe06"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "d8446ce29853d8cc09e4068c36d7f98526ff5fa9d18a7871c078e2d561b02f15"
+        },
+        {
+          "batch": 2,
+          "sha256": "2485b11fec75862248c5fe5267d2a5cd56dc64a0f0ddb13c7f83d291cf34fd63"
+        },
+        {
+          "batch": 3,
+          "sha256": "3e771b2273fbfe8d212ceb5add86330ed3c3226dce2ef624a7952bd345f1c84f"
+        },
+        {
+          "batch": 4,
+          "sha256": "88450e1cdf3a19bb1bf1f2103a76a4965e8e8c5cbda348a8b518106baa689200"
+        }
+      ],
+      "support_checkpoints_sha256": "9884f21014b5e249682042d2db75e8e919e220c6b3987a1f292df22632173032",
+      "trivia_origins_sha256": "00c8611edff25af82d479da64d3b53f914253804cb6f1ce5c78f7d5c7fa4d5fe"
+    },
+    {
+      "family_id": "pilot-scope_change-L01-W2",
+      "source_sha256": "cf4db52864f33e30c30f504c200aebbd78d6957555aad55857fd97d3f3423c38",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "ccb922178588f6a517daadfaf4d7059900b0d872a905d27312a59b1d6140b062"
+        },
+        {
+          "batch": 4,
+          "sha256": "e467fdd35c167e0a804baa557a7deadf66de66b0bdc7d75c8dadcf4a010696ea"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "aa3656e9950999e34457d3908236bfed82616f59b147aa6b2cfe6ae37f1094a8"
+        },
+        {
+          "batch": 4,
+          "sha256": "e5025c0b976b98ffe48738047d4e80623ad6acbf60d85192256b90bb03bdf8f9"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "293a925d424a5df3c8952531e77a993c919e5cf1b3d103db0fe956d83e7d4389"
+        },
+        {
+          "batch": 2,
+          "sha256": "c329604a4d1fcfcdfbb2c4847f34722bab96b6fb52a2134218742f557a55bb8c"
+        },
+        {
+          "batch": 3,
+          "sha256": "ed286357e45f52d98acb3d4b77fdcb4169a2d04f9cb2620b1f0754e32a69454e"
+        },
+        {
+          "batch": 4,
+          "sha256": "261408be1190bc5a8ecd060a52a85ecb126817bd471291f2955d4edbaa078013"
+        }
+      ],
+      "support_checkpoints_sha256": "478621f23e91b82c0299199dcb9da19ba221d1f9c505efb022415c37890fd42d",
+      "trivia_origins_sha256": "00c8611edff25af82d479da64d3b53f914253804cb6f1ce5c78f7d5c7fa4d5fe"
+    },
+    {
+      "family_id": "pilot-scope_change-L02-W1",
+      "source_sha256": "88e98e4f7abe067cdefa617809251cc23c40e6341483f25f9f23bcb91542b893",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "0691105a01458b0fda556e2ca7aaf0ef39476773d34fbe46f02c6eb34876f06d"
+        },
+        {
+          "batch": 4,
+          "sha256": "28fa7123c45dd9324fe23c0a868d5c7331b848806807fde0127e215a61fd355d"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "19bd81089594622e99a10380bd01521a1e4e0d08ddb19d36bda93cfad89d445e"
+        },
+        {
+          "batch": 4,
+          "sha256": "7baa51b3c31fb0901a43295c46ae21af4f24431491e9f69386dda99331482970"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "6fffb8a5997bd47e91cbc6e9804a92feda0a335f39c97e1f457278b50f600c50"
+        },
+        {
+          "batch": 2,
+          "sha256": "1968db719665c5724bac80bfc6307e7991c137fefccb901b15e15d02a52a9368"
+        },
+        {
+          "batch": 3,
+          "sha256": "881b486d0f73d9abdd0f91c16e0b9084fdfe7839af077ea9cb57a3bd428bec99"
+        },
+        {
+          "batch": 4,
+          "sha256": "cc237558dbb5cb0027a6e53af42c0be3bddfe970ff5553b0b0f4c1093964b498"
+        }
+      ],
+      "support_checkpoints_sha256": "4e6f377b0b28ae75b30db41b67277431bebcf7447b2db733bf7fee5dbfc6a0a9",
+      "trivia_origins_sha256": "2225687e3b75bd7fe19619886667250c413f696aef3182ba9d3d2aa052c5a158"
+    },
+    {
+      "family_id": "pilot-scope_change-L02-W2",
+      "source_sha256": "e6832987fb138de4b4ba3477963d116bb3949ccff4c49c949df240e6780cc08b",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "df858d5fd10f45d510b8832c7ee32c4b53ae3c7d533089b5a6b0e76e01f70f3c"
+        },
+        {
+          "batch": 4,
+          "sha256": "805a6d7d20cf2e6fc0845b71aa7b94a0f379d4721daeba6d0a8dbb87b7db3f6f"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "a38fd6686720945e4863bcf01ea9f0957f83b5cd5432a276f365696dd10f6dc2"
+        },
+        {
+          "batch": 4,
+          "sha256": "e4879a75f6d669da18552ad27d66ff9957b194b346c266ce376b49102469384d"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "c1ecbdb456bd30d617f08ef605897b6c8d5a63daea8f642ce87296b02f52e768"
+        },
+        {
+          "batch": 2,
+          "sha256": "19db43f480fc40594cfb35cd9da19a3b8304d5b44e24bc6356a652950ade1146"
+        },
+        {
+          "batch": 3,
+          "sha256": "02af6945585ef8f0b5d5f0b635b8a379c91e9bcda52b331312c11db85325c074"
+        },
+        {
+          "batch": 4,
+          "sha256": "7677dc3bd2029b70515e9891df2b2d4575df99828efea037d134f4d36b8b5b09"
+        }
+      ],
+      "support_checkpoints_sha256": "564a1e414ae254f67942a4b74e340c38edfcd8cd808929bb76f15789b5eacbf5",
+      "trivia_origins_sha256": "2225687e3b75bd7fe19619886667250c413f696aef3182ba9d3d2aa052c5a158"
+    },
+    {
+      "family_id": "pilot-scope_change-L03-W1",
+      "source_sha256": "6d7afc1356a9b58961f2b192c62b055d2b036bcd1d15867361201d218839a955",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "0a21694e448a44435fd4f240332e1eab12a5e3803600951b16e5cf8fe3bed2f2"
+        },
+        {
+          "batch": 4,
+          "sha256": "ab8d2b5e0ccc2afaba7d6f4fe7b44e03d4726bb81e28901a2b68d8803bf50bc6"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "ec9ba99aea890dd584d33c37f02601c4a226261ce75b45133273ef497d3b66ef"
+        },
+        {
+          "batch": 4,
+          "sha256": "674f4168668a3a2e48d987e4159371da0cb2bba62e31cd7273689263f19a8a83"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "445a02cc8e4553246a400d4810a28031d849115dedc6b1f22ac520e2d5fc5083"
+        },
+        {
+          "batch": 2,
+          "sha256": "bcd51e9b8d47a2eeedafd5e9de1c2431c76bd4a3a93f991d655c055e7e14f4d9"
+        },
+        {
+          "batch": 3,
+          "sha256": "bb4019682974ef9061b4939b477609703369517a4066d3d7d3a2830f2a94153f"
+        },
+        {
+          "batch": 4,
+          "sha256": "1e8a727aa941a33df939a97cfe61760a8a47ca8afae73638a0423437fb622964"
+        }
+      ],
+      "support_checkpoints_sha256": "753e37c9f3c66880aff23d3f551f6ffc11fb34b81226d407bb90a9b33b4cc233",
+      "trivia_origins_sha256": "2b9301c479cf556a4c22f0f8ab103ee3b79dce5e280f854ea571f9de62b7454b"
+    },
+    {
+      "family_id": "pilot-scope_change-L03-W2",
+      "source_sha256": "c77ac8acb24ea9904905bbecd87116323d56ded97944ee6ab5f802b1f7c8966b",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "539dd1040eb76dd6daa9918a6a340215531cf6201877695286ec83eafe6fd5c6"
+        },
+        {
+          "batch": 4,
+          "sha256": "439596235f2729d745d2c75bd7c9164da61e632e879d8e97527f86e0f9554a5a"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "427b4db935b8ae46ef7726c52840bd6a48e90121e0a946e583654cb1764c0397"
+        },
+        {
+          "batch": 4,
+          "sha256": "37fd56590b369efc8034164dd7c8ee5aefc19f5af99614f1124adc124c24ff21"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "b59ce5442a20b61a0677bcae793f97ba595c65cf6040d4bb372fcc7ad831eb2c"
+        },
+        {
+          "batch": 2,
+          "sha256": "d4b25bb82f92350d23346d34aa1f2cbb2028c7e88aa46e0c1ad944a645cd0442"
+        },
+        {
+          "batch": 3,
+          "sha256": "c73413e68451ac06e4f834dc2fc3e14efac13b70a3dff61f3adf3a319bcb4dba"
+        },
+        {
+          "batch": 4,
+          "sha256": "1fb1ad1a8799c61a4a6eaaca1be7f0b2cc4cc45daf9baac4bd42b8fdbd02de77"
+        }
+      ],
+      "support_checkpoints_sha256": "fc116f8f1f039d57c95684e15f27bac68ac5d1bb9caa255927144d1b3b8dd2b9",
+      "trivia_origins_sha256": "e070100fca3ebc93ab83d0a9ec4807fe9085db78a03e62df499d95fe5c0b3359"
+    },
+    {
+      "family_id": "pilot-scope_change-L04-W1",
+      "source_sha256": "775ad55e9ab0255d08b8ae9b0ef89296ac744b3d730a57d019195f127cf252d2",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "f25ab89ee6d935366302b4609c1f0ab6099c7d6147da9cf1c253ec9e13e8fcb1"
+        },
+        {
+          "batch": 4,
+          "sha256": "8c01c42a034139f32f1ffc88a4d54b88a2713af2543189f4ddf1c45772f0b096"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "e64e4e0c0296af91b58c9af1601a7a64b6fb59715f614adc12ee102a4df4d479"
+        },
+        {
+          "batch": 4,
+          "sha256": "342205407e0512143b7ac37c117642439621e5bebfe0f17b9f39a2f6e5bd59db"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "9d8049567afcc3403a6e06836a7f814605e2d92d4dc6d5b8aadd2d5397ca10b1"
+        },
+        {
+          "batch": 2,
+          "sha256": "e38a38a6d6532c7f9c9338075f136f3fe6a580cdab9f58013add80014ec4f76b"
+        },
+        {
+          "batch": 3,
+          "sha256": "8795cbc54b323f8fe0b100626637628fdd2686c44e5e9ae8ab05c2996c741359"
+        },
+        {
+          "batch": 4,
+          "sha256": "fc0c7b92a204d7321a59e4ce43618f9f8e5f1b0e969b868737d854a914e42d31"
+        }
+      ],
+      "support_checkpoints_sha256": "a3574d2b55049d0ddbdac0cc731e8b63f7eb3927016364792b8c1a36f31dde98",
+      "trivia_origins_sha256": "e7adb349907e17ac99bdf636b3e14d3afdd899bbade38e320df3002b83af46b9"
+    },
+    {
+      "family_id": "pilot-scope_change-L04-W2",
+      "source_sha256": "cd71525abafb4501ff9237ea764e3c6d75f446535d0e877126f35db719b425f3",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "19a0a7c25a1b06aa039b3f1e32def4a53550898844636c4a5d93321ad57dbabc"
+        },
+        {
+          "batch": 4,
+          "sha256": "c87e937be4064dc3f9f11d7b8dc3291b0efb53fcc1055fe3866323177f1c939f"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "19913f833ec6ca755db5d45997e643749664aced591a266c4f5f7609dbb56231"
+        },
+        {
+          "batch": 4,
+          "sha256": "530a4203f28782025e3c6e91da9319ebc2dfac29bad0a56c87f7bf96cf557b63"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "79cfa7829b51ed2d6b9d3621d08ab23f8e8cf2804e32152e31eeecfd2dd84b20"
+        },
+        {
+          "batch": 2,
+          "sha256": "00bcc9a8212c226c9a99d0badfb26bc9947ce32f72fc2fd00aff6c4df74ef077"
+        },
+        {
+          "batch": 3,
+          "sha256": "e1f29e066aba863f76a21ad67cac0bb2ffd77a4619393e2fa3512cbec500ab58"
+        },
+        {
+          "batch": 4,
+          "sha256": "fe8a4f2a27948dacedfe2313bf3d0e876c77caef20c5651c00d1e5f95cf5e358"
+        }
+      ],
+      "support_checkpoints_sha256": "00b4ecaa26e3b9cddec9bfb69f367f22c47eb02b3bf08abeb41286ab1cddade5",
+      "trivia_origins_sha256": "e7adb349907e17ac99bdf636b3e14d3afdd899bbade38e320df3002b83af46b9"
+    },
+    {
+      "family_id": "pilot-scope_change-L05-W1",
+      "source_sha256": "cccf7654a339762867a0fac49fe97780a5ed492bfc468842b6277efc289fd437",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "a8bba76b5605da85e322a46a63cc4c26ebc3e91be02a32365cc8316db0b29859"
+        },
+        {
+          "batch": 4,
+          "sha256": "e0853711809ac87b68833cdd2ab070cb7d005043ef5010ae2a7fd5a184a83d6c"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "d85d3ab02b3d6eb9a669162f9a865739fe1102d361501f5788607057b3b448a1"
+        },
+        {
+          "batch": 4,
+          "sha256": "54e21c461d6542d472afa829e130ca834e393b4c0af8441130cd8bb699c9c6a3"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "75c4f1059e52e1c17bbd4300bdca3fe65dba2a422be185353bab0c29acdefbab"
+        },
+        {
+          "batch": 2,
+          "sha256": "8d21ad46ea71829921c308ee40adc2969b2b5ff732146d92e4ac4d39d39fc980"
+        },
+        {
+          "batch": 3,
+          "sha256": "e3acc58eb3217b59f9b35c0868b44ab2b9ec215c7aba6a1b8a3054c13249875c"
+        },
+        {
+          "batch": 4,
+          "sha256": "008a8dbd61ed6a0c811040b0667c89167271c6f286bbd4f6b0464e88cf6bd2fb"
+        }
+      ],
+      "support_checkpoints_sha256": "c7fd151b883255c53441d2e90bcac94694ea2e32335fbb3948a43c215f22383e",
+      "trivia_origins_sha256": "cd211d526bb7d2b741bc62388c812cb66b197505e0fdc320d892ba3ef1df88f5"
+    },
+    {
+      "family_id": "pilot-scope_change-L05-W2",
+      "source_sha256": "bb588db8ec75a496e058fcfbe2750cd3741bedc16e20b3f4ecd8d5e84dcbc183",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "21f345f0e7fea76c1f8a9e7973272985206ba6f9e18c1f720d1767465f810466"
+        },
+        {
+          "batch": 4,
+          "sha256": "a0d23cde69337caa52ef567c0739857f1ddcad9ac901aff0059fc28f6daec71e"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "d855631acf78451673983b345cd28f3dd1c38af433588d1636b326a8e4888673"
+        },
+        {
+          "batch": 4,
+          "sha256": "c9b086f06a6934cf6c5db447db64f3a4e2ac8687294c11b291c2a8557e4d9325"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "f91d4976ed65cb5850d6c615eb49b1e75df7084ea270e298ebb9420a60eee37d"
+        },
+        {
+          "batch": 2,
+          "sha256": "2dcef1c6dc1cc00b7ebbb1afd57604ccee1a7657da06bf5fb040127725d5c0f0"
+        },
+        {
+          "batch": 3,
+          "sha256": "ebda8be1379e02927244f4c71b156e078f4a9ecd1b7e3e2aef70b4eec00443f5"
+        },
+        {
+          "batch": 4,
+          "sha256": "bbc14789d3c1f6fd3f000efa4df16dc0f8915779d06243500af4f2299b71ab92"
+        }
+      ],
+      "support_checkpoints_sha256": "9f773fc24722d6fd2543289fd6d37477598fa1bf68adba991834801588abad71",
+      "trivia_origins_sha256": "337087ca191ec1cb2b929aa5023e9926b6ed14b9f3045e4069e11ab91576245c"
+    },
+    {
+      "family_id": "pilot-scope_change-L06-W1",
+      "source_sha256": "df7b622044aa73c587a72f2dcab7b1317a35946c79e9e03396958f168288cd69",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "01243ec41de0855517f219e8de12973ecd03b8ba775a4640adf06be278c19de9"
+        },
+        {
+          "batch": 4,
+          "sha256": "fb60ff7191b6c32f27f36a29416ddb659609e7348b6a1b01c1c2394ac5ef0719"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "9cf0ccd35eed373f5170a69acf17c16fa09500ddc7fd6ac78148f32407f476cb"
+        },
+        {
+          "batch": 4,
+          "sha256": "50f26999821f222cb2ac78d9f5388a85124fd330386304788e7b0ba3ce0e024f"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "ebf5a9a0888b3b760635558c51451e6c70ed3b94c104aaf0a6d751723e581604"
+        },
+        {
+          "batch": 2,
+          "sha256": "dc7e80f5eeb1cd9a6d8774e6d6d7a793d77b8c6f9f41353e16429ebbd6722583"
+        },
+        {
+          "batch": 3,
+          "sha256": "06f67fdb11e7fe671f2c8e6b3924bf27c9f7ae60ab0da0f26d74e1a7ce4b7bda"
+        },
+        {
+          "batch": 4,
+          "sha256": "80cdc1fe320e7e7e24a65103a1ddf834e5ba811ce7c574befcd8f3cccef68b9e"
+        }
+      ],
+      "support_checkpoints_sha256": "af47712b8b7a3fdb8232d27f292caa1f169d9702ef199647b50c18a8bfae1073",
+      "trivia_origins_sha256": "bda2bf55c95df9d00f15fcccb6faca9d7962a905e7dfc6f89597ca736e2eea79"
+    },
+    {
+      "family_id": "pilot-scope_change-L06-W2",
+      "source_sha256": "0437e6361f22ce17ca5c9afb6edc1e7fe303d70a4ddf44039a08d649b432b908",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "a5d24c71978f5a3293cc3f72a9c353a7b7b8ee7f309b8b64f181d9998c573342"
+        },
+        {
+          "batch": 4,
+          "sha256": "df61c3f0dadd4f9698dffead978aaee008687f67f012f2eee33b7f018712ad14"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "8f19eb89b899ecb6bd0f74632156bc5354b71b8621744994c1aabda7aa626ac9"
+        },
+        {
+          "batch": 4,
+          "sha256": "7007ca1e317bfb97e1d87c11bb74d33bf96979288543f5d2fd6cfc7c2b39ed82"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "c2be8a73fee42a981eb912f3325b125bf1d01c4cbc3a6e4e10b56353dece6532"
+        },
+        {
+          "batch": 2,
+          "sha256": "5c04dbc43f74cf16f686161a94a04754dc532ef3d5acb4dac7c29613f13bc781"
+        },
+        {
+          "batch": 3,
+          "sha256": "f31e71dc69fdaca520ee7b28224f541610359515b4c6ae1ac972bca6664912e8"
+        },
+        {
+          "batch": 4,
+          "sha256": "c178accb0107f180aab7f7d623658ecad440f9fe01b36588fe16d023ff7c7738"
+        }
+      ],
+      "support_checkpoints_sha256": "2d8ef89fed9c6690d142cea6c6f0fa17b80074a62a2329a3a46cf1aa91e3ecba",
+      "trivia_origins_sha256": "43d8efedaff819ebdecb129a24a06daab14327af75e04b28f6c3cd59985afaa7"
+    },
+    {
+      "family_id": "pilot-expiry-L01-W1",
+      "source_sha256": "7284d4f2b729665f01c27f050e0448fd12e942867d5b20d399b03c415d17926f",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "9f3666a43736947120eba2ac1479a67f479b3bc309191f522e7964d0b857c896"
+        },
+        {
+          "batch": 4,
+          "sha256": "a1b4ce510d2b456d2e1ae104a72c1f97e07a9269a544c2b497bd8bff4713d1fa"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "4e6dead22e161a15c5235eae729913c0bae7e424300aa05f434c5e72f4dd3016"
+        },
+        {
+          "batch": 4,
+          "sha256": "5010e589b6edd8d1537e69f9095083bdbe67a35c7be18444b15d4d765b70976c"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "bc03906a69fc4f62c9557b6f8c424f7ac981839a76482bdd8543b795c9c2ec56"
+        },
+        {
+          "batch": 2,
+          "sha256": "99ce917c58f69cd9d924df846f822f3d4855fa04050ab38317dffeff2442c55d"
+        },
+        {
+          "batch": 3,
+          "sha256": "985cc5990377a7c5cb1550a1e7d763f09ee4c2905b14ad9487d013d77fbe5e5a"
+        },
+        {
+          "batch": 4,
+          "sha256": "ac18f1fa3f65f45c9641a4375f388290cbbe2a3e8b6b4edb57bfe89e7b2b1add"
+        }
+      ],
+      "support_checkpoints_sha256": "19d73b379e351652966617a8b207c10ea4a3f5c521e442f465e7b761e5687d61",
+      "trivia_origins_sha256": "9adec90e46c09ca500d74ac076b27a6367704c8b3fd452c18e6553f1522ce259"
+    },
+    {
+      "family_id": "pilot-expiry-L01-W2",
+      "source_sha256": "9bc0497b9a87da3de92232a8355f974fbd801d9bea7a5d49a337f5d45b1ffbb0",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "cd7cba341ea29806298cc4d4617e262bd8bda186fee61dce1d5c006590d44b54"
+        },
+        {
+          "batch": 4,
+          "sha256": "57250b6f7df19755799be4403dcc39e113b4860e94ee05bb728c5a39d18c2657"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "05f60edc1a4163b35c74f9b29e20dd70644f086e561fdb3532c81c1b7ef25d69"
+        },
+        {
+          "batch": 4,
+          "sha256": "3a26abbbe9fe4d297898210fbf611077b64b70773e0d8a3ef4983bc594f90f6a"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "4532c4933f9cb962437848d5ce94aaf1835b666c0ff743d599f377e2702cc240"
+        },
+        {
+          "batch": 2,
+          "sha256": "de8f5f41128b703bf99abb64cd8a702fb541529170d1ea5528fc6f899599d937"
+        },
+        {
+          "batch": 3,
+          "sha256": "93d99368737d9fe1649e06d9598d62d6f082757a628c18e954cab46a5b1a8440"
+        },
+        {
+          "batch": 4,
+          "sha256": "d38ba74f9194d9bca26e218e9fda3bc9e4511b2337452ca4ca900c1ad9ae2893"
+        }
+      ],
+      "support_checkpoints_sha256": "5bdebf80f062e801c12a8ffdc67597dce14b64bf4bf18bd2b885d4aa833efb8b",
+      "trivia_origins_sha256": "d1f94cbf12fc2a3fb846033b2620e230c4e0277c57baf8897352691dcb0f6566"
+    },
+    {
+      "family_id": "pilot-expiry-L02-R3-W1",
+      "source_sha256": "83fe9f930dc8c7c42cf095b143137ca8b7b68406d0702559690fe51f0444479e",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "198a3f3bea03cb41b6e15d5fe3d22b390ef4ff5ef08b150c2a1d32f964893070"
+        },
+        {
+          "batch": 4,
+          "sha256": "796e4919f6605a9ac4c2bca2038143e755a00f7cc192133f29745945c8c2aeeb"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "59d5b51bd30cbdd5b49a7755e9fe7143bf76e60288f82ecd6c3794c4ee267878"
+        },
+        {
+          "batch": 4,
+          "sha256": "92e4cc2d25f7ce6654ac6417c0f8b483119989c5dd747c231f02a5c008249f8f"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "15ee712bad5288c6818b8ff36ac7a4df8e24176913f374486e6164f18d1531a8"
+        },
+        {
+          "batch": 2,
+          "sha256": "89529e813a6a6b3e473ac7eea3c28b36f7014c0cf6d172a2d527c8a8c418295c"
+        },
+        {
+          "batch": 3,
+          "sha256": "ef029389f70a503e3637a955df41649d32416ea5ea75fb08dd816ccca4a14213"
+        },
+        {
+          "batch": 4,
+          "sha256": "3890fb87c67986745aa889495f609f3f70830c7300adcb2b3a3a727fd5aefcc1"
+        }
+      ],
+      "support_checkpoints_sha256": "ec42b0c49f9c8e64b10224b5759bb361a0c68a9ff2b8e152898fa0bec9d759cd",
+      "trivia_origins_sha256": "1866a35ff151f9600f9f7252bee1aa3cd57316377832c0d58f34db52e0a42011"
+    },
+    {
+      "family_id": "pilot-expiry-L02-R3-W2",
+      "source_sha256": "4283ab4e706036d59773ed6d10208f67639376f28fe34713502c5de7e3ea1857",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "b3b35257f68b53b02c33c01fe1132e8681831abc22930af28659632f78cacb17"
+        },
+        {
+          "batch": 4,
+          "sha256": "f9a6d1fcb17b5c73ac4e3d104898476d2f58c0aa787229b6254eb14938c986d4"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "4a3a3ffe87581921dadaae00d864184fe5aa25180f7b1e159b92ba91cc4562b2"
+        },
+        {
+          "batch": 4,
+          "sha256": "ae11fc3fd1dfc1c932db7329a82cb9b2263cf35148d914c61dddae97ed68cd98"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "fc97a749157e1cbf1486d827d2165bab04e13f0942b78f09f45d296b14cd0554"
+        },
+        {
+          "batch": 2,
+          "sha256": "a67453d026ca3a01d045d9ccdf1ea49b2615b640bda07124495762acf97cbb23"
+        },
+        {
+          "batch": 3,
+          "sha256": "260b17c32212a6bd16e73d3c9714d8eb701680109d1aac11b2b7ae7981b920d9"
+        },
+        {
+          "batch": 4,
+          "sha256": "d9f63b683e0151ff494125c134b3f927ebe8a4122857f95f856a8489b9cdd563"
+        }
+      ],
+      "support_checkpoints_sha256": "c811198ffe4e183a974cc152c8c21436d1c411a21b83d8507f2c7a731e91a51e",
+      "trivia_origins_sha256": "1b1d16f5be1ede8b671ddb446e4b48b2812109f187ac6dbaf7ae881887154f60"
+    },
+    {
+      "family_id": "pilot-expiry-L03-R3-W1",
+      "source_sha256": "eec916d943983e662a687524c819f74f32b784ceff48e12502ad93e94ee1317c",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "3434c14e11366c1bd47ff0b8ac4def6235a56cb9dc04f64277fbab13137456bc"
+        },
+        {
+          "batch": 4,
+          "sha256": "d49e8f8bf40692f5683d15118f14385e2fc783cb42f131b65a852773e45e3965"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "07ef126f9955a91fad324bc8355fcd242640627d05f04b5656bbe7a3d439e886"
+        },
+        {
+          "batch": 4,
+          "sha256": "d1ef6275e7f4502a309846d39489ca89745b6c8b25db1917781707b7852f9aec"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "55758731ec0d63dde9175a626a7981466fdf6dcdafa569a309d9398c0e574187"
+        },
+        {
+          "batch": 2,
+          "sha256": "03eacdec7ce35b322a62246f263e1755ef2d06897e1682ebcc0567648f986a7f"
+        },
+        {
+          "batch": 3,
+          "sha256": "022f42085ab7ea7b32eeb1b2db39981a40ee7fde19ff45e9426a120b3bb987e9"
+        },
+        {
+          "batch": 4,
+          "sha256": "f701565f650ad38aa945eba3873c324aa782faa6ef921f7c9e2200cd2ab5d9fc"
+        }
+      ],
+      "support_checkpoints_sha256": "f2730172ad76642a9c9f098b2b210afc66cf354769d00ea060c906c8eb4cd778",
+      "trivia_origins_sha256": "08c0007eb074e048d8d27193783fdf3a2d2379e7c2acc58cf5f5fcf71ae1ebe6"
+    },
+    {
+      "family_id": "pilot-expiry-L03-R3-W2",
+      "source_sha256": "20eebce13b3d1f1d03f43afcbc5b708e7a0fcfdf55e37579e7f3b74ed6166ed1",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "3434ce7a27feec5064469b331b4f19269f15833b57aaa5bdbe00018a107a0ddc"
+        },
+        {
+          "batch": 4,
+          "sha256": "443faa944bc48dda403828fdec90fdde7642cdc67bef1f58c248035615427fa3"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "33bed2006ec917a1ceec6e7cd8ab702e0bee3caeec0e4d595baf6deb2264a9a8"
+        },
+        {
+          "batch": 4,
+          "sha256": "054a2eda5038bccae151c5994e80f9fd02be6c2330e9900f918bb78642ef0a22"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "32b7ac045d96d475cc12c56a6194c1a5557d2d1348d8901fd87d4cbade2e120d"
+        },
+        {
+          "batch": 2,
+          "sha256": "2dd10de7bdecea209d90b04a9d7ff3d4bda0c04f92f8a0412f7d225346fbee3d"
+        },
+        {
+          "batch": 3,
+          "sha256": "3ef96ab6943601fc63d469935fe57cd3fd1908533e2f9915cae1d04834508114"
+        },
+        {
+          "batch": 4,
+          "sha256": "1bdf94314192f5aae942046bbff69c55406ee449bb49c163a024cb4863975dff"
+        }
+      ],
+      "support_checkpoints_sha256": "9740b7d7498d6415ccccd376d88af1cb2b134d37198e5ea48716c7df159d391e",
+      "trivia_origins_sha256": "f29b41f63300c510d3bc076d6dc001fd8cbeaeb1e160b6544cef03f90d1f86d1"
+    },
+    {
+      "family_id": "pilot-expiry-L04-R3-W1",
+      "source_sha256": "4826743c4a92139d7d81e476b027c3da501c7f3648f5efd71abeb8f502da377a",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "7b44ae1fe88cb8065437c51149584a835563443a57886b4aa5189261b8b8ea31"
+        },
+        {
+          "batch": 4,
+          "sha256": "3fa7e7c2d56d0b198f43106b19bd89c51280d28dc44b645307f17c0e9d5efd4e"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "3550ac5a1b6acc7d39c3334b4440784de161fb0862a233f3fbc0cb516b1528a3"
+        },
+        {
+          "batch": 4,
+          "sha256": "52f357b32c70eeb7c6ae1b8124c246ba73078f375034493d0bba323817acd25b"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "0380937341019dec235dbbe762511d8cf24488be4d47de3c7c94535a2fb4ba9d"
+        },
+        {
+          "batch": 2,
+          "sha256": "7dcb5025ed8a71949b648438be1b69c0ee114f073e1c157d4d661c6defcf85ca"
+        },
+        {
+          "batch": 3,
+          "sha256": "da6c2a3fe4e540ed4b1945a915466831ab26cb24e8537eb81b90eca5a00f29bb"
+        },
+        {
+          "batch": 4,
+          "sha256": "af7cfe1db96e99ee602c247fa48d806d09692313f811a0ef8a72d2d53b43cbb3"
+        }
+      ],
+      "support_checkpoints_sha256": "957a95244a79d15c80e80f083495eaad095d5ba967ec1304b7b309d14edf92f1",
+      "trivia_origins_sha256": "2750e8634173c0d9e230ac41bf68148fe47f84b2b959c067a0a1039ae748028b"
+    },
+    {
+      "family_id": "pilot-expiry-L04-R3-W2",
+      "source_sha256": "ca15bf790eb0d695167612170ebe0638cd240d0164290d57fb4977672d2affff",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "0feb3acb80b05eb2e565ab1956eb92045bc142f3c3f475629a45beb8c63c2662"
+        },
+        {
+          "batch": 4,
+          "sha256": "20ec19688ab6a693b0271f53944e131bb37df82ae5a7fb449d3d8b77608e6549"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "080062a7891c5a371ac5d377f0d22c75db6572f73e83a79a76b8131154b7cebd"
+        },
+        {
+          "batch": 4,
+          "sha256": "ef812b5946ff5c8276aab912bb6afa106169c661dd0a6097927f01d3cbb94e0d"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "a279f1f057d4a6385bc6d7918fa8cac3dbdfa0b62e9a79499f0495b520f06271"
+        },
+        {
+          "batch": 2,
+          "sha256": "cebcf1a3b8bf64ea849d10f9056719154fcb0e06085c9e96f1b87114a1e52846"
+        },
+        {
+          "batch": 3,
+          "sha256": "14d382ed6796b3932e0f80cb148785153415cc1bf425f86bcbe09b9ebc26a898"
+        },
+        {
+          "batch": 4,
+          "sha256": "96b5dfeb442b524b2c4538bd41feabdcdf39d38a3d7c6d65ae7123becca6964f"
+        }
+      ],
+      "support_checkpoints_sha256": "7c0eb390110cde6ffd40acf59dc8a992bcf4b512e38fab198c46b48ea09e71a6",
+      "trivia_origins_sha256": "10e49fa28ac0ea60147f46b908e7bc614d869b7e4ffc7aefafc3797ea94f1ad9"
+    },
+    {
+      "family_id": "pilot-expiry-L05-R3-W1",
+      "source_sha256": "78e340116bb262554532c500ecba9825c17e6698b04c9ac296f9e21205d951a1",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "869ca74ae2d2cded543c6f806348e7dcd9260fa544010da19147834b263672dd"
+        },
+        {
+          "batch": 4,
+          "sha256": "110a6a37a8e5e99adabd8a4605df77a08d10de49fbb50b71250a167a0f765252"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "0a8f356c24fee0126cf65f7c91a3f86ba96bf49fd74980315c53985191aaf6f0"
+        },
+        {
+          "batch": 4,
+          "sha256": "ccf128c7db924b73e2861b2c2d9a3dcdece8d12122fdc3ecbb12e455627724ae"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "a2bd2a65e02fd5d359447e4464ca327473b0d91baff421e463f45158f3022b0b"
+        },
+        {
+          "batch": 2,
+          "sha256": "675216ee7a8c83a020aa9991caf6ab99942da386242db377d43bf118551c38cb"
+        },
+        {
+          "batch": 3,
+          "sha256": "45f78ecc80d4326508a372ec10747a3ec596732ec71e776411390a90fcb655c6"
+        },
+        {
+          "batch": 4,
+          "sha256": "ace6f879d4f4fca6c02d643809100dc8337e33798a809dcdeee5493af182606c"
+        }
+      ],
+      "support_checkpoints_sha256": "7ba9c9d3946b7ca532af57a2af25af5b55c3bab3920aa8e536535bc94243bc12",
+      "trivia_origins_sha256": "6ba78dc13ad695b4dbddd41b235873048c6a0bd2f4da9ada7693704043d7cb28"
+    },
+    {
+      "family_id": "pilot-expiry-L05-R3-W2",
+      "source_sha256": "36768645af434ba18f99a2405d70d84a44c25209ed5807c1d1e9985e24e38c9d",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "59e0811e714ae97453637d50bc6c6afb420a4d6279b54a7fd7b7924787694079"
+        },
+        {
+          "batch": 4,
+          "sha256": "a927af24b27e2ae6c7210c9995afc9cf8e6983482e9a27afdb7921906c533a29"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "ff4a2ae10f9df28fb624085215e3739a82982787ec23979af14977276666adde"
+        },
+        {
+          "batch": 4,
+          "sha256": "6b280ba62fe0b1b225c724be29db4f775e169ad7461180f4ad5b929e5af35b77"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "a0028dee2252a9fa0869cb57549c59dc87dcc382e208ebdbc13343d6b8232335"
+        },
+        {
+          "batch": 2,
+          "sha256": "bf97a9b3562c46398b80ebefbd87e92f8bf19aa80293a0dc5a52611296d23bec"
+        },
+        {
+          "batch": 3,
+          "sha256": "5d5e2fd82eceb464980476eb2ad11e55ad22f4635d7a8ec18e4b283c49234427"
+        },
+        {
+          "batch": 4,
+          "sha256": "82f3bdc48daba735291afe5ed17e5a4e51e9de52ec477128b6a18cf2a8889fc9"
+        }
+      ],
+      "support_checkpoints_sha256": "811e6d49465a2e984c7da13afdcade69156b612d212f7ff3613ac876d7373212",
+      "trivia_origins_sha256": "6ba78dc13ad695b4dbddd41b235873048c6a0bd2f4da9ada7693704043d7cb28"
+    },
+    {
+      "family_id": "pilot-expiry-L06-R3-W1",
+      "source_sha256": "42ab29aaf29881ad729c339e2b752437077c3d251964123a171568dfd2f253f1",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "0a686a47b55de16af43216d8593a87d5f1dbc49ee50a9fd6e61d092f20496d7f"
+        },
+        {
+          "batch": 4,
+          "sha256": "37ae97cb5316f9a31a21b8847e86b7a29a0ca43b96ca1feb3a0be5529c2fd1a8"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "d38e66322a5ee76a2fc8914801d2dc580d812b94d098e41842861bf8ec2a5e19"
+        },
+        {
+          "batch": 4,
+          "sha256": "016b73fe5e3c2d9549dae963b09e770f2dc3a271d522abf282cc91d49f5fc1b7"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "f4f98a4e9cb27ce705ce4abe0fb8ca4879e423e2fc73b1a9f3a503becb064245"
+        },
+        {
+          "batch": 2,
+          "sha256": "6792ff4f3c7c130ec8a7c17e6502217f1a3e20984ac5a912abce91db04c13218"
+        },
+        {
+          "batch": 3,
+          "sha256": "c8371aedb8b1d0b53b9a97be9d48ab27cb56be68f07640114071f8a715f9e153"
+        },
+        {
+          "batch": 4,
+          "sha256": "17c6f5134ac7d77731a6e376a8d3e9474438f50f76867ee1f22d813d9da95696"
+        }
+      ],
+      "support_checkpoints_sha256": "334aa833516ae9b63b41ae6897b0b5055bb97a4d2ecb553f38e987408e7b63b4",
+      "trivia_origins_sha256": "4f0f556c06e89281ea1fd2adea2b5d9b40964bf53d952734af5872f3843b431d"
+    },
+    {
+      "family_id": "pilot-expiry-L06-R3-W2",
+      "source_sha256": "15473724285e90eded674221021cd03bc044ce3d46e5362c8c0f367b97780d4c",
+      "questions": [
+        {
+          "batch": 2,
+          "sha256": "857eeb44b93a97e01a9f07c43aeaa01be401be0ba5880f75ba3ee3e42c06c314"
+        },
+        {
+          "batch": 4,
+          "sha256": "79e58bc9dc04b7beb68bee7d556eaeafc808ff1011945334943680fdeb248ac8"
+        }
+      ],
+      "G_correct": [
+        {
+          "batch": 2,
+          "sha256": "946b5d11333ffe679c6c3e63f311d28e5f4d8c6e537a147cc68ed47d8104437b"
+        },
+        {
+          "batch": 4,
+          "sha256": "5bf89a818668df7a86446c6170c36cb1cd4235572c860b8b2bf594b99a356d78"
+        }
+      ],
+      "extraction_inputs": [
+        {
+          "batch": 1,
+          "sha256": "ee38902f3c978bcbc746f9519d0875bef1db73cfaba844f482c9bf42f2db5222"
+        },
+        {
+          "batch": 2,
+          "sha256": "61cfa6abdfc508de1b5fc02bb30ba42f0c920757a7e298a5b88ff0d8c60d33e8"
+        },
+        {
+          "batch": 3,
+          "sha256": "f0cc2a9483135599963f2744afb164bdb1c3a9c9c6a0f55aa246557a7cf9fbec"
+        },
+        {
+          "batch": 4,
+          "sha256": "1a9c976a0b75993cc69cb2b114922f0f99b87144a0569880d906f1660d22964b"
+        }
+      ],
+      "support_checkpoints_sha256": "f0a6074579cb5048177e84a9376515587fac06e812b154d4416e3b4f08e16d87",
+      "trivia_origins_sha256": "4f0f556c06e89281ea1fd2adea2b5d9b40964bf53d952734af5872f3843b431d"
+    }
+  ]
+}

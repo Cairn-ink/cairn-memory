@@ -1,0 +1,110 @@
+{
+  "status": "PASS",
+  "gates": {
+    "reader": {
+      "pass": true,
+      "cap": 2176,
+      "worstTokens": 1774,
+      "margin": 402,
+      "marginPercent": 18.474264705882355,
+      "worstStructure": "engineering-stress/reader/scope_change/alternative_mediated/4/supported_union",
+      "familyId": "engineering-cap-scope_change-alternative_mediated-zh-Hant-B0"
+    },
+    "extraction": {
+      "pass": true,
+      "cap": 4352,
+      "worstTokens": 2276,
+      "margin": 2076,
+      "marginPercent": 47.70220588235294,
+      "worstStructure": "engineering-stress/extraction/scope_change/alternative_mediated/4/all_explicit_events",
+      "familyId": "engineering-cap-scope_change-alternative_mediated-zh-Hant-B0"
+    }
+  },
+  "summary": [
+    {
+      "split": "pilot",
+      "operation": "reader",
+      "variant": "supported_union",
+      "cases": 120,
+      "failures": 0,
+      "tokens": 1625,
+      "cap": 2176,
+      "margin": 551,
+      "marginPercent": 25.32169117647059,
+      "pass": true,
+      "worstStructure": "pilot/reader/scope_change/alternative_mediated/4/supported_union",
+      "familyId": "pilot-scope_change-L06-W1"
+    },
+    {
+      "split": "pilot",
+      "operation": "reader",
+      "variant": "required_graph",
+      "cases": 144,
+      "failures": 0,
+      "tokens": 588,
+      "cap": 2176,
+      "margin": 1588,
+      "marginPercent": 72.97794117647058,
+      "pass": true,
+      "worstStructure": "pilot/reader/scope_change/three_edge_serial/4/required_graph_1",
+      "familyId": "pilot-scope_change-L04-W1"
+    },
+    {
+      "split": "pilot",
+      "operation": "extraction",
+      "variant": "all_explicit_events",
+      "cases": 240,
+      "failures": 0,
+      "tokens": 2072,
+      "cap": 4352,
+      "margin": 2280,
+      "marginPercent": 52.38970588235294,
+      "pass": true,
+      "worstStructure": "pilot/extraction/scope_change/alternative_mediated/4/all_explicit_events",
+      "familyId": "pilot-scope_change-L06-W1"
+    },
+    {
+      "split": "engineering-stress",
+      "operation": "reader",
+      "variant": "supported_union",
+      "cases": 360,
+      "failures": 0,
+      "tokens": 1774,
+      "cap": 2176,
+      "margin": 402,
+      "marginPercent": 18.474264705882355,
+      "pass": true,
+      "worstStructure": "engineering-stress/reader/scope_change/alternative_mediated/4/supported_union",
+      "familyId": "engineering-cap-scope_change-alternative_mediated-zh-Hant-B0"
+    },
+    {
+      "split": "engineering-stress",
+      "operation": "reader",
+      "variant": "required_graph",
+      "cases": 432,
+      "failures": 0,
+      "tokens": 618,
+      "cap": 2176,
+      "margin": 1558,
+      "marginPercent": 71.59926470588235,
+      "pass": true,
+      "worstStructure": "engineering-stress/reader/scope_change/three_edge_serial/4/required_graph_1",
+      "familyId": "engineering-cap-scope_change-three_edge_serial-zh-Hant-B0"
+    },
+    {
+      "split": "engineering-stress",
+      "operation": "extraction",
+      "variant": "all_explicit_events",
+      "cases": 720,
+      "failures": 0,
+      "tokens": 2276,
+      "cap": 4352,
+      "margin": 2076,
+      "marginPercent": 47.70220588235294,
+      "pass": true,
+      "worstStructure": "engineering-stress/extraction/scope_change/alternative_mediated/4/all_explicit_events",
+      "familyId": "engineering-cap-scope_change-alternative_mediated-zh-Hant-B0"
+    }
+  ],
+  "report": "evaluation/hr3/harness/reports/cap-certification-a6.json"
+}

@@ -2,7 +2,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { adaptGenerator, adaptChallenge, restore, goldWitness, stable, hash } from './adapters.mjs';
-import { score, validateGold } from '../scorer/scorer.mjs';
+import {validateGold} from '../scorer/scorer.mjs';
+import {score} from '../harness/scoring-a6.mjs';
 import { readJSONL, regenerate } from './reproduce.mjs';
 import { fieldMapping } from './field-map.mjs';
 const components = ['C', 'O', 'R', 'J'];
@@ -53,7 +54,7 @@ export async function mechanical(out) {
       const id = `${family.family_id}/${cp.batch}`;
       try {
         const a = adaptGenerator(family, gs[0], ss[0], cp.batch); audit(a, id); validateGold(a.gold);
-        const result = score(a.gold, goldWitness(a.gold));
+        const result = score(a.gold, goldWitness(a.gold),a.scoringOptions);
         const ok = components.every(c => result.scores[c] === 1);
         pilot.push({ id, schemaValid: true, scores: result.scores, ok });
         if (!ok) failures.push({ id, stage: 'self-score', result });
@@ -64,7 +65,7 @@ export async function mechanical(out) {
   for (const file of ['pooled.jsonl', 'referral-candidates.jsonl', 'evidence-contrasts.jsonl', 'representation-pairs.jsonl']) for (const row of await readJSONL(join(data.challenge, file))) {
     try {
       const a = adaptChallenge(row, worlds.get(row.world_id)); audit(a, row.id);
-      const result = score(a.gold, a.submission);
+      const result = score(a.gold, a.submission,a.scoringOptions);
       for (const f of result.referrals) {
         const { key, components: requested, ...payload } = f;
         const existing = bundles.get(key);

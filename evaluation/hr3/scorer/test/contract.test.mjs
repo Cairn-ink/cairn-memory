@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { consumeContract, validateContract, SLOT_INTERFACE, projectFields, projectClaimFields } from '../contract.mjs';
 import { fieldRepresentationsEqual } from '../slots.mjs';
-import { score } from '../scorer.mjs';
+import { scoreUnlicensed as score } from './unlicensed-fixtures.mjs';
 import { claim, copy, fixture, text, quantity } from './fixtures.mjs';
 const languageRow = (canonical, zh, en = canonical) => ({ canonical, 'zh-Hant': [zh], en: [en], mixed: [`${en} ${zh}`] });
 function engineeringContract() {

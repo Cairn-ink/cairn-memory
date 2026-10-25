@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { score, correctnessGold, validateGold, SEED } from '../scorer.mjs';
+import { correctnessGold, validateGold, SEED } from '../scorer.mjs';
 import { citation, cited, copy, fixture, row, scoped, slot } from './fixtures.mjs';
-const run = f => score(f.gold, f.submission);
+import { scoreUnlicensed } from './unlicensed-fixtures.mjs';
+const run = f => scoreUnlicensed(f.gold, f.submission);
 const all = { C: 1, O: 1, R: 1, J: 1 };
 
 test('closed slot answers select a complete serial path, deterministic per-family J', () => {
@@ -238,7 +239,7 @@ test('dependence keys include complete evidence context, slot answer and separat
   const second = run(f);
   assert.equal(first.referrals.find(r => r.pass === 'correctness').key, second.referrals.find(r => r.pass === 'correctness').key);
   assert.notEqual(first.referrals.find(r => r.pass === 'support').key, second.referrals.find(r => r.pass === 'support').key);
-  assert(first.referrals.every(r => r.parentRule.startsWith('a4.')));
+  assert(first.referrals.every(r => r.parentRule.startsWith('a4.') || r.parentRule.startsWith('a6.')));
 });
 
 test('impossible source-claimed interval retains existing whole-answer malformed semantics', () => {
@@ -263,7 +264,7 @@ test('ambiguous overlapping reader occurrences refer only R; malformed attempts 
   assert.equal(result.scores.C, 1); assert.equal(result.scores.O, 1); assert.equal(result.scores.R, null);
   assert.equal(result.reason.error, 'ambiguous_overlapping_occurrence');
   f.gold.reason = { status: 'not_stated', nodes: [], acceptedGraphs: [] };
-  const malformed = score(f.gold, null);
+  const malformed = scoreUnlicensed(f.gold, null);
   assert.equal(malformed.reasonStratum.denominator, 1);
   assert.equal(malformed.reasonStratum.noEvidenceBaseline.R, 1);
 });

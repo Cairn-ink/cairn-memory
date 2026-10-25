@@ -1,3 +1,39 @@
+Current A-6.1 configuration: `paid-preflight-a6.json` is the default record path;
+its version remains `hr3-paid-preflight-a6-v1`. Review evidence must list A-6.1
+as well as A-6 and earlier applicable amendments. The authenticated trivia
+producer is pinned by `trivia-authority-a6.mjs`; changing it requires explicit
+configuration migration and complete recertification. Development/test analysis
+must bind scorer `hr3-scorer-a6-v5`. No review/supervision/fresh-run attestation
+is authored here.
+
+# Fifth engineering pilot: A-6
+
+The active record version is `hr3-paid-preflight-a6-v1`; the import filenames
+retain A-4 names for caller compatibility only. The exact requirement catalog
+now cites A-6 §7. The primary's review must list A-4, A-4.1, A-4.2, A-1.1 and
+A-6, bind the current freeze/evidence and record a passing non-author verdict.
+The harness never supplies that attestation. Allocation uses
+`hr3-worlds-a6-pilot-v1`; accounting requires the four-pilot chain and a separate
+primary-supplied preparation-completeness record. The supplied ledger files do
+not themselves attest to unrecorded preparation calls.
+
+`measure-a6.mjs` and `measure-p-ties-a6.mjs` always publish
+`MEASUREMENT_ONLY_NOT_CERTIFIED`. They have no provider transport or runtime
+ceiling-override option. Such a report is rejected as paid-preflight evidence.
+The retained input limits still fail; A-6.1 and full input/embedding/privacy/
+conformance/allocation/budget recertification remain pending. Output-only
+certification is insufficient. `freeze-a6.mjs` rejects the blocked verification
+status and cannot treat expected failures as paid readiness.
+
+A-1.1 sequencing and every development/test analysis/resource requirement are
+retained. Existing supervision, mechanical stops, source/freeze bindings and
+independent missing/stale prerequisite tests remain in force. Calibration v2 and
+the full A-5 validation remain before development/inference; no pilot confidence
+interval, bootstrap estimate or contrast with uncertainty is permitted.
+
+The following earlier A-4 descriptions are historical; use the active catalog
+and A-6 report for the fifth pilot.
+
 # Paid A-4 preflight
 
 `runner.mjs` calls `verifyPaidPreflight` for every real transport before creating a journal or dispatching. Accounting alone cannot authorize execution. Fake transports exercise the offline pipeline and never produce paid readiness.

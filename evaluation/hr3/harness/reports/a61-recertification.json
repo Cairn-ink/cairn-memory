@@ -1,0 +1,120 @@
+{
+  "version": "hr3-a61-recertification-v1",
+  "status": "FAIL_STOPPED_AT_CERTIFICATE",
+  "paidReadiness": false,
+  "networkCalls": 0,
+  "paidCalls": 0,
+  "freezeRun": false,
+  "commands": [
+    {
+      "name": "strict-schema",
+      "command": "node evaluation/hr3/harness/strict-schema.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/reports/a61-certification/strict-schema.stdout": "55abd6fa95f708d806c10006891f429be3d90d3333feb6479a89053c0b9969d7",
+        "evaluation/hr3/harness/reports/a61-certification/strict-schema.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "published-schemas",
+      "command": "node evaluation/hr3/harness/schemas-a4.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/reports/a61-certification/published-schemas.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/reports/a61-certification/published-schemas.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "private-inventory",
+      "command": "node evaluation/hr3/harness/private-field-inventory.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/reports/a61-certification/private-inventory.stdout": "ef8434c0cfef9767acbe497a3763ee44da67a0331295a6191a4c455f2ec65fe6",
+        "evaluation/hr3/harness/reports/a61-certification/private-inventory.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "inspected-references",
+      "command": "node evaluation/hr3/harness/inspected-references.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/reports/a61-certification/inspected-references.stdout": "49ef6808e9326e14b80b96d566a9b6517f1ca3bcf0551da740eb94a4d5ac693f",
+        "evaluation/hr3/harness/reports/a61-certification/inspected-references.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "runtime-closure",
+      "command": "node evaluation/hr3/harness/runtime-closure.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/reports/a61-certification/runtime-closure.stdout": "1915530c376b9d0f8c1e97d6243f1e5aaee1b0c3c1cc8ced17b9b46fb77e7f25",
+        "evaluation/hr3/harness/reports/a61-certification/runtime-closure.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "accounting",
+      "command": "node evaluation/hr3/harness/accounting-a6.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/reports/a61-certification/accounting.stdout": "43fcfd3bf009606a08d2815060d67dd5a7885753aae8f562ad51fd700c9d7044",
+        "evaluation/hr3/harness/reports/a61-certification/accounting.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "budget",
+      "command": "node evaluation/hr3/harness/budget-a6.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/reports/a61-certification/budget.stdout": "0bc23e72147dbf051afb64f7b466f2ea387d6d67775ef9bd17f3668c84d8c6d2",
+        "evaluation/hr3/harness/reports/a61-certification/budget.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "continuation",
+      "command": "node evaluation/hr3/harness/continuation-a6.mjs",
+      "exitCode": 0,
+      "logs": {
+        "evaluation/hr3/harness/reports/a61-certification/continuation.stdout": "d86817dd0e62d328ebd4d7bceea44346562e566d286ffcc0cf697c5c6ded5760",
+        "evaluation/hr3/harness/reports/a61-certification/continuation.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "output-certificate",
+      "command": "node evaluation/hr3/harness/cap-certification.mjs",
+      "exitCode": 1,
+      "logs": {
+        "evaluation/hr3/harness/reports/a61-certification/output-certificate.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "evaluation/hr3/harness/reports/a61-certification/output-certificate.stderr": "24b83787424d9e55353a1bf414ba6876566cf833fcd63d52e0a47ef04d99ce3d"
+      }
+    }
+  ],
+  "notRun": [
+    "context conformance certificate",
+    "complete provider-body certificate",
+    "embedding bodies and cumulative-unit certificate",
+    "generator suite",
+    "scorer suite",
+    "integration suite",
+    "harness suite",
+    "480-answer fake pilot",
+    "complete leak scan",
+    "bound report",
+    "derived certificate bundle"
+  ],
+  "blockingStep": "output-certificate",
+  "heavyWrapper": {
+    "command": "setsid -w ~/.local/bin/cairn-heavy node CERTIFICATION_DRIVER",
+    "exitCode": 1,
+    "sharedLockAcquired": false,
+    "error": "Default shared lock path is read-only; wrapper continues after descriptor failure. This is not a properly locked heavy verification."
+  },
+  "blockingIssue": {
+    "certificate": "output-certificate",
+    "assertion": "Current errata binding",
+    "file": "evaluation/hr3/harness/cap-certification.mjs",
+    "line": 76,
+    "protectedBinding": "evaluation/hr3/generator/freeze.json:errata_sha256",
+    "expectedFrozenSHA256": "05102088c42ea22fa596d6cfd06cff028db88a561125caa4167cdac388decc1d",
+    "actualErrataSHA256": "0a5f74d8e72ca582f37568d45e49c91198c0525281a77879b4822de1eb1f2a35"
+  }
+}

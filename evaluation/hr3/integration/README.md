@@ -1,3 +1,36 @@
+Case binding: all generator scoring now returns a separate opaque expected-case
+token alongside gold. Mechanical scoring passes it to the shared harness guard.
+Any source carrying trivia must authenticate against independently supplied
+family/checkpoint/query data; declared or replayed proof metadata cannot create
+that target. Explicitly empty-trivia engineering worlds use fully protected
+scoring, and sources carrying trivia require a separate trusted target.
+
+Authenticated trivia update: generator adaptation now uses the independently pinned
+freeze authority in `../harness/trivia-authority-a6.mjs` and reauthenticates source
+data on replay. Challenge adaptation preserves opaque proof identity; serialized
+or declared offsets grant no licenses. Current verification is recorded in the
+harness A-6.1 authentication recertification report.
+
+# A-6 integration
+
+`adapters.mjs` now consumes the closed own-name/reference extraction wire and
+producer-authenticated private optional-trivia registry. Every source object is
+retained behind a hash-checked audit/restore boundary. No graph-answer fallback
+is provided. Source names authorize identity resolution only, never retrieval
+of overwritten or forgotten O/P content.
+
+`node evaluation/hr3/integration/reconcile-a6.mjs` checks all 120 generator
+checkpoints and 240 extraction batches, independently enumerates field paths,
+and republishes the complete field and delivery manifests. The integration
+suite also compares the hash-pinned pre-A-6 reducers against equivalent fully
+resolved streams, tests actual public P operations and loss, and checks both
+bilingual preservation/no-preservation pairs. Its 26 tests pass.
+
+See [the A-6 migration report](../harness/REPORT-A6-MIGRATION.md). These are
+engineering checks; input ceilings, A-6.1, final recertification and primary/
+non-author execution approvals remain pending. The legacy challenge bank and
+mechanical results below are historical, not calibration-v2 evidence.
+
 # HR-3 A-4 integration
 
 The active adapters accept closed slot answers and selected explanation quotations. Generator slot gold is joined to private causal nodes and exact UTF-16 support spans. No graph-answer conversion or fallback is implemented. Requested predecessor identities, slot states, scope and intervals survive the projection. Audit sidecars retain original metadata with hash-verified restoration; scoring and referral bundles receive closed projections only.

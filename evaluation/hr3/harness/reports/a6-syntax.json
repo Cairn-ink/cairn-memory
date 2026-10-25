@@ -1,0 +1,32 @@
+[
+  {
+    "file": "evaluation/hr3/harness/accounting-a6.mjs",
+    "exitCode": 0,
+    "sha256": "6995a1d6adef7335d425d8a15fd5f16d3c9d3757142233df3ed22576e512dd25"
+  },
+  {
+    "file": "evaluation/hr3/harness/contract-projection-a6.mjs",
+    "exitCode": 0,
+    "sha256": "0d1032a27535a48f84756b4a56307583761d2d9cedeaadece0cb9a8f9580388f"
+  },
+  {
+    "file": "evaluation/hr3/harness/preflight-a6.mjs",
+    "exitCode": 0,
+    "sha256": "46bc34d2141ccc7da7e526c323e9d46ccf11a16f7cb354130ca66a344a30990d"
+  },
+  {
+    "file": "evaluation/hr3/harness/preflight-a6-schema.mjs",
+    "exitCode": 0,
+    "sha256": "c3ece0467c8e6e41801a059689b8b32f9f6ef73c41a34ca950a76201c56702cc"
+  },
+  {
+    "file": "evaluation/hr3/harness/prompts-a6.mjs",
+    "exitCode": 0,
+    "sha256": "a64a4ce4223b9d76060f3928c5182721f624e6119b6f43df51c10da185634479"
+  },
+  {
+    "file": "evaluation/hr3/harness/test/preflight-a6.test.mjs",
+    "exitCode": 0,
+    "sha256": "ea94da1abcd1176ac66a4b62ddccbef6c5f49946765148a7efa3f4bf5bbe9ddf"
+  }
+]

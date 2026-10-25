@@ -1,3 +1,61 @@
+> Latest: scorer v7 token migration and complete offline recertification PASS.
+> Full suites: generator 62, scorer 123, integration 26, harness 377; all exit 0.
+> Standalone fake pilot 480/480, complete leak/blinding scans, bound report,
+> reconciliation and certificate bundle passed. Ran unlocked; primary freeze
+> and non-author acceptance remain pending. See `REPORT-A6.1-SCORER-V7-RECERTIFICATION.md`.
+> Earlier status blocks below are historical and superseded.
+
+> Latest focused task: trivia P2-2 fixed. Complete-target no-trivia authority and
+> private gold/token bindings reject both bilingual downgrade attacks. Focused
+> tests: 20/20 harness checks and 7/7 integration checks, exit 0. Full harness and
+> recertification are deferred until the in-flight scorer fix lands.
+> See `REPORT-A6.1-UNLICENSED-BINDING.md`; earlier status blocks are historical.
+
+> Latest continuation: both authorized tests pass; harness 371/371 (exit 0).
+> Standalone fake pilot completed 480/480 (exit 0), then source validation stopped
+> on concurrent changes to scorer support.mjs, scorer.mjs and cli.mjs. Remaining
+> gates were not run; current checkout is not certified. Ran unlocked.
+> See `REPORT-A6.1-TEST-RESUME.md`; earlier status blocks are historical.
+
+> Latest recertification: placeholder inventory fixed; four new regressions and all
+> certificates through accounting pass. Full suites: generator 62/62, scorer 100/100,
+> integration 26/26; harness 369 passed / 2 stale-test failures (exit 1). Stopped before
+> the standalone fake pilot. Ran unlocked. See `REPORT-A6.1-PLACEHOLDER-RECERTIFICATION.md`.
+> Earlier status blocks below are historical and superseded.
+
+Current expected-case migration passes all 12 focused regressions. Full
+recertification is stopped at the `record` formatter/private-inventory collision;
+no complete fake pilot or paid readiness is claimed. See
+`REPORT-A6.1-CASE-BINDING.md`.
+
+Current A-6.1 verification is stopped at a failed authentication-consumer gate.
+The approved ceilings remain unchanged; the concurrently updated scorer now
+requires an independent target-case token. No paid readiness or complete fake
+pilot is claimed. See `REPORT-A6.1-AUTH-RECERTIFICATION.md`.
+
+# A-6 migration; numerical amendment pending
+
+Runtime extraction now uses own-record names and current-batch predecessor
+references, with one gold-free identity resolution before arm fan-out. Prompts,
+closed schemas, caches, support provenance and integration are migrated. The
+unchanged input limits still block every measured maximal request category.
+
+Run `node evaluation/hr3/harness/verify-a6.mjs` for the local ordered migration
+checks. It expects the input gate and fake pilot to fail; its success status is
+`MEASUREMENT_COMPLETE_PAID_GATES_BLOCKED_A6_1`, never paid readiness. The separate
+`measure-a6.mjs` builds complete bodies without dispatch and cannot bypass the
+runtime request validator. `measure-p-ties-a6.mjs` retains additional local P
+identity/tie variation without changing product IDs or returned blocks.
+
+See [REPORT-A6-MIGRATION.md](REPORT-A6-MIGRATION.md),
+[measurement-a6.json](reports/measurement-a6.json), and
+[projection-options-a6.json](reports/projection-options-a6.json). The original
+[feasibility stop](REPORT-A6-PREFLIGHT.md) remains a historical record. Primary
+A-6.1, complete recertification, preparation completeness, freeze and non-author
+review are still required. No paid-preflight attestation is produced here.
+
+Previous repair records follow as historical context.
+
 # A-4 fourth-recheck writer-owner repair
 
 Writer intents now atomically publish pid, Linux process start time, boot/PID-namespace identity and a random nonce in their names. Observers reclaim a provably dead owner only under the accounting lock, after revalidation. Live and unverifiable owners retain priority; unknown identities are included in observation/watchdog diagnostics. There is no time-only lease. Anonymous legacy markers remain explicitly unknown.

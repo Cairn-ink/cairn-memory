@@ -8,7 +8,7 @@ import {extractionInput} from '../extraction.mjs';import {referenceEvents} from 
 import {pilotReferenceBundles} from '../cap-certification.mjs';import {scope,date,plan} from './fixtures.mjs';
 const anchor={turn_id:'t1',quote:'route = q; cap = 4 requests/hour. Context only.',occurrence:1};
 const input={observed_at:date(1),turns:[{turn_id:'t1',text:anchor.quote}]};
-function wire(){return {event_id:'x',source_turns:['t1'],observed_at:date(1),kind:'decision',commitment:'adopted',change_type:'initial',subject:'engineering example',predicate:'dispatch configuration',scope,effective_interval:{from:date(1),to:null},predecessor_anchors:[],replacement_extent:'entire_predecessor',source_quotes:[anchor],reason_quotes:[],payload:{type:'slots',route:{value:{type:'Text',text:'q'},anchors:[anchor]},approval:null,cap:{value:{type:'Quantity',decimal:'4',unit:'requests/hour'},anchors:[anchor]}}};}
+function wire(){return {event_id:'x',source_turns:['t1'],observed_at:date(1),kind:'decision',commitment:'adopted',change_type:'initial',subject:'engineering example',predicate:'dispatch configuration',scope,effective_interval:{from:date(1),to:null},record_name:{name:'q',anchor:{turn_id:'t1',quote:'q',occurrence:1}},predecessor_refs:[],replacement_extent:'entire_predecessor',source_quotes:[anchor],reason_quotes:[],payload:{type:'slots',route:{value:{type:'Text',text:'q'},anchors:[anchor]},approval:null,cap:{value:{type:'Quantity',decimal:'4',unit:'requests/hour'},anchors:[anchor]}}};}
 test('exact rational conversions and independent domain/anchor exclusions derive only admitted masks',()=>{
  const e=wire(),valid=validateExtraction({events:[e]},input);assert.deepEqual(valid.events[0].claims.map(c=>[c.field,c.value]),[['value',{type:'Text',text:'q'}],['cap',{type:'Quantity',decimal:'96',unit:'requests/day'}]]);
  e.payload.route.value={type:'Quantity',decimal:'3',unit:'requests/day'};e.reason_quotes=[{...anchor,quote:'absent'}];
@@ -32,7 +32,7 @@ test('non-slot context admits only anchored extracted text and never changes dec
  context.payload.text='manufactured missing text';assert.equal(validateExtraction({events:[context]},input).events.length,0);
 });
 test('research serializations retain source associations and deduplicate per record without O archives',()=>{
- const one=validateExtraction({events:[wire()]},input).events[0],two={...structuredClone(one),event_id:'two',observed_at:date(2),source_turns:['t2'],source_quotes:[{turn_id:'t2',quote:'new',occurrence:1,start:0,end:3}],change_type:'correction',predecessor_anchors:[{source_turn:'t1',record_name:'x',subject:one.subject,predicate:one.predicate}],effective_interval:{from:date(2),to:null}};
+ const one=validateExtraction({events:[wire()]},input).events[0],two={...structuredClone(one),event_id:'two',observed_at:date(2),source_turns:['t2'],source_quotes:[{turn_id:'t2',quote:'q new',occurrence:1,start:0,end:5}],change_type:'correction',record_name:null,predecessor_refs:[{record_name:'q',anchor:{turn_id:'t2',quote:'q',occurrence:1,start:0,end:1}}],effective_interval:{from:date(2),to:null}};
  const aliases=sourceOrderAliases([one,two]),state=materialize('O',[one,two],date(2));assert.equal(state.history.length,0);assert.equal(state.events,undefined);
  const record=serializeRecord(state.current[0],aliases);assert.ok(!record.body.includes('reason_nodes'));assert.ok(!record.body.includes('field_mask'));assert.deepEqual(record.receipts.map(q=>q.origin),['t2']);
  assert.ok(!JSON.stringify(record).includes('Context only.'));
@@ -60,12 +60,12 @@ test('identical product excerpts from different source turns never acquire a gue
 test('valid admitted partial updates inherit, while entire replacement and expiry clear inherited predecessor fields',()=>{
  const initial=wire();initial.payload.approval={value:{type:'Boolean',value:false},anchors:[anchor]};
  const first=validateExtraction({events:[initial]},input).events[0];
- const patch=wire();patch.event_id='patch';patch.observed_at=date(2);patch.source_turns=['t2'];patch.source_quotes=[{turn_id:'t2',quote:'Adopt a partial cap-only update: 8 requests/hour.',occurrence:1}];patch.change_type='refinement';patch.replacement_extent='partial';patch.predecessor_anchors=[{source_turn:'t1',record_name:'alpha',subject:initial.subject,predicate:initial.predicate}];patch.effective_interval={from:date(2),to:null};patch.payload={type:'slots',route:null,approval:null,cap:{value:{type:'Quantity',decimal:'8',unit:'requests/hour'},anchors:patch.source_quotes}};
+ const patch=wire();patch.event_id='patch';patch.observed_at=date(2);patch.source_turns=['t2'];patch.source_quotes=[{turn_id:'t2',quote:'Record beta: refine q; adopt a partial cap-only update: 8 requests/hour.',occurrence:1}];patch.change_type='refinement';patch.replacement_extent='partial';patch.record_name={name:'beta',anchor:{turn_id:'t2',quote:'beta',occurrence:1}};patch.predecessor_refs=[{record_name:'q',anchor:{turn_id:'t2',quote:'q',occurrence:1}}];patch.effective_interval={from:date(2),to:null};patch.payload={type:'slots',route:null,approval:null,cap:{value:{type:'Quantity',decimal:'8',unit:'requests/hour'},anchors:patch.source_quotes}};
  const second=validateExtraction({events:[patch]},{observed_at:date(2),turns:[{turn_id:'t2',text:patch.source_quotes[0].quote}]}).events[0];
  const typed=materialize('T',[first,second],date(2));assert.deepEqual(typed.current[0].fields.map(x=>x.field).sort(),['approval','cap','value']);
  for(const arm of ['U','O'])assert.deepEqual(materialize(arm,[first,second],date(2)).current[0].fields.map(x=>x.field),['cap']);
  for(const expiry of [false,true]){
-  const e=wire();e.event_id='end';e.observed_at=date(3);e.source_turns=['t3'];e.source_quotes=[{turn_id:'t3',quote:expiry?'The explicit deadline passed and this decision expires.':'Withdraw the entire predecessor and adopt route z alone.',occurrence:1}];e.change_type=expiry?'expiry':'reversal';e.predecessor_anchors=[{source_turn:'t2',record_name:'beta',subject:initial.subject,predicate:initial.predicate}];e.effective_interval={from:date(3),to:null};e.payload={type:'slots',route:expiry?null:{value:{type:'Text',text:'z'},anchors:e.source_quotes},approval:null,cap:null};
+  const e=wire();e.event_id='end';e.observed_at=date(3);e.source_turns=['t3'];e.source_quotes=[{turn_id:'t3',quote:expiry?'Record end: beta explicit deadline passed and this decision expires.':'Record end: withdraw beta, the entire predecessor, and adopt route z alone.',occurrence:1}];e.change_type=expiry?'expiry':'reversal';e.record_name={name:'end',anchor:{turn_id:'t3',quote:'end',occurrence:1}};e.predecessor_refs=[{record_name:'beta',anchor:{turn_id:'t3',quote:'beta',occurrence:1}}];e.effective_interval={from:date(3),to:null};e.payload={type:'slots',route:expiry?null:{value:{type:'Text',text:'z'},anchors:e.source_quotes},approval:null,cap:null};
   const end=validateExtraction({events:[e]},{observed_at:date(3),turns:[{turn_id:'t3',text:e.source_quotes[0].quote}]}).events[0];
   const state=materialize('T',[first,second,end],date(3));assert.deepEqual(state.current[0].fields.map(x=>x.field),expiry?[]:['value']);
   const historical=state.history.find(r=>r.id==='patch');assert.equal(historical.fields.length,3);assert.equal(historical.status,expiry?'expired':'previously_adopted');
@@ -84,7 +84,7 @@ test('paid accounting rejects a fake third-pilot source before preparing a suppl
  const {prepareA4Accounting,BASE_MANIFEST,A4_MANIFEST}=await import('../accounting-a4.mjs');const {Ledger}=await import('../ledger.mjs');const {hash}=await import('../common.mjs');
  const dir=mkdtempSync('evaluation/hr3/harness/artifacts/a4-accounting-test-');t.after(()=>rmSync(dir,{recursive:true,force:true}));
  const baseline=readFileSync(BASE_MANIFEST),outputBefore=existsSync(A4_MANIFEST)?readFileSync(A4_MANIFEST):null;
- const ledgerPath=join(dir,'ledger.jsonl'),ledger=new Ledger(ledgerPath,{plan,carryForward:BASE_MANIFEST});ledger.reserve({id:'simulated',operation:'extraction',body:responseRequest('extraction',{})});
+ const ledgerPath=join(dir,'ledger.jsonl'),ledger=new Ledger(ledgerPath,{plan,carryForward:BASE_MANIFEST});ledger.reserve({id:'simulated',operation:'reader',body:responseRequest('reader',{})});
  const save=(name,value)=>{const path=join(dir,name);writeFileSync(path,JSON.stringify(value)+'\n');return {path,sha256:hash(readFileSync(path))};};
  const run=save('run.json',{offline:true,stage:'pilot'}),summary=save('summary.json',{stage:'pilot',ledger:ledger.snapshot()});
  const sources=save('sources.json',{version:'hr3-a4-accounting-input-v1',baseManifest:{path:BASE_MANIFEST,sha256:hash(baseline)},thirdPilotLedger:{path:ledgerPath,sha256:hash(readFileSync(ledgerPath))},thirdPilotRun:run,thirdPilotSummary:summary,additionalPreparationReceipts:[],preparationComplete:true,attestation:'Test-only deliberately fake input; must be refused.'});
@@ -92,8 +92,39 @@ test('paid accounting rejects a fake third-pilot source before preparing a suppl
 });
 
 
-test('A-4.2 runtime accepts only complete hash-verified accounting matching the regenerated budget',async()=>{
- const {verifyA4RunAccounting}=await import('../runner.mjs');const {prepareA4Accounting,BASE_MANIFEST,A4_MANIFEST}=await import('../accounting-a4.mjs');
- const a=prepareA4Accounting(),carried=verifyA4RunAccounting(A4_MANIFEST);assert.equal(a.status,'COMPLETE_VERIFIED_CHAIN');assert.equal(carried.exposure.total,2136861040);assert.equal(carried.manifestSHA256,a.carry.manifestSHA256);
- assert.throws(()=>verifyA4RunAccounting(BASE_MANIFEST),/a4_complete_accounting_required/);assert.throws(()=>verifyA4RunAccounting(null),/verified_complete_carry_forward_required/);
+test('A6 runtime requires the fourth-pilot chain and a primary preparation completeness record',async t=>{
+ const fs=await import('node:fs'),{join,isAbsolute}=await import('node:path'),{runInNewContext}=await import('node:vm');
+ const {verifyA6RunAccounting}=await import('../runner.mjs');
+ const {A6_CARRY,A6_ACCOUNTING_INPUT,accountingA6}=await import('../accounting-a6.mjs');
+ const {loadCarryForward,auditLedger}=await import('../accounting.mjs');
+ const {canonical,hash,fail}=await import('../common.mjs');
+ const {INPUT_CAPS,OUTPUT_CAPS,READER_INPUT_CAPS}=await import('../requests.mjs');
+ const originalInput=fs.readFileSync(A6_ACCOUNTING_INPUT),originalCarry=fs.readFileSync(A6_CARRY);
+ const dir=fs.mkdtempSync('evaluation/hr3/harness/artifacts/a6-preparation-fixtures-');t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+ const accountingSource=fs.readFileSync(new URL('../accounting-a6.mjs',import.meta.url),'utf8').split('if(process.argv[1]')[0].replace(/^import .*\n/gm,'').replace(/^export /gm,'');
+ const runnerSource=fs.readFileSync(new URL('../runner.mjs',import.meta.url),'utf8');
+ const guardSource=runnerSource.slice(runnerSource.indexOf('export function verifyA6RunAccounting('),runnerSource.indexOf('// Historical import name only;')).replace(/^export /gm,'');
+ for(const kind of ['missing','stale','test-only']){
+  const fixtureDir=join(dir,kind);fs.mkdirSync(fixtureDir);
+  const input=JSON.parse(originalInput),carry=JSON.parse(originalCarry);
+  if(kind==='missing'){delete input.preparation;carry.preparation={complete:false,receipts:[]};}
+  if(kind==='stale')carry.preparation.attestation+=' [STALE TEST FIXTURE]';
+  if(kind==='test-only'){input.preparation.testOnly=true;carry.preparation.attestation='TEST ONLY: never primary preparation evidence.';}
+  const inputPath=join(fixtureDir,'input.json'),carryPath=join(fixtureDir,'carry.json');
+  fs.writeFileSync(inputPath,JSON.stringify(input)+'\n');fs.writeFileSync(carryPath,JSON.stringify(carry)+'\n');
+  // Run the actual accounting and guard source, changing only filesystem inputs.
+  // Real manifests are never mutated; no fixture can become a dispatch input.
+  const mapPath=path=>path===A6_ACCOUNTING_INPUT?inputPath:path===A6_CARRY?carryPath:path;
+  const context={assert,isAbsolute,canonical,hash,fail,auditLedger,INPUT_CAPS,OUTPUT_CAPS,READER_INPUT_CAPS,
+   readFileSync:(path,...args)=>fs.readFileSync(mapPath(path),...args),
+   writeFileSync:()=>assert.fail('Fixture must never write accounting records'),
+   loadCarryForward:path=>loadCarryForward(mapPath(path))};
+  runInNewContext(accountingSource+'\n'+guardSource+'\nglobalThis.verify=verifyA6RunAccounting;',context);
+  if(kind==='missing')assert.throws(()=>context.verify(A6_CARRY),/a6_preparation_completeness_required/);
+  else assert.throws(()=>context.verify(A6_CARRY),error=>error.code==='ERR_ASSERTION',kind+' record must fail actual accounting validation');
+ }
+ const verified=verifyA6RunAccounting(A6_CARRY);assert.equal(verified.preparationComplete,true);
+ assert.equal(verified.exposure.total,4145077720);assert.deepEqual(verified,accountingA6().carry);
+ for(const path of [null,'evaluation/hr3/harness/reports/a4-carry-forward.json'])assert.throws(()=>verifyA6RunAccounting(path),/a6_complete_accounting_required/);
+ assert.deepEqual(fs.readFileSync(A6_ACCOUNTING_INPUT),originalInput);assert.deepEqual(fs.readFileSync(A6_CARRY),originalCarry);
 });

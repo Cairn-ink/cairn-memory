@@ -1,7 +1,7 @@
 // Explicit public authoring paths. Arrays use '*'; no subtree wildcard exists.
 // Colliding leaf names are licensed by the closed extraction/answer schemas or
 // the listed public product-operation fields, never by an authoring container.
-import {preflightExtractionSchema} from './preflight-a4-schema.mjs';
+import {preflightExtractionSchemaA6 as preflightExtractionSchema} from './preflight-a6-schema.mjs';
 import {answerSchema} from '../scorer/schema.mjs';
 export const PUBLIC_AUTHOR_PATHS=[
  'language','change_type','namespace','namespace.ownerId','namespace.scope','namespace.projectId',

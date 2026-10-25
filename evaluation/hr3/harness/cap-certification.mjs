@@ -53,7 +53,7 @@ function dimensions(operation,value) {
  return {currentRows:value.current?.rows.length??0,oldRecords:value.old?.records.length??0,oldRows:value.old?.records.reduce((n,r)=>n+r.rows.length,0)??0,
   events:value.events?.length??0,contextEvents:value.events?.filter(e=>e.payload.type==='context').length??0,
   assignments:value.events?.reduce((n,e)=>n+['route','approval','cap'].filter(k=>e.payload[k]!=null).length,0)??0,
-  predecessors:value.events?.reduce((n,e)=>n+e.predecessor_anchors.length,0)??0,
+  predecessors:value.events?.reduce((n,e)=>n+e.predecessor_refs.length,0)??0,
   reasonQuotes:operation==='reader'?value.reason.support.length:value.events.reduce((n,e)=>n+e.reason_quotes.length,0),
   citations:rows.reduce((n,r)=>n+r.citations.length,0)+(value.reason?.support.length??0)};
 }
@@ -73,7 +73,7 @@ function provenance() {
   const amendment = errata.indexOf('## A-2 (2026-10-25):');
   assert.ok(amendment > 0, 'A-2 amendment missing');
   const a41=errata.indexOf('### A-4.1 ');assert.ok(a41>amendment);
-  assert.equal(sha256(errata.slice(0,a41).trimEnd()+'\n'),freeze.errata_sha256,'Frozen pre-A-4.1 errata changed');
+  assert.equal(sha256(errata),freeze.errata_sha256,'Current errata binding');
   const revision=errata.indexOf('### A-2 cap revision after the engineering stress certificate');
   assert.ok(revision>amendment,'Engineering-stress cap revision missing');
   assert.match(errata.slice(revision), /2,176/);
@@ -147,7 +147,7 @@ export function certify({ progress = () => {} } = {}) {
       return [operation,{previousWorstTokens:inspected.previousWorstTokens[operation],engineeringWorstTokens:stressWorst,comparable:false}];
     }));
     return {
-      runtimeClosureSHA256:closureHash(runtimeClosure().files),version: 'hr3-cap-certification-a4-audit-v2', protocol: 'v0.3.4 + A-4/A-4.1', seed: DEFAULT_SEED,
+      runtimeClosureSHA256:closureHash(runtimeClosure().files),version: 'hr3-cap-certification-a6-v1', protocol: 'v0.3.4 + A-6', seed: readJSON(local('evaluation/hr3/generator/freeze.json')).seed,
       status: Object.values(gates).every(g => g.pass) ? 'PASS' : 'FAIL_AMENDMENT_REQUIRED',
       minimumMarginPercent: MINIMUM_MARGIN_PERCENT, historicalDominance, stressSpec:STRESS_SPEC,
       inspectedHeldOutManifest:{path:'evaluation/hr3/harness/reports/inspected-heldout-references.json',sha256:sources['evaluation/hr3/harness/reports/inspected-heldout-references.json']},
@@ -188,7 +188,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   // Only the fixed harness report is writable through this CLI.
   assert.equal(process.argv.length, 2, 'No CLI arguments supported');
   const report = certify({ progress: message => process.stderr.write(message + '\n') });
-  const output = new URL('./reports/cap-certification-a4.json', import.meta.url);
+  const output = new URL('./reports/cap-certification-a6.json', import.meta.url);
   writeFileSync(output, JSON.stringify(report, null, 2) + '\n');
   assert.deepEqual(readJSON(output), report);
   process.stdout.write(JSON.stringify({ status: report.status, gates: report.gates, summary: report.summary, report: relative(fileURLToPath(repo), fileURLToPath(output)) }, null, 2) + '\n');

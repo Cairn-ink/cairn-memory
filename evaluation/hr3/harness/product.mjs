@@ -82,6 +82,7 @@ export class ProductAgent {
     this.aliases.register(incoming);this.events.push(...incoming);
     const linked=linkedEvents??resolveLinks(this.events);const fresh=new Set(incoming.map(e=>e.event_id));
     for(const e of linked.filter(e=>fresh.has(e.event_id))) {
+      this.log.push({surface:'agent',method:'named_link_decision',event:e.event_id,targets:e.targets,errors:e.link_errors,names:e.name_diagnostics});
       if(e.commitment!=='adopted'){this.log.push({surface:'agent',method:'skip_nonadopted',event:e.event_id,source_turns:e.source_turns,reason:'commitment_filter',commitment:e.commitment});continue;}
       if(e.unresolved){this.log.push({surface:'agent',method:'unresolved_mapping',event:e.event_id,errors:e.link_errors,anchor_diagnostics:ingestionLosses(this.events,at,{linkedEvents:linked}).find(row=>row.event===e.event_id)?.anchors});continue;}
       this.pending.push(e);
@@ -93,13 +94,13 @@ export class ProductAgent {
     await this.expire(at);
   }
   async apply(e) {
+    const targets=e.targets.map(id=>this.refs.get(id));
+    if(targets.some(x=>!x||this.forgottenIds.has(x.id)||!this.inspect(x.id).ok)){this.log.push({surface:'agent',method:'unresolved_product_target',event:e.event_id,reason:'absent_product_target'});return;}
     if(e.change_type==='expiry') {
       // Extracted explicit boundary confirms a deadline, rather than creating a decision assertion.
       for(const id of e.targets){const ref=this.refs.get(id);if(ref&&e.replacement_extent==='entire_predecessor')this.schedules.set(ref.id,{id:ref.id,revision:ref.revision,deadline:e.effective_interval.from,anchor:e.source_quotes[0],event:e,contentHash:hash(this.inspect(ref.id).value?.memory?.content??'')});else {if(ref)this.schedules.delete(ref.id);this.log.push({surface:'agent',method:'partial_expiry_unresolved',event:e.event_id});}}return;
     }
     const content=formatEvent(e,this.aliases.id(e.event_id)),receipts=this.receipts(e);this.registerContent(content,e);
-    const targets=e.targets.map(id=>this.refs.get(id));
-    if(targets.some(x=>!x)){this.log.push({surface:'agent',method:'unresolved_product_target',event:e.event_id,reason:'absent_product_target'});return;}
     let result;
     if(e.change_type==='correction') {
       // Atomic corrections only. Preserve multi-target refusals rather than synthesizing a merged record.
@@ -223,6 +224,6 @@ export class ProductAgent {
     }
     return {blocks,delivered,diagnostics};
   }
-  state() {return {version:'hr3-product-agent-a4-audit-v2',arm:'P',readerAliases:this.aliases.diagnostics(),namespaceAliases:this.namespaceAliases.diagnostics(),pending:this.pending.map(e=>e.event_id),schedules:[...this.schedules.values()].map(({event,...s})=>({...s,event_id:event.event_id})),refs:[...this.refs],controls:this.controlSnapshot(),operations:this.log};}
+  state() {return {version:'hr3-product-agent-a6-v1',arm:'P',readerAliases:this.aliases.diagnostics(),namespaceAliases:this.namespaceAliases.diagnostics(),pending:this.pending.map(e=>e.event_id),schedules:[...this.schedules.values()].map(({event,...s})=>({...s,event_id:event.event_id})),refs:[...this.refs],controls:this.controlSnapshot(),operations:this.log};}
   async close() {try{await this.client?.close();await this.server?.close();}finally{this.core?.close();if(this.directory)rmSync(this.directory,{recursive:true,force:true});}}
 }

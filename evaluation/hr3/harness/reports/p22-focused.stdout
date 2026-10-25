@@ -1,0 +1,163 @@
+TAP version 13
+# Subtest: A6 placeholder inventory: P formatter record alias passes without public-path exemptions
+ok 1 - A6 placeholder inventory: P formatter record alias passes without public-path exemptions
+  ---
+  duration_ms: 219.53811
+  type: 'test'
+  ...
+# Subtest: A6 placeholder inventory: private values under every formatter key remain rejected
+ok 2 - A6 placeholder inventory: private values under every formatter key remain rejected
+  ---
+  duration_ms: 1.275023
+  type: 'test'
+  ...
+# Subtest: A6 placeholder inventory: undeclared map keys fail closed and declared values stay recursive
+ok 3 - A6 placeholder inventory: undeclared map keys fail closed and declared values stay recursive
+  ---
+  duration_ms: 6.439807
+  type: 'test'
+  ...
+# Subtest: A6 placeholder inventory: genuine record metadata outside variables remains inventoried
+ok 4 - A6 placeholder inventory: genuine record metadata outside variables remains inventoried
+  ---
+  duration_ms: 0.384917
+  type: 'test'
+  ...
+# Subtest: A6 authenticated consumers: harness and integration retain opaque freeze-bound proofs in every language
+ok 5 - A6 authenticated consumers: harness and integration retain opaque freeze-bound proofs in every language
+  ---
+  duration_ms: 107.153708
+  type: 'test'
+  ...
+# Subtest: A6 authenticated consumers: candidate offsets and changed source tapes never grant a license
+ok 6 - A6 authenticated consumers: candidate offsets and changed source tapes never grant a license
+  ---
+  duration_ms: 1.721531
+  type: 'test'
+  ...
+# Subtest: A6 authenticated consumers: JSON replay reauthenticates source data; cloned normalized proofs remain protected
+ok 7 - A6 authenticated consumers: JSON replay reauthenticates source data; cloned normalized proofs remain protected
+  ---
+  duration_ms: 8.057596
+  type: 'test'
+  ...
+# Subtest: A6 authenticated challenge consumer: opaque identity survives; declared offsets cannot license punctuation omission
+ok 8 - A6 authenticated challenge consumer: opaque identity survives; declared offsets cannot license punctuation omission
+  ---
+  duration_ms: 13.370655
+  type: 'test'
+  ...
+# Subtest: A6 authenticated consumer boundary: fixed trusted pin and sole four-argument adapter; no declaration fallback
+ok 9 - A6 authenticated consumer boundary: fixed trusted pin and sole four-argument adapter; no declaration fallback
+  ---
+  duration_ms: 0.388297
+  type: 'test'
+  ...
+# Subtest: A6 private authentication and identity registries are rejected from model-visible inputs
+ok 10 - A6 private authentication and identity registries are rejected from model-visible inputs
+  ---
+  duration_ms: 0.310835
+  type: 'test'
+  ...
+# Subtest: A6 runtime embedding inputs reject private identity metadata before dispatch
+ok 11 - A6 runtime embedding inputs reject private identity metadata before dispatch
+  ---
+  duration_ms: 0.378577
+  type: 'test'
+  ...
+# Subtest: A6 real harness scoring path tolerates authenticated final period omission in English and Chinese
+ok 12 - A6 real harness scoring path tolerates authenticated final period omission in English and Chinese
+  ---
+  duration_ms: 77.631928
+  type: 'test'
+  ...
+# Subtest: A6 harness guard rejects cross-family proof replay with one pin and the same trusted question/query
+ok 13 - A6 harness guard rejects cross-family proof replay with one pin and the same trusted question/query
+  ---
+  duration_ms: 26.178679
+  type: 'test'
+  ...
+# Subtest: A6 harness guard distinguishes checkpoints and queries while sharing the same observation binding across arms
+ok 14 - A6 harness guard distinguishes checkpoints and queries while sharing the same observation binding across arms
+  ---
+  duration_ms: 93.156791
+  type: 'test'
+  ...
+# Subtest: A6 harness scoring errors on missing forged or cloned bindings instead of silently dropping trivia
+ok 15 - A6 harness scoring errors on missing forged or cloned bindings instead of silently dropping trivia
+  ---
+  duration_ms: 10.247548
+  type: 'test'
+  ...
+# Subtest: A6 harness scoring rejects a changed actual question even when the proof and expected token are genuine
+ok 16 - A6 harness scoring rejects a changed actual question even when the proof and expected token are genuine
+  ---
+  duration_ms: 3.869041
+  type: 'test'
+  ...
+# Subtest: P2-2 en: unrelated no-trivia token cannot downgrade a licensed same-question target
+ok 17 - P2-2 en: unrelated no-trivia token cannot downgrade a licensed same-question target
+  ---
+  duration_ms: 27.883539
+  type: 'test'
+  ...
+# Subtest: P2-2 zh-Hant: unrelated no-trivia token cannot downgrade a licensed same-question target
+ok 18 - P2-2 zh-Hant: unrelated no-trivia token cannot downgrade a licensed same-question target
+  ---
+  duration_ms: 24.020949
+  type: 'test'
+  ...
+# Subtest: P2-2 no-trivia authority: unknown family case question and source cannot self-declare absence
+ok 19 - P2-2 no-trivia authority: unknown family case question and source cannot self-declare absence
+  ---
+  duration_ms: 7.662689
+  type: 'test'
+  ...
+# Subtest: P2-2 no-trivia binding: same-question cases cannot exchange tokens or cloned gold
+not ok 20 - P2-2 no-trivia binding: same-question cases cannot exchange tokens or cloned gold
+  ---
+  duration_ms: 23.375058
+  type: 'test'
+  location: 'evaluation/hr3/harness/test/trivia-consumers-a6.test.mjs:104:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /trivia_case_binding_required/. Input:
+    
+    'RangeError: Invalid/duplicate support span'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+  error: 'Invalid/duplicate support span'
+  name: 'RangeError'
+  stack: |-
+    validateGold (evaluation/hr3/scorer/scorer.mjs:50:107)
+    score (evaluation/hr3/harness/scoring-a6.mjs:29:53)
+    evaluation/hr3/harness/test/trivia-consumers-a6.test.mjs:112:68
+    getActual (node:assert:531:5)
+    Function.throws (node:assert:677:24)
+    TestContext.<anonymous> (evaluation/hr3/harness/test/trivia-consumers-a6.test.mjs:112:57)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (evaluation/hr3/harness/test/trivia-consumers-a6.test.mjs:112:57)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 19
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 749.505084
