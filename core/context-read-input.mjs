@@ -28,7 +28,7 @@ export const CONTEXT_LIMITS = Object.freeze({ defaultLimit: 12, horizon: 24, que
   snapshotUnits: 16384, refreshItems: 1024, batchRows: 128, batchTextUnits: 2_000_000,
   vectors: 20000, cacheBytes: 134217728, dimensions: 32768, embedderMetadataUnits: 200, rankings: 128, rankingTtlMs: 300000 });
 export function contextOptions(value) {
-  const options = ownData(value, ['version', 'authority', 'embedder', 'policy', 'counter', 'sources']);
+  const options = ownData(value, ['version', 'authority', 'embedder', 'policy', 'counter', 'sources', 'localStatus']);
   if (options.version !== CONTEXT_VERSION) fail('invalid_input');
   const sources = Object.hasOwn(options, 'sources') ? contextSources(options.sources) : null;
   const authority = ownData(options.authority, ['authorize', 'isCurrent']);
@@ -40,15 +40,23 @@ export function contextOptions(value) {
   if (counter && (typeof counter.id !== 'string' || !counter.id.isWellFormed() ||
       counter.id.includes('\0') || counter.id.length < 1 || counter.id.length > 200)) fail('invalid_input');
   const policy = options.policy === undefined ? {} : ownData(options.policy,
-    ['family', 'maxRequests', 'maxUsd', 'maxConcurrent', 'estimateUsd']);
+    ['family', 'maxRequests', 'maxUsd', 'maxConcurrent', 'estimateUsd', 'maxBatchDocuments']);
   const family = policy.family ?? 'local';
   if (!['local', 'hosted'].includes(family)) fail('invalid_input');
-  const budgeted = ['maxRequests', 'maxUsd', 'maxConcurrent', 'estimateUsd'].some(key => Object.hasOwn(policy, key));
-  if (budgeted && (!Number.isSafeInteger(policy.maxRequests) || policy.maxRequests < 1 ||
+  const explicitLocal = Object.hasOwn(policy, 'maxBatchDocuments');
+  const localStatus = options.localStatus;
+  if (explicitLocal) {
+    if (family !== 'local' || policy.family !== 'local' || policy.maxBatchDocuments !== 1 || policy.maxConcurrent !== 1 ||
+        !Number.isSafeInteger(policy.maxRequests) || policy.maxRequests < 1 || Object.keys(policy).length !== 4 ||
+        !embedder || typeof localStatus !== 'function' || types.isAsyncFunction(localStatus)) fail('invalid_input');
+  } else if (Object.hasOwn(options, 'localStatus')) fail('invalid_input');
+  const budgeted = explicitLocal || ['maxRequests', 'maxUsd', 'maxConcurrent', 'estimateUsd'].some(key => Object.hasOwn(policy, key));
+  if (!explicitLocal && budgeted && (!Number.isSafeInteger(policy.maxRequests) || policy.maxRequests < 1 ||
       !Number.isFinite(policy.maxUsd) || policy.maxUsd <= 0 || typeof policy.estimateUsd !== 'function' ||
       types.isAsyncFunction(policy.estimateUsd) || policy.maxConcurrent !== undefined &&
       (!Number.isInteger(policy.maxConcurrent) || policy.maxConcurrent < 1 || policy.maxConcurrent > 1024))) fail('invalid_input');
   return Object.freeze({ authority: Object.freeze(authority), embedder, counter: counter && Object.freeze(counter), family,
+    ...(explicitLocal ? { localStatus } : {}),
     preset: sources?.includes('moc-v1') ? 'rrf-k60-d12-moc-v1' : family === 'hosted' ? 'rrf-k10' : 'rrf-k60-d12',
     ...(sources ? { sources } : {}),
     policy: Object.freeze({ ...policy, maxConcurrent: policy.maxConcurrent ?? 1 }),

@@ -521,7 +521,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
 
   // Explicit document embedding is deliberately a separate operation. The
   // caller owns request/spend reservations, cancellation and authority rechecks.
-  async function refreshVectors(input, embedder, { signal, isCurrent, onProgress } = {}) {
+  async function refreshVectors(input, embedder, { signal, isCurrent, onProgress, maxBatchDocuments } = {}) {
     if (readOnly) fail('invalid_input');
     if (typeof isCurrent !== 'function') fail('authority_required');
     const guard = () => { try { if (isCurrent() === true) return; } catch { /* A refused grant is stale. */ } fail('scope_changed'); };
@@ -529,13 +529,14 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     const port = validateEmbedder(embedder), p = projection(input), g = published(p), m = metrics();
     const maximum = input.budget?.maxItems, maxMs = input.budget?.maxMs;
     if (!Number.isInteger(maximum) || maximum < 1 || maximum > 1024 || !Number.isInteger(maxMs) || maxMs < 1 || maxMs > 5000) fail('invalid_input');
+    if (maxBatchDocuments !== undefined && maxBatchDocuments !== 1) fail('invalid_input');
     const started = performance.now(); let attempted = 0, embedded = 0;
     while (attempted < maximum && performance.now() - started < maxMs) {
       guard();
       const rows = sideRead(() => side.prepare(`SELECT d.* FROM documents d WHERE d.generation=? AND d.eligible=1 AND NOT EXISTS(
         SELECT 1 FROM vectors v WHERE v.generation=d.generation AND v.stream=d.stream AND v.id=d.id AND v.embedder_id=?
         AND v.embedder_revision=? AND v.dimensions=? AND v.normalization=?) ORDER BY d.stream,d.id LIMIT ?`)
-        .all(p.id, port.id, port.revision, port.dimensions, port.normalization, Math.min(batchSize, 64, maximum - attempted)));
+        .all(p.id, port.id, port.revision, port.dimensions, port.normalization, Math.min(batchSize, maxBatchDocuments ?? 64, maximum - attempted)));
       if (!rows.length) break;
       attempted += rows.length;
       onProgress?.({ attempted, embedded });
