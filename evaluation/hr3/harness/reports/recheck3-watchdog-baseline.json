@@ -8,10 +8,10 @@
     "error": "ledger_locked"
   },
   "dispatches": 1,
-  "busy": 18,
-  "checks": 21,
-  "observerBusy": 18,
-  "elapsed": 44.66495900000001,
+  "busy": 16,
+  "checks": 20,
+  "observerBusy": 16,
+  "elapsed": 42.68951200000001,
   "state": {
     "total": 13449200,
     "reservations": 1,

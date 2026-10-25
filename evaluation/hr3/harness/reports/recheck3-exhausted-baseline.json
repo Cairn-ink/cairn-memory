@@ -15,7 +15,7 @@
     "reply": null,
     "error": "request_already_reserved"
   },
-  "elapsed": 18.559697999999997,
+  "elapsed": 17.642071,
   "dispatches": 1,
   "stop": null,
   "responses": [],

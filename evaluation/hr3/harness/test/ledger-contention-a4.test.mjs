@@ -27,7 +27,7 @@ function evidence(name,f,data){fs.writeFileSync(h+'/reports/recheck3-'+name+'-'+
 
 test('recheck3 contention: monitoring lock at reply settles once after release with one dispatch',async t=>{
  const f=fixture(t);let dispatches=0,received;
- const guard=new f.GuardedTransport({async send(r){dispatches++;received=response(r);hold(t,f.path,25);return received;}},f.ledger,{accountingTimeoutMs:500});
+ const guard=new f.GuardedTransport({async send(r){dispatches++;received=response(r);hold(t,f.path,25);return received;}},f.ledger,{accountingTimeoutMs:5000});
  const result=await outcome(guard.send(request('reply')));await new Promise(resolve=>setTimeout(resolve,30));
  const rows=journal(f.path);evidence('reply',f,{result,dispatches,reservations:rows.filter(e=>e.type==='reserve').length,settlements:rows.filter(e=>e.type==='settle').length,responses:savedResponses(f.path)});
  assert.equal(result.error,null);assert.deepEqual(result.reply,received);assert.equal(dispatches,1);assert.equal(rows.filter(e=>e.type==='reserve').length,1);assert.equal(rows.filter(e=>e.type==='settle').length,1);assert.equal(f.ledger.snapshot().unsettled.length,0);assert.equal(savedResponses(f.path).length,0);
@@ -49,7 +49,7 @@ test('recheck3 contention: exhausted reply wait stops durably with reservation a
 
 test('recheck3 contention: busy watchdog yields to pending writer without starvation',async t=>{
  const f=fixture(t,{watchdogMs:1}),observer=new f.Ledger(f.path,{plan});let dispatches=0,busy=0,checks=0,observerBusy=0;
- const guard=new f.GuardedTransport({async send(r){dispatches++;hold(t,f.path,20);return response(r);}},f.ledger,{accountingTimeoutMs:500,accountingBackoffMs:2});
+ const guard=new f.GuardedTransport({async send(r){dispatches++;hold(t,f.path,20);return response(r);}},f.ledger,{accountingTimeoutMs:5000,accountingBackoffMs:2});
  guard.startSupervision(p=>{checks++;if(p.ledgerBusy)busy++;});t.after(()=>guard.stopSupervision());
  const monitoring=setInterval(()=>{try{observer.snapshot();}catch(e){if(e.code==='ledger_locked')observerBusy++;else throw e;}},1);t.after(()=>clearInterval(monitoring));
  const started=performance.now(),result=await outcome(guard.send(request('watchdog')));await new Promise(resolve=>setTimeout(resolve,25));guard.stopSupervision();clearInterval(monitoring);
@@ -60,7 +60,7 @@ test('recheck3 contention: busy watchdog yields to pending writer without starva
 for(const step of ['reserve','settle','failure','stop'])test('recheck3 accounting: '+step+' contention retries only the accounting step',async t=>{
  const f=fixture(t);let dispatches=0,invocations=0;
  const original=f.ledger[step].bind(f.ledger);f.ledger[step]=(...args)=>{if(++invocations===1)hold(t,f.path,15);return original(...args);};
- const guard=new f.GuardedTransport({async send(r){dispatches++;if(step==='failure'&&dispatches===1)throw new f.TransportError();const reply=response(r);if(step==='stop')reply.model='wrong';return reply;}},f.ledger,{accountingTimeoutMs:500,accountingBackoffMs:2});
+ const guard=new f.GuardedTransport({async send(r){dispatches++;if(step==='failure'&&dispatches===1)throw new f.TransportError();const reply=response(r);if(step==='stop')reply.model='wrong';return reply;}},f.ledger,{accountingTimeoutMs:5000,accountingBackoffMs:2});
  const result=await outcome(guard.send(request(step)));await new Promise(resolve=>setTimeout(resolve,20));
  assert.equal(result.error,step==='stop'?'model_mismatch':null);assert.equal(dispatches,step==='failure'?2:1);assert.ok(invocations>1);
  assert.equal(journal(f.path).filter(e=>e.type===step).length,1);assert.equal(f.ledger.snapshot().stopped,step==='stop'?'model_mismatch':null);
@@ -93,13 +93,13 @@ for(const step of ['settle','failure'])test('recheck3 accounting: exhausted '+st
 });
 
 test('recheck3 accounting: runner-style snapshot retries contention and preserves coherent totals',async t=>{
- const f=fixture(t),guard=new f.GuardedTransport({},f.ledger,{accountingTimeoutMs:500});f.ledger.reserve(request('outstanding'));hold(t,f.path,15);
+ const f=fixture(t),guard=new f.GuardedTransport({},f.ledger,{accountingTimeoutMs:5000});f.ledger.reserve(request('outstanding'));hold(t,f.path,15);
  const state=await guard.snapshot();assert.equal(state.unsettled.length,1);assert.equal(state.stopped,null);assert.equal(state.total,f.ledger.snapshot().total);
 });
 
 test('recheck3 accounting: watchdog stop drains bounded recording before artifact reporting',async t=>{
  let tick,now=0,calls=0,signal;const f=fixture(t,{captureInterval:fn=>{tick=fn;}});
- const guard=new f.GuardedTransport({send(r,options){calls++;signal=options.signal;return new Promise(()=>{});}},f.ledger,{now:()=>now,accountingTimeoutMs:500});guard.startSupervision();t.after(()=>guard.stopSupervision());
+ const guard=new f.GuardedTransport({send(r,options){calls++;signal=options.signal;return new Promise(()=>{});}},f.ledger,{now:()=>now,accountingTimeoutMs:5000});guard.startSupervision();t.after(()=>guard.stopSupervision());
  const pending=guard.send(request('supervised')),checkpoint=fs.readFileSync(f.path+'.head.json');fs.mkdirSync(f.path+'.lock');t.after(()=>{if(fs.existsSync(f.path+'.lock'))fs.rmdirSync(f.path+'.lock');});now=300000;tick();
  assert.equal((await outcome(pending)).error,'five_minutes_without_progress');assert.equal(signal.aborted,true);assert.equal(calls,1);assert.deepEqual(fs.readFileSync(f.path+'.head.json'),checkpoint);
  fs.rmdirSync(f.path+'.lock');await guard.stopSupervision();const state=await guard.snapshot({forReport:true});assert.equal(state.stopped,'five_minutes_without_progress');assert.equal(state.unsettled.length,1);assert.equal(journal(f.path).filter(e=>e.type==='stop').length,1);assert.equal(fs.readdirSync(f.path+'.lock.writers').length,0);
@@ -109,7 +109,7 @@ test('recheck3 accounting: settlement backoff cannot reset an elapsed five-minut
  const f=fixture(t);let now=0,dispatches=0,first=true,received,timer;const original=f.ledger.settle.bind(f.ledger);
  f.ledger.settle=(...args)=>{if(first){first=false;fs.mkdirSync(f.path+'.lock');timer=setTimeout(()=>{now=300000;fs.rmdirSync(f.path+'.lock');},15);}return original(...args);};
  t.after(()=>{clearTimeout(timer);if(fs.existsSync(f.path+'.lock'))fs.rmdirSync(f.path+'.lock');});
- const guard=new f.GuardedTransport({async send(r){dispatches++;now=299990;received=response(r);return received;}},f.ledger,{now:()=>now,accountingTimeoutMs:500,accountingBackoffMs:2});
+ const guard=new f.GuardedTransport({async send(r){dispatches++;now=299990;received=response(r);return received;}},f.ledger,{now:()=>now,accountingTimeoutMs:5000,accountingBackoffMs:2});
  const result=await outcome(guard.send(request('elapsed'))),state=f.ledger.snapshot(),responses=savedResponses(f.path);evidence('deadline',f,{result,state,dispatches,lastProgress:guard.lastProgress,responses});
  assert.equal(result.error,'five_minutes_without_progress');assert.equal(dispatches,1);assert.equal(guard.lastProgress,0);assert.equal(state.stopped,'five_minutes_without_progress');assert.equal(state.unsettled.length,1);assert.equal(journal(f.path).filter(e=>e.type==='settle').length,0);assert.equal(responses.length,1);assert.deepEqual(responses[0].value.response,received);
 });

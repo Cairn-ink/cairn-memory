@@ -36,8 +36,8 @@ export class GuardedTransport {
           }
           await new Promise(resolve=>setTimeout(resolve,Math.min(delay,remaining)));
           // Writer intent stays registered across the yield. Observers must not
-          // reacquire the lock ahead of this accounting operation.
-          if(performance.now()-started>=this.accountingTimeoutMs)continue;
+          // reacquire the lock ahead of this accounting operation. Always try once
+          // after waking: a delayed timer must not turn a released lock into a stop.
           try{fn();return;}catch(error){if(error.code!=='ledger_locked')throw error;}
           delay=Math.min(delay*2,100);
         }

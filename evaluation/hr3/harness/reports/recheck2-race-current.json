@@ -9,19 +9,19 @@
   "resumeError": null,
   "writes": [
     {
-      "path": "evaluation/hr3/harness/artifacts/ledger-race-pjgAHJ/ledger.jsonl.head.json",
+      "path": "evaluation/hr3/harness/artifacts/ledger-race-rSVi46/ledger.jsonl.head.json",
       "records": 1,
       "blockedReason": null,
       "locked": true
     },
     {
-      "path": "evaluation/hr3/harness/artifacts/ledger-race-pjgAHJ/ledger.jsonl.head.json",
+      "path": "evaluation/hr3/harness/artifacts/ledger-race-rSVi46/ledger.jsonl.head.json",
       "records": 2,
       "blockedReason": null,
       "locked": true
     },
     {
-      "path": "evaluation/hr3/harness/artifacts/ledger-race-pjgAHJ/ledger.jsonl.head.json",
+      "path": "evaluation/hr3/harness/artifacts/ledger-race-rSVi46/ledger.jsonl.head.json",
       "records": 3,
       "blockedReason": null,
       "locked": true
