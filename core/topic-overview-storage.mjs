@@ -13,8 +13,9 @@ const binary = (left, right) => Buffer.compare(Buffer.from(left), Buffer.from(ri
 
 /** One generator step is a physical row/EOF visit plus <=3 indexed validations,
  * or one in-memory ancestor/count update. No body/receipt column is selected. */
-export function createTopicOverviewStorage(db) {
-  const prepare = sql => db.prepare(sql);
+export function createTopicOverviewStorage(db, { exactComparisons = false } = {}) {
+  const prepare = sql => db.prepare(exactComparisons ? sql.replace(/\b([a-z_]+)([>=]+)\?/g, '$1 COLLATE BINARY$2?')
+    .replace(/ORDER BY ([a-z_]+)/g, 'ORDER BY $1 COLLATE BINARY') : sql);
   const stateRow = prepare(`SELECT active_generation FROM namespace_index_state WHERE ${where}`);
   const epoch = prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`);
   const identity = prepare('SELECT store_id FROM store_metadata WHERE singleton=1');
