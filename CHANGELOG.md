@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — installer 0.6.0: local mode
+## 0.6.0 — 2026-10-25: installer local mode
 
 - Add local SQLite memory with a one-time storage question on fresh installs and
   explicit `--local` / `--cloud` choices. Existing cloud users keep their flow.
