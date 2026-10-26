@@ -344,3 +344,53 @@ the 250ms gate; max is reported without inventing a new threshold. The original
 0.90 throughput ratio remains a reported engine reference and is excluded from
 product acceptance. The WAL wait stays 100ms. The script header and saved
 protocol v2 pre-register these criteria before measurement.
+
+## Opt-in bounded member previews (P1)
+
+Add `previews:{version:'topic-member-previews-v1',maxChars:72}` to
+`readTopicMembers` inputs, repeating it with every continuation. Omit the field
+to keep the identifier-only E1-M contract. A present `undefined` is invalid;
+inside the options object omitted/undefined `maxChars` defaults to 72 (allowed
+safe integers 1–80).
+
+```js
+const result = await reader.readTopicMembers({
+  namespace, selection: { type: 'unfiled' }, accessRevision: 'host-access-4',
+  previews: { version: 'topic-member-previews-v1', maxChars: 72 }, limit: 24,
+});
+if (result.ok) for (const ref of result.value.items) {
+  const rowText = ref.preview.status === 'available' ? ref.preview.text : ref.label.text;
+  // The UI owns ellipsis/localization; ref.label remains the full Memory ID.
+}
+```
+
+P1 sets both page `version` and snapshot `configuration` to
+`topic-member-previews-v1`. Every emitted ref adds one `preview`: either
+`{status:'available',text,truncated}` or `{status:'unavailable',reason}`.
+Reasons are `empty`, `trimmed_prefix_empty`, `content_limit`, `invalid_text`,
+`grapheme_too_large` and `segmenter_unavailable`. Unavailability does not change
+membership coverage. Errors contain no provisional refs or text.
+
+The Worker reads only complete size-approved sources (12,000 UTF-8 bytes and
+4,000 UTF-16 units), normalizes ECMAScript whitespace, then takes a contiguous
+extended-grapheme prefix bounded by `maxChars` and 1,024 UTF-8 bytes. It repeatedly
+removes entire trailing graphemes until the prefix has no trailing whitespace.
+It never refills the prefix, repairs invalid text, interprets markdown, applies
+NFKC, or appends an ellipsis. `truncated` is exact inequality with the complete
+normalized source. A failed grapheme capability check yields
+`segmenter_unavailable` without source extraction.
+
+Use the same overview `topic-snapshot-v1` provenance for count/list pairing.
+P1 and E1-M cursors have separate authenticated families; switching options
+makes a P1 continuation stale. One member traversal is retained across both
+modes. Replay revalidates and regenerates previews from their bound revisions;
+retained state contains metadata and outcome decisions, with no preview/source
+text. Existing byte/work/deadline caps and E1-C2 lock handling apply.
+
+Run `npm run measure:topic-member-previews -- --plan --report PATH` to inspect
+the preregistered launch matrix. `--smoke` is observational only. Full execution
+belongs in the primary's machine-wide queue on Node 24.22.1. Supply
+`--writer-profile PATH` containing only numeric `captureMs`, `reviewMs` and a
+`provenance` string identifying unchanged production host deadlines. Missing
+production evidence is inconclusive. See the [frozen P1 contract](plans/topic-member-previews.md)
+and [implementation handoff](plans/topic-member-previews-impl.md).

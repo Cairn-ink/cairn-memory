@@ -9,7 +9,14 @@ const revision = value => {
 };
 export function membersInput(input, ownerId) {
   const v = ownData(input, ['namespace', 'selection', 'accessRevision', 'kind', 'order',
-    'limit', 'workLimit', 'maxBytes', 'deadlineMs', 'expectedSnapshot', 'cursor']);
+    'limit', 'workLimit', 'maxBytes', 'deadlineMs', 'expectedSnapshot', 'cursor', 'previews']);
+  let previews;
+  if (Object.hasOwn(v, 'previews')) {
+    const p = ownData(v.previews, ['version', 'maxChars']);
+    const maxChars = p.maxChars === undefined ? 72 : p.maxChars;
+    if (p.version !== 'topic-member-previews-v1' || !Number.isSafeInteger(maxChars) || maxChars < 1 || maxChars > 80) fail('invalid_input');
+    previews = { version: p.version, maxChars };
+  }
   const n = ownData(v.namespace, ['ownerId', 'scope', 'projectId']);
   if (id(n.ownerId) !== ownerId || !Object.hasOwn(n, 'projectId')) fail('invalid_input');
   if (n.scope === 'personal' && n.projectId === null) n.projectId = '';
@@ -44,6 +51,7 @@ export function membersInput(input, ownerId) {
   if (v.cursor !== undefined && (typeof v.cursor !== 'string' || !/^[\x20-\x7e]{1,256}$/.test(v.cursor))) fail('invalid_cursor');
   return { namespace: { ownerId: n.ownerId, scope: n.scope, projectId: n.projectId }, selection,
     accessRevision: id(v.accessRevision), kind, order, ...bounds,
+    ...(previews === undefined ? {} : { previews }),
     ...(expectedSnapshot === undefined ? {} : { expectedSnapshot }),
     ...(v.cursor === undefined ? {} : { cursor: v.cursor }) };
 }

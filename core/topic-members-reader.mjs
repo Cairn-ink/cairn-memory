@@ -1,3 +1,4 @@
+import { createTopicPreviewReader } from './topic-member-previews-reader.mjs';
 import { randomBytes } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { setImmediate as yieldTurn } from 'node:timers/promises';
@@ -8,9 +9,19 @@ const success = value => ({ ok: true, value });
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 /** Worker-owned traversal. Dependencies are explicit for deterministic boundary tests. */
 export function createTopicMemberReader({ storage, snapshot, transaction, tokens, originBinding,
+  previewStorage,
   now = () => performance.now(), yieldQuantum = yieldTurn, observe = () => {}, prepare = () => {}, accept = () => {} }) {
   let traversal;
+  let previewReader, mode = false;
   async function read(request, deadlineAt = now() + request.deadlineMs) {
+    const wantsPreviews = Boolean(request.previews);
+    if (request.cursor && mode !== wantsPreviews) tokens.verifyCursor(request.cursor, undefined, wantsPreviews ? 'tp1' : 'tm1');
+    if (mode !== wantsPreviews) { traversal = previewReader = undefined; mode = wantsPreviews; }
+    if (wantsPreviews) {
+      previewReader ??= createTopicPreviewReader({ storage, previewStorage, snapshot, transaction, tokens, originBinding,
+        now, yieldQuantum, observe, prepare, accept });
+      return previewReader.read(request, deadlineAt);
+    }
     const { cursor, ...bound } = request, binding = JSON.stringify(bound);
     if (cursor) {
       tokens.verifyCursor(cursor);

@@ -1,3 +1,4 @@
+import { createPreviewStorage } from './topic-member-previews-storage.mjs';
 import { unsupportedTopicStorage } from './topic-reader-sqlite.mjs';
 import { lstatSync } from 'node:fs';
 import { openReadDatabase } from './read-database.mjs';
@@ -15,9 +16,9 @@ const configuration = db => ({ version: db.prepare('PRAGMA user_version').get().
 /** The native handle is lazy; all opening queries run after the caller installs
  * its work meter. The full schema walk resumes from acknowledged traversal data. */
 export function createTopicSession(path, topicPolicy) {
-  let connection, schema, opening, overview, members, dirty = false;
+  let connection, schema, opening, overview, members, previews, dirty = false;
   function dispose() {
-    connection?.db.close(); connection = opening = overview = members = undefined; dirty = false;
+    connection?.db.close(); connection = opening = overview = members = previews = undefined; dirty = false;
   }
   function changed() {
     dirty = true;
@@ -84,6 +85,8 @@ export function createTopicSession(path, topicPolicy) {
     return { namespace, captured, file: [stat.dev, stat.ino], schema, configuration: 'topic-snapshot-v1/topic-members-v1' };
   };
   return { prepare, transaction, snapshot, originBinding, dispose,
+    previewStorage: { setup(phase) { previews ??= createPreviewStorage(connection.db); previews.setup(phase); },
+      source: (...args) => previews.source(...args) },
     storage: { create: () => members.create(), target: (...args) => members.target(...args),
       cost: state => members.cost(state), step: (...args) => members.step(...args) },
     accept: state => opening.accept(state?.initialization),

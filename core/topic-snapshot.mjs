@@ -6,7 +6,7 @@ import { fail } from './validation.mjs';
 export function createTopicTokens({ now = () => performance.now(), key = randomBytes(32),
   incarnation = randomBytes(12) } = {}) {
   const digest = value => createHash('sha256').update(JSON.stringify(value)).digest();
-  const purpose = family => family === 'ts1' ? 'topic-snapshot-v1/origin' : 'topic-members-v1/cursor';
+  const purpose = family => family === 'ts1' ? 'topic-snapshot-v1/origin' : family === 'tp1' ? 'topic-member-previews-v1/cursor' : 'topic-members-v1/cursor';
   const mac = (family, body) => createHmac('sha256', key).update(purpose(family)).update(body).digest();
   function issue(family, binding) {
     const body = Buffer.alloc(68);
@@ -27,5 +27,5 @@ export function createTopicTokens({ now = () => performance.now(), key = randomB
     if (!Number.isFinite(age) || age < 0 || (family === 'ts1' && age >= 60000)) fail('cursor_stale');
   }
   return { issueOrigin: binding => issue('ts1', binding), verifyOrigin: (token, binding) => verify(token, 'ts1', binding),
-    issueCursor: binding => issue('tm1', binding), verifyCursor: (token, binding) => verify(token, 'tm1', binding) };
+    issueCursor: (binding, family = 'tm1') => issue(family, binding), verifyCursor: (token, binding, family = 'tm1') => verify(token, family, binding) };
 }

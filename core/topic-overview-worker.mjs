@@ -178,17 +178,24 @@ async function readOptin(request) {
   state.lastInput = cursor; state.lastOutput = success(value); state.nextCursor = value.nextCursor;
   return state.lastOutput;
 }
+function deliver(result, previews) {
+  if (!previews) { parentPort.postMessage(result); return; }
+  // P1 transfers exactly the bounded UTF-8 envelope. Source/normalized text
+  // never crosses this boundary; the host can account the actual payload.
+  const encoded = new TextEncoder().encode(JSON.stringify(result));
+  parentPort.postMessage(encoded.buffer, [encoded.buffer]);
+}
 parentPort.on('message', async message => {
   const { deadlineAt, ...request } = message;
   topicPolicy.start(deadlineAt);
   try {
     if (request.method === 'members' || request.snapshotVersion) prepareTopicReaders();
-    if (request.method === 'members') parentPort.postMessage(await memberReader.read(request.request, deadlineAt));
+    if (request.method === 'members') deliver(await memberReader.read(request.request, deadlineAt), Boolean(request.request.previews));
     else parentPort.postMessage(await (request.snapshotVersion ? readOptin(request) : readLegacy(request)));
   }
   catch (error) {
     if (request.method !== 'members') traversal = undefined;
     const failure = request.method === 'members' || request.snapshotVersion ? safeReaderFailure : safeLegacyReaderFailure;
-    parentPort.postMessage(failure(error, workerData.diagnostics));
+    deliver(failure(error, workerData.diagnostics), request.method === 'members' && Boolean(request.request.previews));
   }
 });

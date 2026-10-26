@@ -1,0 +1,4136 @@
+{
+  "protocol": {
+    "version": "topic-member-previews-v1",
+    "runtime": "v24.22.1",
+    "warmups": 3,
+    "mainSuccesses": 50,
+    "mainCeiling": 500,
+    "coldSuccesses": 10,
+    "coldCeiling": 100,
+    "writerCadenceMs": 20,
+    "thresholds": {
+      "1112": {
+        "p95Ms": 150,
+        "maxMs": 400,
+        "coldP95Ms": 600
+      },
+      "3336": {
+        "p95Ms": 250,
+        "maxMs": 600
+      },
+      "loopMaximumMs": 100,
+      "walBusy": 0
+    },
+    "defaultCaps": {
+      "workLimit": 5000,
+      "maxBytes": 65536,
+      "deadlineMs": 1000
+    },
+    "lockPolicy": "E1-C2 request-wide WAL native wait100ms capped by deadline; DELETE0; no retries",
+    "cloneAccounting": "Exact JSON envelope bytes plus v8.serialize representation bytes, separately labelled; native structured-clone wire size is not exposed by Node",
+    "loopObservation": "1ms heartbeat bracketed by setImmediate before construction and after awaited close, plus final timer drain; idle baseline100ms; no noise subtraction",
+    "coldTopology": "fresh Node subprocess -> public host handle -> actual reader Worker; target DB never opened/primed before sample; outer process launch reported separately"
+  },
+  "registeredAt": "2026-10-26T14:53:30.757Z",
+  "node": "v24.22.1",
+  "smoke": true,
+  "writerProfile": null,
+  "plan": [
+    {
+      "count": 112,
+      "schema": 18,
+      "journal": "DELETE",
+      "selection": "L2",
+      "limit": 24,
+      "load": "idle",
+      "profile": "default-caps"
+    },
+    {
+      "count": 112,
+      "schema": 18,
+      "journal": "DELETE",
+      "selection": "L2",
+      "limit": 24,
+      "load": "same-owner",
+      "profile": "default-caps"
+    },
+    {
+      "count": 112,
+      "schema": 18,
+      "journal": "DELETE",
+      "selection": "L2",
+      "limit": 24,
+      "load": "other-owner",
+      "profile": "default-caps"
+    },
+    {
+      "count": 112,
+      "schema": 18,
+      "journal": "WAL",
+      "selection": "L2",
+      "limit": 24,
+      "load": "idle",
+      "profile": "default-caps"
+    },
+    {
+      "count": 112,
+      "schema": 18,
+      "journal": "WAL",
+      "selection": "L2",
+      "limit": 24,
+      "load": "same-owner",
+      "profile": "default-caps"
+    },
+    {
+      "count": 112,
+      "schema": 18,
+      "journal": "WAL",
+      "selection": "L2",
+      "limit": 24,
+      "load": "other-owner",
+      "profile": "default-caps"
+    }
+  ],
+  "cells": [
+    {
+      "cell": {
+        "count": 112,
+        "schema": 18,
+        "journal": "DELETE",
+        "selection": "L2",
+        "limit": 24,
+        "load": "idle",
+        "profile": "default-caps"
+      },
+      "fixture": {
+        "memories": 112,
+        "namespaces": 4,
+        "mocs": 71
+      },
+      "warmups": [
+        {
+          "startedAt": 1793026442217.8586,
+          "finishedAt": 1793026442283.5342,
+          "readStartedAt": 1793026442218.0488,
+          "readFinishedAt": 1793026442281.9326,
+          "elapsedMs": 65.67552499999874,
+          "hostLoop": {
+            "maxMs": 1.992205999998987,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 675,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true
+        },
+        {
+          "startedAt": 1793026442287.2383,
+          "finishedAt": 1793026442339.824,
+          "readStartedAt": 1793026442287.2935,
+          "readFinishedAt": 1793026442338.2952,
+          "elapsedMs": 52.585697000002256,
+          "hostLoop": {
+            "maxMs": 1.5535239999990154,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 675,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true
+        },
+        {
+          "startedAt": 1793026442342.9946,
+          "finishedAt": 1793026442399.8389,
+          "readStartedAt": 1793026442343.0337,
+          "readFinishedAt": 1793026442398.568,
+          "elapsedMs": 56.844467999999324,
+          "hostLoop": {
+            "maxMs": 1.6038440000011178,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 675,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true
+        }
+      ],
+      "main": [
+        {
+          "startedAt": 1793026442402.9187,
+          "finishedAt": 1793026442456.8972,
+          "readStartedAt": 1793026442402.9531,
+          "readFinishedAt": 1793026442455.7239,
+          "elapsedMs": 53.977796999999555,
+          "hostLoop": {
+            "maxMs": 1.4995879999987665,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 675,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true
+        }
+      ],
+      "cold": [
+        {
+          "startedAt": 1793026442487.6707,
+          "finishedAt": 1793026442552.4114,
+          "readStartedAt": 1793026442487.8887,
+          "readFinishedAt": 1793026442550.7546,
+          "elapsedMs": 64.740668,
+          "hostLoop": {
+            "maxMs": 1.830954000000002,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 675,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true,
+          "processExit": {
+            "code": 0,
+            "signal": null
+          },
+          "outerProcessLaunchAndSampleMs": 100.59213299999828,
+          "launcherLoop": {
+            "maxMs": 3.5940110000010463,
+            "blocksOver100": 0
+          }
+        }
+      ],
+      "retained": {
+        "informational": true,
+        "complete": true,
+        "exactEof": true,
+        "expectedRefs": 13,
+        "emittedRefs": 13,
+        "lifecycleLatency": {
+          "p50Ms": 49.72418900000048,
+          "p95Ms": 49.72418900000048,
+          "maxMs": 49.72418900000048,
+          "totalMs": 50.2329979999995
+        },
+        "records": [
+          {
+            "elapsedMs": 49.72418900000048,
+            "bytes": 6128,
+            "refs": 13,
+            "status": "page",
+            "coverage": {
+              "complete": true,
+              "reason": null
+            }
+          }
+        ],
+        "hostLoop": {
+          "maxMs": 1.6028479999986303,
+          "blocksOver100": 0
+        },
+        "bounds": true,
+        "decision": "pass"
+      },
+      "decisions": [
+        {
+          "series": "main",
+          "summary": {
+            "attempts": 1,
+            "successfulPages": 1,
+            "failures": {},
+            "statuses": {
+              "page": 1
+            },
+            "reasons": {},
+            "allAttempts": {
+              "p50Ms": 53.977796999999555,
+              "p95Ms": 53.977796999999555,
+              "maxMs": 53.977796999999555
+            },
+            "successfulPopulation": {
+              "p50Ms": 53.977796999999555,
+              "p95Ms": 53.977796999999555,
+              "maxMs": 53.977796999999555
+            },
+            "envelopeBytes": {
+              "p50Ms": 6128,
+              "p95Ms": 6128,
+              "maxMs": 6128
+            },
+            "cloneRepresentationBytes": {
+              "p50Ms": 5055,
+              "p95Ms": 5055,
+              "maxMs": 5055
+            },
+            "hostLoopMaximumMs": 1.4995879999987665,
+            "blocksOver100": 0,
+            "missedOverlaps": 0,
+            "writers": {
+              "capture": {
+                "attempts": 0,
+                "commits": 0,
+                "callLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "lifecycleLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "failures": [],
+                "missingDeadlines": 0,
+                "deadlineOverruns": 0
+              },
+              "review": {
+                "attempts": 0,
+                "commits": 0,
+                "callLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "lifecycleLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "failures": [],
+                "missingDeadlines": 0,
+                "deadlineOverruns": 0
+              }
+            }
+          },
+          "checks": {
+            "loop": true,
+            "bytes": true,
+            "numericCounters": true,
+            "walBusy": true,
+            "expectedFailures": true,
+            "writerDeadlines": true
+          },
+          "decision": "inconclusive"
+        },
+        {
+          "series": "cold",
+          "summary": {
+            "attempts": 1,
+            "successfulPages": 1,
+            "failures": {},
+            "statuses": {
+              "page": 1
+            },
+            "reasons": {},
+            "allAttempts": {
+              "p50Ms": 64.740668,
+              "p95Ms": 64.740668,
+              "maxMs": 64.740668
+            },
+            "successfulPopulation": {
+              "p50Ms": 64.740668,
+              "p95Ms": 64.740668,
+              "maxMs": 64.740668
+            },
+            "envelopeBytes": {
+              "p50Ms": 6128,
+              "p95Ms": 6128,
+              "maxMs": 6128
+            },
+            "cloneRepresentationBytes": {
+              "p50Ms": 5055,
+              "p95Ms": 5055,
+              "maxMs": 5055
+            },
+            "hostLoopMaximumMs": 1.830954000000002,
+            "blocksOver100": 0,
+            "missedOverlaps": 0,
+            "writers": {
+              "capture": {
+                "attempts": 0,
+                "commits": 0,
+                "callLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "lifecycleLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "failures": [],
+                "missingDeadlines": 0,
+                "deadlineOverruns": 0
+              },
+              "review": {
+                "attempts": 0,
+                "commits": 0,
+                "callLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "lifecycleLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "failures": [],
+                "missingDeadlines": 0,
+                "deadlineOverruns": 0
+              }
+            }
+          },
+          "checks": {
+            "loop": true,
+            "bytes": true,
+            "numericCounters": true,
+            "walBusy": true,
+            "expectedFailures": true,
+            "writerDeadlines": true
+          },
+          "decision": "inconclusive"
+        },
+        {
+          "series": "warmup",
+          "summary": {
+            "attempts": 3,
+            "successfulPages": 3,
+            "failures": {},
+            "statuses": {
+              "page": 3
+            },
+            "reasons": {},
+            "allAttempts": {
+              "p50Ms": 56.844467999999324,
+              "p95Ms": 65.67552499999874,
+              "maxMs": 65.67552499999874
+            },
+            "successfulPopulation": {
+              "p50Ms": 56.844467999999324,
+              "p95Ms": 65.67552499999874,
+              "maxMs": 65.67552499999874
+            },
+            "envelopeBytes": {
+              "p50Ms": 6128,
+              "p95Ms": 6128,
+              "maxMs": 6128
+            },
+            "cloneRepresentationBytes": {
+              "p50Ms": 5055,
+              "p95Ms": 5055,
+              "maxMs": 5055
+            },
+            "hostLoopMaximumMs": 1.992205999998987,
+            "blocksOver100": 0,
+            "missedOverlaps": 0,
+            "writers": {
+              "capture": {
+                "attempts": 0,
+                "commits": 0,
+                "callLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "lifecycleLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "failures": [],
+                "missingDeadlines": 0,
+                "deadlineOverruns": 0
+              },
+              "review": {
+                "attempts": 0,
+                "commits": 0,
+                "callLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "lifecycleLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "failures": [],
+                "missingDeadlines": 0,
+                "deadlineOverruns": 0
+              }
+            }
+          },
+          "decision": "pass"
+        }
+      ]
+    },
+    {
+      "cell": {
+        "count": 112,
+        "schema": 18,
+        "journal": "DELETE",
+        "selection": "L2",
+        "limit": 24,
+        "load": "same-owner",
+        "profile": "default-caps"
+      },
+      "fixture": {
+        "memories": 112,
+        "namespaces": 4,
+        "mocs": 71
+      },
+      "warmups": [
+        {
+          "startedAt": 1793026442686.0024,
+          "finishedAt": 1793026442723.9763,
+          "readStartedAt": 1793026442686.0361,
+          "readFinishedAt": 1793026442721.8481,
+          "elapsedMs": 37.97413500000039,
+          "hostLoop": {
+            "maxMs": 1.4493660000007367,
+            "blocksOver100": 0
+          },
+          "bytes": 142,
+          "cloneRepresentationBytes": 132,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "storage_busy",
+            "diagnostics": {
+              "stage": "execute",
+              "statement": "user_version",
+              "sqlite": {
+                "code": 5,
+                "extendedCode": 5
+              }
+            }
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 3,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "capture",
+              "startedAt": 1793026442686.9656,
+              "finishedAt": 1793026442801.3225,
+              "elapsedMs": 114.35932999999999,
+              "writeStartedAt": 1793026442690.4277,
+              "writeFinishedAt": 1793026442800.0842,
+              "writeElapsedMs": 109.66267400000001,
+              "deadlineMs": null,
+              "deadlineStart": 1793026442690.4277,
+              "deadlineEnd": 1793026442800.0842,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true
+        },
+        {
+          "startedAt": 1793026442805.6875,
+          "finishedAt": 1793026442844.0354,
+          "readStartedAt": 1793026442805.7158,
+          "readFinishedAt": 1793026442841.7402,
+          "elapsedMs": 38.34823900000265,
+          "hostLoop": {
+            "maxMs": 1.5379980000034266,
+            "blocksOver100": 0
+          },
+          "bytes": 142,
+          "cloneRepresentationBytes": 132,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "storage_busy",
+            "diagnostics": {
+              "stage": "execute",
+              "statement": "user_version",
+              "sqlite": {
+                "code": 5,
+                "extendedCode": 5
+              }
+            }
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 3,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "review",
+              "startedAt": 1793026442806.1304,
+              "finishedAt": 1793026442842.6145,
+              "elapsedMs": 36.48787999999999,
+              "writeStartedAt": 1793026442807.367,
+              "writeFinishedAt": 1793026442842.3508,
+              "writeElapsedMs": 34.98439300000001,
+              "deadlineMs": null,
+              "deadlineStart": 1793026442807.367,
+              "deadlineEnd": 1793026442842.3508,
+              "commits": 1,
+              "failure": null,
+              "deadlineOverrun": null
+            },
+            {
+              "operation": "capture",
+              "startedAt": 1793026442843.8499,
+              "finishedAt": 1793026442949.6409,
+              "elapsedMs": 105.79066399999999,
+              "writeStartedAt": 1793026442845.51,
+              "writeFinishedAt": 1793026442948.8694,
+              "writeElapsedMs": 103.36050399999999,
+              "deadlineMs": null,
+              "deadlineStart": 1793026442845.51,
+              "deadlineEnd": 1793026442948.8694,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true
+        },
+        {
+          "startedAt": 1793026442953.9082,
+          "finishedAt": 1793026442992.261,
+          "readStartedAt": 1793026442953.9492,
+          "readFinishedAt": 1793026442990.2825,
+          "elapsedMs": 38.352977000002284,
+          "hostLoop": {
+            "maxMs": 1.5705290000005334,
+            "blocksOver100": 0
+          },
+          "bytes": 142,
+          "cloneRepresentationBytes": 132,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "storage_busy",
+            "diagnostics": {
+              "stage": "execute",
+              "statement": "user_version",
+              "sqlite": {
+                "code": 5,
+                "extendedCode": 5
+              }
+            }
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 3,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "review",
+              "startedAt": 1793026442954.3755,
+              "finishedAt": 1793026442992.622,
+              "elapsedMs": 38.24657000000002,
+              "writeStartedAt": 1793026442955.7002,
+              "writeFinishedAt": 1793026442992.3386,
+              "writeElapsedMs": 36.63952999999998,
+              "deadlineMs": null,
+              "deadlineStart": 1793026442955.7002,
+              "deadlineEnd": 1793026442992.3386,
+              "commits": 1,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true
+        }
+      ],
+      "main": [
+        {
+          "startedAt": 1793026442996.9922,
+          "finishedAt": 1793026443034.7134,
+          "readStartedAt": 1793026442997.0244,
+          "readFinishedAt": 1793026443032.7969,
+          "elapsedMs": 37.721191000000545,
+          "hostLoop": {
+            "maxMs": 1.4485220000024128,
+            "blocksOver100": 0
+          },
+          "bytes": 142,
+          "cloneRepresentationBytes": 132,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "storage_busy",
+            "diagnostics": {
+              "stage": "execute",
+              "statement": "user_version",
+              "sqlite": {
+                "code": 5,
+                "extendedCode": 5
+              }
+            }
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 3,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "capture",
+              "startedAt": 1793026442997.5596,
+              "finishedAt": 1793026443099.3062,
+              "elapsedMs": 101.74681400000003,
+              "writeStartedAt": 1793026442998.974,
+              "writeFinishedAt": 1793026443098.5264,
+              "writeElapsedMs": 99.55371400000001,
+              "deadlineMs": null,
+              "deadlineStart": 1793026442998.974,
+              "deadlineEnd": 1793026443098.5264,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true
+        },
+        {
+          "startedAt": 1793026443102.4614,
+          "finishedAt": 1793026443145.1013,
+          "readStartedAt": 1793026443102.5015,
+          "readFinishedAt": 1793026443142.7795,
+          "elapsedMs": 42.63979499999914,
+          "hostLoop": {
+            "maxMs": 1.5400929999996151,
+            "blocksOver100": 0
+          },
+          "bytes": 142,
+          "cloneRepresentationBytes": 132,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "storage_busy",
+            "diagnostics": {
+              "stage": "execute",
+              "statement": "user_version",
+              "sqlite": {
+                "code": 5,
+                "extendedCode": 5
+              }
+            }
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 9,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "review",
+              "startedAt": 1793026443102.9917,
+              "finishedAt": 1793026443137.6812,
+              "elapsedMs": 34.68956400000002,
+              "writeStartedAt": 1793026443104.9019,
+              "writeFinishedAt": 1793026443137.3562,
+              "writeElapsedMs": 32.455528000000015,
+              "deadlineMs": null,
+              "deadlineStart": 1793026443104.9019,
+              "deadlineEnd": 1793026443137.3562,
+              "commits": 1,
+              "failure": null,
+              "deadlineOverrun": null
+            },
+            {
+              "operation": "capture",
+              "startedAt": 1793026443138.541,
+              "finishedAt": 1793026443245.6194,
+              "elapsedMs": 107.07742600000006,
+              "writeStartedAt": 1793026443140.0356,
+              "writeFinishedAt": 1793026443244.9688,
+              "writeElapsedMs": 104.933718,
+              "deadlineMs": null,
+              "deadlineStart": 1793026443140.0356,
+              "deadlineEnd": 1793026443244.9688,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true
+        },
+        {
+          "startedAt": 1793026443249.7515,
+          "finishedAt": 1793026443289.8599,
+          "readStartedAt": 1793026443249.786,
+          "readFinishedAt": 1793026443287.6758,
+          "elapsedMs": 40.10815899999943,
+          "hostLoop": {
+            "maxMs": 1.5236870000007912,
+            "blocksOver100": 0
+          },
+          "bytes": 142,
+          "cloneRepresentationBytes": 132,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "storage_busy",
+            "diagnostics": {
+              "stage": "execute",
+              "statement": "user_version",
+              "sqlite": {
+                "code": 5,
+                "extendedCode": 5
+              }
+            }
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 3,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "review",
+              "startedAt": 1793026443250.2153,
+              "finishedAt": 1793026443283.266,
+              "elapsedMs": 33.050881000000004,
+              "writeStartedAt": 1793026443251.4927,
+              "writeFinishedAt": 1793026443282.9458,
+              "writeElapsedMs": 31.454850999999962,
+              "deadlineMs": null,
+              "deadlineStart": 1793026443251.4927,
+              "deadlineEnd": 1793026443282.9458,
+              "commits": 1,
+              "failure": null,
+              "deadlineOverrun": null
+            },
+            {
+              "operation": "capture",
+              "startedAt": 1793026443284.4883,
+              "finishedAt": 1793026443389.3542,
+              "elapsedMs": 104.86642200000006,
+              "writeStartedAt": 1793026443286.0837,
+              "writeFinishedAt": 1793026443388.5005,
+              "writeElapsedMs": 102.41783699999996,
+              "deadlineMs": null,
+              "deadlineStart": 1793026443286.0837,
+              "deadlineEnd": 1793026443388.5005,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true
+        }
+      ],
+      "cold": [
+        {
+          "startedAt": 1793026443485.4028,
+          "finishedAt": 1793026443536.203,
+          "readStartedAt": 1793026443485.588,
+          "readFinishedAt": 1793026443533.7783,
+          "elapsedMs": 50.80004000000001,
+          "hostLoop": {
+            "maxMs": 2.401904000000002,
+            "blocksOver100": 0
+          },
+          "bytes": 142,
+          "cloneRepresentationBytes": 132,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "storage_busy",
+            "diagnostics": {
+              "stage": "execute",
+              "statement": "user_version",
+              "sqlite": {
+                "code": 5,
+                "extendedCode": 5
+              }
+            }
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 3,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "capture",
+              "startedAt": 1793026443487.8516,
+              "finishedAt": 1793026443592.1448,
+              "elapsedMs": 104.298291,
+              "writeStartedAt": 1793026443491.2283,
+              "writeFinishedAt": 1793026443590.558,
+              "writeElapsedMs": 99.33569000000001,
+              "deadlineMs": null,
+              "deadlineStart": 1793026443491.2283,
+              "deadlineEnd": 1793026443590.558,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true,
+          "writerExit": {
+            "code": 0,
+            "signal": null
+          },
+          "processExit": {
+            "code": 0,
+            "signal": null
+          },
+          "outerProcessLaunchAndSampleMs": 212.02051299999948,
+          "launcherLoop": {
+            "maxMs": 1.8088169999973616,
+            "blocksOver100": 0
+          }
+        },
+        {
+          "startedAt": 1793026443717.7598,
+          "finishedAt": 1793026443769.8604,
+          "readStartedAt": 1793026443717.9429,
+          "readFinishedAt": 1793026443767.2993,
+          "elapsedMs": 52.10068100000001,
+          "hostLoop": {
+            "maxMs": 2.0784869999999955,
+            "blocksOver100": 0
+          },
+          "bytes": 142,
+          "cloneRepresentationBytes": 132,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "storage_busy",
+            "diagnostics": {
+              "stage": "execute",
+              "statement": "user_version",
+              "sqlite": {
+                "code": 5,
+                "extendedCode": 5
+              }
+            }
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 3,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "capture",
+              "startedAt": 1793026443719.8826,
+              "finishedAt": 1793026443822.3484,
+              "elapsedMs": 102.46787100000002,
+              "writeStartedAt": 1793026443723.3044,
+              "writeFinishedAt": 1793026443821.1733,
+              "writeElapsedMs": 97.87431799999999,
+              "deadlineMs": null,
+              "deadlineStart": 1793026443723.3044,
+              "deadlineEnd": 1793026443821.1733,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true,
+          "writerExit": {
+            "code": 0,
+            "signal": null
+          },
+          "processExit": {
+            "code": 0,
+            "signal": null
+          },
+          "outerProcessLaunchAndSampleMs": 230.28114199999982,
+          "launcherLoop": {
+            "maxMs": 1.249338000001444,
+            "blocksOver100": 0
+          }
+        },
+        {
+          "startedAt": 1793026443939.7554,
+          "finishedAt": 1793026443996.1245,
+          "readStartedAt": 1793026443939.942,
+          "readFinishedAt": 1793026443993.7368,
+          "elapsedMs": 56.36889999999998,
+          "hostLoop": {
+            "maxMs": 1.9730759999999918,
+            "blocksOver100": 0
+          },
+          "bytes": 142,
+          "cloneRepresentationBytes": 132,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "storage_busy",
+            "diagnostics": {
+              "stage": "execute",
+              "statement": "user_version",
+              "sqlite": {
+                "code": 5,
+                "extendedCode": 5
+              }
+            }
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 9,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "capture",
+              "startedAt": 1793026443941.811,
+              "finishedAt": 1793026444049.463,
+              "elapsedMs": 107.653868,
+              "writeStartedAt": 1793026443945.3738,
+              "writeFinishedAt": 1793026444048.3672,
+              "writeElapsedMs": 102.998893,
+              "deadlineMs": null,
+              "deadlineStart": 1793026443945.3738,
+              "deadlineEnd": 1793026444048.3672,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true,
+          "writerExit": {
+            "code": 0,
+            "signal": null
+          },
+          "processExit": {
+            "code": 0,
+            "signal": null
+          },
+          "outerProcessLaunchAndSampleMs": 224.2723879999976,
+          "launcherLoop": {
+            "maxMs": 2.527700000006007,
+            "blocksOver100": 0
+          }
+        }
+      ],
+      "retained": {
+        "informational": true,
+        "complete": true,
+        "exactEof": true,
+        "expectedRefs": 13,
+        "emittedRefs": 13,
+        "lifecycleLatency": {
+          "p50Ms": 52.23709999999846,
+          "p95Ms": 52.23709999999846,
+          "maxMs": 52.23709999999846,
+          "totalMs": 52.30660099999659
+        },
+        "records": [
+          {
+            "elapsedMs": 52.23709999999846,
+            "bytes": 6128,
+            "refs": 13,
+            "status": "page",
+            "coverage": {
+              "complete": true,
+              "reason": null
+            }
+          }
+        ],
+        "hostLoop": {
+          "maxMs": 1.9152499999981956,
+          "blocksOver100": 0
+        },
+        "bounds": true,
+        "decision": "pass"
+      },
+      "decisions": [
+        {
+          "series": "main",
+          "summary": {
+            "attempts": 3,
+            "successfulPages": 0,
+            "failures": {
+              "storage_busy": 3
+            },
+            "statuses": {
+              "error": 3
+            },
+            "reasons": {},
+            "allAttempts": {
+              "p50Ms": 40.10815899999943,
+              "p95Ms": 42.63979499999914,
+              "maxMs": 42.63979499999914
+            },
+            "successfulPopulation": {
+              "p50Ms": null,
+              "p95Ms": null,
+              "maxMs": null
+            },
+            "envelopeBytes": {
+              "p50Ms": 142,
+              "p95Ms": 142,
+              "maxMs": 142
+            },
+            "cloneRepresentationBytes": {
+              "p50Ms": 132,
+              "p95Ms": 132,
+              "maxMs": 132
+            },
+            "hostLoopMaximumMs": 1.5400929999996151,
+            "blocksOver100": 0,
+            "missedOverlaps": 0,
+            "writers": {
+              "capture": {
+                "attempts": 3,
+                "commits": 9,
+                "callLatency": {
+                  "p50Ms": 102.41783699999996,
+                  "p95Ms": 104.933718,
+                  "maxMs": 104.933718
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 104.86642200000006,
+                  "p95Ms": 107.07742600000006,
+                  "maxMs": 107.07742600000006
+                },
+                "failures": [],
+                "missingDeadlines": 3,
+                "deadlineOverruns": 0
+              },
+              "review": {
+                "attempts": 2,
+                "commits": 2,
+                "callLatency": {
+                  "p50Ms": 31.454850999999962,
+                  "p95Ms": 32.455528000000015,
+                  "maxMs": 32.455528000000015
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 33.050881000000004,
+                  "p95Ms": 34.68956400000002,
+                  "maxMs": 34.68956400000002
+                },
+                "failures": [],
+                "missingDeadlines": 2,
+                "deadlineOverruns": 0
+              }
+            }
+          },
+          "checks": {
+            "loop": true,
+            "bytes": true,
+            "numericCounters": true,
+            "walBusy": true,
+            "expectedFailures": true,
+            "writerDeadlines": true
+          },
+          "decision": "inconclusive"
+        },
+        {
+          "series": "cold",
+          "summary": {
+            "attempts": 3,
+            "successfulPages": 0,
+            "failures": {
+              "storage_busy": 3
+            },
+            "statuses": {
+              "error": 3
+            },
+            "reasons": {},
+            "allAttempts": {
+              "p50Ms": 52.10068100000001,
+              "p95Ms": 56.36889999999998,
+              "maxMs": 56.36889999999998
+            },
+            "successfulPopulation": {
+              "p50Ms": null,
+              "p95Ms": null,
+              "maxMs": null
+            },
+            "envelopeBytes": {
+              "p50Ms": 142,
+              "p95Ms": 142,
+              "maxMs": 142
+            },
+            "cloneRepresentationBytes": {
+              "p50Ms": 132,
+              "p95Ms": 132,
+              "maxMs": 132
+            },
+            "hostLoopMaximumMs": 2.401904000000002,
+            "blocksOver100": 0,
+            "missedOverlaps": 0,
+            "writers": {
+              "capture": {
+                "attempts": 3,
+                "commits": 9,
+                "callLatency": {
+                  "p50Ms": 99.33569000000001,
+                  "p95Ms": 102.998893,
+                  "maxMs": 102.998893
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 104.298291,
+                  "p95Ms": 107.653868,
+                  "maxMs": 107.653868
+                },
+                "failures": [],
+                "missingDeadlines": 3,
+                "deadlineOverruns": 0
+              },
+              "review": {
+                "attempts": 0,
+                "commits": 0,
+                "callLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "lifecycleLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "failures": [],
+                "missingDeadlines": 0,
+                "deadlineOverruns": 0
+              }
+            }
+          },
+          "checks": {
+            "loop": true,
+            "bytes": true,
+            "numericCounters": true,
+            "walBusy": true,
+            "expectedFailures": true,
+            "writerDeadlines": true
+          },
+          "decision": "inconclusive"
+        },
+        {
+          "series": "warmup",
+          "summary": {
+            "attempts": 3,
+            "successfulPages": 0,
+            "failures": {
+              "storage_busy": 3
+            },
+            "statuses": {
+              "error": 3
+            },
+            "reasons": {},
+            "allAttempts": {
+              "p50Ms": 38.34823900000265,
+              "p95Ms": 38.352977000002284,
+              "maxMs": 38.352977000002284
+            },
+            "successfulPopulation": {
+              "p50Ms": null,
+              "p95Ms": null,
+              "maxMs": null
+            },
+            "envelopeBytes": {
+              "p50Ms": 142,
+              "p95Ms": 142,
+              "maxMs": 142
+            },
+            "cloneRepresentationBytes": {
+              "p50Ms": 132,
+              "p95Ms": 132,
+              "maxMs": 132
+            },
+            "hostLoopMaximumMs": 1.5705290000005334,
+            "blocksOver100": 0,
+            "missedOverlaps": 0,
+            "writers": {
+              "capture": {
+                "attempts": 2,
+                "commits": 6,
+                "callLatency": {
+                  "p50Ms": 103.36050399999999,
+                  "p95Ms": 109.66267400000001,
+                  "maxMs": 109.66267400000001
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 105.79066399999999,
+                  "p95Ms": 114.35932999999999,
+                  "maxMs": 114.35932999999999
+                },
+                "failures": [],
+                "missingDeadlines": 2,
+                "deadlineOverruns": 0
+              },
+              "review": {
+                "attempts": 2,
+                "commits": 2,
+                "callLatency": {
+                  "p50Ms": 34.98439300000001,
+                  "p95Ms": 36.63952999999998,
+                  "maxMs": 36.63952999999998
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 36.48787999999999,
+                  "p95Ms": 38.24657000000002,
+                  "maxMs": 38.24657000000002
+                },
+                "failures": [],
+                "missingDeadlines": 2,
+                "deadlineOverruns": 0
+              }
+            }
+          },
+          "decision": "pass"
+        }
+      ],
+      "writerExit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    {
+      "cell": {
+        "count": 112,
+        "schema": 18,
+        "journal": "DELETE",
+        "selection": "L2",
+        "limit": 24,
+        "load": "other-owner",
+        "profile": "default-caps"
+      },
+      "fixture": {
+        "memories": 112,
+        "namespaces": 4,
+        "mocs": 71
+      },
+      "warmups": [
+        {
+          "startedAt": 1793026444195.9602,
+          "finishedAt": 1793026444235.3887,
+          "readStartedAt": 1793026444195.9858,
+          "readFinishedAt": 1793026444233.2031,
+          "elapsedMs": 39.428436000001966,
+          "hostLoop": {
+            "maxMs": 1.9032090000036987,
+            "blocksOver100": 0
+          },
+          "bytes": 142,
+          "cloneRepresentationBytes": 132,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "storage_busy",
+            "diagnostics": {
+              "stage": "execute",
+              "statement": "user_version",
+              "sqlite": {
+                "code": 5,
+                "extendedCode": 5
+              }
+            }
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 3,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "capture",
+              "startedAt": 1793026444196.7996,
+              "finishedAt": 1793026444304.6514,
+              "elapsedMs": 107.85776700000001,
+              "writeStartedAt": 1793026444200.0981,
+              "writeFinishedAt": 1793026444303.5728,
+              "writeElapsedMs": 103.48105699999999,
+              "deadlineMs": null,
+              "deadlineStart": 1793026444200.0981,
+              "deadlineEnd": 1793026444303.5728,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true
+        },
+        {
+          "startedAt": 1793026444308.9768,
+          "finishedAt": 1793026444348.6143,
+          "readStartedAt": 1793026444309.0032,
+          "readFinishedAt": 1793026444346.4097,
+          "elapsedMs": 39.637390000003506,
+          "hostLoop": {
+            "maxMs": 1.4783270000043558,
+            "blocksOver100": 0
+          },
+          "bytes": 142,
+          "cloneRepresentationBytes": 132,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "storage_busy",
+            "diagnostics": {
+              "stage": "execute",
+              "statement": "user_version",
+              "sqlite": {
+                "code": 5,
+                "extendedCode": 5
+              }
+            }
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 3,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "review",
+              "startedAt": 1793026444309.4067,
+              "finishedAt": 1793026444348.4731,
+              "elapsedMs": 39.066249,
+              "writeStartedAt": 1793026444310.7043,
+              "writeFinishedAt": 1793026444348.1897,
+              "writeElapsedMs": 37.48557099999999,
+              "deadlineMs": null,
+              "deadlineStart": 1793026444310.7043,
+              "deadlineEnd": 1793026444348.1897,
+              "commits": 1,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true
+        },
+        {
+          "startedAt": 1793026444352.8516,
+          "finishedAt": 1793026444391.2576,
+          "readStartedAt": 1793026444352.879,
+          "readFinishedAt": 1793026444389.196,
+          "elapsedMs": 38.406286999997974,
+          "hostLoop": {
+            "maxMs": 1.6158490000016172,
+            "blocksOver100": 0
+          },
+          "bytes": 142,
+          "cloneRepresentationBytes": 132,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "storage_busy",
+            "diagnostics": {
+              "stage": "execute",
+              "statement": "user_version",
+              "sqlite": {
+                "code": 5,
+                "extendedCode": 5
+              }
+            }
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 3,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "capture",
+              "startedAt": 1793026444353.28,
+              "finishedAt": 1793026444463.1426,
+              "elapsedMs": 109.862991,
+              "writeStartedAt": 1793026444354.9038,
+              "writeFinishedAt": 1793026444462.4033,
+              "writeElapsedMs": 107.500538,
+              "deadlineMs": null,
+              "deadlineStart": 1793026444354.9038,
+              "deadlineEnd": 1793026444462.4033,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true
+        }
+      ],
+      "main": [
+        {
+          "startedAt": 1793026444467.621,
+          "finishedAt": 1793026444507.2534,
+          "readStartedAt": 1793026444467.649,
+          "readFinishedAt": 1793026444505.0708,
+          "elapsedMs": 39.63254600000073,
+          "hostLoop": {
+            "maxMs": 1.7924039999998058,
+            "blocksOver100": 0
+          },
+          "bytes": 142,
+          "cloneRepresentationBytes": 132,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "storage_busy",
+            "diagnostics": {
+              "stage": "execute",
+              "statement": "user_version",
+              "sqlite": {
+                "code": 5,
+                "extendedCode": 5
+              }
+            }
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 3,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "review",
+              "startedAt": 1793026444468.1453,
+              "finishedAt": 1793026444508.5437,
+              "elapsedMs": 40.397513000000004,
+              "writeStartedAt": 1793026444469.4746,
+              "writeFinishedAt": 1793026444508.2546,
+              "writeElapsedMs": 38.782752000000016,
+              "deadlineMs": null,
+              "deadlineStart": 1793026444469.4746,
+              "deadlineEnd": 1793026444508.2546,
+              "commits": 1,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true
+        },
+        {
+          "startedAt": 1793026444513.0354,
+          "finishedAt": 1793026444557.606,
+          "readStartedAt": 1793026444513.0657,
+          "readFinishedAt": 1793026444555.1858,
+          "elapsedMs": 44.570890999995754,
+          "hostLoop": {
+            "maxMs": 1.7136829999944894,
+            "blocksOver100": 0
+          },
+          "bytes": 142,
+          "cloneRepresentationBytes": 132,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "storage_busy",
+            "diagnostics": {
+              "stage": "execute",
+              "statement": "user_version",
+              "sqlite": {
+                "code": 5,
+                "extendedCode": 5
+              }
+            }
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 9,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "capture",
+              "startedAt": 1793026444513.5605,
+              "finishedAt": 1793026444625.137,
+              "elapsedMs": 111.57604999999995,
+              "writeStartedAt": 1793026444515.0266,
+              "writeFinishedAt": 1793026444624.3628,
+              "writeElapsedMs": 109.33752800000002,
+              "deadlineMs": null,
+              "deadlineStart": 1793026444515.0266,
+              "deadlineEnd": 1793026444624.3628,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true
+        },
+        {
+          "startedAt": 1793026444629.7395,
+          "finishedAt": 1793026444673.6606,
+          "readStartedAt": 1793026444629.7673,
+          "readFinishedAt": 1793026444671.3044,
+          "elapsedMs": 43.92137399999774,
+          "hostLoop": {
+            "maxMs": 1.5192069999975502,
+            "blocksOver100": 0
+          },
+          "bytes": 142,
+          "cloneRepresentationBytes": 132,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "storage_busy",
+            "diagnostics": {
+              "stage": "execute",
+              "statement": "user_version",
+              "sqlite": {
+                "code": 5,
+                "extendedCode": 5
+              }
+            }
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 9,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "review",
+              "startedAt": 1793026444630.1985,
+              "finishedAt": 1793026444666.011,
+              "elapsedMs": 35.811665000000005,
+              "writeStartedAt": 1793026444631.7107,
+              "writeFinishedAt": 1793026444665.718,
+              "writeElapsedMs": 34.008700999999974,
+              "deadlineMs": null,
+              "deadlineStart": 1793026444631.7107,
+              "deadlineEnd": 1793026444665.718,
+              "commits": 1,
+              "failure": null,
+              "deadlineOverrun": null
+            },
+            {
+              "operation": "capture",
+              "startedAt": 1793026444667.315,
+              "finishedAt": 1793026444778.3333,
+              "elapsedMs": 111.01813900000002,
+              "writeStartedAt": 1793026444669.9219,
+              "writeFinishedAt": 1793026444777.5645,
+              "writeElapsedMs": 107.64414699999998,
+              "deadlineMs": null,
+              "deadlineStart": 1793026444669.9219,
+              "deadlineEnd": 1793026444777.5645,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true
+        }
+      ],
+      "cold": [
+        {
+          "startedAt": 1793026444884.982,
+          "finishedAt": 1793026444932.6863,
+          "readStartedAt": 1793026444885.2131,
+          "readFinishedAt": 1793026444930.0498,
+          "elapsedMs": 47.704055999999994,
+          "hostLoop": {
+            "maxMs": 2.1500640000000004,
+            "blocksOver100": 0
+          },
+          "bytes": 142,
+          "cloneRepresentationBytes": 132,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "storage_busy",
+            "diagnostics": {
+              "stage": "execute",
+              "statement": "user_version",
+              "sqlite": {
+                "code": 5,
+                "extendedCode": 5
+              }
+            }
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 3,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "capture",
+              "startedAt": 1793026444887.0667,
+              "finishedAt": 1793026445000.146,
+              "elapsedMs": 113.08100999999999,
+              "writeStartedAt": 1793026444890.336,
+              "writeFinishedAt": 1793026444999.027,
+              "writeElapsedMs": 108.69659000000001,
+              "deadlineMs": null,
+              "deadlineStart": 1793026444890.336,
+              "deadlineEnd": 1793026444999.027,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true,
+          "writerExit": {
+            "code": 0,
+            "signal": null
+          },
+          "processExit": {
+            "code": 0,
+            "signal": null
+          },
+          "outerProcessLaunchAndSampleMs": 229.9757580000005,
+          "launcherLoop": {
+            "maxMs": 2.7481149999948684,
+            "blocksOver100": 0
+          }
+        },
+        {
+          "startedAt": 1793026445116.5798,
+          "finishedAt": 1793026445168.9607,
+          "readStartedAt": 1793026445116.7751,
+          "readFinishedAt": 1793026445166.3735,
+          "elapsedMs": 52.380712,
+          "hostLoop": {
+            "maxMs": 1.8962750000000028,
+            "blocksOver100": 0
+          },
+          "bytes": 142,
+          "cloneRepresentationBytes": 132,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "storage_busy",
+            "diagnostics": {
+              "stage": "execute",
+              "statement": "user_version",
+              "sqlite": {
+                "code": 5,
+                "extendedCode": 5
+              }
+            }
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 9,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "capture",
+              "startedAt": 1793026445118.525,
+              "finishedAt": 1793026445239.8103,
+              "elapsedMs": 121.287287,
+              "writeStartedAt": 1793026445121.9102,
+              "writeFinishedAt": 1793026445238.698,
+              "writeElapsedMs": 116.79464899999999,
+              "deadlineMs": null,
+              "deadlineStart": 1793026445121.9102,
+              "deadlineEnd": 1793026445238.698,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true,
+          "writerExit": {
+            "code": 0,
+            "signal": null
+          },
+          "processExit": {
+            "code": 0,
+            "signal": null
+          },
+          "outerProcessLaunchAndSampleMs": 238.51526000000013,
+          "launcherLoop": {
+            "maxMs": 2.2929669999939506,
+            "blocksOver100": 0
+          }
+        },
+        {
+          "startedAt": 1793026445355.8267,
+          "finishedAt": 1793026445408.4226,
+          "readStartedAt": 1793026445356.086,
+          "readFinishedAt": 1793026445405.8962,
+          "elapsedMs": 52.59571199999999,
+          "hostLoop": {
+            "maxMs": 1.966465999999997,
+            "blocksOver100": 0
+          },
+          "bytes": 142,
+          "cloneRepresentationBytes": 132,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "storage_busy",
+            "diagnostics": {
+              "stage": "execute",
+              "statement": "user_version",
+              "sqlite": {
+                "code": 5,
+                "extendedCode": 5
+              }
+            }
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 9,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "capture",
+              "startedAt": 1793026445357.864,
+              "finishedAt": 1793026445471.7034,
+              "elapsedMs": 113.84151000000001,
+              "writeStartedAt": 1793026445361.1357,
+              "writeFinishedAt": 1793026445470.4944,
+              "writeElapsedMs": 109.365157,
+              "deadlineMs": null,
+              "deadlineStart": 1793026445361.1357,
+              "deadlineEnd": 1793026445470.4944,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true,
+          "writerExit": {
+            "code": 0,
+            "signal": null
+          },
+          "processExit": {
+            "code": 0,
+            "signal": null
+          },
+          "outerProcessLaunchAndSampleMs": 227.8520340000032,
+          "launcherLoop": {
+            "maxMs": 2.2898720000011963,
+            "blocksOver100": 0
+          }
+        }
+      ],
+      "retained": {
+        "informational": true,
+        "complete": true,
+        "exactEof": true,
+        "expectedRefs": 13,
+        "emittedRefs": 13,
+        "lifecycleLatency": {
+          "p50Ms": 53.947448999999324,
+          "p95Ms": 53.947448999999324,
+          "maxMs": 53.947448999999324,
+          "totalMs": 54.01760099999956
+        },
+        "records": [
+          {
+            "elapsedMs": 53.947448999999324,
+            "bytes": 6128,
+            "refs": 13,
+            "status": "page",
+            "coverage": {
+              "complete": true,
+              "reason": null
+            }
+          }
+        ],
+        "hostLoop": {
+          "maxMs": 1.4073910000006435,
+          "blocksOver100": 0
+        },
+        "bounds": true,
+        "decision": "pass"
+      },
+      "decisions": [
+        {
+          "series": "main",
+          "summary": {
+            "attempts": 3,
+            "successfulPages": 0,
+            "failures": {
+              "storage_busy": 3
+            },
+            "statuses": {
+              "error": 3
+            },
+            "reasons": {},
+            "allAttempts": {
+              "p50Ms": 43.92137399999774,
+              "p95Ms": 44.570890999995754,
+              "maxMs": 44.570890999995754
+            },
+            "successfulPopulation": {
+              "p50Ms": null,
+              "p95Ms": null,
+              "maxMs": null
+            },
+            "envelopeBytes": {
+              "p50Ms": 142,
+              "p95Ms": 142,
+              "maxMs": 142
+            },
+            "cloneRepresentationBytes": {
+              "p50Ms": 132,
+              "p95Ms": 132,
+              "maxMs": 132
+            },
+            "hostLoopMaximumMs": 1.7924039999998058,
+            "blocksOver100": 0,
+            "missedOverlaps": 0,
+            "writers": {
+              "capture": {
+                "attempts": 2,
+                "commits": 6,
+                "callLatency": {
+                  "p50Ms": 107.64414699999998,
+                  "p95Ms": 109.33752800000002,
+                  "maxMs": 109.33752800000002
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 111.01813900000002,
+                  "p95Ms": 111.57604999999995,
+                  "maxMs": 111.57604999999995
+                },
+                "failures": [],
+                "missingDeadlines": 2,
+                "deadlineOverruns": 0
+              },
+              "review": {
+                "attempts": 2,
+                "commits": 2,
+                "callLatency": {
+                  "p50Ms": 34.008700999999974,
+                  "p95Ms": 38.782752000000016,
+                  "maxMs": 38.782752000000016
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 35.811665000000005,
+                  "p95Ms": 40.397513000000004,
+                  "maxMs": 40.397513000000004
+                },
+                "failures": [],
+                "missingDeadlines": 2,
+                "deadlineOverruns": 0
+              }
+            }
+          },
+          "checks": {
+            "loop": true,
+            "bytes": true,
+            "numericCounters": true,
+            "walBusy": true,
+            "expectedFailures": true,
+            "writerDeadlines": true
+          },
+          "decision": "inconclusive"
+        },
+        {
+          "series": "cold",
+          "summary": {
+            "attempts": 3,
+            "successfulPages": 0,
+            "failures": {
+              "storage_busy": 3
+            },
+            "statuses": {
+              "error": 3
+            },
+            "reasons": {},
+            "allAttempts": {
+              "p50Ms": 52.380712,
+              "p95Ms": 52.59571199999999,
+              "maxMs": 52.59571199999999
+            },
+            "successfulPopulation": {
+              "p50Ms": null,
+              "p95Ms": null,
+              "maxMs": null
+            },
+            "envelopeBytes": {
+              "p50Ms": 142,
+              "p95Ms": 142,
+              "maxMs": 142
+            },
+            "cloneRepresentationBytes": {
+              "p50Ms": 132,
+              "p95Ms": 132,
+              "maxMs": 132
+            },
+            "hostLoopMaximumMs": 2.1500640000000004,
+            "blocksOver100": 0,
+            "missedOverlaps": 0,
+            "writers": {
+              "capture": {
+                "attempts": 3,
+                "commits": 9,
+                "callLatency": {
+                  "p50Ms": 109.365157,
+                  "p95Ms": 116.79464899999999,
+                  "maxMs": 116.79464899999999
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 113.84151000000001,
+                  "p95Ms": 121.287287,
+                  "maxMs": 121.287287
+                },
+                "failures": [],
+                "missingDeadlines": 3,
+                "deadlineOverruns": 0
+              },
+              "review": {
+                "attempts": 0,
+                "commits": 0,
+                "callLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "lifecycleLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "failures": [],
+                "missingDeadlines": 0,
+                "deadlineOverruns": 0
+              }
+            }
+          },
+          "checks": {
+            "loop": true,
+            "bytes": true,
+            "numericCounters": true,
+            "walBusy": true,
+            "expectedFailures": true,
+            "writerDeadlines": true
+          },
+          "decision": "inconclusive"
+        },
+        {
+          "series": "warmup",
+          "summary": {
+            "attempts": 3,
+            "successfulPages": 0,
+            "failures": {
+              "storage_busy": 3
+            },
+            "statuses": {
+              "error": 3
+            },
+            "reasons": {},
+            "allAttempts": {
+              "p50Ms": 39.428436000001966,
+              "p95Ms": 39.637390000003506,
+              "maxMs": 39.637390000003506
+            },
+            "successfulPopulation": {
+              "p50Ms": null,
+              "p95Ms": null,
+              "maxMs": null
+            },
+            "envelopeBytes": {
+              "p50Ms": 142,
+              "p95Ms": 142,
+              "maxMs": 142
+            },
+            "cloneRepresentationBytes": {
+              "p50Ms": 132,
+              "p95Ms": 132,
+              "maxMs": 132
+            },
+            "hostLoopMaximumMs": 1.9032090000036987,
+            "blocksOver100": 0,
+            "missedOverlaps": 0,
+            "writers": {
+              "capture": {
+                "attempts": 2,
+                "commits": 6,
+                "callLatency": {
+                  "p50Ms": 103.48105699999999,
+                  "p95Ms": 107.500538,
+                  "maxMs": 107.500538
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 107.85776700000001,
+                  "p95Ms": 109.862991,
+                  "maxMs": 109.862991
+                },
+                "failures": [],
+                "missingDeadlines": 2,
+                "deadlineOverruns": 0
+              },
+              "review": {
+                "attempts": 1,
+                "commits": 1,
+                "callLatency": {
+                  "p50Ms": 37.48557099999999,
+                  "p95Ms": 37.48557099999999,
+                  "maxMs": 37.48557099999999
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 39.066249,
+                  "p95Ms": 39.066249,
+                  "maxMs": 39.066249
+                },
+                "failures": [],
+                "missingDeadlines": 1,
+                "deadlineOverruns": 0
+              }
+            }
+          },
+          "decision": "pass"
+        }
+      ],
+      "writerExit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    {
+      "cell": {
+        "count": 112,
+        "schema": 18,
+        "journal": "WAL",
+        "selection": "L2",
+        "limit": 24,
+        "load": "idle",
+        "profile": "default-caps"
+      },
+      "fixture": {
+        "memories": 112,
+        "namespaces": 4,
+        "mocs": 71
+      },
+      "warmups": [
+        {
+          "startedAt": 1793026445591.4922,
+          "finishedAt": 1793026445646.6587,
+          "readStartedAt": 1793026445591.5295,
+          "readFinishedAt": 1793026445645.5178,
+          "elapsedMs": 55.16663800000242,
+          "hostLoop": {
+            "maxMs": 2.0120870000027935,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 675,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true
+        },
+        {
+          "startedAt": 1793026445650.0388,
+          "finishedAt": 1793026445703.1226,
+          "readStartedAt": 1793026445650.0671,
+          "readFinishedAt": 1793026445701.9243,
+          "elapsedMs": 53.08372199999576,
+          "hostLoop": {
+            "maxMs": 1.5124099999957252,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 675,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true
+        },
+        {
+          "startedAt": 1793026445706.4631,
+          "finishedAt": 1793026445761.8816,
+          "readStartedAt": 1793026445706.4917,
+          "readFinishedAt": 1793026445760.729,
+          "elapsedMs": 55.418257000004814,
+          "hostLoop": {
+            "maxMs": 1.4147370000064257,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 675,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true
+        }
+      ],
+      "main": [
+        {
+          "startedAt": 1793026445764.9587,
+          "finishedAt": 1793026445817.6934,
+          "readStartedAt": 1793026445764.9814,
+          "readFinishedAt": 1793026445816.4534,
+          "elapsedMs": 52.73483899999701,
+          "hostLoop": {
+            "maxMs": 1.5379680000041844,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 675,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true
+        }
+      ],
+      "cold": [
+        {
+          "startedAt": 1793026445846.066,
+          "finishedAt": 1793026445915.283,
+          "readStartedAt": 1793026445846.2708,
+          "readFinishedAt": 1793026445913.3418,
+          "elapsedMs": 69.217177,
+          "hostLoop": {
+            "maxMs": 1.9663960000000031,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 675,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true,
+          "processExit": {
+            "code": 0,
+            "signal": null
+          },
+          "outerProcessLaunchAndSampleMs": 100.79663199999777,
+          "launcherLoop": {
+            "maxMs": 2.0976490000030026,
+            "blocksOver100": 0
+          }
+        }
+      ],
+      "retained": {
+        "informational": true,
+        "complete": true,
+        "exactEof": true,
+        "expectedRefs": 13,
+        "emittedRefs": 13,
+        "lifecycleLatency": {
+          "p50Ms": 54.44309499999508,
+          "p95Ms": 54.44309499999508,
+          "maxMs": 54.44309499999508,
+          "totalMs": 54.557836999993015
+        },
+        "records": [
+          {
+            "elapsedMs": 54.44309499999508,
+            "bytes": 6128,
+            "refs": 13,
+            "status": "page",
+            "coverage": {
+              "complete": true,
+              "reason": null
+            }
+          }
+        ],
+        "hostLoop": {
+          "maxMs": 1.3378149999989546,
+          "blocksOver100": 0
+        },
+        "bounds": true,
+        "decision": "pass"
+      },
+      "decisions": [
+        {
+          "series": "main",
+          "summary": {
+            "attempts": 1,
+            "successfulPages": 1,
+            "failures": {},
+            "statuses": {
+              "page": 1
+            },
+            "reasons": {},
+            "allAttempts": {
+              "p50Ms": 52.73483899999701,
+              "p95Ms": 52.73483899999701,
+              "maxMs": 52.73483899999701
+            },
+            "successfulPopulation": {
+              "p50Ms": 52.73483899999701,
+              "p95Ms": 52.73483899999701,
+              "maxMs": 52.73483899999701
+            },
+            "envelopeBytes": {
+              "p50Ms": 6128,
+              "p95Ms": 6128,
+              "maxMs": 6128
+            },
+            "cloneRepresentationBytes": {
+              "p50Ms": 5055,
+              "p95Ms": 5055,
+              "maxMs": 5055
+            },
+            "hostLoopMaximumMs": 1.5379680000041844,
+            "blocksOver100": 0,
+            "missedOverlaps": 0,
+            "writers": {
+              "capture": {
+                "attempts": 0,
+                "commits": 0,
+                "callLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "lifecycleLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "failures": [],
+                "missingDeadlines": 0,
+                "deadlineOverruns": 0
+              },
+              "review": {
+                "attempts": 0,
+                "commits": 0,
+                "callLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "lifecycleLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "failures": [],
+                "missingDeadlines": 0,
+                "deadlineOverruns": 0
+              }
+            }
+          },
+          "checks": {
+            "loop": true,
+            "bytes": true,
+            "numericCounters": true,
+            "walBusy": true,
+            "expectedFailures": true,
+            "writerDeadlines": true
+          },
+          "decision": "inconclusive"
+        },
+        {
+          "series": "cold",
+          "summary": {
+            "attempts": 1,
+            "successfulPages": 1,
+            "failures": {},
+            "statuses": {
+              "page": 1
+            },
+            "reasons": {},
+            "allAttempts": {
+              "p50Ms": 69.217177,
+              "p95Ms": 69.217177,
+              "maxMs": 69.217177
+            },
+            "successfulPopulation": {
+              "p50Ms": 69.217177,
+              "p95Ms": 69.217177,
+              "maxMs": 69.217177
+            },
+            "envelopeBytes": {
+              "p50Ms": 6128,
+              "p95Ms": 6128,
+              "maxMs": 6128
+            },
+            "cloneRepresentationBytes": {
+              "p50Ms": 5055,
+              "p95Ms": 5055,
+              "maxMs": 5055
+            },
+            "hostLoopMaximumMs": 1.9663960000000031,
+            "blocksOver100": 0,
+            "missedOverlaps": 0,
+            "writers": {
+              "capture": {
+                "attempts": 0,
+                "commits": 0,
+                "callLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "lifecycleLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "failures": [],
+                "missingDeadlines": 0,
+                "deadlineOverruns": 0
+              },
+              "review": {
+                "attempts": 0,
+                "commits": 0,
+                "callLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "lifecycleLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "failures": [],
+                "missingDeadlines": 0,
+                "deadlineOverruns": 0
+              }
+            }
+          },
+          "checks": {
+            "loop": true,
+            "bytes": true,
+            "numericCounters": true,
+            "walBusy": true,
+            "expectedFailures": true,
+            "writerDeadlines": true
+          },
+          "decision": "inconclusive"
+        },
+        {
+          "series": "warmup",
+          "summary": {
+            "attempts": 3,
+            "successfulPages": 3,
+            "failures": {},
+            "statuses": {
+              "page": 3
+            },
+            "reasons": {},
+            "allAttempts": {
+              "p50Ms": 55.16663800000242,
+              "p95Ms": 55.418257000004814,
+              "maxMs": 55.418257000004814
+            },
+            "successfulPopulation": {
+              "p50Ms": 55.16663800000242,
+              "p95Ms": 55.418257000004814,
+              "maxMs": 55.418257000004814
+            },
+            "envelopeBytes": {
+              "p50Ms": 6128,
+              "p95Ms": 6128,
+              "maxMs": 6128
+            },
+            "cloneRepresentationBytes": {
+              "p50Ms": 5055,
+              "p95Ms": 5055,
+              "maxMs": 5055
+            },
+            "hostLoopMaximumMs": 2.0120870000027935,
+            "blocksOver100": 0,
+            "missedOverlaps": 0,
+            "writers": {
+              "capture": {
+                "attempts": 0,
+                "commits": 0,
+                "callLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "lifecycleLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "failures": [],
+                "missingDeadlines": 0,
+                "deadlineOverruns": 0
+              },
+              "review": {
+                "attempts": 0,
+                "commits": 0,
+                "callLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "lifecycleLatency": {
+                  "p50Ms": null,
+                  "p95Ms": null,
+                  "maxMs": null
+                },
+                "failures": [],
+                "missingDeadlines": 0,
+                "deadlineOverruns": 0
+              }
+            }
+          },
+          "decision": "pass"
+        }
+      ]
+    },
+    {
+      "cell": {
+        "count": 112,
+        "schema": 18,
+        "journal": "WAL",
+        "selection": "L2",
+        "limit": 24,
+        "load": "same-owner",
+        "profile": "default-caps"
+      },
+      "fixture": {
+        "memories": 112,
+        "namespaces": 4,
+        "mocs": 71
+      },
+      "warmups": [
+        {
+          "startedAt": 1793026446091.2874,
+          "finishedAt": 1793026446136.9211,
+          "readStartedAt": 1793026446091.315,
+          "readFinishedAt": 1793026446135.8257,
+          "elapsedMs": 45.633907999996154,
+          "hostLoop": {
+            "maxMs": 1.473998000001302,
+            "blocksOver100": 0
+          },
+          "bytes": 44,
+          "cloneRepresentationBytes": 40,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 0,
+          "status": null,
+          "coverage": null,
+          "failure": {
+            "code": "cursor_stale"
+          },
+          "reasons": {},
+          "counters": {
+            "workUnits": 202,
+            "extractions": 0,
+            "sourceBytes": 0,
+            "decodeAttemptBytes": 0,
+            "decodedUnits": 0,
+            "normalizationUnits": 0,
+            "segmentationUnits": 0,
+            "temporaryPayloadPeak": 0,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "capture",
+              "startedAt": 1793026446092.2073,
+              "finishedAt": 1793026446161.5247,
+              "elapsedMs": 69.32000200000002,
+              "writeStartedAt": 1793026446095.7253,
+              "writeFinishedAt": 1793026446143.5437,
+              "writeElapsedMs": 47.820825,
+              "deadlineMs": null,
+              "deadlineStart": 1793026446095.7253,
+              "deadlineEnd": 1793026446143.5437,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": false,
+          "bounds": true
+        },
+        {
+          "startedAt": 1793026446166.172,
+          "finishedAt": 1793026446227.1392,
+          "readStartedAt": 1793026446166.2,
+          "readFinishedAt": 1793026446225.9949,
+          "elapsedMs": 60.96724099999847,
+          "hostLoop": {
+            "maxMs": 1.8420989999940502,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 678,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "review",
+              "startedAt": 1793026446166.6057,
+              "finishedAt": 1793026446204.364,
+              "elapsedMs": 37.759315000000015,
+              "writeStartedAt": 1793026446168.2646,
+              "writeFinishedAt": 1793026446192.8618,
+              "writeElapsedMs": 24.597238000000004,
+              "deadlineMs": null,
+              "deadlineStart": 1793026446168.2646,
+              "deadlineEnd": 1793026446192.8618,
+              "commits": 1,
+              "failure": null,
+              "deadlineOverrun": null
+            },
+            {
+              "operation": "capture",
+              "startedAt": 1793026446204.5022,
+              "finishedAt": 1793026446258.709,
+              "elapsedMs": 54.207809999999995,
+              "writeStartedAt": 1793026446206.1536,
+              "writeFinishedAt": 1793026446244.9377,
+              "writeElapsedMs": 38.784829,
+              "deadlineMs": null,
+              "deadlineStart": 1793026446206.1536,
+              "deadlineEnd": 1793026446244.9377,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true
+        },
+        {
+          "startedAt": 1793026446262.9626,
+          "finishedAt": 1793026446322.9285,
+          "readStartedAt": 1793026446262.9924,
+          "readFinishedAt": 1793026446321.6094,
+          "elapsedMs": 59.966011999997136,
+          "hostLoop": {
+            "maxMs": 1.4057860000029905,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 681,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "review",
+              "startedAt": 1793026446263.904,
+              "finishedAt": 1793026446304.4585,
+              "elapsedMs": 40.55488100000002,
+              "writeStartedAt": 1793026446265.4253,
+              "writeFinishedAt": 1793026446292.9756,
+              "writeElapsedMs": 27.550999999999988,
+              "deadlineMs": null,
+              "deadlineStart": 1793026446265.4253,
+              "deadlineEnd": 1793026446292.9756,
+              "commits": 1,
+              "failure": null,
+              "deadlineOverrun": null
+            },
+            {
+              "operation": "capture",
+              "startedAt": 1793026446305.6401,
+              "finishedAt": 1793026446365.274,
+              "elapsedMs": 59.63509899999997,
+              "writeStartedAt": 1793026446306.9402,
+              "writeFinishedAt": 1793026446349.617,
+              "writeElapsedMs": 42.67794500000002,
+              "deadlineMs": null,
+              "deadlineStart": 1793026446306.9402,
+              "deadlineEnd": 1793026446349.617,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true
+        }
+      ],
+      "main": [
+        {
+          "startedAt": 1793026446369.149,
+          "finishedAt": 1793026446424.0498,
+          "readStartedAt": 1793026446369.1802,
+          "readFinishedAt": 1793026446422.5596,
+          "elapsedMs": 54.90080399999715,
+          "hostLoop": {
+            "maxMs": 1.6014240000004065,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 684,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "review",
+              "startedAt": 1793026446369.8826,
+              "finishedAt": 1793026446404.7947,
+              "elapsedMs": 34.91224,
+              "writeStartedAt": 1793026446371.5474,
+              "writeFinishedAt": 1793026446393.954,
+              "writeElapsedMs": 22.407933999999955,
+              "deadlineMs": null,
+              "deadlineStart": 1793026446371.5474,
+              "deadlineEnd": 1793026446393.954,
+              "commits": 1,
+              "failure": null,
+              "deadlineOverrun": null
+            },
+            {
+              "operation": "capture",
+              "startedAt": 1793026446406.1382,
+              "finishedAt": 1793026446463.5334,
+              "elapsedMs": 57.396613,
+              "writeStartedAt": 1793026446407.4495,
+              "writeFinishedAt": 1793026446450.9365,
+              "writeElapsedMs": 43.48820999999998,
+              "deadlineMs": null,
+              "deadlineStart": 1793026446407.4495,
+              "deadlineEnd": 1793026446450.9365,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true
+        }
+      ],
+      "cold": [
+        {
+          "startedAt": 1793026446557.532,
+          "finishedAt": 1793026446621.2268,
+          "readStartedAt": 1793026446557.714,
+          "readFinishedAt": 1793026446619.5457,
+          "elapsedMs": 63.69460499999998,
+          "hostLoop": {
+            "maxMs": 1.9898469999999975,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 686,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "capture",
+              "startedAt": 1793026446559.5154,
+              "finishedAt": 1793026446606.0735,
+              "elapsedMs": 46.56016699999999,
+              "writeStartedAt": 1793026446563.6191,
+              "writeFinishedAt": 1793026446605.3132,
+              "writeElapsedMs": 41.696903000000006,
+              "deadlineMs": null,
+              "deadlineStart": 1793026446563.6191,
+              "deadlineEnd": 1793026446605.3132,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            },
+            {
+              "operation": "review",
+              "startedAt": 1793026446607.3748,
+              "finishedAt": 1793026446636.7996,
+              "elapsedMs": 29.425772999999992,
+              "writeStartedAt": 1793026446608.9084,
+              "writeFinishedAt": 1793026446624.3784,
+              "writeElapsedMs": 15.47046300000001,
+              "deadlineMs": null,
+              "deadlineStart": 1793026446608.9084,
+              "deadlineEnd": 1793026446624.3784,
+              "commits": 1,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true,
+          "writerExit": {
+            "code": 0,
+            "signal": null
+          },
+          "processExit": {
+            "code": 0,
+            "signal": null
+          },
+          "outerProcessLaunchAndSampleMs": 182.41503999999986,
+          "launcherLoop": {
+            "maxMs": 2.0454380000010133,
+            "blocksOver100": 0
+          }
+        }
+      ],
+      "retained": {
+        "informational": true,
+        "complete": true,
+        "exactEof": true,
+        "expectedRefs": 13,
+        "emittedRefs": 13,
+        "lifecycleLatency": {
+          "p50Ms": 53.10341999999946,
+          "p95Ms": 53.10341999999946,
+          "maxMs": 53.10341999999946,
+          "totalMs": 53.17416200000298
+        },
+        "records": [
+          {
+            "elapsedMs": 53.10341999999946,
+            "bytes": 6128,
+            "refs": 13,
+            "status": "page",
+            "coverage": {
+              "complete": true,
+              "reason": null
+            }
+          }
+        ],
+        "hostLoop": {
+          "maxMs": 1.1170249999995576,
+          "blocksOver100": 0
+        },
+        "bounds": true,
+        "decision": "pass"
+      },
+      "decisions": [
+        {
+          "series": "main",
+          "summary": {
+            "attempts": 1,
+            "successfulPages": 1,
+            "failures": {},
+            "statuses": {
+              "page": 1
+            },
+            "reasons": {},
+            "allAttempts": {
+              "p50Ms": 54.90080399999715,
+              "p95Ms": 54.90080399999715,
+              "maxMs": 54.90080399999715
+            },
+            "successfulPopulation": {
+              "p50Ms": 54.90080399999715,
+              "p95Ms": 54.90080399999715,
+              "maxMs": 54.90080399999715
+            },
+            "envelopeBytes": {
+              "p50Ms": 6128,
+              "p95Ms": 6128,
+              "maxMs": 6128
+            },
+            "cloneRepresentationBytes": {
+              "p50Ms": 5055,
+              "p95Ms": 5055,
+              "maxMs": 5055
+            },
+            "hostLoopMaximumMs": 1.6014240000004065,
+            "blocksOver100": 0,
+            "missedOverlaps": 0,
+            "writers": {
+              "capture": {
+                "attempts": 1,
+                "commits": 3,
+                "callLatency": {
+                  "p50Ms": 43.48820999999998,
+                  "p95Ms": 43.48820999999998,
+                  "maxMs": 43.48820999999998
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 57.396613,
+                  "p95Ms": 57.396613,
+                  "maxMs": 57.396613
+                },
+                "failures": [],
+                "missingDeadlines": 1,
+                "deadlineOverruns": 0
+              },
+              "review": {
+                "attempts": 1,
+                "commits": 1,
+                "callLatency": {
+                  "p50Ms": 22.407933999999955,
+                  "p95Ms": 22.407933999999955,
+                  "maxMs": 22.407933999999955
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 34.91224,
+                  "p95Ms": 34.91224,
+                  "maxMs": 34.91224
+                },
+                "failures": [],
+                "missingDeadlines": 1,
+                "deadlineOverruns": 0
+              }
+            }
+          },
+          "checks": {
+            "loop": true,
+            "bytes": true,
+            "numericCounters": true,
+            "walBusy": true,
+            "expectedFailures": true,
+            "writerDeadlines": true
+          },
+          "decision": "inconclusive"
+        },
+        {
+          "series": "cold",
+          "summary": {
+            "attempts": 1,
+            "successfulPages": 1,
+            "failures": {},
+            "statuses": {
+              "page": 1
+            },
+            "reasons": {},
+            "allAttempts": {
+              "p50Ms": 63.69460499999998,
+              "p95Ms": 63.69460499999998,
+              "maxMs": 63.69460499999998
+            },
+            "successfulPopulation": {
+              "p50Ms": 63.69460499999998,
+              "p95Ms": 63.69460499999998,
+              "maxMs": 63.69460499999998
+            },
+            "envelopeBytes": {
+              "p50Ms": 6128,
+              "p95Ms": 6128,
+              "maxMs": 6128
+            },
+            "cloneRepresentationBytes": {
+              "p50Ms": 5055,
+              "p95Ms": 5055,
+              "maxMs": 5055
+            },
+            "hostLoopMaximumMs": 1.9898469999999975,
+            "blocksOver100": 0,
+            "missedOverlaps": 0,
+            "writers": {
+              "capture": {
+                "attempts": 1,
+                "commits": 3,
+                "callLatency": {
+                  "p50Ms": 41.696903000000006,
+                  "p95Ms": 41.696903000000006,
+                  "maxMs": 41.696903000000006
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 46.56016699999999,
+                  "p95Ms": 46.56016699999999,
+                  "maxMs": 46.56016699999999
+                },
+                "failures": [],
+                "missingDeadlines": 1,
+                "deadlineOverruns": 0
+              },
+              "review": {
+                "attempts": 1,
+                "commits": 1,
+                "callLatency": {
+                  "p50Ms": 15.47046300000001,
+                  "p95Ms": 15.47046300000001,
+                  "maxMs": 15.47046300000001
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 29.425772999999992,
+                  "p95Ms": 29.425772999999992,
+                  "maxMs": 29.425772999999992
+                },
+                "failures": [],
+                "missingDeadlines": 1,
+                "deadlineOverruns": 0
+              }
+            }
+          },
+          "checks": {
+            "loop": true,
+            "bytes": true,
+            "numericCounters": true,
+            "walBusy": true,
+            "expectedFailures": true,
+            "writerDeadlines": true
+          },
+          "decision": "inconclusive"
+        },
+        {
+          "series": "warmup",
+          "summary": {
+            "attempts": 3,
+            "successfulPages": 2,
+            "failures": {
+              "cursor_stale": 1
+            },
+            "statuses": {
+              "error": 1,
+              "page": 2
+            },
+            "reasons": {},
+            "allAttempts": {
+              "p50Ms": 59.966011999997136,
+              "p95Ms": 60.96724099999847,
+              "maxMs": 60.96724099999847
+            },
+            "successfulPopulation": {
+              "p50Ms": 59.966011999997136,
+              "p95Ms": 60.96724099999847,
+              "maxMs": 60.96724099999847
+            },
+            "envelopeBytes": {
+              "p50Ms": 6128,
+              "p95Ms": 6128,
+              "maxMs": 6128
+            },
+            "cloneRepresentationBytes": {
+              "p50Ms": 5055,
+              "p95Ms": 5055,
+              "maxMs": 5055
+            },
+            "hostLoopMaximumMs": 1.8420989999940502,
+            "blocksOver100": 0,
+            "missedOverlaps": 0,
+            "writers": {
+              "capture": {
+                "attempts": 3,
+                "commits": 9,
+                "callLatency": {
+                  "p50Ms": 42.67794500000002,
+                  "p95Ms": 47.820825,
+                  "maxMs": 47.820825
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 59.63509899999997,
+                  "p95Ms": 69.32000200000002,
+                  "maxMs": 69.32000200000002
+                },
+                "failures": [],
+                "missingDeadlines": 3,
+                "deadlineOverruns": 0
+              },
+              "review": {
+                "attempts": 2,
+                "commits": 2,
+                "callLatency": {
+                  "p50Ms": 24.597238000000004,
+                  "p95Ms": 27.550999999999988,
+                  "maxMs": 27.550999999999988
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 37.759315000000015,
+                  "p95Ms": 40.55488100000002,
+                  "maxMs": 40.55488100000002
+                },
+                "failures": [],
+                "missingDeadlines": 2,
+                "deadlineOverruns": 0
+              }
+            }
+          },
+          "decision": "pass"
+        }
+      ],
+      "writerExit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    {
+      "cell": {
+        "count": 112,
+        "schema": 18,
+        "journal": "WAL",
+        "selection": "L2",
+        "limit": 24,
+        "load": "other-owner",
+        "profile": "default-caps"
+      },
+      "fixture": {
+        "memories": 112,
+        "namespaces": 4,
+        "mocs": 71
+      },
+      "warmups": [
+        {
+          "startedAt": 1793026446812.1262,
+          "finishedAt": 1793026446865.5957,
+          "readStartedAt": 1793026446812.1528,
+          "readFinishedAt": 1793026446864.4204,
+          "elapsedMs": 53.470041999993555,
+          "hostLoop": {
+            "maxMs": 1.6269240000037826,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 675,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "capture",
+              "startedAt": 1793026446812.88,
+              "finishedAt": 1793026446881.6707,
+              "elapsedMs": 68.793307,
+              "writeStartedAt": 1793026446816.5146,
+              "writeFinishedAt": 1793026446868.1638,
+              "writeElapsedMs": 51.652338,
+              "deadlineMs": null,
+              "deadlineStart": 1793026446816.5146,
+              "deadlineEnd": 1793026446868.1638,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true
+        },
+        {
+          "startedAt": 1793026446887.17,
+          "finishedAt": 1793026446950.2747,
+          "readStartedAt": 1793026446887.2034,
+          "readFinishedAt": 1793026446949.097,
+          "elapsedMs": 63.104323999999906,
+          "hostLoop": {
+            "maxMs": 1.9113959999958752,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 675,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "review",
+              "startedAt": 1793026446887.6665,
+              "finishedAt": 1793026446927.909,
+              "elapsedMs": 40.24332099999998,
+              "writeStartedAt": 1793026446889.0596,
+              "writeFinishedAt": 1793026446915.0632,
+              "writeElapsedMs": 26.00402600000001,
+              "deadlineMs": null,
+              "deadlineStart": 1793026446889.0596,
+              "deadlineEnd": 1793026446915.0632,
+              "commits": 1,
+              "failure": null,
+              "deadlineOverrun": null
+            },
+            {
+              "operation": "capture",
+              "startedAt": 1793026446929.1177,
+              "finishedAt": 1793026446988.7168,
+              "elapsedMs": 59.600167,
+              "writeStartedAt": 1793026446930.6157,
+              "writeFinishedAt": 1793026446974.228,
+              "writeElapsedMs": 43.61328,
+              "deadlineMs": null,
+              "deadlineStart": 1793026446930.6157,
+              "deadlineEnd": 1793026446974.228,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true
+        },
+        {
+          "startedAt": 1793026446993.6108,
+          "finishedAt": 1793026447052.461,
+          "readStartedAt": 1793026446993.6445,
+          "readFinishedAt": 1793026447051.102,
+          "elapsedMs": 58.85014699999738,
+          "hostLoop": {
+            "maxMs": 1.593989999993937,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 675,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "review",
+              "startedAt": 1793026446994.1326,
+              "finishedAt": 1793026447033.1702,
+              "elapsedMs": 39.03875400000001,
+              "writeStartedAt": 1793026446995.7031,
+              "writeFinishedAt": 1793026447021.631,
+              "writeElapsedMs": 25.930465999999967,
+              "deadlineMs": null,
+              "deadlineStart": 1793026446995.7031,
+              "deadlineEnd": 1793026447021.631,
+              "commits": 1,
+              "failure": null,
+              "deadlineOverrun": null
+            },
+            {
+              "operation": "capture",
+              "startedAt": 1793026447034.3777,
+              "finishedAt": 1793026447094.1245,
+              "elapsedMs": 59.74793799999998,
+              "writeStartedAt": 1793026447035.751,
+              "writeFinishedAt": 1793026447078.3003,
+              "writeElapsedMs": 42.55036200000001,
+              "deadlineMs": null,
+              "deadlineStart": 1793026447035.751,
+              "deadlineEnd": 1793026447078.3003,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true
+        }
+      ],
+      "main": [
+        {
+          "startedAt": 1793026447098.912,
+          "finishedAt": 1793026447163.3064,
+          "readStartedAt": 1793026447098.9392,
+          "readFinishedAt": 1793026447161.9734,
+          "elapsedMs": 64.39468299999862,
+          "hostLoop": {
+            "maxMs": 1.476306000004115,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 675,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "review",
+              "startedAt": 1793026447099.3774,
+              "finishedAt": 1793026447139.9343,
+              "elapsedMs": 40.55670700000002,
+              "writeStartedAt": 1793026447100.9248,
+              "writeFinishedAt": 1793026447128.969,
+              "writeElapsedMs": 28.045608000000016,
+              "deadlineMs": null,
+              "deadlineStart": 1793026447100.9248,
+              "deadlineEnd": 1793026447128.969,
+              "commits": 1,
+              "failure": null,
+              "deadlineOverrun": null
+            },
+            {
+              "operation": "capture",
+              "startedAt": 1793026447141.262,
+              "finishedAt": 1793026447204.54,
+              "elapsedMs": 63.277467,
+              "writeStartedAt": 1793026447142.852,
+              "writeFinishedAt": 1793026447191.1216,
+              "writeElapsedMs": 48.271169999999984,
+              "deadlineMs": null,
+              "deadlineStart": 1793026447142.852,
+              "deadlineEnd": 1793026447191.1216,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true
+        }
+      ],
+      "cold": [
+        {
+          "startedAt": 1793026447306.6707,
+          "finishedAt": 1793026447370.839,
+          "readStartedAt": 1793026447306.976,
+          "readFinishedAt": 1793026447369.1985,
+          "elapsedMs": 64.16827199999999,
+          "hostLoop": {
+            "maxMs": 2.6671090000000106,
+            "blocksOver100": 0
+          },
+          "bytes": 6128,
+          "cloneRepresentationBytes": 5055,
+          "actualStructuredCloneWireBytes": null,
+          "refs": 13,
+          "status": "page",
+          "coverage": {
+            "complete": true,
+            "reason": null
+          },
+          "failure": null,
+          "reasons": {},
+          "counters": {
+            "workUnits": 675,
+            "extractions": 13,
+            "sourceBytes": 337,
+            "decodeAttemptBytes": 337,
+            "decodedUnits": 209,
+            "normalizationUnits": 209,
+            "segmentationUnits": 209,
+            "temporaryPayloadPeak": 99,
+            "failures": {}
+          },
+          "writes": [
+            {
+              "operation": "capture",
+              "startedAt": 1793026447309.4656,
+              "finishedAt": 1793026447362.1975,
+              "elapsedMs": 52.73707400000001,
+              "writeStartedAt": 1793026447313.2854,
+              "writeFinishedAt": 1793026447361.2283,
+              "writeElapsedMs": 47.945071,
+              "deadlineMs": null,
+              "deadlineStart": 1793026447313.2854,
+              "deadlineEnd": 1793026447361.2283,
+              "commits": 3,
+              "failure": null,
+              "deadlineOverrun": null
+            },
+            {
+              "operation": "review",
+              "startedAt": 1793026447363.4282,
+              "finishedAt": 1793026447393.0564,
+              "elapsedMs": 29.62881999999999,
+              "writeStartedAt": 1793026447364.803,
+              "writeFinishedAt": 1793026447380.495,
+              "writeElapsedMs": 15.692497000000003,
+              "deadlineMs": null,
+              "deadlineStart": 1793026447364.803,
+              "deadlineEnd": 1793026447380.495,
+              "commits": 1,
+              "failure": null,
+              "deadlineOverrun": null
+            }
+          ],
+          "overlap": true,
+          "successfulPage": true,
+          "bounds": true,
+          "writerExit": {
+            "code": 0,
+            "signal": null
+          },
+          "processExit": {
+            "code": 0,
+            "signal": null
+          },
+          "outerProcessLaunchAndSampleMs": 198.25216299999738,
+          "launcherLoop": {
+            "maxMs": 2.1707790000000386,
+            "blocksOver100": 0
+          }
+        }
+      ],
+      "retained": {
+        "informational": true,
+        "complete": true,
+        "exactEof": true,
+        "expectedRefs": 13,
+        "emittedRefs": 13,
+        "lifecycleLatency": {
+          "p50Ms": 54.535078000000794,
+          "p95Ms": 54.535078000000794,
+          "maxMs": 54.535078000000794,
+          "totalMs": 54.731981999997515
+        },
+        "records": [
+          {
+            "elapsedMs": 54.535078000000794,
+            "bytes": 6128,
+            "refs": 13,
+            "status": "page",
+            "coverage": {
+              "complete": true,
+              "reason": null
+            }
+          }
+        ],
+        "hostLoop": {
+          "maxMs": 1.492406999997911,
+          "blocksOver100": 0
+        },
+        "bounds": true,
+        "decision": "pass"
+      },
+      "decisions": [
+        {
+          "series": "main",
+          "summary": {
+            "attempts": 1,
+            "successfulPages": 1,
+            "failures": {},
+            "statuses": {
+              "page": 1
+            },
+            "reasons": {},
+            "allAttempts": {
+              "p50Ms": 64.39468299999862,
+              "p95Ms": 64.39468299999862,
+              "maxMs": 64.39468299999862
+            },
+            "successfulPopulation": {
+              "p50Ms": 64.39468299999862,
+              "p95Ms": 64.39468299999862,
+              "maxMs": 64.39468299999862
+            },
+            "envelopeBytes": {
+              "p50Ms": 6128,
+              "p95Ms": 6128,
+              "maxMs": 6128
+            },
+            "cloneRepresentationBytes": {
+              "p50Ms": 5055,
+              "p95Ms": 5055,
+              "maxMs": 5055
+            },
+            "hostLoopMaximumMs": 1.476306000004115,
+            "blocksOver100": 0,
+            "missedOverlaps": 0,
+            "writers": {
+              "capture": {
+                "attempts": 1,
+                "commits": 3,
+                "callLatency": {
+                  "p50Ms": 48.271169999999984,
+                  "p95Ms": 48.271169999999984,
+                  "maxMs": 48.271169999999984
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 63.277467,
+                  "p95Ms": 63.277467,
+                  "maxMs": 63.277467
+                },
+                "failures": [],
+                "missingDeadlines": 1,
+                "deadlineOverruns": 0
+              },
+              "review": {
+                "attempts": 1,
+                "commits": 1,
+                "callLatency": {
+                  "p50Ms": 28.045608000000016,
+                  "p95Ms": 28.045608000000016,
+                  "maxMs": 28.045608000000016
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 40.55670700000002,
+                  "p95Ms": 40.55670700000002,
+                  "maxMs": 40.55670700000002
+                },
+                "failures": [],
+                "missingDeadlines": 1,
+                "deadlineOverruns": 0
+              }
+            }
+          },
+          "checks": {
+            "loop": true,
+            "bytes": true,
+            "numericCounters": true,
+            "walBusy": true,
+            "expectedFailures": true,
+            "writerDeadlines": true
+          },
+          "decision": "inconclusive"
+        },
+        {
+          "series": "cold",
+          "summary": {
+            "attempts": 1,
+            "successfulPages": 1,
+            "failures": {},
+            "statuses": {
+              "page": 1
+            },
+            "reasons": {},
+            "allAttempts": {
+              "p50Ms": 64.16827199999999,
+              "p95Ms": 64.16827199999999,
+              "maxMs": 64.16827199999999
+            },
+            "successfulPopulation": {
+              "p50Ms": 64.16827199999999,
+              "p95Ms": 64.16827199999999,
+              "maxMs": 64.16827199999999
+            },
+            "envelopeBytes": {
+              "p50Ms": 6128,
+              "p95Ms": 6128,
+              "maxMs": 6128
+            },
+            "cloneRepresentationBytes": {
+              "p50Ms": 5055,
+              "p95Ms": 5055,
+              "maxMs": 5055
+            },
+            "hostLoopMaximumMs": 2.6671090000000106,
+            "blocksOver100": 0,
+            "missedOverlaps": 0,
+            "writers": {
+              "capture": {
+                "attempts": 1,
+                "commits": 3,
+                "callLatency": {
+                  "p50Ms": 47.945071,
+                  "p95Ms": 47.945071,
+                  "maxMs": 47.945071
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 52.73707400000001,
+                  "p95Ms": 52.73707400000001,
+                  "maxMs": 52.73707400000001
+                },
+                "failures": [],
+                "missingDeadlines": 1,
+                "deadlineOverruns": 0
+              },
+              "review": {
+                "attempts": 1,
+                "commits": 1,
+                "callLatency": {
+                  "p50Ms": 15.692497000000003,
+                  "p95Ms": 15.692497000000003,
+                  "maxMs": 15.692497000000003
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 29.62881999999999,
+                  "p95Ms": 29.62881999999999,
+                  "maxMs": 29.62881999999999
+                },
+                "failures": [],
+                "missingDeadlines": 1,
+                "deadlineOverruns": 0
+              }
+            }
+          },
+          "checks": {
+            "loop": true,
+            "bytes": true,
+            "numericCounters": true,
+            "walBusy": true,
+            "expectedFailures": true,
+            "writerDeadlines": true
+          },
+          "decision": "inconclusive"
+        },
+        {
+          "series": "warmup",
+          "summary": {
+            "attempts": 3,
+            "successfulPages": 3,
+            "failures": {},
+            "statuses": {
+              "page": 3
+            },
+            "reasons": {},
+            "allAttempts": {
+              "p50Ms": 58.85014699999738,
+              "p95Ms": 63.104323999999906,
+              "maxMs": 63.104323999999906
+            },
+            "successfulPopulation": {
+              "p50Ms": 58.85014699999738,
+              "p95Ms": 63.104323999999906,
+              "maxMs": 63.104323999999906
+            },
+            "envelopeBytes": {
+              "p50Ms": 6128,
+              "p95Ms": 6128,
+              "maxMs": 6128
+            },
+            "cloneRepresentationBytes": {
+              "p50Ms": 5055,
+              "p95Ms": 5055,
+              "maxMs": 5055
+            },
+            "hostLoopMaximumMs": 1.9113959999958752,
+            "blocksOver100": 0,
+            "missedOverlaps": 0,
+            "writers": {
+              "capture": {
+                "attempts": 3,
+                "commits": 9,
+                "callLatency": {
+                  "p50Ms": 43.61328,
+                  "p95Ms": 51.652338,
+                  "maxMs": 51.652338
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 59.74793799999998,
+                  "p95Ms": 68.793307,
+                  "maxMs": 68.793307
+                },
+                "failures": [],
+                "missingDeadlines": 3,
+                "deadlineOverruns": 0
+              },
+              "review": {
+                "attempts": 2,
+                "commits": 2,
+                "callLatency": {
+                  "p50Ms": 25.930465999999967,
+                  "p95Ms": 26.00402600000001,
+                  "maxMs": 26.00402600000001
+                },
+                "lifecycleLatency": {
+                  "p50Ms": 39.03875400000001,
+                  "p95Ms": 40.24332099999998,
+                  "maxMs": 40.24332099999998
+                },
+                "failures": [],
+                "missingDeadlines": 2,
+                "deadlineOverruns": 0
+              }
+            }
+          },
+          "decision": "pass"
+        }
+      ],
+      "writerExit": {
+        "code": 0,
+        "signal": null
+      }
+    }
+  ],
+  "status": "smoke-observation",
+  "idleBaseline": {
+    "maxMs": 1.321895999999981,
+    "blocksOver100": 0
+  },
+  "implementationNote": "Only smoke executed. This observational run predates the final UTF-8 transferable-envelope transport accounting and summary refinements; the final public observation path is covered by deterministic functional tests. Primary must execute the full final harness with production deadline provenance."
+}

@@ -39,6 +39,10 @@ export function openMemoryReader(input) {
     worker = instance;
     instance.on('message', result => {
       if (worker !== instance || !pending) return;
+      if (pending.previews) {
+        try { result = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(result)); }
+        catch { void failed(instance, 'reader_failed'); return; }
+      }
       if ((result?.ok && pending.expiresAt !== undefined && performance.now() >= pending.expiresAt) || result?.error?.code === 'read_timeout') void failed(instance, 'read_timeout');
       else finish(pending, result);
     });
@@ -58,6 +62,7 @@ export function openMemoryReader(input) {
       const slot = { resolve }; pending = slot;
       const duration = members ? request.deadlineMs : 5000;
       if (members) slot.expiresAt = started + duration;
+      if (members && request.previews) slot.previews = true;
       slot.deadline = setTimeout(() => {
         void (async () => { await stop(); finish(slot, readerFailure('read_timeout')); })();
       }, members ? Math.max(0, duration - (performance.now() - started)) : 5000);

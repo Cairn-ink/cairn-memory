@@ -284,5 +284,11 @@
   "core/context-read-local-status.mjs",
   "docs/local-embedder-bge-m3.md",
   "core/topic-reader-sqlite.mjs",
-  "docs/plans/topic-reader-wal-fix.md"
+  "docs/plans/topic-reader-wal-fix.md",
+  "core/topic-member-previews-reader.mjs",
+  "core/topic-member-previews-storage.mjs",
+  "core/topic-member-previews-text.mjs",
+  "docs/plans/topic-member-previews.md",
+  "docs/plans/topic-member-previews-impl.md",
+  "docs/plans/topic-member-previews-smoke.json"
 ]
