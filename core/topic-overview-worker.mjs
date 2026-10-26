@@ -1,3 +1,4 @@
+import { createTopicSqlitePolicy, unsupportedTopicStorage } from './topic-reader-sqlite.mjs';
 import { parentPort, workerData } from 'node:worker_threads';
 import { createTopicTokens } from './topic-snapshot.mjs';
 import { createTopicSession } from './topic-members-session.mjs';
@@ -10,11 +11,12 @@ import { createTopicOverviewStorage } from './topic-overview-storage.mjs';
 import { safeReaderFailure, safeLegacyReaderFailure } from './topic-overview-input.mjs';
 import { fail } from './validation.mjs';
 
+const topicPolicy = createTopicSqlitePolicy({ diagnostics: workerData.diagnostics });
 let connection, storage, traversal;
 let tokens, topicSession, memberReader;
 function prepareTopicReaders() {
   if (memberReader) return;
-  const nextTokens = createTopicTokens(), nextSession = createTopicSession(workerData.path);
+  const nextTokens = createTopicTokens(), nextSession = createTopicSession(workerData.path, topicPolicy);
   const nextReader = createTopicMemberReader({ ...nextSession, tokens: nextTokens });
   tokens = nextTokens; topicSession = nextSession; memberReader = nextReader;
 }
@@ -38,9 +40,9 @@ function transaction(work) {
 }
 async function readLegacy(request) {
   if (!connection) {
-    const opened = openReadDatabase(workerData.path);
+    const opened = openReadDatabase(workerData.path, { topicPolicy });
     try { storage = createTopicOverviewStorage(opened.db); connection = opened; }
-    catch { opened.db.close(); fail('unsupported_database'); }
+    catch (error) { opened.db.close(); throw unsupportedTopicStorage(error); }
   }
   const { cursor, ...bound } = request, binding = JSON.stringify(bound);
   if (cursor) {
@@ -176,15 +178,17 @@ async function readOptin(request) {
   state.lastInput = cursor; state.lastOutput = success(value); state.nextCursor = value.nextCursor;
   return state.lastOutput;
 }
-parentPort.on('message', async request => {
+parentPort.on('message', async message => {
+  const { deadlineAt, ...request } = message;
+  topicPolicy.start(deadlineAt);
   try {
     if (request.method === 'members' || request.snapshotVersion) prepareTopicReaders();
-    if (request.method === 'members') parentPort.postMessage(await memberReader.read(request.request, request.deadlineAt));
+    if (request.method === 'members') parentPort.postMessage(await memberReader.read(request.request, deadlineAt));
     else parentPort.postMessage(await (request.snapshotVersion ? readOptin(request) : readLegacy(request)));
   }
   catch (error) {
     if (request.method !== 'members') traversal = undefined;
     const failure = request.method === 'members' || request.snapshotVersion ? safeReaderFailure : safeLegacyReaderFailure;
-    parentPort.postMessage(failure(error));
+    parentPort.postMessage(failure(error, workerData.diagnostics));
   }
 });
