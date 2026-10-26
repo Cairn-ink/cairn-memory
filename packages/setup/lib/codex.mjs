@@ -371,19 +371,49 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
 // Local-mode inspection shares the hosted file checks, isolated HOME and CLI
 // runner. Native parsing is authoritative; no TOML text matching participates.
 export const codexHome = (env = process.env) => resolve(env.CODEX_HOME || join(env.HOME || homedir(), '.codex'));
-export async function inspectCodexServers({ home = codexHome(), env = process.env } = {}) {
+export const codexEnvironmentCause = error => ['codex_tmpdir', 'codex_managed'].includes(error?.key) ? error.key : undefined;
+
+// Internal seams keep tests away from the system fallback and managed files.
+// A fresh attempt is selected for every probe, including post-write verification.
+export async function withCodexInspectionEnvironment({ env = process.env, fallbackParent = '/tmp',
+  managedPaths = ['/etc/codex/config.toml', '/etc/codex/managed_config.toml'],
+  platform = process.platform, plannedConfigPath } = {}, work = async () => {}) {
+  const parents = [env.TMPDIR || tmpdir()];
+  if (platform !== 'win32') parents.push(fallbackParent);
+  const seen = new Set();
+  for (const parent of parents) {
+    let attempt;
+    try {
+      let canonicalParent;
+      try { canonicalParent = await realpath(parent); } catch { continue; }
+      if (seen.has(canonicalParent)) continue;
+      seen.add(canonicalParent);
+      let neutral;
+      try {
+        attempt = await mkdtemp(join(canonicalParent, 'cairn-codex-inspect-'));
+        neutral = await realpath(attempt);
+      } catch { continue; }
+      let usable = true;
+      for (let directory = neutral; ; directory = dirname(directory)) {
+        const path = join(directory, '.codex/config.toml');
+        if (path === plannedConfigPath) { usable = false; break; }
+        try { await lstat(path); usable = false; break; }
+        catch (error) { if (error.code !== 'ENOENT') throw error; }
+        if (directory === dirname(directory)) break;
+      }
+      if (!usable) continue;
+      for (const path of managedPaths) {
+        try { await lstat(path); throw Object.assign(new Error('codex_managed'), { key: 'codex_managed' }); }
+        catch (error) { if (error.code !== 'ENOENT') throw error; }
+      }
+      return await work(neutral);
+    } finally { if (attempt) await rm(attempt, { recursive: true, force: true }); }
+  }
+  throw Object.assign(new Error('codex_tmpdir'), { key: 'codex_tmpdir' });
+}
+export async function inspectCodexServers({ home = codexHome(), env = process.env, ...inspection } = {}) {
   const before = await snapshot(join(home, 'config.toml'));
-  const neutral = await realpath(await mkdtemp(join(env.TMPDIR || tmpdir(), 'cairn-codex-inspect-')));
-  try {
-    for (let directory = neutral; ; directory = dirname(directory)) {
-      try { await lstat(join(directory, '.codex/config.toml')); throw new Error('codex_tmpdir'); }
-      catch (error) { if (error.code !== 'ENOENT') throw error; }
-      if (directory === dirname(directory)) break;
-    }
-    for (const path of ['/etc/codex/config.toml', '/etc/codex/managed_config.toml']) {
-      try { await lstat(path); throw new Error('codex_managed'); }
-      catch (error) { if (error.code !== 'ENOENT') throw error; }
-    }
+  return withCodexInspectionEnvironment({ ...inspection, env }, async neutral => {
     const inspectionHome = join(neutral, 'user-file'); await mkdir(inspectionHome, { mode: 0o700 });
     if (before.stat) await privateWrite(join(inspectionHome, 'config.toml'), before.text);
     const path = env.PATH?.split(delimiter).map(directory => resolve(directory || '.')).join(delimiter);
@@ -403,5 +433,5 @@ export async function inspectCodexServers({ home = codexHome(), env = process.en
       command: entry.transport.type === 'stdio' ? entry.transport.command : undefined,
       args: entry.transport.type === 'stdio' ? entry.transport.args : undefined,
     }));
-  } finally { await rm(neutral, { recursive: true, force: true }); }
+  });
 }

@@ -44,7 +44,8 @@ jobs:
         env:
           npm_config_cache: ${{ runner.temp }}/setup-engine-cache
         run: |
-          npm install --prefix "$RUNNER_TEMP/setup-installed" --offline --ignore-scripts --no-audit --no-fund "$RUNNER_TEMP/cairn-ink-memory-0.6.0.tgz"
+          version="$(node -p "require('./packages/setup/package.json').version")"
+          npm install --prefix "$RUNNER_TEMP/setup-installed" --offline --ignore-scripts --no-audit --no-fund "$RUNNER_TEMP/cairn-ink-memory-$version.tgz"
       - name: Require primed engine cache (no network)
         run: node packages/setup/test/engine-cache.mjs --assert "$RUNNER_TEMP/setup-engine-cache"
       - name: Test packed installer (offline phase)
