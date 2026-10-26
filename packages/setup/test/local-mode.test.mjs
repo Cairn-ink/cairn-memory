@@ -1,7 +1,8 @@
 import runTest from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdir, readdir, lstat, chmod, chown, symlink, rm, cp, copyFile, realpath } from 'node:fs/promises';
+import fsPromises, { readFile, writeFile, mkdir, readdir, lstat, chmod, chown, symlink, rm, cp, copyFile, realpath } from 'node:fs/promises';
 import { constants } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { join, dirname, delimiter } from 'node:path';
@@ -21,6 +22,7 @@ const { engineIdFor } = await fromPackage('local-engine');
 const { claudeSnippet, claudeAddArguments } = await fromPackage('local-claude');
 const { codexSnippet, codexAddArguments } = await fromPackage('local-codex');
 const { shellArgument, tomlString, argvDisplay, columns } = await fromPackage('output');
+const { translator } = await fromPackage('messages');
 const { inspectCodexServers, withCodexInspectionEnvironment } = await fromPackage('codex');
 const { modeUnion } = await fromPackage('local-mode');
 const version = JSON.parse(await readFile(join(packageRoot, 'package.json'))).version;
@@ -56,7 +58,7 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
   }
   const moduleURL = pathToFileURL(join(testedPackageRoot, 'lib/setup.mjs')).href;
   const harness = join(ws.path, 'harness.mjs');
-  await writeFile(harness, `import{main}from${JSON.stringify(moduleURL)};import{writeSync,readFileSync}from'node:fs';
+  await writeFile(harness, `import{main}from${JSON.stringify(moduleURL)};import{writeSync,readFileSync,chmodSync}from'node:fs';
     import{spawn}from'node:child_process';
     import{registerClaude}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/local-claude.mjs')).href)};
     import{registerCodex}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/local-codex.mjs')).href)};
@@ -68,12 +70,15 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
     const config=JSON.parse(process.env.LOCAL_TEST_OPTIONS),answers=config.answers??[];
     const output=line=>writeSync(1,String(line)+'\\n');
     output.literal=line=>{for(const part of String(line).split('\\n'))writeSync(1,JSON.stringify({literal:part})+'\\n');};
+    const answer=async q=>{output(JSON.stringify({prompt:q}));
+      if(config.unsafeCodexOnPrompt)chmodSync(process.env.CODEX_HOME+'/config.toml',0o622);
+      return answers.shift()??'';};
     const run=args=>new Promise(resolve=>{const child=spawn('claude',args,{stdio:['ignore','pipe','pipe']});let stdout='',stderr='',error;
         child.stdout.on('data',v=>stdout+=v);child.stderr.on('data',v=>stderr+=v);child.on('error',v=>error=v);child.on('close',status=>resolve({status,stdout,stderr,error}));});
     if(config.library){
-      const options=parseOptions(process.argv.slice(2)),selection=parseClient(options.argv,SetupError),t=translator('en');
+      const options=parseOptions(process.argv.slice(2)),selection=parseClient(options.argv,SetupError),t=translator(options.lang??'en');
       const context={env:process.env,inspection:config.inspection,write:output,t,interactive:config.interactive??false,
-        prompt:async q=>{output(JSON.stringify({prompt:q}));return answers.shift()??'';},runClaude:run,
+        prompt:answer,runClaude:run,
         installerVersion:${JSON.stringify(version)},nodeVersion:process.versions.node,supportedNode:()=>true,platform:process.platform};
       try{const result=await routeLocalMode(options,selection,context);
         if(result.detection){
@@ -91,7 +96,7 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
       catch(error){output(error.key);process.exitCode=error.code??1;}
     }else process.exitCode=await main(process.argv.slice(2),{interactive:config.interactive??false,disableLocalMode:config.disableLocalMode??false,
       localInstallerVersion:config.installerVersion,platform:config.platform??process.platform,nodeVersion:config.nodeVersion??process.versions.node,
-      write:output,prompt:async q=>{writeSync(1,JSON.stringify({prompt:q})+'\\n');return answers.shift()??'';},
+      write:output,prompt:answer,
       authOptions:{request:async()=>{throw new Error('Local mode must not authorize');}}});`);
   const env = { HOME: home, CODEX_HOME: codexHome, CAIRN_MEMORY_HOME: root, LANG: 'en_US.UTF-8',
     PATH: bin,
@@ -230,11 +235,20 @@ test('L20 stale/live lock paths are retained and actionable', async t => {
 });
 test('L21 local dry runs never lock, repair or create a database, including pending journals', async t => {
   const f = await localFixture(t), before = await f.inventory();
-  assert.equal((await f.run(['setup', '--local', '--dry-run'])).code, 0); assert.deepEqual(await f.inventory(), before);
+  const neutral = join(f.ws, 'neutral'); await mkdir(neutral, { mode: 0o700 });
+  const options = { env: { TMPDIR: neutral } };
+  const assertDetectionOnly = async offsets => {
+    const calls = Object.fromEntries(await Promise.all(['claude', 'codex'].map(async client =>
+      [client, (await f.calls(client)).slice(offsets[client]).map(call => call.args)])));
+    assert.deepEqual(calls, { claude: [['plugin', 'list', '--json']], codex: [['mcp', 'list', '--json']] });
+  };
+  assert.equal((await f.run(['setup', '--local', '--dry-run'], options)).code, 0); assert.deepEqual(await f.inventory(), before);
+  await assertDetectionOnly({ claude: 0, codex: 0 });
   await seed(f, { state: 'pending' }); const pending = await f.inventory();
-  const result = await f.run(['setup', '--dry-run']); assert.equal(result.code, 0, result.display);
+  const offsets = { claude: (await f.calls('claude')).length, codex: (await f.calls('codex')).length };
+  const result = await f.run(['setup', '--dry-run'], options); assert.equal(result.code, 0, result.display);
   assert.match(result.display, /continue setup/); assert.deepEqual(await f.inventory(), pending);
-  assert.ok(!(await f.calls('claude')).some(call => call.args[0] === 'mcp' && call.args[1] === 'get'));
+  await assertDetectionOnly(offsets);
 });
 test('L14 status does not start engines or create the nonexistent database', async t => {
   const f = await localFixture(t); await seed(f); const before = await f.inventory();
@@ -949,12 +963,15 @@ for (const cause of ['codex_tmpdir', 'codex_managed']) {
       ['uninstall', '--local', '--client', 'codex', '--yes']] : [['setup'], ['setup', '--client', 'claude'],
       ['setup', '--cloud'], ['setup', '--local'], ['setup', '--local', '--dry-run']];
     const before = await f.inventory();
-    for (const argv of args) {
+    for (const lang of ['en', 'zh']) for (const argv of args) {
       const calls = (await f.calls('codex')).length, claudeCalls = (await f.calls('claude')).length;
-      const result = await f.run(argv, options);
+      const result = await f.run([...argv, '--lang', lang], options);
       assert.equal(result.code, 2, result.display);
-      assert.match(result.display, /Cannot inspect Codex/);
-      assert.ok(result.display.includes(cause === 'codex_tmpdir' ? 'TMPDIR' : '/etc/codex'), result.display);
+      const t = translator(lang), lines = result.display.trimEnd().split('\n');
+      const pair = [t('mode_unknown', { client: 'Codex', probe: cause === 'codex_tmpdir' ? 'TMPDIR' : '/etc/codex' }), t(cause)];
+      for (const line of pair) assert.equal(lines.filter(value => value === line).length, 1, result.display);
+      const start = lines.indexOf(pair[0]);
+      assert.deepEqual(lines.slice(start, start + 2), pair, result.display);
       assert.deepEqual(await f.inventory(), before);
       assert.equal((await f.calls('codex')).slice(calls).some(call => ['add', 'remove'].includes(call.args[1]) && !call.args.includes('--help')), false);
       assert.equal((await f.calls('claude')).slice(claudeCalls).some(call => call.args[0] === 'mcp'), false);
@@ -985,7 +1002,8 @@ for (const cause of ['codex_tmpdir', 'codex_managed']) {
     await withLocalLock(f.root, () => writeDescriptor(f.root, d));
     const codexCalls = (await f.calls('codex')).length;
     const result = await f.run(['uninstall', '--local', '--yes'], options);
-    assert.equal(result.code, 2, result.display); assert.match(result.display, /retained|kept/u);
+    assert.equal(result.code, 2, result.display);
+    assert.ok(result.display.includes(translator('en')('local_uninstall_retained')), result.display);
     assert.equal((await f.descriptor()).state, 'uninstalling');
     assert.equal((await f.descriptor()).clients.claude, null);
     assert.equal(await readFile(retained, 'utf8'), 'retained engine bytes');
@@ -1023,8 +1041,9 @@ test('L27/L28 status emission bookkeeping: hosted/local causes once for every cl
     if (cause === 'both') await f.config('');
     if (cause === 'codex_managed') options.env.TMPDIR = options.fallback;
     const before = await f.inventory();
-    for (const client of [null, 'claude', 'codex']) {
-      const result = await f.run(['status', ...(client ? ['--client', client] : [])], { ...options, hostedStatus: true });
+    for (const client of [null, 'claude', 'codex']) for (const argv of client ?
+      [['status', '--client', client], ['--client', client, 'status']] : [['status']]) {
+      const result = await f.run(argv, { ...options, hostedStatus: true });
       const tmpdirLines = result.display.split('\n').filter(line => line.includes('TMPDIR has ancestor'));
       const managedLines = result.display.split('\n').filter(line => line.includes('system-managed Codex'));
       assert.equal(tmpdirLines.length, cause === 'codex_tmpdir' || (cause === 'both' && client !== 'claude') ? 1 : 0, result.display);
@@ -1033,6 +1052,38 @@ test('L27/L28 status emission bookkeeping: hosted/local causes once for every cl
       await noAttempts(options);
     }
   }
+});
+for (const action of ['setup', 'uninstall']) test(`Codex pre-check maps unsafe config to local recovery: ${action}`, async t => {
+  const f = await localFixture(t), options = await inspectionFixture(f, { outside: true });
+  if (action === 'uninstall') await seed(f, { selected: ['codex'] });
+  else await f.config('model = "fixture"\n');
+  const configPath = join(f.codexHome, 'config.toml');
+  if (action === 'uninstall') await chmod(configPath, 0o622);
+  const before = await f.inventory(), codexCalls = (await f.calls('codex')).length;
+  // Setup must pass detection first. The consent callback then makes the real
+  // file unsafe before capability probes and the new pre-check inspect it.
+  if (action === 'setup') before['.codex/config.toml'].mode = 0o622;
+  const argv = [action, '--local', '--client', 'codex', ...(action === 'uninstall' ? ['--yes'] : [])];
+  const result = await f.run(argv, { ...options, library: false, interactive: action === 'setup',
+    answers: ['yes'], unsafeCodexOnPrompt: action === 'setup' });
+  const translate = translator('en');
+  assert.equal(result.code, 2, result.display);
+  assert.ok(result.display.includes(translate('codex_mcp_unverified')), result.display);
+  assert.ok(!result.display.includes(translate('setup_failed')), result.display);
+  if (action === 'setup') {
+    assert.ok(result.display.includes(translate('recovery_local_setup')), result.display);
+    assert.ok(result.literals.includes('npx @cairn-ink/memory setup --local'), result.display);
+    assert.deepEqual((await f.calls('codex')).slice(codexCalls).map(call => call.args), [
+      ['mcp', 'list', '--json'], ['mcp', 'add', '--help'], ['mcp', 'remove', '--help'], ['mcp', 'list', '--help'],
+    ]);
+  } else {
+    assert.ok(result.display.includes(translate('local_data_kept')), result.display);
+    assert.ok(result.literals.includes('npx @cairn-ink/memory uninstall --local --yes --client codex'), result.display);
+    assert.ok(!result.literals.includes('npx @cairn-ink/memory setup --local'), result.display);
+    assert.deepEqual((await f.calls('codex')).slice(codexCalls), []);
+  }
+  assert.deepEqual(await f.inventory(), before);
+  await noAttempts(options);
 });
 test('L29 other unknown precedence and changed destination survive environment refusal', async t => {
   const f = await localFixture(t); await seed(f);
@@ -1111,7 +1162,16 @@ test('L32 candidate selection, canonical paths, private copy and cleanup', async
   const alias = join(f.ws, 'alias'); await symlink(primary, alias);
   // Canonical aliases are tried once, including when the candidate is blocked.
   await mkdir(join(primary, '.codex')); await writeFile(join(primary, '.codex/config.toml'), '');
-  await assert.rejects(withCodexInspectionEnvironment({ ...base, fallbackParent: alias }), { key: 'codex_tmpdir' });
+  const originalMkdtemp = fsPromises.mkdtemp, attempts = [];
+  const create = t.mock.method(fsPromises, 'mkdtemp', async (...args) => {
+    const directory = await originalMkdtemp(...args); attempts.push(directory); return directory;
+  });
+  syncBuiltinESMExports();
+  try {
+    await assert.rejects(withCodexInspectionEnvironment({ ...base, fallbackParent: alias }), { key: 'codex_tmpdir' });
+  } finally { create.mock.restore(); syncBuiltinESMExports(); }
+  assert.equal(attempts.length, 1, 'Canonical aliases must create exactly one attempt directory');
+  assert.equal(dirname(attempts[0]), await realpath(primary));
   await assert.rejects(withCodexInspectionEnvironment({ ...base, platform: 'win32' }), { key: 'codex_tmpdir' });
   const selected = await withCodexInspectionEnvironment(base, async neutral => dirname(neutral));
   assert.equal(selected, await realpath(fallback));

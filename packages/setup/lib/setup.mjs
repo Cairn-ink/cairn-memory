@@ -215,17 +215,17 @@ export async function main(argv, {
     const endpointOverride = options.endpoint;
     verbose = options.verbose;
     const translate = t;
+    if (forceReauthorize && !options.argv.includes('--reauthorize')) options.argv.push('--reauthorize');
+    const selection = parseClient(options.argv, SetupError);
     t = (key, params) => {
       const text = technical.has(key) && !verbose && !options.argv.includes('--dry-run') ? undefined : translate(key, params);
-      if (text && options.argv[0] === 'status' && ['codex_tmpdir', 'codex_managed'].includes(key)) {
+      if (text && selection.argv[0] === 'status' && ['codex_tmpdir', 'codex_managed'].includes(key)) {
         progress.codexEnvironmentCauses ??= new Set();
         progress.codexEnvironmentCauses.add(key);
       }
       return text;
     };
     t.locale = translate.locale;
-    if (forceReauthorize && !options.argv.includes('--reauthorize')) options.argv.push('--reauthorize');
-    const selection = parseClient(options.argv, SetupError);
     const beforeRouting = () => {
       if (options.captureExec !== undefined && selection.client === 'claude') throw new SetupError('invalid_exec_setting', 2);
       if (options.dailyCap !== undefined && selection.client === 'claude') throw new SetupError('cap_option_scope', 2);

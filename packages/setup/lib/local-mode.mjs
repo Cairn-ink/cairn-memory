@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { availableClient, codexHome, inspectCodexServers, withCodexInspectionEnvironment, codexEnvironmentCause, snapshot } from './codex.mjs';
 import { installEngine, engineIdFor, engineBaseId } from './local-engine.mjs';
 import { localRoot, requestedRoot, canonicalPath, readDescriptor, writeDescriptor, withLocalLock,
-  engineIdPattern, executableFor, newDescriptor, beginOperation, recordClient, publishedReferences, deletionPath, inside, ownedDirectory, ownedLocalTree } from './local-descriptor.mjs';
+  engineIdPattern, executableFor, newDescriptor, beginOperation, recordClient, publishedReferences, deletionPath, inside, ownedDirectory, ownedLocalTree, localFilesystemError } from './local-descriptor.mjs';
 import { readClaudeServers, registerClaude, detachClaude } from './local-claude.mjs';
 import { registerCodex, detachCodex, checkCodexLock, codexCapabilities } from './local-codex.mjs';
 import { shellArgument } from './output.mjs';
@@ -212,7 +212,7 @@ async function codexPrecheck(detection, context, { add = false, dryRun = false }
     return true;
   } catch (error) {
     const cause = codexEnvironmentCause(error);
-    if (!cause) throw error;
+    if (!cause) throw localFilesystemError(error, 'codex_mcp_unverified');
     // Dry runs normally spawn detection only. Help probes are permitted solely
     // when this pre-check failed, to exempt the non-mutating manual path.
     if (dryRun && !await codexCapabilities(env)) {
@@ -400,10 +400,11 @@ async function uninstallLocal(options, selection, detection, context) {
   await ownedLocalTree(detection.root);
   write(t('local_uninstall_plan')); write(t('local_data_kept'));
   if (detection.descriptor?.operation?.kind !== 'uninstall' && !options.yes && (!interactive || !yes(await prompt(t('local_uninstall_confirm'))))) return 2;
+  progress.localAction = 'uninstall';
+  progress.localUninstallCommand = 'npx @cairn-ink/memory uninstall --local' + (options.yes ? ' --yes' : '') + (selection.client ? ' --client ' + selection.client : '') + (options.purgeConfig ? ' --purge-config' : '');
   if (selected.includes('codex') && detection.descriptor?.operation?.checkpoints.codex?.state !== 'detached' &&
       !await codexPrecheck(detection, context)) return 2;
-  progress.localOperation = true; progress.localAction = 'uninstall';
-  progress.localUninstallCommand = 'npx @cairn-ink/memory uninstall --local' + (options.yes ? ' --yes' : '') + (selection.client ? ' --client ' + selection.client : '') + (options.purgeConfig ? ' --purge-config' : '');
+  progress.localOperation = true;
   const root = await localRoot(env, { create: true });
   return withLocalLock(root, async () => {
     let descriptor = detection.descriptorError ? null : await readDescriptor(root);
