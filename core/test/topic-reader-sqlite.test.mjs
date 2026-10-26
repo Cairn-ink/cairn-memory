@@ -1,8 +1,10 @@
+import { createExclusiveSqliteFile } from '../sqlite-journal-probe.mjs';
+import { initLocalRawStore } from '../../integrations/client/raw/local-setup-init.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { openMemoryCore } from '../index.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { lstatSync, writeFileSync, existsSync } from 'node:fs';
+import { writeFileSync, existsSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { createTopicSqlitePolicy, topicJournalMode, SQLITE_STAGES, SQLITE_STATEMENTS,
   recordSqliteFailure, unsupportedTopicStorage, TOPIC_WAL_WAIT_MS } from '../topic-reader-sqlite.mjs';
@@ -34,24 +36,47 @@ test('diagnostics have a closed, content-free shape; default errors remain byte-
   for (const diagnostics of [true, false, undefined]) assert.doesNotThrow(() => readerOptions({ path, ownerId: 'owner', diagnostics }));
   for (const diagnostics of [1, 'true', null, {}]) assert.throws(() => readerOptions({ path, ownerId: 'owner', diagnostics }));
 });
-for (const mode of ['DELETE', 'WAL']) test(`header detection ${mode}, without a SQLite query or companions`, t => {
+for (const mode of ['DELETE', 'WAL']) test(`SQLite detects ${mode}, including absent companions`, t => {
   const workspace = createTestWorkspace(t), path = join(workspace.path, 'mode.sqlite');
   const core = openMemoryCore({ path }); core.close();
-  const db = new DatabaseSync(path);
-  try {
-    db.exec(`PRAGMA journal_mode=${mode}`);
-    assert.equal(topicJournalMode(path, lstatSync(path)), mode);
-  } finally { db.close(); }
-  assert.equal(topicJournalMode(path, lstatSync(path)), mode);
+  const writer = new DatabaseSync(path); writer.exec(`PRAGMA journal_mode=${mode}`); writer.close();
   assert.equal(existsSync(path + '-wal'), false); assert.equal(existsSync(path + '-shm'), false);
-  assert.throws(() => topicJournalMode(path, { dev: -1, ino: -1 }), /unsafe_database_file/);
+  const db = new DatabaseSync(path, { readOnly: true });
+  try {
+    const policy = createTopicSqlitePolicy(); policy.start(Infinity);
+    assert.equal(topicJournalMode(db, path, policy), mode);
+    assert.equal(db.prepare('PRAGMA busy_timeout').get().timeout, 0);
+  } finally { db.close(); }
 });
-test('unknown or truncated headers never enable waiting', t => {
-  const w = createTestWorkspace(t), path = join(w.path, 'header');
-  for (const bytes of [Buffer.alloc(0), Buffer.alloc(19), Buffer.from('SECRET malformed database'),
-    Buffer.from('SQLite format 3\0xx\x02\x01')]) {
-    writeFileSync(path, bytes); assert.equal(topicJournalMode(path, lstatSync(path)), 'DELETE');
+test('opening mode query: stat hints, one BUSY retry, DELETE zero wait and deadline', t => {
+  const workspace = createTestWorkspace(t), path = join(workspace.path, 'probe');
+  function attempt({ suffix, failures = 0, deadline = 100 } = {}) {
+    if (suffix) writeFileSync(path + suffix, 'hint');
+    const configured = []; let calls = 0;
+    const native = { exec: sql => configured.push(sql), prepare: () => ({ get() {
+      if (calls++ < failures) throw busy();
+      return { journal_mode: 'delete' };
+    } }) };
+    const policy = createTopicSqlitePolicy({ diagnostics: true, now: () => 0 }); policy.start(deadline);
+    let error, mode;
+    try { mode = topicJournalMode(native, path, policy); } catch (e) { error = e; }
+    if (suffix) unlinkSync(path + suffix);
+    return { configured, calls, error, mode };
   }
+  for (const suffix of ['-wal', '-shm']) {
+    const r = attempt({ suffix }); assert.equal(r.mode, 'DELETE');
+    assert.deepEqual(r.configured, ['PRAGMA busy_timeout=100', 'PRAGMA busy_timeout=0']);
+  }
+  const rollback = attempt({ suffix: '-journal', failures: 1 });
+  assert.equal(rollback.calls, 1); assert.equal(rollback.error.errcode, 261);
+  assert.deepEqual(rollback.configured, ['PRAGMA busy_timeout=0']);
+  const reset = attempt({ failures: 1, deadline: 37 }); assert.equal(reset.calls, 2); assert.equal(reset.mode, 'DELETE');
+  assert.deepEqual(reset.configured, ['PRAGMA busy_timeout=37', 'PRAGMA busy_timeout=0']);
+  const exhausted = attempt({ failures: 2, deadline: 0 });
+  assert.equal(exhausted.calls, 2); assert.equal(exhausted.error.errcode, 261);
+  assert.deepEqual(safeReaderFailure(exhausted.error, true).error.diagnostics,
+    { stage: 'execute', statement: 'journal_mode', sqlite: { code: 5, extendedCode: 261 } });
+  assert.deepEqual(exhausted.configured, ['PRAGMA busy_timeout=0']);
 });
 test('native waits share a single bounded request deadline, including cached statements and iterator steps', () => {
   let now = 10; const configured = [];
@@ -116,8 +141,8 @@ test('public Worker diagnostics cross boundary; default and false preserve exact
         if (!diagnostics) assert.equal(JSON.stringify(result), '{"ok":false,"error":{"code":"storage_busy"}}');
         else {
           assert.equal(result.error.diagnostics.sqlite.code, 5);
-          assert.equal(result.error.diagnostics.statement, members ? 'user_version' : 'application_id');
-          assert.equal(result.error.diagnostics.stage, 'execute');
+          assert.equal(result.error.diagnostics.statement, 'journal_mode');
+          assert.equal(result.error.diagnostics.stage, 'prepare');
           assert.deepEqual(Object.keys(result.error.diagnostics).sort(), ['sqlite', 'stage', 'statement']);
         }
       } finally { await reader.close(); }
@@ -141,18 +166,6 @@ test('simulated native busy consumes the deadline once and is never retried or c
     assert.equal(reads, i + 1); assert.equal(now, 37);
   }
   assert.equal(installed, 0, 'expired deadline cannot reinstall the request budget');
-});
-
-test('complete 100-byte header required; WAL prefixes of every truncated length retain zero wait', t => {
-  const w = createTestWorkspace(t), path = join(w.path, 'prefix');
-  const header = Buffer.alloc(100); header.write('SQLite format 3\0'); header[18] = header[19] = 2;
-  for (let length = 20; length < 100; length++) {
-    writeFileSync(path, header.subarray(0, length));
-    assert.equal(topicJournalMode(path, lstatSync(path)), 'DELETE', 'truncated length ' + length);
-  }
-  writeFileSync(path, header); assert.equal(topicJournalMode(path, lstatSync(path)), 'WAL');
-  header[18] = header[19] = 1;
-  writeFileSync(path, header); assert.equal(topicJournalMode(path, lstatSync(path)), 'DELETE');
 });
 
 test('native statement constructor and iterator cancellation semantics are preserved', () => {
@@ -185,4 +198,14 @@ test('rollback refreshes the WAL timeout after the shared budget has expired', (
   const db = policy.database(native, true); db.exec('BEGIN');
   now = 100; db.exec('ROLLBACK');
   assert.deepEqual(executed, ['PRAGMA busy_timeout=100', 'BEGIN', 'PRAGMA busy_timeout=0', 'ROLLBACK']);
+});
+
+test('exclusive creation and setup refuse a store with an active host writer', async t => {
+  const f = memberFixture(t); f.admit('exclusive create');
+  f.db.exec('BEGIN IMMEDIATE; UPDATE store_metadata SET store_id=store_id');
+  try {
+    assert.throws(() => createExclusiveSqliteFile(f.path), { code: 'EEXIST' });
+    const result = await initLocalRawStore({ databasePath: f.path });
+    assert.equal(result.status, 'blocked'); assert.equal(result.reason, 'store_invalid');
+  } finally { f.db.exec('ROLLBACK'); }
 });

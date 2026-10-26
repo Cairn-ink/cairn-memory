@@ -1,5 +1,6 @@
 import { createCardCurrentStorage, cardDependencyFence } from './card-current-storage.mjs';
-import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, unlinkSync } from 'node:fs';
+import { lstatSync, unlinkSync } from 'node:fs';
+import { probeRollbackJournal, createExclusiveSqliteFile } from './sqlite-journal-probe.mjs';
 import { isAbsolute } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { performance } from 'node:perf_hooks';
@@ -33,30 +34,29 @@ function protectedFile(path, required = true) {
   return value;
 }
 function walHeader(path) {
-  const initial = protectedFile(path); let fd;
-  try { fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW); }
+  protectedFile(path);
+  let result;
+  try { result = probeRollbackJournal(path); }
   catch { unavailable('unsafe_file'); }
-  try {
-    const current = fstatSync(fd);
-    if (current.dev !== initial.dev || current.ino !== initial.ino) unavailable('unsafe_file');
-    const header = Buffer.alloc(20), bytes = readSync(fd, header, 0, header.length, 0);
-    return bytes === 20 && header.subarray(0, 16).toString('binary') === 'SQLite format 3\0' &&
-      (header[18] === 2 || header[19] === 2);
-  } catch { unavailable('unsafe_file'); }
-  finally { try { closeSync(fd); } catch { unavailable('unsafe_file'); } }
+  // nolock SQLite refuses WAL with CANTOPEN before it can create companions.
+  // Other malformed/inaccessible files fail closed through ordinary validation.
+  if ([8, 11, 26].includes(result.code)) return false; // Normal recovery/corruption path.
+  if (result.code && result.code !== 14) unavailable('unsafe_file');
+  return result.code === 14 || result.mode !== 'delete';
 }
+
 function auxiliaries(path, readOnly) {
   for (const suffix of ['-wal', '-shm', '-journal']) {
     const entry = protectedFile(path + suffix, false);
     if (entry && (readOnly || suffix !== '-journal')) unavailable('auxiliary_file');
   }
   // A checkpointed WAL database can have no auxiliary files. Inspect its
-  // header before SQLite gets a chance to recreate a transient WAL/SHM pair.
+  // mode through isolated SQLite before a host connection can create WAL/SHM.
   if (readOnly && protectedFile(path, false) && walHeader(path)) unavailable('auxiliary_file');
 }
 /** Part-2 openers must call this after canonical path validation and BEFORE
  * constructing either SQLite connection. Missing files retain opener precedence;
- * this probe only refuses auxiliary files and WAL headers, without recovery. */
+ * this probe only refuses auxiliaries and non-rollback modes, without recovery. */
 export function assertContextReadReadOnlyAuxiliaries(path) {
   auxiliaries(path, true);
   auxiliaries(path + '.context-read-v1.sqlite', true);
@@ -196,7 +196,8 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     auxiliaries(sidecarPath, readOnly);
     if (!initial) {
       if (readOnly) unavailable('missing');
-      closeSync(openSync(sidecarPath, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW, 0o600));
+      // Child-owned creation fd cannot release host/Worker SQLite locks.
+      createExclusiveSqliteFile(sidecarPath);
       rebuildReason ??= 'missing';
     }
     fileIdentity = protectedFile(sidecarPath);

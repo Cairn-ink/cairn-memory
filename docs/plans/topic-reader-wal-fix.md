@@ -1,5 +1,8 @@
 # E1-C2 WAL fresh-reader fix and smoke
 
+Current implementation: see **E1-C2 v1.0.1 lock-safety** below. Earlier header
+probe descriptions are historical and superseded.
+
 Date: 2026-10-26. Node: v22.16.0. Branch: fix/wal-fresh-reader-busy. Uncommitted; primary commits and runs full queued acceptance.
 
 ## Cause and evidence
@@ -337,3 +340,121 @@ packages were not traversed. No new manifest entries were needed. Final
 inventory equality and whitespace were rechecked after this report update.
 The full v2 measurement remains for the primary's machine-wide queue. No claim
 of full performance acceptance follows from the single 2s smoke.
+
+
+## E1-C2 v1.0.1 lock-safety (2026-10-27)
+
+The old header probes are unsafe: POSIX record locks are process/inode-owned,
+and closing any descriptor for the inode releases all of that process's locks.
+Worker threads share the process, and Worker exit closes even cached fds.
+
+| Site | Affected | Resolution |
+| --- | --- | --- |
+| topicJournalMode | Yes | Replace main-file open/read/close with the read-only reader connection's `PRAGMA journal_mode`. |
+| context-read walHeader | Yes | Both canonical and sidecar paths are probed, including with live host connections. Replace with an isolated SQLite-only probe; preserve no-transient-companion refusal. |
+| store-fence pin/check/close | Yes | Pins overlap canonical connections in fenced openers, MCP hosts, and method/asset/context review commands. Retain and recheck lstat identity; remove the raw fd and make close a no-op. Use the isolated SQLite probe for rollback-mode validation. |
+| database ax creation | Yes, narrow creation race | O_EXCL refuses preexisting inodes, but another Worker can open the new inode before close. Move exclusive creation/close into a child process. |
+| sidecar O_CREAT/O_EXCL creation | Yes, narrow creation race | Same child-owned exclusive creation; no host fd. |
+| local raw setup wx creation | Yes, narrow creation race | Additional site in integrations. Its awaited stat/sync previously widened the create-to-close window; use the same child-owned creation helper. |
+
+No additional intentional DB/companion reads were found in adapters, setup lib,
+integrations or plugins. The committed setup engine archive still contains all
+three unsafe probes and three creation closes until the primary regenerates
+it; the new guard detects all six. Generic prompt, package/asset, transcript and configuration readers
+are explicitly audited non-database input channels in the call-site allowlist.
+
+Topic detection uses companion lstat hints, never raw descriptors. WAL/SHM
+without a rollback journal enables waiting on the first journal-mode query.
+Otherwise start at zero; BUSY with a rollback journal is returned immediately.
+BUSY without one retries only that opening query once under the original 100ms
+request budget/deadline. Clear provisional timeout before applying the detected
+mode policy. DELETE metadata/page statements stay at zero. No traversal or
+transaction retries, mode changes, schema migrations or immutable reads.
+The closed diagnostics statement enum gains journal_mode; first failures can
+move to prepare/journal_mode or execute/journal_mode.
+
+An absent journal cannot distinguish a WAL reset from a DELETE exclusive
+transaction before its first journaled write, OFF/MEMORY journaling, or mode
+switching. Those ambiguous openings may use the bounded fallback. A stale
+rollback journal can suppress a WAL wait. Companion stats are not atomic and
+concurrent external mode switching remains unsupported.
+
+The isolated rollback probe uses read-only SQLite with URI nolock=1: WAL
+returns CANTOPEN before SQLite creates companions. It never reads tables or
+changes modes. Running this no-lock VFS in the host would recreate the same
+close hazard, so a short-lived child is mandatory. A successful DELETE result
+is cached by inode/size/nanosecond mtime/ctime, checked before and after the
+probe. Cache misses add process-start cost; errors/timeouts/replacements fail
+closed. Existing corrupt-sidecar rebuild handling is retained. SQLITE_READONLY from a
+hot rollback journal is delegated to normal writable SQLite recovery; read-only
+preflight refuses the journal before probing.
+
+### Regression evidence
+
+The new public-API regression was copied unchanged into a temporary git archive
+of **546d57ac**; no other worktree was touched. On Node **22.16.0** and
+**24.22.1**, it exits **1**, with **six failures of eight tests**: both DELETE
+reader methods lose the writer lock, WAL loses its main-file SHARED lock, and
+context canonical probes lose read locks, and sidecar/fence closes lose writer locks. Child contenders perform no
+writes after acquiring a lock, avoiding deliberate corruption in the control.
+The WAL checkpoint/snapshot checks are supplemented by an exclusive-lock read
+because a surviving SHM read-mark alone does not prove main-file lock safety.
+
+The CI guard scans source plus the setup runtime tree and compressed engine,
+uses exact source lines and multiplicity with one-line justifications, and
+self-tests the old header pattern and alternative fs spellings. The source
+and scanner self-tests pass. The archived-engine test intentionally remains
+red until the primary performs the required bundle regeneration.
+
+
+### Final scoped verification and handoff
+
+Only explicit permitted test paths were run; no broad npm suites, network,
+keys, commits or bundle regeneration. Exit codes were captured from the actual
+Node process, never inferred through a stdout pipeline.
+
+| Check | Result | Exit |
+| --- | --- | --- |
+| 546d57ac control, Node 22.16.0 | 2 pass / 6 fail, eight unchanged lock regressions | 1 |
+| 546d57ac control, Node 24.22.1 | 2 pass / 6 fail, same regressions | 1 |
+| Fixed Node 24.22.1 lock regressions | 8 / 8 pass | 0 |
+| Fixed Node 22.16.0 context-core, sidecar and lock regressions | 50 / 50 pass | 0 |
+| Fixed Node 22.16.0 recovery, topic-reader-sqlite and method-package fences | 34 / 34 pass | 0 |
+| SQLite-free static closure / workflow inventory | 1 / 1 pass | 0 |
+| Source raw-fs guard and scanner regressions | 2 / 2 pass, 185 justified references | 0 |
+| Full raw-fs guard including committed setup engine archive | 2 pass / 1 fail: stale bundle raw opens | 1 |
+
+The initial 39-file permitted run completed 484 tests: 479 pass / 5 fail,
+exit 1. Three hot-journal recovery failures were corrected by preserving normal
+SQLite recovery; one static-closure failure came from an apparent static import
+inside a child script and was changed to a child-only dynamic import. The fifth
+was a 500ms context deadline exceeded during a measured 576ms filesystem commit.
+All affected files passed the focused reruns above; no full-matrix acceptance
+is claimed. Source syntax/JSON and whitespace checks passed, exit 0.
+
+The full guard remains intentionally failing until the primary regenerates
+packages/setup/runtime, including its compressed engine. No unsafe bundle
+exception was added to the allowlist.
+
+Changed inventory: git diff --name-only HEAD plus git ls-files --others
+--exclude-standard was independently compared with git status --porcelain=v1 -z.
+Exact set equality: **15 files**. The new runtime helper and all changed
+shipped docs are registered in packaging/artifact-files.json.
+
+```text
+core/context-read-sidecar.mjs
+core/database.mjs
+core/read-database.mjs
+core/sqlite-journal-probe.mjs
+core/store-fence.mjs
+core/test/fixtures/no-raw-db-fd-allowlist.json
+core/test/no-raw-db-fd.test.mjs
+core/test/sqlite-lock-safety.test.mjs
+core/test/topic-reader-sqlite.test.mjs
+core/topic-reader-sqlite.mjs
+docs/plans/topic-overview-member-pages.md
+docs/plans/topic-reader-wal-fix.md
+docs/topic-overview.md
+integrations/client/raw/local-setup-init.mjs
+packaging/artifact-files.json
+```

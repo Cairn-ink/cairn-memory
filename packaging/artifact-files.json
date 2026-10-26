@@ -72,6 +72,7 @@
   "core/database.mjs",
   "core/existing-store.mjs",
   "core/store-fence.mjs",
+  "core/sqlite-journal-probe.mjs",
   "core/raw-schema.mjs",
   "core/raw-lineage-schema.mjs",
   "core/raw-lineage-storage.mjs",

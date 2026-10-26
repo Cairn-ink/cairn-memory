@@ -22,14 +22,15 @@ function identity(path) {
 export function openReadDatabase(path, { contextRead = false, topicMembers = false, deferTopicValidation = false, topicPolicy, preflight } = {}) {
   const initial = identity(path);
   preflight?.();
-  const wal = topicPolicy ? topicJournalMode(path, initial) === 'WAL' : false;
   let native;
   try { native = new DatabaseSync(path, { readOnly: true }); }
   catch (error) { throw recordSqliteFailure(error, 'open', 'connection'); }
-  const db = topicPolicy ? topicPolicy.database(native, wal) : native;
+  let db = native;
   try {
     try { native.exec(`PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=${contextRead ? 5000 : 0};`); }
     catch (error) { throw recordSqliteFailure(error, 'configure', 'reader_configuration'); }
+    const wal = topicPolicy ? topicJournalMode(native, path, topicPolicy) === 'WAL' : false;
+    db = topicPolicy ? topicPolicy.database(native, wal) : native;
     const current = identity(path);
     if (initial.dev !== current.dev || initial.ino !== current.ino) fail('unsafe_database_file');
     const validate = () => {

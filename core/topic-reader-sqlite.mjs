@@ -1,24 +1,34 @@
-import { openSync, readSync, closeSync, fstatSync, constants } from 'node:fs';
+import { lstatSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { fail, MemoryStoreError } from './validation.mjs';
+import { MemoryStoreError } from './validation.mjs';
 
-// Header format versions at offsets 18/19 are 2/2 for WAL, 1/1 for rollback.
-// Read the main file without entering SQLite (a PRAGMA itself can need a lock).
-export function topicJournalMode(path, expected) {
-  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-  try {
-    const stat = fstatSync(fd);
-    if (!stat.isFile() || stat.dev !== expected.dev || stat.ino !== expected.ino) fail('unsafe_database_file');
-    const header = Buffer.alloc(100);
-    const size = readSync(fd, header, 0, header.length, 0);
-    return size === 100 && header.subarray(0, 16).equals(Buffer.from('SQLite format 3\0')) &&
-      header[18] === 2 && header[19] === 2 ? 'WAL' : 'DELETE';
-  } finally { closeSync(fd); }
+// Never inspect SQLite files through raw descriptors: closing one would release
+// every POSIX record lock this process holds on the same inode (Workers included).
+// Companion stats are hints only; SQLite is the authority on journal mode.
+function companion(path, suffix) {
+  try { lstatSync(path + suffix); return true; }
+  catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+}
+export function topicJournalMode(native, path, policy) {
+  const rollback = () => companion(path, '-journal');
+  const hintedWal = !rollback() && (companion(path, '-wal') || companion(path, '-shm'));
+  const query = wait => policy.database(native, wait).prepare('PRAGMA journal_mode').get().journal_mode.toUpperCase();
+  try { return query(hintedWal); }
+  catch (error) {
+    // Only the opening mode query can be retried, once, before any transaction
+    // or traversal exists. A disappearing WAL pair must not lose the first wait.
+    if (hintedWal || (error.errcode & 255) !== 5 || rollback()) throw error;
+    return query(true);
+  } finally {
+    // A hint or fallback must never grant subsequent DELETE statements a wait.
+    try { native.exec('PRAGMA busy_timeout=0'); }
+    catch (error) { throw recordSqliteFailure(error, 'configure', 'reader_configuration'); }
+  }
 }
 
 export const TOPIC_WAL_WAIT_MS = 100;
 export const SQLITE_STAGES = Object.freeze(['open', 'configure', 'prepare', 'execute', 'begin', 'commit', 'rollback', 'close']);
-export const SQLITE_STATEMENTS = Object.freeze(['connection', 'reader_configuration', 'application_id', 'user_version',
+export const SQLITE_STATEMENTS = Object.freeze(['connection', 'reader_configuration', 'journal_mode', 'application_id', 'user_version',
   'schema_version', 'encoding', 'schema_metadata', 'snapshot_metadata', 'topic_metadata', 'transaction']);
 const failures = new WeakMap();
 export function recordSqliteFailure(error, stage, statement) {
@@ -37,7 +47,7 @@ export function unsupportedTopicStorage(error) {
 }
 function label(sql) {
   if (/query_only|trusted_schema|busy_timeout/i.test(sql)) return 'reader_configuration';
-  for (const name of ['application_id', 'user_version', 'schema_version', 'encoding']) {
+  for (const name of ['journal_mode', 'application_id', 'user_version', 'schema_version', 'encoding']) {
     if (new RegExp('^PRAGMA\\s+' + name + '\\b', 'i').test(sql)) return name;
   }
   if (/^\s*(BEGIN|COMMIT|ROLLBACK)\b/i.test(sql)) return 'transaction';
