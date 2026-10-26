@@ -858,3 +858,84 @@ questions concern additional product expectations, not unspecified v1 fields:
    and expected per-namespace/L1/L2/unfiled counts for your 1,112 Memories,
    four namespaces and 71 MOCs, so primary can replay the same distribution in
    addition to the fully specified engine acceptance fixture?
+
+
+## E1-C2 additive contract v1 (2026-10-26)
+
+This section adds an explicit handle-level `diagnostics?: boolean` option to
+`openMemoryReader({path, ownerId})`. Only literal `true` enables diagnostics;
+omission, `undefined`, and `false` preserve byte-identical default output,
+including legacy overview error classification. Non-boolean supplied values
+are `invalid_input`. Own-data validation applies; accessors are never evaluated.
+The option crosses the Worker boundary in Worker data, independent of env and
+execArgv. It applies to legacy overview, opt-in overview and member reads.
+
+For native SQLite storage failures with captured metadata, attach exactly:
+`error.diagnostics = {stage, statement, sqlite:{code, extendedCode}}`.
+`code` is the numeric primary SQLite result byte; `extendedCode` is the original
+numeric extended result. Successful pages and non-storage failures gain no
+fields. No native error message, SQL, path, ID, owner/namespace or content is
+included. Preserve metadata when existing classification maps a native error
+to `unsupported_database`; classification itself is unchanged.
+
+The closed stage enum is `open | configure | prepare | execute | begin |
+commit | rollback | close`. The closed statement enum is `connection |
+reader_configuration | application_id | user_version | schema_version |
+encoding | schema_metadata | snapshot_metadata | topic_metadata | transaction`.
+Labels identify fixed operation families, never interpolate SQL or values.
+
+E1-C2 selects a single request-wide WAL native lock-wait budget of **100ms**,
+capped by the caller's remaining monotonic deadline. Refresh the floored,
+nonnegative remaining timeout before each native prepare/execution and iterator
+step, including opening and fence checks. Query work consumes the same budget.
+No application transaction retry or second wait layer is added. No host-thread
+wait occurs. Existing close/deadline Worker termination remains cancellable.
+Native busy exhaustion retains `storage_busy`; watchdog cancellation retains
+`read_timeout`. DELETE retains zero wait and existing outcomes. Context reads
+and candidate evidence are outside this delta.
+
+Detect WAL without a SQLite lock-taking PRAGMA: read the safe main-file format-3
+header's read/write version bytes at offsets 18/19; only 2/2 enables WAL waiting.
+Validate descriptor device/inode against the existing safe-file check. Unknown
+or truncated headers keep zero wait and normal validation/refusal. Never change
+journal mode, open a write handle, migrate schema18, or use immutable live reads.
+The mode is fixed during a reader connection; concurrent external mode switching
+is outside this policy.
+
+The opt-in `measure:topic-reader-wal` protocol pre-registers the required WAL
+cells, >=5 x 30s, zero busy, reader/writer p95 <=250ms, writer throughput >=90%
+of paired no-reader baseline and host loop max <=100ms. DELETE is report-only.
+A 2s single-repetition smoke establishes harness operation and may reproduce the
+race; it does not establish production performance acceptance.
+
+
+## E1-C2 review correction v2 (2026-10-26)
+
+The preceding diagnostics DTO and legacy error classification are unchanged.
+WAL detection requires a complete **100-byte** main-file header before testing
+the signature and 2/2 version bytes. All shorter files, including valid-looking
+20–99 byte prefixes, retain zero wait and normal validation. Native rollback
+refreshes the request's remaining timeout, including zero after expiry.
+Timeout-installation errors have `configure/reader_configuration` provenance.
+Native statement constructors and absent iterator methods are preserved.
+
+Measurement protocol **E1-C2-v2** supersedes v1's throughput acceptance gate at
+the product's request: report public-write-call p95/max for every reader-load
+cell; gate public-write p95 at 250ms. Max is reported without an additional
+threshold. Keep the pre-registered 0.90 baseline throughput ratio as an engine
+reference with its comparison result, excluded from product acceptance. Do not
+tune the 100ms wait to reach it. Full lifecycle latency is separately reported.
+
+A zero-busy pass requires both zero public `storage_busy` and zero diagnostic
+SQLite primary 5/6, regardless of the public classification. `cursor_stale` is
+permitted and counted separately; other reader failures fail the cell. Every
+attempt, including failures and the final drain, remains in the report.
+
+Pre-register before a run, per full 30s WAL reader-load cell: **20** attempts
+overlapping actual public writes; for fresh writers, **10** attempts overlapping
+per-write close; and **100** successful native commits during public write calls
+and inside the fixed window in both cell and paired baseline. Opener commits,
+sleeps and retained shutdown close do not satisfy these requirements. Cells
+below any minimum are **invalid**, never passing. Smoke does not assert these
+full-window minima; DELETE latency/contention remains report-only. Existing
+five-repetition, zero-busy, reader p95 and host-loop thresholds remain unchanged.

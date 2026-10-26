@@ -282,5 +282,7 @@
   "adapters/local-embedder/publish.c",
   "adapters/mcp/model-command.mjs",
   "core/context-read-local-status.mjs",
-  "docs/local-embedder-bge-m3.md"
+  "docs/local-embedder-bge-m3.md",
+  "core/topic-reader-sqlite.mjs",
+  "docs/plans/topic-reader-wal-fix.md"
 ]
