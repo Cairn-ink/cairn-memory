@@ -7,9 +7,14 @@ import { command } from './build.mjs';
 // Explicit public-registry network preparation, separate from offline tests.
 // npm ci caches locked tarballs but not all metadata needed by npm install.
 export function prepareCache(directory, userconfig) {
-  for (const spec of ['@modelcontextprotocol/server@2.0.0', '@modelcontextprotocol/core@2.0.0',
-    'zod@4.5.4', 'tiktoken@1.0.22']) {
+  for (const spec of ['@modelcontextprotocol/server@2.3.1', '@modelcontextprotocol/core@2.3.1',
+    'zod@4.6.7', 'tiktoken@1.0.22']) {
     command('npm', ['view', spec, 'version', '--json', '--registry=https://registry.npmjs.org/'], directory, userconfig);
+  }
+  // Frozen installed fixtures (packaging/test/fixtures/*.tgz) keep the closure
+  // they were built with; their offline installs need those exact tarballs.
+  for (const spec of ['@modelcontextprotocol/server@2.0.0', '@modelcontextprotocol/core@2.0.0', 'zod@4.5.4']) {
+    command('npm', ['cache', 'add', spec, '--registry=https://registry.npmjs.org/'], directory, userconfig);
   }
 }
 
