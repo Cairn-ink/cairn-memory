@@ -7,8 +7,8 @@ import { SetupError } from './errors.mjs';
 
 const bundle = new URL('../runtime/engine/', import.meta.url);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
-const pins = { '@modelcontextprotocol/server': '2.0.0', '@modelcontextprotocol/core': '2.0.0',
-  zod: '4.5.4', tiktoken: '1.0.22' };
+const pins = { '@modelcontextprotocol/server': '2.3.1', '@modelcontextprotocol/core': '2.3.1',
+  zod: '4.6.7', tiktoken: '1.0.22' };
 const failure = (key, params = {}) => new SetupError(key, 1, params);
 const engineIdPattern = /^\d+\.\d+\.\d+(?:-[\w.]+)?-[0-9a-f]{12}(?:-r(?:[2-9]|[1-9]\d+))?$/u;
 
