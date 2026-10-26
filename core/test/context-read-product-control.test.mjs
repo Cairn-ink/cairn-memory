@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { Worker } from 'node:worker_threads';
+import { createReaderWorkerLifecycle } from '../reader-worker-lifecycle.mjs';
 import { EventEmitter } from 'node:events';
-import { requestRecord, operationRecord, verifyRecords, credentialDigest, PRODUCT_PROFILE, boundedData, hostConfiguration } from '../context-product-control.mjs';
+import { requestRecord, operationRecord, verifyRecords, credentialDigest, PRODUCT_PROFILE, boundedData, hostConfiguration, operationMessage } from '../context-product-control.mjs';
 import { requestAuthority } from '../context-product-authority.mjs';
 import { createProductReaderRuntime } from '../context-product-reader.mjs';
 import { createSupervisorRegistry, supervisorOwner } from '../context-read-supervisor.mjs';
@@ -12,24 +14,23 @@ const ns = { ownerId: 'synthetic-product', scope: 'personal', projectId: null };
 const coverage = { policy: 'recent-projects-v1', selectionRevision: 'fixture', requestedNamespaces: 1, selectedNamespaces: 1, omittedNamespaces: 0 };
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
-function setup(expiry = null) {
-  const credential = { nonce: randomUUID() };
+function setup(expiry = null, credential = { nonce: randomUUID() }) {
   const control = { requestId: randomUUID(), handleId: randomUUID(), credentialBindingId: randomUUID(), credentialExpiresUtcMs: expiry, requestMaxMs: 5000 };
   const binding = { kind: 'request', ...control, ownerId: ns.ownerId, namespaces: { readSet: [ns], ownerCoverage: coverage }, issuedAt: 7,
     credentialDigest: credentialDigest(credential) };
   delete binding.requestMaxMs;
   return { credential, control, binding, requestReservation: new SharedArrayBuffer(4) };
 }
-function harness({ expiry = null, openAt = 0, stall = false, terminationFails = false } = {}) {
-  let time = 0n, wall = 1000, order = [], readings = [];
+function harness({ expiry = null, openAt = 0, stall = false, terminationFails = false, credential } = {}) {
+  let time = 0n, wall = 1000, order = [], readings = [], timerFailure = false;
   const timers = new Set(), actors = [], registry = createSupervisorRegistry({ now: () => Number(time) / 1e6 });
-  const state = setup(expiry), supervisor = registry.supervisor();
+  const state = setup(expiry, credential), supervisor = registry.supervisor();
   const options = { supervisor, path: new URL('synthetic.sqlite', import.meta.url).pathname, version: 'context-read-v1', profile: PRODUCT_PROFILE,
     readSet: [ns], ownerCoverage: coverage, requestControl: state.control,
     host: { moduleUrl: new URL('../testing/context-product-host.mjs', import.meta.url).href, configuration: { requestBinding: state.binding, requestReservation: state.requestReservation } }, diagnostics: true };
   const open = createProductReaderRuntime({
     now() { order.push('mono'); return readings.length ? readings.shift() : time; }, utc() { order.push('utc'); return wall; },
-    setTimer(fn, ms) { order.push('timer'); const timer = { fn, ms, unref() {} }; timers.add(timer); return timer; },
+    setTimer(fn, ms) { if (timerFailure) throw Error('synthetic timer registration'); order.push('timer'); const timer = { fn, ms, unref() {} }; timers.add(timer); return timer; },
     clearTimer(timer) { timers.delete(timer); },
     spawnWorker(data) {
       order.push('spawn');
@@ -50,6 +51,8 @@ function harness({ expiry = null, openAt = 0, stall = false, terminationFails = 
   return { ...state, options, open, supervisor, registry, actors, order, timers,
     set(ms) { time = BigInt(ms) * 1000000n; },
     readings(values) { readings = values.map(v => BigInt(v) * 1000000n); }, wall(ms) { wall = ms; },
+    failTimers() { timerFailure = true; },
+    expireIdle() { for (const timer of [...timers]) if (timer.ms === 60000) timer.fn(); },
     tick() { for (const timer of [...timers]) if (timer.ms < 60000) timer.fn(); },
   };
 }
@@ -358,4 +361,155 @@ test('P2-22/28/29 null-expiry issuance cannot be renewed after registry history 
   assert.equal(h.actors.length, 1);
   const absent = harness(); delete absent.options.host.configuration.requestReservation;
   await assert.rejects(absent.open(absent.options), { code: 'authority_required' }); assert.equal(absent.actors.length, 0);
+});
+
+for (const opening of [true, false]) test(`P2-03 abort signal brand/proxy validation before ${opening ? 'open' : 'operation'} registration`, async () => {
+  let traps = 0;
+  const signals = [Object.create(AbortSignal.prototype), new Proxy(new AbortController().signal, {
+    getPrototypeOf() { traps++; throw Error('trap'); }, get() { traps++; throw Error('trap'); },
+  })];
+  for (const signal of signals) {
+    const h = harness();
+    if (opening) {
+      await assert.rejects(h.open(h.options, { signal }), { code: 'invalid_input' });
+      assert.equal(h.actors.length, 0); assert.equal(h.registry.counters().live, 0);
+    } else {
+      const reader = await h.open(h.options), before = h.registry.counters();
+      denied(await reader.fetchCandidateEvidence(input, h.credential, { signal }), 'invalid_input');
+      assert.deepEqual(h.registry.counters(), before);
+      await reader.close();
+    }
+    await h.supervisor.close(); assert.equal(h.registry.counters().live, 0);
+  }
+  assert.equal(traps, 0);
+});
+
+for (const cancel of [false, true]) test(`P2-03 intrinsic signal access ignores caller overrides (${cancel ? 'abort' : 'success'})`, async () => {
+  const h = harness(), controller = new AbortController(); let invoked = 0;
+  for (const key of ['aborted', 'addEventListener', 'removeEventListener']) Object.defineProperty(controller.signal, key, {
+    get() { invoked++; throw Error('caller override'); },
+  });
+  const reader = await h.open(h.options, { signal: controller.signal }), actor = h.actors[0];
+  const pending = reader.fetchCandidateEvidence(input, h.credential, { signal: controller.signal });
+  if (cancel) { controller.abort(); denied(await pending, 'read_cancelled'); actor.gate.resolve(); }
+  else { actor.reply({ ok: true, value: null }); assert.equal((await pending).ok, true); }
+  await reader.close(); await h.supervisor.close();
+  assert.equal(invoked, 0); assert.equal(h.registry.counters().live, 0);
+});
+
+test('P2-03 failed request setup cleans registered records and detachment failure cannot prevent settlement', async () => {
+  const h = harness(), reader = await h.open(h.options), actor = h.actors[0];
+  h.failTimers(); const pending = reader.fetchCandidateEvidence(input, h.credential);
+  denied(await pending, 'reader_failed'); assert.equal(h.registry.counters().live, 2);
+  actor.gate.resolve(); await reader.close(); await h.supervisor.close();
+  assert.equal(h.registry.counters().live, 0);
+  const lifecycle = createReaderWorkerLifecycle(); let settled;
+  const slot = { resolve: result => { settled = result; }, detach() { throw Error('detachment'); } };
+  lifecycle.pending = slot;
+  assert.equal(lifecycle.finish(slot, 'terminal'), true);
+  assert.equal(settled, 'terminal'); assert.equal(lifecycle.pending, undefined);
+  assert.equal(lifecycle.finish(slot, 'late'), false); assert.equal(settled, 'terminal');
+});
+
+for (const kind of ['active-close', 'Worker-error', 'Worker-exit', 'idle-expiry']) test(`P2-03 ${kind}: public terminal, delayed disposal and late-result refusal are independent`, async () => {
+  const h = harness(), reader = await h.open(h.options), actor = h.actors[0];
+  let pending, settlements = 0;
+  if (kind !== 'idle-expiry') pending = reader.fetchCandidateEvidence(input, h.credential).then(result => { settlements++; return result; });
+  if (kind === 'Worker-error') actor.emit('error', Error('synthetic crash'));
+  if (kind === 'Worker-exit') actor.emit('exit', 1);
+  if (kind === 'idle-expiry') { h.set(60000); h.expireIdle(); }
+  let disposed = false;
+  const closing = reader.close().then(() => { disposed = true; });
+  if (pending) denied(await pending, kind.startsWith('Worker') ? 'reader_failed' : 'store_closed');
+  await flush(); assert.equal(disposed, false);
+  assert.equal(h.registry.counters().live, kind === 'idle-expiry' ? 1 : 2);
+  let drained = false; const draining = h.supervisor.drain().then(results => { drained = true; return results; });
+  await flush(); assert.equal(drained, false);
+  actor.reply({ ok: true, value: { private: 'late result' } });
+  await flush(); assert.equal(settlements, pending ? 1 : 0); assert.equal(disposed, false);
+  denied(await reader.fetchCandidateEvidence(input, h.credential), kind.startsWith('Worker') ? 'reader_failed' : 'store_closed');
+  actor.gate.resolve(); await closing;
+  const records = await draining;
+  assert.ok(records.every(r => r.state === 'complete' && r.workerStopped && r.nativeDisposed));
+  assert.equal(h.registry.counters().live, 0);
+  actor.reply({ ok: true, value: { private: 'after disposal' } });
+  assert.equal(settlements, pending ? 1 : 0);
+});
+
+for (const dimension of ['depth', 'nodes']) test(`P2-28 credential ${dimension} uses its own inclusive bounds through dispatch`, async () => {
+  let credential = dimension === 'nodes' ? Array(8191).fill(0) : 0;
+  if (dimension === 'depth') for (let i = 0; i < 16; i++) credential = [credential];
+  const h = harness({ credential }), reader = await h.open(h.options), actor = h.actors[0];
+  const pending = reader.fetchCandidateEvidence(input, credential);
+  assert.deepEqual(actor.messages.at(-1).credential, credential);
+  actor.reply({ ok: true, value: null }); assert.equal((await pending).ok, true);
+  const before = actor.messages.length;
+  const oversized = dimension === 'nodes' ? Array(8192).fill(0) : [credential];
+  denied(await reader.fetchCandidateEvidence(input, oversized), 'invalid_input');
+  assert.equal(actor.messages.length, before);
+  await reader.close(); await h.supervisor.close();
+});
+
+test('P2-17 failed disposal exports known committed BUSY, frozen cleanup and incomplete coverage without losing the batch', async () => {
+  const h = harness({ terminationFails: true }), reader = await h.open(h.options), actor = h.actors[0];
+  const healthy = reader.getContextReadCapabilities();
+  sealNative(actor.messages.at(-1).frame); actor.reply({ ok: true, value: null });
+  assert.equal((await healthy).ok, true);
+  const pending = reader.fetchCandidateEvidence(input, h.credential), frame = actor.messages.at(-1).frame;
+  assert.throws(() => nativeOutcome(frame, 'execute', 'context_evidence', () => {
+    throw Object.assign(Error('private SQL and content'), { code: 'ERR_SQLITE_ERROR', errcode: 261 });
+  }));
+  sealNative(frame); h.set(5000); h.tick(); denied(await pending, 'read_timeout');
+  const closing = reader.close(); const rejected = assert.rejects(closing);
+  actor.gate.resolve(); await rejected; await flush();
+  const batch = await h.supervisor.drain();
+  const observed = batch.find(r => r.diagnostics.busy === 1);
+  assert.equal(observed.state, 'failed'); assert.equal(observed.telemetry, 'incomplete');
+  assert.equal(observed.nativeDisposed, false); assert.equal(observed.diagnostics.coverage, 'incomplete');
+  assert.equal(observed.diagnostics.records[0].sqlite.code, 5);
+  assert.equal(observed.diagnostics.records[0].sqlite.extendedCode, 261);
+  assert.equal(JSON.stringify(batch).includes('private'), false);
+  assert.equal(batch.length, 3); assert.ok(batch.some(r => r.state === 'complete'));
+  for (const value of [observed, observed.diagnostics, observed.diagnostics.records, observed.diagnostics.records[0], observed.diagnostics.records[0].sqlite]) assert.ok(Object.isFrozen(value));
+  await assert.rejects(h.supervisor.drain(observed.cleanupId), error => {
+    assert.equal(error.code, 'reader_failed'); assert.strictEqual(error.cleanup, observed);
+    assert.strictEqual(error.diagnostics, observed.diagnostics); return true;
+  });
+  assert.throws(() => h.supervisor.ackCleanup(observed.cleanupId), { code: 'reader_failed' });
+  await assert.rejects(h.supervisor.close(), { code: 'reader_failed' });
+});
+
+test('P2-08 all frozen errors preserve their codes and retryability across a real Worker boundary', async () => {
+  const h = harness();
+  const open = createProductReaderRuntime({ now: () => 0n, utc: () => 1000,
+    setTimer: () => ({ unref() {} }), clearTimer() {},
+    spawnWorker: data => new Worker(new URL('./fixtures/context-product-errors.mjs', import.meta.url), { workerData: data, env: {}, execArgv: [] }),
+  });
+  const reader = await open(h.options);
+  try {
+    for (const code of ['invalid_input','invalid_read_set','authority_required','scope_changed','invalid_cursor','cursor_stale',
+      'invalid_snapshot','snapshot_stale','revision_conflict','evidence_unavailable','index_unavailable','token_count_unavailable',
+      'context_item_too_large','storage_busy','storage_error','read_timeout','read_cancelled','read_in_progress','reader_failed',
+      'store_closed','invalid_path','database_not_found','unsafe_database_file','unsupported_database']) {
+      assert.deepEqual(await reader.fetchCandidateEvidence({ ...input, fixtureCode: code }, h.credential),
+        { ok: false, error: { code, retryable: code === 'storage_busy' } });
+    }
+  } finally { await reader.close(); await h.supervisor.close(); }
+});
+
+test('P2-28 complete IPC byte cap still includes independently bounded credentials and shared buffers', () => {
+  const credential = Array(8191).fill(0);
+  const message = { credential, padding: '', shared: new SharedArrayBuffer(1024) };
+  const overhead = Buffer.byteLength(JSON.stringify(message)) + message.shared.byteLength;
+  const exact = { ...message, padding: 'x'.repeat(262144 - overhead) };
+  assert.equal(operationMessage(exact).padding.length, 262144 - overhead);
+  assert.throws(() => operationMessage({ ...exact, padding: exact.padding + 'x' }), { code: 'invalid_input' });
+});
+
+test('P2-03 opening setup failure releases the pre-registered record without spawning', async () => {
+  const h = harness(); h.failTimers();
+  let failure; await h.open(h.options).catch(error => { failure = error; });
+  assert.equal(failure.code, 'reader_failed'); assert.equal(h.actors.length, 0);
+  assert.equal((await h.supervisor.drain(failure.cleanupId)).state, 'complete');
+  assert.equal(h.registry.counters().live, 0); await h.supervisor.close();
 });

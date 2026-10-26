@@ -23,7 +23,7 @@ function identity(path) {
 export function contextProductFileIdentity(path) {
   const stat = identity(path); return `${stat.dev}:${stat.ino}`;
 }
-export function openReadDatabase(path, { contextRead = false, topicMembers = false, deferTopicValidation = false, topicPolicy, nativeObserver, preflight } = {}) {
+export function openReadDatabase(path, { contextRead = false, topicMembers = false, deferTopicValidation = false, topicPolicy, nativeObserver, preflight, validateProduct } = {}) {
   const initial = identity(path);
   nativeObserver?.identity?.(`${initial.dev}:${initial.ino}`);
   preflight?.();
@@ -38,6 +38,7 @@ export function openReadDatabase(path, { contextRead = false, topicMembers = fal
     const current = identity(path);
     if (initial.dev !== current.dev || initial.ino !== current.ino) fail('unsafe_database_file');
     const validate = () => {
+    validateProduct?.(db);
     if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID ||
         !(contextRead ? CONTEXT_READ_SCHEMA_VERSIONS : READ_SCHEMA_VERSIONS).includes(db.prepare('PRAGMA user_version').get().user_version)) fail('unsupported_database');
     // Member reads validate only consumed Memory metadata and seek paths below;

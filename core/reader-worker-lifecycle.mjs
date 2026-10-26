@@ -17,7 +17,11 @@ export function createReaderWorkerLifecycle({ clearTimer = clearTimeout, onStop 
   }
   function finish(slot, result) {
     if (pending !== slot) return false;
-    pending = undefined; clearTimer(slot.deadline); slot.detach?.(); slot.resolve(result); return true;
+    pending = undefined;
+    try { clearTimer(slot.deadline); slot.detach?.(); }
+    catch { /* Detachment cannot strand an already terminal public request. */ }
+    finally { slot.resolve(result); }
+    return true;
   }
   return {
     get worker() { return worker; }, set worker(value) { worker = value; },

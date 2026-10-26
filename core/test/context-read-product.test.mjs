@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { randomUUID, createHash } from 'node:crypto';
-import { readFileSync, existsSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { existsSync, statSync, renameSync, chmodSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { openContextProductReader, createContextReadSupervisor } from '../index.mjs';
 import { credentialDigest, PRODUCT_PROFILE } from '../context-product-control.mjs';
 import { fixture, ns, ok } from '../testing/context-read-fixture.mjs';
@@ -15,10 +16,9 @@ import { installRoleProfiles } from '../role-profile-schema.mjs';
 import { installCardCurrentDependencies } from '../card-current-schema.mjs';
 
 const moduleUrl = new URL('../testing/context-product-host.mjs', import.meta.url).href;
-function configured(t, path, patch = {}, readSet = [ns]) {
+function configured(t, path, patch = {}, readSet = [ns], credential = { nonce: randomUUID() }) {
   const supervisor = createContextReadSupervisor(); t.after(() => supervisor.close());
   const state = new SharedArrayBuffer(32), view = new Int32Array(state); view[0] = 1; view[3] = 4;
-  const credential = { nonce: randomUUID() };
   const requestControl = { requestId: randomUUID(), handleId: randomUUID(), credentialBindingId: randomUUID(), credentialExpiresUtcMs: null, requestMaxMs: 5000 };
   const ownerCoverage = { policy: 'recent-projects-v1', selectionRevision: 'synthetic', requestedNamespaces: readSet.length, selectedNamespaces: readSet.length, omittedNamespaces: 0 };
   const binding = { kind: 'request', requestId: requestControl.requestId, handleId: requestControl.handleId,
@@ -30,7 +30,18 @@ function configured(t, path, patch = {}, readSet = [ns]) {
 }
 const fetchInput = memory => ({ readSet: [ns], refs: [{ type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision }], intent: 'current' });
 const denied = (result, code) => assert.deepEqual(result, { ok: false, error: { code, retryable: false } });
-const hash = path => createHash('sha256').update(readFileSync(path)).digest('hex');
+// SQLite owns all database descriptors. Fingerprint logical schema/data and
+// file metadata without opening/closing a raw descriptor that drops POSIX locks.
+const fingerprint = path => {
+  const db = new DatabaseSync(path, { readOnly: true });
+  try {
+    const schema = db.prepare("SELECT type,name,tbl_name,sql FROM sqlite_master ORDER BY type,name").all();
+    const rows = schema.filter(r => r.type === 'table').map(({ name }) =>
+      [name, db.prepare('SELECT * FROM "' + name.replaceAll('"', '""') + '"').all()]);
+    const stat = statSync(path);
+    return JSON.stringify({ schema, rows, version: db.prepare('PRAGMA user_version').get(), size: stat.size, mtime: stat.mtimeMs });
+  } finally { db.close(); }
+};
 
 for (const version of [18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]) test(`P2-02/04/05 real Worker physical v${version} canonical fetch, no sidecar or migration`, async t => {
   const f = fixture(t), memory = f.admit('Ｆｕｌｌ width canonical body'); f.core.close();
@@ -45,7 +56,7 @@ for (const version of [18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 3
     } finally { db.close(); }
   }
   const canonical = f.db.prepare('SELECT content FROM memories WHERE id=?').get(memory.id).content;
-  const before = hash(f.path), config = configured(t, f.path), reader = await config.open();
+  const before = fingerprint(f.path), config = configured(t, f.path), reader = await config.open();
   const capabilities = ok(await reader.getContextReadCapabilities());
   assert.ok(config.view[4] > 0);
   assert.equal(capabilities.profile, PRODUCT_PROFILE); assert.equal(capabilities.execution, 'worker');
@@ -58,7 +69,7 @@ for (const version of [18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 3
   assert.equal(config.view[1], 4);
   denied(await reader.findCandidates({ readSet: [ns], query: 'canonical', types: ['memory'], intent: 'current' }, config.credential), 'index_unavailable');
   await reader.close();
-  assert.equal(hash(f.path), before); assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, version);
+  assert.equal(fingerprint(f.path), before); assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, version);
   assert.equal(existsSync(f.path + '.context-read-product-v1.1.sqlite'), false);
   assert.equal(existsSync(f.path + '.context-read-v1.sqlite'), false);
   const deliveries = await config.supervisor.drain();
@@ -107,7 +118,9 @@ test('P2-01/11 product snapshot domains isolated; full-ref/fence semantics and l
 
 test('P2-01 product evidence does not probe an unrelated legacy cache', async t => {
   const f = fixture(t), memory = f.admit('canonical');
-  writeFileSync(f.path + '.context-read-v1.sqlite-wal', 'unrelated legacy cache', { mode: 0o600 });
+  const cache = new DatabaseSync(f.path + '.context-read-v1.sqlite');
+  cache.exec('PRAGMA journal_mode=WAL; CREATE TABLE unrelated(value TEXT)');
+  t.after(() => cache.close());
   const config = configured(t, f.path), reader = await config.open();
   assert.equal((await reader.fetchCandidateEvidence(fetchInput(memory), config.credential)).ok, true);
 });
@@ -115,11 +128,11 @@ test('P2-01 product evidence does not probe an unrelated legacy cache', async t 
 for (const version of [19, 99]) test(`P2-05 unsupported schema ${version} remains untouched and failed open is supervised`, async t => {
   const f = fixture(t); f.core.close();
   const db = openDatabase(f.path); db.exec('PRAGMA user_version=' + version); db.close();
-  const before = hash(f.path), config = configured(t, f.path);
+  const before = fingerprint(f.path), config = configured(t, f.path);
   let failure; await config.open().catch(error => { failure = error; });
   assert.equal(failure.code, 'unsupported_database'); assert.ok(failure.cleanupId);
   const drained = await config.supervisor.drain(failure.cleanupId);
-  assert.equal(drained.state, 'complete'); assert.equal(hash(f.path), before);
+  assert.equal(drained.state, 'complete'); assert.equal(fingerprint(f.path), before);
 });
 
 test('P2-14 generation equality and revocation after the final sample permit bounded completion without a third check', async t => {
@@ -140,16 +153,16 @@ test('P2-16 failed host construction releases registered outer attribution with 
   assert.equal(cleanup.state, 'complete'); assert.equal(cleanup.leasesReleased, true); assert.equal(config.view[7], 1);
 });
 
-test('P2-04 physical v18 old pin reopens after product fetch with identical DELETE bytes', async t => {
+test('P2-04 physical v18 old pin reopens after product fetch with unchanged SQLite contents and file metadata', async t => {
   const f = fixture(t), memory = f.admit('old pin canonical'); f.core.close();
-  const before = hash(f.path), config = configured(t, f.path), reader = await config.open();
+  const before = fingerprint(f.path), config = configured(t, f.path), reader = await config.open();
   assert.equal((await reader.fetchCandidateEvidence(fetchInput(memory), config.credential)).ok, true);
   await reader.close();
   const { openDatabase } = await import('./fixtures/topic-overview-b2513501/core/database.mjs');
   const old = openDatabase(f.path);
   try { assert.equal(old.prepare('SELECT content FROM memories WHERE id=?').get(memory.id).content, f.db.prepare('SELECT content FROM memories WHERE id=?').get(memory.id).content); }
   finally { old.close(); }
-  assert.equal(hash(f.path), before);
+  assert.equal(fingerprint(f.path), before);
 });
 
 for (const version of [23, 33]) test(`P2-05/11 real v${version} Card evidence uses canonical eligibility and exact revisions`, async t => {
@@ -210,4 +223,58 @@ test('P2-14 revocation after the Worker final canonical read permits receipt bef
     assert.equal(config.view[0], 0); assert.equal(config.view[1], 2);
     await reader.close();
   } finally { threads.Worker = NativeWorker; syncBuiltinESMExports(); }
+});
+
+for (const version of [20,21,22,23,24,25,26,27,28,29,30,31,32,33]) test(`P2-05 relabelled v18 as v${version} refuses before returning a handle`, async t => {
+  const f = fixture(t); f.core.close();
+  const db = new DatabaseSync(f.path); db.exec('PRAGMA user_version=' + version); db.close();
+  const config = configured(t, f.path); let failure;
+  await config.open().catch(error => { failure = error; });
+  assert.equal(failure?.code, 'unsupported_database');
+  assert.equal((await config.supervisor.drain(failure.cleanupId)).state, 'complete');
+});
+
+for (const [version, mutation] of [
+  [18, 'DROP TABLE memory_qualifications'],
+  [18, 'ALTER TABLE memories RENAME COLUMN content TO removed_content'],
+  [18, 'ALTER TABLE receipts RENAME COLUMN excerpt TO removed_excerpt'],
+  [18, 'DROP INDEX memory_receipts'],
+  [18, 'DROP INDEX memory_receipts; CREATE INDEX memory_receipts ON receipts(id,memory_id,created_at)'],
+  [23, 'DROP TABLE private_cards'],
+  [23, 'ALTER TABLE private_cards RENAME COLUMN body TO removed_body'],
+  [23, 'ALTER TABLE card_notes RENAME COLUMN text TO removed_text'],
+  [23, 'ALTER TABLE card_memory_bindings RENAME COLUMN source_ref TO removed_source_ref'],
+  [23, 'DROP INDEX private_card_scope'],
+  [23, 'DROP TABLE card_applicability_reviews'],
+]) test(`P2-05 physical v${version} rejects malformed layout: ${mutation}`, async t => {
+  const f = fixture(t); f.core.close(); installOverviewLayout(f.path, version);
+  const db = new DatabaseSync(f.path); db.exec(mutation); db.close();
+  const config = configured(t, f.path); let failure;
+  await config.open().catch(error => { failure = error; });
+  assert.equal(failure?.code, 'unsupported_database');
+  assert.equal((await config.supervisor.drain(failure.cleanupId)).state, 'complete');
+});
+
+test('P2-05 legacy layout acceptance is unchanged by product attestation', t => {
+  const f = fixture(t); f.core.close();
+  const db = new DatabaseSync(f.path); db.exec('PRAGMA user_version=23'); db.close();
+  const reader = openContextReader({ path: f.path, contextRead: { version: 'context-read-v1', authority: legacyHost().authority } });
+  reader.close();
+});
+
+test('P2-08 canonical replacement preserves cursor_stale across the real Worker boundary', async t => {
+  const f = fixture(t), memory = f.admit('replace canonical file'), config = configured(t, f.path), reader = await config.open();
+  f.core.close(); renameSync(f.path, f.path + '.previous');
+  const replacement = new DatabaseSync(f.path); replacement.close(); chmodSync(f.path, 0o600);
+  denied(await reader.fetchCandidateEvidence(fetchInput(memory), config.credential), 'cursor_stale');
+});
+
+for (const dimension of ['depth', 'nodes']) test(`P2-28 real Worker accepts credential at inclusive ${dimension} limit`, async t => {
+  let credential = dimension === 'nodes' ? Array(8191).fill(0) : 0;
+  if (dimension === 'depth') for (let i = 0; i < 16; i++) credential = [credential];
+  const f = fixture(t), memory = f.admit('boundary credential');
+  const config = configured(t, f.path, {}, [ns], credential), reader = await config.open();
+  assert.equal((await reader.fetchCandidateEvidence(fetchInput(memory), credential)).ok, true);
+  const oversized = dimension === 'nodes' ? Array(8192).fill(0) : [credential];
+  denied(await reader.fetchCandidateEvidence(fetchInput(memory), oversized), 'invalid_input');
 });

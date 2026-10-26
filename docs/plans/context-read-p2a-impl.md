@@ -219,3 +219,114 @@ above include docs and configuration, not just core source files.
 - `docs/context-read-product.md`
 - `docs/plans/context-read-p2a-impl.md`
 - `packaging/artifact-files.json`
+
+## Fix round 1
+
+This revision addresses both non-author reviews of P2a against the unchanged
+`context-read-product-v1.1` contract. No frozen specification section changes.
+
+| Finding | Fix | Deterministic regression coverage |
+| --- | --- | --- |
+| P1 abort-signal validation and settlement | Reject proxies with `util.types.isProxy`; call the captured native `AbortSignal.prototype.aborted` getter before registration. Use captured EventTarget listener intrinsics. Put listener/timer setup inside the cleanup path, and settle even when detachment throws. | `context-read-product-control.test.mjs`: forged/proxy signals at open and method entry register nothing and execute no traps; caller getter/method overrides are ignored on success and cancellation; failed setup releases records; a throwing detach still resolves once. |
+| P1 malformed physical schemas | Add product-only `context-product-schema.mjs`: version-specific presence of 109 canonical tables, and complete column/strict-table/index metadata for 39 consumed evidence/support/dependency tables. Check index uniqueness, origin, partial flag, ordered keys, direction and collation. The shared opener receives only an optional validation callback; legacy validation branches are unchanged. Ship the module in the artifact manifest. | `context-read-product.test.mjs`: genuine v18 and v20–v33 layouts remain accepted; v18 relabelled as each v20–v33 refuses `unsupported_database`; missing tables/columns, missing indexes and reordered indexes refuse; the legacy relabelled-layout behavior remains unchanged. The artifact test checks installed runtime closure. |
+| P2 credential bounds narrowed by transport | Validate the credential subtree independently at 16,384 bytes, depth 16 and 8,192 nodes, then charge the complete outbound message and shared buffers against the 262,144-byte IPC cap. | Control tests dispatch credentials at exactly depth 16 and 8,192 nodes, reject one beyond each without dispatch, and check the exact whole-message byte limit plus one byte. Real engine Worker tests also fetch successfully at both credential boundaries. |
+| P2 failed cleanup hides native diagnostics | A failed single-record drain still rejects `reader_failed`, with frozen `error.cleanup` and deeply frozen sanitized `error.diagnostics`. Argument-free drain returns every cleanup delivery, including failed records, so one disposal failure cannot hide the rest. Failed records retain quarantine and incomplete native coverage. | Control test commits native extended BUSY 261, discards the retrieval on timeout, fails Worker disposal, and verifies BUSY 5/261 remains exportable through both drain forms, with incomplete coverage and frozen nested records. Acknowledgement and supervisor close still report failure. |
+| P2 frozen errors collapse to `reader_failed` | Include `invalid_cursor`, `cursor_stale` and `token_count_unavailable` in the product error allowlist. | A real test Worker exercises all 24 applicable frozen errors through sender mapping and parent receipt, preserving retryability only for `storage_busy`. Real engine Worker fetch after canonical inode replacement returns `cursor_stale`. |
+| P2 incomplete P2-03 lifecycle coverage | Add distinct active-close, Worker-error, Worker-exit and idle-expiry scenarios with mock monotonic clocks and explicit termination gates. | Control tests assert public settlement, pinned records and unresolved close/drain before disposal; reject late data before and after disposal; and confirm cleanup and zero live records only after releasing the termination gate. |
+
+The product test's former raw database hashing and manually written WAL fixture
+now use SQLite-managed logical schema/data fingerprints plus file metadata, and
+a SQLite-created WAL cache. These checks do not claim whole-file byte equality.
+New database access uses SQLite or file metadata, without raw database or
+companion descriptors. The separately owned topic SQLite module and sidecar
+`walHeader` probe are unchanged.
+
+### Fix-round verification
+
+All commands below ran sequentially on Node **22.16.0**, with explicit
+test-file paths. The selection was independently derived through `rg --files`
+and a directory walk: **41 matching files**, with no difference. Each child
+process exit code was captured directly, with no pipeline masking. The full
+run exited **0**: **583 tests passed, zero failed, cancelled or skipped**.
+
+| Command | Actual exit | Tests | Passed | Failed |
+| --- | --- | --- | --- | --- |
+| `node core/test/context-read-assembly-races.test.mjs` | 0 | 7 | 7 | 0 |
+| `node core/test/context-read-assembly-readonly.test.mjs` | 0 | 28 | 28 | 0 |
+| `node core/test/context-read-assembly.test.mjs` | 0 | 20 | 20 | 0 |
+| `node core/test/context-read-bm25.test.mjs` | 0 | 3 | 3 | 0 |
+| `node core/test/context-read-budget.test.mjs` | 0 | 5 | 5 | 0 |
+| `node core/test/context-read-core.test.mjs` | 0 | 26 | 26 | 0 |
+| `node core/test/context-read-embedder.test.mjs` | 0 | 5 | 5 | 0 |
+| `node core/test/context-read-fusion.test.mjs` | 0 | 4 | 4 | 0 |
+| `node core/test/context-read-local-embedder.test.mjs` | 0 | 38 | 38 | 0 |
+| `node core/test/context-read-local-status.test.mjs` | 0 | 3 | 3 | 0 |
+| `node core/test/context-read-moc-source.test.mjs` | 0 | 15 | 15 | 0 |
+| `node core/test/context-read-process.test.mjs` | 0 | 1 | 1 | 0 |
+| `node core/test/context-read-product-artifact.test.mjs` | 0 | 1 | 1 | 0 |
+| `node core/test/context-read-product-control.test.mjs` | 0 | 49 | 49 | 0 |
+| `node core/test/context-read-product.test.mjs` | 0 | 61 | 61 | 0 |
+| `node core/test/context-read-recovery.test.mjs` | 0 | 10 | 10 | 0 |
+| `node core/test/context-read-review.test.mjs` | 0 | 10 | 10 | 0 |
+| `node core/test/context-read-sidecar.test.mjs` | 0 | 16 | 16 | 0 |
+| `node core/test/context-read-source-work.test.mjs` | 0 | 7 | 7 | 0 |
+| `node core/test/context-read-sources-authority.test.mjs` | 0 | 6 | 6 | 0 |
+| `node core/test/context-read-sources-bounds.test.mjs` | 0 | 5 | 5 | 0 |
+| `node core/test/context-read-sources-races.test.mjs` | 0 | 16 | 16 | 0 |
+| `node core/test/context-read-sources.test.mjs` | 0 | 14 | 14 | 0 |
+| `node core/test/context-read-tokenize.test.mjs` | 0 | 2 | 2 | 0 |
+| `node core/test/topic-members-bounds.test.mjs` | 0 | 7 | 7 | 0 |
+| `node core/test/topic-members-compatibility.test.mjs` | 0 | 32 | 32 | 0 |
+| `node core/test/topic-members-integration.test.mjs` | 0 | 1 | 1 | 0 |
+| `node core/test/topic-members-mutations.test.mjs` | 0 | 20 | 20 | 0 |
+| `node core/test/topic-members-primary.test.mjs` | 0 | 26 | 26 | 0 |
+| `node core/test/topic-members-recheck-findings.test.mjs` | 0 | 33 | 33 | 0 |
+| `node core/test/topic-members-review-findings.test.mjs` | 0 | 7 | 7 | 0 |
+| `node core/test/topic-members-round3-findings.test.mjs` | 0 | 18 | 18 | 0 |
+| `node core/test/topic-members-scale.test.mjs` | 0 | 2 | 2 | 0 |
+| `node core/test/topic-members-visibility.test.mjs` | 0 | 10 | 10 | 0 |
+| `node core/test/topic-members.test.mjs` | 0 | 10 | 10 | 0 |
+| `node core/test/topic-overview-lifecycle.test.mjs` | 0 | 11 | 11 | 0 |
+| `node core/test/topic-overview-raw29.test.mjs` | 0 | 22 | 22 | 0 |
+| `node core/test/topic-overview-visibility.test.mjs` | 0 | 8 | 8 | 0 |
+| `node core/test/topic-overview.test.mjs` | 0 | 4 | 4 | 0 |
+| `node core/test/topic-reader-cancellation.test.mjs` | 0 | 6 | 6 | 0 |
+| `node core/test/topic-reader-sqlite.test.mjs` | 0 | 14 | 14 | 0 |
+
+The installed-artifact check independently compared all **296** manifest
+entries with the archive filesystem and checked source/installed runtime
+closures (**79** modules each); tar creation and extraction both exited **0**.
+The static reader/supervisor closure remains SQLite-free (**22** modules).
+
+Additional verification: `node --check` for each of the **10 changed JavaScript
+files** exited **0**; `git diff --check` exited **0**. A separate scan including
+untracked files found no trailing whitespace or missing final newlines in all
+**12 changed files**, and no added private absolute paths. The frozen contract,
+topic SQLite implementation and sidecar module are unchanged.
+
+The initial developing product test run exited **1** (58/59 passed): the new
+replacement-file fixture was created with mode 0644, so the file-safety refusal
+preceded inode-currentness checking. Setting that fixture to 0600 corrected the
+test. The focused command
+`node --test-name-pattern='canonical replacement|inclusive' core/test/context-read-product.test.mjs`
+then exited **0** (3/3 passed). The final complete product test above exited
+**0** (61/61 passed); the earlier failure is retained here.
+
+Changed-file route one was `git diff --name-only -z` plus
+`git ls-files --others --exclude-standard -z`; route two was
+`git status --porcelain=v1 -z`. Independently sorted lists matched exactly,
+and `diff -u` exited **0**: **12 files** including the implementation notes,
+manifest and untracked runtime/test fixture. No commit was created.
+
+- `core/context-product-control.mjs`
+- `core/context-product-reader.mjs`
+- `core/context-product-schema.mjs`
+- `core/context-read-facade.mjs`
+- `core/context-read-supervisor.mjs`
+- `core/read-database.mjs`
+- `core/reader-worker-lifecycle.mjs`
+- `core/test/context-read-product-control.test.mjs`
+- `core/test/context-read-product.test.mjs`
+- `core/test/fixtures/context-product-errors.mjs`
+- `docs/plans/context-read-p2a-impl.md`
+- `packaging/artifact-files.json`

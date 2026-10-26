@@ -56,8 +56,9 @@ export function boundedData(value, maximum = 262144) {
   if (Buffer.byteLength(JSON.stringify(result)) > maximum) fail('invalid_input');
   return deepFreeze(result);
 }
-// Shared state is trusted host configuration, never a credential or tool input.
-export function hostConfiguration(value) {
+// Shared state is trusted host configuration. Operation envelopes validate the
+// credential separately, while retaining one byte cap for the full transport.
+export function hostConfiguration(value, credentialEnvelope = false) {
   let sharedBytes = 0, nodes = 8192, units = 262144;
   function copy(value, depth = 0) {
     if (--nodes < 0 || depth > 16 || types.isProxy(value)) fail('invalid_input');
@@ -79,7 +80,9 @@ export function hostConfiguration(value) {
       if (typeof key !== 'string' || key === '__proto__' || !key.isWellFormed() ||
           !Object.hasOwn(descriptors[key], 'value') || (units -= key.length) < 0) fail('invalid_input');
       if (array && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) !== result.length)) fail('invalid_input');
-      result[key] = copy(descriptors[key].value, depth + 1);
+      // Credential limits are relative to the credential, not the IPC wrapper.
+      result[key] = credentialEnvelope && depth === 0 && key === 'credential'
+        ? boundedData(descriptors[key].value, 16384) : copy(descriptors[key].value, depth + 1);
     }
     if (array && result.length !== value.length) fail('invalid_input');
     return result;
@@ -88,6 +91,8 @@ export function hostConfiguration(value) {
   if (sharedBytes + Buffer.byteLength(JSON.stringify(result)) > 262144) fail('invalid_input');
   return deepFreeze(result);
 }
+
+export const operationMessage = value => hostConfiguration(value, true);
 
 export const credentialDigest = value => createHash('sha256').update(JSON.stringify(boundedData(value, 16384))).digest('base64url');
 export function coverage(value, readSet) {

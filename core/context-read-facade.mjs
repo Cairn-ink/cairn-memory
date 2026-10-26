@@ -2,6 +2,7 @@ import { sampleLocalStatus } from './context-read-local-status.mjs';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { isAbsolute, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { validateContextProductLayout } from './context-product-schema.mjs';
 import { openReadDatabase } from './read-database.mjs';
 import { readTransaction, isConnectionDiscarded, isStorageBusy } from './database.mjs';
 import { ownData } from './local-authority-input.mjs';
@@ -93,6 +94,7 @@ function createContextFacade(path, options, { readOnly }) {
   try {
     if (path !== ':memory:') database = openReadDatabase(path, { contextRead: true,
       nativeObserver: options.product?.observer,
+      validateProduct: options.product ? validateContextProductLayout : undefined,
       preflight: () => { if (readOnly) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path); } });
     return initializeContextFacade(path, options, { readOnly, database });
   } catch (error) {

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { drainNative } from './context-product-telemetry.mjs';
+import { deepFreeze } from './private-card-input.mjs';
 import { fail } from './validation.mjs';
 
 export const SUPERVISOR_LIMITS = Object.freeze({ live: 256, completed: 1024, metadataBytes: 1048576,
@@ -46,14 +47,15 @@ export function createSupervisorRegistry({ now = () => Number(process.hrtime.big
     }
   }
   function finalize(record, fields, diagnostics) {
-    if (record.expiresAt !== null) return;
+    if (record.expiresAt !== null || record.state === 'failed') return;
     Object.assign(record, fields);
     record.telemetry = diagnostics.coverage;
-    record.diagnostics = diagnostics;
+    record.diagnostics = diagnostics = deepFreeze(diagnostics);
     record.state = ['workerStopped', 'nativeDisposed', 'leasesReleased', 'providersSettled'].every(k => record[k]) ? 'complete' : 'failed';
     if (record.state === 'failed') {
       record.safety = true;
-      record.reject(Object.assign(Error('reader_failed'), { code: 'reader_failed' }));
+      const cleanup = Object.freeze({ ...status(record), diagnostics });
+      record.reject(Object.assign(Error('reader_failed'), { code: 'reader_failed', cleanup, diagnostics }));
       return;
     }
     record.safety = false; live--;
@@ -104,7 +106,12 @@ export function createSupervisorRegistry({ now = () => Number(process.hrtime.big
       getCleanupStatus(id) { return status(lookup(owner, id)); },
       drain(id) {
         if (id !== undefined) { const record = lookup(owner, id); record.draining = true; return record.delivery; }
-        expire(); return Promise.all([...owner.records].filter(r => r.cleaning).map(r => { r.draining = true; return r.delivery; }));
+        expire(); return Promise.all([...owner.records].filter(r => r.cleaning).map(r => {
+          r.draining = true; return r.delivery.catch(error => {
+            if (error.cleanup) return error.cleanup;
+            throw error;
+          });
+        }));
       },
       ackCleanup(id) {
         const record = lookup(owner, id);
