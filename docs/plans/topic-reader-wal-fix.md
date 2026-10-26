@@ -866,3 +866,91 @@ docs/plans/topic-reader-wal-fix.md
 No runtime regeneration or commit. The generated runtime is unchanged from
 HEAD (git diff --quiet exit 0). No network or key access; all test processes
 were supervised through their actual completion.
+
+### Fix round 4 (full CI)
+
+The defensive SQLite build in GitHub CI refused the malformed-schema fixture's
+`writable_schema` update. The test now closes a valid source database, changes
+one schema token without changing its byte length, and exclusively creates a
+new test-owned malformed database before any SQLite connection to that file.
+It verifies both the wrong application ID and the malformed schema directly,
+then compares the frozen b2513501 reader and the current reader for the same
+`unsupported_database` precedence. No defensive-mode API or build option is
+required on either supported Node version.
+
+The measurement candidate still patched the old `const db` declaration after
+the hotfix changed it to an assignment inside the cleanup boundary. Its anchor
+now matches that assignment and injects the same native measurement wrapper.
+This was also the logged cause of both physical schema18/schema29 failures;
+the public-writer and real-reader assertions remain intact, as does the shared
+remaining wait-budget test for prepared statements and transactions.
+
+The installed import graph treated the isolated file reader's child-entry URL
+as an eager in-process dependency. It now recognizes literal native Node
+`spawn`/`spawnSync` entry edges, records them separately in `childEntries`, and
+retains their complete required archive closure, following the existing Worker
+edge model. Shared dependencies still count as eager when separately imported.
+Regression cases cover child-only dependencies/assets, aliased native spawning,
+an independently imported child, ordinary spawn-looking functions, and missing
+children. All installed-closure consumers use this shared helper; the child
+script remains in the artifact manifest and archive.
+
+The no-raw-descriptor guard's synthetic import mutation now uses `replaceAll`
+to address CodeQL's `js/incomplete-sanitization` alert.
+
+Runtime files and generated setup runtime are unchanged. Existing MCP/OpenAI
+dependencies and offline package caches are reused; the network-enabled CI
+cache-preparation scripts are intentionally not invoked under the no-network
+constraint. All processes below were supervised to their actual exit status.
+
+
+Actual process exit codes (each Node version selected before invocation):
+
+| Node | Command/check | Result | Exit |
+| --- | --- | --- | --- |
+| 22.16.0 | `npm run test:core` | 2,838 pass, 3 expected stage-already-present skips | 0 |
+| 22.16.0 | `npm run test:workspace-lifecycle` | 83 pass, no skips | 0 |
+| 22.16.0 | `npm run test:artifact` first invocation | 273 pass, 1 capture failure, 1 Windows-only skip | 1 |
+| 22.16.0 | `npm run test:artifact` exact full retry | 274 pass, 1 Windows-only skip | 0 |
+| 22.16.0 | Four directly touched test files, command below without the lifecycle file | 38 pass | 0 |
+| 22.16.0 | `node tools/testing/run.mjs packaging/test/raw-installed-lifecycle.test.mjs` | All six IL-A/IL-B/IL-C cases pass | 0 |
+| 22.16.0, baseline `89b10084` | `node tools/testing/run.mjs --test-name-pattern='IL-A codex' packaging/test/raw-installed-lifecycle.test.mjs` | 1 pass | 0 |
+| 24.22.1 | Touched tests plus installed lifecycle closure, command below | 44 pass, no skips | 0 |
+
+The Node 24 command was:
+
+```sh
+node tools/testing/run.mjs core/test/topic-reader-sqlite.test.mjs core/test/no-raw-db-fd.test.mjs tools/testing/measure-topic-overview-contention.test.mjs packaging/test/installed-import-closure.test.mjs packaging/test/raw-installed-lifecycle.test.mjs
+```
+
+The first artifact invocation's additional failure was IL-A Codex capture
+returning `interpretation_incomplete`, before closure verification. All other
+IL cases passed. The same case passed on the current branch in the isolated
+six-case lifecycle run, on the extracted `89b10084` baseline, and in the exact
+full-suite retry. Byte comparison confirmed that the lifecycle test, lifecycle
+fixture, shared one-shot fixture (including its 5-second capture budget), and
+capture adapter are unchanged from `89b10084`. A timing-sensitive capture
+failure is plausible, but the baseline failure was not reproduced, so this is
+not evidence of a proven pre-existing failure or a runtime defect. No runtime
+or unrelated fixture change was made for this transient result.
+
+The full artifact suite checked the other installed-closure consumers too.
+The real CLI graph independently confirms the isolated reader child remains
+required and manifested, is listed in `childEntries`, and is absent from the
+eager set. The archive/installed-tree checks passed in the full retry. The
+CodeQL replacement was corrected; the CodeQL analyzer itself was not run locally.
+
+Changed paths were derived from `git diff --name-only HEAD` plus untracked
+paths and independently from `git status --porcelain=v1 -z`; the sorted sets
+match, count 6, differences 0. `git diff --check` and an independent final
+newline/trailing-whitespace scan both exit 0. Runtime/generated-runtime diff
+checks exit 0. No regeneration or commit.
+
+```text
+core/test/no-raw-db-fd.test.mjs
+core/test/topic-reader-sqlite.test.mjs
+docs/plans/topic-reader-wal-fix.md
+packaging/test/fixtures/installed-import-closure.mjs
+packaging/test/installed-import-closure.test.mjs
+tools/testing/measure-topic-overview-contention.mjs
+```

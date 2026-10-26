@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { openMemoryCore } from '../index.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { writeFileSync, existsSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { createTopicSqlitePolicy, topicJournalMode, SQLITE_STAGES, SQLITE_STATEMENTS,
   recordSqliteFailure, unsupportedTopicStorage, TOPIC_WAL_WAIT_MS } from '../topic-reader-sqlite.mjs';
@@ -214,12 +214,28 @@ test('exclusive creation and setup refuse a store with an active host writer', a
 
 test('wrong application ID plus malformed schema retains b2513501 legacy error precedence', async t => {
   const { baselineReader } = await import('../testing/topic-members-round3-fixture.mjs');
-  const f = memberFixture(t);
-  f.db.exec("PRAGMA application_id=1; PRAGMA writable_schema=ON; UPDATE sqlite_master SET sql='CREATE TABLE invalid (' WHERE name='memories'; PRAGMA writable_schema=OFF;");
-  const oldOpen = await baselineReader(f.workspace, message => t.diagnostic(message));
+  const workspace = createTestWorkspace(t), source = join(workspace.path, 'valid.sqlite');
+  const db = new DatabaseSync(source);
+  try { db.exec('PRAGMA application_id=1; PRAGMA user_version=18; CREATE TABLE memories(id TEXT)'); }
+  finally { db.close(); }
+  // Corrupt a same-length schema token in bytes, then create a NEW test-owned
+  // file before any SQLite connection exists to it. Defensive SQLite builds
+  // correctly refuse writable_schema edits, so this fixture never uses them.
+  const bytes = readFileSync(source), token = Buffer.from('CREATE TABLE memories(');
+  const offset = bytes.indexOf(token);
+  assert.ok(offset >= 0); assert.equal(bytes.indexOf(token, offset + 1), -1);
+  bytes[offset + token.length - 1] = ')'.charCodeAt(0);
+  const path = join(workspace.path, 'malformed.sqlite');
+  writeFileSync(path, bytes, { flag: 'wx', mode: 0o600 });
+  const malformed = new DatabaseSync(path, { readOnly: true });
+  try {
+    assert.equal(malformed.prepare('PRAGMA application_id').get().application_id, 1);
+    assert.throws(() => malformed.prepare('SELECT * FROM sqlite_master').all(), /malformed database schema/);
+  } finally { malformed.close(); }
+  const oldOpen = await baselineReader(workspace, message => t.diagnostic(message));
   const expected = { ok: false, error: { code: 'unsupported_database' } };
   for (const open of [oldOpen, openMemoryReader]) {
-    const reader = open({ path: f.path, ownerId: namespace.ownerId });
+    const reader = open({ path, ownerId: namespace.ownerId });
     try { assert.deepEqual(await reader.readTopicOverview({ namespace }), expected); }
     finally { await reader.close(); }
   }

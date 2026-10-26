@@ -186,7 +186,7 @@ test('guard rejects the original header probe, fs aliases, promises, streams and
   const multiline = allow.find(entry => entry.source.startsWith('import {') && entry.source.includes('\n'));
   assert.ok(multiline);
   assert.equal(violations(multiline.path, multiline.source).length, 0);
-  assert.ok(violations(multiline.path, multiline.source.replace('{', '{ open as $sneak,') + '\nawait $sneak(path);').length > 0);
+  assert.ok(violations(multiline.path, multiline.source.replaceAll('{', '{ open as $sneak,') + '\nawait $sneak(path);').length > 0);
   const entry = allow.find(entry => entry.path === 'core/sqlite-journal-probe.mjs' && entry.source.includes('fd = openSync'));
   assert.ok(violations(entry.path, `${entry.source}\n${entry.source}\nimport { openSync } from 'node:fs';`).length >= 2);
 });
