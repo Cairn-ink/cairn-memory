@@ -1,0 +1,1296 @@
+[
+  {
+    "id": "zh-0-0",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "個人實驗簿調整之前的巡檢日是哪一天？",
+    "intent": "history",
+    "form": "natural"
+  },
+  {
+    "id": "zh-0-1",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "個人實驗簿舊版資料會保留幾天？",
+    "intent": "history",
+    "form": "paraphrase"
+  },
+  {
+    "id": "zh-0-2",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "個人實驗簿以前最多允許重試幾次？",
+    "intent": "history",
+    "form": "natural"
+  },
+  {
+    "id": "zh-0-3",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "個人實驗簿目前琥珀佇列能容納多少筆？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "zh-0-4",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "個人實驗簿的羽砂演練要找哪位虛構員偶負責？",
+    "intent": "current",
+    "form": "paraphrase"
+  },
+  {
+    "id": "zh-0-5",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "個人實驗簿 雨紋 Offline export 的版本",
+    "intent": "current",
+    "form": "exact-term"
+  },
+  {
+    "id": "zh-0-6",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "個人實驗簿的白礫手冊要求先做什麼，再做什麼？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "zh-0-7",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "個人實驗簿月苔卡片多久才容許切換？",
+    "intent": "current",
+    "form": "paraphrase"
+  },
+  {
+    "id": "zh-0-8",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "個人實驗簿 砂羽驗收卡 樣本數",
+    "intent": "current",
+    "form": "exact-term"
+  },
+  {
+    "id": "zh-0-9",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "比較個人實驗簿與霧棱計畫的霧鈴預備額度，各是多少格？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "ja-0-0",
+    "category": "ja",
+    "language": "ja",
+    "text": "個人實驗簿の変更前の保存期間は何日でしたか。",
+    "intent": "history",
+    "form": "natural"
+  },
+  {
+    "id": "ja-0-1",
+    "category": "ja",
+    "language": "ja",
+    "text": "個人實驗簿の霜匣方式では保管前に何分待ちますか。",
+    "intent": "current",
+    "form": "paraphrase"
+  },
+  {
+    "id": "ja-0-2",
+    "category": "ja",
+    "language": "ja",
+    "text": "個人實驗簿の珊石ラベルに使う絵文字と文字表記は何ですか。",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "ja-0-3",
+    "category": "ja",
+    "language": "ja",
+    "text": "個人實驗簿 砂羽 検収 標本数",
+    "intent": "current",
+    "form": "exact-term"
+  },
+  {
+    "id": "ja-0-4",
+    "category": "ja",
+    "language": "ja",
+    "text": "個人實驗簿と霧棱計畫の霧鈴カードの予備枠をそれぞれ教えてください。",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "mixed-0-0",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "個人實驗簿 current retention 現在保留幾天？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "mixed-0-1",
+    "category": "mixed",
+    "language": "ja-en",
+    "text": "個人實驗簿の current retry limit は何回ですか。",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "mixed-0-2",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "個人實驗簿 MossBell 的 batch confirmation threshold？",
+    "intent": "current",
+    "form": "exact-term"
+  },
+  {
+    "id": "mixed-0-3",
+    "category": "mixed",
+    "language": "ja-en",
+    "text": "個人實驗簿 WhitePebble runbook の最初と次の手順は？",
+    "intent": "current",
+    "form": "paraphrase"
+  },
+  {
+    "id": "mixed-0-4",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "個人實驗簿和霧棱計畫的 ArcLamp release，各需幾位審核員？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "zh-1-0",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "霧棱計畫調整之前的巡檢日是哪一天？",
+    "intent": "history",
+    "form": "natural"
+  },
+  {
+    "id": "zh-1-1",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "霧棱計畫舊版資料會保留幾天？",
+    "intent": "history",
+    "form": "paraphrase"
+  },
+  {
+    "id": "zh-1-2",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "霧棱計畫以前最多允許重試幾次？",
+    "intent": "history",
+    "form": "natural"
+  },
+  {
+    "id": "zh-1-3",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "霧棱計畫目前琥珀佇列能容納多少筆？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "zh-1-4",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "霧棱計畫的羽砂演練要找哪位虛構員偶負責？",
+    "intent": "current",
+    "form": "paraphrase"
+  },
+  {
+    "id": "zh-1-5",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "霧棱計畫 雨紋 Offline export 的版本",
+    "intent": "current",
+    "form": "exact-term"
+  },
+  {
+    "id": "zh-1-6",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "霧棱計畫的白礫手冊要求先做什麼，再做什麼？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "zh-1-7",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "霧棱計畫月苔卡片多久才容許切換？",
+    "intent": "current",
+    "form": "paraphrase"
+  },
+  {
+    "id": "zh-1-8",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "霧棱計畫 砂羽驗收卡 樣本數",
+    "intent": "current",
+    "form": "exact-term"
+  },
+  {
+    "id": "zh-1-9",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "比較霧棱計畫與苔弦計畫的霧鈴預備額度，各是多少格？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "ja-1-0",
+    "category": "ja",
+    "language": "ja",
+    "text": "霧棱計畫の変更前の保存期間は何日でしたか。",
+    "intent": "history",
+    "form": "natural"
+  },
+  {
+    "id": "ja-1-1",
+    "category": "ja",
+    "language": "ja",
+    "text": "霧棱計畫の霜匣方式では保管前に何分待ちますか。",
+    "intent": "current",
+    "form": "paraphrase"
+  },
+  {
+    "id": "ja-1-2",
+    "category": "ja",
+    "language": "ja",
+    "text": "霧棱計畫の珊石ラベルに使う絵文字と文字表記は何ですか。",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "ja-1-3",
+    "category": "ja",
+    "language": "ja",
+    "text": "霧棱計畫 砂羽 検収 標本数",
+    "intent": "current",
+    "form": "exact-term"
+  },
+  {
+    "id": "ja-1-4",
+    "category": "ja",
+    "language": "ja",
+    "text": "霧棱計畫と苔弦計畫の霧鈴カードの予備枠をそれぞれ教えてください。",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "mixed-1-0",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "霧棱計畫 current retention 現在保留幾天？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "mixed-1-1",
+    "category": "mixed",
+    "language": "ja-en",
+    "text": "霧棱計畫の current retry limit は何回ですか。",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "mixed-1-2",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "霧棱計畫 MossBell 的 batch confirmation threshold？",
+    "intent": "current",
+    "form": "exact-term"
+  },
+  {
+    "id": "mixed-1-3",
+    "category": "mixed",
+    "language": "ja-en",
+    "text": "霧棱計畫 WhitePebble runbook の最初と次の手順は？",
+    "intent": "current",
+    "form": "paraphrase"
+  },
+  {
+    "id": "mixed-1-4",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "霧棱計畫和苔弦計畫的 ArcLamp release，各需幾位審核員？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "zh-2-0",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "苔弦計畫調整之前的巡檢日是哪一天？",
+    "intent": "history",
+    "form": "natural"
+  },
+  {
+    "id": "zh-2-1",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "苔弦計畫舊版資料會保留幾天？",
+    "intent": "history",
+    "form": "paraphrase"
+  },
+  {
+    "id": "zh-2-2",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "苔弦計畫以前最多允許重試幾次？",
+    "intent": "history",
+    "form": "natural"
+  },
+  {
+    "id": "zh-2-3",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "苔弦計畫目前琥珀佇列能容納多少筆？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "zh-2-4",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "苔弦計畫的羽砂演練要找哪位虛構員偶負責？",
+    "intent": "current",
+    "form": "paraphrase"
+  },
+  {
+    "id": "zh-2-5",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "苔弦計畫 雨紋 Offline export 的版本",
+    "intent": "current",
+    "form": "exact-term"
+  },
+  {
+    "id": "zh-2-6",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "苔弦計畫的白礫手冊要求先做什麼，再做什麼？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "zh-2-7",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "苔弦計畫月苔卡片多久才容許切換？",
+    "intent": "current",
+    "form": "paraphrase"
+  },
+  {
+    "id": "zh-2-8",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "苔弦計畫 砂羽驗收卡 樣本數",
+    "intent": "current",
+    "form": "exact-term"
+  },
+  {
+    "id": "zh-2-9",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "比較苔弦計畫與砂環計畫的霧鈴預備額度，各是多少格？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "ja-2-0",
+    "category": "ja",
+    "language": "ja",
+    "text": "苔弦計畫の変更前の保存期間は何日でしたか。",
+    "intent": "history",
+    "form": "natural"
+  },
+  {
+    "id": "ja-2-1",
+    "category": "ja",
+    "language": "ja",
+    "text": "苔弦計畫の霜匣方式では保管前に何分待ちますか。",
+    "intent": "current",
+    "form": "paraphrase"
+  },
+  {
+    "id": "ja-2-2",
+    "category": "ja",
+    "language": "ja",
+    "text": "苔弦計畫の珊石ラベルに使う絵文字と文字表記は何ですか。",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "ja-2-3",
+    "category": "ja",
+    "language": "ja",
+    "text": "苔弦計畫 砂羽 検収 標本数",
+    "intent": "current",
+    "form": "exact-term"
+  },
+  {
+    "id": "ja-2-4",
+    "category": "ja",
+    "language": "ja",
+    "text": "苔弦計畫と砂環計畫の霧鈴カードの予備枠をそれぞれ教えてください。",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "mixed-2-0",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "苔弦計畫 current retention 現在保留幾天？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "mixed-2-1",
+    "category": "mixed",
+    "language": "ja-en",
+    "text": "苔弦計畫の current retry limit は何回ですか。",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "mixed-2-2",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "苔弦計畫 MossBell 的 batch confirmation threshold？",
+    "intent": "current",
+    "form": "exact-term"
+  },
+  {
+    "id": "mixed-2-3",
+    "category": "mixed",
+    "language": "ja-en",
+    "text": "苔弦計畫 WhitePebble runbook の最初と次の手順は？",
+    "intent": "current",
+    "form": "paraphrase"
+  },
+  {
+    "id": "mixed-2-4",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "苔弦計畫和砂環計畫的 ArcLamp release，各需幾位審核員？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "zh-3-0",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "砂環計畫調整之前的巡檢日是哪一天？",
+    "intent": "history",
+    "form": "natural"
+  },
+  {
+    "id": "zh-3-1",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "砂環計畫舊版資料會保留幾天？",
+    "intent": "history",
+    "form": "paraphrase"
+  },
+  {
+    "id": "zh-3-2",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "砂環計畫以前最多允許重試幾次？",
+    "intent": "history",
+    "form": "natural"
+  },
+  {
+    "id": "zh-3-3",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "砂環計畫目前琥珀佇列能容納多少筆？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "zh-3-4",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "砂環計畫的羽砂演練要找哪位虛構員偶負責？",
+    "intent": "current",
+    "form": "paraphrase"
+  },
+  {
+    "id": "zh-3-5",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "砂環計畫 雨紋 Offline export 的版本",
+    "intent": "current",
+    "form": "exact-term"
+  },
+  {
+    "id": "zh-3-6",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "砂環計畫的白礫手冊要求先做什麼，再做什麼？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "zh-3-7",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "砂環計畫月苔卡片多久才容許切換？",
+    "intent": "current",
+    "form": "paraphrase"
+  },
+  {
+    "id": "zh-3-8",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "砂環計畫 砂羽驗收卡 樣本數",
+    "intent": "current",
+    "form": "exact-term"
+  },
+  {
+    "id": "zh-3-9",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "比較砂環計畫與個人實驗簿的霧鈴預備額度，各是多少格？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "ja-3-0",
+    "category": "ja",
+    "language": "ja",
+    "text": "砂環計畫の変更前の保存期間は何日でしたか。",
+    "intent": "history",
+    "form": "natural"
+  },
+  {
+    "id": "ja-3-1",
+    "category": "ja",
+    "language": "ja",
+    "text": "砂環計畫の霜匣方式では保管前に何分待ちますか。",
+    "intent": "current",
+    "form": "paraphrase"
+  },
+  {
+    "id": "ja-3-2",
+    "category": "ja",
+    "language": "ja",
+    "text": "砂環計畫の珊石ラベルに使う絵文字と文字表記は何ですか。",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "ja-3-3",
+    "category": "ja",
+    "language": "ja",
+    "text": "砂環計畫 砂羽 検収 標本数",
+    "intent": "current",
+    "form": "exact-term"
+  },
+  {
+    "id": "ja-3-4",
+    "category": "ja",
+    "language": "ja",
+    "text": "砂環計畫と個人實驗簿の霧鈴カードの予備枠をそれぞれ教えてください。",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "mixed-3-0",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "砂環計畫 current retention 現在保留幾天？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "mixed-3-1",
+    "category": "mixed",
+    "language": "ja-en",
+    "text": "砂環計畫の current retry limit は何回ですか。",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "mixed-3-2",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "砂環計畫 MossBell 的 batch confirmation threshold？",
+    "intent": "current",
+    "form": "exact-term"
+  },
+  {
+    "id": "mixed-3-3",
+    "category": "mixed",
+    "language": "ja-en",
+    "text": "砂環計畫 WhitePebble runbook の最初と次の手順は？",
+    "intent": "current",
+    "form": "paraphrase"
+  },
+  {
+    "id": "mixed-3-4",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "砂環計畫和個人實驗簿的 ArcLamp release，各需幾位審核員？",
+    "intent": "current",
+    "form": "natural"
+  },
+  {
+    "id": "temporal-0",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "我這週在做什麼",
+    "intent": "current",
+    "form": "natural",
+    "shortTemporal": true,
+    "temporal": {
+      "asOf": "2026-10-27T12:00:00+08:00",
+      "timezone": "Asia/Taipei",
+      "window": "thisWeek",
+      "startDate": "2026-10-26",
+      "endDateExclusive": "2026-11-02"
+    }
+  },
+  {
+    "id": "temporal-1",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "我本週都在忙啥",
+    "intent": "current",
+    "form": "natural",
+    "shortTemporal": true,
+    "temporal": {
+      "asOf": "2026-10-27T12:00:00+08:00",
+      "timezone": "Asia/Taipei",
+      "window": "thisWeek",
+      "startDate": "2026-10-26",
+      "endDateExclusive": "2026-11-02"
+    }
+  },
+  {
+    "id": "temporal-2",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "這星期我在忙什麼",
+    "intent": "current",
+    "form": "natural",
+    "shortTemporal": true,
+    "temporal": {
+      "asOf": "2026-10-27T12:00:00+08:00",
+      "timezone": "Asia/Taipei",
+      "window": "thisWeek",
+      "startDate": "2026-10-26",
+      "endDateExclusive": "2026-11-02"
+    }
+  },
+  {
+    "id": "temporal-3",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "我這週忙哪些事",
+    "intent": "current",
+    "form": "natural",
+    "shortTemporal": true,
+    "temporal": {
+      "asOf": "2026-10-27T12:00:00+08:00",
+      "timezone": "Asia/Taipei",
+      "window": "thisWeek",
+      "startDate": "2026-10-26",
+      "endDateExclusive": "2026-11-02"
+    }
+  },
+  {
+    "id": "temporal-4",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "上週決定了什麼",
+    "intent": "current",
+    "form": "natural",
+    "shortTemporal": true,
+    "temporal": {
+      "asOf": "2026-10-27T12:00:00+08:00",
+      "timezone": "Asia/Taipei",
+      "window": "lastWeek",
+      "startDate": "2026-10-19",
+      "endDateExclusive": "2026-10-26"
+    }
+  },
+  {
+    "id": "temporal-5",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "我上週做了哪些決定",
+    "intent": "current",
+    "form": "natural",
+    "shortTemporal": true,
+    "temporal": {
+      "asOf": "2026-10-27T12:00:00+08:00",
+      "timezone": "Asia/Taipei",
+      "window": "lastWeek",
+      "startDate": "2026-10-19",
+      "endDateExclusive": "2026-10-26"
+    }
+  },
+  {
+    "id": "temporal-6",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "我最近都在忙什麼",
+    "intent": "current",
+    "form": "natural",
+    "shortTemporal": true,
+    "temporal": {
+      "asOf": "2026-10-27T12:00:00+08:00",
+      "timezone": "Asia/Taipei",
+      "window": "recent",
+      "startDate": "2026-10-21",
+      "endDateExclusive": "2026-10-28"
+    }
+  },
+  {
+    "id": "temporal-7",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "最近我都在忙什麼",
+    "intent": "current",
+    "form": "natural",
+    "shortTemporal": true,
+    "temporal": {
+      "asOf": "2026-10-27T12:00:00+08:00",
+      "timezone": "Asia/Taipei",
+      "window": "recent",
+      "startDate": "2026-10-21",
+      "endDateExclusive": "2026-10-28"
+    }
+  },
+  {
+    "id": "product-term-0",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "霧棱的 MCP 授權怎麼設",
+    "intent": "current",
+    "form": "natural",
+    "productTerm": true,
+    "topic": "mcp-authorization"
+  },
+  {
+    "id": "product-term-1",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "上次決定用哪個 embedding",
+    "intent": "current",
+    "form": "natural",
+    "productTerm": true,
+    "topic": "embedding-choice"
+  },
+  {
+    "id": "product-term-2",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "砂環 WAL 為什麼要切",
+    "intent": "current",
+    "form": "natural",
+    "productTerm": true,
+    "topic": "wal-rationale"
+  },
+  {
+    "id": "product-term-3",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "霜匣 API 的 TTL 設多久",
+    "intent": "current",
+    "form": "natural",
+    "productTerm": true,
+    "topic": "api-ttl"
+  },
+  {
+    "id": "product-term-4",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "霧棱 readSet 到底含哪些範圍",
+    "intent": "current",
+    "form": "natural",
+    "productTerm": true,
+    "topic": "read-set"
+  },
+  {
+    "id": "product-term-5",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "苔弦 cron 多久叫醒背景泵",
+    "intent": "current",
+    "form": "natural",
+    "productTerm": true,
+    "topic": "maintenance-cadence"
+  },
+  {
+    "id": "product-term-6",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "砂環 backup 要帶旁檔嗎",
+    "intent": "current",
+    "form": "natural",
+    "productTerm": true,
+    "topic": "backup-policy"
+  },
+  {
+    "id": "product-term-7",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "霜匣 MCP scope 換專案會怎樣",
+    "intent": "current",
+    "form": "natural",
+    "productTerm": true,
+    "topic": "mcp-scope"
+  },
+  {
+    "id": "zero-overlap-0",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "資料庫換成什麼了",
+    "intent": "current",
+    "form": "zero-overlap-paraphrase",
+    "zeroSharedTokens": true,
+    "topic": "database-choice"
+  },
+  {
+    "id": "zero-overlap-1",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "部署放在哪裡跑呢",
+    "intent": "current",
+    "form": "zero-overlap-paraphrase",
+    "zeroSharedTokens": true,
+    "topic": "deployment-location"
+  },
+  {
+    "id": "zero-overlap-2",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "登入之後多久失效",
+    "intent": "current",
+    "form": "zero-overlap-paraphrase",
+    "zeroSharedTokens": true,
+    "topic": "session-lifetime"
+  },
+  {
+    "id": "zero-overlap-3",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "快滿時要怎麼辦呢",
+    "intent": "current",
+    "form": "zero-overlap-paraphrase",
+    "zeroSharedTokens": true,
+    "topic": "capacity-response"
+  },
+  {
+    "id": "zero-overlap-4",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "資料壞掉怎樣救回",
+    "intent": "current",
+    "form": "zero-overlap-paraphrase",
+    "zeroSharedTokens": true,
+    "topic": "corruption-recovery"
+  },
+  {
+    "id": "zero-overlap-5",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "多人一起寫會怎樣",
+    "intent": "current",
+    "form": "zero-overlap-paraphrase",
+    "zeroSharedTokens": true,
+    "topic": "concurrent-write-policy"
+  },
+  {
+    "id": "zero-overlap-6",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "中途斷線如何重來",
+    "intent": "current",
+    "form": "zero-overlap-paraphrase",
+    "zeroSharedTokens": true,
+    "topic": "reconnect-policy"
+  },
+  {
+    "id": "zero-overlap-7",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "打包出去長什麼樣",
+    "intent": "current",
+    "form": "zero-overlap-paraphrase",
+    "zeroSharedTokens": true,
+    "topic": "package-format"
+  },
+  {
+    "id": "zero-overlap-8",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "出錯想找紀錄在哪",
+    "intent": "current",
+    "form": "zero-overlap-paraphrase",
+    "zeroSharedTokens": true,
+    "topic": "trace-destination"
+  },
+  {
+    "id": "zero-overlap-9",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "畫面字太小如何辦",
+    "intent": "current",
+    "form": "zero-overlap-paraphrase",
+    "zeroSharedTokens": true,
+    "topic": "readability-choice"
+  },
+  {
+    "id": "natural-history-0",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "個人實驗簿巡檢之前排哪天？後來為什麼挪動？",
+    "intent": "history",
+    "form": "natural",
+    "naturalHistory": true,
+    "explanationRequired": true
+  },
+  {
+    "id": "natural-history-1",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "我原本把實驗筆記留多久？怎麼會改成現在這樣？",
+    "intent": "history",
+    "form": "natural",
+    "naturalHistory": true,
+    "explanationRequired": true
+  },
+  {
+    "id": "natural-history-2",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "實驗簿之前允許重試幾次？調高是因為什麼？",
+    "intent": "history",
+    "form": "natural",
+    "naturalHistory": true,
+    "explanationRequired": true
+  },
+  {
+    "id": "natural-history-3",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "霧棱原本哪天巡檢？為什麼換日子？",
+    "intent": "history",
+    "form": "natural",
+    "naturalHistory": true,
+    "explanationRequired": true
+  },
+  {
+    "id": "natural-history-4",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "霧棱以前留幾天資料？後來加長的理由呢？",
+    "intent": "history",
+    "form": "natural",
+    "naturalHistory": true,
+    "explanationRequired": true
+  },
+  {
+    "id": "natural-history-5",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "霧棱的重試以前設多少？這次改設定是遇到了什麼？",
+    "intent": "history",
+    "form": "natural",
+    "naturalHistory": true,
+    "explanationRequired": true
+  },
+  {
+    "id": "owner-wide-0",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "潮匣的佇列最後怎麼定的",
+    "intent": "current",
+    "form": "natural",
+    "ownerWide": true,
+    "topic": "潮匣",
+    "foregroundNamespace": {
+      "ownerId": "synthetic-p2-owner",
+      "scope": "project",
+      "projectId": "mist-prism"
+    }
+  },
+  {
+    "id": "distractor-0",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "潮匣最後用的是焰環多列嗎",
+    "intent": "current",
+    "form": "natural",
+    "ownerWide": true,
+    "topic": "潮匣",
+    "foregroundNamespace": {
+      "ownerId": "synthetic-p2-owner",
+      "scope": "project",
+      "projectId": "mist-prism"
+    },
+    "distractorChallenge": true
+  },
+  {
+    "id": "owner-wide-1",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "藍穗的匯出封裝最後怎麼定的",
+    "intent": "current",
+    "form": "natural",
+    "ownerWide": true,
+    "topic": "藍穗",
+    "foregroundNamespace": {
+      "ownerId": "synthetic-p2-owner",
+      "scope": "project",
+      "projectId": "moss-chord"
+    }
+  },
+  {
+    "id": "distractor-1",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "藍穗最後用的是砂渦封套嗎",
+    "intent": "current",
+    "form": "natural",
+    "ownerWide": true,
+    "topic": "藍穗",
+    "foregroundNamespace": {
+      "ownerId": "synthetic-p2-owner",
+      "scope": "project",
+      "projectId": "moss-chord"
+    },
+    "distractorChallenge": true
+  },
+  {
+    "id": "owner-wide-2",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "竹脈的快取策略最後怎麼定的",
+    "intent": "current",
+    "form": "natural",
+    "ownerWide": true,
+    "topic": "竹脈",
+    "foregroundNamespace": {
+      "ownerId": "synthetic-p2-owner",
+      "scope": "project",
+      "projectId": "sand-orbit"
+    }
+  },
+  {
+    "id": "distractor-2",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "竹脈最後用的是整批熱存嗎",
+    "intent": "current",
+    "form": "natural",
+    "ownerWide": true,
+    "topic": "竹脈",
+    "foregroundNamespace": {
+      "ownerId": "synthetic-p2-owner",
+      "scope": "project",
+      "projectId": "sand-orbit"
+    },
+    "distractorChallenge": true
+  },
+  {
+    "id": "owner-wide-3",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "星砂的輪替節奏最後怎麼定的",
+    "intent": "current",
+    "form": "natural",
+    "ownerWide": true,
+    "topic": "星砂",
+    "foregroundNamespace": {
+      "ownerId": "synthetic-p2-owner",
+      "scope": "personal",
+      "projectId": null
+    }
+  },
+  {
+    "id": "distractor-3",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "星砂最後用的是每三輪換匣嗎",
+    "intent": "current",
+    "form": "natural",
+    "ownerWide": true,
+    "topic": "星砂",
+    "foregroundNamespace": {
+      "ownerId": "synthetic-p2-owner",
+      "scope": "personal",
+      "projectId": null
+    },
+    "distractorChallenge": true
+  },
+  {
+    "id": "owner-wide-4",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "紋匣的校對順序最後怎麼定的",
+    "intent": "current",
+    "form": "natural",
+    "ownerWide": true,
+    "topic": "紋匣",
+    "foregroundNamespace": {
+      "ownerId": "synthetic-p2-owner",
+      "scope": "project",
+      "projectId": "mist-prism"
+    }
+  },
+  {
+    "id": "distractor-4",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "紋匣最後用的是先色票後尺寸嗎",
+    "intent": "current",
+    "form": "natural",
+    "ownerWide": true,
+    "topic": "紋匣",
+    "foregroundNamespace": {
+      "ownerId": "synthetic-p2-owner",
+      "scope": "project",
+      "projectId": "mist-prism"
+    },
+    "distractorChallenge": true
+  },
+  {
+    "id": "owner-wide-5",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "朔芽的發送方式最後怎麼定的",
+    "intent": "current",
+    "form": "natural",
+    "ownerWide": true,
+    "topic": "朔芽",
+    "foregroundNamespace": {
+      "ownerId": "synthetic-p2-owner",
+      "scope": "project",
+      "projectId": "moss-chord"
+    }
+  },
+  {
+    "id": "distractor-5",
+    "category": "zh-Hant",
+    "language": "zh-Hant",
+    "text": "朔芽最後用的是多批並送嗎",
+    "intent": "current",
+    "form": "natural",
+    "ownerWide": true,
+    "topic": "朔芽",
+    "foregroundNamespace": {
+      "ownerId": "synthetic-p2-owner",
+      "scope": "project",
+      "projectId": "moss-chord"
+    },
+    "distractorChallenge": true
+  },
+  {
+    "id": "negative-0",
+    "category": "negative",
+    "language": "zh-Hant",
+    "text": "琥珀佇列每月預算是多少？",
+    "intent": "current",
+    "form": "unanswerable",
+    "notInMemory": true,
+    "absentProperty": "每月預算"
+  },
+  {
+    "id": "negative-1",
+    "category": "negative",
+    "language": "zh-Hant",
+    "text": "羽砂演練的緊急聯絡分機是多少？",
+    "intent": "current",
+    "form": "unanswerable",
+    "notInMemory": true,
+    "absentProperty": "緊急聯絡分機"
+  },
+  {
+    "id": "negative-2",
+    "category": "negative",
+    "language": "zh-Hant",
+    "text": "雨紋匯出的壓縮率是多少？",
+    "intent": "current",
+    "form": "unanswerable",
+    "notInMemory": true,
+    "absentProperty": "壓縮率"
+  },
+  {
+    "id": "negative-3",
+    "category": "negative",
+    "language": "zh-Hant",
+    "text": "苔鐘確認採用哪種簽章演算法？",
+    "intent": "current",
+    "form": "unanswerable",
+    "notInMemory": true,
+    "absentProperty": "簽章演算法"
+  },
+  {
+    "id": "negative-4",
+    "category": "negative",
+    "language": "ja",
+    "text": "月苔カードの保守費用はいくらですか。",
+    "intent": "current",
+    "form": "unanswerable",
+    "notInMemory": true,
+    "absentProperty": "保守費用"
+  },
+  {
+    "id": "negative-5",
+    "category": "negative",
+    "language": "ja",
+    "text": "砂羽検収の合格証番号を教えて。",
+    "intent": "current",
+    "form": "unanswerable",
+    "notInMemory": true,
+    "absentProperty": "合格証番号"
+  },
+  {
+    "id": "negative-6",
+    "category": "negative",
+    "language": "ja",
+    "text": "霧鈴カードの請求通貨は何ですか。",
+    "intent": "current",
+    "form": "unanswerable",
+    "notInMemory": true,
+    "absentProperty": "請求通貨"
+  },
+  {
+    "id": "negative-7",
+    "category": "negative",
+    "language": "zh-en",
+    "text": "霧棱 MCP 的憑證指紋是什麼？",
+    "intent": "current",
+    "form": "unanswerable",
+    "notInMemory": true,
+    "absentProperty": "憑證指紋"
+  },
+  {
+    "id": "negative-8",
+    "category": "negative",
+    "language": "ja-en",
+    "text": "苔弦 embedding の訓練標本総数は？",
+    "intent": "current",
+    "form": "unanswerable",
+    "notInMemory": true,
+    "absentProperty": "訓練標本総数"
+  },
+  {
+    "id": "negative-9",
+    "category": "negative",
+    "language": "zh-en",
+    "text": "砂環 WAL 的磁碟保固到哪一天？",
+    "intent": "current",
+    "form": "unanswerable",
+    "notInMemory": true,
+    "absentProperty": "磁碟保固"
+  }
+]

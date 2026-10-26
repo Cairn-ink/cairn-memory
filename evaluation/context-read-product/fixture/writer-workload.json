@@ -1,0 +1,70 @@
+{
+  "version": "p2-writer-workload-v1",
+  "seedDomain": "context-read-product-v1:writers",
+  "execution": "Independent writer process; public engine writes only; fresh open/write/await-close per operation. Retained control reuses the writer, otherwise identical sequence. No keeper, backlog, retries, extraction or model calls.",
+  "perRequest": {
+    "pauseAfterCloseMs": 20,
+    "maximumOfferedRequestsPerSecond": 50,
+    "rateRule": "Next request begins at previous awaited close + 20 ms; public work consumes additional time. Log actual rate, public-write and close intervals and native commits; never infer overlap from pacing.",
+    "captureReviewCycle": ["capture", "capture", "capture", "capture", "review"],
+    "mix": { "capture": 0.8, "review": 0.2 },
+    "operationOverrides": ["capture-only", "review-only", "mixed-80-20"],
+    "productionBounds": "Record and preserve deployed capture/review busy/deadline settings. Do not substitute a fixture deadline for production configuration."
+  },
+  "targets": {
+    "same-owner": { "ownerId": "synthetic-p2-owner", "namespaces": "Round robin personal, mist-prism, moss-chord, sand-orbit; every operation mutates the selected projection." },
+    "other-owner": { "ownerId": "synthetic-p2-other", "namespaces": "Same four namespace suffixes on the other owner in the SAME canonical database; excluded from readSet." },
+    "other-project-control": "Separate observational control only; never substitutes for same-projection writers.",
+    "initialReviewPool": "Before registration, seed four current Memories per target owner with public admit, record ids, exclude setup writes from samples. Review-only cells rotate this pool. Each supersede replaces the current pool id with its returned successor, so review never targets a stale id.",
+    "bindings": "All generated ids/revisions come from public results and are recorded in replay logs, never guessed. Same sequence, world/schema/target and repetition produce the same payloads and target slots."
+  },
+  "operations": {
+    "memoryCapture": { "method": "admit", "role": "Explicit synthetic capture persistence, one new Memory with one 240-unit receipt." },
+    "memoryReview": { "method": "supersede", "role": "Explicit synthetic decision review, retains previous record as historical; fresh successor and receipt. Resolve expectedRevision from public get immediately before the call." },
+    "cardCapture": { "method": "createCardDraft", "role": "Authored synthetic body plus submitted note; not yet a freshness target." },
+    "cardReview": { "method": "confirmCardDraft", "role": "Confirm the exact draft revision with applicability current; this commit begins eligibility." },
+    "boundary": "These are offline public persistence workloads, not timing substitutes for production core.capture extraction or reviewDecisionBasis inference. A production harness must separately bind its actual capture/review paths and record their unchanged deadlines. No provider invocation is authorized by this fixture."
+  },
+  "content": { "memoryBodyUnits": 360, "receiptUnits": 240, "cardBodyUnits": 900, "sourceNoteUnits": 400 },
+  "contention": {
+    "repetitions": 5, "fixedWindowMs": 30000,
+    "pairOrder": "reader then no-reader on even repetitions; reverse on odd repetitions",
+    "classes": ["fresh-writer", "retained-writer-control", "paired-no-reader", "idle"],
+    "loads": ["same-owner", "other-owner"],
+    "actualOverlapRequired": true,
+    "minimums": { "fresh-writer": { "writeOverlaps": 20, "nativeInCallCommits": 100, "closeOverlaps": 10 }, "retained-writer-control": { "writeOverlaps": 20, "nativeInCallCommits": 100 }, "paired-no-reader": { "nativeInCallCommits": 100 } }
+  },
+  "freshness": {
+    "targetsPerType": 120,
+    "intents": ["current", "history"],
+    "memoryTokenPrefix": "p2freshmemorytoken",
+    "cardTokenPrefix": "p2freshcardtoken",
+    "targetNamespaceRule": "Target index modulo four; apply same-owner or other-owner mapping. Only same-owner is a freshness gate; other-owner tokens must stay invisible.",
+    "targetCycle": ["admit-fresh-memory", "create-fresh-card-draft", "confirm-fresh-card"],
+    "v18TargetCycle": ["admit-fresh-memory"],
+    "betweenTargetCycles": "Replay 47 background operations from captureReviewCycle; 20 ms after each awaited close. No catch-up queue. After target 119, continue background writes until 60000 ms after the final eligible commit.",
+    "eligibleCommitRule": "Memory admit commit and Card confirm commit, as observed by independent native writer telemetry. Draft time is not Card eligibility. Record exact returned id/revision/bodyRevision and namespace.",
+    "probeIntervalMs": 1000,
+    "probeLimit": 24,
+    "probeRule": "One unique ASCII lexical token per target; token appears only in that new eligible record and its own receipt/note. Fresh authorized findCandidates handles, both intents, no request repair. Exact id/revision/bodyRevision membership counts; fallback and unrelated matches never count.",
+    "gateP95Ms": 30000,
+    "minimumEligibleTargetsPerTypeIntent": 100,
+    "eligibleCommitAcquisitionCeilingMs": 240000,
+    "observationAfterFinalEligibleCommitMs": 60000,
+    "totalCeilingMs": 300000,
+    "censorRule": "Never observed by the bounded ceiling => +infinity in nearest-rank p95, retained by type/intent/world/schema/mode. Incomplete commit populations are inconclusive; never silently delete failed targets. Writers run at least 30 seconds after final eligibility, including when all probes already succeeded."
+  },
+  "availability": {
+    "start": "After first certified completed current AND history build, then include every scheduled normal index-dependent attempt including dirty/pump-gap intervals.",
+    "methods": ["findCandidates", "contextRead"],
+    "minimumAttemptsPerCell": 100,
+    "maximumNotReadyFraction": 0.01,
+    "classification": "Mutually exclusive not-ready / timeout / other error / validated success. Exact evidence and probe calls do not dilute the normal-attempt denominator."
+  },
+  "pump": {
+    "renewEveryMs": 60000, "leaseMs": 70000, "quantumEveryMs": 100,
+    "maxItems": 256, "maxMs": 50, "projections": ["memory+card/current", "memory+card/history"],
+    "v18Projections": ["memory/current", "memory/history"],
+    "budget": "One serial supervised maintainer; alternate intents per quantum; at most 600 quanta, 153600 items and 30000 ms cumulative declared maxMs per renewal minute. Record actual cumulative work and durable checkpoints. No overlapping quantum; missed cadence slots are skipped. A stopped pump is not inferred live from durable status."
+  }
+}

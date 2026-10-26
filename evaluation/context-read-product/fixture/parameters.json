@@ -1,0 +1,117 @@
+{
+  "version": "p2-qualification-fixture-v1-r1",
+  "contract": "context-read-product-v1",
+  "engineBaseCommit": "e7dade51aab8cff66c94f893ede6f180175bb028",
+  "worlds": {
+    "W1": {
+      "cohorts": 1,
+      "memories": 1112,
+      "cards": 96,
+      "mocs": 71
+    },
+    "W3": {
+      "cohorts": 3,
+      "memories": 3336,
+      "cards": 288,
+      "mocs": 213
+    }
+  },
+  "schemas": [
+    18,
+    23,
+    33
+  ],
+  "ownerId": "synthetic-p2-owner",
+  "otherOwnerId": "synthetic-p2-other",
+  "projects": [
+    null,
+    "mist-prism",
+    "moss-chord",
+    "sand-orbit"
+  ],
+  "names": [
+    "個人實驗簿",
+    "霧棱計畫",
+    "苔弦計畫",
+    "砂環計畫"
+  ],
+  "perNamespacePerCohort": {
+    "memories": 278,
+    "historicalMemories": 3,
+    "cards": 24,
+    "memoryBodyUnits": {
+      "240": 194,
+      "900": 56,
+      "2400": 22,
+      "3990": 6
+    },
+    "cardBodyUnits": {
+      "360": 12,
+      "900": 6,
+      "3000": 5,
+      "19900": 1
+    },
+    "receiptCountCycle": [
+      1,
+      1,
+      1,
+      2,
+      3
+    ],
+    "receiptExcerptUnitsCycle": [
+      80,
+      80,
+      80,
+      240,
+      240,
+      600,
+      790,
+      800
+    ],
+    "sourceNoteUnitsCycle": [
+      320,
+      400,
+      1200,
+      19000
+    ],
+    "l1": 15,
+    "l2ByNamespace": [
+      3,
+      3,
+      3,
+      2
+    ]
+  },
+  "lengthUnit": "UTF-16 code units after public-path canonicalization",
+  "languages": [
+    "zh-Hant",
+    "ja",
+    "zh-en",
+    "ja-en"
+  ],
+  "selection": {
+    "policy": "recent-projects-v1",
+    "selectionRevision": "fixture-four-namespaces-v1",
+    "requestedNamespaces": 4,
+    "selectedNamespaces": 4,
+    "omittedNamespaces": 0
+  },
+  "scope": "Synthetic qualification data; no retrieval, maintenance or performance acceptance claimed.",
+  "revision": 1,
+  "temporalAnchor": {
+    "asOf": "2026-10-27T12:00:00+08:00",
+    "timezone": "Asia/Taipei",
+    "thisWeek": {
+      "startDate": "2026-10-26",
+      "endDateExclusive": "2026-11-02"
+    },
+    "lastWeek": {
+      "startDate": "2026-10-19",
+      "endDateExclusive": "2026-10-26"
+    },
+    "recent": {
+      "startDate": "2026-10-21",
+      "endDateExclusive": "2026-10-28"
+    }
+  }
+}

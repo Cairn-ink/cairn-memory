@@ -1,0 +1,13 @@
+{
+  "version": "p2-fixture-diagnostics-v1",
+  "excludedFromRecallAndNegativePopulations": true,
+  "knownSingleHanMiss": {
+    "tokenizer": "hr1-t1-v1",
+    "query": "砂",
+    "bodyFragment": "砂羽",
+    "queryTokens": ["砂"],
+    "bodyTokens": ["砂羽"],
+    "sharedTokens": [],
+    "classification": "Known tokenizer miss: a single Han query does not match a longer Han run by substring. The world contains SandFeather facts; this is not an absent-answer negative."
+  }
+}

@@ -1,0 +1,703 @@
+{
+  "version": "p2-product-question-styles-r1",
+  "records": [
+    {
+      "namespaceIndex": 0,
+      "type": "memory",
+      "slot": 30,
+      "statement": "2026-10-19。定下鏡盒樣片的巡檢順序，先看邊角再看表面。",
+      "groundTruth": {
+        "eventDate": "2026-10-19",
+        "temporalRole": "decision",
+        "topic": "上週巡檢順序",
+        "adopted": true,
+        "adoptionStatus": "adopted"
+      }
+    },
+    {
+      "namespaceIndex": 1,
+      "type": "memory",
+      "slot": 30,
+      "statement": "2026-10-20。定下霧棱的回復演練節奏，每輪先補齊收據。",
+      "groundTruth": {
+        "eventDate": "2026-10-20",
+        "temporalRole": "decision",
+        "topic": "上週回復演練",
+        "adopted": true,
+        "adoptionStatus": "adopted"
+      }
+    },
+    {
+      "namespaceIndex": 2,
+      "type": "memory",
+      "slot": 30,
+      "statement": "2026-10-22。定下苔弦的標籤色票，使用珊石暖色。",
+      "groundTruth": {
+        "eventDate": "2026-10-22",
+        "temporalRole": "decision",
+        "topic": "上週標籤色票",
+        "adopted": true,
+        "adoptionStatus": "adopted"
+      }
+    },
+    {
+      "namespaceIndex": 3,
+      "type": "memory",
+      "slot": 30,
+      "statement": "2026-10-25。定下砂環的樣片編號規則，先編輪次再編尺寸。",
+      "groundTruth": {
+        "eventDate": "2026-10-25",
+        "temporalRole": "decision",
+        "topic": "上週編號規則",
+        "adopted": true,
+        "adoptionStatus": "adopted"
+      }
+    },
+    {
+      "namespaceIndex": 0,
+      "type": "memory",
+      "slot": 31,
+      "statement": "2026-10-26。正在整理鏡盒實驗筆記，把邊角量測補齊。",
+      "groundTruth": {
+        "eventDate": "2026-10-26",
+        "temporalRole": "activity",
+        "topic": "本週實驗筆記",
+        "adopted": true,
+        "adoptionStatus": "adopted"
+      }
+    },
+    {
+      "namespaceIndex": 1,
+      "type": "memory",
+      "slot": 31,
+      "statement": "2026-10-26。正在測試霧棱授權票證，核對專案切換後的權限。",
+      "groundTruth": {
+        "eventDate": "2026-10-26",
+        "temporalRole": "activity",
+        "topic": "本週授權測試",
+        "adopted": true,
+        "adoptionStatus": "adopted"
+      }
+    },
+    {
+      "namespaceIndex": 2,
+      "type": "memory",
+      "slot": 31,
+      "statement": "2026-10-27。正在比較苔弦向量的離線查找，整理短問句的落點。",
+      "groundTruth": {
+        "eventDate": "2026-10-27",
+        "temporalRole": "activity",
+        "topic": "本週向量比較",
+        "adopted": true,
+        "adoptionStatus": "adopted"
+      }
+    },
+    {
+      "namespaceIndex": 3,
+      "type": "memory",
+      "slot": 31,
+      "statement": "2026-10-27。正在演練砂環磁碟回復，逐輪核對樣片與收據。",
+      "groundTruth": {
+        "eventDate": "2026-10-27",
+        "temporalRole": "activity",
+        "topic": "本週回復演練",
+        "adopted": true,
+        "adoptionStatus": "adopted"
+      }
+    },
+    {
+      "namespaceIndex": 0,
+      "type": "memory",
+      "slot": 40,
+      "statement": "改用霧匣關聯引擎。",
+      "groundTruth": {
+        "topic": "database-choice",
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "zeroOverlapQuestion": "資料庫換成什麼了"
+      }
+    },
+    {
+      "namespaceIndex": 1,
+      "type": "memory",
+      "slot": 40,
+      "statement": "移至苔巢執行叢集。",
+      "groundTruth": {
+        "topic": "deployment-location",
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "zeroOverlapQuestion": "部署放在哪裡跑呢"
+      }
+    },
+    {
+      "namespaceIndex": 2,
+      "type": "memory",
+      "slot": 40,
+      "statement": "互動會期憑證壽命十分鐘。",
+      "groundTruth": {
+        "topic": "session-lifetime",
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "zeroOverlapQuestion": "登入之後多久失效"
+      }
+    },
+    {
+      "namespaceIndex": 3,
+      "type": "memory",
+      "slot": 40,
+      "statement": "啟用潮汐卸載。",
+      "groundTruth": {
+        "topic": "capacity-response",
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "zeroOverlapQuestion": "快滿時要怎麼辦呢"
+      }
+    },
+    {
+      "namespaceIndex": 0,
+      "type": "memory",
+      "slot": 41,
+      "statement": "回復晶盒快照。",
+      "groundTruth": {
+        "topic": "corruption-recovery",
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "zeroOverlapQuestion": "資料壞掉怎樣救回"
+      }
+    },
+    {
+      "namespaceIndex": 1,
+      "type": "memory",
+      "slot": 41,
+      "statement": "交由琥珀閘序列化。",
+      "groundTruth": {
+        "topic": "concurrent-write-policy",
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "zeroOverlapQuestion": "多人一起寫會怎樣"
+      }
+    },
+    {
+      "namespaceIndex": 2,
+      "type": "memory",
+      "slot": 41,
+      "statement": "遵循苔輪指數退避。",
+      "groundTruth": {
+        "topic": "reconnect-policy",
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "zeroOverlapQuestion": "中途斷線如何重來"
+      }
+    },
+    {
+      "namespaceIndex": 3,
+      "type": "memory",
+      "slot": 41,
+      "statement": "輸出銀紋封套。",
+      "groundTruth": {
+        "topic": "package-format",
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "zeroOverlapQuestion": "打包出去長什麼樣"
+      }
+    },
+    {
+      "namespaceIndex": 0,
+      "type": "memory",
+      "slot": 42,
+      "statement": "追蹤送入砂針匣。",
+      "groundTruth": {
+        "topic": "trace-destination",
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "zeroOverlapQuestion": "出錯想找紀錄在哪"
+      }
+    },
+    {
+      "namespaceIndex": 1,
+      "type": "memory",
+      "slot": 42,
+      "statement": "採用松芽大字版。",
+      "groundTruth": {
+        "topic": "readability-choice",
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "zeroOverlapQuestion": "畫面字太小如何辦"
+      }
+    },
+    {
+      "namespaceIndex": 0,
+      "type": "memory",
+      "slot": 50,
+      "statement": "霧棱的 MCP 授權採用短效票證，僅限所選專案，票證二十分鐘更新。",
+      "groundTruth": {
+        "topic": "mcp-authorization",
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "productTermQuestion": "霧棱的 MCP 授權怎麼設"
+      }
+    },
+    {
+      "namespaceIndex": 1,
+      "type": "memory",
+      "slot": 50,
+      "statement": "苔弦的 embedding 最後選擇苔紋向量，維度192，運算留在本機。",
+      "groundTruth": {
+        "topic": "embedding-choice",
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "productTermQuestion": "上次決定用哪個 embedding"
+      }
+    },
+    {
+      "namespaceIndex": 2,
+      "type": "memory",
+      "slot": 50,
+      "statement": "砂環的 WAL 切換是為了讓讀取與短寫入並行，仍保留單一寫入者。",
+      "groundTruth": {
+        "topic": "wal-rationale",
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "productTermQuestion": "砂環 WAL 為什麼要切"
+      }
+    },
+    {
+      "namespaceIndex": 3,
+      "type": "memory",
+      "slot": 50,
+      "statement": "霜匣 API 的 TTL 設為九十分鐘，過期後重新取樣。",
+      "groundTruth": {
+        "topic": "api-ttl",
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "productTermQuestion": "霜匣 API 的 TTL 設多久"
+      }
+    },
+    {
+      "namespaceIndex": 0,
+      "type": "memory",
+      "slot": 51,
+      "statement": "霧棱的 readSet 固定包含個人與已選專案，由入口先核對權限。",
+      "groundTruth": {
+        "topic": "read-set",
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "productTermQuestion": "霧棱 readSet 到底含哪些範圍"
+      }
+    },
+    {
+      "namespaceIndex": 1,
+      "type": "memory",
+      "slot": 51,
+      "statement": "苔弦的 cron 每分鐘續租，背景泵每一百毫秒嘗試一個量子。",
+      "groundTruth": {
+        "topic": "maintenance-cadence",
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "productTermQuestion": "苔弦 cron 多久叫醒背景泵"
+      }
+    },
+    {
+      "namespaceIndex": 2,
+      "type": "memory",
+      "slot": 51,
+      "statement": "砂環的 backup 只保留標準資料，還原後另行建立查找旁檔。",
+      "groundTruth": {
+        "topic": "backup-policy",
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "productTermQuestion": "砂環 backup 要帶旁檔嗎"
+      }
+    },
+    {
+      "namespaceIndex": 3,
+      "type": "memory",
+      "slot": 51,
+      "statement": "霜匣的 MCP scope 綁定入口列出的專案，換專案就重新核對。",
+      "groundTruth": {
+        "topic": "mcp-scope",
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "productTermQuestion": "霜匣 MCP scope 換專案會怎樣"
+      }
+    },
+    {
+      "namespaceIndex": 2,
+      "type": "memory",
+      "slot": 70,
+      "statement": "潮匣的佇列定案採用霧線單列作為唯一執行方案，容量48筆。",
+      "groundTruth": {
+        "topic": "潮匣",
+        "property": "佇列",
+        "discussionNamespaceIndex": 1,
+        "answerNamespaceIndex": 2,
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "chosen": "霧線單列",
+        "ownerWideQuestion": "潮匣的佇列最後怎麼定的",
+        "distractorQuestion": "潮匣最後用的是焰環多列嗎"
+      }
+    },
+    {
+      "namespaceIndex": 1,
+      "type": "memory",
+      "slot": 90,
+      "statement": "潮匣的佇列討論主要圍繞容量48筆，幾種安排都需要拿樣片試算。",
+      "groundTruth": {
+        "topic": "潮匣",
+        "property": "佇列",
+        "discussionNamespaceIndex": 1,
+        "answerNamespaceIndex": 2,
+        "adopted": false,
+        "adoptionStatus": "discussion"
+      }
+    },
+    {
+      "namespaceIndex": 1,
+      "type": "memory",
+      "slot": 91,
+      "statement": "潮匣不妨試試焰環多列，容量48筆看起來夠用，我想先走一輪。",
+      "groundTruth": {
+        "topic": "潮匣",
+        "property": "佇列",
+        "discussionNamespaceIndex": 1,
+        "answerNamespaceIndex": 2,
+        "adopted": false,
+        "adoptionStatus": "proposal",
+        "suggested": "焰環多列",
+        "resolution": "The single adopted decision chose a different option; this suggestion has no adoption event."
+      }
+    },
+    {
+      "namespaceIndex": 1,
+      "type": "memory",
+      "slot": 92,
+      "statement": "潮匣的佇列我偏好玄泡雙列，可以用容量48筆做小樣看看。",
+      "groundTruth": {
+        "topic": "潮匣",
+        "property": "佇列",
+        "discussionNamespaceIndex": 1,
+        "answerNamespaceIndex": 2,
+        "adopted": false,
+        "adoptionStatus": "rejected-suggestion",
+        "suggested": "玄泡雙列",
+        "resolution": "Ground-truth decision outcome chose the other single option after evaluating this suggestion; rejection is deliberately not printed in candidate text."
+      }
+    },
+    {
+      "namespaceIndex": 3,
+      "type": "memory",
+      "slot": 71,
+      "statement": "藍穗的匯出封裝定案採用棱葉封套作為唯一執行方案，每包12張樣片。",
+      "groundTruth": {
+        "topic": "藍穗",
+        "property": "匯出封裝",
+        "discussionNamespaceIndex": 2,
+        "answerNamespaceIndex": 3,
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "chosen": "棱葉封套",
+        "ownerWideQuestion": "藍穗的匯出封裝最後怎麼定的",
+        "distractorQuestion": "藍穗最後用的是砂渦封套嗎"
+      }
+    },
+    {
+      "namespaceIndex": 2,
+      "type": "memory",
+      "slot": 93,
+      "statement": "藍穗的匯出封裝討論主要圍繞每包12張樣片，幾種安排都需要拿樣片試算。",
+      "groundTruth": {
+        "topic": "藍穗",
+        "property": "匯出封裝",
+        "discussionNamespaceIndex": 2,
+        "answerNamespaceIndex": 3,
+        "adopted": false,
+        "adoptionStatus": "discussion"
+      }
+    },
+    {
+      "namespaceIndex": 2,
+      "type": "memory",
+      "slot": 94,
+      "statement": "藍穗不妨試試砂渦封套，每包12張樣片看起來夠用，我想先走一輪。",
+      "groundTruth": {
+        "topic": "藍穗",
+        "property": "匯出封裝",
+        "discussionNamespaceIndex": 2,
+        "answerNamespaceIndex": 3,
+        "adopted": false,
+        "adoptionStatus": "proposal",
+        "suggested": "砂渦封套",
+        "resolution": "The single adopted decision chose a different option; this suggestion has no adoption event."
+      }
+    },
+    {
+      "namespaceIndex": 2,
+      "type": "memory",
+      "slot": 95,
+      "statement": "藍穗的匯出封裝我偏好羽環封套，可以用每包12張樣片做小樣看看。",
+      "groundTruth": {
+        "topic": "藍穗",
+        "property": "匯出封裝",
+        "discussionNamespaceIndex": 2,
+        "answerNamespaceIndex": 3,
+        "adopted": false,
+        "adoptionStatus": "rejected-suggestion",
+        "suggested": "羽環封套",
+        "resolution": "Ground-truth decision outcome chose the other single option after evaluating this suggestion; rejection is deliberately not printed in candidate text."
+      }
+    },
+    {
+      "namespaceIndex": 0,
+      "type": "memory",
+      "slot": 72,
+      "statement": "竹脈的快取策略定案採用逐頁暖存作為唯一執行方案，上限24頁。",
+      "groundTruth": {
+        "topic": "竹脈",
+        "property": "快取策略",
+        "discussionNamespaceIndex": 3,
+        "answerNamespaceIndex": 0,
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "chosen": "逐頁暖存",
+        "ownerWideQuestion": "竹脈的快取策略最後怎麼定的",
+        "distractorQuestion": "竹脈最後用的是整批熱存嗎"
+      }
+    },
+    {
+      "namespaceIndex": 3,
+      "type": "memory",
+      "slot": 96,
+      "statement": "竹脈的快取策略討論主要圍繞上限24頁，幾種安排都需要拿樣片試算。",
+      "groundTruth": {
+        "topic": "竹脈",
+        "property": "快取策略",
+        "discussionNamespaceIndex": 3,
+        "answerNamespaceIndex": 0,
+        "adopted": false,
+        "adoptionStatus": "discussion"
+      }
+    },
+    {
+      "namespaceIndex": 3,
+      "type": "memory",
+      "slot": 97,
+      "statement": "竹脈不妨試試整批熱存，上限24頁看起來夠用，我想先走一輪。",
+      "groundTruth": {
+        "topic": "竹脈",
+        "property": "快取策略",
+        "discussionNamespaceIndex": 3,
+        "answerNamespaceIndex": 0,
+        "adopted": false,
+        "adoptionStatus": "proposal",
+        "suggested": "整批熱存",
+        "resolution": "The single adopted decision chose a different option; this suggestion has no adoption event."
+      }
+    },
+    {
+      "namespaceIndex": 3,
+      "type": "memory",
+      "slot": 98,
+      "statement": "竹脈的快取策略我偏好逐筆即存，可以用上限24頁做小樣看看。",
+      "groundTruth": {
+        "topic": "竹脈",
+        "property": "快取策略",
+        "discussionNamespaceIndex": 3,
+        "answerNamespaceIndex": 0,
+        "adopted": false,
+        "adoptionStatus": "rejected-suggestion",
+        "suggested": "逐筆即存",
+        "resolution": "Ground-truth decision outcome chose the other single option after evaluating this suggestion; rejection is deliberately not printed in candidate text."
+      }
+    },
+    {
+      "namespaceIndex": 1,
+      "type": "memory",
+      "slot": 73,
+      "statement": "星砂的輪替節奏定案採用每六輪換匣作為唯一執行方案，每輪20分鐘。",
+      "groundTruth": {
+        "topic": "星砂",
+        "property": "輪替節奏",
+        "discussionNamespaceIndex": 0,
+        "answerNamespaceIndex": 1,
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "chosen": "每六輪換匣",
+        "ownerWideQuestion": "星砂的輪替節奏最後怎麼定的",
+        "distractorQuestion": "星砂最後用的是每三輪換匣嗎"
+      }
+    },
+    {
+      "namespaceIndex": 0,
+      "type": "memory",
+      "slot": 99,
+      "statement": "星砂的輪替節奏討論主要圍繞每輪20分鐘，幾種安排都需要拿樣片試算。",
+      "groundTruth": {
+        "topic": "星砂",
+        "property": "輪替節奏",
+        "discussionNamespaceIndex": 0,
+        "answerNamespaceIndex": 1,
+        "adopted": false,
+        "adoptionStatus": "discussion"
+      }
+    },
+    {
+      "namespaceIndex": 0,
+      "type": "memory",
+      "slot": 100,
+      "statement": "星砂不妨試試每三輪換匣，每輪20分鐘看起來夠用，我想先走一輪。",
+      "groundTruth": {
+        "topic": "星砂",
+        "property": "輪替節奏",
+        "discussionNamespaceIndex": 0,
+        "answerNamespaceIndex": 1,
+        "adopted": false,
+        "adoptionStatus": "proposal",
+        "suggested": "每三輪換匣",
+        "resolution": "The single adopted decision chose a different option; this suggestion has no adoption event."
+      }
+    },
+    {
+      "namespaceIndex": 0,
+      "type": "memory",
+      "slot": 101,
+      "statement": "星砂的輪替節奏我偏好每九輪換匣，可以用每輪20分鐘做小樣看看。",
+      "groundTruth": {
+        "topic": "星砂",
+        "property": "輪替節奏",
+        "discussionNamespaceIndex": 0,
+        "answerNamespaceIndex": 1,
+        "adopted": false,
+        "adoptionStatus": "rejected-suggestion",
+        "suggested": "每九輪換匣",
+        "resolution": "Ground-truth decision outcome chose the other single option after evaluating this suggestion; rejection is deliberately not printed in candidate text."
+      }
+    },
+    {
+      "namespaceIndex": 2,
+      "type": "memory",
+      "slot": 74,
+      "statement": "紋匣的校對順序定案採用先尺寸後色票作為唯一執行方案，每組16張樣片。",
+      "groundTruth": {
+        "topic": "紋匣",
+        "property": "校對順序",
+        "discussionNamespaceIndex": 1,
+        "answerNamespaceIndex": 2,
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "chosen": "先尺寸後色票",
+        "ownerWideQuestion": "紋匣的校對順序最後怎麼定的",
+        "distractorQuestion": "紋匣最後用的是先色票後尺寸嗎"
+      }
+    },
+    {
+      "namespaceIndex": 1,
+      "type": "memory",
+      "slot": 102,
+      "statement": "紋匣的校對順序討論主要圍繞每組16張樣片，幾種安排都需要拿樣片試算。",
+      "groundTruth": {
+        "topic": "紋匣",
+        "property": "校對順序",
+        "discussionNamespaceIndex": 1,
+        "answerNamespaceIndex": 2,
+        "adopted": false,
+        "adoptionStatus": "discussion"
+      }
+    },
+    {
+      "namespaceIndex": 1,
+      "type": "memory",
+      "slot": 103,
+      "statement": "紋匣不妨試試先色票後尺寸，每組16張樣片看起來夠用，我想先走一輪。",
+      "groundTruth": {
+        "topic": "紋匣",
+        "property": "校對順序",
+        "discussionNamespaceIndex": 1,
+        "answerNamespaceIndex": 2,
+        "adopted": false,
+        "adoptionStatus": "proposal",
+        "suggested": "先色票後尺寸",
+        "resolution": "The single adopted decision chose a different option; this suggestion has no adoption event."
+      }
+    },
+    {
+      "namespaceIndex": 1,
+      "type": "memory",
+      "slot": 104,
+      "statement": "紋匣的校對順序我偏好按輪次交錯，可以用每組16張樣片做小樣看看。",
+      "groundTruth": {
+        "topic": "紋匣",
+        "property": "校對順序",
+        "discussionNamespaceIndex": 1,
+        "answerNamespaceIndex": 2,
+        "adopted": false,
+        "adoptionStatus": "rejected-suggestion",
+        "suggested": "按輪次交錯",
+        "resolution": "Ground-truth decision outcome chose the other single option after evaluating this suggestion; rejection is deliberately not printed in candidate text."
+      }
+    },
+    {
+      "namespaceIndex": 3,
+      "type": "card",
+      "slot": 12,
+      "statement": "朔芽的發送方式定案採用單批順送作為唯一執行方案，每批8個封套。",
+      "groundTruth": {
+        "topic": "朔芽",
+        "property": "發送方式",
+        "discussionNamespaceIndex": 2,
+        "answerNamespaceIndex": 3,
+        "adopted": true,
+        "adoptionStatus": "adopted",
+        "chosen": "單批順送",
+        "ownerWideQuestion": "朔芽的發送方式最後怎麼定的",
+        "distractorQuestion": "朔芽最後用的是多批並送嗎"
+      }
+    },
+    {
+      "namespaceIndex": 2,
+      "type": "memory",
+      "slot": 105,
+      "statement": "朔芽的發送方式討論主要圍繞每批8個封套，幾種安排都需要拿樣片試算。",
+      "groundTruth": {
+        "topic": "朔芽",
+        "property": "發送方式",
+        "discussionNamespaceIndex": 2,
+        "answerNamespaceIndex": 3,
+        "adopted": false,
+        "adoptionStatus": "discussion"
+      }
+    },
+    {
+      "namespaceIndex": 2,
+      "type": "memory",
+      "slot": 106,
+      "statement": "朔芽不妨試試多批並送，每批8個封套看起來夠用，我想先走一輪。",
+      "groundTruth": {
+        "topic": "朔芽",
+        "property": "發送方式",
+        "discussionNamespaceIndex": 2,
+        "answerNamespaceIndex": 3,
+        "adopted": false,
+        "adoptionStatus": "proposal",
+        "suggested": "多批並送",
+        "resolution": "The single adopted decision chose a different option; this suggestion has no adoption event."
+      }
+    },
+    {
+      "namespaceIndex": 2,
+      "type": "memory",
+      "slot": 107,
+      "statement": "朔芽的發送方式我偏好雙路交送，可以用每批8個封套做小樣看看。",
+      "groundTruth": {
+        "topic": "朔芽",
+        "property": "發送方式",
+        "discussionNamespaceIndex": 2,
+        "answerNamespaceIndex": 3,
+        "adopted": false,
+        "adoptionStatus": "rejected-suggestion",
+        "suggested": "雙路交送",
+        "resolution": "Ground-truth decision outcome chose the other single option after evaluating this suggestion; rejection is deliberately not printed in candidate text."
+      }
+    }
+  ]
+}

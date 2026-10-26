@@ -1,0 +1,353 @@
+{
+  "version": "p2-qualification-fixture-v1-r1",
+  "worlds": {
+    "W1": {
+      "world": "W1",
+      "records": 1208,
+      "perNamespace": [
+        {
+          "namespace": {
+            "ownerId": "synthetic-p2-owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "memories": 278,
+          "cards": 24,
+          "historicalMemories": 3,
+          "l1": 15,
+          "l2": 3
+        },
+        {
+          "namespace": {
+            "ownerId": "synthetic-p2-owner",
+            "scope": "project",
+            "projectId": "mist-prism"
+          },
+          "memories": 278,
+          "cards": 24,
+          "historicalMemories": 3,
+          "l1": 15,
+          "l2": 3
+        },
+        {
+          "namespace": {
+            "ownerId": "synthetic-p2-owner",
+            "scope": "project",
+            "projectId": "moss-chord"
+          },
+          "memories": 278,
+          "cards": 24,
+          "historicalMemories": 3,
+          "l1": 15,
+          "l2": 3
+        },
+        {
+          "namespace": {
+            "ownerId": "synthetic-p2-owner",
+            "scope": "project",
+            "projectId": "sand-orbit"
+          },
+          "memories": 278,
+          "cards": 24,
+          "historicalMemories": 3,
+          "l1": 15,
+          "l2": 2
+        }
+      ],
+      "memoryBodyUnits": {
+        "240": 776,
+        "900": 224,
+        "2400": 88,
+        "3990": 24
+      },
+      "cardBodyUnits": {
+        "360": 48,
+        "900": 24,
+        "3000": 20,
+        "19900": 4
+      },
+      "receipts": {
+        "count": 1772,
+        "perMemory": {
+          "1": 672,
+          "2": 220,
+          "3": 220
+        },
+        "units": {
+          "80": 664,
+          "240": 448,
+          "600": 224,
+          "790": 220,
+          "800": 216
+        },
+        "totalBytes": 1820008
+      },
+      "sourceNoteUnits": {
+        "320": 24,
+        "400": 24,
+        "1200": 24,
+        "19000": 24
+      },
+      "groundTruth": {
+        "adoptionStatus": {
+          "adopted": 44,
+          "discussion": 6,
+          "proposal": 6,
+          "rejected-suggestion": 6
+        },
+        "datedRecords": 8,
+        "metadataIndexed": false
+      },
+      "bodyBytes": {
+        "memory": 1937574,
+        "card": 523734
+      },
+      "edgeContent": {
+        "submittedLeadingWhitespace": {
+          "memory": 68,
+          "card": 16
+        },
+        "storedLeadingWhitespace": {
+          "memory": 0,
+          "card": 16
+        },
+        "hasZWJ": {
+          "memory": 4,
+          "card": 4
+        },
+        "hasCombiningMark": {
+          "memory": 0,
+          "card": 4
+        }
+      },
+      "variants": {
+        "18": {
+          "schema": 18,
+          "memories": 1112,
+          "mocs": 71,
+          "cards": 0,
+          "canonicalBytes": null,
+          "logicalSha256": "b0553671a611dd6aa2fa14d992c412056cf05fd07ac4b1b29778dec92509681f"
+        },
+        "23": {
+          "schema": 23,
+          "memories": 1112,
+          "mocs": 71,
+          "cards": 96,
+          "canonicalBytes": 11051008,
+          "logicalSha256": "8689b8b2d39c1a9b5fdf7e4eea9c5493708f9c41e25822296356985c2abeb7fd"
+        },
+        "33": {
+          "schema": 33,
+          "memories": 1112,
+          "mocs": 71,
+          "cards": 96,
+          "canonicalBytes": null,
+          "logicalSha256": "8689b8b2d39c1a9b5fdf7e4eea9c5493708f9c41e25822296356985c2abeb7fd"
+        }
+      }
+    },
+    "W3": {
+      "world": "W3",
+      "records": 3624,
+      "perNamespace": [
+        {
+          "namespace": {
+            "ownerId": "synthetic-p2-owner",
+            "scope": "personal",
+            "projectId": null
+          },
+          "memories": 834,
+          "cards": 72,
+          "historicalMemories": 9,
+          "l1": 45,
+          "l2": 9
+        },
+        {
+          "namespace": {
+            "ownerId": "synthetic-p2-owner",
+            "scope": "project",
+            "projectId": "mist-prism"
+          },
+          "memories": 834,
+          "cards": 72,
+          "historicalMemories": 9,
+          "l1": 45,
+          "l2": 9
+        },
+        {
+          "namespace": {
+            "ownerId": "synthetic-p2-owner",
+            "scope": "project",
+            "projectId": "moss-chord"
+          },
+          "memories": 834,
+          "cards": 72,
+          "historicalMemories": 9,
+          "l1": 45,
+          "l2": 9
+        },
+        {
+          "namespace": {
+            "ownerId": "synthetic-p2-owner",
+            "scope": "project",
+            "projectId": "sand-orbit"
+          },
+          "memories": 834,
+          "cards": 72,
+          "historicalMemories": 9,
+          "l1": 45,
+          "l2": 6
+        }
+      ],
+      "memoryBodyUnits": {
+        "240": 2328,
+        "900": 672,
+        "2400": 264,
+        "3990": 72
+      },
+      "cardBodyUnits": {
+        "360": 144,
+        "900": 72,
+        "3000": 60,
+        "19900": 12
+      },
+      "receipts": {
+        "count": 5316,
+        "perMemory": {
+          "1": 2016,
+          "2": 660,
+          "3": 660
+        },
+        "units": {
+          "80": 1992,
+          "240": 1344,
+          "600": 672,
+          "790": 660,
+          "800": 648
+        },
+        "totalBytes": 5460024
+      },
+      "sourceNoteUnits": {
+        "320": 72,
+        "400": 72,
+        "1200": 72,
+        "19000": 72
+      },
+      "groundTruth": {
+        "adoptionStatus": {
+          "adopted": 132,
+          "discussion": 18,
+          "proposal": 18,
+          "rejected-suggestion": 18
+        },
+        "datedRecords": 24,
+        "metadataIndexed": false
+      },
+      "bodyBytes": {
+        "memory": 5812722,
+        "card": 1571202
+      },
+      "edgeContent": {
+        "submittedLeadingWhitespace": {
+          "memory": 204,
+          "card": 48
+        },
+        "storedLeadingWhitespace": {
+          "memory": 0,
+          "card": 48
+        },
+        "hasZWJ": {
+          "memory": 12,
+          "card": 12
+        },
+        "hasCombiningMark": {
+          "memory": 0,
+          "card": 12
+        }
+      },
+      "variants": {
+        "18": {
+          "schema": 18,
+          "memories": 3336,
+          "mocs": 213,
+          "cards": 0,
+          "canonicalBytes": null,
+          "logicalSha256": "f53d73c3d7c0933b671197228abc561dd02ec5d871ea71975efc2b11b647f7b4"
+        },
+        "23": {
+          "schema": 23,
+          "memories": 3336,
+          "mocs": 213,
+          "cards": 288,
+          "canonicalBytes": 31600640,
+          "logicalSha256": "e24c1c268063bea7fe5f38cf7c1da29bb824a0dca9f509e56f1b48d2cacf6a1e"
+        },
+        "33": {
+          "schema": 33,
+          "memories": 3336,
+          "mocs": 213,
+          "cards": 288,
+          "canonicalBytes": null,
+          "logicalSha256": "e24c1c268063bea7fe5f38cf7c1da29bb824a0dca9f509e56f1b48d2cacf6a1e"
+        }
+      }
+    }
+  },
+  "queryCounts": {
+    "W1": {
+      "categories": {
+        "zh-Hant": 76,
+        "ja": 20,
+        "mixed": 28,
+        "negative": 10
+      },
+      "total": 134,
+      "history": 22,
+      "crossNamespace": 20,
+      "shortTemporal": 8,
+      "mixedProductTerm": 8,
+      "zeroSharedTokens": 10,
+      "naturalHistory": 6,
+      "ownerWideOutsideMajority": 12,
+      "distractorChallenge": 6,
+      "notInMemory": 10,
+      "languages": {
+        "zh-Hant": 80,
+        "ja": 23,
+        "zh-en": 22,
+        "ja-en": 9
+      },
+      "applicableV18": 104
+    },
+    "W3": {
+      "categories": {
+        "zh-Hant": 76,
+        "ja": 20,
+        "mixed": 28,
+        "negative": 10
+      },
+      "total": 134,
+      "history": 22,
+      "crossNamespace": 20,
+      "shortTemporal": 8,
+      "mixedProductTerm": 8,
+      "zeroSharedTokens": 10,
+      "naturalHistory": 6,
+      "ownerWideOutsideMajority": 12,
+      "distractorChallenge": 6,
+      "notInMemory": 10,
+      "languages": {
+        "zh-Hant": 80,
+        "ja": 23,
+        "zh-en": 22,
+        "ja-en": 9
+      },
+      "applicableV18": 104
+    }
+  },
+  "generationEnvironment": {
+    "node": "v22.16.0",
+    "purpose": "Fixture creation only; no P2 measurement."
+  }
+}
