@@ -522,7 +522,7 @@ for (const opening of [true, false]) test(`P2-03 copied signal state/accessors/h
   const hook = Object.getOwnPropertySymbols(AbortSignal.prototype).find(key => key.description === 'kNewListener');
   assert.ok(hook);
   const h = harness(), hooked = new AbortController().signal;
-  Object.defineProperty(hooked, hook, { value() { invoked++; void h.supervisor.close(); } });
+  Object.defineProperty(hooked, hook, { get() { invoked++; throw Error('listener hook accessor'); } });
   signals.push(hooked);
   const reader = opening ? null : await h.open(h.options);
   for (const signal of signals) {
@@ -631,23 +631,94 @@ for (const stage of ['authorize', 'entry', 'final']) test(`P2-26 non-native then
   assert.equal(samples, stage === 'authorize' ? 0 : stage === 'entry' ? 1 : 2); assert.equal(invoked, 0);
 });
 
-for (const opening of [true, false]) test(`P2-03 signal revalidation failure after ${opening ? 'opening' : 'operation'} registration releases every record`, async () => {
-  const h = harness(), reader = opening ? null : await h.open(h.options), controller = new AbortController();
-  const register = h.registry.register; let invoked = 0;
-  h.registry.register = (...args) => {
-    const record = register(...args), key = Reflect.ownKeys(controller.signal)[0];
-    Object.defineProperty(controller.signal, key, { get() { invoked++; throw Error('late symbol accessor'); } });
-    return record;
-  };
-  if (opening) {
-    let failure; await h.open(h.options, { signal: controller.signal }).catch(error => { failure = error; });
-    assert.equal(failure.code, 'invalid_input'); assert.equal(h.actors.length, 0);
-    assert.equal((await h.supervisor.drain(failure.cleanupId)).state, 'complete');
-  } else {
-    denied(await reader.fetchCandidateEvidence(input, h.credential, { signal: controller.signal }), 'reader_failed');
-    h.actors[0].gate.resolve(); await reader.close();
-  }
-  await h.supervisor.close(); assert.equal(h.registry.counters().live, 0); assert.equal(invoked, 0);
+for (const opening of [true, false]) {
+  for (const kind of ['timeout', 'any', 'any-source']) test(`P2-03 native ${kind} accepted at ${opening ? 'open' : 'operation'} entry`, async () => {
+    const h = harness({ stall: opening }), controller = new AbortController(), other = new AbortController();
+    const composite = AbortSignal.any([controller.signal, other.signal]);
+    const signal = kind === 'timeout' ? AbortSignal.timeout(60000) : kind === 'any' ? composite : controller.signal;
+    const reader = opening ? null : await h.open(h.options);
+    const pending = opening ? h.open(h.options, { signal }) : reader.fetchCandidateEvidence(input, h.credential, { signal });
+    const actor = h.actors[0], result = { ok: true, value: null };
+    assert.ok(actor); assert.equal(actor.messages.length, opening ? 0 : 1);
+    actor.reply(result);
+    const opened = opening ? await pending : reader;
+    if (!opening) assert.deepEqual(await pending, result);
+    assert.equal(getEventListeners(signal, 'abort').length, 0);
+    assert.equal(composite.aborted, false);
+    await opened.close(); await h.supervisor.close(); assert.equal(h.registry.counters().live, 0);
+  });
+
+  for (const kind of ['abort', 'aborted-any']) test(`P2-03 native ${kind} cancels ${opening ? 'open' : 'operation'} without dispatch`, async () => {
+    const h = harness(), reader = opening ? null : await h.open(h.options);
+    const signal = kind === 'abort' ? AbortSignal.abort() : AbortSignal.any([new AbortController().signal, AbortSignal.abort()]);
+    const pending = opening ? h.open(h.options, { signal }) : reader.fetchCandidateEvidence(input, h.credential, { signal });
+    if (opening) await assert.rejects(pending, { code: 'read_cancelled' });
+    else denied(await pending, 'read_cancelled');
+    assert.equal(h.actors.length, opening ? 0 : 1);
+    if (reader) { assert.equal(h.actors[0].messages.length, 0); h.actors[0].gate.resolve(); await reader.close(); }
+    await h.supervisor.close(); assert.equal(h.registry.counters().live, 0);
+  });
+
+  test(`P2-03 composing a source during pending ${opening ? 'opening' : 'operation'} preserves acceptance`, async () => {
+    const h = harness({ stall: opening }), reader = opening ? null : await h.open(h.options), controller = new AbortController();
+    const pending = opening ? h.open(h.options, { signal: controller.signal })
+      : reader.fetchCandidateEvidence(input, h.credential, { signal: controller.signal });
+    const before = Reflect.ownKeys(controller.signal);
+    const composite = AbortSignal.any([controller.signal, new AbortController().signal]);
+    assert.ok(Reflect.ownKeys(controller.signal).length > before.length);
+    const actor = h.actors[0], result = { ok: true, value: null };
+    actor.reply(result);
+    const opened = opening ? await pending : reader;
+    if (!opening) assert.deepEqual(await pending, result);
+    assert.equal(composite.aborted, false); assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+    await opened.close(); await h.supervisor.close(); assert.equal(h.registry.counters().live, 0);
+  });
+
+  test(`P2-03 late unused accessor during ${opening ? 'opening' : 'operation'} does not revalidate shape`, async () => {
+    const h = harness({ stall: opening }), reader = opening ? null : await h.open(h.options), controller = new AbortController();
+    const pending = opening ? h.open(h.options, { signal: controller.signal })
+      : reader.fetchCandidateEvidence(input, h.credential, { signal: controller.signal });
+    let invoked = 0;
+    Object.defineProperty(controller.signal, 'late', { get() { invoked++; throw Error('unused accessor'); } });
+    const result = { ok: true, value: null }; h.actors[0].reply(result);
+    const opened = opening ? await pending : reader;
+    if (!opening) assert.deepEqual(await pending, result);
+    assert.equal(invoked, 0); assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+    await opened.close(); await h.supervisor.close(); assert.equal(h.registry.counters().live, 0);
+  });
+}
+
+for (const stage of ['response', 'record-finish']) test(`P2-03 unreadable final native aborted state at ${stage} cancels the operation and keeps reader usable`, async () => {
+  const h = harness(), reader = await h.open(h.options), controller = new AbortController(), actor = h.actors[0];
+  const pending = reader.fetchCandidateEvidence(input, h.credential, { signal: controller.signal });
+  const key = Object.getOwnPropertySymbols(controller.signal).find(value => value.description === 'kAborted');
+  assert.ok(key);
+  const mutate = () => Object.defineProperty(controller.signal, key, { get() { throw Error('late aborted state failure'); } });
+  const finish = h.registry.finish;
+  if (stage === 'response') mutate();
+  else h.registry.finish = (...args) => { const value = finish(...args); mutate(); return value; };
+  try { actor.reply({ ok: true, value: { items: ['discarded'] } }); }
+  finally { h.registry.finish = finish; }
+  denied(await pending, 'read_cancelled');
+  assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+  assert.equal(h.registry.counters().live, 1);
+  const next = reader.getContextReadCapabilities(), result = { ok: true, value: { usable: true } };
+  actor.reply(result); assert.deepEqual(await next, result);
+  await reader.close(); await h.supervisor.close(); assert.equal(h.registry.counters().live, 0);
+});
+
+test('P2-03 unreadable final native aborted state cancels opening with supervised cleanup', async () => {
+  const h = harness({ stall: true }), controller = new AbortController();
+  const opening = h.open(h.options, { signal: controller.signal }), actor = h.actors[0];
+  const key = Object.getOwnPropertySymbols(controller.signal).find(value => value.description === 'kAborted');
+  assert.ok(key);
+  Object.defineProperty(controller.signal, key, { get() { throw Error('late aborted state failure'); } });
+  actor.reply({ ok: true, value: null });
+  let failure; await opening.catch(error => { failure = error; });
+  assert.equal(failure.code, 'read_cancelled');
+  assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+  actor.gate.resolve(); assert.equal((await h.supervisor.drain(failure.cleanupId)).state, 'complete');
+  await h.supervisor.close(); assert.equal(h.registry.counters().live, 0);
 });
 
 test('P2-03 final acceptance rejects an aborted opening even when notification is lost', async () => {

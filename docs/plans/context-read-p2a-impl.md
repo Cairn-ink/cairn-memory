@@ -445,3 +445,121 @@ was created.
 - `core/test/context-read-product.test.mjs`
 - `core/testing/context-product-host.mjs`
 - `docs/plans/context-read-p2a-impl.md`
+
+## Fix round 3
+
+This revision corrects round 2's exact-own-key signal check. Genuine Node
+`AbortSignal.timeout()` and `AbortSignal.any()` signals, and controller signals
+used as composite sources, can have additional native data properties. Creating
+a composite during a pending call can add properties to an admitted source.
+
+Constructor and method entry reject proxies, require the exact native
+`AbortSignal.prototype`, and inspect every own descriptor for a data value.
+There is no exact-key-set comparison. The captured intrinsic `aborted` getter
+then validates readable native state; a throw at entry means `invalid_input`.
+After registration, no shape validation runs. Final acceptance reads only that
+captured getter: aborted or unreadable state discards the response as
+`read_cancelled`. An unreadable final state settles the method without closing
+the reader; a subsequent capability call still succeeds. Failed opening still
+receives supervised cleanup. Protected `addAbortListener` registration, the
+registration-reentry ownership check, and subscription disposal in `finally`
+remain in place.
+
+Control regressions cover timeout and composite signals at opening and method
+entry, pre-aborted native and composite signals with no dispatch, controller
+sources composed before entry and during pending opening/method calls, late
+unused accessors without shape revalidation, and an unreadable final intrinsic
+state followed by successful reuse. Timeout acceptance uses a pending native
+timeout without waiting for real time; deterministic pre-aborted cases use
+`AbortSignal.abort()`. Existing forged-accessor, proxy, registration reentry,
+propagation suppression and lost-notification cases remain covered. The old
+extra-data-hook rejection expectation now uses an accessor hook, consistent
+with the requested entry validation. No timing acceptance gate was added.
+
+### Known P2 hardening, deferred
+
+These cases require a deliberately forging in-process caller that already runs
+arbitrary host code. They are documented here and are not implemented in P2a:
+
+1. Signals forged with
+   `Object.create(AbortSignal.prototype, Object.getOwnPropertyDescriptors(real))`
+   and a proxied internal event map can execute traps during native listener
+   registration. Descriptor checks do not attest internal event-map contents.
+2. A native rejected Promise with a throwing `constructor` getter can still
+   produce an unhandled rejection through species lookup in the captured
+   `Promise.prototype.then`. Capturing `then` does not bypass species lookup.
+
+The separate raw `walHeader` lock-safety hotfix remains the primary's merge.
+This revision does not modify `walHeader` or the topic SQLite implementation.
+
+### Round-3 verification
+
+Verified runtime versions: **22.16.0** and **24.22.1**. The requested
+`core/test/context-read*.test.mjs` inventory was independently derived by
+filesystem glob and `rg --files`: **24 files**, identical (`diff -u` exit
+**0**). Every file ran sequentially as a separate child with its explicit path;
+the actual child return code was captured. No network, keys, package install,
+broad CI sweep or timing acceptance gate was used.
+
+Node **22.16.0**: **404 passed**, zero failed, cancelled or skipped. Each
+explicit command below exited **0**; the sequential runner also exited **0**.
+`node` denotes the verified 22.16.0 executable.
+
+| Explicit command | Actual exit | Tests passed |
+| --- | --- | --- |
+| `node core/test/context-read-assembly-races.test.mjs` | 0 | 7 |
+| `node core/test/context-read-assembly-readonly.test.mjs` | 0 | 28 |
+| `node core/test/context-read-assembly.test.mjs` | 0 | 20 |
+| `node core/test/context-read-bm25.test.mjs` | 0 | 3 |
+| `node core/test/context-read-budget.test.mjs` | 0 | 5 |
+| `node core/test/context-read-core.test.mjs` | 0 | 26 |
+| `node core/test/context-read-embedder.test.mjs` | 0 | 5 |
+| `node core/test/context-read-fusion.test.mjs` | 0 | 4 |
+| `node core/test/context-read-local-embedder.test.mjs` | 0 | 38 |
+| `node core/test/context-read-local-status.test.mjs` | 0 | 3 |
+| `node core/test/context-read-moc-source.test.mjs` | 0 | 15 |
+| `node core/test/context-read-process.test.mjs` | 0 | 1 |
+| `node core/test/context-read-product-artifact.test.mjs` | 0 | 1 |
+| `node core/test/context-read-product-control.test.mjs` | 0 | 81 |
+| `node core/test/context-read-product.test.mjs` | 0 | 81 |
+| `node core/test/context-read-recovery.test.mjs` | 0 | 10 |
+| `node core/test/context-read-review.test.mjs` | 0 | 10 |
+| `node core/test/context-read-sidecar.test.mjs` | 0 | 16 |
+| `node core/test/context-read-source-work.test.mjs` | 0 | 7 |
+| `node core/test/context-read-sources-authority.test.mjs` | 0 | 6 |
+| `node core/test/context-read-sources-bounds.test.mjs` | 0 | 5 |
+| `node core/test/context-read-sources-races.test.mjs` | 0 | 16 |
+| `node core/test/context-read-sources.test.mjs` | 0 | 14 |
+| `node core/test/context-read-tokenize.test.mjs` | 0 | 2 |
+
+Node **24.22.1**:
+
+| Explicit command | Actual exit | Tests passed |
+| --- | --- | --- |
+| `node --test-reporter=tap core/test/context-read-product-control.test.mjs` | 0 | 81 |
+
+The final control suite includes the unchanged forged-accessor, proxy,
+registration-reentry and suppression regressions as well as the new native
+signal cases. Final getter-failure coverage exercises both acceptance checks,
+proves subsequent method reuse, and verifies supervised failed-opening cleanup.
+The earlier developing control runs passed 79 tests on each runtime; the final
+counts above supersede them. No test run failed in round 3.
+
+`node --check` for both changed JavaScript files exited **0**.
+`git diff --check` exited **0**. The whitespace/final-newline scan covers all
+**3** changed files, including documentation; no added private absolute paths
+were found. Protected facade, sidecar and topic SQLite file diff checks exited
+**0**. Existing shipped modules and documentation remain in the artifact
+manifest; no shipped file was added. These are the requested functional checks;
+full CI and performance qualification are not claimed.
+
+### Round-3 changed-file cross-check
+
+Route one: `git diff --name-only -z` plus
+`git ls-files --others --exclude-standard -z`. Route two:
+`git status --porcelain=v1 -z`. Independently sorted lists match exactly;
+`diff -u` exited **0**, with **3 files**. No commit was created.
+
+- `core/context-product-reader.mjs`
+- `core/test/context-read-product-control.test.mjs`
+- `docs/plans/context-read-p2a-impl.md`

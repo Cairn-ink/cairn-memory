@@ -18,19 +18,23 @@ const codes = new Set(['invalid_input', 'invalid_read_set', 'authority_required'
 export const productFailure = code => ({ ok: false, error: { code: codes.has(code) ? code : 'reader_failed', retryable: code === 'storage_busy' } });
 const coded = (code, cleanupId) => Object.assign(Error(codes.has(code) ? code : 'reader_failed'), { code: codes.has(code) ? code : 'reader_failed', ...(cleanupId ? { cleanupId } : {}) });
 const aborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted').get;
-// Node's native brand check alone accepts copied symbol state. Inspect shape
-// before invoking any native getter or listener machinery; never read accessors.
+// Validate entry descriptors before invoking native signal machinery. Native
+// timeout/composite signals and their sources may carry extra data properties.
 const signalPrototype = AbortSignal.prototype;
 const sharedLength = Object.getOwnPropertyDescriptor(SharedArrayBuffer.prototype, 'byteLength').get;
-const signalKeys = new Set(Reflect.ownKeys(new AbortController().signal));
 function signalAborted(signal) {
   if (signal === undefined) return false;
   if (!signal || typeof signal !== 'object' || types.isProxy(signal) ||
       Object.getPrototypeOf(signal) !== signalPrototype) fail('invalid_input');
-  const keys = Reflect.ownKeys(signal);
-  if (keys.length !== signalKeys.size || keys.some(key => !signalKeys.has(key) ||
+  if (Reflect.ownKeys(signal).some(key =>
       !Object.hasOwn(Object.getOwnPropertyDescriptor(signal, key), 'value'))) fail('invalid_input');
   try { return Reflect.apply(aborted, signal, []); } catch { fail('invalid_input'); }
+}
+// After registration the shape may change legitimately (for example any()).
+// An unreadable state discards this result without invalidating the reader.
+function signalCancelled(signal) {
+  if (signal === undefined) return false;
+  try { return Reflect.apply(aborted, signal, []); } catch { return true; }
 }
 const nativeWorker = data => new Worker(new URL('./context-product-worker.mjs', import.meta.url), {
   workerData: data, env: {}, execArgv: [], stdout: true, stderr: true,
@@ -129,13 +133,11 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       } catch { shutdown('reader_failed'); return; }
       // Acceptance is checked again after bounded response validation.
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
-      try { if (signalAborted(slot.signal)) { shutdown('read_cancelled'); return; } }
-      catch { shutdown('invalid_input'); return; }
-      if (slot.open && !result.ok) { shutdown(result.error.code); return; }
+      if (signalCancelled(slot.signal)) result = productFailure('read_cancelled');
       if (!slot.open) registry.finish(slot.record);
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
-      try { if (signalAborted(slot.signal)) { shutdown('read_cancelled'); return; } }
-      catch { shutdown('invalid_input'); return; }
+      if (signalCancelled(slot.signal)) result = productFailure('read_cancelled');
+      if (slot.open && !result.ok) { shutdown(result.error.code); return; }
       lifecycle.finish(slot, result);
       instance.unref(); idle = setTimer(() => shutdown('store_closed'), 60000); idle.unref?.(); lifecycle.idle = idle;
     }
@@ -172,7 +174,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         const abort = () => shutdown('read_cancelled');
         try {
           clearTimer(idle);
-          if (signalAborted(signal)) { shutdown('read_cancelled'); return; }
+          if (signalCancelled(signal)) { shutdown('read_cancelled'); return; }
           if (signal !== undefined) subscription = addAbortListener(signal, abort);
           // Registration may synchronously close the owner or settle the slot.
           // Never dispatch after it has lost ownership, even without a Worker.
