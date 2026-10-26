@@ -30,8 +30,9 @@ try {
 The constructor validates own-data options synchronously and opens no file or
 Worker. The first asynchronous read opens an existing permission-safe regular
 file with native `readOnly`, `query_only` and `trusted_schema=OFF`. DELETE
-keeps a zero busy timeout. WAL uses one Worker-owned native lock-wait budget of
-at most 100ms per request, capped by the remaining request deadline; each
+keeps a zero busy timeout. WAL uses one Worker-owned native lock-wait budget:
+the remaining request deadline capped at 1000ms, minus a 20ms reply reserve
+(at most 980ms native waiting, floored at zero); each
 prepare/execution refreshes the remaining budget, including opening and fences. It rejects symlinks, missing files, unsupported application/layouts and
 missing or malformed required indexes. Supported existing schemas are exactly
 18, 20, 21, 22, 23, 29, 30, 31, 32 and 33; intermediate Raw layouts 24–28 are not accepted.
@@ -342,5 +343,26 @@ Every reader-load cell reports public-write-call latency p95/max separately
 from the full writer open/write/close lifecycle latency. Public-write p95 keeps
 the 250ms gate; max is reported without inventing a new threshold. The original
 0.90 throughput ratio remains a reported engine reference and is excluded from
-product acceptance. The WAL wait stays 100ms. The script header and saved
-protocol v2 pre-register these criteria before measurement.
+product acceptance. The current wait policy is v1.1 below. The script header
+and saved protocol v2 pre-register these criteria before measurement.
+
+
+### E1-C2 v1.1: deadline-bounded WAL waiting
+
+This replaces v1's fixed 100ms WAL budget. At Worker request start, set one
+absolute cutoff to min(request deadline, now + 1000ms) - 20ms. Before native
+prepare/execution, cached statements, iterator steps and rollback, install the
+floored nonnegative time left until that cutoff. Worker startup and SQL work
+consume the request deadline; statements never restart the budget.
+
+Members use their deadlineMs deadline; legacy and opt-in overview use the
+existing 5000ms watchdog deadline. The 20ms reserve provides four normal 5ms
+quanta for cleanup, the small failure result and delivery, leaving at most
+980ms for native lock waiting. If only the reserve remains, there is no wait.
+The reserve is headroom; the existing watchdog still handles deadline expiry.
+
+The wait stays in the cancellable reader Worker. DELETE keeps zero wait;
+header-based WAL detection, diagnostics and existing error classification stay
+unchanged. Busy exhaustion remains storage_busy; watchdog cancellation is
+read_timeout. Measurement thresholds, exposure minima, latency reporting and
+throughput's reported-only role remain unchanged.

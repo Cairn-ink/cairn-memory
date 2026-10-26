@@ -5,7 +5,7 @@ import test from 'node:test';
 import { lstatSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createTopicSqlitePolicy, topicJournalMode, SQLITE_STAGES, SQLITE_STATEMENTS,
-  recordSqliteFailure, unsupportedTopicStorage, TOPIC_WAL_WAIT_MS } from '../topic-reader-sqlite.mjs';
+  recordSqliteFailure, unsupportedTopicStorage, TOPIC_WAL_WAIT_MS, TOPIC_WAL_REPLY_RESERVE_MS } from '../topic-reader-sqlite.mjs';
 import { readerOptions, safeReaderFailure, safeLegacyReaderFailure } from '../topic-overview-input.mjs';
 import { openMemoryReader } from '../memory-reader.mjs';
 import { memberFixture, namespace } from '../testing/topic-members-fixture.mjs';
@@ -30,7 +30,7 @@ test('diagnostics have a closed, content-free shape; default errors remain byte-
   for (const [stage, statement] of [['SECRET', 'application_id'], ['execute', 'SELECT SECRET']]) {
     assert.equal(safeReaderFailure(recordSqliteFailure(busy(), stage, statement), true).error.diagnostics, undefined);
   }
-  const path = '/tmp/reader-options-only';
+  const path = join('synthetic-reader-options', 'memory.sqlite');
   for (const diagnostics of [true, false, undefined]) assert.doesNotThrow(() => readerOptions({ path, ownerId: 'owner', diagnostics }));
   for (const diagnostics of [1, 'true', null, {}]) assert.throws(() => readerOptions({ path, ownerId: 'owner', diagnostics }));
 });
@@ -58,13 +58,13 @@ test('native waits share a single bounded request deadline, including cached sta
   const native = { exec: sql => configured.push(sql), prepare: () => ({ get: () => 1, iterate: function* () { yield 1; } }) };
   const policy = createTopicSqlitePolicy({ now: () => now });
   policy.start(45.9); const db = policy.database(native, true), statement = db.prepare('SELECT metadata');
-  assert.deepEqual(configured, ['PRAGMA busy_timeout=35']);
-  now = 30; statement.get(); assert.equal(configured.at(-1), 'PRAGMA busy_timeout=15');
+  assert.deepEqual(configured, ['PRAGMA busy_timeout=15']);
+  now = 20; statement.get(); assert.equal(configured.at(-1), 'PRAGMA busy_timeout=5');
   now = 45.5; statement.get(); assert.equal(configured.at(-1), 'PRAGMA busy_timeout=0');
   now = 60; statement.get(); assert.equal(configured.at(-1), 'PRAGMA busy_timeout=0');
-  policy.start(10000); statement.get(); assert.equal(configured.at(-1), `PRAGMA busy_timeout=${TOPIC_WAL_WAIT_MS}`);
-  const iterator = statement.iterate(); now += 80; iterator.next(); assert.equal(configured.at(-1), 'PRAGMA busy_timeout=20');
-  now += 30; iterator.next(); assert.equal(configured.at(-1), 'PRAGMA busy_timeout=0');
+  policy.start(10000); statement.get(); assert.equal(configured.at(-1), `PRAGMA busy_timeout=${TOPIC_WAL_WAIT_MS - TOPIC_WAL_REPLY_RESERVE_MS}`);
+  const iterator = statement.iterate(); now += 80; iterator.next(); assert.equal(configured.at(-1), 'PRAGMA busy_timeout=900');
+  now += 901; iterator.next(); assert.equal(configured.at(-1), 'PRAGMA busy_timeout=0');
   const deletePolicy = createTopicSqlitePolicy({ diagnostics: true, now: () => now }); deletePolicy.start(10000);
   configured.length = 0; deletePolicy.database(native, false).prepare('SELECT metadata').get(); assert.deepEqual(configured, []);
   assert.equal(createTopicSqlitePolicy().database(native, false), native);
@@ -84,7 +84,7 @@ test('boundary-specific faults retain exact native labels, including timeout ins
         return { get() { throw busy(); }, iterate: function* () { throw busy(); } };
       },
     };
-    const policy = createTopicSqlitePolicy({ diagnostics: true, now: () => 0 }); policy.start(1);
+    const policy = createTopicSqlitePolicy({ diagnostics: true, now: () => 0 }); policy.start(21);
     const db = policy.database(native, true);
     assert.throws(() => {
       if (boundary === 'begin') db.exec('BEGIN');
@@ -138,7 +138,7 @@ test('simulated native busy consumes the deadline once and is never retried or c
         { stage: 'execute', statement: 'topic_metadata', sqlite: { code: 5, extendedCode: 261 } });
       return true;
     });
-    assert.equal(reads, i + 1); assert.equal(now, 37);
+    assert.equal(reads, i + 1); assert.equal(now, 17);
   }
   assert.equal(installed, 0, 'expired deadline cannot reinstall the request budget');
 });
@@ -183,6 +183,65 @@ test('rollback refreshes the WAL timeout after the shared budget has expired', (
   const native = { exec: sql => executed.push(sql) };
   const policy = createTopicSqlitePolicy({ now: () => now }); policy.start(5000);
   const db = policy.database(native, true); db.exec('BEGIN');
-  now = 100; db.exec('ROLLBACK');
-  assert.deepEqual(executed, ['PRAGMA busy_timeout=100', 'BEGIN', 'PRAGMA busy_timeout=0', 'ROLLBACK']);
+  now = 980; db.exec('ROLLBACK');
+  assert.deepEqual(executed, ['PRAGMA busy_timeout=980', 'BEGIN', 'PRAGMA busy_timeout=0', 'ROLLBACK']);
+});
+
+test('v1.1 native wait never exceeds deadline minus reserve or the shared cap, including late Worker start', () => {
+  assert.equal(TOPIC_WAL_WAIT_MS, 1000); assert.equal(TOPIC_WAL_REPLY_RESERVE_MS, 20);
+  // Simulate host dispatch at zero and Worker startup at 35ms; include short,
+  // exhausted and fractional deadlines, plus the legacy 5000ms watchdog.
+  for (const deadlineAt of [10, 35, 50, 55, 55.9, 250, 1000, 1035, 2000, 5000]) {
+    let now = 35, installed = 0;
+    const native = { exec(sql) { installed = Number(sql.split('=').at(-1)); }, prepare: () => ({ get: () => installed }) };
+    const policy = createTopicSqlitePolicy({ now: () => now }); policy.start(deadlineAt);
+    const db = policy.database(native, true), statement = db.prepare('SELECT metadata');
+    for (const elapsed of [0, .5, 5, 30, 150, 700, 979, 980, 1001]) {
+      now = 35 + elapsed;
+      const wait = statement.get();
+      const deadlineBound = Math.max(0, Math.floor(deadlineAt - now - 20));
+      const capBound = Math.max(0, Math.floor(1000 - elapsed - 20));
+      assert.equal(wait, Math.min(deadlineBound, capBound), 'deadline ' + deadlineAt + ', elapsed ' + elapsed);
+      assert.ok(wait <= deadlineBound); assert.ok(wait <= 980);
+    }
+  }
+});
+
+test('public dispatch supplies member deadlines and the existing 5000ms overview deadline to the Worker', async t => {
+  const { Worker } = await import('node:worker_threads');
+  const { performance } = await import('node:perf_hooks');
+  const workspace = createTestWorkspace(t), messages = [];
+  t.mock.method(performance, 'now', () => 1234);
+  t.mock.method(Worker.prototype, 'postMessage', function(message) {
+    messages.push(message);
+    queueMicrotask(() => this.emit('message', { ok: false, error: { code: 'storage_busy' } }));
+  });
+  const reader = openMemoryReader({ path: join(workspace.path, 'synthetic.sqlite'), ownerId: namespace.ownerId });
+  try {
+    assert.equal((await reader.readTopicMembers({ namespace, selection: { type: 'unfiled' }, accessRevision: 'g', deadlineMs: 250 })).error.code, 'storage_busy');
+    assert.equal(messages.at(-1).deadlineAt, 1234 + 250);
+    assert.equal((await reader.readTopicOverview({ namespace })).error.code, 'storage_busy');
+    assert.equal(messages.at(-1).deadlineAt, 1234 + 5000);
+  } finally { await reader.close(); }
+});
+
+test('v1.1 permits a simulated lock over 100ms and preserves busy when its bound is exhausted', () => {
+  for (const [deadlineAt, releaseAt, succeeds] of [[250, 175, true], [250, 400, false], [5000, 600, true], [5000, 2000, false]]) {
+    let now = 35, installed = 0, reads = 0;
+    const native = { exec(sql) { installed = Number(sql.split('=').at(-1)); }, prepare: () => ({ get() {
+      reads++;
+      if (releaseAt - now > installed) { now += installed; throw busy(5); }
+      now = releaseAt; return 'snapshot';
+    } }) };
+    const policy = createTopicSqlitePolicy({ now: () => now }); policy.start(deadlineAt);
+    const statement = policy.database(native, true).prepare('SELECT metadata');
+    if (succeeds) assert.equal(statement.get(), 'snapshot');
+    else {
+      assert.throws(() => statement.get(), error => {
+        assert.equal(safeReaderFailure(error).error.code, 'storage_busy'); return true;
+      });
+      assert.equal(now, Math.min(deadlineAt, 1035) - 20);
+    }
+    assert.equal(reads, 1, 'no application retry'); assert.ok(now <= deadlineAt - 20);
+  }
 });

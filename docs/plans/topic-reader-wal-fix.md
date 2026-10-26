@@ -337,3 +337,108 @@ packages were not traversed. No new manifest entries were needed. Final
 inventory equality and whitespace were rechecked after this report update.
 The full v2 measurement remains for the primary's machine-wide queue. No claim
 of full performance acceptance follows from the single 2s smoke.
+
+
+## E1-C2 v1.1: deadline-bounded WAL wait (2026-10-27)
+
+This round is based on 69900556 on fix/wal-reader-wait-v11 and remains
+uncommitted for the primary. Earlier sections describe the historical 100ms
+policy. Product supplied a Node24.22.1 full run of 200 trials: four of twenty
+fresh-writer WAL trials failed zero-busy, with five busy member attempts out
+of 4668 and five busy overview attempts out of 4813. Writer-close checkpoint
+or WAL reset exceeded the fixed 100ms budget. The reported no-wait control had
+21–25% busy; reader p95 peaked at 132ms and the maximum at 161ms. Those are the
+product's supplied observations, not a measurement run in this round.
+
+### Policy and reserve
+
+At Worker request start t with the host's absolute monotonic deadline D:
+
+~~~text
+cutoff = min(D, t + 1000ms) - 20ms
+native timeout before each operation = max(0, floor(cutoff - now))
+~~~
+
+This replaces the fixed 100ms limit. The single request-wide budget is the
+remaining request deadline capped at 1000ms, minus a 20ms reserve (maximum
+980ms native waiting). Startup already consumed part of D; SQL work and all
+statements/fences consume the same budget. The cap never restarts per statement.
+
+The 20ms reserve leaves four normal 5ms quanta of headroom for rollback,
+constructing the small failure envelope, posting it and host delivery. It is
+practical delivery headroom, not an extension of the deadline or a guarantee
+against arbitrary scheduling delay. The existing watchdog remains the fallback.
+Members use their deadlineMs-derived deadline; legacy and opt-in overview keep
+the existing 5000ms watchdog deadline. No host-thread wait or new retry is added.
+DELETE stays at zero wait. Native busy exhaustion keeps storage_busy under the
+existing classification; cancellation keeps read_timeout. WAL header detection,
+diagnostics, read-only behavior and the writer IPC fix remain unchanged.
+
+The exact versioned contract delta is [E1-C2 additive contract v1.1](topic-overview-member-pages.md#e1-c2-additive-contract-v11-2026-10-27).
+Public usage is updated in [topic-overview.md](../topic-overview.md#e1-c2-v11-deadline-bounded-wal-waiting).
+Measurement metadata now identifies reader policy E1-C2-v1.1 and its ceiling
+and reserve. The zero-wait control still patches only the ceiling constant to
+zero. Protocol v2's pre-registered thresholds are byte-identical to the base;
+all matrix windows, exposure requirements, failure gates and throughput's
+reported-only role are unchanged. The two IPC delivery/judgment blocks are
+also byte-identical to 69900556. No new runtime modules or shipped docs need
+manifest entries.
+
+### v1.1 verification
+
+Only the two touched test files were run, by explicit path. They cover late
+Worker startup, short/exhausted/fractional deadlines, the 1000ms cap, reserve
+headroom at each native call, shared cached-statement/iterator budgets,
+rollback after exhaustion, host forwarding of member and overview deadlines,
+simulated locks over 100ms, busy exhaustion without retry, default byte parity,
+DELETE, diagnostics, header detection, native iterator fidelity and unchanged
+measurement thresholds/control copying.
+
+~~~sh
+node --test core/test/topic-reader-sqlite.test.mjs tools/testing/measure-topic-reader-wal.test.mjs
+# first run exit 0: 18/18; final run exit 0: 19/19
+node --version
+# exit 0: v22.16.0
+~~~
+
+No smoke or full measurement ran in this round. No broad suite, network,
+provider/model call, key read or commit was performed. No background work is
+left running. Full performance acceptance requires the primary's queued rerun;
+the deterministic simulations establish the new bounds, not a zero-busy
+performance claim under production contention.
+
+
+### v1.1 delivery inventory and checks
+
+Changed files were derived from git diff --name-only HEAD plus git ls-files
+--others --exclude-standard, then independently from git status --porcelain=v1
+-z. Exact set equality: **7 files**, exit 0. Whitespace includes untracked paths;
+no trailing whitespace, missing final newline or machine-local path literals
+in the changed files (exit 0).
+
+~~~text
+core/test/topic-reader-sqlite.test.mjs
+core/topic-reader-sqlite.mjs
+docs/plans/topic-overview-member-pages.md
+docs/plans/topic-reader-wal-fix.md
+docs/topic-overview.md
+tools/testing/measure-topic-reader-wal.mjs
+tools/testing/measure-topic-reader-wal.test.mjs
+~~~
+
+Exact syntax checks (each exit 0):
+
+~~~sh
+node --check core/test/topic-reader-sqlite.test.mjs
+node --check core/topic-reader-sqlite.mjs
+node --check tools/testing/measure-topic-reader-wal.mjs
+node --check tools/testing/measure-topic-reader-wal.test.mjs
+~~~
+
+
+Additional checks: git diff --check exited 0. The inline source comparison of
+measurement thresholds and both IPC blocks against 69900556 exited 0, with
+byte-identical results. The reader/Worker import closure check exited 0:
+52 required files, zero manifest misses; all three affected shipped docs are
+already registered. Final inventory and whitespace/path checks were repeated
+after this report update; no new entries are needed in the artifact manifest.

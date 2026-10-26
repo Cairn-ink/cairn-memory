@@ -939,3 +939,36 @@ sleeps and retained shutdown close do not satisfy these requirements. Cells
 below any minimum are **invalid**, never passing. Smoke does not assert these
 full-window minima; DELETE latency/contention remains report-only. Existing
 five-repetition, zero-busy, reader p95 and host-loop thresholds remain unchanged.
+
+
+## E1-C2 additive contract v1.1 (2026-10-27)
+
+This delta replaces the fixed 100ms WAL wait rule in v1 and its review
+corrections. Other diagnostics, DTO, classification, header-detection and
+read-only guarantees remain unchanged. Measurement protocol v2's pre-registered
+thresholds and exposure requirements remain unchanged.
+
+At Worker request start t, let D be the host's absolute monotonic request
+deadline. Set one request-wide lock cutoff to min(D, t + 1000ms) - 20ms.
+Before each native prepare/execution or iterator step, including rollback,
+install max(0, floor(cutoff - now)) milliseconds of native busy timeout. Opening,
+queries and fence checks consume the same budget; statements never reset it.
+Equivalently the initial budget is max(0, min(remaining deadline, 1000ms) - 20ms),
+so native waiting is at most 980ms. An exhausted or reserve-only budget means
+zero wait.
+
+Members use the deadline derived from their deadlineMs at host dispatch.
+Overview, including legacy overview with no deadline input, uses its existing
+5000ms watchdog deadline. Worker startup consumes that deadline before the
+wait budget is computed.
+
+The 20ms reserve leaves four normal 5ms quanta of headroom for rollback,
+constructing the small failure envelope, posting it and host delivery. It does
+not extend the deadline; existing watchdog termination remains the fallback
+when scheduling or processing exhausts it.
+
+Waiting remains entirely inside the reader Worker, cancellable through the
+existing watchdog/close path. Busy exhaustion retains storage_busy under the
+existing error classification; watchdog cancellation remains read_timeout.
+DELETE retains zero wait. No journal-mode change, migration, write opener or
+additional application retry is introduced.

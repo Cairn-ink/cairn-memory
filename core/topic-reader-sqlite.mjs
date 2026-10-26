@@ -16,7 +16,9 @@ export function topicJournalMode(path, expected) {
   } finally { closeSync(fd); }
 }
 
-export const TOPIC_WAL_WAIT_MS = 100;
+// The ceiling includes reply headroom: at most 980ms native waiting.
+export const TOPIC_WAL_WAIT_MS = 1000;
+export const TOPIC_WAL_REPLY_RESERVE_MS = 20;
 export const SQLITE_STAGES = Object.freeze(['open', 'configure', 'prepare', 'execute', 'begin', 'commit', 'rollback', 'close']);
 export const SQLITE_STATEMENTS = Object.freeze(['connection', 'reader_configuration', 'application_id', 'user_version',
   'schema_version', 'encoding', 'schema_metadata', 'snapshot_metadata', 'topic_metadata', 'transaction']);
@@ -52,7 +54,11 @@ function label(sql) {
 export function createTopicSqlitePolicy({ diagnostics = false, now = () => performance.now() } = {}) {
   let until = -Infinity;
   return {
-    start(deadlineAt) { until = Math.min(deadlineAt, now() + TOPIC_WAL_WAIT_MS); },
+    start(deadlineAt) {
+      // One absolute cutoff: reserve four normal 5ms quanta for cleanup/reply.
+      // Worker startup already consumed the host's absolute request deadline.
+      until = Math.min(deadlineAt, now() + TOPIC_WAL_WAIT_MS) - TOPIC_WAL_REPLY_RESERVE_MS;
+    },
     database(native, wal) {
       if (!wal && !diagnostics) return native;
       let installed = 0;
