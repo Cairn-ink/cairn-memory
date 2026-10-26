@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
-import { resolveClient, projectKey } from '../pairing.mjs';
+import { resolveClient, clientProjectId, projectKey } from '../pairing.mjs';
 import { createHmac } from 'node:crypto';
 import { withWriteObserver } from '../private-state.mjs';
 import { createJsonPoster, hostedTargetId } from '../transport-hosted.mjs';
@@ -84,44 +84,62 @@ test('binding discovery cancellation in key-publication lock acquisition preserv
   assert.deepEqual(names.filter(name => name.startsWith('.project-key.lock.owner-')), []);
 });
 
-test('binding discovery stops between session-evidence reads and closes the scan on cancellation', async t => {
-  const f = await home(t), directory = join(f.root, 'sessions');
-  await mkdir(directory, { mode: 0o700 });
-  for (const digit of ['a', 'b']) await writeFile(join(directory, digit.repeat(64) + '.json'),
-    JSON.stringify({ offset: -1 }), { mode: 0o600 });
-  const reached = rendezvous(), release = rendezvous(), controller = new AbortController();
-  const original = fsPromises.open, originalOpendir = fsPromises.opendir;
-  let reads = 0, scannedDirectory;
-  fsPromises.open = async function (path, ...args) {
-    const file = await original(path, ...args);
-    if (String(path).startsWith(directory + '/')) {
-      const read = file.readFile.bind(file);
-      file.readFile = async (...readArgs) => {
-        const bytes = await read(...readArgs);
-        if (++reads === 1) { reached.resolve(); await release.promise; }
-        return bytes;
-      };
+for (const caller of ['resolveClient', 'clientProjectId']) {
+  const name = caller === 'resolveClient'
+    ? 'binding discovery stops between session-evidence reads and closes the scan on cancellation'
+    : 'clientProjectId cancellation stops a legacy other-creator evidence scan after one read';
+  test(name, async t => {
+    const f = await home(t), directory = join(f.root, 'sessions');
+    let binding;
+    if (caller === 'clientProjectId') {
+      await projectKey(f.root, { home: f.workspace.path, client: 'codex' });
+      assert.equal(JSON.parse(await readFile(join(f.root, 'created-by'), 'utf8')).client, 'codex');
+      binding = { enabled: true, root: f.root, paired: false, createKey: false };
     }
-    return file;
-  };
-  fsPromises.opendir = async function (...args) {
-    const dir = await originalOpendir(...args);
-    scannedDirectory = dir;
-    return dir;
-  };
-  syncBuiltinESMExports();
-  try {
-    const pending = resolveClient({ ...f.options, signal: controller.signal });
-    const rejected = assert.rejects(pending, error => error === controller.signal.reason);
-    await reached.promise; controller.abort(); release.resolve(); await rejected;
-    assert.equal(reads, 1);
-    // Node 22 throws synchronously on a closed Dir; Node 24 rejects the promise.
-    await assert.rejects(async () => scannedDirectory.read(), error => error.code === 'ERR_DIR_CLOSED');
-    assert.deepEqual(await readdir(f.root), ['sessions']);
-  } finally {
-    release.resolve(); fsPromises.open = original; fsPromises.opendir = originalOpendir; syncBuiltinESMExports();
-  }
-});
+    await mkdir(directory, { mode: 0o700 });
+    for (const digit of ['a', 'b']) await writeFile(join(directory, digit.repeat(64) + '.json'),
+      JSON.stringify({ offset: -1 }), { mode: 0o600 });
+    const namesBefore = (await readdir(f.root)).sort();
+    const identityBefore = binding && await Promise.all(['project-key', 'created-by'].map(name =>
+      readFile(join(f.root, name), 'utf8')));
+    const reached = rendezvous(), release = rendezvous(), controller = new AbortController();
+    const original = fsPromises.open, originalOpendir = fsPromises.opendir;
+    let reads = 0, scannedDirectory;
+    fsPromises.open = async function (path, ...args) {
+      const file = await original(path, ...args);
+      if (String(path).startsWith(directory + '/')) {
+        const read = file.readFile.bind(file);
+        file.readFile = async (...readArgs) => {
+          const bytes = await read(...readArgs);
+          if (++reads === 1) { reached.resolve(); await release.promise; }
+          return bytes;
+        };
+      }
+      return file;
+    };
+    fsPromises.opendir = async function (...args) {
+      const dir = await originalOpendir(...args);
+      scannedDirectory = dir;
+      return dir;
+    };
+    syncBuiltinESMExports();
+    try {
+      const options = { ...f.options, signal: controller.signal };
+      const pending = caller === 'resolveClient' ? resolveClient(options)
+        : clientProjectId(options, '/synthetic/legacy-cwd', binding);
+      const rejected = assert.rejects(pending, error => error === controller.signal.reason);
+      await reached.promise; controller.abort(); release.resolve(); await rejected;
+      assert.equal(reads, 1);
+      // Node 22 throws synchronously on a closed Dir; Node 24 rejects the promise.
+      await assert.rejects(async () => scannedDirectory.read(), error => error.code === 'ERR_DIR_CLOSED');
+      assert.deepEqual((await readdir(f.root)).sort(), namesBefore);
+      if (binding) assert.deepEqual(await Promise.all(['project-key', 'created-by'].map(name =>
+        readFile(join(f.root, name), 'utf8'))), identityBefore);
+    } finally {
+      release.resolve(); fsPromises.open = original; fsPromises.opendir = originalOpendir; syncBuiltinESMExports();
+    }
+  });
+}
 
 test('cancellation after key staging finishes the bounded publication without partial key or lock state', async t => {
   const f = await home(t), controller = new AbortController();

@@ -11,7 +11,7 @@
     "integrations/client/hosted-pause.mjs": "f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30",
     "integrations/client/hosted-schemas.mjs": "fda2e6b4f6feda316300819e1a199dd25f7462b9f47e33bff950c3c4f95ba8ce",
     "integrations/client/identity.mjs": "f208808740aa9b2e13dfbb5899ce50de3a657a1c507441ad8d9877b2efe09de6",
-    "integrations/client/pairing.mjs": "11c928ce6810c6c2521bbf1030acfd4acec0ef3dc2383e70f17948492c5f4dbd",
+    "integrations/client/pairing.mjs": "46a3cc1bb1e88ad1ab06c0096fb9c1dbee0d34b19b4c1435c9c07b496065af3c",
     "integrations/client/private-state.mjs": "ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64",
     "integrations/client/recall-query.mjs": "87d606696185da8c0455889c9cf359116f82f70b3a92a1153629026b5406f765",
     "integrations/client/redact.mjs": "f4bcfdc8edd177060b62a75f9dbc229443328eb822e40d814f0a48684c253f88",

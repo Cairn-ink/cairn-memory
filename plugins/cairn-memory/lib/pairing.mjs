@@ -1677,7 +1677,7 @@ async function identityForBinding(binding, client, cwd = "initialization", home,
     if (
       otherCreator &&
       !(await rootMarker(binding.root, "paired-root")) &&
-      !(client === "claude" && (await hasClaudeEvidence(binding.root)))
+      !(client === "claude" && (await hasClaudeEvidence(binding.root, { signal })))
     )
       fail("pairing_needed");
   }
