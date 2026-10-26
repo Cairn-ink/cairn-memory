@@ -123,7 +123,10 @@ async function writerProcess(config) {
       finalClose = { startedAt: Date.now() }; core.close(); core = undefined;
       finalClose.finishedAt = Date.now(); finalClose.walAfterClose = existsSync(config.path + '-wal');
     }
-    process.send({ type: 'result', calls, commits, finalClose });
+    // Wait until the (large, 30 s window) result is written to the IPC channel;
+    // disconnecting right after send() can drop it.
+    await new Promise((resolve, reject) => process.send({ type: 'result', calls, commits, finalClose },
+      error => error ? reject(error) : resolve()));
   } finally { core?.close(); DatabaseSync.prototype.exec = original; process.disconnect(); }
 }
 export async function runTrial(cell, path, control, signal) {
@@ -138,9 +141,14 @@ export async function runTrial(cell, path, control, signal) {
     if (message.type === 'result') writer = message;
   });
   actor.on('error', error => { fatal = error; resolveReady(); });
+  // Judge the writer only after both process exit and IPC disconnect: queued
+  // messages can still be delivered after 'exit'.
+  const disconnected = new Promise(r => actor.once('disconnect', r));
   const exited = new Promise(r => actor.once('exit', (code, signal) => {
-    if (code !== 0 || !writer) fatal ??= Error(`writer exit code=${code} signal=${signal}, result=${Boolean(writer)}`);
-    resolveReady(); r({ code, signal });
+    void Promise.race([disconnected, delay(2000)]).then(() => {
+      if (code !== 0 || !writer) fatal ??= Error(`writer exit code=${code} signal=${signal}, result=${Boolean(writer)}`);
+      resolveReady(); r({ code, signal });
+    });
   }));
   const abort = () => { fatal ??= Error('measurement cancelled or stalled'); actor.kill('SIGKILL'); void reader?.close(); resolveReady(); };
   signal?.addEventListener('abort', abort, { once: true });
