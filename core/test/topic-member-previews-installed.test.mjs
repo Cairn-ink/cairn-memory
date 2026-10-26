@@ -56,13 +56,23 @@ test('P1 offline archive/installed actual Worker closure, schemas18/33 DELETE/WA
     const rootNode = issued.items.find(n => n.level === 'L2');
     const rootPage = ok(await reader.readTopicMembers({ ...input, limit: 100, selection: expected(rootNode) }));
     assert.equal(rootPage.items.length, 3); assert.equal(new Set(rootPage.items.map(i => i.id)).size, 3);
+    const rootInput = { ...input, limit: 1, selection: expected(rootNode) };
+    const rootFirst = ok(await reader.readTopicMembers(rootInput));
+    assert.ok(rootFirst.nextCursor);
+    const rootContinuation = { ...rootInput, cursor: rootFirst.nextCursor };
+    const rootNext = await reader.readTopicMembers(rootContinuation);
+    assert.ok(rootNext.ok); assert.equal(rootNext.value.items.length, 1);
+    assert.deepEqual(await reader.readTopicMembers(rootContinuation), rootNext);
     if (mode === 'DELETE') {
       f.db.exec('BEGIN EXCLUSIVE');
-      try { assert.deepEqual(await reader.readTopicMembers(base), { ok: false, error: { code: 'storage_busy' } }); }
+      try { assert.deepEqual(await reader.readTopicMembers(rootContinuation), { ok: false, error: { code: 'storage_busy' } }); }
       finally { f.db.exec('ROLLBACK'); }
     }
-    f.db.prepare('UPDATE namespace_epochs SET epoch=epoch+1').run();
-    assert.deepEqual(await reader.readTopicMembers({ ...input, limit: 100, selection: expected(rootNode), cursor: first.nextCursor }), { ok: false, error: { code: 'cursor_stale' } });
+    assert.deepEqual(await reader.readTopicMembers(rootContinuation), rootNext);
+    const epoch = f.db.prepare("SELECT epoch FROM namespace_epochs WHERE owner_id=? AND scope='personal' AND project_id=''").get(namespace.ownerId).epoch;
+    f.db.prepare("UPDATE namespace_epochs SET epoch=epoch+1 WHERE owner_id=? AND scope='personal' AND project_id=''").run(namespace.ownerId);
+    assert.equal(f.db.prepare("SELECT epoch FROM namespace_epochs WHERE owner_id=? AND scope='personal' AND project_id=''").get(namespace.ownerId).epoch, epoch + 1);
+    assert.deepEqual(await reader.readTopicMembers(rootContinuation), { ok: false, error: { code: 'cursor_stale' } });
     await reader.close();
   }
   t.diagnostic(JSON.stringify({ archiveFiles: artifact.files.length, installedFiles: files.length,

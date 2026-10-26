@@ -204,3 +204,64 @@ tools/testing/fixtures/topic-member-previews-metrics.mjs
 tools/testing/measure-topic-member-previews.mjs
 tools/testing/prove-topic-member-previews-guard.mjs
 ```
+
+## Fix round 1 (after `45096021`)
+
+The runtime, text algorithm, source transactions, charging and paging are
+unchanged. Both reviews' duplicated privacy finding and every other finding
+are resolved in the measurement tool or its two focused tests:
+
+| Finding | Resolution and evidence |
+| --- | --- |
+| Preview text in replay assertion/report/exception (both reviews) | `tools/testing/measure-topic-member-previews.mjs:96` asserts boolean equality with a fixed message, then emits `replay_mismatch` with numeric counts/byte lengths only. The allowlist at `:72`, report boundary at `:463` and public entry at `:473` discard original messages, stacks, causes and assertion operands. Child stderr is not forwarded. Tests at `core/test/topic-member-previews-measurement.test.mjs:98` and `:163` exercise both sentinel mismatches and real CLI parse failures. |
+| Installed mutation test passed without mutation | `core/test/topic-member-previews-installed.test.mjs:59` creates a live paginated root continuation and verifies exact replay, including after DELETE busy. At `:73` only the namespace epoch changes; the identical request must then be stale. This runs on physical 18/33 in DELETE/WAL through the actual installed Worker. |
+| Fast missed-overlap requests lowered gated p95 | `tools/testing/measure-topic-member-previews.mjs:253` constructs a separate successful-overlapping population for concurrent gates. All attempts and all successful pages retain informational distributions. The main/cold regression adds 400 fast missed overlaps to 50 overlapping pages and still fails the slow gated p95. |
+| Required content not extracted by timed selections | `tools/testing/measure-topic-member-previews.mjs:317` places two copies of the four cases among the smallest eight IDs in the measured namespace: four filed under the selected L1/containing L2, four unfiled. The fixed world shape is preserved. `tools/testing/fixtures/topic-member-previews-metrics.mjs:8` counts actual guarded point-read extraction and bytes per numeric case index, without retaining content. Missing coverage is inconclusive; inconsistent counters fail. The test at `core/test/topic-member-previews-measurement.test.mjs:144` verifies all six selection/page-size combinations, including actual 12,000-byte maximum-source extraction and at least 7,000 normalization input units. |
+| Unexpected idle/other-owner staleness accepted | `tools/testing/measure-topic-member-previews.mjs:287` permits staleness only with same-owner load and an actually overlapping committed public write. Idle, other-owner, noncommitting and missed-overlap stale regressions fail acceptance. |
+| Zero successful pages classified as failure | Absent gated percentiles are null at `tools/testing/measure-topic-member-previews.mjs:303`; only explicit false checks constitute observed violations. A 500-busy/zero-page DELETE series is inconclusive. Loop, byte, WAL-busy, writer and unexpected-error violations retain failure precedence. |
+| Product profile has no review deadline | `tools/testing/measure-topic-member-previews.mjs:102` accepts the supplied file unchanged: capture 25,000 ms, review null, original provenance. At `:279` null review makes its deadline gate inconclusive. The 5,000 ms review comparison is informational, explicitly **not a deadline**, and never becomes an overrun. The deterministic null-review test is at `core/test/topic-member-previews-measurement.test.mjs:114`. |
+
+Commands below use `node@vX.Y.Z` to identify the actual nvm binary. The profile
+variable denotes the exact product-supplied JSON; report variables denote owned
+output locations. No full measurement, broad suite, network call or commit ran.
+
+| Command | Actual exit / result |
+| --- | --- |
+| `node@v22.16.0 --check tools/testing/measure-topic-member-previews.mjs` | 0 |
+| `node@v22.16.0 tools/testing/run.mjs --test-concurrency=1 core/test/topic-member-previews-measurement.test.mjs core/test/topic-member-previews-installed.test.mjs` | Final run 0, **12/12**. Initial run 1 exposed an eight-item fixture placement exceeding the existing batch limit; fixed with two four-item batches. |
+| `node@v22.16.0 tools/testing/run.mjs core/test/topic-member-previews-measurement.test.mjs` | Intermediate corrected run 0, **10/10**, before adding the final CLI sanitation test. |
+| `node@v22.16.0 tools/testing/measure-topic-member-previews.mjs --plan --writer-profile "$P1_WRITER_PROFILE" --report "$P1_PLAN_REPORT"` | 0; exact profile equality verified, 144 planned cells, zero measured cells. |
+| `node@v24.22.1 tools/testing/run.mjs --script tools/testing/measure-topic-member-previews.mjs --smoke --writer-profile "$P1_WRITER_PROFILE" --report "$P1_SMOKE_REPORT"` | 0; **one** tiny smoke, six cells, **38 raw attempts**. |
+| `node@v22.16.0 tools/testing/run.mjs core/test/topic-member-previews-installed.test.mjs` | Final archive recheck 0, **1/1**, after the updated docs and numeric smoke report. |
+| `git diff --check` plus independent all-delivery-file whitespace/newline/path scan | 0 |
+
+The updated `topic-member-previews-smoke.json` preserves this round's raw numeric
+records. Every successful main/cold page observed all four cases, including
+12,000 source bytes for the maximum case. The busy-only DELETE series remain
+inconclusive. WAL reported zero busy; the single same-owner stale outcome had
+actual committed-write overlap. All retained traversals passed; all cold and
+writer child exits were 0, signals null. Review-deadline checks are inconclusive
+throughout concurrent cells. These tiny populations do not establish launch
+acceptance. Full measurements remain the primary's queued work.
+
+Installed archive and recursive extracted inventories both contained **298
+files**, difference empty; the installed core/Worker module closure contained
+**152 modules**, all covered by the manifest. npm/tar/tar child exits were all 0.
+No runtime module or manifest entry was added in this round.
+
+This round's inventories were derived from `git diff --name-only HEAD` plus
+untracked-file enumeration, independently from recursive filesystem Git-blob
+hashes compared with HEAD, and cross-checked again with porcelain status.
+All three contain **7 files**, difference empty; working logs are excluded and
+removed. Every changed file passes the independent whitespace/newline and
+absolute-developer-path scans.
+
+```text
+core/test/topic-member-previews-installed.test.mjs
+core/test/topic-member-previews-measurement.test.mjs
+docs/plans/topic-member-previews-impl.md
+docs/plans/topic-member-previews-smoke.json
+docs/topic-overview.md
+tools/testing/fixtures/topic-member-previews-metrics.mjs
+tools/testing/measure-topic-member-previews.mjs
+```

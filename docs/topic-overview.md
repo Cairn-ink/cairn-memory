@@ -390,7 +390,14 @@ text. Existing byte/work/deadline caps and E1-C2 lock handling apply.
 Run `npm run measure:topic-member-previews -- --plan --report PATH` to inspect
 the preregistered launch matrix. `--smoke` is observational only. Full execution
 belongs in the primary's machine-wide queue on Node 24.22.1. Supply
-`--writer-profile PATH` containing only numeric `captureMs`, `reviewMs` and a
-`provenance` string identifying unchanged production host deadlines. Missing
-production evidence is inconclusive. See the [frozen P1 contract](plans/topic-member-previews.md)
+`--writer-profile PATH` containing `captureMs`, `reviewMs` and a `provenance`
+string identifying unchanged production host settings. The supplied production
+profile has `captureMs:25000` and `reviewMs:null`. A null review deadline makes
+that deadline gate inconclusive; review latency is compared with 5,000 ms for
+information only, labelled **not a deadline**. Missing production evidence is
+inconclusive. Concurrent latency gates use only successful requests with actual
+write-call overlap; all attempts remain in the report. Every measured selection
+includes the four content edge cases, verified through numeric extraction
+coverage. Replay mismatches and other measurement exceptions emit only
+allowlisted codes and numeric data. See the [frozen P1 contract](plans/topic-member-previews.md)
 and [implementation handoff](plans/topic-member-previews-impl.md).
