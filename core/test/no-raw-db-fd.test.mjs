@@ -1,3 +1,6 @@
+// Tripwire against accidental raw-fd reintroduction, NOT an adversarial barrier.
+// Out of scope: eval/Function/vm, native addons, deliberately obfuscated code.
+// Exact source entries and multiplicity still require review; no whole-file pass.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readdirSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
@@ -10,57 +13,103 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const allow = JSON.parse(readFileSync(new URL('./fixtures/no-raw-db-fd-allowlist.json', import.meta.url)));
 const apis = new Set(['open', 'openSync', 'readFile', 'readFileSync', 'writeFile', 'writeFileSync',
   'appendFile', 'appendFileSync', 'createReadStream', 'createWriteStream', 'FileHandle']);
-// Audit exact source lines, with multiplicity, rather than allowing whole files
-// or APIs. Named aliases are resolved. Namespace/dynamic imports are fail-closed
-// review entries too, so a new spelling cannot silently bypass the guard.
+const decode = value => value.replace(/\\(?:u\{([\da-f]+)\}|u([\da-f]{4})|x([\da-f]{2})|([\s\S]))/gi,
+  (_, point, unicode, hex, escaped) => point || unicode || hex ? String.fromCodePoint(parseInt(point ?? unicode ?? hex, 16)) : escaped);
+function tokenize(source, offset = 0) {
+  const tokens = [];
+  const expressionStart = new Set(['=', '(', '[', '{', ',', ':', ';', '!', '?', '&', '|', 'return', 'throw', 'case', '>']);
+  for (let i = 0; i < source.length;) {
+    const start = i, c = source[i];
+    if (/\s/.test(c)) { i++; continue; }
+    if (source.startsWith('//', i)) { const end = source.indexOf('\n', i); i = end < 0 ? source.length : end; continue; }
+    if (source.startsWith('/*', i)) { const end = source.indexOf('*/', i + 2); i = end < 0 ? source.length : end + 2; continue; }
+    let literal = false;
+    if (["'", '"', '`'].includes(c)) {
+      literal = true; i++;
+      while (i < source.length) { if (source[i] === '\\') i += 2; else if (source[i++] === c) break; }
+    } else if (c === '/' && (!tokens.length || expressionStart.has(tokens.at(-1).value))) {
+      // Keep regex literals opaque too, so quotes/comment markers inside them
+      // cannot consume subsequent imports or calls.
+      literal = true; i++; let bracket = false;
+      while (i < source.length) {
+        if (source[i] === '\\') { i += 2; continue; }
+        if (source[i] === '[') bracket = true;
+        if (source[i] === ']') bracket = false;
+        if (source[i++] === '/' && !bracket) break;
+      }
+      while (/[a-z]/i.test(source[i] ?? '') && i < source.length) i++;
+    } else {
+      const identifier = /^(?:[\w$]|\\u\{[\da-fA-F]+\}|\\u[\da-fA-F]{4})+/.exec(source.slice(i));
+      i += identifier ? identifier[0].length : 1;
+    }
+    const raw = source.slice(start, i);
+    tokens.push({ value: literal ? raw : decode(raw), index: offset + start, length: raw.length, literal });
+    // Audit fixed child programs embedded in templates as source too.
+    if (raw[0] === '`' && /\bimport\s/.test(raw)) tokens.push(...tokenize(raw.slice(1, -1), offset + start + 1));
+  }
+  return tokens;
+}
 function sites(source) {
-  const bindings = new Set(), boundaries = [];
-  let body = source;
-  // Tokenize identifiers (including $), quoted module names and punctuation.
-  // Ignore comments so whitespace/comments cannot hide import/require forms.
-  // Template contents are scanned as code too: our child programs live there.
-  const tokens = [...source.matchAll(/\/\/[^\n]*|\/\*[\s\S]*?\*\/|'(?:\\[\s\S]|[^'\\])*'|"(?:\\[\s\S]|[^"\\])*"|`(?:node:)?fs(?:\/promises)?`|[\w$]+|[^\s]/g)]
-    .filter(token => !token[0].startsWith('//') && !token[0].startsWith('/*'));
-  const isFs = token => {
-    if (!/^[\x27"`]/.test(token ?? '')) return false;
-    const value = token.slice(1, -1).replace(/\\\r?\n/g, '').replace(/\\(?:u\{([\da-f]+)\}|u([\da-f]{4})|x([\da-f]{2})|([\s\S]))/gi,
-      (_, point, unicode, hex, escaped) => point || unicode || hex ? String.fromCodePoint(parseInt(point ?? unicode ?? hex, 16)) : escaped);
-    return /^(?:node:)?fs(?:\/promises)?$/.test(value);
-  };
-  const mark = (token, finish = source.indexOf('\n', token.index)) => boundaries.push({
+  const tokens = tokenize(source), found = [], declarations = new Set();
+  const bindings = new Set(), namespaces = new Set(['fs', 'fsp', 'promises']), allBindings = new Set();
+  const loaders = new Set(['require', 'createRequire']);
+  const isFs = token => token?.literal && /^(?:node:)?fs(?:\/promises)?$/.test(decode(token.value.slice(1, -1)));
+  const mark = (token, finish) => found.push({
     line: source.slice(0, token.index).split('\n').length,
-    source: source.slice(token.index, finish < 0 ? source.length : finish).trim(),
+    source: finish === undefined ? source.split('\n')[source.slice(0, token.index).split('\n').length - 1].trim() :
+      source.slice(token.index, finish).trim(),
   });
   for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
-    // Any call receiving an fs module literal is a review boundary. This also
-    // covers aliases made by createRequire, without guessing the alias name.
-    if (isFs(token[0]) && tokens[i - 1]?.[0] !== 'from') {
-      mark(tokens[i - 1]?.[0] === '(' ? tokens[i - 2] ?? token : token, token.index + token[0].length);
-    }
-    if (token[0] !== 'import' || tokens[i + 1]?.[0] === '(') continue;
-    let end = i + 1;
-    while (end < tokens.length && !['from', ';'].includes(tokens[end][0])) end++;
-    if (tokens[end]?.[0] !== 'from' || !isFs(tokens[end + 1]?.[0])) continue;
-    const clause = tokens.slice(i + 1, end).map(t => t[0]);
-    // Review every fs import, including unknown/new APIs and quoted export names.
-    // Metadata-only imports are cheap to audit and cannot hide a new fd API.
-    for (let j = 0; j < clause.length; j++) {
-      if (apis.has(clause[j]) || clause[j] === 'promises') {
-        bindings.add(clause[j + 1] === 'as' ? clause[j + 2] : clause[j]);
+    const token = tokens[i], value = token.value;
+    if (isFs(token) && tokens[i - 1]?.value !== 'from') {
+      const start = tokens[i - 1]?.value === '(' ? tokens[i - 2] ?? token : token;
+      mark(start, token.index + token.length);
+      // Recognize namespace variables from import/require/getBuiltinModule.
+      for (let j = i - 2; j >= 0 && ![';', '{', '}'].includes(tokens[j].value); j--) {
+        if (tokens[j].value === '=') { namespaces.add(tokens[j - 1]?.value); break; }
       }
     }
-    const finish = tokens[end + 1].index + tokens[end + 1][0].length;
-    mark(token, finish); // Audit the ENTIRE import, even when multiline/unused.
-    body = body.slice(0, token.index) + body.slice(token.index, finish).replace(/[^\n]/g, ' ') + body.slice(finish);
+    if (!['import', 'export'].includes(value) || tokens[i + 1]?.value === '(') continue;
+    const next = tokens[i + 1]?.value;
+    if (value === 'export' && !['{', '*'].includes(next)) continue;
+    if (value === 'import' && !['{', '*'].includes(next) &&
+        ![',', 'from'].includes(tokens[i + 2]?.value)) continue;
+    let end = i + 1;
+    while (end < tokens.length && !['from', ';'].includes(tokens[end].value)) end++;
+    const module = tokens[end + 1];
+    if (tokens[end]?.value !== 'from') continue;
+    if (module?.literal && /^(?:node:)?module$/.test(decode(module.value.slice(1, -1)))) {
+      for (let j = i + 1; j < end; j++) if (tokens[j].value === 'createRequire')
+        loaders.add(tokens[j + 1]?.value === 'as' ? tokens[j + 2]?.value : 'createRequire');
+    }
+    if (!isFs(module)) continue;
+    for (let j = i + 1; j < end; j++) {
+      const name = tokens[j].literal ? decode(tokens[j].value.slice(1, -1)) : tokens[j].value;
+      const alias = tokens[j + 1]?.value === 'as' ? tokens[j + 2]?.value : name;
+      if (/^[\w$]+$/.test(alias) && alias !== 'as') allBindings.add(alias);
+      if (apis.has(name) || name === 'promises') bindings.add(alias);
+      if (tokens[j - 1]?.value === 'as' && tokens[j - 2]?.value === '*' || j === i + 1 && !['{', '*'].includes(name) || name === 'promises') namespaces.add(alias);
+    }
+    mark(token, module.index + module.length);
+    for (let j = i; j <= end + 1; j++) declarations.add(j);
   }
-  const lines = source.split('\n'), scanned = body.split('\n'), found = [...boundaries];
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (line.startsWith('//') || line.startsWith('*')) continue;
-    const count = [...bindings].reduce((n, name) => n + [...scanned[i].matchAll(new RegExp('(?<![\\w$])' + name.replaceAll('$', '\\$') + '(?![\\w$])', 'g'))].length, 0);
-    const indirect = /(?:import\s*\(|require\s*\()\s*['"](?:node:)?fs(?:\/promises)?['"]|\bFileHandle\b|\b(?:fs|fsp|promises)\s*(?:\.|\[)\s*['"]?(?:promises|open|openSync|readFile|readFileSync|createReadStream|createWriteStream)/.test(line);
-    for (let n = 0; n < count + Number(indirect); n++) found.push({ line: i + 1, source: line });
+  // Track createRequire-produced aliases; the construction itself is audited.
+  for (let i = 0; i < tokens.length; i++) {
+    if (loaders.has(tokens[i].value) && tokens[i + 1]?.value === '(' && tokens[i - 1]?.value === '=')
+      loaders.add(tokens[i - 2]?.value);
+  }
+  for (let i = 0; i < tokens.length; i++) {
+    if (declarations.has(i)) continue;
+    const token = tokens[i], name = token.value, next = tokens[i + 1];
+    if (token.literal) continue;
+    if (bindings.has(name)) mark(token);
+    if ((allBindings.has(name) || namespaces.has(name)) && next?.value === '[') mark(token);
+    else if (namespaces.has(name) && next?.value === '.' &&
+      (apis.has(tokens[i + 2]?.value) || tokens[i + 2]?.value === 'promises')) mark(token);
+    if (name === 'FileHandle') mark(token);
+    const builtin = name === 'getBuiltinModule' && tokens[i - 1]?.value === '.' && tokens[i - 2]?.value === 'process';
+    if ((loaders.has(name) || builtin) && next?.value === '(' &&
+        (!tokens[i + 2]?.literal || tokens[i + 2].value.includes('${') || tokens[i + 3]?.value !== ')')) mark(token);
   }
   return found;
 }
@@ -113,7 +162,7 @@ test('generated setup runtime and archived engine obey the same guard', () => {
 });
 test('guard rejects the original header probe, fs aliases, promises, streams and extra allowlisted calls', () => {
   const old = `import { openSync, readSync, closeSync } from 'node:fs';\nconst fd = openSync(path, constants.O_RDONLY);\ncloseSync(fd);`;
-  assert.equal(violations('core/topic-reader-sqlite.mjs', old).length, 2);
+  assert.ok(violations('core/topic-reader-sqlite.mjs', old).length >= 2);
   for (const source of [
     "const io = await import(`node:fs/promises`); const handle = await io.open(path);",
     "import { open as raw } from 'node:\\x66s/promises'; const handle = await raw(path);",
@@ -139,5 +188,40 @@ test('guard rejects the original header probe, fs aliases, promises, streams and
   assert.equal(violations(multiline.path, multiline.source).length, 0);
   assert.ok(violations(multiline.path, multiline.source.replace('{', '{ open as $sneak,') + '\nawait $sneak(path);').length > 0);
   const entry = allow.find(entry => entry.path === 'core/sqlite-journal-probe.mjs' && entry.source.includes('fd = openSync'));
-  assert.equal(violations(entry.path, `${entry.source}\n${entry.source}\nimport { openSync } from 'node:fs';`).length, 2);
+  assert.ok(violations(entry.path, `${entry.source}\n${entry.source}\nimport { openSync } from 'node:fs';`).length >= 2);
+});
+
+
+test('round 2 tripwire rejects each realistic bypass even with an allowed import', () => {
+  const path = 'core/unsafe.mjs';
+  for (const source of [
+    "import { openSync } from 'node:fs';\n/* comment\n*/ openSync(path);",
+    "export { openSync as raw } from 'node:fs';",
+    "export * from 'node:fs';",
+    String.raw`import { op\u0065nSync as raw } from 'node:fs'; raw(path);`,
+    String.raw`import { openSync as r\u0061w } from 'node:fs'; r\u0061w(path);`,
+    "import fs from 'node:fs';\nfs[x](path);",
+    'import * as io from "node:fs";\nio[`open${s}`](path);',
+    "import { promises as io } from 'node:fs';\nio[x](path);",
+    "const fs = process.getBuiltinModule(name);",
+    "const fs = require(name);",
+    "const load = createRequire(name);",
+    "import { createRequire as cr } from 'node:module'; const load=cr(import.meta.url); load(name);",
+  ]) assert.ok(violations(path, source).length > 0, source);
+  // Imports can already be allowed: the call after a block comment and escaped
+  // binding uses must independently remain visible.
+  assert.equal(sites("import { openSync } from 'node:fs';\n/* comment\n*/ openSync(path);").length, 2);
+  assert.equal(sites(String.raw`import { openSync } from 'node:fs';
+\u006fpenSync(path);`).length, 2);
+  assert.deepEqual(sites('// openSync(path)\nconst text="fs.openSync(path)"; /* fs[x] */'), []);
+});
+
+test('allowed import boundaries cannot hide computed members or escaped calls', () => {
+  for (const source of [
+    "import fs from 'node:fs';\nfs[x](path);",
+    'import * as io from "node:fs";\nio[`open${s}`](path);',
+    "import { promises as io } from 'node:fs';\nio[x](path);",
+    "const io = process.getBuiltinModule('node:fs');\nio[x](path);",
+    "import { statSync as metadata } from 'node:fs';\nmetadata[x](path);",
+  ]) { assert.ok(sites(source).length >= 2, source); assert.ok(sites(source).some(site => site.line === 2), source); }
 });

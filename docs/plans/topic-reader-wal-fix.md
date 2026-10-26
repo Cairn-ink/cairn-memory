@@ -1,7 +1,7 @@
 # E1-C2 WAL fresh-reader fix and smoke
 
-Current implementation: see **E1-C2 v1.0.1 lock-safety** below. Earlier header
-probe descriptions are historical and superseded.
+Current implementation: see **Lock-safety fix round 2** below. Earlier handoff
+results and header/inode-exclusion designs are historical and superseded.
 
 Date: 2026-10-26. Node: v22.16.0. Branch: fix/wal-fresh-reader-busy. Uncommitted; primary commits and runs full queued acceptance.
 
@@ -462,9 +462,11 @@ packaging/artifact-files.json
 ```
 
 
-## Lock-safety fix round 1 (2026-10-27)
+## Lock-safety fix round 1 (2026-10-27; historical)
 
-Based on 3b94921d. The v1.0.1 exception remains accepted and unchanged: an
+Handoff results below describe the author state before the primary committed
+1e68d801 and regenerated the engine bundle. Round 2 supersedes its input-read
+and guard design. Based on 3b94921d. The v1.0.1 exception remains accepted and unchanged: an
 exclusive DELETE transaction with no journal can receive the bounded opening
 wait. Detected DELETE statements retain zero wait. This round changes no wait
 budget or contention gate.
@@ -500,8 +502,9 @@ process exit codes. No network, real keys, commits or bundle regeneration.
 - Regenerated baseline bundle: original 3b94921d guard/allowlist, generated
   runtime and archived-engine test only: exit 0, 1/1 pass.
 - This round's source guard and negative self-tests: exit 0, 2/2 pass.
-  The complete guard exits 1 solely on the now-stale bundle; regeneration is
-  left to the primary. No stale-bundle exception was added.
+  At that handoff the complete guard exited 1 on the stale bundle. The primary
+  subsequently regenerated it in 1e68d801; the round-1 complete guard on that
+  committed bundle is verified separately below. No bundle exception was added.
 
 The first focused run exited 1 (49 pass / 1 fail): the new fixture updated an
 empty sidecar table, which produced no journal. The corrected fixture writes
@@ -585,14 +588,21 @@ Import/Worker/CLI reachability (memory-reader, topic-overview-worker, MCP CLI,
 local-setup-init): 231 required files, zero missing from artifact-files.json;
 both changed shipped docs registered, exit 0. No new runtime module was added.
 
-### Round 1 changed inventory
+### Round 1 changed inventory (final committed state)
+
+The pre-commit handoff listed 14 source/test/doc files. The final 1e68d801
+commit has **16 files**, including the regenerated engine archive and manifest.
+Cross-checked using git diff --name-only 3b94921d 1e68d801 and independently
+git show --format= --name-only 1e68d801: equal sets, count 16, exit 0.
+The following pre-commit validation is historical:
 
 Union of git diff --name-only HEAD and git ls-files --others --exclude-standard
 compared with independently parsed git status --porcelain=v1 -z: diff exit 0,
-**14 files**. This includes the untracked creation regression test. Every changed
+**14 source/test/doc files** before bundle regeneration. This includes the then-untracked creation regression test. Every changed
 .mjs (11) passes node --check, actual exits 0; JSON parse, git diff --check and
 independent whitespace/newline checks over all 14 files exit 0. The runtime
-bundle has no changed paths.
+bundle had no changed paths at that handoff. The final committed 16-path
+inventory, including the primary-regenerated bundle, is:
 
 ```text
 adapters/mcp/asset-command.mjs
@@ -609,4 +619,192 @@ core/test/sqlite-lock-safety.test.mjs
 core/test/topic-reader-sqlite.test.mjs
 docs/plans/topic-overview-member-pages.md
 docs/plans/topic-reader-wal-fix.md
+packages/setup/runtime/engine/cairn-memory-local-preview-0.0.0-preview.1.tgz
+packages/setup/runtime/engine/manifest.json
 ```
+
+
+## Lock-safety fix round 2 (2026-10-27)
+
+Based on 1e68d801; uncommitted. No wait budget, contention gate or creation
+recovery policy changes. No setup runtime regeneration in this round.
+
+| Decision | Change | Deterministic coverage |
+| --- | --- | --- |
+| A: isolate arbitrary input reads | A shared SQLite-free helper launches a fixed script with process.execPath, no shell, env:{}, a 5s timeout and size-derived maxBuffer. Only the child opens/reads/closes input data. Asset and method inputs retain O_PATH pins, mount/type/nlink checks, byte caps, strict decoding and review-time identity checks. Child metadata includes dev/ino/mode/size/nlink/nanosecond mtime/ctime and is checked before/after each read and against the host pin. Review dependencies retain the 32KiB limit plus one overflow byte and Error class. Remove round-1 inode exclusions and host data-open allowlist entries. | DELETE/WAL lock tests for asset, method-package and review-card: canonical DB, sidecar, companions, hard links and another live store; child contenders remain BUSY until host rollback. Existing confinement faults now inject into actual child syscalls. Isolated reader tests prove exact bytes/identity, overflow cap/close and bounded failure handling. |
+| B: static tripwire | Comment/string/regex-aware tokens replace line heuristics; decode escaped identifiers; flag fs re-exports, computed members and non-literal builtin/require/createRequire loaders. Remove string/comment false positives from the exact allowlist. | Negative self-tests for each spelling, including calls after block-comment terminators and computed accesses with previously allowed import boundaries. Source audit retains exact multiplicity and stale-entry checks. |
+| C: reset failure | Defer only non-lock journal-query errors inside the query boundary; timeout reset remains outside that catch. The opener closes on reset failure. | Inject SQLITE_NOMEM on busy_timeout=0 after a stale WAL hint installs a positive timeout on DELETE; assert original error/diagnostics, one close and no returned connection. Legacy wrong-ID/malformed-schema precedence still passes. |
+| D: creation recovery | Documentation only; deferred to installer owner below. | Existing sqlite-journal-probe post-link directory-fsync/timeout tests remain required; no recovery implementation. |
+| E: records | Distinguish historical handoffs, final round-1 commit and current source/archive status; update inventories and verification below. | Mechanically cross-check path sets, artifact reachability and actual exits. |
+
+The static guard is a tripwire against accidental reintroduction, not an
+adversarial barrier. Explicitly out of scope: eval/Function/vm, native addons,
+and deliberately obfuscated code. A new reviewed raw-fs spelling still needs
+an exact justified allowlist entry; no whole-file or stale-bundle exception.
+
+### Known pre-existing limitation, follow-up for the installer owner
+
+A directory-fsync EIO after link, or a timeout after link but before SQLite
+initialization, can leave a published empty target. The next installer attempt
+then reports store_invalid. This predates the hotfix: the former openSync('ax')
+followed by a SQLite initialization failure left the same empty target.
+Post-publication recovery is deliberately deferred and is not implemented here.
+
+Suggested follow-up: persist a private recovery record before publication with
+the installer operation ID, target path, staged/published dev+ino identity and
+initialization phase. On retry, match the record and current regular-file
+identity, verify that the exact target is still the empty uninitialized file
+owned by that operation, and perform explicit installer-owned recovery. Never
+unlink, overwrite or adopt an unrelated existing target based on pathname alone.
+Record publication and initialization durably so a completed store cannot be
+mistaken for an abandoned empty target.
+
+### Round 2 verification
+
+Actual process statuses (no pipeline-masked exits), Node 22.16.0 unless noted:
+
+| Check | Result | Exit |
+| --- | --- | --- |
+| Original eight lock tests on detached 546d57ac, Node 22.16.0 | 2 pass / 6 fail | 1 |
+| Same red proof, Node 24.22.1 | 2 pass / 6 fail | 1 |
+| Scoped regressions, 53 explicit files | 660/660 pass; 577 top-level cases, no skips | 0 |
+| Final input/helper/confinement/lock run, 7 explicit files | 92/92 pass | 0 |
+| Final topic policy/reset-fault file | 13/13 pass | 0 |
+| Final lock suite, Node 24.22.1 | 14/14 pass | 0 |
+| Additional review-card entry/profile regressions, 2 explicit files | 9/9 pass | 0 |
+| Source guard and three negative self-test groups | 4/4 pass; 250 exact allowlist references | 0 |
+| Full guard including unchanged round-1 archive | 4 pass / 1 fail; five stale references in archive | 1 |
+| Original 1e68d801 guard/allowlist, generated runtime/archive test only | 1/1 pass | 0 |
+
+The red source is byte-identical to the eight-test 3b94921d source after trimming
+separator whitespace (SHA256 a2d1a908afc723d2a42c184c5641ecb7fe19e829f4c708e5c46fb07e33912f7e).
+Both red runs used a newly created detached worktree; creation/removal and
+absence checks exited 0. No install or shared node_modules removal occurred.
+
+The primary did regenerate the round-1 bundle in 1e68d801. Its archive and
+engine manifest remain byte-identical to HEAD in this round. The round-2 full
+guard correctly rejects that now-stale archive: the two former fs imports and
+three host data-open sites in asset-files, method-package-files and review-card.
+No stale archive exception was added. Regeneration is left to the primary per
+this round's scope.
+
+The 53-path scoped regression set was independently derived with Python glob
+and rg --files; equality exit 0, count 53. The command used explicit paths:
+
+```sh
+node --test --test-concurrency=1 \
+  adapters/mcp/test/asset-export.test.mjs \
+  adapters/mcp/test/asset-files.test.mjs \
+  adapters/mcp/test/assets.test.mjs \
+  adapters/mcp/test/card-current.test.mjs \
+  adapters/mcp/test/card-review-pty-framing.test.mjs \
+  adapters/mcp/test/evidence.test.mjs \
+  adapters/mcp/test/method-package-confinement.test.mjs \
+  adapters/mcp/test/method-package-exclusions.test.mjs \
+  adapters/mcp/test/method-package-files.test.mjs \
+  adapters/mcp/test/method-package-linking.test.mjs \
+  adapters/mcp/test/method-package-tools.test.mjs \
+  adapters/mcp/test/private-cards.test.mjs \
+  adapters/mcp/test/retained-raw-review.test.mjs \
+  core/test/context-read-assembly-races.test.mjs \
+  core/test/context-read-assembly-readonly.test.mjs \
+  core/test/context-read-assembly.test.mjs \
+  core/test/context-read-bm25.test.mjs \
+  core/test/context-read-budget.test.mjs \
+  core/test/context-read-core.test.mjs \
+  core/test/context-read-embedder.test.mjs \
+  core/test/context-read-fusion.test.mjs \
+  core/test/context-read-local-embedder.test.mjs \
+  core/test/context-read-local-status.test.mjs \
+  core/test/context-read-moc-source.test.mjs \
+  core/test/context-read-process.test.mjs \
+  core/test/context-read-recovery.test.mjs \
+  core/test/context-read-review.test.mjs \
+  core/test/context-read-sidecar.test.mjs \
+  core/test/context-read-source-work.test.mjs \
+  core/test/context-read-sources-authority.test.mjs \
+  core/test/context-read-sources-bounds.test.mjs \
+  core/test/context-read-sources-races.test.mjs \
+  core/test/context-read-sources.test.mjs \
+  core/test/context-read-tokenize.test.mjs \
+  core/test/isolated-file-read.test.mjs \
+  core/test/sqlite-journal-probe.test.mjs \
+  core/test/sqlite-lock-safety.test.mjs \
+  core/test/topic-members-bounds.test.mjs \
+  core/test/topic-members-compatibility.test.mjs \
+  core/test/topic-members-integration.test.mjs \
+  core/test/topic-members-mutations.test.mjs \
+  core/test/topic-members-primary.test.mjs \
+  core/test/topic-members-recheck-findings.test.mjs \
+  core/test/topic-members-review-findings.test.mjs \
+  core/test/topic-members-round3-findings.test.mjs \
+  core/test/topic-members-scale.test.mjs \
+  core/test/topic-members-visibility.test.mjs \
+  core/test/topic-members.test.mjs \
+  core/test/topic-overview-lifecycle.test.mjs \
+  core/test/topic-overview-raw29.test.mjs \
+  core/test/topic-overview-visibility.test.mjs \
+  core/test/topic-overview.test.mjs \
+  core/test/topic-reader-sqlite.test.mjs
+```
+
+Final input verification after preserving unpinned regular-file size semantics
+and child close-error classes used:
+
+```sh
+node --test --test-concurrency=1 \
+  core/test/isolated-file-read.test.mjs \
+  core/test/sqlite-lock-safety.test.mjs \
+  adapters/mcp/test/asset-files.test.mjs \
+  adapters/mcp/test/assets.test.mjs \
+  adapters/mcp/test/method-package-files.test.mjs \
+  adapters/mcp/test/method-package-confinement.test.mjs \
+  adapters/mcp/test/card-current.test.mjs
+node --test --test-concurrency=1 adapters/mcp/test/retained-raw-profile.test.mjs adapters/mcp/test/context-read.test.mjs
+node --test core/test/topic-reader-sqlite.test.mjs
+node --test --test-name-pattern='runtime raw|guard rejects|round 2|allowed import' core/test/no-raw-db-fd.test.mjs
+node --test core/test/no-raw-db-fd.test.mjs
+# Node 24.22.1:
+node --test --test-reporter=tap core/test/sqlite-lock-safety.test.mjs
+```
+
+The import/Worker/CLI/child-script closure has 233 required files, zero missing
+from packaging/artifact-files.json; both changed shipped docs and both new
+runtime files are registered. A separate Python traversal and
+installedImportClosure produced equal sets, count 233, exit 0.
+
+### Round 2 changed inventory
+
+Union of git diff --name-only HEAD and git ls-files --others --exclude-standard
+compared against independently parsed git status --porcelain=v1 -z: equality
+exit 0, **21 files**. No paths under packages/setup/runtime changed. Syntax
+checks on all 17 changed/new .mjs files, JSON parsing of both changed configs,
+git diff --check and independent whitespace/newline checks: actual exits 0.
+
+```text
+adapters/mcp/asset-command.mjs
+adapters/mcp/asset-files.mjs
+adapters/mcp/method-package-files.mjs
+adapters/mcp/review-card.mjs
+adapters/mcp/test/asset-files.test.mjs
+adapters/mcp/test/assets.test.mjs
+adapters/mcp/test/card-current.test.mjs
+adapters/mcp/test/fixtures/asset-files-race.mjs
+adapters/mcp/test/fixtures/method-files-race.mjs
+core/isolated-file-read-child.mjs
+core/isolated-file-read.mjs
+core/read-database.mjs
+core/test/fixtures/no-raw-db-fd-allowlist.json
+core/test/isolated-file-read.test.mjs
+core/test/no-raw-db-fd.test.mjs
+core/test/sqlite-lock-safety.test.mjs
+core/test/topic-reader-sqlite.test.mjs
+core/topic-reader-sqlite.mjs
+docs/plans/topic-overview-member-pages.md
+docs/plans/topic-reader-wal-fix.md
+packaging/artifact-files.json
+```
+
+No commit, network, real-key access, broad npm suite, performance measurement
+or recovery implementation. All task-owned processes are supervised through
+completion; temporary worktrees/directories are removed before handoff.

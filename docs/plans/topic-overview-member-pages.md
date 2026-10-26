@@ -998,5 +998,11 @@ CI scans runtime source and generated setup code/archive against exact raw-fs
 call-site allowlists with per-site justifications. Public same-process reader
 regressions use separate child lock contenders in DELETE and WAL, verify host
 snapshot/checkpoint protection and WAL main-file SHARED locking, and cover
-context probes and fence close. The generated setup bundle must be refreshed
-by the primary before the archived-engine guard can pass.
+context probes and fence close. The primary regenerated the round-1 bundle in
+1e68d801. Round 2 additionally isolates asset, method-package and review-card
+input data reads in a fixed bounded child; O_PATH pins and identity validation
+remain in the host. The static guard is an accidental-reintroduction tripwire,
+with eval/Function/vm, native addons and deliberate obfuscation out of scope.
+The unchanged round-1 bundle is now stale against round-2 source; the primary
+must refresh it separately before the archived-engine guard can pass. See
+[round-2 verification](topic-reader-wal-fix.md#round-2-verification).

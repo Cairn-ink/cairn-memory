@@ -113,29 +113,45 @@ test('store fence check and close preserve same-process SQLite locks', t => {
   } finally { if (f.db.isTransaction) f.db.exec('ROLLBACK'); pin.close(); }
 });
 
-for (const mode of ['DELETE', 'WAL']) test(`${mode}: asset input refuses store, sidecar and companion inodes without releasing host locks`, async t => {
-  const { prepareAssetFiles } = await import('../../adapters/mcp/asset-files.mjs');
-  const { linkSync, unlinkSync } = await import('node:fs');
-  const f = memberFixture(t, { mode }); f.admit('asset input lock');
-  const index = openContextReadSidecar({ path: f.path, db: f.db }); index.close();
-  for (const path of [f.path, f.path + '.context-read-v1.sqlite']) {
-    const db = path === f.path ? f.db : new DatabaseSync(path);
-    db.exec('PRAGMA busy_timeout=5000; BEGIN IMMEDIATE');
-    db.exec(path === f.path ? 'UPDATE store_metadata SET store_id=store_id' : 'UPDATE generations SET phase=phase');
-    if (path !== f.path) db.exec('PRAGMA user_version=1'); // Ensure a real journal even with no generations.
-    try {
-      const suffixes = path === f.path && mode === 'WAL' ? ['-wal', '-shm'] : ['-journal'];
-      for (const source of [path, ...suffixes.map(suffix => path + suffix)]) {
-        const refuse = input => {
-          const files = prepareAssetFiles(f.path);
-          try { assert.throws(() => files.read(input, 33554432, { binary: true }), { code: 'invalid_input' }); }
-          finally { files.close(); }
-          locked(path);
-        };
-        refuse(source); // Single-link DB must be excluded before a data open.
-        const alias = source + '.asset-link'; linkSync(source, alias);
-        try { refuse(alias); } finally { unlinkSync(alias); }
+for (const mode of ['DELETE', 'WAL']) for (const channel of ['asset', 'method-package', 'review-card'])
+  test(`${mode}: ${channel} arbitrary inputs preserve locks on all live stores`, async t => {
+    const { prepareAssetFiles } = await import('../../adapters/mcp/asset-files.mjs');
+    const { prepareMethodFiles } = await import('../../adapters/mcp/method-package-files.mjs');
+    const { reviewCard } = await import('../../adapters/mcp/review-card.mjs');
+    const { linkSync, unlinkSync, mkdirSync, writeFileSync } = await import('node:fs');
+    const { join, dirname } = await import('node:path');
+    const f = memberFixture(t, { mode }); f.admit('input lock');
+    const other = memberFixture(t, { mode }); other.admit('other live store');
+    const index = openContextReadSidecar({ path: f.path, db: f.db }); index.close();
+    const root = join(dirname(f.path), 'package'); mkdirSync(root); writeFileSync(join(root, 'SKILL.md'), 'input');
+    const read = input => {
+      if (channel === 'review-card') {
+        // JSON decoding fails before terminal review. No terminal or store open.
+        assert.throws(() => reviewCard(['--db', f.path, '--owner', 'owner', '--card', 'synthetic', '--revision', '1',
+          '--dependencies', input, '--dependency-revision', 'null']));
+        return;
       }
-    } finally { db.exec('ROLLBACK'); if (db !== f.db) db.close(); }
-  }
-});
+      const files = channel === 'asset' ? prepareAssetFiles() : prepareMethodFiles(root);
+      try {
+        if (channel === 'asset') {
+          // A regular SQLite file is valid binary input; safety comes from fd
+          // isolation, not an inode denylist. Hard links retain nlink refusal.
+          try { files.read(input, 33554432, { binary: true }); }
+          catch (error) { assert.equal(error.code, 'invalid_input'); }
+        } else assert.throws(() => files.change(input), { code: 'invalid_input' });
+      } finally { files.close(); }
+    };
+    for (const path of [f.path, f.path + '.context-read-v1.sqlite', other.path]) {
+      const db = path === f.path ? f.db : path === other.path ? other.db : new DatabaseSync(path);
+      db.exec('PRAGMA busy_timeout=5000; BEGIN IMMEDIATE; PRAGMA user_version=33');
+      try {
+        const suffixes = path !== f.path + '.context-read-v1.sqlite' && mode === 'WAL' ? ['-wal', '-shm'] : ['-journal'];
+        for (const source of [path, ...suffixes.map(suffix => path + suffix)]) {
+          locked(path); read(source); locked(path);
+          const alias = source + '.input-link'; linkSync(source, alias);
+          try { read(alias); locked(path); } finally { unlinkSync(alias); }
+        }
+      } finally { db.exec('ROLLBACK'); if (db !== f.db && db !== other.db) db.close(); }
+      assert.deepEqual(child(path, 'BEGIN IMMEDIATE'), { rows: [] });
+    }
+  });

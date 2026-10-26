@@ -31,12 +31,7 @@ export function openReadDatabase(path, { contextRead = false, topicMembers = fal
     catch (error) { throw recordSqliteFailure(error, 'configure', 'reader_configuration'); }
     let wal = false;
     if (topicPolicy) {
-      try { wal = topicJournalMode(native, path, topicPolicy) === 'WAL'; }
-      catch (error) {
-        // The mode PRAGMA can parse a malformed schema before application_id.
-        // Preserve the legacy metadata validator's error precedence in that case.
-        if ([5, 6].includes(error.errcode & 255)) throw error;
-      }
+      wal = topicJournalMode(native, path, topicPolicy, { deferQueryErrors: true }) === 'WAL';
     }
     db = topicPolicy ? topicPolicy.database(native, wal) : native;
     const current = identity(path);

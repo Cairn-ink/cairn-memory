@@ -1,5 +1,7 @@
+import { spawnSync } from 'node:child_process';
 import { createExclusiveSqliteFile } from '../sqlite-journal-probe.mjs';
 import { initLocalRawStore } from '../../integrations/client/raw/local-setup-init.mjs';
+import { openReadDatabase } from '../read-database.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { openMemoryCore } from '../index.mjs';
 import assert from 'node:assert/strict';
@@ -221,4 +223,29 @@ test('wrong application ID plus malformed schema retains b2513501 legacy error p
     try { assert.deepEqual(await reader.readTopicOverview({ namespace }), expected); }
     finally { await reader.close(); }
   }
+});
+
+test('DELETE opening propagates SQLITE_NOMEM on timeout reset and closes the connection', t => {
+  const f = memberFixture(t, { mode: 'DELETE' });
+  // A stale WAL hint installs a non-zero opening timeout on this DELETE store.
+  const hint = spawnSync(process.execPath, ['--input-type=module', '-e',
+    "import { writeFileSync } from 'node:fs'; writeFileSync(process.argv[1], 'hint');", f.path + '-wal'],
+    { env: {}, timeout: 5000, maxBuffer: 4096 });
+  assert.equal(hint.error, undefined); assert.equal(hint.status, 0);
+  t.after(() => { if (existsSync(f.path + '-wal')) unlinkSync(f.path + '-wal'); });
+  const exec = DatabaseSync.prototype.exec, close = DatabaseSync.prototype.close;
+  const fault = busy(7); let selected, closed = 0, installed;
+  t.mock.method(DatabaseSync.prototype, 'exec', function(sql) {
+    if (sql === 'PRAGMA busy_timeout=0') {
+      selected = this; installed = this.prepare('PRAGMA busy_timeout').get().timeout;
+      throw fault;
+    }
+    return exec.call(this, sql);
+  });
+  t.mock.method(DatabaseSync.prototype, 'close', function() { if (this === selected) closed++; return close.call(this); });
+  const policy = createTopicSqlitePolicy({ diagnostics: true }); policy.start(Infinity);
+  assert.throws(() => openReadDatabase(f.path, { topicPolicy: policy }), error => error === fault);
+  assert.ok(installed > 0); assert.equal(closed, 1); assert.equal(selected.isOpen, false);
+  assert.deepEqual(safeReaderFailure(fault, true).error.diagnostics,
+    { stage: 'configure', statement: 'reader_configuration', sqlite: { code: 7, extendedCode: 7 } });
 });

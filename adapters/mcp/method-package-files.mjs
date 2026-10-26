@@ -3,6 +3,7 @@ import { constants, openSync, closeSync, fstatSync, readSync, readFileSync, open
 import { tmpdir } from 'node:os';
 import { isAbsolute, extname, dirname, basename, join } from 'node:path';
 import { METHOD_LIMITS, methodPath } from '../../core/method-package-input.mjs';
+import { isolatedFileRead } from '../../core/isolated-file-read.mjs';
 import { fail } from '../../core/validation.mjs';
 import { ASSET_LIMITS, validateAssetMedia } from '../../core/asset-input.mjs';
 
@@ -120,7 +121,7 @@ export function methodExclude(pattern) {
   };
 }
 
-/** Owns pinned parent, path and read fds until close, including across review. */
+/** Owns O_PATH pins across review; input data descriptors live only in a child. */
 export function prepareMethodFiles(directory,exclusions=[],attachments=false) {
   if(typeof directory!=='string'||!isAbsolute(directory)||directory.includes('\0'))fail('invalid_path');
   probeMethodFileEnvironment();
@@ -136,20 +137,14 @@ export function prepareMethodFiles(directory,exclusions=[],attachments=false) {
   }
   function read(pin,maximum,account,binary=false) {
     if(pin.stat.size>BigInt(maximum))fail('invalid_input');
-    const fd=hold(openSync(fdPath(pin.fd),constants.O_RDONLY|constants.O_NONBLOCK));
-    const verify=()=>{if(!sameFile(pin.stat,inspectFile(pin.fd,pin.mount,'file').stat)||!sameFile(pin.stat,inspectFile(fd,pin.mount,'file').stat))fail('invalid_input');};
-    try {
-    verify();const chunks=[];let total=0;
-    while(true){
-      verify();const chunk=Buffer.alloc(Math.min(65536,maximum-total+1));
-      const count=readSync(fd,chunk,0,chunk.length,null);verify();
-      if(!count)break;
-      total+=count;if(total>maximum)fail('invalid_input');account(count);chunks.push(chunk.subarray(0,count));
-    }
-    if(BigInt(total)!==pin.stat.size)fail('invalid_input');pins.push(pin);
-    const bytes=Buffer.concat(chunks,total);return binary?bytes:decode(bytes);
-    } finally {release(fd);}
+    const verify=()=>{if(!sameFile(pin.stat,inspectFile(pin.fd,pin.mount,'file').stat))fail('invalid_input');};
+    verify();
+    const {bytes,stat}=isolatedFileRead(`/proc/${process.pid}/fd/${pin.fd}`,maximum,{expected:pin.stat});
+    if(!sameFile(pin.stat,stat))fail('invalid_input');
+    verify();account(bytes.length);pins.push(pin);
+    return binary?bytes:decode(bytes);
   }
+
   try {
     const root=hold(openSync(directory,PATH_FLAGS|constants.O_DIRECTORY)),rootInfo=inspectFile(root,undefined,'directory');
     function walk(fd,prefix,depth) {

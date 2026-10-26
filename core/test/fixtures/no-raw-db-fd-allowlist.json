@@ -187,22 +187,17 @@
   {
     "path": "adapters/mcp/asset-files.mjs",
     "source": "const name=methodEntryName(basename(path)),parent=hold(openSync(dirname(path),PATH_FLAGS|constants.O_DIRECTORY));",
-    "reason": "Asset inputs exclude canonical/sidecar/companion dev+ino (hard links too) before pins and data opens; O_PATH pins are rechecked before reading."
+    "reason": "Host directory and O_PATH pins only; arbitrary input data descriptors live in the isolated child."
   },
   {
     "path": "adapters/mcp/asset-files.mjs",
     "source": "const fd=hold(openSync(`${fdPath(parent)}/${name}`,PATH_FLAGS)),saved={fd,parent,name,...inspectFile(fd,root.mount,'file')};",
-    "reason": "Asset inputs exclude canonical/sidecar/companion dev+ino (hard links too) before pins and data opens; O_PATH pins are rechecked before reading."
-  },
-  {
-    "path": "adapters/mcp/asset-files.mjs",
-    "source": "const data=hold(openSync(fdPath(fd),constants.O_RDONLY|constants.O_NONBLOCK));",
-    "reason": "Asset inputs exclude canonical/sidecar/companion dev+ino (hard links too) before pins and data opens; O_PATH pins are rechecked before reading."
+    "reason": "Host directory and O_PATH pins only; arbitrary input data descriptors live in the isolated child."
   },
   {
     "path": "adapters/mcp/asset-files.mjs",
     "source": "const current=openSync(`${fdPath(saved.parent)}/${saved.name}`,PATH_FLAGS);",
-    "reason": "Asset inputs exclude canonical/sidecar/companion dev+ino (hard links too) before pins and data opens; O_PATH pins are rechecked before reading."
+    "reason": "Host directory and O_PATH pins only; arbitrary input data descriptors live in the isolated child."
   },
   {
     "path": "adapters/mcp/method-package-command.mjs",
@@ -212,57 +207,52 @@
   {
     "path": "adapters/mcp/method-package-files.mjs",
     "source": "const mount=fd=>methodMountId(readFileSync(`/proc/self/fdinfo/${fd}`,'utf8'));",
-    "reason": "Package input files, directory/O_PATH pins, proc fd metadata and disposable environment-probe files."
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
   },
   {
     "path": "adapters/mcp/method-package-files.mjs",
     "source": "writeFileSync(join(scratch,'file'),'x',{mode:0o600});symlinkSync('file',join(scratch,'link'));",
-    "reason": "Package input files, directory/O_PATH pins, proc fd metadata and disposable environment-probe files."
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
   },
   {
     "path": "adapters/mcp/method-package-files.mjs",
     "source": "const root=openSync(scratch,PATH_FLAGS|constants.O_DIRECTORY);fds.push(root);",
-    "reason": "Package input files, directory/O_PATH pins, proc fd metadata and disposable environment-probe files."
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
   },
   {
     "path": "adapters/mcp/method-package-files.mjs",
     "source": "const path=openSync(`${fdPath(root)}/file`,PATH_FLAGS);fds.push(path);",
-    "reason": "Package input files, directory/O_PATH pins, proc fd metadata and disposable environment-probe files."
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
   },
   {
     "path": "adapters/mcp/method-package-files.mjs",
     "source": "const link=openSync(`${fdPath(root)}/link`,PATH_FLAGS);fds.push(link);",
-    "reason": "Package input files, directory/O_PATH pins, proc fd metadata and disposable environment-probe files."
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
   },
   {
     "path": "adapters/mcp/method-package-files.mjs",
     "source": "const read=openSync(fdPath(path),constants.O_RDONLY);fds.push(read);",
-    "reason": "Package input files, directory/O_PATH pins, proc fd metadata and disposable environment-probe files."
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
   },
   {
     "path": "adapters/mcp/method-package-files.mjs",
     "source": "const fd=hold(openSync(`${fdPath(parent)}/${name}`,PATH_FLAGS|(type==='directory'?constants.O_DIRECTORY:0)));",
-    "reason": "Package input files, directory/O_PATH pins, proc fd metadata and disposable environment-probe files."
-  },
-  {
-    "path": "adapters/mcp/method-package-files.mjs",
-    "source": "const fd=hold(openSync(fdPath(pin.fd),constants.O_RDONLY|constants.O_NONBLOCK));",
-    "reason": "Package input files, directory/O_PATH pins, proc fd metadata and disposable environment-probe files."
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
   },
   {
     "path": "adapters/mcp/method-package-files.mjs",
     "source": "const root=hold(openSync(directory,PATH_FLAGS|constants.O_DIRECTORY)),rootInfo=inspectFile(root,undefined,'directory');",
-    "reason": "Package input files, directory/O_PATH pins, proc fd metadata and disposable environment-probe files."
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
   },
   {
     "path": "adapters/mcp/method-package-files.mjs",
     "source": "const current=openSync(`${fdPath(saved.parent)}/${saved.name}`,PATH_FLAGS);",
-    "reason": "Package input files, directory/O_PATH pins, proc fd metadata and disposable environment-probe files."
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
   },
   {
     "path": "adapters/mcp/method-package-files.mjs",
     "source": "const parent=hold(openSync(dirname(path),PATH_FLAGS|constants.O_DIRECTORY));",
-    "reason": "Package input files, directory/O_PATH pins, proc fd metadata and disposable environment-probe files."
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
   },
   {
     "path": "adapters/mcp/retained-raw-profile.mjs",
@@ -271,13 +261,8 @@
   },
   {
     "path": "adapters/mcp/review-card.mjs",
-    "source": "const fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK);",
-    "reason": "Explicit dependency-review JSON input or controlling /dev/tty terminal, not the configured store."
-  },
-  {
-    "path": "adapters/mcp/review-card.mjs",
     "source": "try { fd = openSync('/dev/tty', 'r+'); }",
-    "reason": "Explicit dependency-review JSON input or controlling /dev/tty terminal, not the configured store."
+    "reason": "Host metadata-only inspection and controlling /dev/tty terminal; dependency data reads live in the child."
   },
   {
     "path": "adapters/openai/index.mjs",
@@ -312,26 +297,6 @@
   {
     "path": "packages/setup/lib/codex-runtime.mjs",
     "source": "const sourceBytes = await readFile(new URL(path,source));",
-    "reason": "Installer package/runtime metadata, ownership files and exclusive staging/lock files, not the SQLite store."
-  },
-  {
-    "path": "packages/setup/lib/codex-runtime.mjs",
-    "source": "const quota = quotaValue === null ? 'open' : quotaValue.version===2 &&",
-    "reason": "Installer package/runtime metadata, ownership files and exclusive staging/lock files, not the SQLite store."
-  },
-  {
-    "path": "packages/setup/lib/codex-runtime.mjs",
-    "source": "['recall','capture'].every(operation => quotaValue.operations?.[operation]?.mode==='open') ? 'open' : 'limited_or_invalid';",
-    "reason": "Installer package/runtime metadata, ownership files and exclusive staging/lock files, not the SQLite store."
-  },
-  {
-    "path": "packages/setup/lib/codex-runtime.mjs",
-    "source": "['recall','capture'].every(operation => quotaValue.operations?.[operation]?.mode==='open') ? 'open' : 'limited_or_invalid';",
-    "reason": "Installer package/runtime metadata, ownership files and exclusive staging/lock files, not the SQLite store."
-  },
-  {
-    "path": "packages/setup/lib/codex-runtime.mjs",
-    "source": "if(quota!=='open')write(t('quota_limited'));",
     "reason": "Installer package/runtime metadata, ownership files and exclusive staging/lock files, not the SQLite store."
   },
   {
@@ -606,62 +571,12 @@
   },
   {
     "path": "integrations/client/transport-hosted.mjs",
-    "source": "const modes = new Set([\"open\", \"quota_reached\", \"ready\", \"in_flight\", \"cooldown\"]);",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "integrations/client/transport-hosted.mjs",
-    "source": "const freshOperation = () => ({ mode: \"open\", resetAt: null, until: null, attempt: null });",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "integrations/client/transport-hosted.mjs",
     "source": "try { file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW); }",
     "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
   },
   {
     "path": "integrations/client/transport-hosted.mjs",
     "source": "const file = await open(temporary, \"wx\", 0o600);",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "integrations/client/transport-hosted.mjs",
-    "source": "if (value.mode === \"open\" && value.resetAt !== null) return false;",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "integrations/client/transport-hosted.mjs",
-    "source": "[\"open\", \"quota_reached\", \"ready\", \"consumed\", \"unconfirmed\", \"invalid_reply\"].includes(value.mode) &&",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "integrations/client/transport-hosted.mjs",
-    "source": "mode: operations.every((op) => state.operations[op].mode === \"open\") ? \"open\" : \"limited\",",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "integrations/client/transport-hosted.mjs",
-    "source": "mode: operations.every((op) => state.operations[op].mode === \"open\") ? \"open\" : \"limited\",",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "integrations/client/transport-hosted.mjs",
-    "source": "outcomes[operation] = { status: state.operations[operation].mode === \"open\" ? \"active\" :",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "integrations/client/transport-hosted.mjs",
-    "source": "if (![\"open\", \"ready\"].includes(gate.mode)) return { blocked: gateReply(gate) };",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "integrations/client/transport-hosted.mjs",
-    "source": "if (gate.mode === \"open\") return { token: null };",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "integrations/client/transport-hosted.mjs",
-    "source": "if (!matching && ![\"open\", \"cooldown\"].includes(gate.mode)) return true;",
     "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
   },
   {
@@ -756,62 +671,12 @@
   },
   {
     "path": "plugins/cairn-memory/lib/http.mjs",
-    "source": "const modes = new Set([\"open\", \"quota_reached\", \"ready\", \"in_flight\", \"cooldown\"]);",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "plugins/cairn-memory/lib/http.mjs",
-    "source": "const freshOperation = () => ({ mode: \"open\", resetAt: null, until: null, attempt: null });",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "plugins/cairn-memory/lib/http.mjs",
     "source": "try { file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW); }",
     "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
   },
   {
     "path": "plugins/cairn-memory/lib/http.mjs",
     "source": "const file = await open(temporary, \"wx\", 0o600);",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "plugins/cairn-memory/lib/http.mjs",
-    "source": "if (value.mode === \"open\" && value.resetAt !== null) return false;",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "plugins/cairn-memory/lib/http.mjs",
-    "source": "[\"open\", \"quota_reached\", \"ready\", \"consumed\", \"unconfirmed\", \"invalid_reply\"].includes(value.mode) &&",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "plugins/cairn-memory/lib/http.mjs",
-    "source": "mode: operations.every((op) => state.operations[op].mode === \"open\") ? \"open\" : \"limited\",",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "plugins/cairn-memory/lib/http.mjs",
-    "source": "mode: operations.every((op) => state.operations[op].mode === \"open\") ? \"open\" : \"limited\",",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "plugins/cairn-memory/lib/http.mjs",
-    "source": "outcomes[operation] = { status: state.operations[operation].mode === \"open\" ? \"active\" :",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "plugins/cairn-memory/lib/http.mjs",
-    "source": "if (![\"open\", \"ready\"].includes(gate.mode)) return { blocked: gateReply(gate) };",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "plugins/cairn-memory/lib/http.mjs",
-    "source": "if (gate.mode === \"open\") return { token: null };",
-    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
-  },
-  {
-    "path": "plugins/cairn-memory/lib/http.mjs",
-    "source": "if (!matching && ![\"open\", \"cooldown\"].includes(gate.mode)) return true;",
     "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
   },
   {
@@ -887,21 +752,6 @@
   {
     "path": "plugins/cairn-memory/scripts/hook.mjs",
     "source": "if (JSON.parse(await readFile(statePath, \"utf8\")).ownSkillTurn === true) {",
-    "reason": "Hook transcript input and skill-turn JSON state; SQLite is accessed through the engine."
-  },
-  {
-    "path": "plugins/cairn-memory/scripts/hook.mjs",
-    "source": "process.stdout.write(\"Cairn quota state repaired to open; automatic memory is active.\\n\");",
-    "reason": "Hook transcript input and skill-turn JSON state; SQLite is accessed through the engine."
-  },
-  {
-    "path": "plugins/cairn-memory/scripts/hook.mjs",
-    "source": "const quota = quotaTarget ? await hostedQuotaStatus(quotaTarget) : { mode: \"open\" };",
-    "reason": "Hook transcript input and skill-turn JSON state; SQLite is accessed through the engine."
-  },
-  {
-    "path": "plugins/cairn-memory/scripts/hook.mjs",
-    "source": "Object.entries(quota.operations ?? {}).filter(([, gate]) => gate.mode !== \"open\")",
     "reason": "Hook transcript input and skill-turn JSON state; SQLite is accessed through the engine."
   },
   {
@@ -1010,11 +860,6 @@
     "reason": "Export directories and exclusively created export staging files, never an existing DB file."
   },
   {
-    "path": "adapters/mcp/asset-files.mjs",
-    "source": "import { constants,openSync,closeSync,readSync,lstatSync,statSync } from 'node:fs'",
-    "reason": "Asset inputs exclude canonical/sidecar/companion dev+ino (hard links too) before pins and data opens; O_PATH pins are rechecked before reading."
-  },
-  {
     "path": "adapters/mcp/method-package-command.mjs",
     "source": "import { openSync,closeSync,readSync,writeSync } from 'node:fs'",
     "reason": "Controlling terminal /dev/tty for explicit approval, never a store path."
@@ -1022,17 +867,12 @@
   {
     "path": "adapters/mcp/method-package-files.mjs",
     "source": "import { constants, openSync, closeSync, fstatSync, readSync, readFileSync, opendirSync,\n  mkdtempSync, writeFileSync, symlinkSync, rmSync } from 'node:fs'",
-    "reason": "Package input files, directory/O_PATH pins, proc fd metadata and disposable environment-probe files."
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
   },
   {
     "path": "adapters/mcp/retained-raw-profile.mjs",
     "source": "import { open } from 'node:fs/promises'",
     "reason": "Retained runtime profile JSON; database contents are opened separately through SQLite."
-  },
-  {
-    "path": "adapters/mcp/review-card.mjs",
-    "source": "import { closeSync, openSync, readSync, writeSync, lstatSync, fstatSync, constants } from 'node:fs'",
-    "reason": "Explicit dependency-review JSON input or controlling /dev/tty terminal, not the configured store."
   },
   {
     "path": "adapters/openai/index.mjs",
@@ -1378,5 +1218,35 @@
     "path": "plugins/cairn-memory/lib/private-state.mjs",
     "source": "import { constants } from \"node:fs\"",
     "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "adapters/mcp/asset-files.mjs",
+    "source": "import { constants,openSync,closeSync } from 'node:fs'",
+    "reason": "Host directory and O_PATH pins only; arbitrary input data descriptors live in the isolated child."
+  },
+  {
+    "path": "adapters/mcp/review-card.mjs",
+    "source": "import { closeSync, openSync, readSync, writeSync, lstatSync } from 'node:fs'",
+    "reason": "Host metadata-only inspection and controlling /dev/tty terminal; dependency data reads live in the child."
+  },
+  {
+    "path": "integrations/codex/qualification.mjs",
+    "source": "try {vendor=join(dirname(createRequire(launcher).resolve(packageName+'/package.json')),'vendor');}",
+    "reason": "Installer qualification resolves package metadata beside a launcher; reviewed non-literal createRequire boundary, never reads a store."
+  },
+  {
+    "path": "core/isolated-file-read-child.mjs",
+    "source": "import { constants, openSync, closeSync, fstatSync, readSync, readFileSync } from 'node:fs'",
+    "reason": "Child-only bounded input reads; this script never opens SQLite connections."
+  },
+  {
+    "path": "core/isolated-file-read-child.mjs",
+    "source": "const { path, maximum, expected } = JSON.parse(readFileSync(0, 'utf8'));",
+    "reason": "Child-only bounded input reads; this script never opens SQLite connections."
+  },
+  {
+    "path": "core/isolated-file-read-child.mjs",
+    "source": "fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK);",
+    "reason": "Child-only bounded input reads; this script never opens SQLite connections."
   }
 ]

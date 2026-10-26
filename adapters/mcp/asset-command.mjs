@@ -69,7 +69,7 @@ export async function assetCommand(args){
     if(identity.userVersion>=31)open();
     if(!mutation){result=exportAsset(call,config.input.version,config.values.get('--out'));}
     else{
-      files=prepareAssetFiles(config.path,store.identity);
+      files=prepareAssetFiles();
       if(config.operation==='import'){
         const path=config.values.get('--file'),bytes=files.read(path,33554432,{binary:true});
         Object.assign(config.input,{filename:basename(path),mediaType:assetMedia(path),bytes});validateAssetMedia(config.input.filename,config.input.mediaType,bytes);
