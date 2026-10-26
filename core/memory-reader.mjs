@@ -48,7 +48,7 @@ export function openMemoryReader(input) {
   }
   async function dispatch(input, members = false) {
     if (closed) return readerFailure('store_closed');
-    const started = members ? performance.now() : undefined;
+    const started = performance.now();
     let request;
     try { request = (members ? membersInput : overviewInput)(input, options.ownerId); }
     catch (error) { return (members ? safeReaderFailure : safeLegacyReaderFailure)(error); }
@@ -63,7 +63,7 @@ export function openMemoryReader(input) {
       }, members ? Math.max(0, duration - (performance.now() - started)) : 5000);
       try {
         const instance = start(); instance.ref();
-        instance.postMessage(members ? { method: 'members', request, deadlineAt: started + duration } : request);
+        instance.postMessage(members ? { method: 'members', request, deadlineAt: started + duration } : { ...request, deadlineAt: started + duration });
       } catch { void (async () => { await stop(); finish(slot, readerFailure('reader_failed')); })(); }
     });
   }

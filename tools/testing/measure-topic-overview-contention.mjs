@@ -186,15 +186,14 @@ export function createCandidate(directory) {
   directory = join(directory, 'core');
   const patches = [
     ['memory-reader.mjs', [
-      ["import { Worker }", "import { performance } from 'node:perf_hooks';\nimport { Worker }"],
-      ['instance.postMessage(request);', `instance.postMessage({ ...request, __measurementLockDeadline: performance.now() + ${PROTOCOL.candidateWaitMs} });`],
+      [': { ...request, deadlineAt: started + duration });', `: { ...request, deadlineAt: started + duration, __measurementLockDeadline: performance.now() + ${PROTOCOL.candidateWaitMs} });`],
     ]],
     ['topic-overview-worker.mjs', [
-      ["parentPort.on('message', async request => {", "parentPort.on('message', async message => {\n  const { __measurementLockDeadline, ...request } = message;\n  globalThis.__measurementLockDeadline = __measurementLockDeadline;"],
+      ["const { deadlineAt, ...request } = message;", "const { deadlineAt, __measurementLockDeadline, ...request } = message;\n  globalThis.__measurementLockDeadline = __measurementLockDeadline;"],
     ]],
     ['read-database.mjs', [
       ["import { assertNoCardCurrentDependencies }", "import { performance } from 'node:perf_hooks';\nimport { measurementDatabase } from './measurement-database.mjs';\nimport { assertNoCardCurrentDependencies }"],
-      ['const db = new DatabaseSync(path, { readOnly: true });', 'const db = measurementDatabase(new DatabaseSync(path, { readOnly: true }), performance);'],
+      ['const db = topicPolicy ? topicPolicy.database(native, wal) : native;', 'native = measurementDatabase(native, performance);\n  const db = topicPolicy ? topicPolicy.database(native, wal) : native;'],
       [' PRAGMA busy_timeout=${contextRead ? 5000 : 0};', ''],
     ]],
   ];

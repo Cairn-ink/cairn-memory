@@ -1,3 +1,4 @@
+import { sqliteFailureDiagnostics } from './topic-reader-sqlite.mjs';
 import { resolve } from 'node:path';
 import { types } from 'node:util';
 import { identifier, fail } from './validation.mjs';
@@ -14,11 +15,12 @@ export function ownData(value, allowed) {
 }
 const id = value => { try { return identifier(value); } catch { fail('invalid_input'); } };
 export function readerOptions(input) {
-  const value = ownData(input, ['path', 'ownerId']);
+  const value = ownData(input, ['path', 'ownerId', 'diagnostics']);
   if (typeof value.path !== 'string' || !value.path.isWellFormed() || !value.path ||
       value.path.length > 4096 || value.path.includes('\0') || value.path === ':memory:' ||
       value.path.startsWith('file:')) fail('invalid_input');
-  return { path: resolve(value.path), ownerId: id(value.ownerId) };
+  if (value.diagnostics !== undefined && typeof value.diagnostics !== 'boolean') fail('invalid_input');
+  return { path: resolve(value.path), ownerId: id(value.ownerId), ...(value.diagnostics === true ? { diagnostics: true } : {}) };
 }
 export function overviewInput(input, ownerId) {
   const value = ownData(input, ['namespace', 'nodeLimit', 'maxBytes', 'workLimit', 'memberLimit', 'cursor', 'snapshotVersion']);
@@ -46,11 +48,17 @@ const legacyCodes = new Set(['invalid_input', 'invalid_cursor', 'cursor_stale', 
   'unsafe_database_file', 'unsupported_database', 'database_not_found', 'storage_busy',
   'state_limit', 'context_item_too_large', 'store_closed']);
 const safeCodes = new Set([...legacyCodes, 'moc_not_found', 'revision_conflict', 'invalid_ref', 'read_timeout']);
-function classifiedFailure(error, codes) {
+function classifiedFailure(error, codes, diagnostics) {
+  const result = classify(error, codes);
+  const metadata = diagnostics && sqliteFailureDiagnostics(error);
+  if (metadata) result.error.diagnostics = metadata;
+  return result;
+}
+function classify(error, codes) {
   if (error?.code === 'ERR_SQLITE_ERROR' && Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 255)) {
     return readerFailure('storage_busy');
   }
   return readerFailure(codes.has(error?.code) ? error.code : 'reader_failed');
 }
-export const safeReaderFailure = error => classifiedFailure(error, safeCodes);
-export const safeLegacyReaderFailure = error => classifiedFailure(error, legacyCodes);
+export const safeReaderFailure = (error, diagnostics = false) => classifiedFailure(error, safeCodes, diagnostics);
+export const safeLegacyReaderFailure = (error, diagnostics = false) => classifiedFailure(error, legacyCodes, diagnostics);
