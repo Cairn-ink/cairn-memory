@@ -911,7 +911,11 @@ test('L10/L11/L12 actual SIGKILL, stale-lock recovery and resume: ' + boundary, 
     await withLocalLock(f.root, () => writeDescriptor(f.root, d));
     const normalized = claudeAddArguments(f.root, desired).filter((_, i, args) => i !== args.indexOf('--scope') && i !== args.indexOf('--scope') + 1).join(' ');
     await f.setState('claude', { killBefore: normalized });
-  } else await f.setState('codex', boundary === 'after-claude-done' ? { killBefore: 'mcp add --help' } : { killAfterAdd: true });
+  } else if (boundary === 'after-claude-done') {
+    // Capability probes run before mutation. The native add follows Claude's
+    // durable done checkpoint and is intercepted before changing Codex config.
+    await f.setState('codex', { killBefore: codexAddArguments(f.root, d.clients.codex.vector).join(' ') });
+  } else await f.setState('codex', { killAfterAdd: true });
   const killed = await f.run(['setup']); assert.equal(killed.signal, 'SIGKILL');
   const saved = await f.descriptor(); assert.equal(saved.state, 'pending');
   if (boundary !== 'claude-add') assert.equal(saved.operation.checkpoints.claude.state, 'done');
