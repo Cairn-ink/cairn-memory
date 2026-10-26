@@ -808,3 +808,61 @@ packaging/artifact-files.json
 No commit, network, real-key access, broad npm suite, performance measurement
 or recovery implementation. All task-owned processes are supervised through
 completion; temporary worktrees/directories are removed before handoff.
+
+
+## Fix round 3
+
+Only native SQLite failures from preparing or executing PRAGMA journal_mode may
+be deferred for legacy metadata validation. The query boundary marks those
+failures explicitly and excludes timeout-installation errors with configure
+provenance. Timeout installation and reset failures propagate to the opener,
+which closes the connection. Fault injection covers SQLITE_NOMEM during
+positive-timeout installation on both the WAL-hint and BUSY-fallback paths,
+with diagnostics enabled and disabled; each case asserts the original error,
+exactly one close, a closed connection and configure/reader_configuration
+provenance. Existing reset-failure and legacy-precedence coverage is retained.
+
+The creation child skips directory open/fsync on win32. On POSIX it retains
+directory syncing, but EISDIR, EPERM, EINVAL and ENOTSUP from that directory
+open/fsync after publication return success with the published dev/ino identity.
+Other errors retain the existing failure behavior. Tests override process.platform
+in the actual child body and make any Windows directory open fail; creation
+still succeeds, preserves a live stage and reports the target identity. POSIX
+faults cover all four codes at both directory open and fsync. Existing staged
+file-fsync EIO, post-publication directory-fsync EIO, no-replace and timeout
+coverage remains in place.
+
+The remaining child operations were reviewed for Windows: the generated stage
+suffix uses a positive decimal PID and UUID, signal 0 checks process existence,
+and linkSync publishes a file within the same directory. The simulated win32
+child exercises these operations and live-stage preservation. Native Windows
+filesystem and process behavior was not executed on this Linux host; no further
+incompatibility was identified by code review.
+
+Actual process exit codes (Node versions verified before invocation):
+
+| Check | Result | Exit |
+| --- | --- | --- |
+| Node 22.16.0: journal probe, lock safety and all core topic tests, 18 explicit paths | 256/256 pass, no skips | 0 |
+| Node 22.16.0: full no-raw-db-fd guard, including generated runtime/archive | 5/5 pass | 0 |
+| Node 24.22.1: sqlite-lock-safety | 14/14 pass | 0 |
+| Node 22.16.0: syntax checks for all four changed modules/tests | pass | 0 |
+| git diff --check and independent whitespace/newline checks | pass | 0 |
+
+The 18 test paths were derived with Python globbing and independently with
+rg --files; the sorted sets are equal, count 18, exit 0. Each path was passed
+explicitly to node --test with test-concurrency=1. The five changed paths were
+derived from git diff --name-only HEAD plus untracked files and independently
+from git status --porcelain=v1 -z; equality exit 0, count 5:
+
+```text
+core/sqlite-journal-probe.mjs
+core/test/sqlite-journal-probe.test.mjs
+core/test/topic-reader-sqlite.test.mjs
+core/topic-reader-sqlite.mjs
+docs/plans/topic-reader-wal-fix.md
+```
+
+No runtime regeneration or commit. The generated runtime is unchanged from
+HEAD (git diff --quiet exit 0). No network or key access; all test processes
+were supervised through their actual completion.

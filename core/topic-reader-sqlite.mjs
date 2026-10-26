@@ -12,7 +12,18 @@ function companion(path, suffix) {
 export function topicJournalMode(native, path, policy, { deferQueryErrors = false } = {}) {
   const rollback = () => companion(path, '-journal');
   const hintedWal = !rollback() && (companion(path, '-wal') || companion(path, '-shm'));
-  const query = wait => policy.database(native, wait).prepare('PRAGMA journal_mode').get().journal_mode.toUpperCase();
+  let queryFailure;
+  const query = wait => {
+    const db = policy.database(native, wait);
+    let row;
+    try { row = db.prepare('PRAGMA journal_mode').get(); }
+    catch (error) {
+      // Installing a timeout happens inside the query proxy, but is configuration.
+      if (error.code === 'ERR_SQLITE_ERROR' && sqliteFailureDiagnostics(error)?.stage !== 'configure') queryFailure = error;
+      throw error;
+    }
+    return row.journal_mode.toUpperCase();
+  };
   try {
     try { return query(hintedWal); }
     catch (error) {
@@ -23,7 +34,7 @@ export function topicJournalMode(native, path, policy, { deferQueryErrors = fals
   } catch (error) {
     // Only journal-query failures may defer to legacy metadata validation.
     // The finally boundary below must propagate every timeout-reset failure.
-    if (!deferQueryErrors || [5, 6].includes(error.errcode & 255)) throw error;
+    if (!deferQueryErrors || error !== queryFailure || [5, 6].includes(error.errcode & 255)) throw error;
   } finally {
     // A hint or fallback must never grant subsequent DELETE statements a wait.
     try { native.exec('PRAGMA busy_timeout=0'); }

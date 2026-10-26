@@ -71,8 +71,15 @@ const create = `
     closeSync(fd); fd = undefined;
     linkSync(temporary, target); published = true;
     unlinkSync(temporary); temporary = undefined;
-    dir = openSync(directory, 'r'); fsyncSync(dir);
-    closeSync(dir); dir = undefined;
+    if (process.platform !== 'win32') {
+      try {
+        dir = openSync(directory, 'r'); fsyncSync(dir);
+      } catch (error) {
+        // The target is already published; some filesystems cannot sync directories.
+        if (!['EISDIR', 'EPERM', 'EINVAL', 'ENOTSUP'].includes(error.code)) throw error;
+      }
+      if (dir !== undefined) { closeSync(dir); dir = undefined; }
+    }
     console.log(JSON.stringify({ dev, ino }));
   } catch (error) { console.log(JSON.stringify({ error: error.code ?? 'EIO', published })); }
   finally {

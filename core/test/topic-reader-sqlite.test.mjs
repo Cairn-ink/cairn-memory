@@ -225,6 +225,37 @@ test('wrong application ID plus malformed schema retains b2513501 legacy error p
   }
 });
 
+for (const hinted of [true, false]) for (const diagnostics of [true, false])
+test(`opening propagates timeout-installation SQLITE_NOMEM (${hinted ? 'WAL hint' : 'BUSY fallback'}, diagnostics=${diagnostics})`, t => {
+  const f = memberFixture(t, { mode: 'DELETE' });
+  if (hinted) {
+    const hint = spawnSync(process.execPath, ['--input-type=module', '-e',
+      "import { writeFileSync } from 'node:fs'; writeFileSync(process.argv[1], 'hint');", f.path + '-wal'],
+      { env: {}, timeout: 5000, maxBuffer: 4096 });
+    assert.equal(hint.error, undefined); assert.equal(hint.status, 0);
+    t.after(() => { if (existsSync(f.path + '-wal')) unlinkSync(f.path + '-wal'); });
+  }
+  const exec = DatabaseSync.prototype.exec, prepare = DatabaseSync.prototype.prepare, close = DatabaseSync.prototype.close;
+  const fault = busy(7); let selected, closed = 0, queries = 0, installations = 0;
+  t.mock.method(DatabaseSync.prototype, 'exec', function(sql) {
+    if (/^PRAGMA busy_timeout=[1-9]\d*$/.test(sql)) {
+      selected = this; installations++; throw fault;
+    }
+    return exec.call(this, sql);
+  });
+  t.mock.method(DatabaseSync.prototype, 'prepare', function(sql) {
+    if (sql === 'PRAGMA journal_mode') { queries++; throw busy(); }
+    return prepare.call(this, sql);
+  });
+  t.mock.method(DatabaseSync.prototype, 'close', function() { if (this === selected) closed++; return close.call(this); });
+  const policy = createTopicSqlitePolicy({ diagnostics, now: () => 0 }); policy.start(Infinity);
+  assert.throws(() => openReadDatabase(f.path, { topicPolicy: policy }), error => error === fault);
+  assert.equal(installations, 1); assert.equal(queries, hinted ? 0 : 1);
+  assert.equal(closed, 1); assert.equal(selected.isOpen, false);
+  assert.deepEqual(safeReaderFailure(fault, true).error.diagnostics,
+    { stage: 'configure', statement: 'reader_configuration', sqlite: { code: 7, extendedCode: 7 } });
+});
+
 test('DELETE opening propagates SQLITE_NOMEM on timeout reset and closes the connection', t => {
   const f = memberFixture(t, { mode: 'DELETE' });
   // A stale WAL hint installs a non-zero opening timeout on this DELETE store.
