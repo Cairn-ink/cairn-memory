@@ -1,7 +1,9 @@
 # Opt-in bounded topic member previews (P1)
 
-Status: **revision 1 for re-check, base `eb3a0675`, 2026-10-26; no implementation
-or performance acceptance claimed.** Branch: `feat/topic-member-previews`;
+Status: **frozen `topic-member-previews-v1`, 2026-10-26.** A non-author audit
+of `eb3a0675` and three re-checks (`ba6444ea`, `edaf00a8`, `4748443d`) ended
+with "can be frozen: yes". No implementation or performance acceptance is
+claimed. Changing a name, shape or gate requires a new version. Branch: `feat/topic-member-previews`;
 the original repository baseline was `ff6616a1`. This revision changes only
 this file and leaves the frozen [E1-M contract](topic-overview-member-pages.md)
 untouched. Normative P1 requirements below describe future behavior; sections
