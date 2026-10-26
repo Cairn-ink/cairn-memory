@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "a7436df6ba14de197eafe786e1fcf1cdc0fc4037fe16e25d0730428283c9c1ba",
-  "bytes": 710713,
+  "sha256": "79ddf87eba57643bb4d26537308181762fc5df683188c3812739cc80fc585e7b",
+  "bytes": 710723,
   "files": [
     "LICENSE",
     "README.md",
@@ -585,11 +585,11 @@
     "docs/local-embedder-bge-m3.md": "d2ceeb0bd952007ff4413eba515a99d7e90a6254ffeb88636ef6ac82f2909fdf",
     "bin/cairn-memory.mjs": "7c24872a106de8d06c0a66499002f46aa8894b588b005ac9d39a50df4e586981",
     "README.md": "dcfd6be7a1a90d7016dbce352dbd06516443d6760e0dbfd74e6049632ec36891",
-    "THIRD_PARTY_NOTICES.md": "50aa8b0e7133671617cc71255245bfa92af354bc9cdeba6425ce0970639719c0",
+    "THIRD_PARTY_NOTICES.md": "2414f8077181dea55945dbcf3243716d095b148fc8903ffe978ea606864aacd8",
     "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b"
   },
   "generatedHashes": {
-    "package.json": "9ce9aac5ee2ed55ff9c3fdc133c6cacac578ddb819bde45f2322449565a4431e",
-    "npm-shrinkwrap.json": "586d36cf333d878ee6dbbd27e7677c6d2271626b53485721b64f86aee599827b"
+    "package.json": "171a3cc0abbe21c112a5fe2f961caafca0f642fbd75e0783561cf698d0931c4b",
+    "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8"
   }
 }

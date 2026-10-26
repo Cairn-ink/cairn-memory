@@ -5,9 +5,9 @@ vendored dependency code. Local npm installation retrieves these exact packages:
 
 | Package | Version | License | Source |
 | --- | --- | --- | --- |
-| @modelcontextprotocol/server | 2.0.0 | MIT | https://github.com/modelcontextprotocol/typescript-sdk |
-| @modelcontextprotocol/core | 2.0.0 | MIT | https://github.com/modelcontextprotocol/typescript-sdk |
-| zod | 4.5.4 | MIT | https://github.com/colinhacks/zod |
+| @modelcontextprotocol/server | 2.3.1 | MIT | https://github.com/modelcontextprotocol/typescript-sdk |
+| @modelcontextprotocol/core | 2.3.1 | MIT | https://github.com/modelcontextprotocol/typescript-sdk |
+| zod | 4.6.7 | MIT | https://github.com/colinhacks/zod |
 | tiktoken | 1.0.22 | MIT | https://github.com/dqbd/tiktoken |
 
 The generated npm-shrinkwrap.json pins the production closure's registry URLs

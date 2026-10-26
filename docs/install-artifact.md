@@ -56,8 +56,8 @@ with no additional npm dependencies, used only by the opt-in Hermes experiment l
 experiment runners or credentials are included, and the consumer executable
 does not enable it. See [collection boundaries](model-failure-diagnostics.md#installed-hermes-collection).
 
-The production closure is pinned to SDK server/core2.0.0, Zod4.5.4 and
-tiktoken1.0.22 using the existing adapter lockfiles' exact versions, registry URLs
+The production closure is pinned to SDK server/core 2.3.1, Zod 4.6.7 and
+tiktoken 1.0.22 using the existing adapter lockfiles' exact versions, registry URLs
 and integrity values. Builds fail on unreviewed dependency changes. No dependency
 is bundled or downloaded by an install lifecycle script; npm itself retrieves
 the pinned archives. See [third-party notices](../packaging/THIRD_PARTY_NOTICES.md).
@@ -111,7 +111,7 @@ synthetic databases for inspection; nothing is globally installed.
 
 | Surface | Evidence / status |
 | --- | --- |
-| Official SDK client2.0.0 → installed stdio executable, Linux x64, Node22.16.0 | Artifact tests cover contents/closure, lifecycle/restart, isolation/revisions, same-schema upgrade/uninstall and ancestor-project isolation |
+| Official SDK client 2.3.1 → installed stdio executable, Linux x64, Node22.16.0 | Artifact tests cover contents/closure, lifecycle/restart, isolation/revisions, same-schema upgrade/uninstall and ancestor-project isolation |
 | Same installed SDK/stdio path, Node24.20.0 | Same offline installed-artifact verification; no semantic or named-client claim |
 | Installed host with actual OpenAI model and new process | Passed: remember → restart → recall with exact source receipt → forget → empty recall; six actual HTTP requests |
 | Hermes0.21.1, commit c8aa5608c24e3636e77c267650c0f1f52e44adb0, Linux x64, Node22.16.0 | Actual `hermes mcp test cairn` connected and discovered all five tools; discovery only, no chat/native memory-provider acceptance |

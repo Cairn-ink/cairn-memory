@@ -474,7 +474,7 @@ at 64 KiB; tool-result JSON is capped at 256 KiB and fails explicitly rather tha
 truncating source evidence. No production database is used in tests.
 
 `npm run test:mcp` runs synthetic actual-protocol tests without a key or model
-service. SDK server/client 2.0.0 and Zod4.5.4 are pinned outside core; the lockfile
+service. SDK server/client 2.3.1 and Zod 4.6.7 are pinned outside core; the lockfile
 pins transitive packages. Registry metadata identifies MIT licensing; installed
 packages retain their license notices. Core remains dependency-free. See
 [acceptance and evidence](plans/standalone-mcp.md).
