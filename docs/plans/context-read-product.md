@@ -1,6 +1,6 @@
 # Context-read for the product — P2 contract draft
 
-Status: **revision 4 (`context-read-product-v1.1` draft) for re-check, base `99e4391a`**. This is an explicit pre-implementation version revision of frozen `context-read-product-v1`, not a reinterpretation of that profile. Frozen v1 remains the reference at `e7dade51`; nothing has been implemented. No new freeze, product-adapter sign-off or performance acceptance is claimed. Inventory baseline remains `546d57ac`; P2a coding requires re-check and product sign-off on the revised checklist.
+Status: **frozen `context-read-product-v1.1` (P2), 2026-10-27.** It supersedes the never-implemented `context-read-product-v1` (`e7dade51`) with a request-scoped authority model, after the product's authority-seam mapping; see "Changes from v1". A non-author audit of `2a7912fe`, re-checks of `7ce43db1` and `d0482f7e` (v1 frozen), and re-checks of `99e4391a` and `a6ddec69` (v1.1) ended with "can be frozen: yes". No implementation or performance acceptance is claimed. P2a coding starts after the product passes the shortened product checklist. Changing a name, shape or gate requires a new version.
 
 ## Changes from v1
 
