@@ -20,8 +20,40 @@ test('literal Worker graph retains lazy modules/assets and eager shared dependen
   });
   assert.deepEqual(f.inspect(), {
     required: ['lazy.mjs', 'main.mjs', 'shared.mjs', 'worker-only.txt', 'worker.mjs'],
-    eager: ['main.mjs', 'shared.mjs'], lazy: ['lazy.mjs', 'worker-only.txt', 'worker.mjs'], workerEntries: ['worker.mjs'],
+    eager: ['main.mjs', 'shared.mjs'], lazy: ['lazy.mjs', 'worker-only.txt', 'worker.mjs'], workerEntries: ['worker.mjs'], childEntries: [],
   });
+});
+test('spawned Node entries retain their dependency closure without requiring in-process loads', t => {
+  const f = graph(t, {
+    'main.mjs': `import { spawnSync as launch } from 'node:child_process';
+      import { fileURLToPath } from 'node:url'; import './shared.mjs';
+      launch(process.execPath, [fileURLToPath(new URL('./child.mjs', import.meta.url))], { env: {} });`,
+    'child.mjs': `import './shared.mjs'; import './child-only.mjs'; new URL('./child-only.txt', import.meta.url);`,
+    'shared.mjs': '', 'child-only.mjs': '', 'child-only.txt': '',
+  });
+  assert.deepEqual(f.inspect(), {
+    required: ['child-only.mjs', 'child-only.txt', 'child.mjs', 'main.mjs', 'shared.mjs'],
+    eager: ['main.mjs', 'shared.mjs'], lazy: ['child-only.mjs', 'child-only.txt', 'child.mjs'],
+    workerEntries: [], childEntries: ['child.mjs'],
+  });
+});
+test('a separately imported child entry stays eager', t => {
+  const f = graph(t, { 'main.mjs': `import {spawn} from 'node:child_process'; import './child.mjs';
+    spawn(process.execPath, [new URL('./child.mjs', import.meta.url)]);`, 'child.mjs': '' });
+  assert.deepEqual(f.inspect().lazy, []);
+  assert.deepEqual(f.inspect().eager, f.inspect().required);
+  assert.deepEqual(f.inspect().childEntries, ['child.mjs']);
+});
+test('a non-native spawn-looking function keeps ordinary URL assets eager', t => {
+  const f = graph(t, { 'main.mjs': `function spawnSync() {} spawnSync(process.execPath,
+    [new URL('./asset.txt', import.meta.url)]);`, 'asset.txt': '' });
+  assert.deepEqual(f.inspect().eager, ['asset.txt', 'main.mjs']);
+  assert.deepEqual(f.inspect().childEntries, []);
+});
+test('a missing spawned child entry fails closed', t => {
+  const f = graph(t, { 'main.mjs': `import {spawnSync} from 'node:child_process';
+    spawnSync(process.execPath, [fileURLToPath(new URL('./missing.mjs', import.meta.url))]);` });
+  assert.throws(f.inspect, { code: 'ENOENT' });
 });
 test('a separately eager Worker module is never hidden in the lazy set', t => {
   const f = graph(t, { 'main.mjs': `import {Worker} from 'node:worker_threads'; import './worker.mjs';

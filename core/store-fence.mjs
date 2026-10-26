@@ -1,6 +1,7 @@
 // Host-selected rollback-journal review fence. This module must stay SQLite-free
-// at link time: the CLI inspects its pinned file before importing/opening SQLite.
-import {constants,openSync,closeSync,readSync,fstatSync,lstatSync} from 'node:fs';
+// at link time: the CLI validates file identity before importing host SQLite.
+import {lstatSync} from 'node:fs';
+import {probeRollbackJournal} from './sqlite-journal-probe.mjs';
 import {isAbsolute,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {ownData} from './local-authority-input.mjs';
@@ -33,26 +34,28 @@ function noCompanions(path) {
 }
 export function pinStoreFile(path,expected) {
   if(typeof path!=='string'||!isAbsolute(path)||path.includes('\0')||resolve(path)!==path)fail('invalid_path');
-  let fd;
-  try{
-    const first=fileIdentity(path);regular(first);
-    fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
-    const pinned=fstatSync(fd,{bigint:true});regular(pinned);
-    const identity=filesystemIdentity(pinned);
-    if(first.dev!==pinned.dev||first.ino!==pinned.ino)fail('unsafe_database_file');
-    const check=()=>{
-      const current=fileIdentity(path);regular(current);
-      if(String(current.dev)!==identity.dev||String(current.ino)!==identity.ino||
-        expected&&(expected.dev!==identity.dev||expected.ino!==identity.ino))fail('unsafe_database_file');
-      noCompanions(path);
-      const header=Buffer.alloc(100);
-      if(readSync(fd,header,0,100,0)!==100||header.subarray(0,16).toString('latin1')!=='SQLite format 3\0')fail('unsupported_database');
-      if(header[18]!==1||header[19]!==1)fail('unsafe_database_file');
-    };
-    check();
-    return {identity:Object.freeze(identity),check,close(){if(fd!==undefined){closeSync(fd);fd=undefined;}}};
-  }catch(error){if(fd!==undefined)closeSync(fd);if(error.code==='ENOENT')fail('method_not_found');throw error;}
+  // A pin is a checked identity, not a raw fd. Closing any raw descriptor on
+  // this inode would release all of this process's SQLite record locks.
+  const first=fileIdentity(path);regular(first);
+  const identity=filesystemIdentity(first);
+  const check=()=>{
+    const current=fileIdentity(path);regular(current);
+    if(String(current.dev)!==identity.dev||String(current.ino)!==identity.ino||
+      expected&&(expected.dev!==identity.dev||expected.ino!==identity.ino))fail('unsafe_database_file');
+    noCompanions(path);
+    if(current.size<100n)fail('unsupported_database');
+    let result;
+    try{result=probeRollbackJournal(path);}catch{fail('unsafe_database_file');}
+    if(result.code===14||result.mode&&result.mode!=='delete')fail('unsafe_database_file');
+    if(result.mode!=='delete')fail('unsupported_database');
+    const after=fileIdentity(path);regular(after);
+    if(after.dev!==first.dev||after.ino!==first.ino)fail('unsafe_database_file');
+    noCompanions(path);
+  };
+  check();
+  return {identity:Object.freeze(identity),check,close(){}};
 }
+
 export function storeIdentity(db) {
   let result;
   try{

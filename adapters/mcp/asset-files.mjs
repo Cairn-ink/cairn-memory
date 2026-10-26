@@ -1,6 +1,7 @@
-import { constants,openSync,closeSync,readSync } from 'node:fs';
+import { constants,openSync,closeSync } from 'node:fs';
 import { isAbsolute,dirname,basename,extname } from 'node:path';
 import { PATH_FLAGS,fdPath,sameFile,inspectFile,methodEntryName,probeMethodFileEnvironment,BINARY_MEDIA } from './method-package-files.mjs';
+import { isolatedFileRead } from '../../core/isolated-file-read.mjs';
 import { fail } from '../../core/validation.mjs';
 
 /** Separate explicit input channels; descriptors and original names survive review. */
@@ -19,11 +20,11 @@ export function prepareAssetFiles() {
     const root=inspectFile(parent,undefined,'directory');
     const fd=hold(openSync(`${fdPath(parent)}/${name}`,PATH_FLAGS)),saved={fd,parent,name,...inspectFile(fd,root.mount,'file')};
     if(saved.stat.size>BigInt(maximum))fail('invalid_input');
-    const data=hold(openSync(fdPath(fd),constants.O_RDONLY|constants.O_NONBLOCK));
-    const verify=()=>{for(const handle of [fd,data])if(!sameFile(saved.stat,inspectFile(handle,root.mount,'file').stat))fail('invalid_input');};
-    verify();const bytes=Buffer.alloc(Number(saved.stat.size));let offset=0;
-    while(offset<bytes.length){verify();const count=readSync(data,bytes,offset,Math.min(65536,bytes.length-offset),null);verify();if(!count)fail('invalid_input');offset+=count;}
-    if(readSync(data,Buffer.alloc(1),0,1,null)!==0)fail('invalid_input');verify();pins.push(saved);
+    const verify=()=>{if(!sameFile(saved.stat,inspectFile(fd,root.mount,'file').stat))fail('invalid_input');};
+    verify();
+    const {bytes,stat}=isolatedFileRead(`/proc/${process.pid}/fd/${fd}`,maximum,{expected:saved.stat});
+    if(!sameFile(saved.stat,stat))fail('invalid_input');
+    verify();pins.push(saved);
     if(binary)return bytes;
     let text;try{text=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(bytes);}catch{fail('invalid_input');}
     if(!json)return text;

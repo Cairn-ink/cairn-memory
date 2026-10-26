@@ -52,20 +52,17 @@ test('C12 new binary U3 terminal adoption and disable with dependency authoring 
 });
 
 
-test('review-card bounds dependency-file descriptor reads and rejects oversized and non-regular files',t=>{
+test('review-card bounds isolated dependency reads and rejects oversized and non-regular files',t=>{
  const f=fixture(t),path=join(f.dir,'oversized.json');writeFileSync(path,' '.repeat(1024*1024));
  const args=file=>['--db',f.path,'--owner','owner','--card','synthetic','--revision','2','--dependencies',file,'--dependency-revision','null'];
- const originalRead=fs.readSync,originalOpen=fs.openSync,originalClose=fs.closeSync;
- let selected,requested=0,read=0,closed=0;
- t.mock.method(fs,'openSync',function(file,...rest){const fd=originalOpen.call(this,file,...rest);if(file===path)selected=fd;return fd;});
- t.mock.method(fs,'readSync',function(fd,buffer,offset,length,...rest){if(fd===selected)requested+=length;const n=originalRead.call(this,fd,buffer,offset,length,...rest);if(fd===selected)read+=n;return n;});
- t.mock.method(fs,'closeSync',function(fd){if(fd===selected)closed++;return originalClose.call(this,fd);});
+ const originalOpen=fs.openSync;let hostDataOpens=0;
+ t.mock.method(fs,'openSync',function(file,...rest){if(file===path)hostDataOpens++;return originalOpen.call(this,file,...rest);});
  syncBuiltinESMExports();
  try {
-  assert.throws(()=>reviewCard(args(path)),/invalid_review_configuration/);assert.equal(requested,32769);assert.equal(read,32769);assert.equal(closed,1);assert.throws(()=>fs.fstatSync(selected),{code:'EBADF'});
+  assert.throws(()=>reviewCard(args(path)),/invalid_review_configuration/);assert.equal(hostDataOpens,0);
   const fifo=join(f.dir,'dependencies.fifo'),made=spawnSync('mkfifo',[fifo],{stdio:'ignore'});
   const special=made.status===0?fifo:'/dev/zero';assert.equal(fs.lstatSync(special).isFile(),false);
-  assert.throws(()=>reviewCard(args(special)),/invalid_review_configuration/);assert.equal(requested,32769);assert.equal(closed,1);
+  assert.throws(()=>reviewCard(args(special)),/invalid_review_configuration/);
   assert.throws(()=>reviewCard(args(f.dir)),/invalid_review_configuration/);
- } finally {fs.readSync=originalRead;fs.openSync=originalOpen;fs.closeSync=originalClose;syncBuiltinESMExports();}
+ } finally {fs.openSync=originalOpen;syncBuiltinESMExports();}
 });

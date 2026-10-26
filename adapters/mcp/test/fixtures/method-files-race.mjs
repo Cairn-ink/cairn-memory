@@ -2,9 +2,9 @@
 // boundaries; no test hooks or alternate reader are shipped in the importer.
 import fs from 'node:fs';
 import {syncBuiltinESMExports} from 'node:module';
-import {spawnSync} from 'node:child_process';
+import cp,{spawnSync} from 'node:child_process';
 const config=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
-const original={open:fs.openSync,read:fs.readSync,dir:fs.opendirSync};
+const original={open:fs.openSync,read:fs.readSync,dir:fs.opendirSync,spawn:cp.spawnSync};
 let rootMount,childMount,pathFd,sourceFd,directoryFd,changed=false,dataReads=0,specialSeen=false;
 fs.openSync=function(path,flags,...rest){
   if(String(path).endsWith('/SKILL.md')&&(flags&0x200000)){
@@ -35,6 +35,30 @@ fs.opendirSync=function(path,...args){
     changed=true;fs.renameSync(config.root+'/nested',config.outside+'/relocated');fs.symlinkSync(config.outside,config.root+'/nested');
   }
   return original.dir.call(this,path,...args);
+};
+cp.spawnSync=function(executable,args,options){
+  if(args[0]?.endsWith('/isolated-file-read-child.mjs')&&pathFd!==undefined){
+    const input=JSON.parse(options.input);
+    if(input.path===`/proc/${process.pid}/fd/${pathFd}`){
+      dataReads++;
+      const preload='data:text/javascript,'+encodeURIComponent(`
+        import fs from 'node:fs';import {syncBuiltinESMExports} from 'node:module';
+        const config=${JSON.stringify(config)},open=fs.openSync,read=fs.readSync;let data,changed=false;
+        const change=()=>{if(changed)return;changed=true;
+          if(config.mode==='path-swap'){fs.renameSync(config.root+'/SKILL.md',config.root+'/old');fs.symlinkSync(config.outside+'/SKILL.md',config.root+'/SKILL.md');}
+          if(config.mode==='link-change')fs.linkSync(config.root+'/SKILL.md',config.outside+'/hardlink');
+          if(config.mode==='growing')fs.appendFileSync(config.root+'/SKILL.md','x'.repeat(1_600_001));
+        };
+        fs.openSync=(path,...rest)=>{if(path===${JSON.stringify(input.path)}&&['path-swap','link-change'].includes(config.mode))change();const fd=open(path,...rest);if(path===${JSON.stringify(input.path)})data=fd;return fd;};
+        fs.readSync=(fd,...rest)=>{const n=read(fd,...rest);if(fd===data&&config.mode==='growing')change();return n;};
+        syncBuiltinESMExports();
+      `);
+      const result=original.spawn(executable,['--import',preload,...args],options);
+      if(['path-swap','link-change','growing'].includes(config.mode))changed=true;
+      return result;
+    }
+  }
+  return original.spawn(executable,args,options);
 };
 syncBuiltinESMExports();
 let prepared,outcome;
