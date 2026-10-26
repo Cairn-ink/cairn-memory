@@ -442,3 +442,142 @@ byte-identical results. The reader/Worker import closure check exited 0:
 52 required files, zero manifest misses; all three affected shipped docs are
 already registered. Final inventory and whitespace/path checks were repeated
 after this report update; no new entries are needed in the artifact manifest.
+
+
+## v1.1 fix round 1: public cancellation independent of native cleanup
+
+The preceding v1.1 work is committed as d89abc79. This uncommitted correction
+addresses Spec P1 and Standards' deadline qualification. The former host awaited
+Worker termination before settling read_timeout/store_closed. Worker termination
+cannot interrupt an active synchronous SQLite call, so that await could delay
+public cancellation even though the host loop remained responsive.
+
+### Implementation and review locations
+
+- core/memory-reader.mjs:10 detaches the old Worker before requesting termination
+  and tracks its cleanup promise. A synchronous native call may still run; its
+  later events cannot reach a request slot.
+- core/memory-reader.mjs:34 settles cancellation without awaiting cleanup;
+  core/memory-reader.mjs:74 invokes it directly in the watchdog callback.
+  core/memory-reader.mjs:39 also settles Worker failures independently of cleanup.
+- core/memory-reader.mjs:54 rejects messages from detached Workers. The identity
+  guard also rejects their late error/exit events.
+- core/memory-reader.mjs:76 guards deferred launches by slot identity, closure
+  and the new request's own deadline; core/memory-reader.mjs:86 waits for previous
+  cleanup before starting a replacement. This chooses one live Worker per handle
+  to avoid accumulating threads after repeated deadlines. One request may wait
+  for cleanup; another concurrent read still returns read_in_progress. Timed-out
+  and closed slots cannot launch later; cleanup failure prevents replacement.
+- core/memory-reader.mjs:93 settles the pending request with store_closed before
+  awaiting resource release. close() itself remains a cleanup promise, including
+  concurrent close calls, and can lag by the remaining native wait/step and
+  Worker shutdown. No native-interruption facility is introduced.
+
+The corrected [v1.1 contract](topic-overview-member-pages.md#e1-c2-additive-contract-v11-2026-10-27)
+bounds configured timeouts rather than synchronous completion. Public watchdog
+settlement occurs in the timer callback without awaiting native execution;
+normal host timer scheduling applies. Native waiting does not block the host
+loop. The 1000ms cap, 20ms reserve, DELETE zero wait, header detector, diagnostic
+shape/classification, schema support and read-only policy are unchanged.
+
+### Native cancellation coverage
+
+The new core/test/topic-reader-cancellation.test.mjs drives the actual public
+host dispatch/cancellation implementation. Its test-only Worker is
+core/test/fixtures/topic-reader-native-wait-worker.mjs. A read-only connection
+executes a real SQLite query against an owned file held by an EXCLUSIVE lock.
+An outer in-memory SQLite UDF signals that native execution has entered; the
+inner query is genuinely blocked by SQLite, rather than Atomics.wait or a fake
+clock pretending to be a native call. The fixture uses DELETE locking only to
+force this known native wait; this is not a production WAL-contention claim.
+Its 5000ms timeout is test-only and does not change the reader's wait policy.
+
+- core/test/topic-reader-cancellation.test.mjs:82 covers both overview and members:
+  pending store_closed settles while close() and concurrent close remain pending.
+- core/test/topic-reader-cancellation.test.mjs:103 exercises the watchdog, an
+  expired request waiting for cleanup, read_in_progress, and successful
+  replacement only after cleanup. An explicit termination latch lets the blocked
+  query finish and send a genuine abandoned reply while the new slot is pending;
+  that reply is observed by the test and ignored by the public host.
+- core/test/topic-reader-cancellation.test.mjs:129 covers both close and watchdog
+  using actual Worker.terminate(), without the termination latch. Public results
+  settle while real termination still waits for the blocked native call.
+- core/test/topic-reader-cancellation.test.mjs:146 closes a request waiting for
+  cleanup and proves its deferred launch never starts a Worker.
+
+The fixture deliberately retains its read transaction after the late reply.
+A zero-wait native EXCLUSIVE probe gets SQLite 5 while the Worker remains alive;
+the same lock acquisition succeeds after termination. This verifies eventual
+native resource release. Host event-loop turns and controlled watchdog callbacks
+establish ordering, without elapsed-time/p95/throughput acceptance gates. Owned
+locks, Workers and ports are released on assertion failure as well as success.
+
+### Commands and verification
+
+Focused command (exit 0 on each run; tests grew from 3 to 5 to 6 as native
+coverage was completed):
+
+~~~sh
+node --test core/test/topic-reader-cancellation.test.mjs
+~~~
+
+Exact requested regression command (output redirected, rc captured before
+printing its tail):
+
+~~~sh
+node --test --test-concurrency=1 core/test/topic-reader-cancellation.test.mjs core/test/topic-overview.test.mjs core/test/topic-overview-lifecycle.test.mjs core/test/topic-overview-raw29.test.mjs core/test/topic-overview-visibility.test.mjs core/test/topic-members.test.mjs core/test/topic-members-bounds.test.mjs core/test/topic-members-compatibility.test.mjs core/test/topic-members-integration.test.mjs core/test/topic-members-mutations.test.mjs core/test/topic-members-primary.test.mjs core/test/topic-members-recheck-findings.test.mjs core/test/topic-members-review-findings.test.mjs core/test/topic-members-round3-findings.test.mjs core/test/topic-members-scale.test.mjs core/test/topic-members-visibility.test.mjs
+~~~
+
+The final exit, count and inventory checks are recorded below after completion.
+No smoke, full measurement, broad suite, network access or key read was performed.
+No other session's tests or fixtures were edited. The new Worker fixture is
+strictly test-only and is not a new runtime dependency or shipped artifact.
+
+
+### v1.1 cancellation fix: final result and delivery inventory
+
+The exact explicit regression command above exited **0**, **217/217 passed**,
+on Node v22.16.0 (node --version exit 0). Its path inventory independently
+matches all 15 existing topic-overview/topic-members files from rg --files,
+plus the new cancellation test: 16 files total. The legacy b2513501 comparisons
+remain unchanged and passed: 184 comparisons, zero differences; 154 fault
+comparisons, zero differences. No old test or assertion was weakened or edited.
+
+Changed paths were derived mechanically using git diff --name-only HEAD plus
+git ls-files --others --exclude-standard, then independently from git status
+--porcelain=v1 -z. Exact set equality: **6 files**, exit 0 (including the new
+native Worker fixture). Whitespace and machine-local-path checks cover every
+changed and untracked file, exit 0. No new runtime module or shipped doc was
+introduced; the fixture and its driver are test-only.
+
+~~~text
+core/memory-reader.mjs
+core/test/fixtures/topic-reader-native-wait-worker.mjs
+core/test/topic-reader-cancellation.test.mjs
+docs/plans/topic-overview-member-pages.md
+docs/plans/topic-reader-wal-fix.md
+docs/topic-overview.md
+~~~
+
+Syntax commands (each exit 0):
+
+~~~sh
+node --check core/memory-reader.mjs
+node --check core/test/topic-reader-cancellation.test.mjs
+node --check core/test/fixtures/topic-reader-native-wait-worker.mjs
+~~~
+
+An inline byte comparison against HEAD exited 0 for core/topic-reader-sqlite.mjs,
+tools/testing/measure-topic-reader-wal.mjs and its test: configured waits,
+measurement thresholds, latency tail and IPC behavior are untouched. No full
+performance acceptance is claimed in this cancellation-only correction.
+
+
+Closure/manifest verification exited 0: installedImportClosure and an independent
+Python literal-import/Worker-URL traversal agreed on all 52 reader closure
+files; zero are missing from the artifact manifest. All three modified shipped
+docs remain registered; the new test fixture is absent from the runtime closure.
+git diff --check and the independent whitespace/local-path scan exited 0. The
+six-file inventory was rechecked after this report update. Temporary evidence
+was removed after recording the verified results; no tests or native Workers
+remain running. No commit was made.

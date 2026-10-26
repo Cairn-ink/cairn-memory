@@ -954,8 +954,9 @@ Before each native prepare/execution or iterator step, including rollback,
 install max(0, floor(cutoff - now)) milliseconds of native busy timeout. Opening,
 queries and fence checks consume the same budget; statements never reset it.
 Equivalently the initial budget is max(0, min(remaining deadline, 1000ms) - 20ms),
-so native waiting is at most 980ms. An exhausted or reserve-only budget means
-zero wait.
+so the configured native wait is at most 980ms. This bounds timeout parameters,
+not synchronous call completion. An exhausted or reserve-only budget means zero
+wait.
 
 Members use the deadline derived from their deadlineMs at host dispatch.
 Overview, including legacy overview with no deadline input, uses its existing
@@ -964,11 +965,29 @@ wait budget is computed.
 
 The 20ms reserve leaves four normal 5ms quanta of headroom for rollback,
 constructing the small failure envelope, posting it and host delivery. It does
-not extend the deadline; existing watchdog termination remains the fallback
-when scheduling or processing exhausts it.
+not extend the deadline; the host watchdog settles the public result without
+waiting for Worker termination when scheduling or processing exhausts it.
 
-Waiting remains entirely inside the reader Worker, cancellable through the
-existing watchdog/close path. Busy exhaustion retains storage_busy under the
-existing error classification; watchdog cancellation remains read_timeout.
-DELETE retains zero wait. No journal-mode change, migration, write opener or
-additional application retry is introduced.
+Waiting remains entirely inside the reader Worker. Watchdog cancellation
+settles the pending public request with read_timeout in the host timer callback,
+without awaiting native completion or Worker termination. Calling close()
+settles a pending request immediately with store_closed. The host loop performs
+no native SQLite wait; normal host timer scheduling still applies.
+
+On cancellation the Worker is detached immediately, its late replies/errors/
+exit events are ignored, and termination continues on a tracked cleanup promise.
+A synchronous native SQLite wait or step cannot be pre-empted: resource release
+can lag until that active call returns and Worker termination completes. close()
+itself is a resource-release promise and resolves only after that cleanup; it
+can therefore take the remaining active native wait or step plus termination.
+
+A new request on the same open handle uses its own deadline while waiting for
+the old Worker's cleanup before launching a replacement. There is at most one
+live Worker per handle, and one admitted pending request across both methods;
+concurrent reads still return read_in_progress. A queued request that times out
+or is closed settles immediately and cannot later launch a Worker. Failed
+cleanup never starts a replacement.
+
+Busy exhaustion retains storage_busy under existing error classification.
+DELETE retains zero wait. No journal-mode change, migration, write opener,
+additional application retry or native-interruption mechanism is introduced.
