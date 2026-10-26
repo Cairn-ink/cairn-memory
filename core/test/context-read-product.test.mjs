@@ -14,6 +14,7 @@ import { migrateMethodPrerequisites } from '../method-package-migration.mjs';
 import { installAssets } from '../asset-schema.mjs';
 import { installRoleProfiles } from '../role-profile-schema.mjs';
 import { installCardCurrentDependencies } from '../card-current-schema.mjs';
+import { validateContextProductLayout } from '../context-product-schema.mjs';
 
 const moduleUrl = new URL('../testing/context-product-host.mjs', import.meta.url).href;
 function configured(t, path, patch = {}, readSet = [ns], credential = { nonce: randomUUID() }) {
@@ -43,11 +44,10 @@ const fingerprint = path => {
   } finally { db.close(); }
 };
 
-for (const version of [18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]) test(`P2-02/04/05 real Worker physical v${version} canonical fetch, no sidecar or migration`, async t => {
-  const f = fixture(t), memory = f.admit('Ｆｕｌｌ width canonical body'); f.core.close();
-  if (version <= 29) installOverviewLayout(f.path, version);
+function installVersion(path, version) {
+  if (version <= 29) installOverviewLayout(path, version);
   else {
-    const db = openDatabase(f.path);
+    const db = openDatabase(path);
     try {
       migrateMethodPrerequisites(db);
       if (version >= 31) { installAssets(db); db.exec('PRAGMA user_version=31'); }
@@ -55,6 +55,11 @@ for (const version of [18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 3
       if (version >= 33) { installCardCurrentDependencies(db); db.exec('PRAGMA user_version=33'); }
     } finally { db.close(); }
   }
+}
+
+for (const version of [18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]) test(`P2-02/04/05 real Worker physical v${version} canonical fetch, no sidecar or migration`, async t => {
+  const f = fixture(t), memory = f.admit('Ｆｕｌｌ width canonical body'); f.core.close();
+  installVersion(f.path, version);
   const canonical = f.db.prepare('SELECT content FROM memories WHERE id=?').get(memory.id).content;
   const before = fingerprint(f.path), config = configured(t, f.path), reader = await config.open();
   const capabilities = ok(await reader.getContextReadCapabilities());
@@ -277,4 +282,47 @@ for (const dimension of ['depth', 'nodes']) test(`P2-28 real Worker accepts cred
   assert.equal((await reader.fetchCandidateEvidence(fetchInput(memory), credential)).ok, true);
   const oversized = dimension === 'nodes' ? Array(8192).fill(0) : [credential];
   denied(await reader.fetchCandidateEvidence(fetchInput(memory), oversized), 'invalid_input');
+});
+
+for (const stage of ['authorize', 'entry', 'final']) test(`P2-26 real Worker observes rejected ${stage} Promise and remains healthy`, async t => {
+  const f = fixture(t), memory = f.admit('canonical'), config = configured(t, f.path);
+  config.options.host.configuration.rejectedAuthorityAt = stage;
+  const reader = await config.open();
+  denied(await reader.fetchCandidateEvidence(fetchInput(memory), config.credential), stage === 'final' ? 'scope_changed' : 'authority_required');
+  assert.equal(config.view[1], stage === 'authorize' ? 0 : stage === 'entry' ? 1 : 2);
+  assert.equal(config.view[7], 0);
+  assert.equal((await reader.getContextReadCapabilities()).ok, true);
+  // Graceful close requires the real Worker to exit zero after rejection checks.
+  await reader.close();
+  assert.ok((await config.supervisor.drain()).every(record => record.state === 'complete'));
+});
+
+for (const version of [18,20,21,22,23,24,25,26,27,28,29,30,31,32,33]) test(`P2-05 v${version} attests every required partial predicate`, t => {
+  const f = fixture(t); f.core.close(); installVersion(f.path, version);
+  const db = new DatabaseSync(f.path);
+  try {
+    validateContextProductLayout(db);
+    const required = db.prepare("SELECT name,sql FROM sqlite_schema WHERE type='index' AND name IN ('active_identity','capture_current_memories') ORDER BY name").all();
+    assert.equal(required.length, 2);
+    for (const { name, sql } of required) {
+      for (const mutation of [sql.replace(/deleted\s*=\s*0/i, 'deleted=1'), sql.replace(/\s+WHERE[\s\S]*$/i, '')]) {
+        assert.notEqual(mutation, sql);
+        db.exec(`DROP INDEX ${name}`); db.exec(mutation);
+        assert.throws(() => validateContextProductLayout(db), { code: 'unsupported_database' });
+        db.exec(`DROP INDEX ${name}`); db.exec(sql);
+        validateContextProductLayout(db);
+      }
+    }
+  } finally { db.close(); }
+});
+
+for (const predicate of ['WHERE deleted=1', '']) test(`P2-05 real Worker refuses active_identity predicate ${predicate || 'absent'}`, async t => {
+  const f = fixture(t); f.core.close();
+  const db = new DatabaseSync(f.path);
+  try { db.exec(`DROP INDEX active_identity; CREATE UNIQUE INDEX active_identity ON memories(owner_id,scope,project_id,fingerprint) ${predicate}`); }
+  finally { db.close(); }
+  const config = configured(t, f.path); let failure;
+  await config.open().catch(error => { failure = error; });
+  assert.equal(failure?.code, 'unsupported_database');
+  assert.equal((await config.supervisor.drain(failure.cleanupId)).state, 'complete');
 });

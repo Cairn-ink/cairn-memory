@@ -330,3 +330,118 @@ manifest and untracked runtime/test fixture. No commit was created.
 - `core/test/fixtures/context-product-errors.mjs`
 - `docs/plans/context-read-p2a-impl.md`
 - `packaging/artifact-files.json`
+
+## Fix round 2
+
+This revision fixes the two re-reviews of `ed0211d1` against the unchanged
+v1.1 contract. Frozen specification sections, the topic SQLite implementation
+and the sidecar `walHeader` probe remain unchanged. No commit was created.
+
+| Finding | Fix | Deterministic regression coverage |
+| --- | --- | --- |
+| P1 forged/accessor-backed signals and registration reentry | After rejecting proxies, require the exact native signal prototype, the own-key set captured from a fresh controller at module load, and data descriptors for every own property. Only then invoke the captured `aborted` getter. This rejects copied state on ordinary objects, symbol accessors, extra hooks and caller method overrides without invoking them; deriving keys at runtime avoids depending on one Node version's symbol inventory. Recheck reader/owner/slot ownership immediately after registration. Put every post-registration check in supervised cleanup. | P2-03 control tests exercise copied symbol state, every native own key replaced by a throwing accessor, an actual runtime listener-hook symbol, proxies and own overrides at open/method entry. Forced close inside native registration spawns/posts nothing, disposes the returned subscription and drains to zero live records. Late descriptor mutation after registration and timer setup failures also release all records. |
+| P1 suppressible cancellation | Register with `node:events` `addAbortListener`, dispose its handle on settlement and in `finally`, and check native aborted state immediately before accepting a final envelope. | P2-03 installs an earlier `stopImmediatePropagation()` listener. Abort still settles `read_cancelled`; late success is discarded. Separate tests remove the protected listener to prove the final acceptance guard independently, for opening and method results. Listener inventories verify disposal; mock clocks and termination gates verify cleanup without timing gates. |
+| P2 SharedArrayBuffer validation executes user code | Classify with `util.types.isSharedArrayBuffer` after `isProxy`, require the exact supported prototype and inspect own descriptors before native reads. Capture `growable` and `byteLength` intrinsic getters; use the native length getter for the request reservation too. | P2-28 refuses proxy instances, objects and buffers with proxy prototypes, own accessor overrides and growable buffers. A replaced prototype getter is never called; the captured getter still validates a genuine fixed buffer. All caller trap/getter counters stay zero. |
+| P2 rejected authority Promises become unhandled rejections | Identify native Promises with `util.types.isPromise` and observe rejection with captured `Promise.prototype.then`, without reading their own `then`. Keep synchronous refusal and the existing sample protocol. Non-native thenables remain refused without calling `then`. | P2-26 covers authorize, entry currentness and final currentness with rejected native Promises whose own `then` throws, plus refused non-native thenables. Exact sample counts remain 0/1/2 and errors remain `authority_required`/`scope_changed`. Real engine Workers return the prescribed errors, serve a subsequent capability request and close gracefully with confirmed cleanup. |
+| P2 partial-index predicates are not attested | Include token-normalized predicates from `sqlite_schema.sql` in required partial-index metadata, preserving quoted literal bytes while normalizing SQL keyword case and spacing. | P2-05 validates both required partial indexes at all 15 accepted versions, then flips `deleted=0` to `deleted=1` and drops `WHERE`, independently restoring and revalidating each index. Real Workers refuse both `active_identity` mutations as `unsupported_database` and drain the failed opening. Existing genuine-version tests still fetch successfully. |
+
+### Round-2 verification
+
+Verified runtime executables report **22.16.0** and **24.22.1**. No network,
+keys, package installation, broad suite or timing acceptance gate was used.
+The prescribed paths were independently derived by filesystem glob and
+`rg --files`: **41 files**, no difference. Each test ran as a separate child
+with an explicit file path; its actual process return code was captured.
+
+Node **22.16.0**: **620 passed**, zero failed, cancelled or skipped across all
+41 prescribed files. `node` in the following table denotes that verified
+runtime. The sequential 40-file runner exited **0**; the separately executed
+product file exited **0**.
+
+| Explicit command | Actual exit | Tests passed |
+| --- | --- | --- |
+| `node core/test/context-read-assembly-races.test.mjs` | 0 | 7 |
+| `node core/test/context-read-assembly-readonly.test.mjs` | 0 | 28 |
+| `node core/test/context-read-assembly.test.mjs` | 0 | 20 |
+| `node core/test/context-read-bm25.test.mjs` | 0 | 3 |
+| `node core/test/context-read-budget.test.mjs` | 0 | 5 |
+| `node core/test/context-read-core.test.mjs` | 0 | 26 |
+| `node core/test/context-read-embedder.test.mjs` | 0 | 5 |
+| `node core/test/context-read-fusion.test.mjs` | 0 | 4 |
+| `node core/test/context-read-local-embedder.test.mjs` | 0 | 38 |
+| `node core/test/context-read-local-status.test.mjs` | 0 | 3 |
+| `node core/test/context-read-moc-source.test.mjs` | 0 | 15 |
+| `node core/test/context-read-process.test.mjs` | 0 | 1 |
+| `node core/test/context-read-product-artifact.test.mjs` | 0 | 1 |
+| `node core/test/context-read-product-control.test.mjs` | 0 | 66 |
+| `node core/test/context-read-product.test.mjs` | 0 | 81 |
+| `node core/test/context-read-recovery.test.mjs` | 0 | 10 |
+| `node core/test/context-read-review.test.mjs` | 0 | 10 |
+| `node core/test/context-read-sidecar.test.mjs` | 0 | 16 |
+| `node core/test/context-read-source-work.test.mjs` | 0 | 7 |
+| `node core/test/context-read-sources-authority.test.mjs` | 0 | 6 |
+| `node core/test/context-read-sources-bounds.test.mjs` | 0 | 5 |
+| `node core/test/context-read-sources-races.test.mjs` | 0 | 16 |
+| `node core/test/context-read-sources.test.mjs` | 0 | 14 |
+| `node core/test/context-read-tokenize.test.mjs` | 0 | 2 |
+| `node core/test/topic-members-bounds.test.mjs` | 0 | 7 |
+| `node core/test/topic-members-compatibility.test.mjs` | 0 | 32 |
+| `node core/test/topic-members-integration.test.mjs` | 0 | 1 |
+| `node core/test/topic-members-mutations.test.mjs` | 0 | 20 |
+| `node core/test/topic-members-primary.test.mjs` | 0 | 26 |
+| `node core/test/topic-members-recheck-findings.test.mjs` | 0 | 33 |
+| `node core/test/topic-members-review-findings.test.mjs` | 0 | 7 |
+| `node core/test/topic-members-round3-findings.test.mjs` | 0 | 18 |
+| `node core/test/topic-members-scale.test.mjs` | 0 | 2 |
+| `node core/test/topic-members-visibility.test.mjs` | 0 | 10 |
+| `node core/test/topic-members.test.mjs` | 0 | 10 |
+| `node core/test/topic-overview-lifecycle.test.mjs` | 0 | 11 |
+| `node core/test/topic-overview-raw29.test.mjs` | 0 | 22 |
+| `node core/test/topic-overview-visibility.test.mjs` | 0 | 8 |
+| `node core/test/topic-overview.test.mjs` | 0 | 4 |
+| `node core/test/topic-reader-cancellation.test.mjs` | 0 | 6 |
+| `node core/test/topic-reader-sqlite.test.mjs` | 0 | 14 |
+
+Node **24.22.1**:
+
+| Explicit command | Actual exit | Tests passed |
+| --- | --- | --- |
+| `node core/test/context-read-product-control.test.mjs` | 0 | 66 |
+| `node --test-name-pattern='P2-26 real Worker observes rejected' core/test/context-read-product.test.mjs` | 0 | 3 |
+
+An additional Node **22.16.0** final-parent check,
+`node --test-name-pattern='P2-26 real Worker observes rejected|physical v18 canonical' core/test/context-read-product.test.mjs`,
+exited **0**, with **4/4 passed**. These focused reruns are not added to the
+620-test inventory. Developing control runs passed before the additional
+post-registration/opening regressions were added; final counts above describe
+the complete control file. No test run failed in this fix round.
+
+The installed-artifact test compared **296** manifest entries to the archive
+filesystem, with tar creation/extraction exits **0/0**. Source and installed
+runtime/Worker closures both contain **79** modules; the static SQLite-free
+closure contains **22**. All modified shipped modules and this existing plan
+are already in the manifest; no new shipped file was introduced.
+
+`node --check` for each of the **7** changed JavaScript files exited **0**.
+`git diff --check` exited **0**. The independent whitespace/final-newline scan
+covers all **8** changed files, including any untracked paths; no added private
+absolute paths were found. Frozen/protected-file diff checks exited **0**.
+These are functional checks; full CI and performance qualification are not
+claimed.
+
+### Round-2 changed-file cross-check
+
+Route one: `git diff --name-only -z` plus
+`git ls-files --others --exclude-standard -z`. Route two:
+`git status --porcelain=v1 -z`. The independently sorted lists match exactly;
+`diff -u` exited **0**, with **8 files**, including documentation. No commit
+was created.
+
+- `core/context-product-authority.mjs`
+- `core/context-product-control.mjs`
+- `core/context-product-reader.mjs`
+- `core/context-product-schema.mjs`
+- `core/test/context-read-product-control.test.mjs`
+- `core/test/context-read-product.test.mjs`
+- `core/testing/context-product-host.mjs`
+- `docs/plans/context-read-p2a-impl.md`

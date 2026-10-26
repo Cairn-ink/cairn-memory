@@ -117,7 +117,7 @@ const tables = {
   "card_current_dependencies": 33
 };
 const layouts = {
-  memories: [[18,{"columns":[["id","TEXT",1,1],["owner_id","TEXT",1,0],["scope","TEXT",1,0],["project_id","TEXT",1,0],["fingerprint","TEXT",1,0],["content","TEXT",0,0],["kind","TEXT",1,0],["origin","TEXT",1,0],["confidence","REAL",1,0],["revision","INTEGER",1,0],["deleted","INTEGER",1,0],["created_at","TEXT",1,0],["updated_at","TEXT",1,0],["filing_status","TEXT",1,0],["currentness","TEXT",1,0],["review_state","TEXT",1,0]],"indexes":[{"name":"active_identity","unique":1,"origin":"c","partial":1,"keys":[["owner_id",0,"BINARY"],["scope",0,"BINARY"],["project_id",0,"BINARY"],["fingerprint",0,"BINARY"]]},{"name":"capture_current_memories","unique":0,"origin":"c","partial":1,"keys":[["owner_id",0,"BINARY"],["scope",0,"BINARY"],["project_id",0,"BINARY"],["id",0,"BINARY"]]},{"name":"index_memory_keyset","unique":0,"origin":"c","partial":0,"keys":[["owner_id",0,"BINARY"],["scope",0,"BINARY"],["project_id",0,"BINARY"],["id",0,"BINARY"]]},{"name":"namespace_memories","unique":0,"origin":"c","partial":0,"keys":[["owner_id",0,"BINARY"],["scope",0,"BINARY"],["project_id",0,"BINARY"],["deleted",0,"BINARY"],["updated_at",1,"BINARY"],["id",0,"BINARY"]]},{"name":"sqlite_autoindex_memories_1","unique":1,"origin":"pk","partial":0,"keys":[["id",0,"BINARY"]]}]}]],
+  memories: [[18,{"columns":[["id","TEXT",1,1],["owner_id","TEXT",1,0],["scope","TEXT",1,0],["project_id","TEXT",1,0],["fingerprint","TEXT",1,0],["content","TEXT",0,0],["kind","TEXT",1,0],["origin","TEXT",1,0],["confidence","REAL",1,0],["revision","INTEGER",1,0],["deleted","INTEGER",1,0],["created_at","TEXT",1,0],["updated_at","TEXT",1,0],["filing_status","TEXT",1,0],["currentness","TEXT",1,0],["review_state","TEXT",1,0]],"indexes":[{"name":"active_identity","unique":1,"origin":"c","partial":1,"predicate":["deleted","=","0"],"keys":[["owner_id",0,"BINARY"],["scope",0,"BINARY"],["project_id",0,"BINARY"],["fingerprint",0,"BINARY"]]},{"name":"capture_current_memories","unique":0,"origin":"c","partial":1,"predicate":["deleted","=","0","and","currentness","=","'current'"],"keys":[["owner_id",0,"BINARY"],["scope",0,"BINARY"],["project_id",0,"BINARY"],["id",0,"BINARY"]]},{"name":"index_memory_keyset","unique":0,"origin":"c","partial":0,"keys":[["owner_id",0,"BINARY"],["scope",0,"BINARY"],["project_id",0,"BINARY"],["id",0,"BINARY"]]},{"name":"namespace_memories","unique":0,"origin":"c","partial":0,"keys":[["owner_id",0,"BINARY"],["scope",0,"BINARY"],["project_id",0,"BINARY"],["deleted",0,"BINARY"],["updated_at",1,"BINARY"],["id",0,"BINARY"]]},{"name":"sqlite_autoindex_memories_1","unique":1,"origin":"pk","partial":0,"keys":[["id",0,"BINARY"]]}]}]],
   memory_qualifications: [[18,{"columns":[["memory_id","TEXT",1,1],["version","INTEGER",1,0],["bound_revision","INTEGER",1,0],["content_digest","TEXT",1,0],["subject","TEXT",0,0],["property","TEXT",0,0],["scope","TEXT",0,0],["applies","TEXT",0,0],["value","TEXT",0,0],["attribution","TEXT",1,0],["commitment","TEXT",1,0],["anchor_count","INTEGER",1,0]],"indexes":[{"name":"sqlite_autoindex_memory_qualifications_1","unique":1,"origin":"pk","partial":0,"keys":[["memory_id",0,"BINARY"]]}]}]],
   namespace_epochs: [[18,{"columns":[["owner_id","TEXT",1,1],["scope","TEXT",1,2],["project_id","TEXT",1,3],["epoch","INTEGER",1,0]],"indexes":[{"name":"sqlite_autoindex_namespace_epochs_1","unique":1,"origin":"pk","partial":0,"keys":[["owner_id",0,"BINARY"],["scope",0,"BINARY"],["project_id",0,"BINARY"]]}]}]],
   qualification_anchors: [[18,{"columns":[["memory_id","TEXT",1,1],["ordinal","INTEGER",1,2],["receipt_id","TEXT",1,0],["receipt_digest","TEXT",1,0],["start","INTEGER",1,0],["end","INTEGER",1,0],["fields","TEXT",1,0]],"indexes":[{"name":"qualification_receipts","unique":0,"origin":"c","partial":0,"keys":[["receipt_id",0,"BINARY"]]},{"name":"sqlite_autoindex_qualification_anchors_1","unique":1,"origin":"pk","partial":0,"keys":[["memory_id",0,"BINARY"],["ordinal",0,"BINARY"]]}]}]],
@@ -158,12 +158,22 @@ const layouts = {
   card_current_dependencies: [[33,{"columns":[["card_id","TEXT",1,1],["owner_id","TEXT",1,0],["scope","TEXT",1,0],["project_id","TEXT",1,0],["revision","INTEGER",1,0],["card_revision","INTEGER",1,0],["body_revision","INTEGER",1,0],["context","TEXT",1,0],["vector","TEXT",1,0]],"indexes":[{"name":"card_current_namespace","unique":0,"origin":"c","partial":0,"keys":[["owner_id",0,"BINARY"],["scope",0,"BINARY"],["project_id",0,"BINARY"],["card_id",0,"BINARY"]]},{"name":"sqlite_autoindex_card_current_dependencies_1","unique":1,"origin":"pk","partial":0,"keys":[["card_id",0,"BINARY"]]}]}]],
 };
 
+// Tokenize rather than strip whitespace inside literals (which changes meaning).
+// Unknown spellings fail closed; only canonical installer predicates attest.
+function indexPredicate(sql) {
+  const tokens = (sql ?? '').match(/'(?:''|[^'])*'|"(?:""|[^"])*"|`(?:``|[^`])*`|\[[^\]]*\]|[A-Za-z_][A-Za-z_0-9]*|[0-9]+|[^\s]/g) ?? [];
+  const normalized = tokens.map(token => /^[A-Za-z_]/.test(token) ? token.toLowerCase() : token);
+  const where = normalized.indexOf('where');
+  return where < 0 ? null : normalized.slice(where + 1);
+}
+
 export function validateContextProductLayout(db) {
   const version = db.prepare('PRAGMA user_version').get().user_version;
   if (![18,20,21,22,23,24,25,26,27,28,29,30,31,32,33].includes(version)) fail('unsupported_database');
   const present = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?");
   const columns = db.prepare('SELECT name,type,"notnull",pk FROM pragma_table_info(?) ORDER BY cid');
   const indexes = db.prepare('SELECT name,"unique",origin,partial FROM pragma_index_list(?) ORDER BY name');
+  const indexSql = db.prepare("SELECT sql FROM sqlite_schema WHERE type='index' AND name=?");
   const keys = db.prepare('SELECT name,"desc",coll FROM pragma_index_xinfo(?) WHERE key=1 ORDER BY seqno');
   for (const [name, first] of Object.entries(tables)) {
     if (Boolean(present.get(name)) !== (version >= first)) fail('unsupported_database');
@@ -172,7 +182,8 @@ export function validateContextProductLayout(db) {
     const actualColumns = columns.all(name).map(r => [r.name,r.type,r.notnull,r.pk]);
     if (JSON.stringify(actualColumns) !== JSON.stringify(expected.columns) ||
         db.prepare('SELECT strict FROM pragma_table_list WHERE schema=? AND name=?').get('main', name)?.strict !== 1) fail('unsupported_database');
-    const actualIndexes = indexes.all(name).map(r => ({ ...r, keys: keys.all(r.name).map(k => [k.name,k.desc,k.coll]) }));
+    const actualIndexes = indexes.all(name).map(r => ({ ...r, ...(r.partial ? { predicate: indexPredicate(indexSql.get(r.name)?.sql) } : {}),
+      keys: keys.all(r.name).map(k => [k.name,k.desc,k.coll]) }));
     for (const index of expected.indexes) {
       if (!actualIndexes.some(actual => JSON.stringify(actual) === JSON.stringify(index))) fail('unsupported_database');
     }

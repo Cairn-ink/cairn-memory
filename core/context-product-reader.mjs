@@ -1,4 +1,5 @@
 import { types } from 'node:util';
+import { addAbortListener } from 'node:events';
 import { Worker } from 'node:worker_threads';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isAbsolute, resolve } from 'node:path';
@@ -17,11 +18,18 @@ const codes = new Set(['invalid_input', 'invalid_read_set', 'authority_required'
 export const productFailure = code => ({ ok: false, error: { code: codes.has(code) ? code : 'reader_failed', retryable: code === 'storage_busy' } });
 const coded = (code, cleanupId) => Object.assign(Error(codes.has(code) ? code : 'reader_failed'), { code: codes.has(code) ? code : 'reader_failed', ...(cleanupId ? { cleanupId } : {}) });
 const aborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted').get;
-const addListener = EventTarget.prototype.addEventListener;
-const removeListener = EventTarget.prototype.removeEventListener;
+// Node's native brand check alone accepts copied symbol state. Inspect shape
+// before invoking any native getter or listener machinery; never read accessors.
+const signalPrototype = AbortSignal.prototype;
+const sharedLength = Object.getOwnPropertyDescriptor(SharedArrayBuffer.prototype, 'byteLength').get;
+const signalKeys = new Set(Reflect.ownKeys(new AbortController().signal));
 function signalAborted(signal) {
   if (signal === undefined) return false;
-  if (types.isProxy(signal)) fail('invalid_input');
+  if (!signal || typeof signal !== 'object' || types.isProxy(signal) ||
+      Object.getPrototypeOf(signal) !== signalPrototype) fail('invalid_input');
+  const keys = Reflect.ownKeys(signal);
+  if (keys.length !== signalKeys.size || keys.some(key => !signalKeys.has(key) ||
+      !Object.hasOwn(Object.getOwnPropertyDescriptor(signal, key), 'value'))) fail('invalid_input');
   try { return Reflect.apply(aborted, signal, []); } catch { fail('invalid_input'); }
 }
 const nativeWorker = data => new Worker(new URL('./context-product-worker.mjs', import.meta.url), {
@@ -66,7 +74,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       host: { moduleUrl: host.moduleUrl, configuration }, operation: first, frame, resources, deadlineMs: openDeadline };
     hostConfiguration(openingData);
     const reservation = configuration.requestReservation;
-    if (!(reservation instanceof SharedArrayBuffer) || reservation.byteLength !== 4 ||
+    if (!types.isSharedArrayBuffer(reservation) || Reflect.apply(sharedLength, reservation, []) !== 4 ||
         Atomics.compareExchange(new Int32Array(reservation), 0, 0, 1) !== 0) fail('authority_required');
     const resource = registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, request, frame, resources });
     let closed = false, terminal, idle, closePromise, ready = false;
@@ -121,9 +129,13 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       } catch { shutdown('reader_failed'); return; }
       // Acceptance is checked again after bounded response validation.
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
+      try { if (signalAborted(slot.signal)) { shutdown('read_cancelled'); return; } }
+      catch { shutdown('invalid_input'); return; }
       if (slot.open && !result.ok) { shutdown(result.error.code); return; }
       if (!slot.open) registry.finish(slot.record);
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
+      try { if (signalAborted(slot.signal)) { shutdown('read_cancelled'); return; } }
+      catch { shutdown('invalid_input'); return; }
       lifecycle.finish(slot, result);
       instance.unref(); idle = setTimer(() => shutdown('store_closed'), 60000); idle.unref?.(); lifecycle.idle = idle;
     }
@@ -140,24 +152,33 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
           if (JSON.stringify(contextReadSet(input.readSet)) !== JSON.stringify(readSet)) fail('invalid_read_set');
           duration = deadline(input.deadlineMs);
         } else duration = openDeadline;
-      } catch (error) { return Promise.resolve(productFailure(error.code)); }
+      } catch (error) {
+        if (opening) shutdown(error.code ?? 'reader_failed');
+        return Promise.resolve(productFailure(error.code));
+      }
       if (lifecycle.pending) return Promise.resolve(productFailure('read_in_progress'));
       const operation = opening ? first : operationRecord(request, entered, duration, epoch);
       const callFrame = opening ? frame : options.diagnostics ? nativeTelemetry(operation.operationId, epoch) : null;
       const outbound = opening ? openingData : { method, input, credential: token, request, operation, frame: callFrame };
       operationMessage(outbound);
       const record = opening ? resource : registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, parent: resource, frame: callFrame });
-      if (signalAborted(signal)) {
-        if (!opening) registry.finish(record);
-        shutdown('read_cancelled'); return Promise.resolve(productFailure('read_cancelled'));
-      }
-      clearTimer(idle);
+      let subscription;
+      const detach = () => {
+        const previous = subscription; subscription = undefined;
+        previous?.[Symbol.dispose]();
+      };
       return new Promise(resolve => {
-        const slot = { resolve, operation, record, open: opening }; lifecycle.pending = slot;
+        const slot = { resolve, operation, record, signal, open: opening, detach }; lifecycle.pending = slot;
         const abort = () => shutdown('read_cancelled');
-        slot.detach = () => { if (signal !== undefined) Reflect.apply(removeListener, signal, ['abort', abort]); };
         try {
-          if (signal !== undefined) Reflect.apply(addListener, signal, ['abort', abort, { once: true }]);
+          clearTimer(idle);
+          if (signalAborted(signal)) { shutdown('read_cancelled'); return; }
+          if (signal !== undefined) subscription = addAbortListener(signal, abort);
+          // Registration may synchronously close the owner or settle the slot.
+          // Never dispatch after it has lost ownership, even without a Worker.
+          if (closed || owner.owner.closed || lifecycle.pending !== slot) {
+            shutdown('store_closed'); return;
+          }
           const remaining = mono(operation.operationCutoffMonoNs) - now();
           slot.deadline = setTimer(() => shutdown('read_timeout'), Math.max(0, Number(remaining) / 1e6));
           if (remaining <= 0n) { shutdown('read_timeout'); return; }
@@ -174,6 +195,9 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
             lifecycle.worker.postMessage(outbound);
           }
         } catch { shutdown('reader_failed'); }
+      }).finally(() => {
+        // Also disposes a handle returned after synchronous registration reentry.
+        try { detach(); } catch { /* Public settlement is already terminal. */ }
       });
     }
     const opened = await dispatch('open', null, null, { signal }, admitted, true);

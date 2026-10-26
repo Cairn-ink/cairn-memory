@@ -3,6 +3,14 @@ import { boundedData, credentialDigest } from './context-product-control.mjs';
 import { deepFreeze } from './private-card-input.mjs';
 import { fail } from './validation.mjs';
 
+const promiseThen = Promise.prototype.then;
+function observePromise(value) {
+  if (!types.isPromise(value)) return false;
+  // Refuse async authority, but consume rejection without reading an own then.
+  Reflect.apply(promiseThen, value, [undefined, () => {}]);
+  return true;
+}
+
 // Binding validation is separate from the two currentness samples. The host
 // derives one method grant, not one independent grant per namespace.
 export function requestAuthority(host, binding, control) {
@@ -16,12 +24,15 @@ export function requestAuthority(host, binding, control) {
     let grant;
     try {
       grant = host.authorize(request, credential);
-      if (!grant || typeof grant !== 'object' || typeof grant.then === 'function' ||
+      if (observePromise(grant) || !grant || typeof grant !== 'object' ||
           !isDeepStrictEqual(boundedData(grant), binding)) fail('authority_required');
     } catch { fail('authority_required'); }
     let finalState = 'unsampled';
     function sample(code) {
-      try { if (host.isCurrent(grant, request) === true) return; } catch { /* Unverifiable state refuses. */ }
+      try {
+        const current = host.isCurrent(grant, request);
+        if (!observePromise(current) && current === true) return;
+      } catch { /* Unverifiable state refuses. */ }
       fail(code);
     }
     sample('authority_required');

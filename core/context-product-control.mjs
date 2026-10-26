@@ -8,6 +8,9 @@ import { fail } from './validation.mjs';
 export const PRODUCT_PROFILE = 'context-read-product-v1.1';
 const domainKey = Symbol.for('context-read-product-v1.1/clock-domain');
 export const clockDomainId = globalThis[domainKey] ??= randomUUID();
+const sharedPrototype = SharedArrayBuffer.prototype;
+const sharedLength = Object.getOwnPropertyDescriptor(sharedPrototype, 'byteLength').get;
+const sharedGrowable = Object.getOwnPropertyDescriptor(sharedPrototype, 'growable').get;
 const U64 = (1n << 64n) - 1n;
 export const id = value => {
   if (typeof value !== 'string' || !/^[\x00-\x7f]{1,64}$/.test(value)) fail('invalid_input');
@@ -62,8 +65,11 @@ export function hostConfiguration(value, credentialEnvelope = false) {
   let sharedBytes = 0, nodes = 8192, units = 262144;
   function copy(value, depth = 0) {
     if (--nodes < 0 || depth > 16 || types.isProxy(value)) fail('invalid_input');
-    if (value instanceof SharedArrayBuffer) {
-      if (value.growable || Reflect.ownKeys(value).length || (sharedBytes += value.byteLength) > 262144) fail('invalid_input');
+    if (types.isSharedArrayBuffer(value)) {
+      if (Object.getPrototypeOf(value) !== sharedPrototype ||
+          Reflect.ownKeys(Object.getOwnPropertyDescriptors(value)).length ||
+          Reflect.apply(sharedGrowable, value, []) ||
+          (sharedBytes += Reflect.apply(sharedLength, value, [])) > 262144) fail('invalid_input');
       return value;
     }
     if (value === null || typeof value !== 'object') {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 import { createReaderWorkerLifecycle } from '../reader-worker-lifecycle.mjs';
-import { EventEmitter } from 'node:events';
+import { EventEmitter, getEventListeners } from 'node:events';
 import { requestRecord, operationRecord, verifyRecords, credentialDigest, PRODUCT_PROFILE, boundedData, hostConfiguration, operationMessage } from '../context-product-control.mjs';
 import { requestAuthority } from '../context-product-authority.mjs';
 import { createProductReaderRuntime } from '../context-product-reader.mjs';
@@ -384,17 +384,12 @@ for (const opening of [true, false]) test(`P2-03 abort signal brand/proxy valida
   assert.equal(traps, 0);
 });
 
-for (const cancel of [false, true]) test(`P2-03 intrinsic signal access ignores caller overrides (${cancel ? 'abort' : 'success'})`, async () => {
+for (const key of ['aborted', 'addEventListener', 'removeEventListener']) test(`P2-03 signal own override ${key} refuses without execution`, async () => {
   const h = harness(), controller = new AbortController(); let invoked = 0;
-  for (const key of ['aborted', 'addEventListener', 'removeEventListener']) Object.defineProperty(controller.signal, key, {
-    get() { invoked++; throw Error('caller override'); },
-  });
-  const reader = await h.open(h.options, { signal: controller.signal }), actor = h.actors[0];
-  const pending = reader.fetchCandidateEvidence(input, h.credential, { signal: controller.signal });
-  if (cancel) { controller.abort(); denied(await pending, 'read_cancelled'); actor.gate.resolve(); }
-  else { actor.reply({ ok: true, value: null }); assert.equal((await pending).ok, true); }
-  await reader.close(); await h.supervisor.close();
-  assert.equal(invoked, 0); assert.equal(h.registry.counters().live, 0);
+  Object.defineProperty(controller.signal, key, { get() { invoked++; throw Error('caller override'); } });
+  await assert.rejects(h.open(h.options, { signal: controller.signal }), { code: 'invalid_input' });
+  assert.equal(invoked, 0); assert.equal(h.actors.length, 0); assert.equal(h.registry.counters().live, 0);
+  await h.supervisor.close();
 });
 
 test('P2-03 failed request setup cleans registered records and detachment failure cannot prevent settlement', async () => {
@@ -512,4 +507,158 @@ test('P2-03 opening setup failure releases the pre-registered record without spa
   assert.equal(failure.code, 'reader_failed'); assert.equal(h.actors.length, 0);
   assert.equal((await h.supervisor.drain(failure.cleanupId)).state, 'complete');
   assert.equal(h.registry.counters().live, 0); await h.supervisor.close();
+});
+
+for (const opening of [true, false]) test(`P2-03 copied signal state/accessors/hooks refuse before ${opening ? 'open' : 'operation'} registration`, async () => {
+  const genuine = new AbortController().signal, descriptors = Object.getOwnPropertyDescriptors(genuine);
+  let invoked = 0;
+  const signals = [Object.defineProperties({}, descriptors)];
+  for (const key of Reflect.ownKeys(genuine)) {
+    const forged = Object.defineProperties(Object.create(AbortSignal.prototype), descriptors);
+    Object.defineProperty(forged, key, { get() { invoked++; throw Error('symbol accessor'); } });
+    signals.push(forged);
+  }
+  // Discover this runtime's hook symbol instead of manufacturing a lookalike.
+  const hook = Object.getOwnPropertySymbols(AbortSignal.prototype).find(key => key.description === 'kNewListener');
+  assert.ok(hook);
+  const h = harness(), hooked = new AbortController().signal;
+  Object.defineProperty(hooked, hook, { value() { invoked++; void h.supervisor.close(); } });
+  signals.push(hooked);
+  const reader = opening ? null : await h.open(h.options);
+  for (const signal of signals) {
+    const before = h.registry.counters(), spawned = h.actors.length;
+    if (opening) await assert.rejects(h.open(h.options, { signal }), { code: 'invalid_input' });
+    else denied(await reader.fetchCandidateEvidence(input, h.credential, { signal }), 'invalid_input');
+    assert.deepEqual(h.registry.counters(), before); assert.equal(h.actors.length, spawned);
+  }
+  assert.equal(invoked, 0);
+  await reader?.close(); await h.supervisor.close(); assert.equal(h.registry.counters().live, 0);
+});
+
+for (const opening of [true, false]) test(`P2-03 close during abort registration stops ${opening ? 'bootstrap' : 'dispatch'} and disposes the subscription`, async () => {
+  const h = harness(), reader = opening ? null : await h.open(h.options), controller = new AbortController();
+  const prototype = AbortSignal.prototype;
+  const hook = Object.getOwnPropertySymbols(prototype).find(key => key.description === 'kNewListener');
+  const original = Object.getOwnPropertyDescriptor(prototype, hook);
+  let closing, pending;
+  Object.defineProperty(prototype, hook, { ...original, value(...args) {
+    const result = Reflect.apply(original.value, this, args);
+    if (this === controller.signal) closing = h.supervisor.close();
+    return result;
+  } });
+  try {
+    pending = opening ? h.open(h.options, { signal: controller.signal })
+      : reader.fetchCandidateEvidence(input, h.credential, { signal: controller.signal });
+  } finally { Object.defineProperty(prototype, hook, original); }
+  if (opening) await assert.rejects(pending, { code: 'store_closed' });
+  else { denied(await pending, 'store_closed'); assert.equal(h.actors[0].messages.length, 0); h.actors[0].gate.resolve(); }
+  assert.ok(closing); await closing; await reader?.close();
+  assert.equal(h.actors.length, opening ? 0 : 1); assert.equal(h.registry.counters().live, 0);
+  assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+});
+
+for (const loseNotification of [false, true]) test(`P2-03 prior stopImmediatePropagation cannot deliver success (lost notification ${loseNotification})`, async () => {
+  const h = harness(), controller = new AbortController();
+  const suppress = event => event.stopImmediatePropagation();
+  controller.signal.addEventListener('abort', suppress);
+  const reader = await h.open(h.options, { signal: controller.signal }), actor = h.actors[0];
+  assert.deepEqual(getEventListeners(controller.signal, 'abort'), [suppress]);
+  const pending = reader.fetchCandidateEvidence(input, h.credential, { signal: controller.signal });
+  if (loseNotification) {
+    // Exercise final acceptance independently of the propagation-resistant path.
+    const protectedListener = getEventListeners(controller.signal, 'abort').find(listener => listener !== suppress);
+    assert.ok(protectedListener);
+    EventTarget.prototype.removeEventListener.call(controller.signal, 'abort', protectedListener);
+  }
+  controller.abort();
+  if (loseNotification) actor.reply({ ok: true, value: { items: ['discarded'] } });
+  denied(await pending, 'read_cancelled');
+  actor.reply({ ok: true, value: { items: ['late'] } });
+  assert.deepEqual(getEventListeners(controller.signal, 'abort'), [suppress]);
+  actor.gate.resolve(); await reader.close(); await h.supervisor.close();
+  assert.equal(h.registry.counters().live, 0);
+});
+
+test('P2-28 SharedArrayBuffer classification and descriptors execute no caller code', () => {
+  let invoked = 0;
+  const proxy = new Proxy({}, { getPrototypeOf() { invoked++; throw Error('prototype trap'); } });
+  const unsupported = [Object.create(proxy), new Proxy(new SharedArrayBuffer(4), {
+    get() { invoked++; throw Error('get trap'); }, getPrototypeOf() { invoked++; throw Error('prototype trap'); },
+  })];
+  for (const key of ['growable', 'byteLength']) {
+    const shared = new SharedArrayBuffer(4);
+    Object.defineProperty(shared, key, { get() { invoked++; throw Error('own accessor'); } });
+    unsupported.push(shared);
+  }
+  const wrongPrototype = new SharedArrayBuffer(4); Object.setPrototypeOf(wrongPrototype, proxy); unsupported.push(wrongPrototype);
+  for (const value of unsupported) assert.throws(() => hostConfiguration({ value }), { code: 'invalid_input' });
+  const original = Object.getOwnPropertyDescriptor(SharedArrayBuffer.prototype, 'growable');
+  Object.defineProperty(SharedArrayBuffer.prototype, 'growable', { ...original, get() { invoked++; throw Error('prototype accessor'); } });
+  try { assert.equal(hostConfiguration({ value: new SharedArrayBuffer(4) }).value.byteLength, 4); }
+  finally { Object.defineProperty(SharedArrayBuffer.prototype, 'growable', original); }
+  assert.throws(() => hostConfiguration({ value: new SharedArrayBuffer(4, { maxByteLength: 8 }) }), { code: 'invalid_input' });
+  assert.equal(invoked, 0);
+});
+
+for (const stage of ['authorize', 'entry', 'final']) test(`P2-26 rejected native Promise at ${stage} is observed through intrinsic then`, async () => {
+  const s = setup(), control = requestRecord(s.control, 0n, 1000); let samples = 0, invoked = 0;
+  const reject = () => {
+    const promise = Promise.reject(Error('synthetic rejected authority'));
+    Object.defineProperty(promise, 'then', { get() { invoked++; throw Error('own then'); } });
+    return promise;
+  };
+  const enter = requestAuthority({ authorize: () => stage === 'authorize' ? reject() : s.binding,
+    isCurrent() { samples++; return stage === 'entry' || stage === 'final' && samples === 2 ? reject() : true; },
+  }, s.binding, control);
+  if (stage === 'final') {
+    const access = enter('fetchCandidateEvidence', input, s.credential);
+    assert.throws(() => access.check(), { code: 'scope_changed' });
+    assert.throws(() => access.check(), { code: 'scope_changed' });
+  } else assert.throws(() => enter('fetchCandidateEvidence', input, s.credential), { code: 'authority_required' });
+  assert.equal(samples, stage === 'authorize' ? 0 : stage === 'entry' ? 1 : 2); assert.equal(invoked, 0);
+  // A task boundary allows the runtime's unhandled-rejection check to run.
+  await new Promise(resolve => setImmediate(resolve));
+});
+
+for (const stage of ['authorize', 'entry', 'final']) test(`P2-26 non-native thenable at ${stage} is refused without calling then`, () => {
+  const s = setup(), control = requestRecord(s.control, 0n, 1000); let samples = 0, invoked = 0;
+  const thenable = { then() { invoked++; throw Error('thenable'); } };
+  const enter = requestAuthority({ authorize: () => stage === 'authorize' ? thenable : s.binding,
+    isCurrent() { samples++; return stage === 'entry' || stage === 'final' && samples === 2 ? thenable : true; },
+  }, s.binding, control);
+  if (stage === 'final') assert.throws(() => enter('fetchCandidateEvidence', input, s.credential).check(), { code: 'scope_changed' });
+  else assert.throws(() => enter('fetchCandidateEvidence', input, s.credential), { code: 'authority_required' });
+  assert.equal(samples, stage === 'authorize' ? 0 : stage === 'entry' ? 1 : 2); assert.equal(invoked, 0);
+});
+
+for (const opening of [true, false]) test(`P2-03 signal revalidation failure after ${opening ? 'opening' : 'operation'} registration releases every record`, async () => {
+  const h = harness(), reader = opening ? null : await h.open(h.options), controller = new AbortController();
+  const register = h.registry.register; let invoked = 0;
+  h.registry.register = (...args) => {
+    const record = register(...args), key = Reflect.ownKeys(controller.signal)[0];
+    Object.defineProperty(controller.signal, key, { get() { invoked++; throw Error('late symbol accessor'); } });
+    return record;
+  };
+  if (opening) {
+    let failure; await h.open(h.options, { signal: controller.signal }).catch(error => { failure = error; });
+    assert.equal(failure.code, 'invalid_input'); assert.equal(h.actors.length, 0);
+    assert.equal((await h.supervisor.drain(failure.cleanupId)).state, 'complete');
+  } else {
+    denied(await reader.fetchCandidateEvidence(input, h.credential, { signal: controller.signal }), 'reader_failed');
+    h.actors[0].gate.resolve(); await reader.close();
+  }
+  await h.supervisor.close(); assert.equal(h.registry.counters().live, 0); assert.equal(invoked, 0);
+});
+
+test('P2-03 final acceptance rejects an aborted opening even when notification is lost', async () => {
+  const h = harness({ stall: true }), controller = new AbortController();
+  const suppress = event => event.stopImmediatePropagation(); controller.signal.addEventListener('abort', suppress);
+  const opening = h.open(h.options, { signal: controller.signal }), actor = h.actors[0];
+  const listener = getEventListeners(controller.signal, 'abort').find(value => value !== suppress);
+  assert.ok(listener); EventTarget.prototype.removeEventListener.call(controller.signal, 'abort', listener);
+  controller.abort(); actor.reply({ ok: true, value: null });
+  let failure; await opening.catch(error => { failure = error; });
+  assert.equal(failure.code, 'read_cancelled'); actor.gate.resolve();
+  assert.equal((await h.supervisor.drain(failure.cleanupId)).state, 'complete');
+  await h.supervisor.close(); assert.equal(h.registry.counters().live, 0);
 });
