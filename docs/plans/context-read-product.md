@@ -1,6 +1,6 @@
 # Context-read for the product — P2 contract draft
 
-Status: **revision 2 for re-check, base `7ce43db1`**. Draft identity: **P2 v0.3, `context-read-product-v1`**, 2026-10-27. Inventory baseline remains `546d57ac083f`, branch `feat/context-read-product`. The re-check confirmed the seven original findings resolved but returned “can be frozen: no” on four additional findings; this revision addresses those four while preserving the product's answered requirements and generic wording. No freeze, implementation approval or measured acceptance is claimed. The primary owns commits and implementation dispatch.
+Status: **frozen `context-read-product-v1` (P2), 2026-10-27.** A non-author audit of `2a7912fe` and two re-checks (`7ce43db1`, `d0482f7e`) ended with "can be frozen: yes". Inventory baseline `546d57ac`. No implementation or performance acceptance is claimed. P2a coding starts only after the product signs off every item in the authority seam checklist (below). Changing a name, shape or gate requires a new version.
 
 ## 1. Purpose, evidence and compatibility boundary
 
