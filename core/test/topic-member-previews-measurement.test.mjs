@@ -175,3 +175,62 @@ test('P1 CLI sanitizes parse failures before writing reports or stderr', async t
   assert.deepEqual(JSON.parse(child.stderr), { failure: { code: 'measurement_failed' } });
   assert.equal(existsSync(output),false);
 });
+
+test('P1 failed cold children always release heartbeats and allow natural process exit', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const tool = new URL('../../tools/testing/measure-topic-member-previews.mjs', import.meta.url).href;
+  const probe = String.raw`
+    import assert from 'node:assert/strict';
+    const { coldAttempt } = await import(process.argv[1]);
+    const fault = process.argv[2], intervals = new Set();
+    const nativeSet = globalThis.setInterval, nativeClear = globalThis.clearInterval;
+    globalThis.setInterval = (...args) => {
+      const timer = nativeSet(...args); intervals.add(timer); return timer;
+    };
+    globalThis.clearInterval = timer => { intervals.delete(timer); nativeClear(timer); };
+    let killed = 0, exited = false;
+    const spawn = () => {
+      if (fault === 'spawn') throw Error('forced_spawn_failure');
+      const monitor = setInterval(() => {}, 60000);
+      let resolveExit;
+      const child = { exitCode: null, signalCode: null,
+        exited: new Promise(resolve => { resolveExit = resolve; }),
+        async wait() {
+          if (fault === 'wait') throw Error('forced_wait_failure');
+          return { record: {} };
+        },
+        kill() {
+          killed++; child.signalCode = 'SIGKILL';
+          clearInterval(monitor); exited = true; resolveExit({ code: null, signal: 'SIGKILL' });
+          return true;
+        },
+      };
+      if (fault === 'exit-status') {
+        child.exitCode = 7; clearInterval(monitor); exited = true;
+        resolveExit({ code: 7, signal: null });
+      } else if (fault === 'exit-wait') {
+        child.exited = Promise.reject(Error('forced_exit_wait_failure'));
+        child.exited.catch(() => {});
+      }
+      return child;
+    };
+    let failed = false;
+    try { await coldAttempt({}, { spawn }); }
+    catch { failed = true; process.exitCode = 1; } // Same exitCode-only CLI failure policy.
+    assert.equal(failed, true);
+    assert.equal(intervals.size, 0, 'cold failure left a live interval');
+    assert.equal(process.getActiveResourcesInfo().filter(type => type === 'Timeout').length, 0);
+    assert.equal(killed, fault === 'wait' || fault === 'exit-wait' ? 1 : 0);
+    assert.equal(exited, fault !== 'spawn');
+    console.log(JSON.stringify({ failed, liveIntervals: intervals.size, killed, exited }));
+  `;
+  for (const fault of ['spawn','wait','exit-status','exit-wait']) {
+    const child = spawnSync(process.execPath, ['--input-type=module','--eval',probe,tool,fault], {
+      env: {}, encoding: 'utf8', timeout: 10000,
+    }); // Containment watchdog only; no elapsed-time performance assertion.
+    assert.equal(child.error, undefined, 'cold failure probe did not exit naturally');
+    assert.equal(child.signal, null); assert.equal(child.status, 1, child.stderr);
+    const result = JSON.parse(child.stdout);
+    assert.equal(result.failed, true); assert.equal(result.liveIntervals, 0);
+  }
+});

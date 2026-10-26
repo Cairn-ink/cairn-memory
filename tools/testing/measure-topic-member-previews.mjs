@@ -112,8 +112,10 @@ function observeLoop() {
   const timer = setInterval(sample, 1);
   let completion;
   return { finish() { return completion ??= (async () => {
-    await new Promise(r => setImmediate(r)); await delay(2); sample(); clearInterval(timer);
-    return { maxMs, blocksOver100 };
+    try {
+      await new Promise(r => setImmediate(r)); await delay(2); sample();
+      return { maxMs, blocksOver100 };
+    } finally { clearInterval(timer); }
   })(); } };
 }
 function instrumentWorkers(sourceCases = {}) {
@@ -191,6 +193,30 @@ function actor(args) {
     if (Date.now() - lastProgress > 150000) { process.stderr.write('preview measurement child made no IPC progress; terminating\n'); child.kill('SIGKILL'); }
   }, 5000);
   return child;
+}
+// Every owned actor must reach exit, even when its wait or validation fails.
+async function terminateActor(child) {
+  if (!child) return;
+  try {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+  } finally { await child.exited; }
+}
+export async function coldAttempt(config, { spawn = actor } = {}) {
+  const outer = performance.now(), processLoop = observeLoop();
+  let child, record;
+  try {
+    child = spawn(['--cold', JSON.stringify(config)]);
+    const message = await child.wait('result'), exit = await child.exited;
+    assert.equal(exit.code, 0); assert.equal(exit.signal, null);
+    record = { ...message.record, processExit: exit, outerProcessLaunchAndSampleMs: performance.now() - outer };
+  } finally {
+    try { await terminateActor(child); }
+    finally {
+      const launcherLoop = await processLoop.finish();
+      if (record) record.launcherLoop = launcherLoop;
+    }
+  }
+  return record;
 }
 async function writerProcess(config) {
   const { openMemoryCore } = await import('../../core/contract.mjs');
@@ -418,7 +444,9 @@ async function run(args) {
   save(); if (plan) return report;
   const workspace = createTestWorkspace(null, { prefix: 'cairn-preview-measure-' }), seeds = new Map();
   try {
-    const idleLoop = observeLoop(); await delay(100); report.idleBaseline = await idleLoop.finish();
+    const idleLoop = observeLoop();
+    try { await delay(100); }
+    finally { report.idleBaseline = await idleLoop.finish(); }
     for (const [i, cell] of report.plan.entries()) {
       process.stderr.write(JSON.stringify({ progress: i + 1, total: report.plan.length, cell }) + '\n');
       const key = `${cell.count}:${cell.schema}`;
@@ -439,12 +467,7 @@ async function run(args) {
         while (entry.main.filter(r => r.successfulPage && r.overlap).length < target && entry.main.length < ceiling) { entry.main.push(await attempt(config, writer)); save(); }
         const coldTarget = smoke ? 1 : 10, coldCeiling = smoke ? 3 : 100;
         while (entry.cold.filter(r => r.successfulPage && r.overlap).length < coldTarget && entry.cold.length < coldCeiling) {
-          const outer = performance.now(), processLoop = observeLoop();
-          const child = actor(['--cold', JSON.stringify(config)]);
-          const message = await child.wait('result'), exit = await child.exited;
-          assert.equal(exit.code, 0); assert.equal(exit.signal, null);
-          entry.cold.push({ ...message.record, processExit: exit, outerProcessLaunchAndSampleMs: performance.now() - outer,
-            launcherLoop: await processLoop.finish() }); save();
+          entry.cold.push(await coldAttempt(config)); save();
         }
         const production = process.version === PROTOCOL.runtime && !smoke;
         entry.retained = await retainedTraversal(config, fixture);
@@ -454,8 +477,12 @@ async function run(args) {
         entry.decisions = [decide(cell, 'main', entry.main, 50, production), decide(cell, 'cold', entry.cold, 10, production, true),
           decide({ ...cell, limit: 100 }, 'warmup', entry.warmups, 0, production)];
       } finally {
-        if (writer) { writer.send({ type: 'close' }); entry.writerExit = await writer.exited; assert.equal(entry.writerExit.code, 0); }
-        save();
+        try {
+          if (writer) {
+            try { writer.send({ type: 'close' }); entry.writerExit = await writer.exited; assert.equal(entry.writerExit.code, 0); }
+            finally { await terminateActor(writer); }
+          }
+        } finally { save(); }
       }
     }
     report.status = smoke ? 'smoke-observation' : report.cells.some(c => (c.decisions.some(d => d.decision === 'fail') || c.retained?.decision === 'fail')) ? 'failed' :
@@ -483,7 +510,7 @@ async function commandLine() {
       const record = await attempt(config, writer);
       if (writer) { writer.send({ type: 'close' }); record.writerExit = await writer.exited; assert.equal(record.writerExit.code, 0); }
       await new Promise((resolveSend, reject) => process.send({ type: 'result', record }, error => error ? reject(error) : resolveSend()));
-    } finally { if (writer?.connected) writer.kill('SIGTERM'); process.disconnect(); }
+    } finally { try { await terminateActor(writer); } finally { process.disconnect(); } }
   } else await main(process.argv.slice(2));
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
