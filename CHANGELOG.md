@@ -10,6 +10,8 @@
   transport, bearer verifier or OAuth client.
 - The production closure is still server, core, zod and tiktoken. The installer's
   embedded engine bundle is regenerated, so it gets a new engine id.
+- The MCP SDK packages now declare Apache-2.0 (2.0.0 declared MIT); upstream is
+  moving from MIT to Apache-2.0. Third-party notices are updated.
 - SDK 2.3.1 closes the stdio transport when stdin ends, and Zod rejects an
   oversized bounded array on its size before validating elements.
 

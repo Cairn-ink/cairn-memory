@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "79ddf87eba57643bb4d26537308181762fc5df683188c3812739cc80fc585e7b",
-  "bytes": 710723,
+  "sha256": "943f686dba20aaaeb4d527dd2b7eae6e7a974a84d59585a0e3cd1e39160c1257",
+  "bytes": 710773,
   "files": [
     "LICENSE",
     "README.md",
@@ -585,7 +585,7 @@
     "docs/local-embedder-bge-m3.md": "d2ceeb0bd952007ff4413eba515a99d7e90a6254ffeb88636ef6ac82f2909fdf",
     "bin/cairn-memory.mjs": "7c24872a106de8d06c0a66499002f46aa8894b588b005ac9d39a50df4e586981",
     "README.md": "dcfd6be7a1a90d7016dbce352dbd06516443d6760e0dbfd74e6049632ec36891",
-    "THIRD_PARTY_NOTICES.md": "2414f8077181dea55945dbcf3243716d095b148fc8903ffe978ea606864aacd8",
+    "THIRD_PARTY_NOTICES.md": "f53d69106bd47f5c23acf119a83d3adc61ddcdcaf4ec908a1cf4f6cee9e4f23c",
     "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b"
   },
   "generatedHashes": {
