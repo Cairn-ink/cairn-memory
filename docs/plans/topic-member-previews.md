@@ -717,10 +717,14 @@ all error/status counts and the count of main-loop blocks **strictly >100ms**
 for each cell/series. Timed attempts include typed failures, and all-attempt
 latency and error counts are always reported.
 
-**Gated population.** Every latency gate in the decision table below (p95 and
-maximum, main series and cold series) is evaluated on the **successful-page
-population only**: requests that returned `ok:true` with a page (complete or a
-progressing partial), timed open→read→close. A cell's main series needs
+**Gated population.** The **reader open→read→close lifecycle latency gates**
+in the decision table below (p95 and maximum, main series and cold series) are
+evaluated on the **successful-page population only**: requests that returned
+`ok:true` with a page (complete or a progressing partial), timed
+open→read→close. This rule does not narrow any other gate: the <=100ms host
+main-loop maximum still applies to **every attempt**, including failures,
+warm-ups and cold runs, and the WAL zero-busy and byte gates still count every
+attempt. A cell's main series needs
 **>=50 successful pages** after the warm-ups, and its cold series **>=10
 successful cold runs**. Keep sampling, without selecting for speed, until the
 count is reached or a hard ceiling of 10x the target attempts (500 main, 100
