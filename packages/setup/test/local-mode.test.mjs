@@ -1,6 +1,6 @@
 import runTest from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdir, readdir, lstat, chmod, chown, symlink, rm, cp, copyFile } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, lstat, chmod, chown, symlink, rm, cp, copyFile, realpath } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { spawn, spawnSync } from 'node:child_process';
@@ -21,6 +21,7 @@ const { engineIdFor } = await fromPackage('local-engine');
 const { claudeSnippet, claudeAddArguments } = await fromPackage('local-claude');
 const { codexSnippet, codexAddArguments } = await fromPackage('local-codex');
 const { shellArgument, tomlString, argvDisplay, columns } = await fromPackage('output');
+const { inspectCodexServers, withCodexInspectionEnvironment } = await fromPackage('codex');
 const { modeUnion } = await fromPackage('local-mode');
 const version = JSON.parse(await readFile(join(packageRoot, 'package.json'))).version;
 const manifestBytes = await readFile(join(packageRoot, 'runtime/engine/manifest.json'));
@@ -60,15 +61,33 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
     import{registerClaude}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/local-claude.mjs')).href)};
     import{registerCodex}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/local-codex.mjs')).href)};
     import{translator}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/messages.mjs')).href)};
+    import{routeLocalMode,localStatus}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/local-mode.mjs')).href)};
+    import{parseOptions}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/options.mjs')).href)};
+    import{parseClient}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/codex.mjs')).href)};
+    import{SetupError}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/errors.mjs')).href)};
     const config=JSON.parse(process.env.LOCAL_TEST_OPTIONS),answers=config.answers??[];
     const output=line=>writeSync(1,String(line)+'\\n');
     output.literal=line=>{for(const part of String(line).split('\\n'))writeSync(1,JSON.stringify({literal:part})+'\\n');};
-    if(config.direct){
-      const run=args=>new Promise(resolve=>{const child=spawn('claude',args,{stdio:['ignore','pipe','pipe']});let stdout='',stderr='',error;
+    const run=args=>new Promise(resolve=>{const child=spawn('claude',args,{stdio:['ignore','pipe','pipe']});let stdout='',stderr='',error;
         child.stdout.on('data',v=>stdout+=v);child.stderr.on('data',v=>stderr+=v);child.on('error',v=>error=v);child.on('close',status=>resolve({status,stdout,stderr,error}));});
+    if(config.library){
+      const options=parseOptions(process.argv.slice(2)),selection=parseClient(options.argv,SetupError),t=translator('en');
+      const context={env:process.env,inspection:config.inspection,write:output,t,interactive:config.interactive??false,
+        prompt:async q=>{output(JSON.stringify({prompt:q}));return answers.shift()??'';},runClaude:run,
+        installerVersion:${JSON.stringify(version)},nodeVersion:process.versions.node,supportedNode:()=>true,platform:process.platform};
+      try{const result=await routeLocalMode(options,selection,context);
+        if(result.detection){
+          const progress={};
+          if(config.hostedStatus)await main(process.argv.slice(2),{disableLocalMode:true,write:output,progress});
+          await localStatus(result.detection,{...context,emittedEnvironmentCauses:progress.codexEnvironmentCauses??new Set(config.emitted??[])});
+        }
+        if(!result.handled&&!result.detection)output('HOSTED');
+        process.exitCode=result.code??result.statusCode??0;
+      }catch(error){output(t(error.key??'setup_failed',error.params));process.exitCode=error.code??1;}
+    }else if(config.direct){
       const d=JSON.parse(readFileSync(process.env.CAIRN_MEMORY_HOME+'/installation.json'));
       try{const state=await (config.direct==='claude'?registerClaude({root:process.env.CAIRN_MEMORY_HOME,home:process.env.HOME,checkpoint:d.operation.checkpoints.claude,run,write:output,t:translator('en')}):
-        registerCodex({root:process.env.CAIRN_MEMORY_HOME,checkpoint:d.operation.checkpoints.codex,env:process.env,write:output,t:translator('en')}));output(state);}
+        registerCodex({root:process.env.CAIRN_MEMORY_HOME,checkpoint:d.operation.checkpoints.codex,env:process.env,inspection:config.inspection,write:output,t:translator('en')}));output(state);}
       catch(error){output(error.key);process.exitCode=error.code??1;}
     }else process.exitCode=await main(process.argv.slice(2),{interactive:config.interactive??false,disableLocalMode:config.disableLocalMode??false,
       localInstallerVersion:config.installerVersion,platform:config.platform??process.platform,nodeVersion:config.nodeVersion??process.versions.node,
@@ -898,6 +917,220 @@ test('L10/L11/L12 actual SIGKILL, stale-lock recovery and resume: ' + boundary, 
     assert.equal(removed.status, 0);
   }
   const current = await f.descriptor(); assert.equal(current.state, 'installed'); assert.equal(current.ownerId, owner);
+});
+
+// Every F1 candidate and simulated managed file lives in the owned fixture.
+async function inspectionFixture(f, { blocked = false, managed = false, inside = false, outside = false } = {}) {
+  const primary = join(outside ? f.ws : f.home, 'tmp'), fallback = join(inside ? f.home : f.ws, 'fallback');
+  await mkdir(primary, { mode: 0o700 }); await mkdir(fallback, { mode: 0o700 });
+  const managedPaths = [join(f.ws, 'managed-config'), join(f.ws, 'managed-overlay')];
+  if (blocked) {
+    await f.config('');
+    await mkdir(join(fallback, '.codex'), { mode: 0o700 });
+    await writeFile(join(fallback, '.codex/config.toml'), '', { mode: 0o600 });
+  }
+  if (managed) await writeFile(managedPaths[1], '', { mode: 0o600 });
+  return { library: true, env: { TMPDIR: primary }, inspection: { fallbackParent: fallback, managedPaths }, primary, fallback };
+}
+async function noAttempts(options) {
+  for (const path of [options.primary, options.fallback])
+    assert.deepEqual((await readdir(path)).filter(name => name.startsWith('cairn-codex-inspect-')), []);
+}
+for (const cause of ['codex_tmpdir', 'codex_managed']) {
+  for (const installed of [false, true]) test(`L27/L28 ${cause}: ${installed ? 'installed' : 'fresh'} refusal matrix`, async t => {
+    const f = await localFixture(t);
+    if (installed) {
+      await seed(f);
+      await mkdir(join(f.root, 'engine', engineId), { recursive: true, mode: 0o700 });
+      await writeFile(join(f.root, 'engine', engineId, 'retained'), 'retained engine bytes', { mode: 0o600 });
+    }
+    const options = await inspectionFixture(f, { blocked: cause === 'codex_tmpdir', managed: cause === 'codex_managed' });
+    const args = installed ? [['setup'], ['setup', '--dry-run'], ['uninstall', '--local', '--yes'],
+      ['uninstall', '--local', '--client', 'codex', '--yes']] : [['setup'], ['setup', '--client', 'claude'],
+      ['setup', '--cloud'], ['setup', '--local'], ['setup', '--local', '--dry-run']];
+    const before = await f.inventory();
+    for (const argv of args) {
+      const calls = (await f.calls('codex')).length, claudeCalls = (await f.calls('claude')).length;
+      const result = await f.run(argv, options);
+      assert.equal(result.code, 2, result.display);
+      assert.match(result.display, /Cannot inspect Codex/);
+      assert.ok(result.display.includes(cause === 'codex_tmpdir' ? 'TMPDIR' : '/etc/codex'), result.display);
+      assert.deepEqual(await f.inventory(), before);
+      assert.equal((await f.calls('codex')).slice(calls).some(call => ['add', 'remove'].includes(call.args[1]) && !call.args.includes('--help')), false);
+      assert.equal((await f.calls('claude')).slice(claudeCalls).some(call => call.args[0] === 'mcp'), false);
+      await noAttempts(options);
+    }
+    if (installed) {
+      for (const argv of [['status'], ['status', '--client', 'claude']]) {
+        const result = await f.run(argv, options); assert.equal(result.code, 0, result.display);
+        assert.match(result.display, /Registration: unknown/);
+        const diagnostic = result.display.split('\n').filter(line => /TMPDIR|System-managed Codex|system-managed Codex/u.test(line));
+        assert.equal(diagnostic.length, 1, result.display);
+        const deduplicated = await f.run(argv, { ...options, emitted: [cause] });
+        assert.equal(deduplicated.display.split('\n').filter(line => /TMPDIR|System-managed Codex|system-managed Codex/u.test(line)).length, 0, deduplicated.display);
+      }
+      const scoped = await f.run(['uninstall', '--local', '--client', 'claude', '--yes'], options);
+      assert.equal(scoped.code, 0, scoped.display);
+      const d = await f.descriptor(); assert.equal(d.state, 'installed'); assert.equal(d.clients.claude, null); assert.ok(d.clients.codex);
+    }
+  });
+  test(`L27/L28 ${cause}: detached Codex resume retains engine after final detection`, async t => {
+    const f = await localFixture(t), { d } = await seed(f);
+    await mkdir(join(f.root, 'engine', engineId), { recursive: true, mode: 0o700 });
+    const retained = join(f.root, 'engine', engineId, 'retained');
+    await writeFile(retained, 'retained engine bytes', { mode: 0o600 });
+    const options = await inspectionFixture(f, { blocked: cause === 'codex_tmpdir', managed: cause === 'codex_managed' });
+    beginOperation(d, 'uninstall', ['claude', 'codex'], { claude: f.home, codex: join(f.codexHome, 'config.toml') });
+    recordClient(d, 'codex', null);
+    await withLocalLock(f.root, () => writeDescriptor(f.root, d));
+    const codexCalls = (await f.calls('codex')).length;
+    const result = await f.run(['uninstall', '--local', '--yes'], options);
+    assert.equal(result.code, 2, result.display); assert.match(result.display, /retained|kept/u);
+    assert.equal((await f.descriptor()).state, 'uninstalling');
+    assert.equal((await f.descriptor()).clients.claude, null);
+    assert.equal(await readFile(retained, 'utf8'), 'retained engine bytes');
+    assert.equal((await f.calls('codex')).length, codexCalls);
+    await noAttempts(options);
+  });
+}
+for (const present of [false, true]) test(`L25 fresh fallback lifecycle (config present: ${present})`, async t => {
+  if (!needCache(t)) return;
+  const f = await localFixture(t), options = await inspectionFixture(f);
+  if (present) await f.config('model = "fixture"\n');
+  const result = await f.run(['setup', '--local'], options);
+  assert.equal(result.code, 0, result.display); assert.equal((await f.descriptor()).state, 'installed');
+  const status = await f.run(['status'], options); assert.equal(status.code, 0, status.display);
+  assert.equal(status.display.match(/Registration: registered/gu)?.length, 2);
+  const removed = await f.run(['uninstall', '--local', '--yes'], options);
+  assert.equal(removed.code, 0, removed.display); assert.equal((await f.descriptor()).state, 'uninstalled');
+  await noAttempts(options);
+});
+test('L26 hidden Codex ownership remains orphan with fallback', async t => {
+  const f = await localFixture(t); await seed(f, { selected: ['codex'] });
+  const options = await inspectionFixture(f); options.env.CAIRN_MEMORY_HOME = join(f.home, 'hidden-root');
+  const before = await f.inventory();
+  for (const args of [['setup'], ['setup', '--client', 'claude']]) {
+    const result = await f.run(args, options); assert.equal(result.code, 2, result.display);
+    assert.match(result.display, /installation record/u); assert.doesNotMatch(result.display, /HOSTED/u);
+    assert.deepEqual(await f.inventory(), before);
+  }
+  await noAttempts(options);
+});
+test('L27/L28 status emission bookkeeping: hosted/local causes once for every client scope', async t => {
+  for (const cause of ['codex_tmpdir', 'codex_managed', 'both']) {
+    const f = await localFixture(t); await seed(f);
+    const options = await inspectionFixture(f, { blocked: cause === 'codex_tmpdir', managed: cause !== 'codex_tmpdir' });
+    if (cause === 'both') await f.config('');
+    if (cause === 'codex_managed') options.env.TMPDIR = options.fallback;
+    const before = await f.inventory();
+    for (const client of [null, 'claude', 'codex']) {
+      const result = await f.run(['status', ...(client ? ['--client', client] : [])], { ...options, hostedStatus: true });
+      const tmpdirLines = result.display.split('\n').filter(line => line.includes('TMPDIR has ancestor'));
+      const managedLines = result.display.split('\n').filter(line => line.includes('system-managed Codex'));
+      assert.equal(tmpdirLines.length, cause === 'codex_tmpdir' || (cause === 'both' && client !== 'claude') ? 1 : 0, result.display);
+      assert.equal(managedLines.length, cause !== 'codex_tmpdir' ? 1 : 0, result.display);
+      assert.deepEqual(await f.inventory(), before);
+      await noAttempts(options);
+    }
+  }
+});
+test('L29 other unknown precedence and changed destination survive environment refusal', async t => {
+  const f = await localFixture(t); await seed(f);
+  const options = await inspectionFixture(f, { blocked: true });
+  await f.claudeConfig('{invalid');
+  for (const args of [['setup', '--local'], ['setup', '--local', '--dry-run']]) {
+    const before = await f.inventory(), result = await f.run(args, options);
+    assert.equal(result.code, 2, result.display); assert.match(result.display, /Cannot inspect Claude Code/);
+    assert.doesNotMatch(result.display, /TMPDIR/u); assert.deepEqual(await f.inventory(), before);
+  }
+  await rm(join(f.home, '.claude.json'));
+  const changed = join(f.ws, 'changed-codex'); await mkdir(changed);
+  const result = await f.run(['setup', '--local'], { ...options, env: { ...options.env, CODEX_HOME: changed } });
+  assert.equal(result.code, 2, result.display); assert.match(result.display, /destination|home|HOME/u);
+  assert.doesNotMatch(result.display, /Cannot inspect Codex|TMPDIR/u);
+  const before = await f.inventory();
+  const dry = await f.run(['setup', '--local', '--dry-run'], { ...options, env: { ...options.env, CODEX_HOME: changed } });
+  assert.equal(dry.code, 0, dry.display); assert.doesNotMatch(dry.display, /TMPDIR/u);
+  assert.deepEqual(await f.inventory(), before);
+});
+test('L29 manual dry-run exemption probes help only after synthetic add pre-check fails', async t => {
+  const f = await localFixture(t, { codexState: { noMcpAdd: true } });
+  const options = await inspectionFixture(f, { inside: true }), before = await f.inventory();
+  const result = await f.run(['setup', '--local', '--dry-run'], options);
+  assert.equal(result.code, 0, result.display); assert.match(result.display, /manual|manually/u);
+  assert.deepEqual(await f.inventory(), before);
+  assert.deepEqual((await f.calls('codex')).map(call => call.args.join(' ')), ['mcp list --json', 'mcp add --help']);
+  await noAttempts(options);
+});
+test('L29 native add plan refuses before creating a fresh root, including pending dry-run', async t => {
+  const f = await localFixture(t), options = await inspectionFixture(f, { inside: true });
+  for (const args of [['setup', '--local'], ['setup', '--local', '--dry-run']]) {
+    const before = await f.inventory(), result = await f.run(args, options);
+    assert.equal(result.code, 2, result.display); assert.match(result.display, /TMPDIR/u);
+    assert.deepEqual(await f.inventory(), before);
+  }
+  await seed(f, { state: 'pending', register: false });
+  const before = await f.inventory(), result = await f.run(['setup', '--local', '--dry-run'], options);
+  assert.equal(result.code, 2, result.display); assert.deepEqual(await f.inventory(), before);
+  await noAttempts(options);
+});
+test('L29 manual setup exemption completes with a manual receipt', async t => {
+  if (!needCache(t)) return;
+  const f = await localFixture(t, { codexState: { noMcpAdd: true } }), options = await inspectionFixture(f, { inside: true });
+  const result = await f.run(['setup', '--local'], options);
+  assert.equal(result.code, 1, result.display); assert.equal((await f.descriptor()).state, 'installed');
+  assert.match(result.display, /manually/u); assert.doesNotMatch(result.display, /Cannot inspect Codex/u);
+});
+for (const both of [false, true]) test(`L30 add race re-evaluates candidates (both blocked: ${both})`, async t => {
+  const f = await localFixture(t); await seed(f, { state: 'pending', selected: ['codex'], register: false });
+  const options = await inspectionFixture(f, { outside: true });
+  await withCodexInspectionEnvironment({ ...options.inspection, env: { ...f.env, ...options.env }, plannedConfigPath: join(f.codexHome, 'config.toml') });
+  await f.setState('codex', { blockInspectionParents: [options.primary, ...(both ? [options.fallback] : [])] });
+  const result = await f.run(['setup', '--local'], { ...options, library: false, direct: 'codex' });
+  assert.equal(result.code, both ? 1 : 0, result.display);
+  if (both) { assert.match(result.display, /codex_mcp_unverified/u); assert.match(result.display, /TMPDIR/u); }
+  else assert.match(result.display, /done/u);
+  await noAttempts(options);
+});
+for (const both of [false, true]) test(`L30 complete setup race (both blocked: ${both})`, async t => {
+  if (!needCache(t)) return;
+  const f = await localFixture(t), options = await inspectionFixture(f, { outside: true });
+  await f.setState('codex', { blockInspectionParents: [options.primary, ...(both ? [options.fallback] : [])] });
+  const result = await f.run(['setup', '--local'], options);
+  assert.equal(result.code, both ? 1 : 0, result.display);
+  if (both) { assert.match(result.display, /verified|verification/u); assert.match(result.display, /TMPDIR/u); }
+  else assert.equal((await f.descriptor()).state, 'installed');
+  await noAttempts(options);
+});
+test('L32 candidate selection, canonical paths, private copy and cleanup', async t => {
+  const f = await localFixture(t), options = await inspectionFixture(f), primary = options.primary, fallback = options.fallback;
+  const base = { env: { ...f.env, TMPDIR: primary }, ...options.inspection };
+  const seen = [];
+  await withCodexInspectionEnvironment(base, async neutral => { seen.push(neutral); assert.equal((await lstat(neutral)).mode & 0o777, 0o700); });
+  assert.equal(dirname(seen[0]), await realpath(primary));
+  const alias = join(f.ws, 'alias'); await symlink(primary, alias);
+  // Canonical aliases are tried once, including when the candidate is blocked.
+  await mkdir(join(primary, '.codex')); await writeFile(join(primary, '.codex/config.toml'), '');
+  await assert.rejects(withCodexInspectionEnvironment({ ...base, fallbackParent: alias }), { key: 'codex_tmpdir' });
+  await assert.rejects(withCodexInspectionEnvironment({ ...base, platform: 'win32' }), { key: 'codex_tmpdir' });
+  const selected = await withCodexInspectionEnvironment(base, async neutral => dirname(neutral));
+  assert.equal(selected, await realpath(fallback));
+  // A non-directory candidate forces mkdtemp failure after realpath succeeds.
+  const notDirectory = join(f.ws, 'file-parent'); await writeFile(notDirectory, '');
+  assert.equal(await withCodexInspectionEnvironment({ ...base, env: { TMPDIR: notDirectory } }, async n => dirname(n)), await realpath(fallback));
+  await mkdir(join(fallback, '.codex')); await writeFile(join(fallback, '.codex/config.toml'), '');
+  await assert.rejects(withCodexInspectionEnvironment(base), { key: 'codex_tmpdir' });
+  await rm(join(fallback, '.codex'), { recursive: true });
+  await f.config('model = "private-copy"\n');
+  await f.setState('codex', { recordInspectionModes: true });
+  await inspectCodexServers({ ...base, home: f.codexHome });
+  const call = (await f.calls('codex')).at(-1);
+  assert.equal(dirname(call.cwd), await realpath(fallback)); assert.equal(call.home, join(call.cwd, 'user-file'));
+  assert.deepEqual(call.modes, { cwd: 0o700, home: 0o700, config: 0o600 });
+  const cleanAlias = join(f.ws, 'clean-alias'); await symlink(fallback, cleanAlias);
+  await inspectCodexServers({ ...base, env: { ...f.env, TMPDIR: cleanAlias }, home: f.codexHome });
+  assert.equal(dirname((await f.calls('codex')).at(-1).cwd), await realpath(fallback));
+  await noAttempts(options);
 });
 
 await Promise.all(pending);

@@ -215,7 +215,14 @@ export async function main(argv, {
     const endpointOverride = options.endpoint;
     verbose = options.verbose;
     const translate = t;
-    t = (key, params) => technical.has(key) && !verbose && !options.argv.includes('--dry-run') ? undefined : translate(key, params);
+    t = (key, params) => {
+      const text = technical.has(key) && !verbose && !options.argv.includes('--dry-run') ? undefined : translate(key, params);
+      if (text && options.argv[0] === 'status' && ['codex_tmpdir', 'codex_managed'].includes(key)) {
+        progress.codexEnvironmentCauses ??= new Set();
+        progress.codexEnvironmentCauses.add(key);
+      }
+      return text;
+    };
     t.locale = translate.locale;
     if (forceReauthorize && !options.argv.includes('--reauthorize')) options.argv.push('--reauthorize');
     const selection = parseClient(options.argv, SetupError);
@@ -463,7 +470,7 @@ export async function main(argv, {
     return Math.max(localStatusCode, error instanceof SetupError ? error.code : 1);
   } finally {
     if (localDetection) {
-      try { await localStatus(localDetection, { write, t, verbose }); }
+      try { await localStatus(localDetection, { write, t, verbose, emittedEnvironmentCauses: progress.codexEnvironmentCauses }); }
       catch { write(t('local_status_unverified')); }
     }
     process.off('SIGINT', interrupt);
