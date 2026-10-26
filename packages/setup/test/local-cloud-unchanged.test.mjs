@@ -1,7 +1,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFile, writeFile, readdir, cp, rm, mkdtemp } from 'node:fs/promises';
+import { readFile, writeFile, readdir, cp, rm, mkdtemp, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
@@ -218,8 +218,45 @@ for (const lang of ['zh', 'en']) test(`L02 fresh cloud choice preserves hosted f
   assert.equal(routed.prompts.filter(p => /Where should memory live|記憶要存在哪裡/u.test(p.prompt)).length, 1);
   await assert.rejects(readdir(join(routedFixture.home, 'local-memory')), { code: 'ENOENT' });
 });
-for (const scenario of scenarios) for (const args of actions) test(`L06 hosted baseline: ${scenario}; ${args.join(' ')}`, async t => {
-  const historical = await baselineForTest(t);
+// The fixture runner supplies internal inspection paths by calling the library
+// router, then delegates the unchanged hosted flow to main. Production main
+// needs no new option or environment seam.
+async function routingFixture(scratch, inspection) {
+  const root = process.env.CAIRN_SETUP_TEST_PACKAGE || fileURLToPath(new URL('../', import.meta.url));
+  const lib = name => pathToFileURL(join(root, 'lib', name + '.mjs')).href;
+  const wrapper = join(scratch, 'routed-setup.mjs');
+  for (const name of ['errors', 'transport']) await writeFile(join(scratch, name + '.mjs'),
+    `export * from ${JSON.stringify(lib(name))};`);
+  await writeFile(wrapper, `import{main as hosted}from${JSON.stringify(lib('setup'))};
+    import{routeLocalMode,localStatus}from${JSON.stringify(lib('local-mode'))};
+    import{parseOptions}from${JSON.stringify(lib('options'))};
+    import{parseClient}from${JSON.stringify(lib('codex'))};
+    import{SetupError}from${JSON.stringify(lib('errors'))};
+    import{translator}from${JSON.stringify(lib('messages'))};
+    import{spawn}from'node:child_process';import{writeSync}from'node:fs';
+    export async function main(argv,options={}){
+      const parsed=parseOptions(argv),selection=parseClient(parsed.argv,SetupError);
+      const write=options.write??(line=>{if(line!==undefined)writeSync(1,line+'\\n');});write.literal??=write;
+      const runClaude=args=>new Promise(resolve=>{const child=spawn('claude',args,{stdio:['ignore','pipe','pipe']});
+        let stdout='',stderr='',error;child.stdout.on('data',v=>stdout+=v);child.stderr.on('data',v=>stderr+=v);
+        child.on('error',v=>error=v);child.on('close',status=>resolve({stdout,stderr,error,status}));});
+      const context={...options,env:process.env,inspection:${JSON.stringify(inspection)},write,t:translator(parsed.lang??'en'),
+        runClaude,supportedNode:()=>true,nodeVersion:process.versions.node};
+      const result=await routeLocalMode(parsed,selection,context);
+      if(result.handled)return result.code;
+      const code=await hosted(argv,{...options,disableLocalMode:true});
+      if(result.detection)await localStatus(result.detection,context);
+      return Math.max(code,result.statusCode??0);
+    }`);
+  return pathToFileURL(wrapper).href;
+}
+const cells = [
+  ...scenarios.flatMap(scenario => actions.map(args => ({ scenario, args, label: 'L06' }))),
+  ...scenarios.slice(0, 4).flatMap(scenario => [['setup'], ['setup', '--client', 'claude'], ['setup', '--cloud'],
+    ['setup', '--dry-run'], ['status'], ['pause']].map(args => ({ scenario, args, label: 'L24' }))),
+];
+for (const { scenario, args, label } of cells) test(`${label} hosted baseline: ${scenario}; ${args.join(' ')}`, async t => {
+  const historical = label === 'L24' ? acceptBaseline(t, await historicalInstaller(), true) : await baselineForTest(t);
   if (!historical) return;
   const f = await fixture(t, { claude: scenario !== 'Codex qualified' && scenario !== 'Codex fallback',
     codex: scenario !== 'Claude only', qualified: scenario !== 'Codex fallback' });
@@ -236,20 +273,32 @@ for (const scenario of scenarios) for (const args of actions) test(`L06 hosted b
     await writeFile(join(f.home, '.claude.json'), JSON.stringify({ mcpServers: { cairn: { type: 'stdio', command: 'legacy', args: [] } } }));
   }
   if (scenario === 'Claude inspection failure') await f.setClaudeState({ fail: 'plugin list --json', failCode: 7 });
+  let inspectionTmpdir, routedModule;
+  if (label === 'L24') {
+    inspectionTmpdir = join(f.home, 'tmp'); await mkdir(inspectionTmpdir);
+    await mkdir(f.codexHome, { recursive: true });
+    await writeFile(join(f.codexHome, 'config.toml'), await readFile(join(f.codexHome, 'config.toml')).catch(error => {
+      if (error.code !== 'ENOENT') throw error; return Buffer.from('model = "fixture"\n');
+    }), { mode: 0o600 });
+    const fallbackParent = join(f.scratch, 'fallback'); await mkdir(fallbackParent);
+    routedModule = await routingFixture(f.scratch, { fallbackParent, managedPaths: [] });
+  }
+  const run = options => f.run({ ...options, tmpdir: inspectionTmpdir });
   const saved = join(f.scratch, 'baseline-home'); await cp(f.home, saved, { recursive: true });
   const nativeState = await readFile(join(f.scratch, 'claude.json'));
   const codexState = await readFile(join(f.scratch, 'codex.json'));
   const choices = { claude: 'no', codex: 'no' }, fixedNow = Date.now();
   if (args.length === 1 && args[0] === 'setup') {
     const before = await inventory(f.home), calls = (await f.orderedCalls()).length;
-    const conflict = await f.run({ args: ['setup', '--local'], disableLocalMode: false });
+    const conflict = await run({ args: ['setup', '--local'], disableLocalMode: false, ...(routedModule ? { module: routedModule } : {}) });
     assert.equal(conflict.code, 2, conflict.stdout);
     assert.match(conflict.stdout, scenario === 'Claude inspection failure' ? /Cannot inspect/ : /Cloud memory is configured/);
     assert.deepEqual(await inventory(f.home), before);
     assert.deepEqual((await f.orderedCalls()).slice(calls).filter(callsThatMutate), []);
   }
   const beforeCalls = await f.calls(), beforeOrdered = (await f.orderedCalls()).length;
-  const baseline = await f.run({ args, choices, fixedNow, disableLocalMode: true, module: historical.module });
+  // --cloud selects the pre-existing hosted setup; 0.5.3 had no mode flag.
+  const baseline = await run({ args: args.filter(arg => arg !== '--cloud'), choices, fixedNow, disableLocalMode: true, module: historical.module });
   const baselineFiles = await inventory(f.home, true), baselineCalls = await f.calls();
   const mutating = (all, start) => Object.fromEntries(['claude', 'codex'].map(client => [client,
     all[client].slice(start[client].length).filter(callsThatMutate).map(call => ({ args: call.args.map(arg => normalizeRuntime(arg, f.codexHome)), keys: call.keys, endpoint: call.endpoint, pairingRecord: call.pairingRecord }))]));
@@ -261,7 +310,7 @@ for (const scenario of scenarios) for (const args of actions) test(`L06 hosted b
   };
   await t.test('immutable 0.5.3 versus current hosted-only path', async () => {
     await restore(); const start = await f.calls(), orderedStart = (await f.orderedCalls()).length;
-    const disabled = await f.run({ args, choices, fixedNow, disableLocalMode: true });
+    const disabled = await run({ args, choices, fixedNow, disableLocalMode: true });
     assert.equal(disabled.code, baseline.code, disabled.stdout);
     assert.equal(normalized(disabled.stdout, f.codexHome), normalized(baseline.stdout, f.codexHome));
     assert.deepEqual(disabled.prompts, baseline.prompts);
@@ -274,7 +323,7 @@ for (const scenario of scenarios) for (const args of actions) test(`L06 hosted b
   });
   await restore();
   const beforeRouted = await f.calls(), routedOrdered = (await f.orderedCalls()).length;
-  const routed = await f.run({ args, choices, fixedNow, disableLocalMode: false });
+  const routed = await run({ args, choices, fixedNow, disableLocalMode: false, ...(routedModule ? { module: routedModule } : {}) });
   assert.equal(routed.code, baseline.code, routed.stdout);
   assert.equal(normalized(routed.stdout, f.codexHome), normalized(baseline.stdout, f.codexHome));
   assert.deepEqual(routed.prompts, baseline.prompts);
