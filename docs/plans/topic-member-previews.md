@@ -1,11 +1,12 @@
 # Opt-in bounded topic member previews (P1)
 
-Status: **draft contract for non-author audit, 2026-10-26; no implementation or
-performance acceptance claimed.** Repository base: `ff6616a1`, branch
-`feat/topic-member-previews`. This packet adds only this file, remains
-uncommitted, and leaves the frozen [E1-M contract](topic-overview-member-pages.md)
+Status: **revision 1 for re-check, base `eb3a0675`, 2026-10-26; no implementation
+or performance acceptance claimed.** Branch: `feat/topic-member-previews`;
+the original repository baseline was `ff6616a1`. This revision changes only
+this file and leaves the frozen [E1-M contract](topic-overview-member-pages.md)
 untouched. Normative P1 requirements below describe future behavior; sections
-explicitly describing the baseline cite current source locations.
+explicitly describing the baseline cite current source locations. Audit probe
+results and product targets supplied for this revision are attributed below.
 
 ## Purpose and compatibility boundary
 
@@ -85,7 +86,7 @@ time, work or response-byte allowance exists.
 type MemberPreview =
   | { status: "available"; text: string; truncated: boolean }
   | { status: "unavailable"; reason:
-        "empty" | "content_limit" | "invalid_text"
+        "empty" | "trimmed_prefix_empty" | "content_limit" | "invalid_text"
         | "grapheme_too_large" | "segmenter_unavailable" };
 
 type PreviewRef = MemberRef & { preview: MemberPreview };
@@ -111,15 +112,16 @@ Every emitted P1 ref has exactly one preview result. Unavailability means:
 | Reason | Meaning |
 | --- | --- |
 | `empty` | The complete, valid source normalizes to an empty string. |
+| `trimmed_prefix_empty` | The normalized source is nonempty, but whole-grapheme trailing-whitespace removal empties the bounded prefix. Do not emit an empty available preview or skip ahead to a later grapheme. |
 | `content_limit` | Source exceeds 12,000 UTF-8 bytes or, after bounded decoding, 4,000 UTF-16 code units. No prefix of an over-limit source is returned. |
 | `invalid_text` | Source is null/non-TEXT on an otherwise eligible row, invalid UTF-8, ill-formed Unicode, or contains NUL. Do not repair it into a different preview. |
 | `grapheme_too_large` | The first normalized grapheme alone exceeds 1,024 UTF-8 bytes. Do not split it or return an empty available preview. |
 | `segmenter_unavailable` | The Worker cannot provide the required grapheme segmenter/capability described below. Skip source extraction in this case. |
 
 If several apply, use `segmenter_unavailable` first; otherwise source type,
-byte-size, decoding/UTF-16-size, normalization, then grapheme checks determine
-the reason in that order. Invalid decoding/NUL is `invalid_text`; valid decoded
-text over 4,000 units is `content_limit`.
+byte-size, decoding/UTF-16-size, normalization, then grapheme and prefix-trimming
+checks determine the reason in that order. Invalid decoding/NUL is
+`invalid_text`; valid decoded text over 4,000 units is `content_limit`.
 
 Not opting in omits `preview` entirely. Hidden/nonmembers produce no ref and
 no unavailability placeholder. A pending budget-limited candidate is not
@@ -139,6 +141,10 @@ prefix whose final grapheme or trailing whitespace is uncertain.
    for the whitespace step (a decoder must not silently replace malformed
    sequences or consume a BOM as a separate preprocessing policy). Validate
    well-formed Unicode, absence of NUL, and the 4,000 UTF-16-unit source cap.
+   Before that last check, a byte-approved source can decode to **12,000
+   UTF-16 units**; for example, 12,000 ASCII bytes decode fully and are then
+   rejected as `content_limit`. Account for that temporary string and validation
+   work even though it never reaches normalization or segmentation.
 2. Normalize whitespace first, equivalently
    `content.replace(/\s+/gu, " ").trim()` under ECMAScript semantics. This
    includes CR/LF, tabs, NBSP, ideographic spaces, line/paragraph separators and
@@ -157,17 +163,32 @@ prefix whose final grapheme or trailing whitespace is uncertain.
    first grapheme that would exceed either cap; never skip a grapheme and
    resume later. If the first grapheme exceeds the byte cap, return
    `unavailable/grapheme_too_large`.
-5. If that selected prefix ends in the normalized ASCII space, remove that
-   final space by moving back to its grapheme boundary. This is part of choosing
-   a trimmed prefix; do not fill the vacated position with a later character.
-   The output is a trimmed, single-line prefix with no split surrogate pair,
-   combining sequence, ZWJ emoji or CJK character.
-6. Return `available` with `text` equal to that prefix and
+5. While the selected prefix is nonempty and
+   `prefix.trimEnd() !== prefix`, remove its **entire last grapheme**, using
+   the boundaries from step 3, then repeat the check. A grapheme may contain a
+   non-whitespace Prepend character followed by a space; never remove only that
+   space, and never assume one whole-grapheme removal is enough. Do not refill
+   from later graphemes. The normalized input has no leading whitespace, so a
+   nonempty prefix remaining after this loop equals its own `.trim()`.
+   If the loop removes the entire prefix, return
+   `unavailable/trimmed_prefix_empty`. This distinct reason preserves `empty`
+   for an empty normalized source and keeps every available preview nonempty.
+6. Otherwise return `available` with `text` equal to that nonempty prefix and
    **`truncated: text !== normalized`**. Thus a nonempty exactly-N-grapheme
-   source fitting the byte cap has `false`; N+1 has `true`. Byte truncation also
-   has `true`. Whitespace normalization alone does not mean truncation.
+   source fitting the byte cap has `false`; an available prefix of an N+1
+   source has `true`. Byte truncation and whole-grapheme whitespace removal also
+   give `true` when a nonempty preview remains. Whitespace normalization alone
+   does not mean truncation.
    Unavailable results have neither `text` nor `truncated`; unknown source
    completeness is never represented by `truncated:false`.
+
+Exact regression cases (escaped strings denote their literal code points;
+both complete sources remain unchanged by step 2):
+
+| Stored/normalized source | Segments from step 3 | `maxChars` | Exact `preview` result |
+| --- | --- | --- | --- |
+| `"A \u0600 B"` | `["A"," ","\u0600 ","B"]` | 3 | `{status:"available",text:"A",truncated:true}`; remove `"\u0600 "`, then `" "`. |
+| `"\u0600 B"` | `["\u0600 ","B"]` | 1 | `{status:"unavailable",reason:"trimmed_prefix_empty"}`; remove `"\u0600 "` entirely. |
 
 There is no API-level ellipsis or synthetic suffix. An enormous combining/ZWJ
 cluster is allowed to consume the entire source bound; it is handled by the
@@ -177,22 +198,46 @@ allocate an array of every segment.
 
 ### Node and ICU support
 
-P1 supports **Node 22.16.0 and 24.15.0 with their full-ICU builds**. Those are
+P1 retains compatibility with **Node 22.16.0 and 24.15.0 with full ICU**. Those are
 already named in E1-M's runtime acceptance contract
 (`docs/plans/topic-overview-member-pages.md:813`). The official builds of both
 versions are configured with internationalization and full ICU (their bundled
 `include/node/config.gypi`), and both binaries contain V8's `JSSegmenter::New`
-implementation; this was static inspection of the reference machine's installed
-builds, not execution of a capability test. No runtime support test or timing
-claim is made by this document.
+implementation; this was the original author's static inspection of the
+reference machine's installed builds. The product additionally requires launch
+measurements on production **Node 24.22.1**, reported as not yet installed on
+that machine. Passing local compatibility checks on 22.16.0/24.15.0 cannot
+substitute for production-runtime acceptance. All three runtimes must satisfy
+the same functional/guard obligations before being accepted for P1.
 
 Reduced ICU data does not automatically imply unusable grapheme segmentation.
-On the opted-in path, initialize the segmenter in the Worker and require its
-grapheme mode plus fixed canaries for combining marks, surrogate-pair emoji,
-emoji modifier/ZWJ family, flag, CRLF, Japanese combining marks and mixed CJK
-text. Canaries compare complete segment strings/boundaries, not locale display
-names. If the constructor is missing/throws, mode is wrong, or any canary fails,
-use `segmenter_unavailable` for every otherwise eligible ref; never fall back
+On the opted-in path, initialize the segmenter in the Worker with locale
+`"und"` and require `resolvedOptions().granularity === "grapheme"` plus the
+following exact table, identified as
+**`topic-member-previews-grapheme-canaries-v1`**. Strings use JavaScript escaped
+code points/UTF-16 pairs; no displayed escape is a literal backslash in the
+input. Feed these inputs directly to the segmenter, **before any whitespace
+normalization** (in particular, preserve the CRLF canary). Compare the complete
+ordered segment array exactly, including spaces and absence of extra segments;
+do not substitute locale display names or category-equivalent examples.
+
+| Canary | Exact input | Exact expected segment array |
+| --- | --- | --- |
+| ASCII + combining accent | `"\u0041\u0065\u0301\u0042"` | `["\u0041","\u0065\u0301","\u0042"]` |
+| Surrogate-pair emoji | `"\u0041\uD83D\uDE00\u0042"` | `["\u0041","\uD83D\uDE00","\u0042"]` |
+| Emoji skin-tone modifier | `"\uD83D\uDC4D\uD83C\uDFFD"` | `["\uD83D\uDC4D\uD83C\uDFFD"]` |
+| Emoji variation selector | `"\u2708\uFE0F"` | `["\u2708\uFE0F"]` |
+| ZWJ family | `"\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67\u200D\uD83D\uDC66"` | `["\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67\u200D\uD83D\uDC66"]` |
+| Regional-indicator flag | `"\uD83C\uDDEF\uD83C\uDDF5"` | `["\uD83C\uDDEF\uD83C\uDDF5"]` |
+| CRLF | `"\u0041\u000D\u000A\u0042"` | `["\u0041","\u000D\u000A","\u0042"]` |
+| Japanese combining dakuten | `"\u304B\u3099\u306A"` | `["\u304B\u3099","\u306A"]` |
+| Mixed CJK/Latin/supplementary CJK/emoji | `"\u4E2D\u65E5\u0041\uD840\uDC00\uD83D\uDE00"` | `["\u4E2D","\u65E5","\u0041","\uD840\uDC00","\uD83D\uDE00"]` |
+| Prepend + trailing whitespace, repeated removal | `"\u0041\u0020\u0600\u0020\u0042"` | `["\u0041","\u0020","\u0600\u0020","\u0042"]` |
+| Prepend + trailing whitespace, all removed | `"\u0600\u0020\u0042"` | `["\u0600\u0020","\u0042"]` |
+
+If the constructor is missing/throws, mode is wrong, iteration throws, or any
+table row fails, use `segmenter_unavailable` for every otherwise eligible ref;
+never fall back
 to code units, code points or English word segmentation. A reduced-data build
 that passes uses the same grapheme algorithm, but full runtime acceptance is
 still required. Unsupported arbitrary Unicode/ICU versions are not certified
@@ -200,10 +245,13 @@ by a few canaries. These future capability checks are specified tests, not
 checks run here, and must not run on the E1-M/default-overview paths.
 
 Bind the effective Node/V8/ICU/Unicode segmentation fingerprint and P1 algorithm
-identity into P1 traversal configuration. Changing those invalidates traversal
-state. Output need not be identical between different ICU releases for newly
-introduced Unicode characters; it must be stable within the bound traversal,
-and all explicit acceptance cases must pass on both required runtimes.
+identity **and the exact canary-table version ID** into P1 traversal
+configuration, including cursor and replay binding. A table change requires a
+new table ID; implementations may not silently vary the table under v1.
+Changing any of those identities invalidates traversal state. Output need not
+be identical between different ICU releases for newly introduced Unicode
+characters; it must be stable within the bound traversal,
+and all explicit acceptance cases must pass on each accepted runtime.
 
 ## Bounded source access and its actual cost
 
@@ -259,22 +307,32 @@ point path on P1 only; unavailable required SQL support is
 
 **`substr` limits the result, not SQLite's source-value materialization.** The
 current backend is native `DatabaseSync` (`core/read-database.mjs:6`,
-`core/read-database.mjs:24`), not a streaming TEXT reader. Static inspection of
-both installed Node binaries' SQLite `substrFunc` shows complete-value text
-access/conversion (`valueToText`) before result construction. SQLite's C API
-describes text access as a UTF-8 TEXT value, not an incremental prefix
-(`sqlite3_value_text` in `sqlite3.h`); its string/BLOB/row limit is a separate
-native limit (`SQLITE_MAX_LENGTH`). Accordingly budget an entire approved
-content value in SQLite, even for a tiny result. BLOB extraction is used for
-strict UTF-8 decoding, not as a claim that SQLite performs streaming I/O.
+`core/read-database.mjs:24`), not a streaming TEXT reader. In the size-approved
+branch, SQLite loads the complete `content` value before applying
+`CAST(content AS BLOB)`. The query then selects `substrFunc`'s **BLOB path**,
+which obtains the complete BLOB via `sqlite3_value_blob` and takes the requested
+byte range. The auditor's static inspection of both installed reference Node
+binaries distinguishes that path from the TEXT path's `valueToText` conversion;
+the latter does **not** describe this query's `substr` argument. Accordingly
+budget the full approved content value before the cast and full-value BLOB
+access afterward, including potential native copies; the 12,001-byte result
+bound is not a physical-I/O bound. SQLite's value accessors are documented in
+`sqlite3.h`; its native string/BLOB/row limit is separate
+(`SQLITE_LIMIT_LENGTH`, with a build maximum `SQLITE_MAX_LENGTH`). BLOB
+extraction enables strict UTF-8 decoding, not streaming I/O.
 
-Offline evidence here is limited to core source, installed build metadata,
-the local SQLite header and static binary inspection. In particular, the
+The original author used core source, installed build metadata, the SQLite
+header and static binary inspection. For revision 1 the non-author auditor
+supplied in-memory SQL and Unicode probe results: **exit 0 on Node 22.16.0 and
+24.15.0**, including successful execution of the proposed guarded BLOB query.
+These results establish query execution/functional examples, not bounded
+physical I/O or production-runtime acceptance. In particular, the
 guard's metadata-only behavior and lazy extraction must be confirmed against
 each bundled SQLite's query bytecode/native source during implementation
-review; no SQL probe or measurement was run for this draft. This is a required
-acceptance check, not permission to ship an unguarded query. Inspect
-`octet_length(content)` as a direct-column operation and ensure an over-limit
+review, including Node 24.22.1. No new probe or measurement was run by the author
+for this revision. This is a required acceptance check, not permission to ship
+an unguarded query. Inspect `octet_length(content)` as a direct-column operation
+and ensure an over-limit
 row never reaches the content-materializing branch. If that cannot be
 established on a supported runtime, P1 must not claim the bounded native-read
 contract or launch on that runtime.
@@ -297,13 +355,20 @@ The resulting conservative bounds for P1's *additional content work* are:
 
 | Resource | Worst case per request |
 | --- | --- |
-| Approved source payload materialized/extracted cumulatively | `12000 * L`, at most **1,200,000 bytes**; at most one source being transformed at once. Native copies/cache overhead is additional. |
-| Valid decoded source processed | `4000 * L`, at most **400,000 UTF-16 units**; linear normalization/segmentation within that bound. |
+| Byte-approved source payload materialized/extracted cumulatively, including later rejection | `12000 * L`, at most **1,200,000 bytes**; at most one source being transformed at once. Native copies/cache overhead is additional. |
+| Decoding/validation output, including later-rejected sources | Up to **12,000 UTF-16 units per candidate**, `12000 * L` or **1,200,000 units** cumulatively. Budget up to **24,000 bytes of UTF-16 payload** for the temporary decoded string per candidate, coexisting with up to 12,000 source bytes, plus object/decoder/native-copy overhead. Actual JS string storage may be more compact; do not rely on that for the budget. Invalid decodes also consume input/validation work. |
+| Accepted text entering normalization/segmentation | Up to **4,000 UTF-16 units per candidate**, `4000 * L` or **400,000 units** cumulatively; rejected decoded sources do not enter these stages. Normalized strings/segment metadata are additional temporary allocations within this accepted-text bound. |
 | Available preview text before JSON escaping | `1024 * L`, at most **102,400 UTF-8 bytes**. |
 | Whole serialized response delivered to the host | At most requested `maxBytes`, never more than **262,144 UTF-8 bytes**, including JSON escaping and every envelope field. |
 | Content work at worker/host boundary | Only the bounded result crosses; source bytes/normalized bodies never cross. Host decode, structured clone and UI work remain measurement obligations. |
 
 These payload bounds are not claims about total SQLite I/O, RSS or wall time.
+Instrument bytes decoded/attempted, decoded UTF-16 units, validation failures
+by reason, accepted normalization units and peak temporary payload separately.
+Include the 12,000-ASCII-byte rejection case: it reaches 12,000 decoded units
+before `content_limit`, contributes zero normalization/segmentation units, and
+must not disappear from work/allocation counters merely because no text is
+returned. Keep these counters numeric and release rejected buffers promptly.
 Index seeks, overflow pages, metadata validation, native copies, cache misses,
 record/header sizes, filesystem and scheduling costs also exist. Native source
 work is O(L times the approved row-content size), **not O(L times maxChars)**;
@@ -369,7 +434,8 @@ P1 continuations use a distinct authenticated cursor family/purpose
 `topic-member-previews-v1/cursor`, at most 256 ASCII bytes, with E1-M's
 ephemeral Worker-key and canonical-encoding rules. Bind all existing request,
 store/file/schema, access, snapshot, traversal and sequence fences plus
-normalized preview options, fixed source/byte caps and segmentation fingerprint.
+normalized preview options, fixed source/byte caps, segmentation fingerprint
+and `topic-member-previews-grapheme-canaries-v1` table identity.
 Changing `maxChars` or P1 configuration on an authenticated P1 continuation is
 `cursor_stale`; malformed/wrong-family cursors are `invalid_cursor`. E1-M and
 P1 cursors cannot be interchanged. Retain one member traversal total across
@@ -415,8 +481,9 @@ Retain short deferred quanta of at most 64 charged units or 5ms between units;
 commit before yielding. Those are the existing reader quantum limits
 (`core/topic-members-reader.mjs:127`). Additionally charge each preview
 candidate at least one unit for its indexed type/size/source point read, one
-for strict decode/normalization of the bounded source, and one for bounded
-segmentation/preview construction. Charge extra membership/projection checks
+for strict decoding/validation of up to 12,000 UTF-16 units and normalization
+of at most 4,000 accepted units, and one for bounded segmentation/preview
+construction. Charge extra membership/projection checks
 as E1-M work; never hide them in those units. For an unavailable capability,
 charge the bounded per-ref outcome step and do not read content. Reserve final
 fence and envelope work before admitting any source operation. Source bytes
@@ -487,7 +554,9 @@ work/bytes/timings and aggregate reason counts only; never content or prefixes.
 
 ## Acceptance required after audit
 
-No tests, SQL probes, builds or measurements are run for this document.
+The author runs no tests, SQL probes, builds or measurements for this revision.
+The supplied auditor probes (exit 0 on both reference runtimes) are prior
+functional evidence only; no performance measurement result has been supplied.
 The non-author auditor must review the contract before implementation.
 Use owned synthetic fixtures, no network/keys/real user stores. Expected text
 is computed from canonical stored content. Functional assertions and
@@ -508,8 +577,13 @@ only in an opt-in measurement command, scheduled serially by the primary.
    mixed zh/ja/Latin/emoji. Place each case across the cut. Validate exact
    cluster strings, not only `isWellFormed()`. Cover a very long single cluster
    and an over-byte-cap first/later cluster. Invalid input Unicode is never
-   repaired into a preview. Exercise full ICU on both required Nodes and
-   injected missing/reduced/failing segmentation support deterministically.
+   repaired into a preview. Execute every exact row of
+   `topic-member-previews-grapheme-canaries-v1` on all accepted Nodes. Inject a
+   wrong segment, missing/extra segment, constructor/iterator throw and wrong
+   mode, including a failure isolated to each table row; each must select
+   `segmenter_unavailable` without a source extraction. Inject reduced support
+   that passes the exact table and verify it uses the normal algorithm.
+   Verify the canary-table ID is bound into configuration/cursors/replay.
 3. **Normalization:** leading/trailing/multiple spaces, tabs, CRLF/newlines,
    Unicode whitespace, NBSP/U+3000/BOM, whitespace-only content and U+200B.
    Preserve markdown literally. Cover long leading whitespace and a combining
@@ -517,11 +591,19 @@ only in an opt-in measurement command, scheduled serially by the primary.
    normalization, trimmed output, and no further NFKC/redaction.
 4. **Exact boundaries:** empty, 1, exactly N, N+1 and N−1 graphemes at N=1,
    default 72 and maximum 80; byte cap exactly 1,024 and next whole cluster
-   over it; a cut ending at a space; no engine-added ellipsis. Assert
+   over it; a cut ending at a space; no engine-added ellipsis. Assert the exact
+   regression outputs: source `"A \u0600 B"`, `maxChars:3` gives
+   `{status:"available",text:"A",truncated:true}` after two whole-grapheme
+   removals; source `"\u0600 B"`, `maxChars:1` gives
+   `{status:"unavailable",reason:"trimmed_prefix_empty"}`. No available text is
+   empty or ends in ECMAScript whitespace. For available results, assert
    `truncated` equals inequality with the complete normalized stored source.
 5. **Source bounds:** approved 4,000-unit/12,000-byte cases, supplementary
    strings, raw oversized rows, 12,001-byte and valid <=12,000-byte but
-   >4,000-unit rows, null/non-TEXT, NUL and malformed UTF-8. Instrument native
+   >4,000-unit rows, null/non-TEXT, NUL and malformed UTF-8. Explicitly inject
+   12,000 ASCII bytes through an owned raw fixture: require `content_limit`,
+   12,000 decoded units accounted, zero normalization/segmentation units, and
+   the larger temporary decoded allocation in counters. Instrument native
    query plan/bytecode or inspect the matching bundled source to establish
    metadata-only size guards/lazy CASE and no materialization of oversize
    content. Fail acceptance if that property cannot be proven. Assert no
@@ -550,8 +632,9 @@ only in an opt-in measurement command, scheduled serially by the primary.
    long/maximal identifiers and heavily escaped preview text, plus reads
    interleaved with overview/default member calls and close/idle/restart.
 9. **Storage/runtime/install:** real physical schema 18 and current 33, DELETE
-   and WAL, Node 22.16.0 and 24.15.0; smoke the other accepted schemas. Verify
-   no migration, journal-mode/schema/user_version change or engine data writes.
+   and WAL, Node 22.16.0, 24.15.0 and production 24.22.1; smoke the other
+   accepted schemas. Verify no migration, journal-mode/schema/user_version
+   change or engine data writes.
    Apply the existing qualified native-control/WAL SHM invariant, not
    impossible concurrent-write file equality
    (`core/test/topic-members-compatibility.test.mjs:31`,
@@ -574,36 +657,134 @@ adopted by this draft.
 
 An opt-in `measure:topic-member-previews` (or an explicitly identified extension
 of the member measurement) must exercise the **public host handle and actual
-reader Worker**. Fixture setup and source generation happen before the timed
-window. Measure cold, warm, continuation, replay and revision-change requests
-for both product worlds **1,112 and 3,336 Memories**, both journal modes, both
-required Node versions, physical v18 and current 33. Include all selection
-types, realistic multifiling, defaults and maximum common/P1 bounds, maximal
-stored source sizes, zh, ja, mixed strings, whitespace and long clusters.
+reader Worker**. The launch criteria below record the supplied product answer
+from **cairn-wiki-cd, 2026-10-26 approximately 22:50**, including its writer
+clarification; they replace the original draft's unresolved measurement targets.
+No measured outcome is implied.
 
-For every region-page request, start a concurrent writer operation in an
-independent connection/process, recording its **actual call start/end and
-commit outcome**. Use another namespace for stable traversal performance;
-separately exercise same-namespace writes and report their expected stale
-outcomes. Require actual writer-call/read-interval overlap in each measurement
-cell; lack of overlap is an invalid sample, not a pass. Exclude sleeps, process
-lifetime and fixture setup from claimed active overlap. Record failed/busy
-attempts and retries, and both processes' actual exits. No silent retries or
-writer starvation may turn into an apparent passing latency sample.
+#### Lifecycle, cells and samples
 
-| Gate | Definition and decision |
+The gated reader lifecycle is a **fresh handle for every request**:
+`openMemoryReader -> await readTopicMembers -> await close`. Measure host wall
+time from immediately before construction through completion of awaited close,
+including Worker startup/opening, input validation, dispatch, result cloning,
+deserialization, delivery and cleanup. Close in a finally path on failure and
+include that elapsed time. Do not time only the internal reader or SQL call.
+Use fixture-ledger selections/revisions; do not warm the handle with an
+overview call or copy another handle's origin token into the fresh request.
+Retained-handle reads, continuations and replay are **informational latency
+measurements only**, while still subject to functional and resource invariants.
+
+Use production **Node 24.22.1** for launch acceptance. The locally available
+22.16.0/24.15.0 runs provide compatibility/comparison evidence, not a waiver of
+the production run. Product reports 24.22.1 as not yet installed; installing it
+and running measurements are outside this docs-only revision. Missing required
+production results mean **not yet accepted**, not a pass inferred from another
+Node version.
+
+A measurement cell identifies world size (1,112 or 3,336 Memories), journal mode
+(DELETE or WAL), schema (physical 18 or current 33), selection (L1, L2 or
+unfiled), page limit and load condition. Load conditions are **idle**, concurrent
+**same-owner writer**, and concurrent **other-owner writer**. Record the runtime
+and fixture/profile as part of each cell; never pool modes, schemas, world sizes
+or load conditions into one percentile. Fixtures include realistic multifiling,
+zh, ja and mixed strings, plus Memories with ZWJ emoji, combining marks, leading
+whitespace and 4,000-unit maximum stored content. Generate fixtures before the
+timed window and derive expectations from their canonical stored ledger.
+
+Preview options are on with `maxChars:72`. **`limit:24` is the reader-latency
+gate; `limit:100` is a report-only latency worst case.** Use unchanged defaults
+for the other common request caps in the main cells; label separate stress
+profiles with their actual caps. For every cell, discard exactly **3 warm-up
+requests**, each also with a fresh handle, then collect **at least 50 measured
+fresh-handle requests**. Report the warm-ups separately; the <=100ms main-loop
+invariant also applies to warm-ups and report-only cells. Record actual emitted
+ref counts, status/coverage and busy/stale/timeout outcomes with the latencies.
+
+Collect an additional **at least 10 cold runs per cell** from a fresh Node
+process, or a fresh Worker with documented equivalence to the public reader's
+spawn topology. Do not pre-open or prime that process/Worker with the target
+store; do not put warm-ups inside a cold sample. Time the same host
+open/read/close lifecycle in the new process/Worker, including the reader's
+Worker startup; report outer Node-process launch time separately if collected.
+Keep cold distributions separate from the >=50-request series;
+warm-ups do not erase the cold obligation. Latency for a fresh handle in an
+otherwise warm host is not a substitute for this cold series.
+
+Use nearest-rank percentiles: sort durations and select ranks `ceil(0.50*n)`
+and `ceil(0.95*n)` for p50/p95. Report **p50, p95 and maximum**, sample counts,
+all error/status counts and the count of main-loop blocks **strictly >100ms**
+for each cell/series. Timed attempts include typed failures; also report
+successful-page latency separately so fast refusals cannot masquerade as page
+performance. An error is not a page; a cell with no successful pages cannot
+establish page performance and is inconclusive. Preserve all raw numeric
+attempt records. No silent retry, removal of slow samples or pooling of retries
+into one fast success is allowed; report any retry-inclusive user latency too.
+
+#### Per-request writers
+
+In each concurrent cell use an independent connection/process with a fresh
+`openMemoryCore -> write -> close` lifecycle, scheduled approximately every
+**20ms** while a reader request is active. Cover capture and review writes and
+report their operation types separately. Exercise the signed-in owner and a
+different owner in separate cells. Include same-owner writes in the measured
+namespace to exercise snapshot invalidation; same-owner/different-namespace
+stable traversals are useful additional observations, not a replacement.
+
+Record lifecycle boundaries and **actual write-call start/end, deadline and
+commit/error outcome**. Each concurrent measured request needs actual
+write-call/read-call overlap; a live writer process, an overlapping open/close
+or a sleep interval does not prove it. Coordinate start where necessary and
+mark a missed-overlap attempt invalid for that concurrency claim, retaining its
+timings in the report and collecting a replacement without selecting for speed.
+Require >=50 valid overlapping requests after the warm-ups for each concurrent
+cell and >=10 valid cold overlaps for its cold series. An operation lasting
+longer than the approximate cadence is reported; do not queue a saturated
+backlog or tune to a throughput ratio. Record both processes' actual exits.
+
+Same-namespace changes may cause the specified `cursor_stale` outcome; record
+it explicitly and verify there is no stale preview. The writer runs off the
+host reader's event loop so synchronous writer work does not contaminate reader
+main-loop attribution. Measure the writer's user-visible latency in its own
+host/process, including any waiting/retry exposed to its caller; also report
+the complete open/write/close lifecycle distribution separately.
+
+#### Decision table
+
+| Gate / reported metric | Acceptance decision |
 | --- | --- |
-| Host main loop | **Maximum request-attributable uninterrupted main-loop blockage <=100ms for every request**, including input validation, dispatch, result structured-clone/deserialization and page delivery. Use a documented heartbeat/event-loop-delay method with bracketing samples and an idle baseline; capture the final delivery stall, not only the wait for SQL. Do not substitute average/p95 or request duration for maximum blockage. Keep the writer off the host loop so its synchronous work cannot mask the reader's attribution. Report scheduling noise separately; never subtract it silently to obtain a pass. |
-| Reader p95 | Report nearest-rank p95 (`ceil(0.95*n)`) of public request-to-settlement latency by world/mode/runtime/schema/phase/bounds and separately for actual active overlap, with sample counts, max, busy/stale/timeout counts and retry-inclusive user latency. **Numeric p95 target and minimum sample count require product agreement before measurement acceptance**; no performance acceptance with those blank. Successful partials must also reach exact traversal completion within the pinned origin lifetime in the stable-writer workload; timeout/busy storms do not count as fast successful pages. |
-| Bytes per page | Every captured full response <=requested `maxBytes` (absolute ceiling 262,144 bytes); available text <=1,024 bytes/item and <=`maxChars` graphemes; approved source payload <=`12000*L` (absolute ceiling 1,200,000 bytes/request). Report these separately, with work units and extraction count. Numeric counters only; never source/preview text in reports. |
-| Writer coexistence | Show active per-request overlap, successful commits and writer latency/error distributions under the selected E1-C policy in DELETE and WAL. Record the policy and all thresholds before the queued run; no guessed inherited acceptance. |
+| Fresh handle, page 24, 1,112 Memories | Host open/read/close wall **p95 <=150ms and maximum <=400ms** in each main-series launch cell. Previews on, `maxChars:72`. |
+| Fresh handle, page 24, 3,336 Memories | Host open/read/close wall **p95 <=250ms and maximum <=600ms** in each main-series launch cell. Previews on, `maxChars:72`. |
+| Page 100 and retained handles | Reader lifecycle latency **report only**, with p50/p95/max; no page-24 latency thresholds are applied. Main-loop, byte, visibility, concurrency and applicable writer/busy requirements still apply. |
+| Cold series | At 1,112 Memories and page 24, **cold p95 <=600ms**, >=10 cold runs per cell. At 3,336, cold latency is report only; page-100 latency is report only at both sizes. The fresh main-series maximum is not an additional cold maximum; report cold max separately. Main-loop <=100ms applies to every cold run. |
+| Host main loop, every cell/series/request | **Absolute maximum uninterrupted blockage <=100ms**, including cold startup, construction, dispatch, result clone/deserialization, delivery and close. Use documented heartbeat/event-loop-delay observation with bracketing samples through cleanup and an idle baseline; capture the final stall. Maximum, not average/p95, decides; report count >100ms (must be zero). Report scheduling noise without subtracting it to claim a pass. |
+| WAL busy | **`storage_busy` count = 0** for reader and writer operations in every WAL cell/series. Record attempted operations and denominators. |
+| DELETE busy | Report reader/writer busy counts and rates, error codes and latency **without a busy-rate pass/fail threshold**. Busy is not a successful page or commit; do not relabel it as successful coverage. Other applicable gates still apply. |
+| Writer coexistence and user-visible deadlines | Actual per-request write-call overlap as specified above. Report **per-write p95/max in every reader-load cell**, separately for capture/review, with statuses and commit counts. **Capture and review must stay within their production-configured operation deadlines**, with no deadline overrun/timeout caused by reader load. Record each operation's numeric deadline, its defined start/end interval and observed duration before comparing; use existing production settings unchanged, not a larger benchmark-specific deadline. End-to-end latency includes user-visible wait/retry; retries cannot reset that deadline. No additional writer-p95 numeric ceiling, saturated-throughput target, commit ratio or reader/writer throughput ratio is a gate. |
+| Complete response and preview bounds | Every full response <=requested `maxBytes` (absolute ceiling 262,144 UTF-8 bytes); text <=1,024 UTF-8 bytes/item and <=`maxChars` graphemes. Source payload <=`12000*L`, decoded output <=`12000*L` units including rejections, and accepted normalization input <=`4000*L` units. Numeric counters only. |
 
-The <=100ms host gate is a product measurement acceptance requirement, not a
-hard-real-time guarantee derived from SQL limits. If any gate fails, do not
-enable P1: investigate source/segmentation/clone costs and bring a revised
-contract or bounded implementation to audit. Do not weaken E1-M, move timing
-assertions into ordinary tests or claim this docs packet fixes the incident.
-Primary owns queued, supervised execution and reports actual exit codes.
+Also report **per-cell preview-unavailable reason counts** (including
+`trimmed_prefix_empty`) and **bytes crossing to the host per page, p95 and max**.
+Report serialized envelope bytes and actual transport-byte accounting
+separately if structured-clone accounting differs; do not equate source bytes
+with host traffic. Include work units, extraction counts, decoding/validation
+of rejected sources, accepted normalization units and temporary-payload peaks.
+Retained-handle stable traversals must still demonstrate correct exact EOF
+within origin lifetime; lifecycle latency distributions remain informational.
+
+These are measurement gates, not hard-real-time guarantees derived from SQL
+limits. Record the selected E1-C lock policy and unchanged production writer
+deadline settings in the report. If a mandatory cell lacks samples, overlap,
+deadline evidence or production-runtime results, acceptance is incomplete.
+Unexpected functional errors remain failures even when their latency is small.
+
+If **1,112/page-24 p95 exceeds 150ms because of whole-value reads**, report the
+actual measured value and attribution. Do not silently relax the target, change
+the default `maxChars`, or lower the gated page size. Product decides whether
+to revise those inputs through a new reviewed decision. Any failing launch
+gate blocks enablement pending resolution; report-only metrics do not silently
+become new gates. Do not weaken E1-M or move timing assertions into ordinary
+tests. Primary owns queued, supervised execution and records actual exit codes.
 
 ## Later stored labels (B), questions and handoff
 
@@ -619,11 +800,12 @@ or report `truncated:false` for a different source. Such schemas require an
 explicit allowlist/compatibility decision. Existing schema-18 callers retain
 P1 without migration. No write-time column or backfill is authorized here.
 
-The remaining product question is **the numeric reader-p95 acceptance target
-and minimum samples per measurement cell**, including how cold opening is
-budgeted. The 100ms host maximum, world sizes and byte bounds above are fixed;
-reader latency must not be inferred from them. Implementation review must also
-close the explicitly recorded SQLite guard-proof obligation on both runtimes.
+The supplied product answer resolves the prior p95, sample-count, cold-start
+and writer-acceptance questions; **no new product question is opened by this
+revision**. Installing the production runtime, verifying the guarded native
+path on each accepted runtime, recording existing production writer deadlines
+and running the specified cells are outstanding execution/acceptance work,
+not missing launch criteria. None is claimed complete here.
 
 Follow the primary's dispatch traps list for later implementation/integration.
 This docs-only packet does not modify
