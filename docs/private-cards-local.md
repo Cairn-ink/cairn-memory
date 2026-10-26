@@ -11,6 +11,13 @@ transactional invalidation. The integrated local preview adds
 [installed MCP with real-TTY private confirmation](private-card-terminal-review.md).
 This is bounded local source/Memory/Card behavior, not completion of full Raw
 RL1/G1/G2, hosted approval/encryption, publication or product integration.
+The separate [retained-profile MCP path](private-card-terminal-review.md#retained-raw-profile)
+can discover existing Raw, resolve exact references and draft an explicitly
+authored Card without creating an intermediary Memory. It selects the same
+engine, not a second store or automatic promotion. MCP never confirms: the
+separate real-TTY review still binds the exact inspected revision and sources.
+Ordinary private-Card MCP remains receipt-only unless that profile is selected.
+
 Core owns private Cards; the product supplies UI, authority and publication
 around that core. See [the run/handoff guide](private-engine-v1-local.md).
 
@@ -33,8 +40,8 @@ openMemoryCore({ path, privateCards: {
 ```
 
 The source must be deliberately provided for this private Card under a disclosed
-one-off retention policy. This configuration never authorizes chat capture,
-history access, file/URL fetch, backfill, providers or production enablement.
+one-off retention policy. This submitted-note configuration alone never authorizes
+chat capture, history access, file/URL fetch, backfill, providers or production enablement.
 Only local plaintext storage is implemented. Unsupported encryption/hosted
 configuration fails `source_unavailable`; there is no plaintext hosted fallback.
 Secrets use the existing best-effort redactor, not a guarantee of secret removal.

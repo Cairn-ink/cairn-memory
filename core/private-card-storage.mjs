@@ -1,4 +1,7 @@
+import { createCardCurrentStorage, cardDependencyFence } from './card-current-storage.mjs';
+import { CARD_CURRENT_METHODS } from './card-current-input.mjs';
 import { randomUUID } from 'node:crypto';
+import { createOperationLedger, createPrivateEffectWriter, createPrivateCursor } from './private-operation-helpers.mjs';
 import { transaction } from './database.mjs';
 import { fail } from './validation.mjs';
 import { EVIDENCE_METHODS } from './private-evidence-input.mjs';
@@ -7,6 +10,7 @@ import { cardApplicabilityInside, reviewCardApplicabilityInside } from './privat
 import { ORGANIZATION_METHODS, ORGANIZATION_READS } from './private-organization-input.mjs';
 import { createPrivateOrganizationStorage } from './private-organization-storage.mjs';
 import { createCardReceiptSources } from './card-receipt-sources.mjs';
+import { createCardRawSources } from './card-raw-sources.mjs';
 import { cardText, keyed, noteInput, OWNER_NOTE_CAP, pageLimit, refs, sourceRef } from './private-card-input.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
@@ -17,10 +21,12 @@ const attribution = () => ({ sourceAuthor: null, claimant: null, subject: null,
   eventTime: null, commitment: 'unknown', status: 'unassessed' });
 
 /** Uses the same canonical SQLite handle as all existing Memory operations. */
-export function createPrivateCardStorage({ db, identity, ready, memoryMapInside, memoryTopicInside }) {
+export function createPrivateCardStorage({ db, identity, ready, memoryMapInside, memoryTopicInside, rawSources = false }) {
+  const dependencies = createCardCurrentStorage({ db, identity });
   const secret = identity.cursorSecret;
   const binding = (purpose, value) => keyed(secret, purpose, [identity.storeId, value]);
   const receiptSources = createCardReceiptSources(db, binding);
+  const raw = createCardRawSources(db, identity);
   const epoch = ns => db.prepare(`SELECT generation FROM card_epochs WHERE ${where}`)
     .get(...boundary(ns))?.generation ?? 1;
   function advance(ns) {
@@ -35,7 +41,8 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
       completeness: 'provided-note' };
   }
   function resolve(ns, ref) {
-    sourceRef(ref, ns);
+    sourceRef(ref, ns, rawSources);
+    if (ref.type === 'raw') return raw.resolve(ns, ref);
     if (ref.type === 'receipt') return receiptSources.resolve(ns, ref);
     const row = note(ns, ref.sourceId);
     if (!row || row.state !== 'available' || row.revision !== ref.revision ||
@@ -43,9 +50,18 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     return row;
   }
   function validateRefs(ns, values, existing = [], currentCardId = '') {
-    const selected = refs(values, ns);
+    const selected = refs(values, ns, rawSources), rawBudget = raw.budget();
     let bytes = 0;
     for (const ref of selected) {
+      if (ref.type === 'raw') {
+        try { raw.resolve(ns,ref,rawBudget); }
+        catch (error) {
+          if (error.code === 'source_budget_exceeded') fail('invalid_input');
+          if (!['source_unavailable','source_excluded'].includes(error.code) ||
+              !existing.some(old => JSON.stringify(old) === JSON.stringify(ref))) throw error;
+        }
+        continue;
+      }
       const table = ref.type === 'receipt' ? 'card_memory_bindings' : 'card_bindings';
       const key = ref.type === 'receipt' ? 'memory_id' : 'source_id';
       const dependents = db.prepare(`SELECT count(*) AS n FROM (SELECT DISTINCT c.id FROM ${table} b
@@ -58,7 +74,8 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
         if (error.code !== 'source_unavailable' || !existing.some(old => JSON.stringify(old) === JSON.stringify(ref))) throw error;
       }
     }
-    if (bytes > 64_000) fail('invalid_input');
+    raw.checkFanout(selected, currentCardId);
+    if (bytes+rawBudget.used > 64_000) fail('invalid_input');
     return selected;
   }
   function insertNote(ns, input) {
@@ -73,39 +90,44 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     return refFor(ns, note(ns, id));
   }
   function getRefs(id) {
-    return db.prepare(`SELECT source_ref,position FROM card_bindings WHERE card_id=?
+    const rawRefs = raw.refs(id);
+    if (rawRefs.length && !rawSources) fail('source_unavailable');
+    return [...db.prepare(`SELECT source_ref,position FROM card_bindings WHERE card_id=?
       UNION ALL SELECT source_ref,position FROM card_memory_bindings WHERE card_id=? ORDER BY position`)
-      .all(id, id).map(row => JSON.parse(row.source_ref));
+      .all(id, id), ...rawRefs].sort((a,b) => a.position-b.position).map(row => JSON.parse(row.source_ref));
   }
   function putRefs(id, values) {
+    raw.put(id,values);
     db.prepare('DELETE FROM card_bindings WHERE card_id=?').run(id);
     db.prepare('DELETE FROM card_memory_bindings WHERE card_id=?').run(id);
     const insert = db.prepare('INSERT INTO card_bindings VALUES(?,?,?,?)');
     const memoryInsert = db.prepare('INSERT INTO card_memory_bindings VALUES(?,?,?,?,?,?)');
-    values.forEach((ref, position) => ref.type === 'receipt'
+    values.forEach((ref, position) => ref.type === 'raw' ? undefined : ref.type === 'receipt'
       ? memoryInsert.run(id, ref.memoryId, ref.memoryRevision, ref.receiptId, JSON.stringify(ref), position)
       : insert.run(id, ref.sourceId, JSON.stringify(ref), position));
   }
   function support(ns, values) {
     const available = values.length > 0 && values.every(ref => {
       try { resolve(ns, ref); return true; }
-      catch (error) { if (error.code === 'source_unavailable') return false; throw error; }
+      catch (error) { if (error.code === 'source_unavailable' || ref.type === 'raw' &&
+        ['source_excluded','raw_crypto_unavailable'].includes(error.code)) return false; throw error; }
     });
     return { status: available ? 'eligible' : 'unavailable', applicability: 'unknown',
       reasons: [available ? 'unassessed' : values.some(ref => ref.type === 'receipt') ? 'memory_changed' : 'source_deleted'] };
   }
-  function metadata(ns, row) {
-    const review = cardApplicabilityInside(db, row);
+  function metadata(ns, row, readSet = [ns], { historicalReason = false, deadlineAt = Infinity } = {}) {
+    const review = cardApplicabilityInside(db, row), currentDependency = historicalReason ? null : dependencies.compare(ns, row, readSet, { deadlineAt });
     return { id: row.id, namespace: ns, revision: row.revision, state: row.state,
       bodyRevision: row.body_revision, origin: 'authored', support: { ...support(ns, getRefs(row.id)),
         applicability: review.applicability,
-        applicabilityReviewedRevision: review.reviewedRevision, checkedAt: row.updated_at },
+        applicabilityReviewedRevision: review.reviewedRevision, checkedAt: row.updated_at,
+        ...(currentDependency ? { currentDependency } : {}) },
       createdAt: row.created_at, updatedAt: row.updated_at, confirmedAt: row.confirmed_at };
   }
-  function detail(ns, row) {
+  function detail(ns, row, readSet, intent) {
     if (!row || ['cancelled', 'deleted'].includes(row.state)) return null;
-    return { ...metadata(ns, row), title: row.title, body: row.body,
-      bindings: getRefs(row.id).map(ref => ({ id: ref.sourceId ?? ref.receiptId, source: ref,
+    return { ...metadata(ns, row, readSet, intent), title: row.title, body: row.body,
+      bindings: getRefs(row.id).map(ref => ({ id: ref.type === 'raw' ? raw.bindingId(ref) : ref.sourceId ?? ref.receiptId, source: ref,
         dependency: ref.type === 'receipt' ? 'memory-interpretation' : 'source-only',
         memoryRef: ref.type === 'receipt' ? { type: 'memory', namespace: ns,
           memoryId: ref.memoryId, revision: ref.memoryRevision } : null,
@@ -119,11 +141,8 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     if (row.state !== state) fail('card_state_conflict');
     return row;
   }
-  function effect(ns, kind, type, id, revision, actionId) {
-    const ordinal = db.prepare('SELECT coalesce(max(ordinal),0)+1 AS n FROM card_effects').get().n;
-    db.prepare('INSERT INTO card_effects VALUES(?,?,?,?,?,?,?,?,?,?)')
-      .run(randomUUID(), ...boundary(ns), kind, type, id, revision, actionId, ordinal);
-  }
+  const effect = createPrivateEffectWriter(db, 'card_effects');
+  const ledger = createOperationLedger(db, 'card_operations');
   const receipt = (row, effectCount = 0) => ({ id: row.id, revision: row.revision,
     state: row.state, bodyRevision: row.body_revision ?? null, effectCount });
   function purgeCard(ns, row, state, actionId) {
@@ -131,10 +150,16 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
       updated_at=? WHERE id=?`).run(state, now(), row.id);
     db.prepare('DELETE FROM card_bindings WHERE card_id=?').run(row.id);
     db.prepare('DELETE FROM card_memory_bindings WHERE card_id=?').run(row.id);
+    raw.put(row.id,[]);
     effect(ns, state === 'deleted' ? 'card_deleted' : 'evidence_invalidated', 'card', row.id, row.revision + 1, actionId);
     return card(ns, row.id);
   }
-  function mutate(method, ns, input) {
+  function mutate(method, ns, input, currentAccess) {
+    if (CARD_CURRENT_METHODS.includes(method)) {
+      const row = existing(ns, input, 'confirmed');
+      validateRefs(ns, getRefs(row.id), [], row.id);
+      return dependencies.write(ns, row, { ...input, method }, currentAccess);
+    }
     if (method === 'submitSourceNote') return { source: insertNote(ns, { text: input.text, occurredAt: input.occurredAt }) };
     if (method === 'createCardDraft') {
       const value = input.input;
@@ -177,11 +202,13 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     if (method === 'cancelCardDraft' || method === 'deleteKnowledgeCard') {
       return receipt(purgeCard(ns, row, method === 'cancelCardDraft' ? 'cancelled' : 'deleted', input.actionId), 1);
     }
+    getRefs(row.id); // Ordinary facades cannot consume unsupported Raw bindings.
     if (method === 'confirmCardDraft') {
       validateRefs(ns, getRefs(row.id), [], row.id);
       db.prepare(`UPDATE private_cards SET state='confirmed',revision=revision+1,body_revision=1,
         confirmed_at=?,updated_at=? WHERE id=?`).run(now(), now(), row.id);
       if (input.applicability !== undefined) reviewCardApplicabilityInside(db, row.id, row.revision + 1, input.applicability);
+      if (input.currentDependencies) dependencies.write(ns, card(ns, row.id), { ...input, expectedRevision: row.revision + 1, expectedDependencyRevision: null }, currentAccess);
       return receipt(card(ns, row.id));
     }
     const selected = validateRefs(ns, input.bindings, confirmed ? getRefs(row.id) : [], row.id);
@@ -194,21 +221,9 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     effect(ns, 'evidence_invalidated', 'card', row.id, row.revision + 1, input.actionId);
     return receipt(card(ns, row.id), 1);
   }
-  function cursorEncode(value) {
-    const body = Buffer.from(JSON.stringify(value)).toString('base64url');
-    return `${body}.${binding('card-cursor-v1', body)}`;
-  }
-  function cursorDecode(cursor, expected, ns) {
-    if (cursor === undefined) return null;
-    const [body, signature, extra] = cursor.split('.');
-    if (extra !== undefined || !body || signature !== binding('card-cursor-v1', body)) fail('invalid_cursor');
-    let value;
-    try { value = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')); } catch { fail('invalid_cursor'); }
-    if (JSON.stringify(value.binding) !== JSON.stringify(expected)) fail('invalid_cursor');
-    if (value.epoch !== epoch(ns)) fail('cursor_stale');
-    if (!(typeof value.after === 'string' || Number.isSafeInteger(value.after))) fail('invalid_cursor');
-    return value;
-  }
+  const cardEpoch = ns => { const fence = cardDependencyFence(db, ns); return Object.keys(fence).length ? binding('card-dependency-cursor-v1', [epoch(ns), fence]) : epoch(ns); };
+  const cardCursor = createPrivateCursor({ binding, purpose: 'card-cursor-v1', epoch: cardEpoch });
+  const legacyCursor = createPrivateCursor({ binding, purpose: 'card-cursor-v1', epoch });
   function read(method, ns, input) {
     if (method === 'getCard') {
       const result = { card: detail(ns, card(ns, input.cardId)) };
@@ -230,6 +245,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     const expected = { store: identity.storeId, namespace: ns, method, limit: count,
       ...(method === 'listCards' ? { states: [...input.states].sort() } : {}),
       ...(method === 'getSource' ? { source: sourceRef(input.source, ns) } : {}) };
+    const { encode: cursorEncode, decode: cursorDecode } = method === 'listCards' ? cardCursor : legacyCursor;
     const cursor = cursorDecode(input.cursor, expected, ns);
     if (method === 'getSource') {
       const row = resolve(ns, input.source), parts = [];
@@ -266,7 +282,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     while (true) {
       const result = { [isCards ? 'cards' : 'effects']: items,
         coverage: { status: complete ? 'complete' : 'budget_exhausted', included: items.length, omitted: complete ? 0 : null },
-        nextCursor: complete ? null : cursorEncode({ binding: expected, epoch: epoch(ns),
+        nextCursor: complete ? null : cursorEncode({ binding: expected, epoch: isCards ? cardEpoch(ns) : epoch(ns),
           after: isCards ? items.at(-1)?.id : items.at(-1)?.ordinal }) };
       if (size(result) <= 65536) return result;
       complete = false; items.pop();
@@ -280,7 +296,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     cardDetailInside: (ns, id) => detail(ns, card(ns, id)) });
   return Object.freeze({
     // Internal shared-read seams: caller owns scope authorization and transaction.
-    cardDetailInside(ns, id) { ready(); return detail(ns, card(ns, id)); },
+    cardDetailInside(ns, id, readSet, intent) { ready(); return detail(ns, card(ns, id), readSet, intent); },
     cardMetadataInside(ns, row) { ready(); return metadata(ns, row); },
     receiptRefInside(ns, memoryRow, receiptRow) { ready(); return receiptSources.refInside(ns, memoryRow, receiptRow); },
     payloadBinding: value => binding('card-action-v1', value),
@@ -290,16 +306,12 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
         if (EVIDENCE_METHODS.includes(method)) return evidence.call(method, ns, input, context.accessGeneration);
         if (ORGANIZATION_READS.includes(method)) return organization.call(method, ns, input, context.accessGeneration);
         if (isRead) return read(method, ns, input);
-        const old = db.prepare(`SELECT * FROM card_operations WHERE ${where} AND action_id=?`).get(...boundary(ns), input.actionId);
-        if (old) {
-          if (old.payload_binding !== payloadBinding || old.method !== method) fail('action_conflict');
-          return JSON.parse(old.result);
-        }
-        const result = ORGANIZATION_METHODS.includes(method) ? organization.call(method, ns, input, context.accessGeneration) : mutate(method, ns, input);
+        const replay = ledger.replay(ns, input.actionId, method, payloadBinding);
+        if (replay !== undefined) return replay;
+        const result = ORGANIZATION_METHODS.includes(method) ? organization.call(method, ns, input, context.accessGeneration) : mutate(method, ns, input, context.access);
         if (size(result) > 65536) fail('context_item_too_large');
         const target = result.source?.sourceId ?? result.id;
-        db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)')
-          .run(...boundary(ns), input.actionId, method, payloadBinding, target, JSON.stringify(result), now());
+        ledger.record(ns, input.actionId, method, payloadBinding, target, result, now());
         advance(ns);
         return result;
       });

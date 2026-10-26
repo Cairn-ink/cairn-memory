@@ -5,6 +5,10 @@ import {
 
 export { MemoryStoreError } from "./validation.mjs";
 export { openMemoryCore } from "./contract.mjs";
+export { openMemoryReader } from './memory-reader.mjs';
+export { openContextReader } from './context-reader.mjs';
+// U5c-2 public configuration constants; storage readers remain internal.
+export { CONTEXT_SOURCES, SOURCE_LIMITS } from './context-read-input.mjs';
 
 /** Embedded storage only. The caller, not this library, authenticates owners. */
 export function openMemoryStore(input) {
@@ -69,3 +73,9 @@ export function openMemoryStore(input) {
 
   return Object.freeze({ scope: bindScope, close: runtime.close });
 }
+
+export { profileRef as roleProfileRef, releaseRef as roleProfileReleaseRef } from './role-profile-input.mjs';
+export { roleTaskMeteredText, roleTaskToolResponse } from './role-context-wire.mjs';
+
+// U5c-3: dependency authoring remains under explicit Card confirmation authority.
+export { CARD_CURRENT_VERSION, CARD_CURRENT_METHODS } from './card-current-input.mjs';

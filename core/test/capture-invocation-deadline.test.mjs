@@ -314,22 +314,38 @@ test('D3 each initial claim variant rolls back when its own transaction outlives
 });
 
 test('D3 initial journal begin rolls back to not_started and never calls classifier after expiry', async t => {
-  let classified = 0;
-  const model = scripted();
-  model.classify = () => { classified++; return { items: [] }; };
-  const { core, db } = fixture(t, { model, captureDeadlineMs: 600 });
-  const delayed = delayAfterSql("SET status='in_flight_or_interrupted'", 900);
-  try {
-    const result = ok(await core.capture(input('journal-begin')));
-    assert.equal(delayed.reached(), 1);
-    assert.equal(result.classification.status, 'failed');
-    assert.equal(result.classification.error.code, 'model_timeout');
-    assert.equal(classified, 0);
-    assert.equal(db.prepare("SELECT status FROM capture_initial_classification WHERE event_id='journal-begin'")
-      .get().status, 'not_started');
-    assert.equal(count(db, 'memories'), 1);
-    assert.equal(count(db, 'receipts'), 1);
-  } finally { delayed.restore(); }
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-journal-clock-parent-' });
+  const child = fileURLToPath(new URL('../testing/capture-journal-clock-child.mjs', import.meta.url));
+  const run = mode => spawnSync(process.execPath, [child, workspace.path, mode],
+    { encoding: 'utf8', env: {}, timeout: 10_000 });
+  const actual = run('journal');
+  assert.equal(actual.status, 0, actual.stderr);
+  const observed = JSON.parse(actual.stdout);
+  assert.equal(observed.reached, 1);
+  assert.equal(observed.advanced, 1);
+  assert.equal(observed.classified, 0);
+  assert.deepEqual(observed.inside, { memories: 1, receipts: 1,
+    journal: 'in_flight_or_interrupted', claim: 'completed' });
+  assert.deepEqual(observed.after, { memories: 1, receipts: 1, journal: 'not_started', claim: 'completed' });
+  assert.equal(observed.classification.error.code, 'model_timeout');
+  const mutant = run('remove-post-work-check');
+  assert.equal(mutant.status, 2, mutant.stderr);
+  assert.match(mutant.stderr, /JOURNAL_ROLLBACK_ASSERTION_FAILED:journal begin mutation must roll back/u);
+  const counterfactual = JSON.parse(mutant.stdout);
+  assert.deepEqual(counterfactual.inside, observed.inside);
+  assert.equal(counterfactual.reached, 1);
+  assert.equal(counterfactual.classified, 0);
+  assert.deepEqual(counterfactual.after, { memories: 1, receipts: 1, journal: 'failed', claim: 'completed' });
+  const early = run('expire-before-admission');
+  assert.equal(early.status, 0, early.stderr);
+  const control = JSON.parse(early.stdout);
+  assert.equal(control.reached, 0);
+  assert.equal(control.classified, 0);
+  assert.equal(control.ok, false);
+  assert.equal(control.error.code, 'model_timeout');
+  assert.deepEqual(control.after, { memories: 0, receipts: 0, journal: null, claim: 'pending' });
+  const { readdirSync } = await import('node:fs');
+  assert.deepEqual(readdirSync(workspace.path), [], 'all child outcomes clean their owned workspaces');
 });
 
 test('D3 placement expiry rolls back filing and applied journal while retaining admission', () => {

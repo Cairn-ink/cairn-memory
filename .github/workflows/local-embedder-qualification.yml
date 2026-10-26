@@ -1,0 +1,91 @@
+name: Local embedder qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      linux_pack_dir:
+        type: string
+        required: true
+      macos_pack_dir:
+        type: string
+        required: true
+      manifest_sha256:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cairn-local-embedder-qualification
+  cancel-in-progress: false
+
+jobs:
+  extra:
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - runner: [self-hosted, linux, x64, cairn-local-embedder-qualification]
+            node: '22.16.0'
+            pack_input: linux_pack_dir
+          - runner: [self-hosted, linux, x64, cairn-local-embedder-qualification]
+            node: '24.15.0'
+            pack_input: linux_pack_dir
+          - runner: [self-hosted, macOS, ARM64, cairn-local-embedder-qualification]
+            node: '22.16.0'
+            pack_input: macos_pack_dir
+          - runner: [self-hosted, macOS, ARM64, cairn-local-embedder-qualification]
+            node: '24.15.0'
+            pack_input: macos_pack_dir
+    runs-on: ${{ matrix.runner }}
+    # Single-executor hosts reserved by the primary queue; never general CI hosts.
+    env:
+      CAIRN_QUAL_PACK: ${{ inputs[matrix.pack_input] }}
+      CAIRN_QUAL_MANIFEST: ${{ inputs.manifest_sha256 }}
+      CAIRN_QUAL_EXPECTED_NODE: ${{ matrix.node }}
+      CAIRN_QUAL_DIR: ${{ runner.temp }}/cairn-local-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
+      CAIRN_QUAL_REPORT: ${{ runner.temp }}/cairn-local-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}/measurement.json
+      CAIRN_QUAL_COMMIT: ${{ github.sha }}
+    steps:
+      - name: Initialize job-private evidence before checkout or admission
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$CAIRN_QUAL_DIR"
+          chmod 700 "$CAIRN_QUAL_DIR"
+          printf 'not-run\n' > "$CAIRN_QUAL_DIR/exit-code.txt"
+          printf 'commit=%s\nexpected-node=%s\nrunner=%s\n' "$GITHUB_SHA" "$CAIRN_QUAL_EXPECTED_NODE" "$RUNNER_OS/$RUNNER_ARCH" > "$CAIRN_QUAL_DIR/tested.txt"
+          if [[ "$CAIRN_QUAL_MANIFEST" =~ ^[a-f0-9]{64}$ ]]; then printf 'expected-manifest=%s\n' "$CAIRN_QUAL_MANIFEST" >> "$CAIRN_QUAL_DIR/tested.txt"; fi
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Select provisioned toolchain and check external queue lease
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CAIRN_QUAL_TOOLCHAINS:-}"
+          [[ "$CAIRN_QUAL_TOOLCHAINS" = /* ]]
+          task_node_bin="$CAIRN_QUAL_TOOLCHAINS/$CAIRN_QUAL_EXPECTED_NODE/bin"
+          test -x "$task_node_bin/node"
+          task_actual_node="$("$task_node_bin/node" --version)"
+          printf 'actual-node=%s\n' "$task_actual_node" >> "$CAIRN_QUAL_DIR/tested.txt"
+          test "$task_actual_node" = "v$CAIRN_QUAL_EXPECTED_NODE"
+          printf '%s\n' "$task_node_bin" >> "$GITHUB_PATH"
+          "$task_node_bin/node" tools/testing/local-embedder-admission.mjs
+      - name: Measure verified preprovisioned pack
+        shell: bash
+        run: |
+          set -uo pipefail
+          printf 'running\n' > "$CAIRN_QUAL_DIR/exit-code.txt"
+          npm run measure:local-embedder -- --pack "$CAIRN_QUAL_PACK" --expected-manifest-sha256 "$CAIRN_QUAL_MANIFEST" --output "$CAIRN_QUAL_REPORT"
+          task_rc=$?
+          printf '%s\n' "$task_rc" > "$CAIRN_QUAL_DIR/exit-code.txt"
+          exit "$task_rc"
+      - name: Preserve report and failure evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: local-embedder-${{ strategy.job-index }}-${{ matrix.node }}
+          path: ${{ env.CAIRN_QUAL_DIR }}
+          if-no-files-found: error

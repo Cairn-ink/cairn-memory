@@ -2,6 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { link, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { performance } from "node:perf_hooks";
 
 const OWNER_PATTERN = /^([1-9][0-9]*)-([a-f0-9-]{36})$/;
 
@@ -111,8 +112,8 @@ export async function withFileLock(
     ownerCreated = true;
     // Preserve the existing acquisition window after owner publication. A caller's
     // independent signal still cancels setup and is checked before acquisition.
-    const deadline = Date.now() + timeoutMs;
-    while (!acquired && Date.now() < deadline) {
+    const deadline = performance.now() + timeoutMs;
+    while (!acquired && performance.now() < deadline) {
       signal?.throwIfAborted();
       try {
         await link(ownerPath, path);

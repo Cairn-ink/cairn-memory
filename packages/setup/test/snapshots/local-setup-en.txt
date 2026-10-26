@@ -1,0 +1,16 @@
+Cairn.ink Memory setup <version>
+1. Local: data stays on this computer, free and offline, without computer sync.
+2. Cloud: memory is shared across computers and tools, with cairn.ink sign-in.
+? Where should memory live? (1/2)
+Memory stays on this computer in ~/.cairn-memory. Setup sends no user data.
+Use the MCP tools to save and find memories; capture and recall are not
+  automatic.
+Semantic recall needs a model key. If the tool environment has OPENAI_API_KEY,
+the engine uses it for recall and sends selected text to that provider.
+? Connect Claude Code? (Y/n)
+? Connect Codex? (y/N)
+Installing the local memory engine…
+✓ Claude Code connected to local memory (cairn-local)
+✓ Codex connected to local memory (cairn-local)
+✓ Local memory setup complete.
+Next: reopen Claude Code and Codex.

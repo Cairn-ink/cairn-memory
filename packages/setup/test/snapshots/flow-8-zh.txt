@@ -1,4 +1,4 @@
-Cairn.ink Memory 0.5.3
+Cairn.ink Memory <version>
 
 Claude Code
   ✓ 外掛 0.3.1 已安裝並已啟用

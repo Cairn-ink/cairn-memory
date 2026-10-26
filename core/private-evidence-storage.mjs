@@ -52,18 +52,19 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     support: card.support, origin: card.origin };
   }
   const cardEligible = (card, intent) => card?.state === 'confirmed' && (intent === 'history' ||
-    card.support.status === 'eligible' && card.support.applicability === 'current');
+    card.support.status === 'eligible' && card.support.applicability === 'current' && (!card.support.currentDependency || card.support.currentDependency.status === 'current'));
   const memoryEligible = (row, intent) => row && !row.deleted &&
     (intent === 'history' || row.currentness === 'current' && row.review_state !== 'awaiting');
-  function item(ns, ref, intent) {
+  function item(ns, ref, intent, readSet, options) {
     if (ref.type === 'card') {
-      const card = cardDetailInside(ns, ref.cardId);
+      const card = cardDetailInside(ns, ref.cardId, readSet, options);
       if (!cardEligible(card, intent)) fail('evidence_unavailable');
       if (card.revision !== ref.revision || card.bodyRevision !== ref.bodyRevision) fail('revision_conflict');
       const sources = card.bindings.map(binding => binding.source);
       return { ...cardMetadata(card), title: card.title, body: card.body,
         qualification: { applicability: card.support.applicability, attribution: 'unassessed', commitment: 'unknown' },
-        provenance: { sources, completeness: sources.every(source => source.type === 'submitted-note') ?
+        provenance: { sources, completeness: sources.some(source => source.type === 'raw') ?
+          sources.every(source => source.type === 'raw') ? 'selected-raw-span' : 'mixed-sources' : sources.every(source => source.type === 'submitted-note') ?
           'provided-note' : 'excerpt-only', conversationCoverage: 'unknown', meaning: 'unassessed',
         support: card.support.status, corroboration: 'not-assessed',
         coverage: { status: 'complete', included: sources.length, omitted: 0 } },
@@ -169,7 +170,11 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
         accessGeneration, after, turn }, 8192),
       snapshot: makeSnapshot(ns, input.intent, refs, items, accessGeneration) };
   }
-  return Object.freeze({ call(method, ns, original, accessGeneration) {
+  return Object.freeze({
+    // Internal U5 read seam: authorization and the deferred transaction belong
+    // to the caller. Reuses the exact current/history canonical predicate/DTO.
+    itemsInside(ns, refs, intent, readSet, options) { return refs.map(ref => item(ns, ref, intent, readSet, options)); },
+    call(method, ns, original, accessGeneration) {
     const input = evidenceInput(method, original, ns);
     if (method === 'selectEvidence') return select(ns, input, original, accessGeneration);
     if (method === 'fetchEvidence') return fetched(ns, input, accessGeneration);

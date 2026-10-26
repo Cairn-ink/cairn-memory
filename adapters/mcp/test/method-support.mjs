@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict';
+import {spawn} from 'node:child_process';
+import {createInterface} from 'node:readline';
+import {fileURLToPath} from 'node:url';
+import {Client} from '@modelcontextprotocol/client';
+import {StdioClientTransport} from '@modelcontextprotocol/client/stdio';
+export const cli=fileURLToPath(new URL('../cli.mjs',import.meta.url));
+export const namespace={ownerId:'synthetic-method-owner',scope:'personal',projectId:null};
+export const ok=result=>{assert.equal(result.ok,true,JSON.stringify(result));return result.value;};
+export async function call(client,name,args={}) {
+  const response=await client.callTool({name,arguments:args});
+  assert.ok(Buffer.byteLength(JSON.stringify(response))<=262144,'encoded MCP result bound');
+  const result=JSON.parse(response.content[0].text);
+  const {evidenceTrust,...envelope}=result;
+  assert.equal(evidenceTrust,'untrusted-data-not-instructions');
+  assert.ok(Buffer.byteLength(JSON.stringify(envelope))<=65536,'serialized core envelope bound');
+  assert.equal(response.isError,!result.ok);return result;
+}
+export async function host(workspace,path,{command=cli,enabled=true,project,personal=false,owner=namespace.ownerId}={}) {
+  const transport=new StdioClientTransport({command:'/usr/bin/python3',args:[fileURLToPath(new URL('./fixtures/method-stdio-relay.py',import.meta.url)),workspace.path,process.execPath,
+    '--import','data:text/javascript,globalThis.fetch=()=>{process.exit(91)}',command,
+    '--db',path,'--owner',owner,...(project?['--project',project]:[]),
+    ...(enabled?['--method-packages','local-v1']:[]),...(personal?['--method-read-personal']:[])],
+    env:{OPENAI_API_KEY:'',NODE_NO_WARNINGS:'1',NODE_DISABLE_COMPILE_CACHE:'1'},stderr:'pipe'});
+  let stderr='';transport.stderr.on('data',chunk=>{stderr+=chunk;});
+  const client=new Client({name:'synthetic-method-client',version:'1.0.0'});workspace.defer(()=>client.close());
+  try{await client.connect(transport);}catch(error){throw Error(error.message+'; server stderr: '+stderr);}
+  return {client,stderr:()=>stderr};
+}
+/** Real controlling terminal, reusing the Card test supervisor and framing. */
+export function review(workspace,args,{command=cli,imports=[]}={}) {
+  const child=spawn('/usr/bin/python3',[fileURLToPath(new URL('./fixtures/card-review-pty.py',import.meta.url)),process.execPath,
+    '--import','data:text/javascript,globalThis.fetch=()=>{process.exit(91)}',...imports.flatMap(path=>['--import',path]),command,'methods',...args],
+    {stdio:'pipe',env:{NODE_NO_WARNINGS:'1',NODE_DISABLE_COMPILE_CACHE:'1'}});
+  let resolvePrompt,rejectPrompt,resolveDone,rejectDone,completed,stderr='';
+  const prompt=new Promise((yes,no)=>{resolvePrompt=yes;rejectPrompt=no;});prompt.catch(()=>{});
+  const done=new Promise((yes,no)=>{resolveDone=yes;rejectDone=no;});done.catch(()=>{});
+  child.stderr.on('data',chunk=>{stderr+=chunk;});
+  const lines=createInterface({input:child.stdout});lines.on('line',line=>{
+    try{const event=JSON.parse(line);if(event.event==='prompt')resolvePrompt(event);if(event.event==='done')completed=event;}
+    catch(error){rejectPrompt(error);rejectDone(error);}
+  });
+  const closed=new Promise(resolve=>child.once('close',(code,signal)=>{
+    if(code!==0||signal||!completed){const error=Error(`PTY supervisor exit ${code}, signal ${signal}: ${stderr}`);rejectPrompt(error);rejectDone(error);}
+    else{resolveDone(completed);rejectPrompt(Error('method review exited before prompt'));}resolve();
+  }));
+  child.once('error',error=>{rejectPrompt(error);rejectDone(error);});
+  workspace.defer(async()=>{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGTERM');await closed;lines.close();});
+  return {prompt,done,answer(answer){child.stdin.write(JSON.stringify({answer})+'\n');},eof(){child.stdin.write('{"eof":true}\n');}};
+}
+export function phrase(output) {
+  const matches=[...output.matchAll(/To approve this exact operation, type ("[^\r\n]+") and press Enter\./g)];
+  assert.equal(matches.length,1,output);return JSON.parse(matches[0][1]);
+}
+export function receipt(output) {
+  const matches=output.split(/\r?\n/).filter(line=>line.startsWith('{"ok":'));
+  assert.equal(matches.length,1,output);return JSON.parse(matches[0]);
+}

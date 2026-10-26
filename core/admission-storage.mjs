@@ -1,21 +1,41 @@
 import { randomUUID } from "node:crypto";
 import { transaction, isStorageBusy } from "./database.mjs";
 import { fail, identifier } from "./validation.mjs";
+import { localAuthorityGuard } from './local-authority-guard.mjs';
 
 const where = "owner_id = ? AND scope = ? AND project_id = ? AND client = ? AND event_id = ?";
 const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, input.eventId];
 
 /** Content-free job state around the shared admission mutation transaction. */
 export function createAdmissionStorage({ db, admitMutation, isSuppressed, activeRow, epoch,
-  conflictStorage, stagedEvidence, classificationJournal, episodes, proceduralStorage }) {
+  conflictStorage, stagedEvidence, classificationJournal, episodes, proceduralStorage, assertSources, sourceRoots }) {
+  // A current feature-off connection may predate another connection's optional
+  // migration. Cache presence, never absence, so persisted guards still apply.
+  let rawCaptureAvailable = false;
+  const hasRawCapture = () => rawCaptureAvailable ||= Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_capture_events'").get());
+  function rawGuard(ns, input) {
+    if (input.keepActionId || !hasRawCapture()) return null;
+    const captured = db.prepare(`SELECT * FROM raw_capture_events WHERE ${where}`).get(...key(ns, input));
+    if (!captured) return null;
+    const localDenied = localAuthorityGuard(db,captured);
+    if (localDenied) return localDenied;
+    if (captured.projection_digest !== input.payloadDigest) return 'event_payload_conflict';
+    const control = episodes.getControl(ns);
+    if (control.paused || !control.enabled || control.generation !== captured.capture_generation) return 'capture_evidence_closed';
+    if (db.prepare(`SELECT 1 FROM raw_session_fences WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=?`)
+      .get(ns.ownerId, ns.scope, ns.projectId, input.client, captured.session_key)) return 'capture_evidence_closed';
+    if (db.prepare(`SELECT 1 FROM session_episodes WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=? AND deleted=1`)
+      .get(ns.ownerId, ns.scope, ns.projectId, input.client, captured.session_key)) return 'capture_evidence_closed';
+    return null;
+  }
   const table = input => input.keepActionId ? 'episode_keep_actions' : 'admission_claims';
   const predicate = input => input.keepActionId ? 'owner_id=? AND scope=? AND project_id=? AND admission_key=?' : where;
   const values = (ns, input) => input.keepActionId ? [ns.ownerId, ns.scope, ns.projectId, input.keepActionId] : key(ns, input);
   const read = (ns, input) => db.prepare(`SELECT * FROM ${table(input)} WHERE ${predicate(input)}`)
     .get(...values(ns, input));
   const time = (ns, input, create) => input.keepActionId ? Date.now() : stagedEvidence.admissionTime(ns, input, create);
-  const guard = (method, ns, input, ...args) => input.keepActionId ? episodes.guard(ns, input)
-    : stagedEvidence[method](ns, input, ...args);
+  const guard = (method, ns, input, ...args) => sourceRoots?.jobGuard(ns, input) || rawGuard(ns, input) || (input.keepActionId ? episodes.guard(ns, input)
+    : stagedEvidence[method](ns, input, ...args));
   const live = (row, input, now) => row?.state === "pending" &&
     row.payload_digest === input.payloadDigest && row.token === input.token &&
     row.lease_expires_at > now;
@@ -58,7 +78,7 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
     }
   }
 
-  function claimAdmission(ns, input, hooks, stagedView, deadline) {
+  function claimAdmission(ns, input, hooks, stagedView, deadline, registration, sources) {
     const pending = retryCleanup.get(cleanupKey(ns, input));
     if (pending) {
       abandonAdmission(ns, pending);
@@ -66,20 +86,25 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
     }
     const serialized = stagedView === undefined ? null : stagedEvidence.serializeView(stagedView);
     const result = transaction(db, () => {
+      const registeredRaw = registration?.commit();
+      if (registeredRaw?.observation) return { rawReplay: registeredRaw.observation };
       const now = time(ns, input, serialized !== null);
       const row = read(ns, input);
-      if (row && row.payload_digest !== input.payloadDigest) return { closed: 'event_payload_conflict' };
+      const refuse = closed => { if (registration) fail(closed); return { closed }; };
+      if (row && row.payload_digest !== input.payloadDigest) return refuse('event_payload_conflict');
+      for (const source of sources ?? []) sourceRoots?.assertSession(ns, source.client, source.sessionId);
       const closed = guard('claimGuard', ns, input, row, now, serialized !== null);
-      if (closed) return { closed };
+      if (closed) return refuse(closed);
       if (row?.state === "completed") {
         return { duplicate: true, memoryIds: JSON.parse(row.memory_ids),
           suppressedCount: row.suppressed_count, ...hooks?.replay() };
       }
+      if (row) sourceRoots?.bindJob(ns, input, sources);
       const prepared = hooks?.prepare(row);
       if (row && row.lease_expires_at > now) return { processing: true };
       const registered = episodes.event(ns, input);
       const capacity = !registered && serialized && stagedEvidence.capacityGuard(ns, serialized);
-      if (capacity) return { closed: capacity };
+      if (capacity && !registration) return { closed: capacity };
       const token = randomUUID();
       if (row) {
         db.prepare(`UPDATE ${table(input)} SET state = 'pending', token = ?, lease_expires_at = ? WHERE ${predicate(input)}`)
@@ -91,10 +116,13 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
           .run(...key(ns, input), input.payloadDigest, token, now + input.leaseMs);
       }
       const episodePolicy = registered ? episodes.admissionStarted(ns, input) : undefined;
-      if (serialized && !registered) stagedEvidence.insert(ns, input, serialized, now);
+      if (!row) sourceRoots?.bindJob(ns, input, sources);
+      if (serialized && !registered && !capacity) stagedEvidence.insert(ns, input, serialized, now);
+      if (serialized && !registered) registration?.setStaging(capacity ? 'not-staged' : 'staged');
       return { token, ...prepared, ...(registered ? { episodePolicy } : {}) };
     }, deadline?.check);
     if (result.closed) fail(result.closed);
+    registration?.accept();
     return result;
   }
 
@@ -113,6 +141,7 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
       let suppressedCount = 0;
       const activeItems = [];
       for (const item of input.items) {
+        assertSources?.(ns, item.receipts);
         // Check before deduplication; one suppressed input contributes one count.
         if (isSuppressed(ns, item.fingerprint)) {
           suppressedCount++;
@@ -122,7 +151,8 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
         activeItems.push(item);
       }
       const entries = activeItems.map((item) => {
-        const result = admitMutation(ns, item, { automatic: true });
+        const result = admitMutation(ns, item, { automatic: true,
+          ...(hooks?.captureQualifiedDuplicates ? { captureQualifiedDuplicates: hooks.captureQualifiedDuplicates } : {}) });
         const memoryId = result.memory.id;
         if (item.procedural !== undefined) proceduralStorage.write(result.memory, item.procedural, 'model', item.receipts);
         ids.add(memoryId);

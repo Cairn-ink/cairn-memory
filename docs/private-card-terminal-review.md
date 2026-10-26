@@ -7,6 +7,128 @@ records private curation, not truth, adoption, current applicability, execution
 permission or publication. Product integration and deployment belong to the
 product team.
 
+## Retained Raw profile
+
+An exclusive keyless alternative discovers existing Raw and creates an authored
+Card directly from its source references, without a fabricated Memory. A long
+message does not automatically become a Card: an operator requests the draft
+and supplies its title/body. Ordinary `--private-cards local-v1` below keeps its
+receipt-only draft input and 22 tools; this alternative has 25.
+
+Initially use Linux/WSL with Node >=22.16 (tested 22.16/24.15) and an already
+compatible schema 29 store. Missing/incompatible stores refuse without creation
+or migration. Profile and database must be own-UID regular files 0600, with
+own-UID immediate directories 0700. Owned leaves cannot be symlinks; host-owned
+ancestors are canonicalized. Keep the database outside the installation tree.
+No native macOS/Windows retained-profile verification is claimed.
+
+Obtain `storeId` from the trusted existing host or its already-opened Raw-enabled
+SDK: `getLocalCaptureControl({namespace,client:'codex'})` returns it in the success
+value without creating a control row or granting capture consent. Use that exact
+store ID and existing namespace; do not guess IDs or open/migrate an operational
+store just to obtain one. Create a separate private profile, at most 65536 bytes,
+with exactly these fields:
+
+```json
+{
+  "version": "local-raw-retained-profile-v1",
+  "path": "/absolute/private/existing.sqlite",
+  "storeId": "EXACT_STORE_ID_FROM_TRUSTED_INSPECTION",
+  "namespace": {"ownerId":"EXISTING_OWNER", "scope":"personal", "projectId":null}
+}
+```
+
+Project scope uses `scope:'project'` and its actual project ID. Unknown fields,
+providers, callbacks and permission flags refuse. This profile is separate from
+B4c capture and B3 consent/provider/usage configuration.
+
+```sh
+cairn-memory --check-config --retained-raw-profile /absolute/private/retained.json
+cairn-memory --retained-raw-profile /absolute/private/retained.json
+```
+
+Do not combine it with `--db`, `--owner`, `--project`, model or capture flags.
+The check validates syntax/runtime only, reading no profile/database/API key.
+Actual MCP negotiation validates the guarded connection; empty stdin may never
+construct the SDK server and is not a store-validation probe. Programmatic hosts
+use `await createRetainedRawServer({profilePath})` from
+`adapters/mcp/retained-raw.mjs`; the legacy constructor stays synchronous.
+
+Store/namespace configuration stays frozen for the process, including negotiation
+fallback. Restart to reconfigure. File/parent identities and permissions are
+rechecked; this does not detect every same-inode content edit or hostile
+same-owner filesystem action. Only `local-plain-v1`, null key version and valid
+UTF-8 decode, preserving Unicode/BOM with core length/digest checks. Encrypted
+or unknown formats have no plaintext fallback.
+
+Use public success responses to supply every ID, revision and source ref:
+
+1. Call `list_raw_conversations` with `{"client":"codex","limit":20}` or
+   client `claude-code`. Continue with its signed `nextCursor` and the same
+   client/limit. Metadata presence does not prove source saving or interpretation.
+2. Call `read_raw_conversation` with a returned `conversationId`, optionally
+   `limit`/`cursor`. Inspect actual message IDs, `totalUnits`, conversation revision
+   and paged parts. Pending/skipped coverage remains explicit.
+3. Resolve 1..16 inspected anchors with `resolve_source_references`. For a fully
+   saved message, a read success envelope named `read` supplies this input:
+
+   ```js
+   { anchors: [{ rawAnchor: {
+     conversationId: read.value.conversation.id,
+     messageId: read.value.messages[0].id,
+     start: 0, end: read.value.messages[0].totalUnits,
+     precision: 'whole-message'
+   }, expectedConversationRevision: read.value.conversation.revision }] }
+   ```
+
+   Exact saved passages use `precision:'exact'` and inspected UTF-16 offsets.
+   Never invent missing parts. The optional `budgets` object accepts positive
+   `sourceByteLimit` <=64000, `scanRowLimit` <=1024, `deadlineMs` <=5000 and
+   `responseByteLimit` <=65536.
+   Unavailable, excluded, stale or over-budget sources refuse.
+4. Copy resolved refs, omitting only their namespace, into
+   `create_private_card_draft`. For a success envelope named `resolved`:
+
+   ```js
+   { actionId: 'owner-authored-draft-1', title: 'Review plan',
+     body: 'Check Tuesday availability before adopting this plan.',
+     sources: resolved.value.sources.map(({ namespace, ...source }) => source) }
+   ```
+
+   Supply exactly one of Raw sources 1..16 or existing memoryRefs 1..6. Mixed,
+   forged or foreign refs, authoredInput and grants refuse. Drafting performs no
+   model call, new retained source copy or automatic promotion.
+5. Inspect the returned Card with `inspect_private_card`. MCP confirmation still
+   refuses `approval_required`. Separately run the command below, replacing its
+   placeholders with the inspected ID and integer revision:
+
+   ```sh
+   cairn-memory review-card --retained-raw-profile /absolute/private/retained.json --card RETURNED_CARD_ID --revision RETURNED_REVISION --applicability current
+   ```
+
+   Inspect the escaped complete Card/bindings/applicability on the real
+   controlling TTY and type its exact displayed phrase. Piped/environment/
+   `--yes` approval is unsupported. Source deletion or Card changes during the
+   prompt make the inspected approval stale.
+6. Close and reopen the same profile in a fresh process. Inspect the same Card
+   and use `read_private_card_source` with its exact binding ref, omitting only
+   namespace. Raw refs have type, conversationId, messageId,
+   span:{start,end,precision},contentIdentity. The optional nested `budgets`
+   object (`{source,budgets?}`) applies only to Raw source reads.
+
+Eligible support plus explicit exact-revision applicability review is needed
+for current evidence. Deleting a source through a separately authorized host
+cancels bound drafts; a confirmed authored body remains inspectable with support
+unavailable. Logical deletion does not erase WAL/free pages/backups.
+
+The retained host fixes Raw mode off, changes no quota/consent, reads no API key,
+creates no provider and revokes Card/source grants on close. Explicit remember/
+correct/forget remain available. Capture permission is not retained-read authority.
+Conversation reads still compute aggregates; bounded output is not constant-time
+large-history latency. Sources/confirmation do not prove truth, adoption or
+semantic reliability. This is a synthetic-tested installable preview, not newly
+published software, real-client activation or completed V1.
+
 ## Start and draft
 
 Use the existing inspected [local artifact installation](install-artifact.md),

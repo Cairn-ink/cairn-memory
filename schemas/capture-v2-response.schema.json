@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Cairn-ink/cairn-memory/schemas/capture-v2-response.schema.json",
+  "title": "Internal Raw producer v2 acknowledgement (uninstalled)",
+  "oneOf": [
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "duplicate", "memoryCount", "raw"],
+      "properties": {
+        "version": { "const": 2 }, "duplicate": { "type": "boolean" }, "processing": { "type": "boolean" },
+        "memoryCount": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "raw": {
+          "type": "object", "additionalProperties": false, "required": ["conversationId", "revision", "parts"],
+          "properties": {
+            "conversationId": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+            "parts": {
+              "type": "array", "minItems": 1, "maxItems": 24,
+              "items": {
+                "type": "object", "additionalProperties": false,
+                "required": ["messageId", "index", "saved", "reason"],
+                "properties": {
+                  "messageId": { "type": "string", "minLength": 1, "maxLength": 200 },
+                  "index": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                  "saved": { "type": "boolean" },
+                  "reason": { "enum": [null, "tool_off", "notice_required", "quota_reached", "raw_disabled", "capture_barrier"] }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object", "additionalProperties": false, "required": ["error"],
+      "properties": {
+        "error": { "const": "quota_reached" },
+        "resetAt": { "type": "string", "format": "date-time", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|\\+00:00)$" }
+      }
+    }
+  ]
+}

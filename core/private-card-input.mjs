@@ -1,8 +1,10 @@
+import { CARD_CURRENT_VERSION, CARD_CURRENT_METHODS, currentCall, currentDeclaration } from './card-current-input.mjs';
 import { createHmac } from 'node:crypto';
 import { redactSecrets } from '../plugins/cairn-memory/lib/redact.mjs';
 import { denseArray, fail, identifier, object, revision } from './validation.mjs';
 import { APPLICABILITY, EVIDENCE_METHODS, evidenceInput } from './private-evidence-input.mjs';
 import { ORGANIZATION_METHODS, ORGANIZATION_READS, organizationInput } from './private-organization-input.mjs';
+import { rawSourceRef, rawSourceKey, sourceAnchors, sourceBudgets } from './raw-source-input.mjs';
 
 export const CARD_METHODS = Object.freeze([
   'submitSourceNote', 'getSource', 'deleteSourceNote', 'createCardDraft', 'getCard',
@@ -18,12 +20,13 @@ export const OWNER_NOTE_CAP = 200_000_000;
 
 export function privateCardOptions(value) {
   if (value === undefined) return undefined;
-  object(value, ['version', 'source', 'storage', 'disclosure', 'authority']);
+  object(value, ['version', 'source', 'storage', 'disclosure', 'authority', 'currentDependencies']);
   if (value.version !== 'private-cards-local-v1' || value.source !== 'submitted-note-v1' ||
       value.storage !== 'local-plain-v1' || value.disclosure !== 'explicit-submitted-note-v1') fail('source_unavailable');
   object(value.authority, ['authorize', 'isCurrent']);
   if (typeof value.authority.authorize !== 'function' || typeof value.authority.isCurrent !== 'function') fail('authority_required');
-  return Object.freeze({ ...value, authority: Object.freeze({ ...value.authority }) });
+  if (value.currentDependencies !== undefined) { object(value.currentDependencies, ['version']); if (value.currentDependencies.version !== CARD_CURRENT_VERSION) fail('invalid_input'); }
+  return Object.freeze({ ...value, ...(value.currentDependencies ? { currentDependencies: Object.freeze({ ...value.currentDependencies }) } : {}), authority: Object.freeze({ ...value.authority }) });
 }
 
 // Snapshot plain serialized data once, rejecting getters, sparse arrays and non-JSON values.
@@ -89,7 +92,8 @@ export function noteInput(value) {
 export const keyed = (secret, purpose, value) => createHmac('sha256', secret)
   .update(JSON.stringify([purpose, value])).digest('base64url');
 
-export function sourceRef(value, ns) {
+export function sourceRef(value, ns, raw = false) {
+  if (raw && value?.type === 'raw') return rawSourceRef(value, ns);
   if (value?.type === 'receipt') {
     object(value, ['type', 'namespace', 'memoryId', 'memoryRevision', 'receiptId', 'contentIdentity', 'completeness']);
     const scope = cardNamespace(value.namespace);
@@ -111,9 +115,9 @@ export function sourceRef(value, ns) {
   return { type: 'submitted-note', namespace: scope, sourceId: value.sourceId,
     revision: value.revision, contentIdentity: value.contentIdentity, completeness: 'provided-note' };
 }
-export function refs(value, ns) {
-  const result = denseArray(value, 1, 16).map(ref => sourceRef(ref, ns));
-  if (new Set(result.map(ref => `${ref.type}:${ref.sourceId ?? ref.receiptId}`)).size !== result.length) fail('invalid_input');
+export function refs(value, ns, raw = false) {
+  const result = denseArray(value, 1, 16).map(ref => sourceRef(ref, ns, raw));
+  if (new Set(result.map(ref => `${ref.type}:${ref.type === 'raw' ? rawSourceKey(ref) : ref.sourceId ?? ref.receiptId}`)).size !== result.length) fail('invalid_input');
   return result;
 }
 export function cardMemoryRefs(value, ns) {
@@ -129,19 +133,23 @@ export function pageLimit(value = 20) {
   if (!Number.isSafeInteger(value) || value < 1 || value > 50) fail('invalid_input');
   return value;
 }
-export function validateCardCall(method, input) {
+export function validateCardCall(method, input, raw = false, currentDependencies = false) {
   const ns = cardNamespace(input.namespace);
+  if (currentDependencies && CARD_CURRENT_METHODS.includes(method)) { currentCall(input, ns); return ns; }
+  if (method === 'resolveSourceReferences' && raw) {
+    object(input, ['namespace','anchors','budgets']); sourceAnchors(input.anchors); sourceBudgets(input.budgets); return ns;
+  }
   if (EVIDENCE_METHODS.includes(method)) { evidenceInput(method, input, ns); return ns; }
   if (ORGANIZATION_METHODS.includes(method)) { organizationInput(method, input, ns); return ns; }
   const allowed = {
     submitSourceNote: ['actionId', 'text', 'occurredAt'],
-    getSource: ['source', 'limit', 'cursor'],
+    getSource: ['source', 'limit', 'cursor', ...(raw && input.source?.type === 'raw' ? ['budgets'] : [])],
     deleteSourceNote: ['sourceId', 'expectedRevision', 'actionId'],
     createCardDraft: ['actionId', 'input', 'drafting'],
     getCard: ['cardId', 'responseByteLimit'], listCards: ['states', 'limit', 'cursor'],
     editCardDraft: ['cardId', 'expectedRevision', 'actionId', 'title', 'body', 'bindings'],
     editKnowledgeCard: ['cardId', 'expectedRevision', 'actionId', 'title', 'body', 'bindings', 'applicability'],
-    confirmCardDraft: ['cardId', 'expectedRevision', 'actionId', 'applicability'],
+    confirmCardDraft: ['cardId', 'expectedRevision', 'actionId', 'applicability', ...(currentDependencies ? ['currentDependencies'] : [])],
     cancelCardDraft: ['cardId', 'expectedRevision', 'actionId'],
     deleteKnowledgeCard: ['cardId', 'expectedRevision', 'actionId'],
     inspectCardOperation: ['operationActionId'], listCardEffects: ['limit', 'cursor'],
@@ -155,6 +163,7 @@ export function validateCardCall(method, input) {
   if (method === 'getCard' && !Object.hasOwn(input, 'cardId')) fail('invalid_input');
   if (method === 'deleteSourceNote') identifier(input.sourceId);
   if (method === 'inspectCardOperation') identifier(input.operationActionId);
+  if (method === 'confirmCardDraft' && input.currentDependencies !== undefined) currentDeclaration(input.currentDependencies, ns);
   if (method === 'confirmCardDraft' && input.applicability !== undefined &&
       !APPLICABILITY.includes(input.applicability)) fail('invalid_input');
   if (Object.hasOwn(input, 'cursor') && (typeof input.cursor !== 'string' || input.cursor.length > 8192)) fail('invalid_cursor');
@@ -166,7 +175,10 @@ export function validateCardCall(method, input) {
   if (method === 'getCard' && input.responseByteLimit !== undefined &&
       (!Number.isSafeInteger(input.responseByteLimit) || input.responseByteLimit < 1 || input.responseByteLimit > 65536)) fail('invalid_input');
   if (method === 'submitSourceNote') noteInput({ text: input.text, occurredAt: input.occurredAt });
-  if (method === 'getSource') sourceRef(input.source, ns);
+  if (method === 'getSource') {
+    sourceRef(input.source, ns, raw);
+    if (input.source?.type === 'raw') sourceBudgets(input.budgets);
+  }
   if (method === 'createCardDraft') {
     if (input.drafting !== 'authored') fail('source_unavailable');
     object(input.input, ['sources', 'authoredInput', 'memoryRefs', 'sourcePolicy', 'title', 'body']);
@@ -176,12 +188,13 @@ export function validateCardCall(method, input) {
       cardMemoryRefs(input.input.memoryRefs, ns);
     } else if (Object.hasOwn(input.input, 'sourcePolicy')) fail('invalid_input');
     if (input.input.authoredInput !== undefined) noteInput(input.input.authoredInput);
-    else if (input.input.sources !== undefined && refs(input.input.sources, ns).some(ref => ref.type !== 'submitted-note')) fail('source_unavailable');
+    else if (input.input.sources !== undefined && refs(input.input.sources, ns, raw).some(ref =>
+      !['submitted-note', ...(raw ? ['raw'] : [])].includes(ref.type))) fail('source_unavailable');
     cardText(input.input.title, 200); cardText(input.input.body, 20_000);
   }
   if (method === 'editCardDraft' || method === 'editKnowledgeCard') {
     identifier(input.cardId); cardText(input.title, 200); cardText(input.body, 20_000);
-    refs(input.bindings, ns);
+    refs(input.bindings, ns, raw);
     if (method === 'editKnowledgeCard' && !APPLICABILITY.includes(input.applicability)) fail('invalid_input');
   }
   for (const methodName of ['confirmCardDraft', 'cancelCardDraft', 'deleteKnowledgeCard']) {

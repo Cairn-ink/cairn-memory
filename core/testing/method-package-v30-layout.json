@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 30,
+  "objects": [
+    {
+      "name": "method_binding_event_generation",
+      "type": "index",
+      "tableName": "method_binding_events",
+      "sql": "CREATE UNIQUE INDEX method_binding_event_generation ON method_binding_events(owner_id,scope,project_id,package_id,generation)"
+    },
+    {
+      "name": "method_binding_event_package",
+      "type": "index",
+      "tableName": "method_binding_events",
+      "sql": "CREATE INDEX method_binding_event_package ON method_binding_events(owner_id,scope,project_id,package_id,ordinal)"
+    },
+    {
+      "name": "method_binding_event_revision",
+      "type": "index",
+      "tableName": "method_binding_events",
+      "sql": "CREATE UNIQUE INDEX method_binding_event_revision ON method_binding_events(owner_id,scope,project_id,package_id,role_key,revision)"
+    },
+    {
+      "name": "method_binding_event_scope",
+      "type": "index",
+      "tableName": "method_binding_events",
+      "sql": "CREATE INDEX method_binding_event_scope ON method_binding_events(owner_id,scope,project_id,ordinal)"
+    },
+    {
+      "name": "method_binding_events",
+      "type": "table",
+      "tableName": "method_binding_events",
+      "sql": "CREATE TABLE method_binding_events (\n      event_id TEXT PRIMARY KEY, owner_id TEXT NOT NULL,\n      scope TEXT NOT NULL CHECK(scope IN ('personal','project')), project_id TEXT NOT NULL,\n      package_id TEXT NOT NULL, role_key TEXT NOT NULL CHECK(role_key='*' OR\n        (length(role_key) BETWEEN 1 AND 200 AND role_key NOT GLOB '*[^A-Za-z0-9._-]*')),\n      kind TEXT NOT NULL CHECK(kind='binding_changed'),\n      revision INTEGER NOT NULL CHECK(revision>0), generation INTEGER NOT NULL CHECK(generation>0),\n      state TEXT NOT NULL CHECK(state IN ('active','disabled')), version_id TEXT, manifest_identity TEXT,\n      action_id TEXT NOT NULL, created_at TEXT NOT NULL,\n      reason_refs TEXT NOT NULL CHECK(json_valid(reason_refs) AND json_type(reason_refs)='array'\n        AND json_array_length(reason_refs)<=16),\n      ordinal INTEGER NOT NULL UNIQUE CHECK(ordinal>0),\n      CHECK((scope='personal' AND project_id='') OR (scope='project' AND length(project_id)>0)),\n      CHECK((state='active' AND version_id IS NOT NULL AND manifest_identity IS NOT NULL) OR\n        (state='disabled' AND version_id IS NULL AND manifest_identity IS NULL)),\n      FOREIGN KEY(owner_id,scope,project_id,package_id,role_key)\n        REFERENCES method_bindings(owner_id,scope,project_id,package_id,role_key),\n      FOREIGN KEY(package_id,version_id,manifest_identity)\n        REFERENCES method_versions(package_id,id,manifest_identity)\n    ) STRICT"
+    },
+    {
+      "name": "method_binding_generations",
+      "type": "table",
+      "tableName": "method_binding_generations",
+      "sql": "CREATE TABLE method_binding_generations (\n      owner_id TEXT NOT NULL, scope TEXT NOT NULL CHECK(scope IN ('personal','project')),\n      project_id TEXT NOT NULL, package_id TEXT NOT NULL REFERENCES method_packages(id),\n      generation INTEGER NOT NULL CHECK(generation>0),\n      CHECK((scope='personal' AND project_id='') OR (scope='project' AND length(project_id)>0)),\n      PRIMARY KEY(owner_id,scope,project_id,package_id)\n    ) STRICT"
+    },
+    {
+      "name": "method_binding_namespace_insert",
+      "type": "trigger",
+      "tableName": "method_binding_generations",
+      "sql": "CREATE TRIGGER method_binding_namespace_insert BEFORE INSERT ON method_binding_generations\n      WHEN NOT EXISTS(SELECT 1 FROM method_packages p WHERE p.id=NEW.package_id AND p.owner_id=NEW.owner_id AND\n        ((p.scope=NEW.scope AND p.project_id=NEW.project_id) OR (NEW.scope='project' AND p.scope='personal' AND p.project_id='')))\n      BEGIN SELECT RAISE(ABORT,'invalid_method_binding_namespace'); END"
+    },
+    {
+      "name": "method_binding_namespace_update",
+      "type": "trigger",
+      "tableName": "method_binding_generations",
+      "sql": "CREATE TRIGGER method_binding_namespace_update BEFORE UPDATE ON method_binding_generations\n      WHEN NOT EXISTS(SELECT 1 FROM method_packages p WHERE p.id=NEW.package_id AND p.owner_id=NEW.owner_id AND\n        ((p.scope=NEW.scope AND p.project_id=NEW.project_id) OR (NEW.scope='project' AND p.scope='personal' AND p.project_id='')))\n      BEGIN SELECT RAISE(ABORT,'invalid_method_binding_namespace'); END"
+    },
+    {
+      "name": "method_bindings",
+      "type": "table",
+      "tableName": "method_bindings",
+      "sql": "CREATE TABLE method_bindings (\n      owner_id TEXT NOT NULL, scope TEXT NOT NULL CHECK(scope IN ('personal','project')),\n      project_id TEXT NOT NULL, package_id TEXT NOT NULL,\n      role_key TEXT NOT NULL CHECK(role_key='*' OR\n        (length(role_key) BETWEEN 1 AND 200 AND role_key NOT GLOB '*[^A-Za-z0-9._-]*')),\n      state TEXT NOT NULL CHECK(state IN ('active','disabled')),\n      version_id TEXT, manifest_identity TEXT,\n      revision INTEGER NOT NULL CHECK(revision>0), generation INTEGER NOT NULL CHECK(generation>0),\n      created_at TEXT NOT NULL, updated_at TEXT NOT NULL,\n      CHECK((scope='personal' AND project_id='') OR (scope='project' AND length(project_id)>0)),\n      CHECK((state='active' AND version_id IS NOT NULL AND manifest_identity IS NOT NULL) OR\n        (state='disabled' AND version_id IS NULL AND manifest_identity IS NULL)),\n      PRIMARY KEY(owner_id,scope,project_id,package_id,role_key),\n      FOREIGN KEY(owner_id,scope,project_id,package_id)\n        REFERENCES method_binding_generations(owner_id,scope,project_id,package_id),\n      FOREIGN KEY(package_id,version_id,manifest_identity)\n        REFERENCES method_versions(package_id,id,manifest_identity)\n    ) STRICT"
+    },
+    {
+      "name": "method_changes",
+      "type": "table",
+      "tableName": "method_changes",
+      "sql": "CREATE TABLE method_changes (\n      to_id TEXT PRIMARY KEY REFERENCES method_versions(id), from_ref TEXT, to_ref TEXT NOT NULL,\n      items TEXT NOT NULL, reason_refs TEXT NOT NULL\n    ) STRICT"
+    },
+    {
+      "name": "method_effect_scope",
+      "type": "index",
+      "tableName": "method_effects",
+      "sql": "CREATE INDEX method_effect_scope ON method_effects(owner_id,scope,project_id,ordinal)"
+    },
+    {
+      "name": "method_effects",
+      "type": "table",
+      "tableName": "method_effects",
+      "sql": "CREATE TABLE method_effects (\n      effect_id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,\n      kind TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL,\n      revision INTEGER NOT NULL, action_id TEXT NOT NULL, ordinal INTEGER NOT NULL UNIQUE\n    ) STRICT"
+    },
+    {
+      "name": "method_epochs",
+      "type": "table",
+      "tableName": "method_epochs",
+      "sql": "CREATE TABLE method_epochs (\n      owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,\n      generation INTEGER NOT NULL, PRIMARY KEY(owner_id,scope,project_id)\n    ) STRICT"
+    },
+    {
+      "name": "method_files",
+      "type": "table",
+      "tableName": "method_files",
+      "sql": "CREATE TABLE method_files (\n      version_id TEXT NOT NULL REFERENCES method_versions(id), position INTEGER NOT NULL,\n      path TEXT NOT NULL, text TEXT NOT NULL, byte_count INTEGER NOT NULL CHECK(byte_count>=0),\n      content_identity TEXT NOT NULL, media_type TEXT NOT NULL,\n      PRIMARY KEY(version_id,position), UNIQUE(version_id,path)\n    ) STRICT"
+    },
+    {
+      "name": "method_operations",
+      "type": "table",
+      "tableName": "method_operations",
+      "sql": "CREATE TABLE method_operations (\n      owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,\n      action_id TEXT NOT NULL, method TEXT NOT NULL, payload_binding TEXT NOT NULL,\n      target_id TEXT NOT NULL, result TEXT NOT NULL, created_at TEXT NOT NULL,\n      PRIMARY KEY(owner_id,scope,project_id,action_id)\n    ) STRICT"
+    },
+    {
+      "name": "method_owner_usage",
+      "type": "table",
+      "tableName": "method_owner_usage",
+      "sql": "CREATE TABLE method_owner_usage (\n      owner_id TEXT PRIMARY KEY, byte_count INTEGER NOT NULL CHECK(byte_count>=0)\n    ) STRICT"
+    },
+    {
+      "name": "method_package_scope",
+      "type": "index",
+      "tableName": "method_packages",
+      "sql": "CREATE INDEX method_package_scope ON method_packages(owner_id,scope,project_id,id)"
+    },
+    {
+      "name": "method_packages",
+      "type": "table",
+      "tableName": "method_packages",
+      "sql": "CREATE TABLE method_packages (\n      id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,\n      state TEXT NOT NULL CHECK(state IN ('available','deleted')),\n      revision INTEGER NOT NULL CHECK(revision>0), next_ordinal INTEGER NOT NULL CHECK(next_ordinal>0),\n      created_at TEXT NOT NULL, updated_at TEXT NOT NULL\n    ) STRICT"
+    },
+    {
+      "name": "method_version_ref",
+      "type": "index",
+      "tableName": "method_versions",
+      "sql": "CREATE UNIQUE INDEX method_version_ref ON method_versions(package_id,id,manifest_identity)"
+    },
+    {
+      "name": "method_versions",
+      "type": "table",
+      "tableName": "method_versions",
+      "sql": "CREATE TABLE method_versions (\n      id TEXT PRIMARY KEY, package_id TEXT NOT NULL REFERENCES method_packages(id),\n      ordinal INTEGER NOT NULL CHECK(ordinal>0), based_on TEXT,\n      manifest_identity TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('available','deleted')),\n      revision INTEGER NOT NULL CHECK(revision>0), title TEXT, submitted_by TEXT,\n      imported_at TEXT NOT NULL, byte_count INTEGER NOT NULL CHECK(byte_count>=0),\n      UNIQUE(package_id,ordinal),\n      CHECK((state='available' AND title IS NOT NULL) OR\n        (state='deleted' AND title IS NULL AND submitted_by IS NULL AND byte_count=0))\n    ) STRICT"
+    }
+  ]
+}

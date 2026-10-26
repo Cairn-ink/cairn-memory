@@ -1,0 +1,22 @@
+Cairn.ink Memory <version>
+
+Claude Code
+  ✗ Plugin is not installed
+  Install:
+npx @cairn-ink/memory setup
+  To see whether the last connection worked, type /cairn-memory:status in it.
+
+Codex 0.160.0
+Automatic memory is paused: Codex 0.160.0 has not been verified yet.
+  Recheck:
+npx @cairn-ink/memory status --client codex
+Automatic memory is not installed
+  Install:
+npx @cairn-ink/memory setup
+Codex automatic memory is off (this version has not been verified).
+You can use the Cairn tools in Codex /mcp to save and find memories manually.
+PAT, remote service and hooks are not tested.
+
+Only local settings were read; no connection was tested.
+Details:
+npx @cairn-ink/memory status --verbose

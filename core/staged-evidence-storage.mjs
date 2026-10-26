@@ -36,6 +36,9 @@ function serializeView(view, episode = false) {
 /** Methods without a transaction wrapper are called under the admission/mutation lock. */
 export function createStagedEvidenceStorage({ db }) {
   let episodes;
+  const hasRawCapture = Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_capture_events'").get());
+  const rawBypass = (ns, input) => hasRawCapture && db.prepare(`SELECT 1 FROM raw_capture_events
+    WHERE ${eventWhere} AND staging='not-staged'`).get(...key(ns, input));
   const read = (ns, input) => db.prepare(`SELECT * FROM staged_capture_evidence WHERE ${eventWhere}`)
     .get(...key(ns, input));
 
@@ -67,6 +70,7 @@ export function createStagedEvidenceStorage({ db }) {
   function claimGuard(ns, input, admission, now, staged) {
     const denied = episodes?.guard(ns, input); if (denied) return denied;
     const row = read(ns, input);
+    if (!row && rawBypass(ns, input)) return null;
     if (!row && episodes?.event(ns, input)?.staging === 'not-staged') return null;
     if (!row) return staged && admission ? 'capture_evidence_closed' : null;
     if (row.state === 'admitted' || row.state === 'released') return null;

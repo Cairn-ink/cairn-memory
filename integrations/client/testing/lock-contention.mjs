@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { withWriteObserver } from "../private-state.mjs";
 import { deferred } from "./deferred.mjs";
+import { performance } from "node:perf_hooks";
 
 // Only globals used by hook/lock code are mocked, never HTTP/child internals.
 // Polls advance logical time; filesystem ownership and writes stay real.
@@ -9,6 +10,8 @@ export async function withLockClock(t, work, { pollMs = 10 } = {}) {
   const timers = new Map();
   const originalClear = globalThis.clearTimeout;
   const now = t.mock.method(Date, "now", () => clock);
+  const monotonicStart = performance.now();
+  const monotonic = t.mock.method(performance, "now", () => monotonicStart + elapsed);
   // Mock only globals used by the lock/hook, leaving HTTP and child-process
   // internals on their own timers. Hook deadlines use the same virtual clock.
   const timeout = t.mock.method(globalThis, "setTimeout", (callback, ms, ...args) => {
@@ -33,6 +36,7 @@ export async function withLockClock(t, work, { pollMs = 10 } = {}) {
     timeout.mock.restore();
     clear.mock.restore();
     now.mock.restore();
+    monotonic.mock.restore();
   }
 }
 

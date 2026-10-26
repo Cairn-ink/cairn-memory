@@ -59,6 +59,14 @@ bounded maps and an injected classification port over that same runtime. No mode
 provider or MCP adapter is bundled. No private source, prompt or fixture contents
 are copied into these slices.
 
+The [asynchronous topic reader](topic-overview.md) supplies owner-bound Memory
+MOC metadata through a fixed read-only Worker over the same store and index
+authority. It uses bounded physical traversal and short deferred snapshots;
+it has no model/counter, second index or admission gate. Its ephemeral cursor
+state does not change model-facing `map` or authorize product enablement.
+Its explicit schema 29 compatibility is a read port over existing Memory/index
+authority, not a new Raw source read grant, migration or second engine.
+
 [S2c](fetch-recall.md) adds bounded fetch/recall to that same runtime. Recall
 uses injected selection/ranking adapters and an authoritative final read;
 no model provider or network host is bundled. The released plugin is unchanged.
@@ -148,3 +156,43 @@ session-start groups/receipts/combined budget and hosted pause state/generation.
 CX-5 owns lifecycle consumption and the resume EOF barrier; H5 owns hosted
 serving. No hosted/service code or client hook enablement is delivered here.
 The local automatic-capture connection remains LAC's separate work.
+
+### Trusted local capture controls
+
+Explicit public Raw construction also selects optional schema 29 and exposes
+trusted local `getLocalCaptureControl`/`setLocalCaptureControl` methods. These
+content-free exact-store/owner/namespace/client controls share the registration
+and publication transaction domain. The optional frozen `localAuthority`
+startup snapshot is validated before host policy/sealing, after sealing and
+at registration; it cannot refresh itself after settings changes. Persisted
+consent bindings fence ordinary/staged admission and the recorded episode
+watermark at attempt start and commit, even through a later unmanaged caller.
+
+Automatic interpretation consent, Raw disclosure acknowledgement and the
+per-client Raw saving switch have independent meanings. Notice/saving changes
+do not cancel eligible admitted interpretation; consent revocation does. No
+serialized capture field, MCP tool, hook, provider or setup path acquires these
+trusted setters. See [the local guide](raw-local-journal.md#durable-local-authority-b2b).
+
+### Opt-in local one-shot adapter
+
+The private artifact also includes `adapters/local/cli.mjs`, an explicit POSIX
+process for one already selected/redacted capture-v2 request. A private fixed
+configuration supplies the existing store and frozen managed authority; stdin
+cannot grant consent or select a different owner, client, scope or provider.
+The adapter invokes the same `captureRaw` source-bound-v2 engine and existing
+OpenAI baseline, not a second interpretation or storage implementation.
+
+The product runtime-usage guard shares durable daily port-invocation counts and
+concurrency across both clients for the same store/target and usage root.
+Local planning/replay/continuation needs no key or permit; actual model ports
+use a lazily selected environment key. Dispatch and every HTTP request recheck
+consent, independently of Raw notice/saving. A slot remains owned until the
+underlying invocation settles or a dead process is recovered. This is a count
+limit, not a dollar budget or cancellation/refund guarantee.
+
+The CLI validates truthful bounded acknowledgements and does not equate retained
+Raw with completed interpretation. It never installs hooks, writes a producer
+cursor, changes controls, enables MCP capture or alters hosted/v1 routes. Setup,
+outer host-worker supervision and complete installed local V1 remain separate.
+See [configuration, replies and limits](raw-local-journal.md#local-one-shot-adapter-b3).

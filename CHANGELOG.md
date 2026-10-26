@@ -8,6 +8,377 @@
   recall-success telemetry so it cannot delay hook exit after valid context.
   Capture, startup and status behavior and package versions are unchanged.
 
+## 0.6.0 — 2026-10-25: installer local mode
+
+- Add local SQLite memory with a one-time storage question on fresh installs and
+  explicit `--local` / `--cloud` choices. Existing cloud users keep their flow.
+- Register the `cairn-local` stdio MCP server for Claude Code and Codex, with shared
+  local storage, status and local uninstall that keeps memory data.
+- Local mode uses explicit MCP tools; automatic capture and recall are not
+  included yet. Semantic recall needs a model key and sends selected text to
+  the provider.
+
+## Unreleased — bounded topic member pages (E1-M)
+
+- Add `openMemoryReader(...).readTopicMembers(...)` for complete, bounded member lists of an L1/L2 MOC or the unfiled region. The reader is read-only and asynchronous, takes no writer slot, and returns refs only, with no bodies.
+- Results are ordered by `id_asc`, de-duplicated across L1, and carry an opaque cursor bound to a snapshot. The opt-in `topic-snapshot-v1` overview snapshot adds an `originToken`, so overview counts and member lists come from the same snapshot. `cursor_stale` and `storage_busy` are typed outcomes, and `storage_busy` never means empty.
+- Reads schema 18 and current stores without migrating them, under both DELETE and WAL. Legacy `readTopicOverview` output is unchanged; a differential test against `b2513501` covers every error class. Contract: `docs/plans/topic-overview-member-pages.md`.
+
+## Unreleased — optional local bge-m3 embedder (contract §20)
+
+- **New opt-in local embedder.** It uses the bge-m3 model (`--context-embedder local --context-embed-model bge-m3`) and is an alternative to the OpenAI default, which is unchanged.
+- **Model pack.** The model ships as a pack that Cairn owns, installed explicitly with `cairn-memory model install|verify bge-m3 --dir ABS`. The pack is pinned to one revision, every artifact is sha256-verified, and retrieval never downloads anything.
+- **Isolation.** Inference runs in a supervised child process, and the base package gains no inference dependencies. Inputs over 8,192 tokens are refused rather than truncated.
+- **Vectors.** Local and hosted vectors are never mixed.
+- **Platforms.** Qualified on Linux x64 (including WSL2) and macOS arm64; other platforms are unverified. The production model catalog stays empty and fails closed until reviewed release data is published.
+
+## Unreleased — local role profiles (U5c-1)
+
+- Add explicit current-method dependency review for private Cards, canonical v33 guards, and read-time invalidation across evidence, retrieval, organization and role guidance.
+
+- Add opt-in direct agent role publication with dual CAS and v32 guards, matching
+  method/context scopes, and one budgeted MCP role/task read with caller-held
+  receipts, historical labels and exact-version file continuation. See the
+  [role guide](docs/role-profiles-local.md) for configuration and limitations.
+
+## Unreleased — optional context sources (U5c-2)
+
+- Add independently opt-in one-hop typed relations and MOC title ranking, fixed
+  caps and source fences; MCP permits per-call narrowing and keeps source
+  diagnostics in host metadata. Source-disabled wire behavior stays unchanged.
+
+## Unreleased — context representation v2 (U5b-2)
+
+- Replace the experimental preview.2 assembly shape with `representation-v2`:
+  compact refs with verified fence prefixes, string bodies, lossless default
+  omission and `sameAsBody` receipts; full refs and unit counts stay in diagnostics.
+- Keep the snapshot only in namespaced host `_meta`, beside diagnostics, and
+  add the non-default first-source policy. Parent-only MOC moves preserve compact
+  refetch evidence but stale the snapshot path. See the
+  [context guide](docs/context-read-local.md) and [limitations](docs/limitations.md).
+
+## Unreleased — budgeted context assembly (U5b)
+
+- Add opt-in `read_memory_context` with whole canonical evidence units, strict
+  budgets and versioned rank-first/coverage-first policies. Context-enabled
+  startup supplies a keyless local `o200k_base` counter independently of models.
+- Emit the exact core-metered text as the single MCP text block; diagnostics
+  use namespaced `_meta` under an explicit client contract. The guarantee covers
+  that text alone, with separate core/transport byte bounds. See the
+  [context guide](docs/context-read-local.md) and [limitations](docs/limitations.md).
+
+## Unreleased — asset schema review fixes
+
+- Harden unreleased v31 against replacement-insert/update tombstone resurrection and
+  stale payload/binding restoration, without changing the v30 installer.
+- Reject unexpected triggers on method/asset tables and case-varied premature
+  asset artifacts through every opener. Match snapshot prototype rules to
+  canonical binary identity encoding before authority callbacks.
+- Keep C04/K13 contention gates on the paced scenario, with reader overlap
+  counted against actual writer calls. Report unpaced rollback-journal reader
+  starvation as bounded stress data, retrying the same page through busy waits
+  and verifying eventual byte-exact completion.
+
+## Unreleased — local asset host (U4b)
+
+- Add terminal-approved asset import, supplied derivatives and CAS deletion,
+  using confined descriptors, frozen payloads and the noncreating v31 store fence.
+- Add pure-Node create-only export with protected source names, readback
+  verification, link publication and explicit uncertain-durability receipts.
+- Add `methods import --attachments local-v1`, including exclusive binary
+  attachment review and SVG text, and five opt-in metadata/derivative MCP reads.
+  Default tools remain unchanged; MCP exposes neither bytes nor asset mutations.
+- Ship the complete host closure and real-process, PTY, publication fault and
+  installed-artifact acceptance. See [the asset guide](docs/assets-local.md).
+
+## Unreleased — context retrieval host (U5a part 3)
+
+- Renormalize OpenAI provider vectors in the adapter before strict float32 validation.
+- Add explicit context MCP startup options and two read tools, fixed host read
+  sets, strict reference-preserving grammars and separate core/transport bounds.
+- Add bounded `context refresh`, syntax-only context configuration checks and
+  the budgeted OpenAI embedding port. Hosted configuration selects frozen
+  `rrf-k10`; default construction and legacy tools remain unchanged.
+- Use fake HTTP and actual installed-process acceptance; paid smoke remains a
+  separate unrun opt-in. Accounting rates are frozen inputs, not live billing
+  attestation. See [the context guide](docs/context-read-local.md).
+
+## Unreleased — opt-in core candidate retrieval (U5a parts 1–2)
+
+- Add the explicit `contextRead` core opt-in, read-only `openContextReader`,
+  candidate lookup, bounded index refresh and canonical evidence refetch. Existing
+  flag-off behaviour is unchanged; MCP, CLI and hosted adapter wiring are deferred.
+- Keep lexical postings, statistics and optional vectors in a sensitive local
+  sidecar. Canonical changes invalidate retrieval logically; deleting or
+  invalidating entries does not provide secure physical erasure.
+- Freeze T1 tokenization and BM25/RRF presets, including the intentional embedded
+  single-Han miss: `中` does not match `中文`. Measurements use synthetic data and
+  are observational, not semantic-quality or production-latency guarantees.
+
+## Unreleased — derivatives and method attachments (U4a-2)
+
+- Add immutable, explicitly supplied asset derivatives with exact source
+  provenance, formatting-preserving redaction, bounded unverified intervals,
+  paged text, replay and trigger-driven purge accounting.
+- Add explicit `mixed-v1` method manifests and exclusively owned binary
+  attachments. Imports and byte delivery require separate method and asset
+  grants; metadata and purge remain available to method-only processes.
+  Current attachment reads respect adoption pins and never switch versions.
+- Preserve text-only action/manifest bindings and the frozen v31 schema.
+  Extend `measure:assets` with asserted 64-MiB mixed-import lock/RSS gates.
+
+## Unreleased — standalone assets (U4a-1)
+
+- Add the opt-in assets-local-v1 embedded facade with immutable binary versions,
+  signature matching, authenticated 32-KiB chunk reads, CAS/replay, namespace
+  usage, content-free effects and trigger-driven purge accounting.
+- Install the complete canonical v31 layout only when assets are selected,
+  including reserved derivative and mixed-manifest tables. Validate it at every
+  opener; retain shallow-safe actual v30 install/store fixtures.
+- Gate 32-MiB import lock duration, preparation-inclusive RSS growth and sustained
+  independent byte-reader/binding-writer contention in `measure:assets`.
+
+## Unreleased — method host review fixes
+
+- Treat line terminators as ordinary path characters in exclusion globs, and
+  preserve explicit bind-mount preflight infrastructure failures as failures.
+- Bound exclusion glob matching with a two-row dynamic program and preserve
+  Unicode, separator, class and directory-pruning semantics.
+- Separate bind-mount prerequisite skips from mandatory importer-child success;
+  strengthen installed terminal-control approval and injection tests.
+- Pace the C04 writer from a reader baseline, require 200 overlapping pages,
+  and report overlap reader latency separately, including commit queueing.
+
+## Unreleased — method read concurrency (U2c)
+
+- Run method and binding reads in deferred, query-only snapshots; restore the
+  connection state on refusal and discard connections whose cleanup fails.
+- Verify manifest metadata plus the requested file on file pages and metadata
+  during resolution. Version metadata, manifest lists and comparison retain
+  whole-version verification. Out-of-band text corruption affects that file's
+  reads while other files remain readable.
+- Gate the opt-in two-process maximum-reader/binding-writer measurement on
+  100 commits, zero busy outcomes and writer p95 ≤250 ms, with finite deadlines.
+
+## Unreleased — installed method packages (U3)
+
+- Keep the CLI static graph SQLite-free while preserving installed eager-module
+  observations. Fence terminal review to one rollback-journal store identity;
+  use a noncreating ordinary opener and check identities before migration.
+  Bound the observational measurement by a shared deadline and retry limit.
+
+- Keep installed eager import closure consistent without method flags. Never
+  create a store from a method command; review and approve an older store's
+  one-way v30 upgrade before opening the core. Count and retry reader/writer
+  busy outcomes in the opt-in contention measurement.
+
+- Add Linux/WSL descriptor-confined directory importing and separate real-TTY
+  import/adopt/disable approval of frozen payloads. Check mount IDs before data
+  access, reject links/special files, and bound traversal, reads and review.
+- Add nine read-only MCP method tools behind `--method-packages local-v1`;
+  personal reads from a project require `--method-read-personal`. Enforce core
+  and separately encoded transport byte bounds, preserving opaque refs and pins.
+- Raise file/version limits and derived snapshot budgets together to 256 files,
+  400,000 units/file and 4,000,000 units/version. Add read-authorized availability-
+  only `checkMethodReasonRefs`; keep v30 and the 50 MB owner cap unchanged.
+- Add actual installed, process-race and real-PTY H01–H07 coverage and an opt-in
+  synthetic maximum-read/writer-contention measurement. No package execution,
+  model authority, automatic approval or binary assets are introduced.
+
+## Unreleased — local method bindings and pins (U2b)
+
+- Add explicit adoption/disable CAS, four-level resolution with disabled and
+  unavailable barriers, authenticated current/history pins and binding-event reads.
+- Reauthorize every read-set namespace, retain exact cross-scope package identity,
+  and advance binding generations only on transitions. The frozen v30 layout is
+  unchanged; deletion uses canonical lifecycle fences without binding fanout.
+- Extend the synthetic method example with adopt → resolve → pin → disable.
+  U3 adds the separately opted-in installed host workflow above.
+
+## Unreleased — opt-in local method packages (U2a)
+
+- Keep historical migration and compatibility tests shallow-safe with immutable
+  synthetic fixtures and an opt-in full-history regeneration/verification target.
+- Refuse same-named weakened v30 schema definitions, including CHECK constraints
+  and namespace trigger bodies; cover competing-process quota and lifecycle races.
+
+- Add text-only immutable method imports, context-free history, exact-edge
+  comparison, atomic owner quota, purging deletion and content-free durable replay
+  and effects in the existing SQLite core.
+- Allocate the complete schema v30, including initially empty binding, binding-
+  generation and content-free binding-event storage, through a transactional
+  schema-only prerequisite migrator; unselected construction stays unchanged. Existing upgraded stores reopen through
+  ordinary, read-only, managed and local setup/preflight paths.
+- Require method-specific host authority. At the U2a checkpoint, bindings, contexts,
+  snapshots and current intent were deferred; U2b adds them on the frozen
+  v30 layout; deletion advances lifecycle revisions and emits only its deletion
+  effect, without enumerating bindings or advancing binding generations. See
+  [the local guide](docs/method-packages-local.md).
+
+## Unreleased — explicit local foreground setup preview
+
+- Add default-off `local init/setup/status/activate/disable` and bounded quiet
+  native hook routing over the existing host/worker/core, not another engine.
+- Bind separate consents, exact existing store/client/namespace, approved sources,
+  private runtime HOME and shared cross-client target/usage limits. Init is
+  brand-new-only; setup never migrates existing files. Daily limits count model
+  port calls, not USD; owner Raw cap becomes durable on first real capture.
+- Publish foreground 160-second hooks last and revoke SQL first on disable;
+  preserve identity and require existing explicit rearm after re-enabling.
+  Hosted defaults, trust, credentials and provider algorithms remain unchanged.
+- Separate exact generated-command keyless checks from installed synthetic
+  provider/ancestry instrumentation; native, semantic and product gates remain.
+
+## Unreleased — bounded asynchronous Memory topic metadata
+
+- Add owner-bound `openMemoryReader().readTopicOverview()` over the same local
+  store: exact deduplicated Memory MOC counts, guarded titles, bounded optional
+  member refs and opaque continuation through a fixed read-only Worker.
+- Bound physical work, response bytes and ephemeral state; report incomplete
+  counts explicitly and reject stale snapshots. Existing supported files open
+  without migration or reserving a writer. Model-facing `map` remains unchanged.
+- Expose the unavailable placement-added timestamp explicitly rather than
+  inferring it from edits. Product integration, member-list/location extensions
+  and episode headers remain separate. See the [reader guide](docs/topic-overview.md).
+- Integrate that reader with exact schema 29 compatibility while preserving
+  physical legacy 18/20/21/22/23 support and refusing 24–28. Add synthetic
+  capture/receipt/deletion and installed Worker coverage. Read-only WAL readers
+  may maintain SQLite SHM read marks; this is not an engine data write or a
+  semantic, native-client or product-enablement claim.
+
+## Unreleased — explicit local authority rearm
+
+- Add trusted rearm status/CAS actions for one established session after controls
+  were independently re-enabled. Preserve identity/ordinal and non-authority
+  configuration; skip only one frozen complete EOF without retrying old work.
+- Add bounded intent/terminal receipts, one retained predecessor and direct-worker
+  permission/receipt checks. Terminal replay never rewinds later cursor progress;
+  missing or older global history refuses when the selected session proves it.
+- Include synthetic source/crash and actual offline archive checks. Revision 0 is
+  absence observation, not historical proof. No controls are enabled, native
+  client activated, semantic score measured or full V1/release claimed.
+
+## Unreleased — optional matching qualified evidence
+
+- Add the trusted `append-matching-evidence-v1` capture policy for exact canonical
+  content, seven matching labels and eligible original/incoming sources. Append
+  receipts without replacing the original qualification; default/manual/ordered/
+  episode behavior remains strict.
+- Allow the same optional top-level B3 configuration field through the existing
+  local host. Preserve source/deletion/suppression/replay fences and exact
+  configuration/preparation bindings; no implicit requalification or rearm.
+- Add offline synthetic source and installed checks. No truth/reaffirmation,
+  semantic-score, real-client activation, full V1 or release claim is made.
+
+## Unreleased — retained Raw inspection and authored Cards
+
+- Add an exclusive keyless retained-profile MCP path for an existing private
+  schema 29/store, with indexed discovery, paged Raw reads and source resolution.
+- Allow explicitly authored Card drafts from resolved Raw without a Memory.
+  Keep ordinary receipt drafts and default rosters unchanged; confirmation still
+  requires the separate controlling-TTY exact revision review.
+- Include the shared runtime and synthetic installed lifecycle checks. No
+  automatic Cards, capture/consent/quota change, client activation, semantic
+  quality result, registry publication or release is added.
+
+## Unreleased — explicit local capture host
+
+- Add owner-operated foreground status, preparation, initialization and bounded
+  capture through the existing private worker/transport/core. Check durable
+  capture permission before source access; preserve lazy provider credentials
+  and exact-event keyless replay.
+- Bind private configuration and installation identity with an external durable
+  preparation marker. Interrupted/lost identity refuses without repair. Keep
+  pending progress through cancellation and await actual child teardown.
+- Include synthetic installed archive and permission checks. This host slice did
+  not include rearm or retained-source MCP/Card review; later explicit slices
+  above retain their separate authority boundaries. Automatic hooks and completed
+  local V1 remain separate.
+
+## Unreleased — durable opt-in local Raw worker
+
+- Add explicit initialization and bounded local-v2 worker progress through the
+  existing producer, supervised transport and qualified one-shot engine. Private
+  keyed claims/cursors preserve exact part identity, issued ordinals and bounded
+  recovery across fresh processes without storing transcript text or raw IDs.
+- Recheck selected and excluded source commitments before advancement; retain
+  incomplete/refused work rather than silently skipping or resetting identity.
+  Contended shared/generated-lock acquisition now uses monotonic time without
+  changing owner liveness/reaping or capture/recall/pause algorithms.
+- Include the required private-archive closure and synthetic installed checks.
+  No automatic hooks, setup/rearm, hosted/v1 rewrite, Card promotion, completed
+  local V1 or production enablement is included.
+
+## Unreleased — supervised opt-in local process transport
+
+- Add an explicit host API for fixed-runtime, authority-bound capture-v2
+  subprocesses, with a shared configuration-text digest and closed child
+  environment. The standalone two-argument one-shot CLI remains compatible.
+- Supervise probe, stdin, bounded output, cancellation and actual child close
+  under one deadline. Processing, quota, incomplete interpretation and uncertain
+  delivery never become completed admission. No automatic entrypoint, cursor,
+  hook, setup, hosted/v1 change or production enablement is included.
+
+## Unreleased — opt-in local one-shot capture
+
+- Include a private POSIX one-shot CLI accepting one selected/redacted v2 request
+  for a fixed managed local target. It reuses the existing qualified Memory/Raw
+  engine and OpenAI baseline, with lazy explicit environment-key lookup and
+  durable shared per-port count/concurrency accounting.
+- Check consent at dispatch and every HTTP request, await actual provider
+  settlement before releasing a slot, and report saved Raw with incomplete
+  interpretation as non-2xx. Deadline termination never fabricates completion.
+- Add optional trusted `configureCap:false` to preserve existing owner caps
+  during capture construction; omitted/default administrative behavior remains.
+  This is synthetic offline integration, not hooks, setup, cursor recovery,
+  completed local V1, production enablement or a release.
+
+## Unreleased — durable trusted local capture authority
+
+- Add exact-store/namespace/client local consent controls and an optional frozen
+  startup authority snapshot to explicit public Raw construction. CAS revisions
+  and consent generations fence registration, replay, Memory admission and
+  episode publication across revocation and disable/re-enable races.
+- Recheck the same frozen managed authority before every source-sealing
+  callback, so revocation during one part prevents later parts from dispatching.
+- Keep automatic interpretation consent, Raw notice acknowledgement and the
+  Raw saving switch separate. Notice revocation closes pending reservations
+  without discarding transport suffixes or cancelling admitted interpretation.
+- Explicit public Raw construction selects additive schema 29; ordinary
+  constructors preserve existing layouts and gain no controls or Card authority.
+  This is synthetic local programmatic infrastructure, not installed capture
+  setup, hooks, transport, production enablement or a release.
+
+## Unreleased — local Raw skipped-tail capture barrier
+
+- Let namespace pause/project stop close incomplete Raw tails previously skipped
+  for quota, notice or Raw-off, so a fresh higher ordinal can proceed after
+  resume. Historical part/event receipts stay unchanged; late suffixes remain
+  gaps and old-generation replay still refuses. Raw-only off/on adds no barrier.
+
+## Unreleased — explicit local Raw constructor
+
+- Add default-off `openMemoryCore({rawConversations})` using the existing shared
+  Raw/Memory/Card engine, with strict pre-open configuration, retained-read off
+  mode, lineage and revision-bound deletion. Raw source/Card operations still
+  require existing private-Card authority; no automatic Card creation.
+- Include the public composition's real closure in the private archive and
+  verify synthetic fresh-process multipart replay/read/authored-Card/deletion.
+  This is not installed Claude/Codex hook capture, MCP exposure, hosted Raw or
+  completed local V1. Lost-client-state recovery remains separate.
+
+## Unreleased — internal local Raw journal foundation
+
+- Add a default-off, model-free internal Raw journal in the existing SQLite
+  store: exact paged parts, immutable keyed replay identities, whole-message
+  owner reservations, usage snapshots and asynchronous seal/open fences.
+  Explicit internal opt-in upgrades compatible synthetic stores additively to
+  schema 24; current option-off openers preserve it and pre-Raw openers refuse it.
+- This P1 slice adds no public capture/MCP/hooks capability, Raw → Card source
+  support, public deletion integration or hosted encryption. Tests use synthetic
+  local plaintext fixtures only; no operational migration or production
+  enablement is authorized. See [the internal boundary](docs/raw-local-journal.md).
+
 ## Unreleased — integrated local private engine preview
 
 - Add exact-namespace `selectEvidence`, `fetchEvidence` and `revalidateEvidence`

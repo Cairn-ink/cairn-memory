@@ -83,7 +83,19 @@ Cairn 提供工具，讓你把這些偏好或決定存成記憶，下次可以�
 - 預設自動抽取記憶的品質仍未通過我們的來源支持標準，不能把示範當成普遍可靠
   的記憶效果。[已知限制](docs/limitations.md)
 - 託管服務與本機工具是不同路徑。Claude Code 託管外掛有自動保存功能與另外的
-  資料處理方式；Codex 文件描述的是明確呼叫記憶工具，自動保存整合仍在開發。
+  資料處理方式；通過格式驗收的 Codex 雲端整合也支援自動保存與提問回想。
+  本機模式則只提供明確呼叫的 MCP 工具，不會自動保存或回想。
 - [本機資料與刪除範圍](README.md#local-privacy-and-control) · [隱私說明](docs/privacy.md)
+
+## 安裝
+
+```sh
+npx @cairn-ink/memory setup
+```
+
+Installer 0.6.0 已於 2026-10-25 發布，可直接用上方指令；第一次互動安裝會問要用本機
+MCP 工具，或登入 cairn.ink 使用雲端自動記憶，也可用 `setup --local`／
+`setup --cloud` 直接選擇，首次非互動執行時需指定 `--local`／`--cloud`；
+本機模式目前不會自動保存或回想。
 
 更多安裝、開發與技術文件，請看 [English README](README.md)。

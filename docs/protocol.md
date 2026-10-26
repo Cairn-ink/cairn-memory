@@ -1,5 +1,9 @@
 # Compatibility protocol v0.3.0
 
+The uninstalled [internal Raw producer foundation](raw-local-journal.md#internal-producer-foundation-p4a)
+has a separate v2 preparation/acknowledgement contract and transient-plaintext
+threat model. It does not widen installed v1 or add a hosted route.
+
 ### Explicit local submitted-note/Card boundary
 
 The separately selected `retained-receipts-v1` Card drafting input resolves

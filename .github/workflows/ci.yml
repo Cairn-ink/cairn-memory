@@ -9,6 +9,20 @@ permissions:
   contents: read
 
 jobs:
+  local-embedder-offline:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['22.16.0', '24.15.0']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ matrix.node-version }}
+      # Builtins and tiny fixtures only; cc builds the publication utility fixture.
+      # No model, inference package, key, installer or network artifact source.
+      - run: npm run test:local-embedder
+
   windows-preview:
     runs-on: windows-latest
     strategy:
@@ -51,6 +65,8 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - run: npm test
       - run: npm run validate
+      - run: npm run test:local-transport-import
+      - run: npm run test:local-host-import
 
   pairing:
     runs-on: ubuntu-latest
@@ -84,6 +100,8 @@ jobs:
       - run: npm run test:codex
       # CX-1's shared-client parity and fixture-generator tests.
       - run: npm run test:client
+      # Internal producer coverage stays explicit; automatic hooks still use v1.
+      - run: npm run test:raw-producer
 
   core:
     runs-on: ubuntu-latest
@@ -146,6 +164,12 @@ jobs:
       - run: npm ci --prefix adapters/openai
       - run: npm run test:openai
       - run: npm run demo:openai-offline
+      - run: npm run test:local
+      - run: npm run test:local-transport
+      # Explicit local-v2 worker remains opt-in; no installed client hook is enabled.
+      - run: npm run test:local-worker
+      # Explicit owner-operated foreground entry; automatic hooks stay unchanged.
+      - run: npm run test:local-host
 
   mcp:
     runs-on: ubuntu-latest
@@ -162,6 +186,8 @@ jobs:
       - run: npm ci --prefix adapters/mcp
       - run: npm ci --prefix adapters/openai
       - run: npm run test:mcp
+      - name: Required role receipt measurements with installed tokenizer
+        run: CAIRN_REQUIRE_ROLE_TOKENIZER=1 node tools/testing/run.mjs core/test/task-receipt-measurement.test.mjs core/test/role-observations.test.mjs core/test/role-context.test.mjs
       - run: node tools/testing/run.mjs --script packaging/verify-clean-cache.mjs
       - run: node tools/testing/run.mjs --script packaging/prepare-cache.mjs
       - run: npm run test:artifact

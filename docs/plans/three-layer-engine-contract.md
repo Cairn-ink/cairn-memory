@@ -755,3 +755,17 @@ When support changes, keep reviewed authored content privately under its policy
 but block it from current answers until the person reviews its support. Sharing
 still needs destination permission. A fresh session reads the same engine and
 rechecks sources; it does not infer permission from an old snapshot.
+
+### 2026-10-21 local Raw development exception
+
+After the bounded local private Card/evidence/organization implementation, the
+owner authorized pure-local synthetic Raw development, tests and PRs before
+G1/G2 production evidence is complete. This supersedes the S0 pre-code blocker
+and the corresponding unchecked prerequisite above **only for that local
+development scope**. Default-off behavior, no real-user transcript retention,
+no production migration/publication/deployment, and all hosted privacy,
+encryption, restore/erasure and launch gates remain in force.
+
+See [local Raw V1 completion](raw-local-v1-completion.md) for the four remaining
+workstreams, bounded first packet and acceptance record. This exception does
+not mark any T01–T18, RL-1–RL-3 or product acceptance row as passed.

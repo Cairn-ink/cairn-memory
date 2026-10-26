@@ -1,0 +1,29 @@
+Cairn.ink Memory <version>
+
+Claude Code
+  ✗ 外掛沒有安裝
+  安裝：
+npx @cairn-ink/memory setup
+  最近一次是否連線成功，請在 Claude Code 輸入 /cairn-memory:status
+
+Codex 0.160.0
+自動記憶暫停中：這個 Codex 版本（0.160.0）還沒驗證完。
+  重新檢查：
+npx @cairn-ink/memory status --client codex
+自動記憶尚未安裝
+  安裝：
+npx @cairn-ink/memory setup
+Codex 自動記憶尚未開啟（這個版本還沒驗證）。
+目前可以在 Codex 用 /mcp 的 Cairn 工具手動存取記憶。
+未驗證 PAT、遠端服務或 hook 執行
+
+這裡只讀本機設定，沒有實際連線測試。
+詳細資料：
+npx @cairn-ink/memory status --verbose
+Claude Code：本機記憶（cairn-local）
+  連接：已註冊
+Codex：本機記憶（cairn-local）
+  連接：已註冊
+  尚未啟動引擎檢查連線。
+  Node：找不到，請重跑 setup --local
+  資料：~/.cairn-memory/data

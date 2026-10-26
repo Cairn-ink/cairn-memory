@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, lstatSync, readdirSync, symlinkSync } from 'node:fs';
 import { spawn } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 
-const moduleURL = new URL('../lib/setup.mjs', import.meta.url).href;
+const moduleURL = process.env.CAIRN_SETUP_TEST_MODULE || (process.env.CAIRN_SETUP_TEST_PACKAGE ? pathToFileURL(join(process.env.CAIRN_SETUP_TEST_PACKAGE, 'lib/setup.mjs')).href : new URL('../lib/setup.mjs', import.meta.url).href);
 const secret = 'synthetic-Codex-PAT-never-log-123';
 const endpoint = '[mcp_servers.cairn]\nurl = "https://cairn.ink/api/mcp"\n';
 const configured = endpoint + '[mcp_servers.cairn.http_headers]\nAuthorization = "Bearer ' + secret + '"\n';
@@ -32,11 +33,11 @@ async function fixture(t, options = {}) {
   }
   const promptsPath = join(workspace.path, 'prompts.jsonl'); writeFileSync(promptsPath, '');
   const harness = join(workspace.path, 'harness.mjs');
-  writeFileSync(harness, `import {SetupError} from ${JSON.stringify(new URL('../lib/errors.mjs',import.meta.url).href)};
+  writeFileSync(harness, `import {SetupError} from ${JSON.stringify(new URL('./errors.mjs',moduleURL).href)};
     import {main} from ${JSON.stringify(moduleURL)};
     import {appendFileSync,writeFileSync,writeSync} from 'node:fs';
     const answers = ${JSON.stringify(options.answers ?? [secret])};
-    process.exitCode = await main(process.argv.slice(2), {
+    process.exitCode = await main(process.argv.slice(2), { disableLocalMode: true,
       interactive: ${options.interactive ?? true}, nodeVersion: ${JSON.stringify(options.nodeVersion ?? process.versions.node)},
       prompt: async (question, options) => {
         appendFileSync(${JSON.stringify(promptsPath)}, JSON.stringify({question, options}) + '\\n');

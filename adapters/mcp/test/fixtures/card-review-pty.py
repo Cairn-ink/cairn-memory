@@ -40,7 +40,9 @@ try:
             output.extend(data)
             if len(output) > 700000:
                 raise RuntimeError('pty output exceeded bound')
-            if not prompted and b'Approval> ' in output:
+            # Quoted untrusted JSON may contain this text. The real prompt is
+            # a complete line-start frame at the current terminal output end.
+            if not prompted and (output == b'Approval> ' or output.endswith(b'\nApproval> ')):
                 prompted = True
                 print(json.dumps({'event': 'prompt', 'output': output.decode('utf-8')}), flush=True)
         if sys.stdin in ready:
