@@ -328,8 +328,8 @@ function extractedApp(app) {
   // verifier without fetching or pretending to prove a loadable installation.
   const engine = join(modules, manifest.package.name);
   renameSync(join(modules, 'package'), engine);
-  for (const [name, version] of Object.entries({ '@modelcontextprotocol/server': '2.0.0',
-    '@modelcontextprotocol/core': '2.0.0', zod: '4.5.4', tiktoken: '1.0.22' })) {
+  for (const [name, version] of Object.entries({ '@modelcontextprotocol/server': '2.3.1',
+    '@modelcontextprotocol/core': '2.3.1', zod: '4.6.7', tiktoken: '1.0.22' })) {
     mkdirSync(join(modules, name), { recursive: true });
     writeFileSync(join(modules, name, 'package.json'), JSON.stringify({ name, version }));
   }

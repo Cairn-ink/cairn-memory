@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — MCP SDK 2.3.1 and Zod 4.6.7 security update
+
+- Update `@modelcontextprotocol/server` and `@modelcontextprotocol/core` (and the
+  dev-only `@modelcontextprotocol/client`) from 2.0.0 to 2.3.1, and `zod` from
+  4.5.4 to 4.6.7. This clears GHSA-jm63-cq47-j5jp, GHSA-46jr-4wx8-v453,
+  GHSA-rvq5-wwqv-78pq, GHSA-6prh-2h8m-c8cw, GHSA-6qxp-vccf-f47h and
+  GHSA-mrhx-c7xc-m3w5. The engine still starts stdio only and configures no HTTP
+  transport, bearer verifier or OAuth client.
+- The production closure is still server, core, zod and tiktoken. The installer's
+  embedded engine bundle is regenerated, so it gets a new engine id.
+- The MCP SDK packages now declare Apache-2.0 (2.0.0 declared MIT); upstream is
+  moving from MIT to Apache-2.0. Third-party notices are updated.
+- SDK 2.3.1 closes the stdio transport when stdin ends, and Zod rejects an
+  oversized bounded array on its size before validating elements.
+
 ## 0.6.0 — 2026-10-25: installer local mode
 
 - Add local SQLite memory with a one-time storage question on fresh installs and

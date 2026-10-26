@@ -1,5 +1,6 @@
+import { isolatedFileRead } from '../../core/isolated-file-read.mjs';
 import { randomUUID } from 'node:crypto';
-import { closeSync, openSync, readSync, writeSync, lstatSync, fstatSync, constants } from 'node:fs';
+import { closeSync, openSync, readSync, writeSync, lstatSync } from 'node:fs';
 import { isatty } from 'node:tty';
 import { isDeepStrictEqual } from 'node:util';
 import { openMemoryCore } from '../../core/contract.mjs';
@@ -17,24 +18,12 @@ export function terminalJson(value) {
       `\\u${character.charCodeAt(index).toString(16).padStart(4, '0')}`).join(''));
 }
 
-// Inspect before open so a FIFO cannot block, then verify the opened descriptor
-// against replacement races. The extra byte detects overflow without reading
-// the remainder of an oversized file.
+// Refuse non-regular paths before the child opens with O_NONBLOCK. The child
+// reads at most the existing limit plus one overflow byte, then closes.
 function dependencyFile(path) {
   if (!lstatSync(path).isFile()) throw Error('invalid_review_configuration');
-  const fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK);
-  try {
-    if (!fstatSync(fd).isFile()) throw Error('invalid_review_configuration');
-    const bytes = Buffer.alloc(32769);
-    let used = 0;
-    while (used < bytes.length) {
-      const count = readSync(fd, bytes, used, bytes.length - used, null);
-      if (count === 0) break;
-      used += count;
-    }
-    if (used > 32768) throw Error('invalid_review_configuration');
-    return bytes.subarray(0, used);
-  } finally { closeSync(fd); }
+  const { bytes } = isolatedFileRead(path, 32768, { invalid: 'invalid_review_configuration' });
+  return bytes;
 }
 
 function configuration(args) {

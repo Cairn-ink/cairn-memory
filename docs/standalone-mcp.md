@@ -140,7 +140,9 @@ returns `model_not_configured`; it never silently substitutes lexical lookup.
 The optional OpenAI adapter sends selected inputs to OpenAI and may incur charges.
 The live-test guard is not a production per-user spending limit on this host.
 
-The server waits on stdin; stdout is reserved for MCP JSON-RPC. Configure your
+The server waits on stdin; stdout is reserved for MCP JSON-RPC. Ending stdin
+closes the server without waiting for outstanding requests. Keep stdin open
+until you have received the replies you expect. Configure your
 local MCP client to spawn that exact Node command with the same arguments and
 an appropriate working directory. Do not place a key in command-line arguments
 or committed client configuration. This document does not certify any particular
@@ -474,8 +476,9 @@ at 64 KiB; tool-result JSON is capped at 256 KiB and fails explicitly rather tha
 truncating source evidence. No production database is used in tests.
 
 `npm run test:mcp` runs synthetic actual-protocol tests without a key or model
-service. SDK server/client 2.0.0 and Zod4.5.4 are pinned outside core; the lockfile
-pins transitive packages. Registry metadata identifies MIT licensing; installed
+service. SDK server/client 2.3.1 and Zod 4.6.7 are pinned outside core; the lockfile
+pins transitive packages. Registry metadata identifies Apache-2.0 for the SDK 2.3.1
+packages and MIT for Zod; installed
 packages retain their license notices. Core remains dependency-free. See
 [acceptance and evidence](plans/standalone-mcp.md).
 

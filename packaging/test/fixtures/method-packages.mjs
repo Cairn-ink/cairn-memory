@@ -4,7 +4,7 @@ import {spawnSync} from 'node:child_process';
 import {openSync,closeSync,readFileSync,writeFileSync,rmSync,readdirSync,mkdirSync,copyFileSync,existsSync} from 'node:fs';
 import {homedir} from 'node:os';
 import {dirname,join,delimiter} from 'node:path';
-import {pathToFileURL} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 import {buildArtifact,commandInvocation,packageName} from '../../build.mjs';
 
 /** Actual npm pack/install with regular-file stdio, including in restricted CI. */
@@ -35,6 +35,13 @@ function seedCache(workspace) {
     for(const name of ['@modelcontextprotocol/core','@modelcontextprotocol/server','zod','tiktoken']){
       const entry=lock.packages['node_modules/'+name];if(entry)urls.add(entry.resolved);
     }
+  }
+  // Frozen fixture archives install the closure pinned in their own shrinkwrap.
+  const fixtures=fileURLToPath(new URL('./',import.meta.url));
+  for(const name of readdirSync(fixtures).filter(name=>name.endsWith('.tgz'))){
+    const listed=spawnSync('tar',['-xzOf',join(fixtures,name),'package/npm-shrinkwrap.json'],{encoding:'utf8'});
+    if(listed.status!==0)continue;
+    for(const entry of Object.values(JSON.parse(listed.stdout).packages??{}))if(entry.resolved)urls.add(entry.resolved);
   }
   for(const url of urls){
     const key='make-fetch-happen:request-cache:'+url,hash=createHash('sha256').update(key).digest('hex'),suffix=join(hash.slice(0,2),hash.slice(2,4),hash.slice(4));

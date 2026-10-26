@@ -2,13 +2,14 @@ import { installCardCurrentDependencies, validateCardCurrentDependencies, assert
 import { installRoleProfiles, validateRoleProfiles, assertNoRoleProfiles } from './role-profile-schema.mjs';
 import { installAssets, validateAssets, assertNoAssets } from './asset-schema.mjs';
 import { types } from 'node:util';
+import { createExclusiveSqliteFile } from './sqlite-journal-probe.mjs';
 import { storeFenceOption,pinStoreFile,assertStoreIdentity,noncreatingStoreURI } from './store-fence.mjs';
 import { migrateMethodPrerequisites } from './method-package-migration.mjs';
 import { randomBytes, randomUUID } from "node:crypto";
 import { installRawDeletion, RAW_DELETION_SCHEMA_VERSION } from './raw-deletion-schema.mjs';
 import { installRawSources, RAW_SOURCE_SCHEMA_VERSION } from './raw-source-schema.mjs';
 import { assertNoLocalAuthority, installLocalAuthority, validateLocalAuthority, validateRawSourcePrerequisites, LOCAL_AUTHORITY_SCHEMA_VERSION } from './local-authority-schema.mjs';
-import { closeSync, lstatSync, mkdirSync, openSync } from "node:fs";
+import { lstatSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { existingStoreOption, existingStorePath, validateExistingStore } from './existing-store.mjs';
@@ -385,9 +386,13 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
     path = resolve(path);
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     try {
-      closeSync(openSync(path, "ax", 0o600));
+      // Existing files need no fd. A missing file is exclusively created in a
+      // child so even a concurrent Worker opening the new inode is lock-safe.
+      lstatSync(path);
     } catch (error) {
-      if (error.code !== "EEXIST") throw error;
+      if (error.code !== 'ENOENT') throw error;
+      try { createExclusiveSqliteFile(path); }
+      catch (creation) { if (creation.code !== 'EEXIST') throw creation; }
     }
     const stat = lstatSync(path);
     if (!stat.isFile() || (process.platform !== "win32" && (stat.mode & 0o077))) {
@@ -396,7 +401,7 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
   }
   let db;
   try {
-    // URI mode=rw is mandatory here: no mkdir/open(ax), no creation fallback.
+    // URI mode=rw is mandatory for fences: no mkdir or creation fallback.
     db = new DatabaseSync(fence ? noncreatingStoreURI(path) : path, { timeout: STORAGE_BUSY_TIMEOUT_MS });
     db.exec("PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;");
     transaction(db, () => {
