@@ -19,16 +19,21 @@ function identity(path) {
   }
   return stat;
 }
-export function openReadDatabase(path, { contextRead = false, topicMembers = false, deferTopicValidation = false, topicPolicy, preflight } = {}) {
+// Worker preflight handoff: safe identity before any native connection opens.
+export function contextProductFileIdentity(path) {
+  const stat = identity(path); return `${stat.dev}:${stat.ino}`;
+}
+export function openReadDatabase(path, { contextRead = false, topicMembers = false, deferTopicValidation = false, topicPolicy, nativeObserver, preflight } = {}) {
   const initial = identity(path);
+  nativeObserver?.identity?.(`${initial.dev}:${initial.ino}`);
   preflight?.();
   const wal = topicPolicy ? topicJournalMode(path, initial) === 'WAL' : false;
   let native;
-  try { native = new DatabaseSync(path, { readOnly: true }); }
+  try { native = nativeObserver ? nativeObserver.invoke('open', 'connection', () => new DatabaseSync(path, { readOnly: true })) : new DatabaseSync(path, { readOnly: true }); }
   catch (error) { throw recordSqliteFailure(error, 'open', 'connection'); }
-  const db = topicPolicy ? topicPolicy.database(native, wal) : native;
+  const db = nativeObserver ? nativeObserver.database(native) : topicPolicy ? topicPolicy.database(native, wal) : native;
   try {
-    try { native.exec(`PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=${contextRead ? 5000 : 0};`); }
+    try { (nativeObserver ? db : native).exec(`PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=${contextRead && !nativeObserver ? 5000 : 0};`); }
     catch (error) { throw recordSqliteFailure(error, 'configure', 'reader_configuration'); }
     const current = identity(path);
     if (initial.dev !== current.dev || initial.ino !== current.ino) fail('unsafe_database_file');
@@ -87,7 +92,7 @@ export function openReadDatabase(path, { contextRead = false, topicMembers = fal
     if (!(topicMembers && deferTopicValidation)) {
       if (contextRead) readTransaction(db, validate); else validate();
     }
-    return { db, assertFile() {
+    return { db, fileIdentity: `${initial.dev}:${initial.ino}`, assertFile() {
       const stat = identity(path);
       if (stat.dev !== initial.dev || stat.ino !== initial.ino) fail('cursor_stale');
     } };

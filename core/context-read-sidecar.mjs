@@ -57,6 +57,7 @@ function auxiliaries(path, readOnly) {
 /** Part-2 openers must call this after canonical path validation and BEFORE
  * constructing either SQLite connection. Missing files retain opener precedence;
  * this probe only refuses auxiliary files and WAL headers, without recovery. */
+export function assertContextReadCanonicalDelete(path) { auxiliaries(path, true); }
 export function assertContextReadReadOnlyAuxiliaries(path) {
   auxiliaries(path, true);
   auxiliaries(path + '.context-read-v1.sqlite', true);

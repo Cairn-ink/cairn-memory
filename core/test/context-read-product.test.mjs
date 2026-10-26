@@ -1,0 +1,213 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { randomUUID, createHash } from 'node:crypto';
+import { readFileSync, existsSync, writeFileSync } from 'node:fs';
+import { openContextProductReader, createContextReadSupervisor } from '../index.mjs';
+import { credentialDigest, PRODUCT_PROFILE } from '../context-product-control.mjs';
+import { fixture, ns, ok } from '../testing/context-read-fixture.mjs';
+import { host as legacyHost } from '../testing/context-read-core-fixture.mjs';
+import { openContextReader } from '../context-reader.mjs';
+import { installOverviewLayout } from '../testing/topic-overview-raw29-fixture.mjs';
+import { openDatabase } from '../database.mjs';
+import { migrateMethodPrerequisites } from '../method-package-migration.mjs';
+import { installAssets } from '../asset-schema.mjs';
+import { installRoleProfiles } from '../role-profile-schema.mjs';
+import { installCardCurrentDependencies } from '../card-current-schema.mjs';
+
+const moduleUrl = new URL('../testing/context-product-host.mjs', import.meta.url).href;
+function configured(t, path, patch = {}, readSet = [ns]) {
+  const supervisor = createContextReadSupervisor(); t.after(() => supervisor.close());
+  const state = new SharedArrayBuffer(32), view = new Int32Array(state); view[0] = 1; view[3] = 4;
+  const credential = { nonce: randomUUID() };
+  const requestControl = { requestId: randomUUID(), handleId: randomUUID(), credentialBindingId: randomUUID(), credentialExpiresUtcMs: null, requestMaxMs: 5000 };
+  const ownerCoverage = { policy: 'recent-projects-v1', selectionRevision: 'synthetic', requestedNamespaces: readSet.length, selectedNamespaces: readSet.length, omittedNamespaces: 0 };
+  const binding = { kind: 'request', requestId: requestControl.requestId, handleId: requestControl.handleId,
+    credentialBindingId: requestControl.credentialBindingId, credentialExpiresUtcMs: null, credentialDigest: credentialDigest(credential),
+    ownerId: ns.ownerId, namespaces: { readSet, ownerCoverage }, issuedAt: 1, ...patch };
+  const options = { supervisor, path, version: 'context-read-v1', profile: PRODUCT_PROFILE, readSet, ownerCoverage,
+    requestControl, host: { moduleUrl, configuration: { requestBinding: binding, state, requestReservation: new SharedArrayBuffer(4) } }, diagnostics: true };
+  return { credential, view, options, supervisor, async open() { const reader = await openContextProductReader(options); t.after(() => reader.close()); return reader; } };
+}
+const fetchInput = memory => ({ readSet: [ns], refs: [{ type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision }], intent: 'current' });
+const denied = (result, code) => assert.deepEqual(result, { ok: false, error: { code, retryable: false } });
+const hash = path => createHash('sha256').update(readFileSync(path)).digest('hex');
+
+for (const version of [18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]) test(`P2-02/04/05 real Worker physical v${version} canonical fetch, no sidecar or migration`, async t => {
+  const f = fixture(t), memory = f.admit('Ｆｕｌｌ width canonical body'); f.core.close();
+  if (version <= 29) installOverviewLayout(f.path, version);
+  else {
+    const db = openDatabase(f.path);
+    try {
+      migrateMethodPrerequisites(db);
+      if (version >= 31) { installAssets(db); db.exec('PRAGMA user_version=31'); }
+      if (version >= 32) { installRoleProfiles(db); db.exec('PRAGMA user_version=32'); }
+      if (version >= 33) { installCardCurrentDependencies(db); db.exec('PRAGMA user_version=33'); }
+    } finally { db.close(); }
+  }
+  const canonical = f.db.prepare('SELECT content FROM memories WHERE id=?').get(memory.id).content;
+  const before = hash(f.path), config = configured(t, f.path), reader = await config.open();
+  const capabilities = ok(await reader.getContextReadCapabilities());
+  assert.ok(config.view[4] > 0);
+  assert.equal(capabilities.profile, PRODUCT_PROFILE); assert.equal(capabilities.execution, 'worker');
+  assert.equal(capabilities.readSetMaximum, 2); assert.deepEqual(capabilities.methods, ['fetchCandidateEvidence']);
+  assert.deepEqual(capabilities.types, version >= 23 ? ['memory', 'card'] : ['memory']);
+  const fetched = ok(await reader.fetchCandidateEvidence(fetchInput(memory), config.credential));
+  assert.equal(fetched.items[0].content, canonical); assert.equal(config.view[1], 2);
+  assert.equal(typeof fetched.snapshot, 'string');
+  assert.deepEqual(ok(await reader.fetchCandidateEvidence({ readSet: [ns], snapshot: fetched.snapshot }, config.credential)), fetched);
+  assert.equal(config.view[1], 4);
+  denied(await reader.findCandidates({ readSet: [ns], query: 'canonical', types: ['memory'], intent: 'current' }, config.credential), 'index_unavailable');
+  await reader.close();
+  assert.equal(hash(f.path), before); assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, version);
+  assert.equal(existsSync(f.path + '.context-read-product-v1.1.sqlite'), false);
+  assert.equal(existsSync(f.path + '.context-read-v1.sqlite'), false);
+  const deliveries = await config.supervisor.drain();
+  assert.ok(deliveries.length >= 3); assert.ok(deliveries.every(d => d.state === 'complete' && d.telemetry === 'complete'));
+});
+
+for (const stage of ['entry', 'final', 'generation-entry', 'generation-final']) test(`P2-14/25/26 real Worker ${stage} refuses with exact sample count`, async t => {
+  const f = fixture(t), memory = f.admit('private');
+  const config = configured(t, f.path, stage.startsWith('generation') ? { ownerGeneration: 4 } : {});
+  if (stage === 'entry') config.view[0] = 0;
+  if (stage === 'final') config.view[2] = 2;
+  if (stage === 'generation-entry') config.view[3] = 5;
+  // The host publication hook revokes at the second sample; generation equality
+  // is independently tested at entry and on both successful samples.
+  if (stage === 'generation-final') config.view[5] = 2;
+  const reader = await config.open(), final = stage.endsWith('final');
+  denied(await reader.fetchCandidateEvidence(fetchInput(memory), config.credential), final ? 'scope_changed' : 'authority_required');
+  assert.equal(config.view[1], final ? 2 : 1);
+});
+
+test('P2-22 separate service authority, cross-request/handle credential reuse and reservation reuse refuse', async t => {
+  const f = fixture(t), memory = f.admit('private'), a = configured(t, f.path), b = configured(t, f.path);
+  const readerA = await a.open(), readerB = await b.open();
+  denied(await readerB.fetchCandidateEvidence(fetchInput(memory), a.credential), 'authority_required');
+  assert.equal(b.view[1], 0);
+  await assert.rejects(openContextProductReader(a.options), { code: 'authority_required' });
+  const service = configured(t, f.path, { kind: 'service' });
+  await assert.rejects(service.open(), { code: 'authority_required' });
+  await readerA.close(); denied(await readerA.fetchCandidateEvidence(fetchInput(memory), a.credential), 'store_closed');
+});
+
+test('P2-01/11 product snapshot domains isolated; full-ref/fence semantics and legacy bytes unchanged', async t => {
+  const f = fixture(t), memory = f.admit('canonical');
+  const config = configured(t, f.path), reader = await config.open(), trusted = legacyHost();
+  const legacy = openContextReader({ path: f.path, contextRead: { version: 'context-read-v1', authority: trusted.authority } }); t.after(() => legacy.close());
+  const input = fetchInput(memory), before = trusted.call(legacy, 'fetchCandidateEvidence', input);
+  const product = ok(await reader.fetchCandidateEvidence(input, config.credential));
+  assert.deepEqual(product.items, ok(before).items);
+  assert.notEqual(product.snapshot, before.value.snapshot);
+  denied(await reader.fetchCandidateEvidence({ readSet: [ns], snapshot: before.value.snapshot }, config.credential), 'invalid_snapshot');
+  denied(trusted.call(legacy, 'fetchCandidateEvidence', { readSet: [ns], snapshot: product.snapshot }), 'invalid_snapshot');
+  denied(await reader.fetchCandidateEvidence({ ...input, fences: ['AAAAAAAA'] }, config.credential), 'snapshot_stale');
+  assert.equal(JSON.stringify(trusted.call(legacy, 'fetchCandidateEvidence', input)), JSON.stringify(before));
+  denied(trusted.call(legacy, 'fetchCandidateEvidence', { ...input, deadlineMs: 20 }), 'invalid_input');
+});
+
+test('P2-01 product evidence does not probe an unrelated legacy cache', async t => {
+  const f = fixture(t), memory = f.admit('canonical');
+  writeFileSync(f.path + '.context-read-v1.sqlite-wal', 'unrelated legacy cache', { mode: 0o600 });
+  const config = configured(t, f.path), reader = await config.open();
+  assert.equal((await reader.fetchCandidateEvidence(fetchInput(memory), config.credential)).ok, true);
+});
+
+for (const version of [19, 99]) test(`P2-05 unsupported schema ${version} remains untouched and failed open is supervised`, async t => {
+  const f = fixture(t); f.core.close();
+  const db = openDatabase(f.path); db.exec('PRAGMA user_version=' + version); db.close();
+  const before = hash(f.path), config = configured(t, f.path);
+  let failure; await config.open().catch(error => { failure = error; });
+  assert.equal(failure.code, 'unsupported_database'); assert.ok(failure.cleanupId);
+  const drained = await config.supervisor.drain(failure.cleanupId);
+  assert.equal(drained.state, 'complete'); assert.equal(hash(f.path), before);
+});
+
+test('P2-14 generation equality and revocation after the final sample permit bounded completion without a third check', async t => {
+  const f = fixture(t), memory = f.admit('canonical'), config = configured(t, f.path, { ownerGeneration: 4 });
+  config.view[6] = 2;
+  const reader = await config.open();
+  assert.equal((await reader.fetchCandidateEvidence(fetchInput(memory), config.credential)).ok, true);
+  assert.equal(config.view[0], 0); assert.equal(config.view[1], 2);
+  denied(await reader.fetchCandidateEvidence(fetchInput(memory), config.credential), 'authority_required');
+});
+
+test('P2-16 failed host construction releases registered outer attribution with no returned reader', async t => {
+  const f = fixture(t), config = configured(t, f.path);
+  config.options.host.configuration.throwAfterResource = true;
+  let failure; await config.open().catch(e => { failure = e; });
+  assert.equal(failure.code, 'reader_failed');
+  const cleanup = await config.supervisor.drain(failure.cleanupId);
+  assert.equal(cleanup.state, 'complete'); assert.equal(cleanup.leasesReleased, true); assert.equal(config.view[7], 1);
+});
+
+test('P2-04 physical v18 old pin reopens after product fetch with identical DELETE bytes', async t => {
+  const f = fixture(t), memory = f.admit('old pin canonical'); f.core.close();
+  const before = hash(f.path), config = configured(t, f.path), reader = await config.open();
+  assert.equal((await reader.fetchCandidateEvidence(fetchInput(memory), config.credential)).ok, true);
+  await reader.close();
+  const { openDatabase } = await import('./fixtures/topic-overview-b2513501/core/database.mjs');
+  const old = openDatabase(f.path);
+  try { assert.equal(old.prepare('SELECT content FROM memories WHERE id=?').get(memory.id).content, f.db.prepare('SELECT content FROM memories WHERE id=?').get(memory.id).content); }
+  finally { old.close(); }
+  assert.equal(hash(f.path), before);
+});
+
+for (const version of [23, 33]) test(`P2-05/11 real v${version} Card evidence uses canonical eligibility and exact revisions`, async t => {
+  const f = fixture(t, { cards: true }), memory = f.admit('memory beside Card');
+  const draft = ok(f.host.call(f.core, 'createCardDraft', { namespace: ns, actionId: 'draft', drafting: 'authored', input: {
+    title: 'Synthetic Card', body: 'Canonical Card body', authoredInput: { text: 'Synthetic source', occurredAt: null } } }));
+  const card = ok(f.host.call(f.core, 'confirmCardDraft', { namespace: ns, cardId: draft.id, expectedRevision: draft.revision, actionId: 'confirm', applicability: 'current' }));
+  f.core.close();
+  if (version === 33) {
+    const db = openDatabase(f.path); try { migrateMethodPrerequisites(db); installAssets(db); installRoleProfiles(db); installCardCurrentDependencies(db); db.exec('PRAGMA user_version=33'); } finally { db.close(); }
+  }
+  const config = configured(t, f.path), reader = await config.open();
+  const cardRef = { type: 'card', namespace: ns, cardId: card.id, revision: card.revision, bodyRevision: card.bodyRevision };
+  const input = { readSet: [ns], refs: [fetchInput(memory).refs[0], cardRef], intent: 'current' };
+  const value = ok(await reader.fetchCandidateEvidence(input, config.credential));
+  assert.deepEqual(value.items.map(i => i.type), ['memory', 'card']); assert.equal(value.items[1].body, f.db.prepare('SELECT body FROM private_cards WHERE id=?').get(card.id).body);
+  denied(await reader.fetchCandidateEvidence({ ...input, refs: [{ ...cardRef, revision: card.revision + 1 }] }, config.credential), 'revision_conflict');
+});
+
+test('P2-06 two namespaces preserve mapping under permutations and reject changed/omitted read sets', async t => {
+  const f = fixture(t), personal = { ownerId: ns.ownerId, scope: 'personal', projectId: null };
+  const a = f.admit('project evidence'), b = f.admit('personal evidence', personal), config = configured(t, f.path, {}, [ns, personal]);
+  const reader = await config.open(), refs = [fetchInput(a).refs[0], { ...fetchInput(b).refs[0], namespace: personal }];
+  const first = ok(await reader.fetchCandidateEvidence({ readSet: [personal, ns], refs, intent: 'current' }, config.credential));
+  const second = ok(await reader.fetchCandidateEvidence({ readSet: [ns, personal], refs, intent: 'current' }, config.credential));
+  assert.deepEqual(first, second);
+  denied(await reader.fetchCandidateEvidence({ refs, intent: 'current' }, config.credential), 'invalid_read_set');
+  denied(await reader.fetchCandidateEvidence({ readSet: [ns], refs: refs.slice(0, 1), intent: 'current' }, config.credential), 'invalid_read_set');
+  denied(await reader.fetchCandidateEvidence({ readSet: [ns], refs: refs.slice(0, 1), intent: 'current' }), 'authority_required');
+});
+
+test('P2-11/22/25 fresh credentials can refetch durable snapshots; content epochs do not revoke authority', async t => {
+  const f = fixture(t), memory = f.admit('durable evidence'), a = configured(t, f.path), first = await a.open();
+  const value = ok(await first.fetchCandidateEvidence(fetchInput(memory), a.credential)); await first.close();
+  const b = configured(t, f.path), second = await b.open();
+  assert.deepEqual(ok(await second.fetchCandidateEvidence({ readSet: [ns], snapshot: value.snapshot }, b.credential)), value);
+  f.admit('unrelated canonical commit');
+  denied(await second.fetchCandidateEvidence({ readSet: [ns], snapshot: value.snapshot }, b.credential), 'snapshot_stale');
+  assert.equal((await second.fetchCandidateEvidence(fetchInput(memory), b.credential)).ok, true);
+});
+
+test('P2-14 revocation after the Worker final canonical read permits receipt before cutoff without another sample', async t => {
+  const { default: threads } = await import('node:worker_threads'), { syncBuiltinESMExports } = await import('node:module');
+  const NativeWorker = threads.Worker;
+  const f = fixture(t), memory = f.admit('after final read'), config = configured(t, f.path);
+  threads.Worker = class extends NativeWorker {
+    constructor(url, options) {
+      super(url, options);
+      this.prependListener('message', message => {
+        if (message.result?.ok && message.result.value?.items) Atomics.store(config.view, 0, 0);
+      });
+    }
+  };
+  syncBuiltinESMExports();
+  try {
+    const reader = await config.open();
+    assert.equal((await reader.fetchCandidateEvidence(fetchInput(memory), config.credential)).ok, true);
+    assert.equal(config.view[0], 0); assert.equal(config.view[1], 2);
+    await reader.close();
+  } finally { threads.Worker = NativeWorker; syncBuiltinESMExports(); }
+});
