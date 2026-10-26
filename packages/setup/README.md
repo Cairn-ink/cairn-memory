@@ -4,7 +4,7 @@ Set up Cairn memory for Claude Code and Codex: local MCP tools or cloud
 automatic memory.
 Requires Node ≥22.16 and the selected CLI on PATH. The installer itself has no
 runtime dependencies.
-**Installer 0.6.0** was published on 2026-10-25. The Claude plugin stays **0.3.2**.
+**Installer 0.6.0** was published on 2026-10-25. The Claude plugin is **0.3.3**.
 
 ## Setup / 安裝
 

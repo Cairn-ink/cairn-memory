@@ -12,6 +12,7 @@ import { conforms, utcInstant, classifyHostedReply, parseSessionStartRequest, op
 export { classifyHostedReply } from "./hosted-contract.mjs";
 const routes = new Set(["/api/memory/recall", "/api/memory/capture"]);
 const recallPath = "/api/memory/recall";
+const UNUSED_PERMIT_RESTORE_MS = 250;
 // Pre-OB-1 Cairn returns Zod issues. Only this root unknown-key rejection
 // proves the optional field was refused before any recall work ran.
 function rejectsSessionId(status, value) {
@@ -154,7 +155,7 @@ const gateReply = (gate) => gate.mode === "cooldown" ?
   { status: "unavailable", code: "rate_limited", cooldownUntil: gate.until } :
   { status: "quota_reached", resetAt: gate.resetAt };
 
-async function gateLock(target, work, { repair = false, now = Date.now(), signal } = {}) {
+async function gateLock(target, work, { repair = false, now = Date.now(), signal, recoverStale = true, timeoutMs = 2_000 } = {}) {
   signal?.throwIfAborted();
   const paths = quotaPaths(target);
   await mkdir(resolve(target.root), { recursive: true, mode: 0o700 });
@@ -172,14 +173,14 @@ async function gateLock(target, work, { repair = false, now = Date.now(), signal
       await gateWrite(paths.state, state, signal);
     }
     const before = JSON.stringify(state);
-    recover(state, now);
+    if (recoverStale) recover(state, now);
     // Persist migration and stale recovery once, inside the short state lock.
     const disk = await gateRead(paths.state);
     if (disk !== undefined && (JSON.stringify(state) !== before ||
         JSON.parse(disk).version === 1)) await gateWrite(paths.state, state, signal);
     signal?.throwIfAborted();
     result = await work(state, () => gateWrite(paths.state, state, signal), repaired);
-  }, { timeoutMs: 2_000, pollMs: 10, validatePath: checkGatePath, read: gateRead, signal });
+  }, { timeoutMs, pollMs: 10, validatePath: checkGatePath, read: gateRead, signal });
   return acquired ? result : { status: "unavailable" };
 }
 
@@ -224,13 +225,14 @@ export async function resumeHostedQuota(target, { now = Date.now() } = {}) {
   }, { repair: true, now });
 }
 
-async function guardedReply(target, operation, timeoutMs, attempt, signal) {
+async function guardedReply(target, operation, timeoutMs, attempt, signal, dispatchState) {
+  let reservedToken;
   try {
     const reservation = await gateLock(target, async (state, save) => {
       const gate = state.operations[operation];
       if (!["open", "ready"].includes(gate.mode)) return { blocked: gateReply(gate) };
       if (gate.mode === "open") return { token: null };
-      const token = randomUUID();
+      const token = reservedToken = randomUUID();
       gate.mode = "in_flight";
       gate.attempt = { pid: process.pid, token, deadline: Date.now() + timeoutMs + 1000 };
       await save();
@@ -241,6 +243,7 @@ async function guardedReply(target, operation, timeoutMs, attempt, signal) {
     // No filesystem gate lock is held across dispatch, body reads or timeout.
     signal?.throwIfAborted();
     const reply = await attempt();
+    if (reservedToken && !dispatchState.started) return reply;
     if (reservation.token === null && !["quota_reached", "rate_limited"].includes(reply.code ?? reply.status)) {
       return reply;
     }
@@ -263,6 +266,23 @@ async function guardedReply(target, operation, timeoutMs, attempt, signal) {
     }, { signal });
     return transition === true ? reply : { status: "unavailable" };
   } catch (error) { return { status: "unavailable", code: error.message }; }
+  finally {
+    if (reservedToken && !dispatchState.started) {
+      // R16: no fetch used this permit. Finish token-checked restoration despite
+      // cancellation, without passing the aborted signal. Any signal-bearing
+      // caller uses the short host-margin window, even if abort arrives during
+      // cleanup; callers without a signal retain the ordinary window. On lock
+      // timeout leave in_flight for dead-owner recovery, silently. Skip stale
+      // recovery here so a matching unused reservation can still be restored.
+      await gateLock(target, async (state, save) => {
+        const gate = state.operations[operation];
+        if (gate.mode === "in_flight" && gate.attempt.token === reservedToken) {
+          state.operations[operation] = { ...refusal(gate.resetAt), mode: "ready" };
+          await save();
+        }
+      }, { recoverStale: false, timeoutMs: signal ? UNUSED_PERMIT_RESTORE_MS : undefined }).catch(() => {});
+    }
+  }
 }
 
 // The legacy JSON poster retains its original return API; memory routes now
@@ -287,10 +307,12 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
           AbortSignal.timeout(timeoutMs)) :
         signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);
       timedSignal.throwIfAborted();
-      return fetch(`${baseUrl}${path}`, {
+      const options = {
         method: "POST", headers, body: JSON.stringify(body), signal: timedSignal,
         ...(client === "codex" ? { redirect: "error" } : {}),
-      });
+      };
+      recallDeadline.started = true;
+      return fetch(`${baseUrl}${path}`, options);
     };
     const response = await (dispatch ? dispatch(start) : start());
     if (!routes.has(path) && path !== "/api/memory/session-start") {
@@ -333,14 +355,15 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
       // valid legacy recall request, preserving the caller's original wire defaults.
       if (!conforms("recall-request", body)) return { status: "error", code: "invalid_memory_input" };
     }
+    const dispatchState = { started: false };
     const attempt = async () => {
-      try { return await request(path, body, timeoutMs, true, limits, signal, dispatch); }
+      try { return await request(path, body, timeoutMs, true, limits, signal, dispatch, dispatchState); }
       catch (error) {
         return { status: "unavailable", ...(error.message === "dispatch_not_started" ?
           { notStarted: true } : {}) };
       }
     };
-    return target && routes.has(path) ? guardedReply(target, path.endsWith("recall") ? "recall" : "capture", timeoutMs, attempt, signal) : attempt();
+    return target && routes.has(path) ? guardedReply(target, path.endsWith("recall") ? "recall" : "capture", timeoutMs, attempt, signal, dispatchState) : attempt();
   }
   const post = async (path, body, timeoutMs, authenticated = true, dispatch, signal) => {
     if (!routes.has(path) && path !== "/api/memory/session-start") {

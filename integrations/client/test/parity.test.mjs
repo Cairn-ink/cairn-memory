@@ -11,9 +11,9 @@ import { observeHosted, observeMechanisms } from './observe-legacy.mjs';
 const client = fileURLToPath(new URL('../', import.meta.url));
 const plugin = fileURLToPath(new URL('../../../plugins/cairn-memory/', import.meta.url));
 const golden = JSON.parse(await readFile(new URL('./fixtures/claude-hosted-93e52b7.json', import.meta.url), 'utf8'));
-// Recall deadlines add cooperative quota-lock cancellation to the CX-5 transport.
+// Recall deadlines add cancellation and host-margin-bounded unused-permit restoration.
 // Preserve the old observed outputs below; do not regenerate historical goldens.
-const recallDeadlineTransportHash = 'b4cda018ddb731c54696472ab02db7ed04115afb3521ea7d0100d32137bdc760';
+const recallDeadlineTransportHash = '200729758fb555ed3a88b0ad06791e2d937c1966f0c19f0ea620327addaed0e1';
 
 test('pinned shared source hashes include the revised hosted transport', async () => {
   assert.equal(golden.base, '93e52b7afb298d728cb4831c34bbda6dcf750704');

@@ -420,3 +420,36 @@ run exited 0 with no host kill). Maximum times in ms:
 | Schema downgrade | 2,535 | 2,505 | 2,540 | 2,505 |
 
 Historical measurements above are not reused.
+
+### Review round 1 fixes
+
+Binding discovery now carries the optional cancellation signal into root/key
+probes, key-publication lock acquisition and the bounded session-evidence scan.
+Checks between asynchronous reads stop further discovery and preserve the exact
+abort reason. Once key publication has started staging, its fixed set of writes
+and pending-file cleanup completes under the owned lock before cancellation is
+reported, so cancellation cannot leave a partial publication. Token-checked lock
+release also finishes after cancellation. These critical sections have no new
+lock wait; individual filesystem stalls remain outside cooperative cancellation.
+
+A resumed permit records whether fetch actually started, including across the
+schema fallback. Cancellation before any fetch restores only the matching
+in-flight token to ready, using a signal-free cleanup lock with a named 250 ms
+acquisition window for callers supplying a signal, including one that may abort
+during cleanup; callers without a signal retain the ordinary 2,000 ms window.
+If the short window expires under live foreign lock contention, cleanup gives up
+silently and leaves the permit in_flight for existing dead-owner recovery to
+restore quota_reached.
+This cleanup may outlast cancellation and never overwrites a successor or steals
+a live foreign lock. Already-started
+requests retain their existing settlement and dead-owner recovery rules. R16's
+published meaning is unchanged.
+
+The pause/resume process test now holds the synthetic recall response behind
+an abort-aware IPC acknowledgement sent only after both parent-side control
+writes resolve. No delay is used to synchronize those writes. New deterministic
+cancellation tests cover key-lock discovery, between-read evidence cancellation,
+publication completion, unused-permit restoration at publication and dispatch
+contention, expired unused reservations, started fetches and successor tokens.
+Separate processes verify the state after the reserving owner exits; the other
+operation's gate and lock cleanup are checked too.

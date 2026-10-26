@@ -45,7 +45,8 @@ export async function invocation(t, { lockMs = 0, holdQuotaLock = false, recallM
       cwd: home, env: { PATH: '/usr/bin:/bin', HOME: home, TMPDIR: workspace.path,
         CLAUDE_PLUGIN_DATA: root, CLAUDE_PLUGIN_OPTION_API_ENDPOINT: 'https://synthetic.invalid',
         CLAUDE_PLUGIN_OPTION_API_TOKEN: missingToken ? '' : 'synthetic-token', CLAUDE_PLUGIN_OPTION_TELEMETRY: String(telemetry),
-        CAIRN_TEST_RECALL_DELAY: String(recallMs), CAIRN_TEST_RECALL_REPLY: reply }, stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+        CAIRN_TEST_RECALL_DELAY: String(recallMs), CAIRN_TEST_RECALL_REPLY: reply,
+        CAIRN_TEST_RECALL_ACK: String(Boolean(onFetch)) }, stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
     });
     let stdout = '', stderr = '', hostKilled = false, duringFetch, fetchFailed = false;
     child.on('message', event => {
@@ -54,7 +55,12 @@ export async function invocation(t, { lockMs = 0, holdQuotaLock = false, recallM
       if (event.kind === 'quota-lock-contended' && lockMs && !releaseTimer)
         releaseTimer = setTimeout(unlock, lockMs);
       if (event.kind === 'recall-fetch' && onFetch && !duringFetch)
-        duringFetch = Promise.resolve().then(() => onFetch(root)).catch(() => { fetchFailed = true; });
+        duringFetch = Promise.resolve().then(async () => {
+          await onFetch(root);
+          mark({ kind: 'recall-control-complete' });
+          await new Promise((resolve, reject) => child.send({ kind: 'recall-fetch-ack', attempt: event.attempt },
+            error => error ? reject(error) : resolve()));
+        }).catch(() => { fetchFailed = true; });
     });
     child.stdout.on('data', chunk => { if (!stdout) mark({ kind: 'stdout' }); stdout += chunk; });
     child.stderr.on('data', chunk => stderr += chunk);

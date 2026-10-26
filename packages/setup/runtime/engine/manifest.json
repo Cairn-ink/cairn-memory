@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "136640f0dcc5a68ae9df452b63712867ee502f9d09b99051448de6dc6384ef8f",
-  "bytes": 711599,
+  "sha256": "fbb648653659ce4dcfcfd0e461393cfda4ce9bd37362dc02bb84937b9490c468",
+  "bytes": 712099,
   "files": [
     "LICENSE",
     "README.md",
@@ -483,7 +483,7 @@
     "integrations/client/file-lock.mjs": "698bd557143f3adc73c673093c9c6f6d4fcea2a902396ad4dc0143d25b4288c1",
     "integrations/client/hosted-contract.mjs": "39ce7dcb60b91ab7bf815bd0085f278e9cc5d0f9798b9b5d27e7b7655fd217d1",
     "integrations/client/hosted-schemas.mjs": "fda2e6b4f6feda316300819e1a199dd25f7462b9f47e33bff950c3c4f95ba8ce",
-    "integrations/client/pairing.mjs": "e6a5ff9410a706871dc67457438a9d4f89751073292f3c1322ff36aed92eb5d4",
+    "integrations/client/pairing.mjs": "11c928ce6810c6c2521bbf1030acfd4acec0ef3dc2383e70f17948492c5f4dbd",
     "integrations/client/private-state.mjs": "ca789169d55a76c327ca1ee603ff21b71d1bdde9a8f0d837cfbeb167700afd64",
     "integrations/client/raw/bounds.mjs": "0a59bb7b9655ab3fe8a90704c4cb2f6cb802beb7d5e70c19561eaaffc8ff61f2",
     "integrations/client/raw/local-process.mjs": "6cdff0cd8f7a71bf7878ee512eaa1547904d81a34a9c896325464a9966a610cf",
@@ -550,7 +550,7 @@
     "core/context-read-moc.mjs": "2fe6ea129032c8b3ac989f89ea62c1a52a354e8e7bc384e0b7ee97625c092b6b",
     "adapters/mcp/context-read-sources-configuration.mjs": "0b03510d8a8252c27b4587c798671674041a3d9033df822d0feb68483be1d0fd",
     "adapters/mcp/context-read-sources-tools.mjs": "61f8653a9e1c05021b34b9c3b00ab6e8e3bf2c45731171893b96ef3fe718a3ca",
-    "docs/limitations.md": "838ddf296b44a301f54691c2a7ea76c13a1828fcdc69d028fef0f333814db93d",
+    "docs/limitations.md": "244120601d05cac9317eaa6293f99bce8c91d4a3695235b134407425f278bbc5",
     "core/card-current-input.mjs": "bc7207aeffceb667e6bd5c50808f08b259f70556d48d8cd11b3a50d4810618f1",
     "core/card-current-schema.mjs": "08cd3274d796ef2c3cad876c174a084bc43933447c96cbb50879ce6d4e99932d",
     "core/card-current-storage.mjs": "ea8c99510582727f201a13d07564580b3dba5bc38d7822cc2b1f80ca13c08d7c",

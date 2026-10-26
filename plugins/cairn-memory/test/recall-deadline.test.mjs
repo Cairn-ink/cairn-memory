@@ -53,10 +53,13 @@ test('RH-04 schema fallback shares remaining invocation and HTTP deadlines', asy
   assertScenario('schema-fallback', result);
 });
 test('RH-05 pause and resume during recall still suppress stale injection', async t => {
-  const result = await invocation(t, { recallMs: 150, onFetch: async root => {
+  const result = await invocation(t, { onFetch: async root => {
     await setPaused(root, true); await setPaused(root, false);
   } });
   assert.ok(result.stdout === '', 'silent_stdout');
+  const kinds = result.events.map(event => event.kind);
+  assert.ok(kinds.indexOf('recall-control-complete') < kinds.indexOf('recall-fetch-acknowledged'));
+  assert.ok(kinds.indexOf('recall-fetch-acknowledged') < kinds.indexOf('recall-response'));
 });
 for (const reply of ['empty', 'invalid', 'unauthorized', 'quota', 'other-400']) {
   test(`RH-01/04 ${reply} remains silent without retries or telemetry`, async t => {

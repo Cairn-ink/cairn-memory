@@ -13,6 +13,9 @@ detached queue. Startup/import time is outside the application budget. Synchrono
 CPU and uncooperative filesystem/kernel stalls are not hard-preemptible;
 synthetic child-process timings are not a universal SLA or native Claude
 verification.
+If the quota lock remains held through the 250 ms unused-permit restoration
+window after recall cancellation, cleanup gives up silently and leaves the
+permit in_flight for existing dead-owner recovery to restore quota_reached.
 
 ## Local role profiles (U5c-1)
 
