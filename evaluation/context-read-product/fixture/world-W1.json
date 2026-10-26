@@ -1,5 +1,5 @@
 {
-  "version": "p2-qualification-fixture-v1-r1",
+  "version": "p2-qualification-fixture-v1-r2",
   "seed": "context-read-product-v1:2026-10-27:mist-chord-orbit",
   "world": "W1",
   "namespaces": [
@@ -3991,13 +3991,18 @@
       "id": "f87cdb87-e519-434b-896b-1a9d99f97102",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "個人實驗簿 cohort 0 memory 110。 合成觀測第110格:石芽樣片在第25輪通過尺寸核對。架空の石芽試片の寸法確認。Synthetic StoneBud sample dimension check.",
+      "truth": "個人實驗簿 cohort 0 memory 110。 月苔卡片的演練以逾時切換為主,逐輪核對計時。月苔カードの切替手順を点検する。",
       "expectedUnits": 240,
+      "groundTruth": {
+        "role": "familiar-subject-near-miss",
+        "negativeSubjectFor": "negative-4",
+        "familiarSubject": "月苔"
+      },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
-      "bodyBytes": 582,
-      "bodySha256": "11268326b5eb6f84be843ee946b1c4f522d1b620c3b54b56258bfccd55b26ee4",
+      "bodyBytes": 676,
+      "bodySha256": "fa31bd60b9f2f7a9869953d32e9393dfa6448aab4462ce4f9bbcb3a655894883",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -11921,19 +11926,25 @@
       "id": "68bfa3c6-746b-4db3-9ccf-e2174378550c",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "霧棱計畫 cohort 0 memory 41。 交由琥珀閘序列化。",
+      "truth": "霧棱計畫 cohort 0 memory 41。 併發寫入交由琥珀閘序列化。",
       "expectedUnits": 240,
       "groundTruth": {
         "topic": "concurrent-write-policy",
         "adopted": true,
         "adoptionStatus": "adopted",
-        "zeroOverlapQuestion": "多人一起寫會怎樣"
+        "zeroOverlapQuestion": "mist-prism 多人一起寫會怎樣",
+        "zeroOverlapLanguage": "zh-en",
+        "zeroOverlapScope": {
+          "namespaceIndex": 1,
+          "artifact": "concurrent-writing",
+          "explanation": "The explicit mist-prism project scopes this question to its concurrency policy; the WAL rationale in moss-chord is a different project."
+        }
       },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
       "bodyBytes": 680,
-      "bodySha256": "2f4d4c3ec032d8d53d6315463984960bc71bef43956a78931969aee50e37b92e",
+      "bodySha256": "aebe4ac84399981524bc6baa27c6b82f4f4c208f528705748790bef420d46022",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -12297,7 +12308,19 @@
         "topic": "maintenance-cadence",
         "adopted": true,
         "adoptionStatus": "adopted",
-        "productTermQuestion": "苔弦 cron 多久叫醒背景泵"
+        "productTermQuestion": "苔弦 cron 多久續租，背景泵多久嘗試一個量子？",
+        "productTermAnswerParts": [
+          {
+            "subject": "cron lease renewal",
+            "intervalMs": 60000,
+            "statement": "cron 每分鐘續租"
+          },
+          {
+            "subject": "background pump quantum attempt",
+            "intervalMs": 100,
+            "statement": "背景泵每一百毫秒嘗試一個量子"
+          }
+        ]
       },
       "submittedLeadingWhitespace": true,
       "currentness": "current",
@@ -14445,13 +14468,18 @@
       "id": "fdca7f08-b17b-436d-8e4f-c75fd3ac483c",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "霧棱計畫 cohort 0 memory 110。 合成觀測第110格:石芽樣片在第25輪通過尺寸核對。架空の石芽試片の寸法確認。Synthetic StoneBud sample dimension check.",
+      "truth": "霧棱計畫 cohort 0 memory 110。 砂羽驗收以樣本核對為主,逐張確認量測表。砂羽検収で標本の照合を行う。",
       "expectedUnits": 240,
+      "groundTruth": {
+        "role": "familiar-subject-near-miss",
+        "negativeSubjectFor": "negative-5",
+        "familiarSubject": "砂羽"
+      },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
-      "bodyBytes": 582,
-      "bodySha256": "ba675a9f27d51950ba6e292e0f79d93b63e1d145625774fdc7cd8e16e7115dac",
+      "bodyBytes": 676,
+      "bodySha256": "106e664c649c0fbc13f7c945a15320ebb6ce92471f0938ecc1d31d30c7398205",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -24904,13 +24932,18 @@
       "id": "f009372d-3627-4f67-931a-b40732ecf314",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "苔弦計畫 cohort 0 memory 110。 合成觀測第110格:石芽樣片在第25輪通過尺寸核對。架空の石芽試片の寸法確認。Synthetic StoneBud sample dimension check.",
+      "truth": "苔弦計畫 cohort 0 memory 110。 霧鈴卡片記錄預備額度的分配,按格位核對可用量。霧鈴カードの予備枠を整理する。",
       "expectedUnits": 240,
+      "groundTruth": {
+        "role": "familiar-subject-near-miss",
+        "negativeSubjectFor": "negative-6",
+        "familiarSubject": "霧鈴"
+      },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
-      "bodyBytes": 582,
-      "bodySha256": "d52fc58eb8885276416d52f7ffb04dacf81004f39eb8514a51d273793f2f4ecf",
+      "bodyBytes": 676,
+      "bodySha256": "8cf47d8b7c71f2e6c4ba898c55edf52a41e1c9df52915cef87dc63c729135c79",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -32834,19 +32867,25 @@
       "id": "a8b6d9cf-fce8-48ff-a192-6c7b3006d839",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "砂環計畫 cohort 0 memory 41。 輸出銀紋封套。",
+      "truth": "砂環計畫 cohort 0 memory 41。 主程式輸出銀紋封套。",
       "expectedUnits": 240,
       "groundTruth": {
         "topic": "package-format",
         "adopted": true,
         "adoptionStatus": "adopted",
-        "zeroOverlapQuestion": "打包出去長什麼樣"
+        "zeroOverlapQuestion": "sand-orbit 本體打包出去長什麼樣",
+        "zeroOverlapLanguage": "zh-en",
+        "zeroOverlapScope": {
+          "namespaceIndex": 3,
+          "artifact": "main-program-package",
+          "explanation": "The question asks about the main program artifact in sand-orbit. The separate 藍穗 export decision concerns a different artifact."
+        }
       },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
       "bodyBytes": 680,
-      "bodySha256": "1294b777d1ec87ac54210cc9ad8a13dab07853c0d4257b09924d499beddcd51d",
+      "bodySha256": "2908fc9457fe3e6056246ebe677b5a91fb485908c14f9ea2f35845658ea57dbc",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -43339,5 +43378,5 @@
       "replacement": "c0/n3/m277"
     }
   ],
-  "logicalSha256": "8689b8b2d39c1a9b5fdf7e4eea9c5493708f9c41e25822296356985c2abeb7fd"
+  "logicalSha256": "5dc835cc8a87aec195ce907cf7f35d92760a834873daaa1038a49e343953f0a7"
 }

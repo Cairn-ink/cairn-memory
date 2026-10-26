@@ -1,5 +1,5 @@
 {
-  "version": "p2-qualification-fixture-v1-r1",
+  "version": "p2-qualification-fixture-v1-r2",
   "worlds": {
     "W1": {
       "world": "W1",
@@ -96,10 +96,11 @@
           "rejected-suggestion": 6
         },
         "datedRecords": 8,
+        "familiarSubjectNearMisses": 3,
         "metadataIndexed": false
       },
       "bodyBytes": {
-        "memory": 1937574,
+        "memory": 1937856,
         "card": 523734
       },
       "edgeContent": {
@@ -127,7 +128,7 @@
           "mocs": 71,
           "cards": 0,
           "canonicalBytes": null,
-          "logicalSha256": "b0553671a611dd6aa2fa14d992c412056cf05fd07ac4b1b29778dec92509681f"
+          "logicalSha256": "a69a4f0ba9d3e3071d06516613f9d3c793966bd888f1977543d467dc4a23bfa9"
         },
         "23": {
           "schema": 23,
@@ -135,7 +136,7 @@
           "mocs": 71,
           "cards": 96,
           "canonicalBytes": 11051008,
-          "logicalSha256": "8689b8b2d39c1a9b5fdf7e4eea9c5493708f9c41e25822296356985c2abeb7fd"
+          "logicalSha256": "5dc835cc8a87aec195ce907cf7f35d92760a834873daaa1038a49e343953f0a7"
         },
         "33": {
           "schema": 33,
@@ -143,7 +144,7 @@
           "mocs": 71,
           "cards": 96,
           "canonicalBytes": null,
-          "logicalSha256": "8689b8b2d39c1a9b5fdf7e4eea9c5493708f9c41e25822296356985c2abeb7fd"
+          "logicalSha256": "5dc835cc8a87aec195ce907cf7f35d92760a834873daaa1038a49e343953f0a7"
         }
       }
     },
@@ -242,10 +243,11 @@
           "rejected-suggestion": 18
         },
         "datedRecords": 24,
+        "familiarSubjectNearMisses": 9,
         "metadataIndexed": false
       },
       "bodyBytes": {
-        "memory": 5812722,
+        "memory": 5813568,
         "card": 1571202
       },
       "edgeContent": {
@@ -273,15 +275,15 @@
           "mocs": 213,
           "cards": 0,
           "canonicalBytes": null,
-          "logicalSha256": "f53d73c3d7c0933b671197228abc561dd02ec5d871ea71975efc2b11b647f7b4"
+          "logicalSha256": "15f0ac7404bf8651e823d52f8349cb7fde47fb3d85ef6d5bdd27221ebbc9ebce"
         },
         "23": {
           "schema": 23,
           "memories": 3336,
           "mocs": 213,
           "cards": 288,
-          "canonicalBytes": 31600640,
-          "logicalSha256": "e24c1c268063bea7fe5f38cf7c1da29bb824a0dca9f509e56f1b48d2cacf6a1e"
+          "canonicalBytes": 31604736,
+          "logicalSha256": "7249264a77be99abeac738c7b24684ff5e3edecdcac6b8874b585182544bc93c"
         },
         "33": {
           "schema": 33,
@@ -289,7 +291,7 @@
           "mocs": 213,
           "cards": 288,
           "canonicalBytes": null,
-          "logicalSha256": "e24c1c268063bea7fe5f38cf7c1da29bb824a0dca9f509e56f1b48d2cacf6a1e"
+          "logicalSha256": "7249264a77be99abeac738c7b24684ff5e3edecdcac6b8874b585182544bc93c"
         }
       }
     }
@@ -297,9 +299,9 @@
   "queryCounts": {
     "W1": {
       "categories": {
-        "zh-Hant": 76,
+        "zh-Hant": 74,
         "ja": 20,
-        "mixed": 28,
+        "mixed": 30,
         "negative": 10
       },
       "total": 134,
@@ -308,23 +310,32 @@
       "shortTemporal": 8,
       "mixedProductTerm": 8,
       "zeroSharedTokens": 10,
+      "zeroSharedTokenLanguages": {
+        "zh-Hant": 8,
+        "zh-en": 2
+      },
       "naturalHistory": 6,
       "ownerWideOutsideMajority": 12,
       "distractorChallenge": 6,
       "notInMemory": 10,
+      "familiarSubjectNegativesBySchema": {
+        "18": 10,
+        "23": 10,
+        "33": 10
+      },
       "languages": {
-        "zh-Hant": 80,
+        "zh-Hant": 78,
         "ja": 23,
-        "zh-en": 22,
+        "zh-en": 24,
         "ja-en": 9
       },
       "applicableV18": 104
     },
     "W3": {
       "categories": {
-        "zh-Hant": 76,
+        "zh-Hant": 74,
         "ja": 20,
-        "mixed": 28,
+        "mixed": 30,
         "negative": 10
       },
       "total": 134,
@@ -333,14 +344,23 @@
       "shortTemporal": 8,
       "mixedProductTerm": 8,
       "zeroSharedTokens": 10,
+      "zeroSharedTokenLanguages": {
+        "zh-Hant": 8,
+        "zh-en": 2
+      },
       "naturalHistory": 6,
       "ownerWideOutsideMajority": 12,
       "distractorChallenge": 6,
       "notInMemory": 10,
+      "familiarSubjectNegativesBySchema": {
+        "18": 10,
+        "23": 10,
+        "33": 10
+      },
       "languages": {
-        "zh-Hant": 80,
+        "zh-Hant": 78,
         "ja": 23,
-        "zh-en": 22,
+        "zh-en": 24,
         "ja-en": 9
       },
       "applicableV18": 104

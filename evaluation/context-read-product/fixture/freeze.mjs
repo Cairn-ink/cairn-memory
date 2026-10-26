@@ -33,6 +33,7 @@ export function summarize(world) {
       adoptionStatus: Object.fromEntries(['adopted', 'discussion', 'proposal', 'rejected-suggestion'].map(status =>
         [status, world.records.filter(row => row.groundTruth?.adoptionStatus === status).length])),
       datedRecords: world.records.filter(row => row.groundTruth?.eventDate).length,
+      familiarSubjectNearMisses: memories.filter(row => row.groundTruth?.negativeSubjectFor).length,
       metadataIndexed: false,
     },
     bodyBytes: { memory: memories.reduce((sum, row) => sum + row.bodyBytes, 0), card: cards.reduce((sum, row) => sum + row.bodyBytes, 0) },
@@ -78,10 +79,14 @@ export async function freeze({ reuseDirectory } = {}) {
         shortTemporal: labels.filter(q => q.shortTemporal).length,
         mixedProductTerm: labels.filter(q => q.productTerm).length,
         zeroSharedTokens: labels.filter(q => q.zeroSharedTokens).length,
+        zeroSharedTokenLanguages: Object.fromEntries(['zh-Hant', 'zh-en'].map(language =>
+          [language, labels.filter(q => q.zeroSharedTokens && q.language === language).length])),
         naturalHistory: labels.filter(q => q.naturalHistory).length,
         ownerWideOutsideMajority: labels.filter(q => q.ownerWide).length,
         distractorChallenge: labels.filter(q => q.distractorChallenge).length,
         notInMemory: labels.filter(q => q.notInMemory).length,
+        familiarSubjectNegativesBySchema: Object.fromEntries(parameters.schemas.map(schema =>
+          [schema, labels.filter(q => q.negativeStratumBySchema?.[schema] === 'familiar-subject/missing-property').length])),
         languages: Object.fromEntries(['zh-Hant', 'ja', 'zh-en', 'ja-en'].map(language => [language, labels.filter(q => q.language === language).length])),
         applicableV18: labels.filter(q => q.applicableSchemas.includes(18)).length };
     }

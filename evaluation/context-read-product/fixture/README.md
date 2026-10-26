@@ -1,6 +1,6 @@
 # Frozen synthetic P2 qualification fixture
 
-Revision 1, `p2-qualification-fixture-v1-r1`, fixed seed in `seed.json`, for frozen
+Revision 2, `p2-qualification-fixture-v1-r2`, fixed seed in `seed.json`, for frozen
 `context-read-product-v1` and protocol `P2-product-v3`. This is authored synthetic
 qualification data, not a product snapshot or a retrieval/performance result.
 Every project and actor is invented. No network, credentials, provider, model,
@@ -91,13 +91,45 @@ against an unnormalized Memory submission.
 
 ## Queries, labels and auditing
 
-`queries.json` has **134 questions**: 76 zh-Hant, 20 Japanese, 28 mixed
-(20 zh/en, 8 ja/en), and 10 negatives. Twenty-two require superseded Memories;
+Revision 2 supersedes r1 at `83e3dd5560b8e25d4390c3d7661cb0330a4ceea2`.
+It addresses the non-author audit ambiguities without changing world counts,
+length distributions, writer workloads or positive evidence groups:
+
+- `product-term-5` now asks `苔弦 cron 多久續租，背景泵多久嘗試一個量子？`.
+  Both parts are required: cron renews the lease every 60,000 ms; the pump
+  attempts a quantum every 100 ms. This evidence does not specify a cron
+  wake-up interval. Structured `answerParts` and notes preserve that distinction.
+- `zero-overlap-5` now asks `mist-prism 多人一起寫會怎樣`, with fact
+  `併發寫入交由琥珀閘序列化。`. Its explicit project scope excludes the
+  separate project's WAL rationale.
+- `zero-overlap-7` now asks `sand-orbit 本體打包出去長什麼樣`, with fact
+  `主程式輸出銀紋封套。`. It identifies the main-program artifact rather than
+  the separate 藍穗 subsystem export. Both scoped questions move to mixed zh/en.
+- `negative-4/5/6` gain subject-bearing Memories in `c0/n0/m110`,
+  `c0/n1/m110`, `c0/n2/m110` respectively, replicated in W3. These mention 月苔,
+  砂羽 and 霧鈴 without supplying maintenance cost, certificate number or billing
+  currency. v18 therefore retains the familiar-subject/missing-property challenge.
+
+All ten negatives now carry Memory `subjectEvidenceBySchema` witnesses and an
+explicit `negativeStratumBySchema` for physical v18/v23/v33. These witness refs
+prove subject existence only: they are not required answer evidence or acceptable
+answers to the absent property. Notes print the witness facts for audit. The test
+checks the witnesses against an actually generated v18 Memory-only world.
+
+All ten zero-overlap cases are re-proved, including the two scoped mixed-language
+cases: eight are zh-Hant, two are zh/en. Namespace identifiers appear in question
+text but not the canonical Memory body; the proof includes every token in each
+full stored body and every acceptable W3 alternate. A new r2 manifest and cell
+registration are required before measurement. This authoring revision does not
+claim a new non-author audit verdict or measurement readiness.
+
+`queries.json` has **134 questions**: 74 zh-Hant, 20 Japanese, 30 mixed
+(22 zh/en, 8 ja/en), and 10 negatives. Twenty-two require superseded Memories;
 twenty require evidence from multiple namespaces. The negative group retains
 4 zh-Hant, 3 Japanese, 2 zh/en and 1 ja/en questions. These are overlapping
 dimensions, not extra populations to add to the category totals.
 
-Revision 1 mirrors product-supplied user question styles using invented products:
+The fixture mirrors product-supplied user question styles using invented products:
 
 | Tagged dimension | Count | Ground-truth rule |
 | --- | ---: | --- |
@@ -118,8 +150,9 @@ labels. Event dates, not the fixture's fixed storage-write timestamps or the
 measurement machine's clock, define these windows. A runner must retain the
 frozen anchor when interpreting first-person temporal questions.
 
-`scenarios.json` replaces 50 filler slots per cohort with 8 dated facts,
-10 zero-overlap answer facts, 8 product-term facts, and 24 related-topic records.
+`scenarios.json` replaces 53 filler slots per cohort with 8 dated facts,
+10 zero-overlap answer facts, 8 product-term facts, 24 related-topic records,
+and 3 subject-bearing Memory near-misses for Card-related negative questions.
 Memory/Card/MOC counts, receipt counts and all length buckets are unchanged.
 Six older/newer Memory pairs also gain explicit successor-body change reasons;
 the already-existing 12 supersessions per W1 remain intact.

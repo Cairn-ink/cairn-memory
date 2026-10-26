@@ -57,10 +57,13 @@ export function authoredQueries() {
   });
   scenarios.filter(row => row.groundTruth.productTermQuestion).forEach((row, i) =>
     add(`product-term-${i}`, 'mixed', 'zh-en', row.groundTruth.productTermQuestion,
-      [key(0, row.namespaceIndex, 'm', row.slot)], { productTerm: true, topic: row.groundTruth.topic }));
+      [key(0, row.namespaceIndex, 'm', row.slot)], { productTerm: true, topic: row.groundTruth.topic,
+        ...(row.groundTruth.productTermAnswerParts ? { answerParts: row.groundTruth.productTermAnswerParts } : {}) }));
   scenarios.filter(row => row.groundTruth.zeroOverlapQuestion).forEach((row, i) =>
-    add(`zero-overlap-${i}`, 'zh-Hant', 'zh-Hant', row.groundTruth.zeroOverlapQuestion,
-      [key(0, row.namespaceIndex, 'm', row.slot)], { zeroSharedTokens: true, form: 'zero-overlap-paraphrase', topic: row.groundTruth.topic }));
+    add(`zero-overlap-${i}`, row.groundTruth.zeroOverlapLanguage ? 'mixed' : 'zh-Hant', row.groundTruth.zeroOverlapLanguage ?? 'zh-Hant', row.groundTruth.zeroOverlapQuestion,
+      [key(0, row.namespaceIndex, 'm', row.slot)], { zeroSharedTokens: true, form: 'zero-overlap-paraphrase', topic: row.groundTruth.topic,
+        ...(row.groundTruth.zeroOverlapScope ? { scope: { namespace: namespaces[row.groundTruth.zeroOverlapScope.namespaceIndex],
+          artifact: row.groundTruth.zeroOverlapScope.artifact, explanation: row.groundTruth.zeroOverlapScope.explanation } } : {}) }));
   const histories = [
     [0, 0, '個人實驗簿巡檢之前排哪天？後來為什麼挪動？'],
     [0, 1, '我原本把實驗筆記留多久？怎麼會改成現在這樣？'],
@@ -78,18 +81,19 @@ export function authoredQueries() {
     add(`distractor-${i}`, 'zh-Hant', 'zh-Hant', truth.distractorQuestion, slots, { ...metadata, distractorChallenge: true });
   });
   const negatives = [
-    ['zh-Hant', '琥珀佇列每月預算是多少？', '每月預算'],
-    ['zh-Hant', '羽砂演練的緊急聯絡分機是多少？', '緊急聯絡分機'],
-    ['zh-Hant', '雨紋匯出的壓縮率是多少？', '壓縮率'],
-    ['zh-Hant', '苔鐘確認採用哪種簽章演算法？', '簽章演算法'],
-    ['ja', '月苔カードの保守費用はいくらですか。', '保守費用'],
-    ['ja', '砂羽検収の合格証番号を教えて。', '合格証番号'],
-    ['ja', '霧鈴カードの請求通貨は何ですか。', '請求通貨'],
-    ['zh-en', '霧棱 MCP 的憑證指紋是什麼？', '憑證指紋'],
-    ['ja-en', '苔弦 embedding の訓練標本総数は？', '訓練標本総数'],
-    ['zh-en', '砂環 WAL 的磁碟保固到哪一天？', '磁碟保固'],
+    ['zh-Hant', '琥珀佇列每月預算是多少？', '每月預算', '琥珀佇列', key(0, 0, 'm', 3)],
+    ['zh-Hant', '羽砂演練的緊急聯絡分機是多少？', '緊急聯絡分機', '羽砂', key(0, 0, 'm', 4)],
+    ['zh-Hant', '雨紋匯出的壓縮率是多少？', '壓縮率', '雨紋', key(0, 0, 'm', 5)],
+    ['zh-Hant', '苔鐘確認採用哪種簽章演算法？', '簽章演算法', '苔鐘', key(0, 0, 'm', 6)],
+    ['ja', '月苔カードの保守費用はいくらですか。', '保守費用', '月苔', key(0, 0, 'm', 110)],
+    ['ja', '砂羽検収の合格証番号を教えて。', '合格証番号', '砂羽', key(0, 1, 'm', 110)],
+    ['ja', '霧鈴カードの請求通貨は何ですか。', '請求通貨', '霧鈴', key(0, 2, 'm', 110)],
+    ['zh-en', '霧棱 MCP 的憑證指紋是什麼？', '憑證指紋', '霧棱', key(0, 0, 'm', 50)],
+    ['ja-en', '苔弦 embedding の訓練標本総数は？', '訓練標本総数', '苔弦', key(0, 1, 'm', 50)],
+    ['zh-en', '砂環 WAL 的磁碟保固到哪一天？', '磁碟保固', '砂環', key(0, 2, 'm', 50)],
   ];
-  negatives.forEach(([language, text, absentProperty], i) => add(`negative-${i}`, 'negative', language, text, [], { form: 'unanswerable', notInMemory: true, absentProperty }));
+  negatives.forEach(([language, text, absentProperty, familiarSubject, subjectWitnessSlot], i) => add(`negative-${i}`, 'negative', language, text, [],
+    { form: 'unanswerable', notInMemory: true, absentProperty, familiarSubject, subjectWitnessSlot }));
   return queries;
 }
 
@@ -112,6 +116,17 @@ export function labelQueries(world) {
     const spaces = [...new Set(required.map(row => JSON.stringify(row.namespace)))].map(JSON.parse);
     const types = [...new Set(required.map(row => row.type))].sort();
     const extra = {};
+    if (query.notInMemory) {
+      const witnesses = Array.from({ length: parameters.worlds[world.world].cohorts }, (_, c) =>
+        byKey.get(query.subjectWitnessSlot.replace('c0/', `c${c}/`)));
+      for (const witness of witnesses) {
+        assert.ok(witness && witness.type === 'memory' && witness.currentness === 'current');
+        assert.ok(witness.truth.includes(query.familiarSubject));
+        assert.equal(witness.truth.includes(query.absentProperty), false);
+      }
+      extra.negativeStratumBySchema = Object.fromEntries(parameters.schemas.map(schema => [schema, 'familiar-subject/missing-property']));
+      extra.subjectEvidenceBySchema = Object.fromEntries(parameters.schemas.map(schema => [schema, witnesses.map(ref)]));
+    }
     if (query.zeroSharedTokens) {
       const queryTokens = [...new Set(tokenizeT1(query.text))].sort();
       const comparisons = [...required.map(ref), ...acceptableAlternates.flatMap(group => group.refs)].map(evidence => {
@@ -160,6 +175,12 @@ export function auditNotes(labels, world) {
     const lines = [`${label.id} | ${label.language} | ${label.intent} | ${label.text}`,
       `Expected: ${label.expected}. Applicable physical schemas: ${label.applicableSchemas.join(', ')}.`];
     if (!label.requiredEvidence.length) lines.push(`Why no ids: the familiar subject exists but the requested property (${label.absentProperty}) has no authored fact anywhere in the world, receipts or notes. Abstain; plausible adjacent facts and lexical hits do not supply that property.`);
+    if (label.subjectEvidenceBySchema) {
+      for (const schema of label.applicableSchemas) lines.push(`Schema ${schema} negative stratum: ${label.negativeStratumBySchema[schema]}; subject ${label.familiarSubject} is present in Memory refs ${label.subjectEvidenceBySchema[schema].map(ref => ref.id).join(', ')}. These are subject witnesses only, not answer evidence.`);
+      for (const witness of label.subjectEvidenceBySchema[18]) lines.push(`Subject-bearing Memory: ${byId.get(witness.id).truth}`);
+    }
+    if (label.answerParts) lines.push(`Both explicitly stated intervals are required: ${label.answerParts.map(part => `${part.subject}: ${part.intervalMs} ms (${part.statement})`).join('; ')}. Lease renewal is not a pump wake-up interval.`);
+    if (label.scope) lines.push(`Explicit question scope: ${JSON.stringify(label.scope.namespace)}, artifact ${label.scope.artifact}. ${label.scope.explanation}`);
     if (label.temporal) lines.push(`Frozen temporal interpretation: as of ${label.temporal.asOf} (${label.temporal.timezone}), event dates in [${label.temporal.startDate}, ${label.temporal.endDateExclusive}). All authored events in that window are required; query time never uses the machine clock.`);
     if (label.zeroSharedTokens) lines.push(`Zero-shared-token paraphrase: ${label.lexicalProof.tokenizer}, entire canonical Memory bodies including namespace prefix and padding. Query terms: ${JSON.stringify(label.lexicalProof.queryTokens)}; every required/alternate ref has intersection []. ${label.lexicalOnlyExpectation}`);
     for (const evidence of label.requiredEvidence) {

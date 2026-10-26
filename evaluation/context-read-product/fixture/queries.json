@@ -821,11 +821,23 @@
     "id": "product-term-5",
     "category": "mixed",
     "language": "zh-en",
-    "text": "苔弦 cron 多久叫醒背景泵",
+    "text": "苔弦 cron 多久續租，背景泵多久嘗試一個量子？",
     "intent": "current",
     "form": "natural",
     "productTerm": true,
-    "topic": "maintenance-cadence"
+    "topic": "maintenance-cadence",
+    "answerParts": [
+      {
+        "subject": "cron lease renewal",
+        "intervalMs": 60000,
+        "statement": "cron 每分鐘續租"
+      },
+      {
+        "subject": "background pump quantum attempt",
+        "intervalMs": 100,
+        "statement": "背景泵每一百毫秒嘗試一個量子"
+      }
+    ]
   },
   {
     "id": "product-term-6",
@@ -899,13 +911,22 @@
   },
   {
     "id": "zero-overlap-5",
-    "category": "zh-Hant",
-    "language": "zh-Hant",
-    "text": "多人一起寫會怎樣",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "mist-prism 多人一起寫會怎樣",
     "intent": "current",
     "form": "zero-overlap-paraphrase",
     "zeroSharedTokens": true,
-    "topic": "concurrent-write-policy"
+    "topic": "concurrent-write-policy",
+    "scope": {
+      "namespace": {
+        "ownerId": "synthetic-p2-owner",
+        "scope": "project",
+        "projectId": "mist-prism"
+      },
+      "artifact": "concurrent-writing",
+      "explanation": "The explicit mist-prism project scopes this question to its concurrency policy; the WAL rationale in moss-chord is a different project."
+    }
   },
   {
     "id": "zero-overlap-6",
@@ -919,13 +940,22 @@
   },
   {
     "id": "zero-overlap-7",
-    "category": "zh-Hant",
-    "language": "zh-Hant",
-    "text": "打包出去長什麼樣",
+    "category": "mixed",
+    "language": "zh-en",
+    "text": "sand-orbit 本體打包出去長什麼樣",
     "intent": "current",
     "form": "zero-overlap-paraphrase",
     "zeroSharedTokens": true,
-    "topic": "package-format"
+    "topic": "package-format",
+    "scope": {
+      "namespace": {
+        "ownerId": "synthetic-p2-owner",
+        "scope": "project",
+        "projectId": "sand-orbit"
+      },
+      "artifact": "main-program-package",
+      "explanation": "The question asks about the main program artifact in sand-orbit. The separate 藍穗 export decision concerns a different artifact."
+    }
   },
   {
     "id": "zero-overlap-8",
@@ -1201,7 +1231,9 @@
     "intent": "current",
     "form": "unanswerable",
     "notInMemory": true,
-    "absentProperty": "每月預算"
+    "absentProperty": "每月預算",
+    "familiarSubject": "琥珀佇列",
+    "subjectWitnessSlot": "c0/n0/m3"
   },
   {
     "id": "negative-1",
@@ -1211,7 +1243,9 @@
     "intent": "current",
     "form": "unanswerable",
     "notInMemory": true,
-    "absentProperty": "緊急聯絡分機"
+    "absentProperty": "緊急聯絡分機",
+    "familiarSubject": "羽砂",
+    "subjectWitnessSlot": "c0/n0/m4"
   },
   {
     "id": "negative-2",
@@ -1221,7 +1255,9 @@
     "intent": "current",
     "form": "unanswerable",
     "notInMemory": true,
-    "absentProperty": "壓縮率"
+    "absentProperty": "壓縮率",
+    "familiarSubject": "雨紋",
+    "subjectWitnessSlot": "c0/n0/m5"
   },
   {
     "id": "negative-3",
@@ -1231,7 +1267,9 @@
     "intent": "current",
     "form": "unanswerable",
     "notInMemory": true,
-    "absentProperty": "簽章演算法"
+    "absentProperty": "簽章演算法",
+    "familiarSubject": "苔鐘",
+    "subjectWitnessSlot": "c0/n0/m6"
   },
   {
     "id": "negative-4",
@@ -1241,7 +1279,9 @@
     "intent": "current",
     "form": "unanswerable",
     "notInMemory": true,
-    "absentProperty": "保守費用"
+    "absentProperty": "保守費用",
+    "familiarSubject": "月苔",
+    "subjectWitnessSlot": "c0/n0/m110"
   },
   {
     "id": "negative-5",
@@ -1251,7 +1291,9 @@
     "intent": "current",
     "form": "unanswerable",
     "notInMemory": true,
-    "absentProperty": "合格証番号"
+    "absentProperty": "合格証番号",
+    "familiarSubject": "砂羽",
+    "subjectWitnessSlot": "c0/n1/m110"
   },
   {
     "id": "negative-6",
@@ -1261,7 +1303,9 @@
     "intent": "current",
     "form": "unanswerable",
     "notInMemory": true,
-    "absentProperty": "請求通貨"
+    "absentProperty": "請求通貨",
+    "familiarSubject": "霧鈴",
+    "subjectWitnessSlot": "c0/n2/m110"
   },
   {
     "id": "negative-7",
@@ -1271,7 +1315,9 @@
     "intent": "current",
     "form": "unanswerable",
     "notInMemory": true,
-    "absentProperty": "憑證指紋"
+    "absentProperty": "憑證指紋",
+    "familiarSubject": "霧棱",
+    "subjectWitnessSlot": "c0/n0/m50"
   },
   {
     "id": "negative-8",
@@ -1281,7 +1327,9 @@
     "intent": "current",
     "form": "unanswerable",
     "notInMemory": true,
-    "absentProperty": "訓練標本総数"
+    "absentProperty": "訓練標本総数",
+    "familiarSubject": "苔弦",
+    "subjectWitnessSlot": "c0/n1/m50"
   },
   {
     "id": "negative-9",
@@ -1291,6 +1339,8 @@
     "intent": "current",
     "form": "unanswerable",
     "notInMemory": true,
-    "absentProperty": "磁碟保固"
+    "absentProperty": "磁碟保固",
+    "familiarSubject": "砂環",
+    "subjectWitnessSlot": "c0/n2/m50"
   }
 ]

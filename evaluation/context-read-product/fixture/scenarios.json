@@ -1,5 +1,5 @@
 {
-  "version": "p2-product-question-styles-r1",
+  "version": "p2-product-question-styles-r2",
   "records": [
     {
       "namespaceIndex": 0,
@@ -169,12 +169,18 @@
       "namespaceIndex": 1,
       "type": "memory",
       "slot": 41,
-      "statement": "交由琥珀閘序列化。",
+      "statement": "併發寫入交由琥珀閘序列化。",
       "groundTruth": {
         "topic": "concurrent-write-policy",
         "adopted": true,
         "adoptionStatus": "adopted",
-        "zeroOverlapQuestion": "多人一起寫會怎樣"
+        "zeroOverlapQuestion": "mist-prism 多人一起寫會怎樣",
+        "zeroOverlapLanguage": "zh-en",
+        "zeroOverlapScope": {
+          "namespaceIndex": 1,
+          "artifact": "concurrent-writing",
+          "explanation": "The explicit mist-prism project scopes this question to its concurrency policy; the WAL rationale in moss-chord is a different project."
+        }
       }
     },
     {
@@ -193,12 +199,18 @@
       "namespaceIndex": 3,
       "type": "memory",
       "slot": 41,
-      "statement": "輸出銀紋封套。",
+      "statement": "主程式輸出銀紋封套。",
       "groundTruth": {
         "topic": "package-format",
         "adopted": true,
         "adoptionStatus": "adopted",
-        "zeroOverlapQuestion": "打包出去長什麼樣"
+        "zeroOverlapQuestion": "sand-orbit 本體打包出去長什麼樣",
+        "zeroOverlapLanguage": "zh-en",
+        "zeroOverlapScope": {
+          "namespaceIndex": 3,
+          "artifact": "main-program-package",
+          "explanation": "The question asks about the main program artifact in sand-orbit. The separate 藍穗 export decision concerns a different artifact."
+        }
       }
     },
     {
@@ -294,7 +306,19 @@
         "topic": "maintenance-cadence",
         "adopted": true,
         "adoptionStatus": "adopted",
-        "productTermQuestion": "苔弦 cron 多久叫醒背景泵"
+        "productTermQuestion": "苔弦 cron 多久續租，背景泵多久嘗試一個量子？",
+        "productTermAnswerParts": [
+          {
+            "subject": "cron lease renewal",
+            "intervalMs": 60000,
+            "statement": "cron 每分鐘續租"
+          },
+          {
+            "subject": "background pump quantum attempt",
+            "intervalMs": 100,
+            "statement": "背景泵每一百毫秒嘗試一個量子"
+          }
+        ]
       }
     },
     {
@@ -697,6 +721,39 @@
         "adoptionStatus": "rejected-suggestion",
         "suggested": "雙路交送",
         "resolution": "Ground-truth decision outcome chose the other single option after evaluating this suggestion; rejection is deliberately not printed in candidate text."
+      }
+    },
+    {
+      "namespaceIndex": 0,
+      "type": "memory",
+      "slot": 110,
+      "statement": "月苔卡片的演練以逾時切換為主，逐輪核對計時。月苔カードの切替手順を点検する。",
+      "groundTruth": {
+        "role": "familiar-subject-near-miss",
+        "negativeSubjectFor": "negative-4",
+        "familiarSubject": "月苔"
+      }
+    },
+    {
+      "namespaceIndex": 1,
+      "type": "memory",
+      "slot": 110,
+      "statement": "砂羽驗收以樣本核對為主，逐張確認量測表。砂羽検収で標本の照合を行う。",
+      "groundTruth": {
+        "role": "familiar-subject-near-miss",
+        "negativeSubjectFor": "negative-5",
+        "familiarSubject": "砂羽"
+      }
+    },
+    {
+      "namespaceIndex": 2,
+      "type": "memory",
+      "slot": 110,
+      "statement": "霧鈴卡片記錄預備額度的分配，按格位核對可用量。霧鈴カードの予備枠を整理する。",
+      "groundTruth": {
+        "role": "familiar-subject-near-miss",
+        "negativeSubjectFor": "negative-6",
+        "familiarSubject": "霧鈴"
       }
     }
   ]

@@ -39,6 +39,19 @@ test('frozen P2 worlds, engine identities, labels and writer probes are reproduc
         assert.equal(variant.physical.schema, schema);
         assert.deepEqual(variant.records, first.records.filter(row => schema !== 18 || row.type === 'memory'));
         assert.equal(variant.logicalSha256, readJSON('statistics.json').worlds[world].variants[schema].logicalSha256);
+        if (schema === 18) {
+          const present = new Map(variant.records.map(row => [row.id, row]));
+          for (const label of readJSON(`labels-${world}.json`).filter(q => q.notInMemory)) {
+            assert.equal(label.negativeStratumBySchema[18], 'familiar-subject/missing-property');
+            assert.ok(label.subjectEvidenceBySchema[18].length > 0);
+            for (const witness of label.subjectEvidenceBySchema[18]) {
+              const row = present.get(witness.id);
+              assert.ok(row && row.type === 'memory', `${label.id}: familiar subject must survive real schema18 generation`);
+              assert.ok(row.truth.includes(label.familiarSubject));
+              assert.equal(row.truth.includes(label.absentProperty), false);
+            }
+          }
+        }
       }
     }
     // Always validate both frozen catalogs/labels, without regenerating W3 in ordinary tests.
@@ -48,17 +61,29 @@ test('frozen P2 worlds, engine identities, labels and writer probes are reproduc
       assert.equal(readFileSync(new URL(`why-${world}.txt`, import.meta.url), 'utf8'), auditNotes(labels, catalog));
       assert.equal(labels.length, 134);
       assert.equal(Math.min(...labels.map(label => Array.from(label.text).length)), 7);
-      for (const [category, count] of Object.entries({ 'zh-Hant': 76, ja: 20, mixed: 28, negative: 10 }))
+      for (const [category, count] of Object.entries({ 'zh-Hant': 74, ja: 20, mixed: 30, negative: 10 }))
         assert.equal(labels.filter(q => q.category === category).length, count);
       assert.equal(labels.filter(q => q.intent === 'history').length, 22);
       assert.equal(labels.filter(q => q.crossNamespace).length, 20);
       for (const [flag, count] of Object.entries({ shortTemporal: 8, productTerm: 8, zeroSharedTokens: 10,
         naturalHistory: 6, ownerWide: 12, distractorChallenge: 6, notInMemory: 10 }))
         assert.equal(labels.filter(q => q[flag]).length, count, flag);
-      assert.equal(labels.filter(q => q.language === 'zh-en' && q.category === 'mixed').length, 20);
+      assert.equal(labels.filter(q => q.language === 'zh-en' && q.category === 'mixed').length, 22);
       assert.equal(labels.filter(q => q.language === 'ja-en' && q.category === 'mixed').length, 8);
       const records = new Map(catalog.records.map(row => [row.id, row]));
       assert.equal(records.size, catalog.records.length);
+      const cadence = labels.find(q => q.id === 'product-term-5');
+      assert.equal(cadence.text, '苔弦 cron 多久續租，背景泵多久嘗試一個量子？');
+      assert.deepEqual(cadence.answerParts.map(part => part.intervalMs), [60000, 100]);
+      assert.ok(cadence.answerParts.every(part => records.get(cadence.requiredEvidence[0].id).truth.includes(part.statement)));
+      for (const [id, projectId, artifact] of [['zero-overlap-5', 'mist-prism', 'concurrent-writing'],
+        ['zero-overlap-7', 'sand-orbit', 'main-program-package']]) {
+        const label = labels.find(q => q.id === id);
+        assert.equal(label.category, 'mixed'); assert.equal(label.language, 'zh-en');
+        assert.equal(label.scope.namespace.projectId, projectId); assert.equal(label.scope.artifact, artifact);
+        assert.ok(label.text.startsWith(projectId));
+        assert.ok(label.requiredEvidence.every(ref => ref.namespace.projectId === projectId));
+      }
       for (const label of labels) {
         assert.equal(label.expected === 'abstain', label.requiredEvidence.length === 0);
         for (const ref of [...label.requiredEvidence, ...label.acceptableAlternates.flatMap(group => group.refs)]) {
@@ -121,7 +146,18 @@ test('frozen P2 worlds, engine identities, labels and writer probes are reproduc
         assert.equal(label.expected, 'abstain');
         assert.equal(corpus.includes(label.absentProperty), false);
         assert.doesNotMatch(label.text, /不存在|未記録|尚未採用/u);
+        for (const schema of parameters.schemas) {
+          assert.equal(label.negativeStratumBySchema[schema], 'familiar-subject/missing-property');
+          assert.ok(label.subjectEvidenceBySchema[schema].length > 0);
+          for (const witness of label.subjectEvidenceBySchema[schema]) {
+            assert.equal(witness.type, 'memory');
+            assert.ok(canonicalBodies.get(witness.id).includes(label.familiarSubject));
+          }
+        }
       }
+      assert.ok(canonicalBodies.get(labels.find(q => q.id === 'zero-overlap-5').requiredEvidence[0].id).includes('併發寫入交由琥珀閘序列化。'));
+      assert.ok(canonicalBodies.get(labels.find(q => q.id === 'zero-overlap-7').requiredEvidence[0].id).includes('主程式輸出銀紋封套。'));
+      assert.equal(catalog.records.filter(row => row.groundTruth?.negativeSubjectFor).length, 3 * parameters.worlds[world].cohorts);
       for (const label of labels.filter(q => q.zeroSharedTokens)) {
         for (const comparison of label.lexicalProof.comparisons) {
           const terms = new Set(tokenizeT1(canonicalBodies.get(comparison.ref.id)));

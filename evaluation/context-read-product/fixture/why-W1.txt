@@ -873,8 +873,9 @@ Stored fact: 個人實驗簿 cohort 0 memory 51。 霧棱的 readSet 固定包�
 State: current. Body: 240 UTF-16 units; SHA-256 09ffb98af14fb6be2882c22c1b07e874e61aaf11acac8383ddefdcd6736380a3.
 Only the exact same fact in a replicated cohort or listed curated Card is an alternate; unrelated facts do not satisfy a group.
 
-product-term-5 | zh-en | current | 苔弦 cron 多久叫醒背景泵
+product-term-5 | zh-en | current | 苔弦 cron 多久續租，背景泵多久嘗試一個量子？
 Expected: answerable. Applicable physical schemas: 18, 23, 33.
+Both explicitly stated intervals are required: cron lease renewal: 60000 ms (cron 每分鐘續租); background pump quantum attempt: 100 ms (背景泵每一百毫秒嘗試一個量子). Lease renewal is not a pump wake-up interval.
 Required group: memory 4e7a37e6-4292-4332-93ac-b91b0f06274f rev 2 bodyRev 0; c0/n1/m51; namespace {"ownerId":"synthetic-p2-owner","scope":"project","projectId":"mist-prism"}.
 Stored fact: 霧棱計畫 cohort 0 memory 51。 苔弦的 cron 每分鐘續租,背景泵每一百毫秒嘗試一個量子。
 State: current. Body: 240 UTF-16 units; SHA-256 5ed4a690c0c10680b3713cff64cb69fd36e6fcd200f354d4ea3fcd9a017d0f52.
@@ -934,12 +935,13 @@ Stored fact: 個人實驗簿 cohort 0 memory 41。 回復晶盒快照。
 State: current. Body: 240 UTF-16 units; SHA-256 1ae897b0b35685da4ae003f7aa9c3aeefd7aecd0abad0b5ae33b440ae91cbb3d.
 Only the exact same fact in a replicated cohort or listed curated Card is an alternate; unrelated facts do not satisfy a group.
 
-zero-overlap-5 | zh-Hant | current | 多人一起寫會怎樣
+zero-overlap-5 | zh-en | current | mist-prism 多人一起寫會怎樣
 Expected: answerable. Applicable physical schemas: 18, 23, 33.
-Zero-shared-token paraphrase: hr1-t1-v1, entire canonical Memory bodies including namespace prefix and padding. Query terms: ["一起","人一","多人","寫會","怎樣","會怎","起寫"]; every required/alternate ref has intersection []. Known answerable ceiling case; report recall separately. Empty lexical retrieval is a miss, not a correct abstention.
+Explicit question scope: {"ownerId":"synthetic-p2-owner","scope":"project","projectId":"mist-prism"}, artifact concurrent-writing. The explicit mist-prism project scopes this question to its concurrency policy; the WAL rationale in moss-chord is a different project.
+Zero-shared-token paraphrase: hr1-t1-v1, entire canonical Memory bodies including namespace prefix and padding. Query terms: ["mist","prism","一起","人一","多人","寫會","怎樣","會怎","起寫"]; every required/alternate ref has intersection []. Known answerable ceiling case; report recall separately. Empty lexical retrieval is a miss, not a correct abstention.
 Required group: memory 68bfa3c6-746b-4db3-9ccf-e2174378550c rev 2 bodyRev 0; c0/n1/m41; namespace {"ownerId":"synthetic-p2-owner","scope":"project","projectId":"mist-prism"}.
-Stored fact: 霧棱計畫 cohort 0 memory 41。 交由琥珀閘序列化。
-State: current. Body: 240 UTF-16 units; SHA-256 2f4d4c3ec032d8d53d6315463984960bc71bef43956a78931969aee50e37b92e.
+Stored fact: 霧棱計畫 cohort 0 memory 41。 併發寫入交由琥珀閘序列化。
+State: current. Body: 240 UTF-16 units; SHA-256 aebe4ac84399981524bc6baa27c6b82f4f4c208f528705748790bef420d46022.
 Only the exact same fact in a replicated cohort or listed curated Card is an alternate; unrelated facts do not satisfy a group.
 
 zero-overlap-6 | zh-Hant | current | 中途斷線如何重來
@@ -950,12 +952,13 @@ Stored fact: 苔弦計畫 cohort 0 memory 41。 遵循苔輪指數退避。
 State: current. Body: 240 UTF-16 units; SHA-256 a0e2337ac42a6c46a133f1f96ea7c1f02ba57a241451c6fa2d497f8d6b70e77d.
 Only the exact same fact in a replicated cohort or listed curated Card is an alternate; unrelated facts do not satisfy a group.
 
-zero-overlap-7 | zh-Hant | current | 打包出去長什麼樣
+zero-overlap-7 | zh-en | current | sand-orbit 本體打包出去長什麼樣
 Expected: answerable. Applicable physical schemas: 18, 23, 33.
-Zero-shared-token paraphrase: hr1-t1-v1, entire canonical Memory bodies including namespace prefix and padding. Query terms: ["什麼","出去","包出","去長","打包","長什","麼樣"]; every required/alternate ref has intersection []. Known answerable ceiling case; report recall separately. Empty lexical retrieval is a miss, not a correct abstention.
+Explicit question scope: {"ownerId":"synthetic-p2-owner","scope":"project","projectId":"sand-orbit"}, artifact main-program-package. The question asks about the main program artifact in sand-orbit. The separate 藍穗 export decision concerns a different artifact.
+Zero-shared-token paraphrase: hr1-t1-v1, entire canonical Memory bodies including namespace prefix and padding. Query terms: ["orbit","sand","什麼","出去","包出","去長","打包","本體","長什","體打","麼樣"]; every required/alternate ref has intersection []. Known answerable ceiling case; report recall separately. Empty lexical retrieval is a miss, not a correct abstention.
 Required group: memory a8b6d9cf-fce8-48ff-a192-6c7b3006d839 rev 2 bodyRev 0; c0/n3/m41; namespace {"ownerId":"synthetic-p2-owner","scope":"project","projectId":"sand-orbit"}.
-Stored fact: 砂環計畫 cohort 0 memory 41。 輸出銀紋封套。
-State: current. Body: 240 UTF-16 units; SHA-256 1294b777d1ec87ac54210cc9ad8a13dab07853c0d4257b09924d499beddcd51d.
+Stored fact: 砂環計畫 cohort 0 memory 41。 主程式輸出銀紋封套。
+State: current. Body: 240 UTF-16 units; SHA-256 2908fc9457fe3e6056246ebe677b5a91fb485908c14f9ea2f35845658ea57dbc.
 Only the exact same fact in a replicated cohort or listed curated Card is an alternate; unrelated facts do not satisfy a group.
 
 zero-overlap-8 | zh-Hant | current | 出錯想找紀錄在哪
@@ -1217,49 +1220,89 @@ Only the exact same fact in a replicated cohort or listed curated Card is an alt
 negative-0 | zh-Hant | current | 琥珀佇列每月預算是多少？
 Expected: abstain. Applicable physical schemas: 18, 23, 33.
 Why no ids: the familiar subject exists but the requested property (每月預算) has no authored fact anywhere in the world, receipts or notes. Abstain; plausible adjacent facts and lexical hits do not supply that property.
+Schema 18 negative stratum: familiar-subject/missing-property; subject 琥珀佇列 is present in Memory refs 06cd5f3b-b09b-44ca-9bec-2c1ad5f42ccc. These are subject witnesses only, not answer evidence.
+Schema 23 negative stratum: familiar-subject/missing-property; subject 琥珀佇列 is present in Memory refs 06cd5f3b-b09b-44ca-9bec-2c1ad5f42ccc. These are subject witnesses only, not answer evidence.
+Schema 33 negative stratum: familiar-subject/missing-property; subject 琥珀佇列 is present in Memory refs 06cd5f3b-b09b-44ca-9bec-2c1ad5f42ccc. These are subject witnesses only, not answer evidence.
+Subject-bearing Memory: 個人實驗簿 cohort 0 memory 3。 決議使用琥珀佇列,容量40筆。 琥珀キューの容量は40件。 Amber queue capacity: 40 items.
 Only the exact same fact in a replicated cohort or listed curated Card is an alternate; unrelated facts do not satisfy a group.
 
 negative-1 | zh-Hant | current | 羽砂演練的緊急聯絡分機是多少？
 Expected: abstain. Applicable physical schemas: 18, 23, 33.
 Why no ids: the familiar subject exists but the requested property (緊急聯絡分機) has no authored fact anywhere in the world, receipts or notes. Abstain; plausible adjacent facts and lexical hits do not supply that property.
+Schema 18 negative stratum: familiar-subject/missing-property; subject 羽砂 is present in Memory refs d1439eca-afe1-4732-af32-af87c2762b0f. These are subject witnesses only, not answer evidence.
+Schema 23 negative stratum: familiar-subject/missing-property; subject 羽砂 is present in Memory refs d1439eca-afe1-4732-af32-af87c2762b0f. These are subject witnesses only, not answer evidence.
+Schema 33 negative stratum: familiar-subject/missing-property; subject 羽砂 is present in Memory refs d1439eca-afe1-4732-af32-af87c2762b0f. These are subject witnesses only, not answer evidence.
+Subject-bearing Memory: 個人實驗簿 cohort 0 memory 4。 備援演練由虛構員偶甲負責,代號羽砂。 予備訓練の担当は架空の員偶甲、符号は羽砂。 Fallback drill code: FeatherSand.
 Only the exact same fact in a replicated cohort or listed curated Card is an alternate; unrelated facts do not satisfy a group.
 
 negative-2 | zh-Hant | current | 雨紋匯出的壓縮率是多少？
 Expected: abstain. Applicable physical schemas: 18, 23, 33.
 Why no ids: the familiar subject exists but the requested property (壓縮率) has no authored fact anywhere in the world, receipts or notes. Abstain; plausible adjacent facts and lexical hits do not supply that property.
+Schema 18 negative stratum: familiar-subject/missing-property; subject 雨紋 is present in Memory refs fe8a96d3-9684-49eb-ab90-12f7bb4c90e5. These are subject witnesses only, not answer evidence.
+Schema 23 negative stratum: familiar-subject/missing-property; subject 雨紋 is present in Memory refs fe8a96d3-9684-49eb-ab90-12f7bb4c90e5. These are subject witnesses only, not answer evidence.
+Schema 33 negative stratum: familiar-subject/missing-property; subject 雨紋 is present in Memory refs fe8a96d3-9684-49eb-ab90-12f7bb4c90e5. These are subject witnesses only, not answer evidence.
+Subject-bearing Memory: 個人實驗簿 cohort 0 memory 5。 離線匯出採用雨紋格式,版本3。 オフライン出力は雨紋形式、版3。 Offline export format: RainPattern version 3.
 Only the exact same fact in a replicated cohort or listed curated Card is an alternate; unrelated facts do not satisfy a group.
 
 negative-3 | zh-Hant | current | 苔鐘確認採用哪種簽章演算法？
 Expected: abstain. Applicable physical schemas: 18, 23, 33.
 Why no ids: the familiar subject exists but the requested property (簽章演算法) has no authored fact anywhere in the world, receipts or notes. Abstain; plausible adjacent facts and lexical hits do not supply that property.
+Schema 18 negative stratum: familiar-subject/missing-property; subject 苔鐘 is present in Memory refs 244cb7c3-be4c-406f-9524-b9d3628b2d45. These are subject witnesses only, not answer evidence.
+Schema 23 negative stratum: familiar-subject/missing-property; subject 苔鐘 is present in Memory refs 244cb7c3-be4c-406f-9524-b9d3628b2d45. These are subject witnesses only, not answer evidence.
+Schema 33 negative stratum: familiar-subject/missing-property; subject 苔鐘 is present in Memory refs 244cb7c3-be4c-406f-9524-b9d3628b2d45. These are subject witnesses only, not answer evidence.
+Subject-bearing Memory: 個人實驗簿 cohort 0 memory 6。 批次確認門檻是12筆,代號苔鐘。 一括確認の閾値は12件、符号は苔鐘。 Batch confirmation threshold: 12, MossBell.
 Only the exact same fact in a replicated cohort or listed curated Card is an alternate; unrelated facts do not satisfy a group.
 
 negative-4 | ja | current | 月苔カードの保守費用はいくらですか。
 Expected: abstain. Applicable physical schemas: 18, 23, 33.
 Why no ids: the familiar subject exists but the requested property (保守費用) has no authored fact anywhere in the world, receipts or notes. Abstain; plausible adjacent facts and lexical hits do not supply that property.
+Schema 18 negative stratum: familiar-subject/missing-property; subject 月苔 is present in Memory refs f87cdb87-e519-434b-896b-1a9d99f97102. These are subject witnesses only, not answer evidence.
+Schema 23 negative stratum: familiar-subject/missing-property; subject 月苔 is present in Memory refs f87cdb87-e519-434b-896b-1a9d99f97102. These are subject witnesses only, not answer evidence.
+Schema 33 negative stratum: familiar-subject/missing-property; subject 月苔 is present in Memory refs f87cdb87-e519-434b-896b-1a9d99f97102. These are subject witnesses only, not answer evidence.
+Subject-bearing Memory: 個人實驗簿 cohort 0 memory 110。 月苔卡片的演練以逾時切換為主,逐輪核對計時。月苔カードの切替手順を点検する。
 Only the exact same fact in a replicated cohort or listed curated Card is an alternate; unrelated facts do not satisfy a group.
 
 negative-5 | ja | current | 砂羽検収の合格証番号を教えて。
 Expected: abstain. Applicable physical schemas: 18, 23, 33.
 Why no ids: the familiar subject exists but the requested property (合格証番号) has no authored fact anywhere in the world, receipts or notes. Abstain; plausible adjacent facts and lexical hits do not supply that property.
+Schema 18 negative stratum: familiar-subject/missing-property; subject 砂羽 is present in Memory refs fdca7f08-b17b-436d-8e4f-c75fd3ac483c. These are subject witnesses only, not answer evidence.
+Schema 23 negative stratum: familiar-subject/missing-property; subject 砂羽 is present in Memory refs fdca7f08-b17b-436d-8e4f-c75fd3ac483c. These are subject witnesses only, not answer evidence.
+Schema 33 negative stratum: familiar-subject/missing-property; subject 砂羽 is present in Memory refs fdca7f08-b17b-436d-8e4f-c75fd3ac483c. These are subject witnesses only, not answer evidence.
+Subject-bearing Memory: 霧棱計畫 cohort 0 memory 110。 砂羽驗收以樣本核對為主,逐張確認量測表。砂羽検収で標本の照合を行う。
 Only the exact same fact in a replicated cohort or listed curated Card is an alternate; unrelated facts do not satisfy a group.
 
 negative-6 | ja | current | 霧鈴カードの請求通貨は何ですか。
 Expected: abstain. Applicable physical schemas: 18, 23, 33.
 Why no ids: the familiar subject exists but the requested property (請求通貨) has no authored fact anywhere in the world, receipts or notes. Abstain; plausible adjacent facts and lexical hits do not supply that property.
+Schema 18 negative stratum: familiar-subject/missing-property; subject 霧鈴 is present in Memory refs f009372d-3627-4f67-931a-b40732ecf314. These are subject witnesses only, not answer evidence.
+Schema 23 negative stratum: familiar-subject/missing-property; subject 霧鈴 is present in Memory refs f009372d-3627-4f67-931a-b40732ecf314. These are subject witnesses only, not answer evidence.
+Schema 33 negative stratum: familiar-subject/missing-property; subject 霧鈴 is present in Memory refs f009372d-3627-4f67-931a-b40732ecf314. These are subject witnesses only, not answer evidence.
+Subject-bearing Memory: 苔弦計畫 cohort 0 memory 110。 霧鈴卡片記錄預備額度的分配,按格位核對可用量。霧鈴カードの予備枠を整理する。
 Only the exact same fact in a replicated cohort or listed curated Card is an alternate; unrelated facts do not satisfy a group.
 
 negative-7 | zh-en | current | 霧棱 MCP 的憑證指紋是什麼？
 Expected: abstain. Applicable physical schemas: 18, 23, 33.
 Why no ids: the familiar subject exists but the requested property (憑證指紋) has no authored fact anywhere in the world, receipts or notes. Abstain; plausible adjacent facts and lexical hits do not supply that property.
+Schema 18 negative stratum: familiar-subject/missing-property; subject 霧棱 is present in Memory refs d515d0a3-ee50-415f-a9d4-6b8d317a2bcd. These are subject witnesses only, not answer evidence.
+Schema 23 negative stratum: familiar-subject/missing-property; subject 霧棱 is present in Memory refs d515d0a3-ee50-415f-a9d4-6b8d317a2bcd. These are subject witnesses only, not answer evidence.
+Schema 33 negative stratum: familiar-subject/missing-property; subject 霧棱 is present in Memory refs d515d0a3-ee50-415f-a9d4-6b8d317a2bcd. These are subject witnesses only, not answer evidence.
+Subject-bearing Memory: 個人實驗簿 cohort 0 memory 50。 霧棱的 MCP 授權採用短效票證,僅限所選專案,票證二十分鐘更新。
 Only the exact same fact in a replicated cohort or listed curated Card is an alternate; unrelated facts do not satisfy a group.
 
 negative-8 | ja-en | current | 苔弦 embedding の訓練標本総数は？
 Expected: abstain. Applicable physical schemas: 18, 23, 33.
 Why no ids: the familiar subject exists but the requested property (訓練標本総数) has no authored fact anywhere in the world, receipts or notes. Abstain; plausible adjacent facts and lexical hits do not supply that property.
+Schema 18 negative stratum: familiar-subject/missing-property; subject 苔弦 is present in Memory refs 84809d5b-0dde-4d0c-be00-97a635551663. These are subject witnesses only, not answer evidence.
+Schema 23 negative stratum: familiar-subject/missing-property; subject 苔弦 is present in Memory refs 84809d5b-0dde-4d0c-be00-97a635551663. These are subject witnesses only, not answer evidence.
+Schema 33 negative stratum: familiar-subject/missing-property; subject 苔弦 is present in Memory refs 84809d5b-0dde-4d0c-be00-97a635551663. These are subject witnesses only, not answer evidence.
+Subject-bearing Memory: 霧棱計畫 cohort 0 memory 50。 苔弦的 embedding 最後選擇苔紋向量,維度192,運算留在本機。
 Only the exact same fact in a replicated cohort or listed curated Card is an alternate; unrelated facts do not satisfy a group.
 
 negative-9 | zh-en | current | 砂環 WAL 的磁碟保固到哪一天？
 Expected: abstain. Applicable physical schemas: 18, 23, 33.
 Why no ids: the familiar subject exists but the requested property (磁碟保固) has no authored fact anywhere in the world, receipts or notes. Abstain; plausible adjacent facts and lexical hits do not supply that property.
+Schema 18 negative stratum: familiar-subject/missing-property; subject 砂環 is present in Memory refs ad994abd-5feb-4c6a-83dc-9ce93bfb611c. These are subject witnesses only, not answer evidence.
+Schema 23 negative stratum: familiar-subject/missing-property; subject 砂環 is present in Memory refs ad994abd-5feb-4c6a-83dc-9ce93bfb611c. These are subject witnesses only, not answer evidence.
+Schema 33 negative stratum: familiar-subject/missing-property; subject 砂環 is present in Memory refs ad994abd-5feb-4c6a-83dc-9ce93bfb611c. These are subject witnesses only, not answer evidence.
+Subject-bearing Memory: 苔弦計畫 cohort 0 memory 50。 砂環的 WAL 切換是為了讓讀取與短寫入並行,仍保留單一寫入者。
 Only the exact same fact in a replicated cohort or listed curated Card is an alternate; unrelated facts do not satisfy a group.

@@ -1,5 +1,5 @@
 {
-  "version": "p2-qualification-fixture-v1-r1",
+  "version": "p2-qualification-fixture-v1-r2",
   "contract": "context-read-product-v1",
   "engineBaseCommit": "e7dade51aab8cff66c94f893ede6f180175bb028",
   "worlds": {
@@ -97,7 +97,7 @@
     "omittedNamespaces": 0
   },
   "scope": "Synthetic qualification data; no retrieval, maintenance or performance acceptance claimed.",
-  "revision": 1,
+  "revision": 2,
   "temporalAnchor": {
     "asOf": "2026-10-27T12:00:00+08:00",
     "timezone": "Asia/Taipei",
@@ -113,5 +113,9 @@
       "startDate": "2026-10-21",
       "endDateExclusive": "2026-10-28"
     }
+  },
+  "supersedesFixture": {
+    "version": "p2-qualification-fixture-v1-r1",
+    "commit": "83e3dd5560b8e25d4390c3d7661cb0330a4ceea2"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "version": "p2-qualification-fixture-v1-r1",
+  "version": "p2-qualification-fixture-v1-r2",
   "seed": "context-read-product-v1:2026-10-27:mist-chord-orbit",
   "world": "W3",
   "namespaces": [
@@ -3991,13 +3991,18 @@
       "id": "f87cdb87-e519-434b-896b-1a9d99f97102",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "個人實驗簿 cohort 0 memory 110。 合成觀測第110格:石芽樣片在第25輪通過尺寸核對。架空の石芽試片の寸法確認。Synthetic StoneBud sample dimension check.",
+      "truth": "個人實驗簿 cohort 0 memory 110。 月苔卡片的演練以逾時切換為主,逐輪核對計時。月苔カードの切替手順を点検する。",
       "expectedUnits": 240,
+      "groundTruth": {
+        "role": "familiar-subject-near-miss",
+        "negativeSubjectFor": "negative-4",
+        "familiarSubject": "月苔"
+      },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
-      "bodyBytes": 582,
-      "bodySha256": "11268326b5eb6f84be843ee946b1c4f522d1b620c3b54b56258bfccd55b26ee4",
+      "bodyBytes": 676,
+      "bodySha256": "fa31bd60b9f2f7a9869953d32e9393dfa6448aab4462ce4f9bbcb3a655894883",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -11921,19 +11926,25 @@
       "id": "68bfa3c6-746b-4db3-9ccf-e2174378550c",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "霧棱計畫 cohort 0 memory 41。 交由琥珀閘序列化。",
+      "truth": "霧棱計畫 cohort 0 memory 41。 併發寫入交由琥珀閘序列化。",
       "expectedUnits": 240,
       "groundTruth": {
         "topic": "concurrent-write-policy",
         "adopted": true,
         "adoptionStatus": "adopted",
-        "zeroOverlapQuestion": "多人一起寫會怎樣"
+        "zeroOverlapQuestion": "mist-prism 多人一起寫會怎樣",
+        "zeroOverlapLanguage": "zh-en",
+        "zeroOverlapScope": {
+          "namespaceIndex": 1,
+          "artifact": "concurrent-writing",
+          "explanation": "The explicit mist-prism project scopes this question to its concurrency policy; the WAL rationale in moss-chord is a different project."
+        }
       },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
       "bodyBytes": 680,
-      "bodySha256": "2f4d4c3ec032d8d53d6315463984960bc71bef43956a78931969aee50e37b92e",
+      "bodySha256": "aebe4ac84399981524bc6baa27c6b82f4f4c208f528705748790bef420d46022",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -12297,7 +12308,19 @@
         "topic": "maintenance-cadence",
         "adopted": true,
         "adoptionStatus": "adopted",
-        "productTermQuestion": "苔弦 cron 多久叫醒背景泵"
+        "productTermQuestion": "苔弦 cron 多久續租，背景泵多久嘗試一個量子？",
+        "productTermAnswerParts": [
+          {
+            "subject": "cron lease renewal",
+            "intervalMs": 60000,
+            "statement": "cron 每分鐘續租"
+          },
+          {
+            "subject": "background pump quantum attempt",
+            "intervalMs": 100,
+            "statement": "背景泵每一百毫秒嘗試一個量子"
+          }
+        ]
       },
       "submittedLeadingWhitespace": true,
       "currentness": "current",
@@ -14445,13 +14468,18 @@
       "id": "fdca7f08-b17b-436d-8e4f-c75fd3ac483c",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "霧棱計畫 cohort 0 memory 110。 合成觀測第110格:石芽樣片在第25輪通過尺寸核對。架空の石芽試片の寸法確認。Synthetic StoneBud sample dimension check.",
+      "truth": "霧棱計畫 cohort 0 memory 110。 砂羽驗收以樣本核對為主,逐張確認量測表。砂羽検収で標本の照合を行う。",
       "expectedUnits": 240,
+      "groundTruth": {
+        "role": "familiar-subject-near-miss",
+        "negativeSubjectFor": "negative-5",
+        "familiarSubject": "砂羽"
+      },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
-      "bodyBytes": 582,
-      "bodySha256": "ba675a9f27d51950ba6e292e0f79d93b63e1d145625774fdc7cd8e16e7115dac",
+      "bodyBytes": 676,
+      "bodySha256": "106e664c649c0fbc13f7c945a15320ebb6ce92471f0938ecc1d31d30c7398205",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -24904,13 +24932,18 @@
       "id": "f009372d-3627-4f67-931a-b40732ecf314",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "苔弦計畫 cohort 0 memory 110。 合成觀測第110格:石芽樣片在第25輪通過尺寸核對。架空の石芽試片の寸法確認。Synthetic StoneBud sample dimension check.",
+      "truth": "苔弦計畫 cohort 0 memory 110。 霧鈴卡片記錄預備額度的分配,按格位核對可用量。霧鈴カードの予備枠を整理する。",
       "expectedUnits": 240,
+      "groundTruth": {
+        "role": "familiar-subject-near-miss",
+        "negativeSubjectFor": "negative-6",
+        "familiarSubject": "霧鈴"
+      },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
-      "bodyBytes": 582,
-      "bodySha256": "d52fc58eb8885276416d52f7ffb04dacf81004f39eb8514a51d273793f2f4ecf",
+      "bodyBytes": 676,
+      "bodySha256": "8cf47d8b7c71f2e6c4ba898c55edf52a41e1c9df52915cef87dc63c729135c79",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -32834,19 +32867,25 @@
       "id": "a8b6d9cf-fce8-48ff-a192-6c7b3006d839",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "砂環計畫 cohort 0 memory 41。 輸出銀紋封套。",
+      "truth": "砂環計畫 cohort 0 memory 41。 主程式輸出銀紋封套。",
       "expectedUnits": 240,
       "groundTruth": {
         "topic": "package-format",
         "adopted": true,
         "adoptionStatus": "adopted",
-        "zeroOverlapQuestion": "打包出去長什麼樣"
+        "zeroOverlapQuestion": "sand-orbit 本體打包出去長什麼樣",
+        "zeroOverlapLanguage": "zh-en",
+        "zeroOverlapScope": {
+          "namespaceIndex": 3,
+          "artifact": "main-program-package",
+          "explanation": "The question asks about the main program artifact in sand-orbit. The separate 藍穗 export decision concerns a different artifact."
+        }
       },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
       "bodyBytes": 680,
-      "bodySha256": "1294b777d1ec87ac54210cc9ad8a13dab07853c0d4257b09924d499beddcd51d",
+      "bodySha256": "2908fc9457fe3e6056246ebe677b5a91fb485908c14f9ea2f35845658ea57dbc",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -45761,13 +45800,18 @@
       "id": "e3101dac-2bf1-4cfb-ba0c-d0b2bec4e1a2",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "個人實驗簿 cohort 1 memory 110。 合成觀測第110格:石芽樣片在第25輪通過尺寸核對。架空の石芽試片の寸法確認。Synthetic StoneBud sample dimension check.",
+      "truth": "個人實驗簿 cohort 1 memory 110。 月苔卡片的演練以逾時切換為主,逐輪核對計時。月苔カードの切替手順を点検する。",
       "expectedUnits": 240,
+      "groundTruth": {
+        "role": "familiar-subject-near-miss",
+        "negativeSubjectFor": "negative-4",
+        "familiarSubject": "月苔"
+      },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
-      "bodyBytes": 582,
-      "bodySha256": "f978c5d2b48957b69c135cc13ecef30a8d900b61a173b8da7abc940d4cd52949",
+      "bodyBytes": 676,
+      "bodySha256": "d9174d33672bd0a786ddda070092c4c2e50aa0cf6ea1fda473a943e48a73019a",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -53691,19 +53735,25 @@
       "id": "45725452-bed0-4cc7-889d-8d655d9eb9a5",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "霧棱計畫 cohort 1 memory 41。 交由琥珀閘序列化。",
+      "truth": "霧棱計畫 cohort 1 memory 41。 併發寫入交由琥珀閘序列化。",
       "expectedUnits": 240,
       "groundTruth": {
         "topic": "concurrent-write-policy",
         "adopted": true,
         "adoptionStatus": "adopted",
-        "zeroOverlapQuestion": "多人一起寫會怎樣"
+        "zeroOverlapQuestion": "mist-prism 多人一起寫會怎樣",
+        "zeroOverlapLanguage": "zh-en",
+        "zeroOverlapScope": {
+          "namespaceIndex": 1,
+          "artifact": "concurrent-writing",
+          "explanation": "The explicit mist-prism project scopes this question to its concurrency policy; the WAL rationale in moss-chord is a different project."
+        }
       },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
       "bodyBytes": 680,
-      "bodySha256": "50dbc8deb6c58975c927deb79ffc4f13016724f550a21b92533511607057e383",
+      "bodySha256": "3d06b67b0e8825cc7fc423eb50e670fe24e1b15de26820eaa3ec85f2672ac503",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -54067,7 +54117,19 @@
         "topic": "maintenance-cadence",
         "adopted": true,
         "adoptionStatus": "adopted",
-        "productTermQuestion": "苔弦 cron 多久叫醒背景泵"
+        "productTermQuestion": "苔弦 cron 多久續租，背景泵多久嘗試一個量子？",
+        "productTermAnswerParts": [
+          {
+            "subject": "cron lease renewal",
+            "intervalMs": 60000,
+            "statement": "cron 每分鐘續租"
+          },
+          {
+            "subject": "background pump quantum attempt",
+            "intervalMs": 100,
+            "statement": "背景泵每一百毫秒嘗試一個量子"
+          }
+        ]
       },
       "submittedLeadingWhitespace": true,
       "currentness": "current",
@@ -56215,13 +56277,18 @@
       "id": "3cde954a-bc9e-4f69-8b53-2b0a657e77f9",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "霧棱計畫 cohort 1 memory 110。 合成觀測第110格:石芽樣片在第25輪通過尺寸核對。架空の石芽試片の寸法確認。Synthetic StoneBud sample dimension check.",
+      "truth": "霧棱計畫 cohort 1 memory 110。 砂羽驗收以樣本核對為主,逐張確認量測表。砂羽検収で標本の照合を行う。",
       "expectedUnits": 240,
+      "groundTruth": {
+        "role": "familiar-subject-near-miss",
+        "negativeSubjectFor": "negative-5",
+        "familiarSubject": "砂羽"
+      },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
-      "bodyBytes": 582,
-      "bodySha256": "c2a224bade37caf65b958009797c17a85254ac03afe248eacc5e045aa9744b0e",
+      "bodyBytes": 676,
+      "bodySha256": "5dc02c70a8340a363740a590e519c716b2131e426dee5972fdb41764f7c252a4",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -66674,13 +66741,18 @@
       "id": "68627e53-cc6d-412d-bed5-f9427104c811",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "苔弦計畫 cohort 1 memory 110。 合成觀測第110格:石芽樣片在第25輪通過尺寸核對。架空の石芽試片の寸法確認。Synthetic StoneBud sample dimension check.",
+      "truth": "苔弦計畫 cohort 1 memory 110。 霧鈴卡片記錄預備額度的分配,按格位核對可用量。霧鈴カードの予備枠を整理する。",
       "expectedUnits": 240,
+      "groundTruth": {
+        "role": "familiar-subject-near-miss",
+        "negativeSubjectFor": "negative-6",
+        "familiarSubject": "霧鈴"
+      },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
-      "bodyBytes": 582,
-      "bodySha256": "28fd2ecc3c7a9673386fa8f8c4ec4801bb1826c063e6952d1f57fbb1a5aa8e18",
+      "bodyBytes": 676,
+      "bodySha256": "2a20d629f4a61d52991a1f5587901c4f8d9d0a611190f00d0a0998fd1e12dcaa",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -74604,19 +74676,25 @@
       "id": "f1d0a5f5-c119-47c7-aa3f-07d9a8c237ac",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "砂環計畫 cohort 1 memory 41。 輸出銀紋封套。",
+      "truth": "砂環計畫 cohort 1 memory 41。 主程式輸出銀紋封套。",
       "expectedUnits": 240,
       "groundTruth": {
         "topic": "package-format",
         "adopted": true,
         "adoptionStatus": "adopted",
-        "zeroOverlapQuestion": "打包出去長什麼樣"
+        "zeroOverlapQuestion": "sand-orbit 本體打包出去長什麼樣",
+        "zeroOverlapLanguage": "zh-en",
+        "zeroOverlapScope": {
+          "namespaceIndex": 3,
+          "artifact": "main-program-package",
+          "explanation": "The question asks about the main program artifact in sand-orbit. The separate 藍穗 export decision concerns a different artifact."
+        }
       },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
       "bodyBytes": 680,
-      "bodySha256": "7dc1a729fd6ae33f9918f3227badc357463c1afe31892c7863684ab184d9513d",
+      "bodySha256": "c6c9b28b96db7c45641d6beb2110548a538e20ca4ad4c8894d14c477553e36cd",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -87531,13 +87609,18 @@
       "id": "18cc81d3-b668-475c-b5f7-c84814521082",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "個人實驗簿 cohort 2 memory 110。 合成觀測第110格:石芽樣片在第25輪通過尺寸核對。架空の石芽試片の寸法確認。Synthetic StoneBud sample dimension check.",
+      "truth": "個人實驗簿 cohort 2 memory 110。 月苔卡片的演練以逾時切換為主,逐輪核對計時。月苔カードの切替手順を点検する。",
       "expectedUnits": 240,
+      "groundTruth": {
+        "role": "familiar-subject-near-miss",
+        "negativeSubjectFor": "negative-4",
+        "familiarSubject": "月苔"
+      },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
-      "bodyBytes": 582,
-      "bodySha256": "ccdbbf9fa55723ae7aed81a0f279d502a5b8310ea6b1d509d0d6d78aec037541",
+      "bodyBytes": 676,
+      "bodySha256": "1262a20f8a407ef654ec92768cb39df224044a8f5d30ad59f8bdd97d11b47071",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -95461,19 +95544,25 @@
       "id": "9b02bd13-b300-40e4-9856-528863c7b61b",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "霧棱計畫 cohort 2 memory 41。 交由琥珀閘序列化。",
+      "truth": "霧棱計畫 cohort 2 memory 41。 併發寫入交由琥珀閘序列化。",
       "expectedUnits": 240,
       "groundTruth": {
         "topic": "concurrent-write-policy",
         "adopted": true,
         "adoptionStatus": "adopted",
-        "zeroOverlapQuestion": "多人一起寫會怎樣"
+        "zeroOverlapQuestion": "mist-prism 多人一起寫會怎樣",
+        "zeroOverlapLanguage": "zh-en",
+        "zeroOverlapScope": {
+          "namespaceIndex": 1,
+          "artifact": "concurrent-writing",
+          "explanation": "The explicit mist-prism project scopes this question to its concurrency policy; the WAL rationale in moss-chord is a different project."
+        }
       },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
       "bodyBytes": 680,
-      "bodySha256": "e34573eb68187515d7774b2952b19ce815884ecb5055752776e6189ac7ebe50f",
+      "bodySha256": "cde81a0df01a8614bd7891588949737b1fb403a179abfda731264c762c285b90",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -95837,7 +95926,19 @@
         "topic": "maintenance-cadence",
         "adopted": true,
         "adoptionStatus": "adopted",
-        "productTermQuestion": "苔弦 cron 多久叫醒背景泵"
+        "productTermQuestion": "苔弦 cron 多久續租，背景泵多久嘗試一個量子？",
+        "productTermAnswerParts": [
+          {
+            "subject": "cron lease renewal",
+            "intervalMs": 60000,
+            "statement": "cron 每分鐘續租"
+          },
+          {
+            "subject": "background pump quantum attempt",
+            "intervalMs": 100,
+            "statement": "背景泵每一百毫秒嘗試一個量子"
+          }
+        ]
       },
       "submittedLeadingWhitespace": true,
       "currentness": "current",
@@ -97985,13 +98086,18 @@
       "id": "d1e75649-8a14-4275-b983-3b33202f4827",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "霧棱計畫 cohort 2 memory 110。 合成觀測第110格:石芽樣片在第25輪通過尺寸核對。架空の石芽試片の寸法確認。Synthetic StoneBud sample dimension check.",
+      "truth": "霧棱計畫 cohort 2 memory 110。 砂羽驗收以樣本核對為主,逐張確認量測表。砂羽検収で標本の照合を行う。",
       "expectedUnits": 240,
+      "groundTruth": {
+        "role": "familiar-subject-near-miss",
+        "negativeSubjectFor": "negative-5",
+        "familiarSubject": "砂羽"
+      },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
-      "bodyBytes": 582,
-      "bodySha256": "859014ebf4d4a23b4f958f0231494583ac4ca252b4c269691aea6088cff722f8",
+      "bodyBytes": 676,
+      "bodySha256": "b86a18ae0d83d70a6f4cfd1c4a7880f76e8c5ec6088b3c0b2fad3b170a55345d",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -108444,13 +108550,18 @@
       "id": "5e4a0642-e1a3-4bbb-8758-ae4b6bd864eb",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "苔弦計畫 cohort 2 memory 110。 合成觀測第110格:石芽樣片在第25輪通過尺寸核對。架空の石芽試片の寸法確認。Synthetic StoneBud sample dimension check.",
+      "truth": "苔弦計畫 cohort 2 memory 110。 霧鈴卡片記錄預備額度的分配,按格位核對可用量。霧鈴カードの予備枠を整理する。",
       "expectedUnits": 240,
+      "groundTruth": {
+        "role": "familiar-subject-near-miss",
+        "negativeSubjectFor": "negative-6",
+        "familiarSubject": "霧鈴"
+      },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
-      "bodyBytes": 582,
-      "bodySha256": "61ada7fa41034531b9068daf499cf136bab7f4be0a55f660fd628a37ebdef155",
+      "bodyBytes": 676,
+      "bodySha256": "72656852189d06be536959c0a55bb461f4016884bf73e7b263592dea3158aa27",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -116374,19 +116485,25 @@
       "id": "78755e6a-c697-4037-8076-64e2119d3306",
       "revision": 2,
       "bodyRevision": 0,
-      "truth": "砂環計畫 cohort 2 memory 41。 輸出銀紋封套。",
+      "truth": "砂環計畫 cohort 2 memory 41。 主程式輸出銀紋封套。",
       "expectedUnits": 240,
       "groundTruth": {
         "topic": "package-format",
         "adopted": true,
         "adoptionStatus": "adopted",
-        "zeroOverlapQuestion": "打包出去長什麼樣"
+        "zeroOverlapQuestion": "sand-orbit 本體打包出去長什麼樣",
+        "zeroOverlapLanguage": "zh-en",
+        "zeroOverlapScope": {
+          "namespaceIndex": 3,
+          "artifact": "main-program-package",
+          "explanation": "The question asks about the main program artifact in sand-orbit. The separate 藍穗 export decision concerns a different artifact."
+        }
       },
       "submittedLeadingWhitespace": false,
       "currentness": "current",
       "bodyUnits": 240,
       "bodyBytes": 680,
-      "bodySha256": "045cfa49110426c7bf15a20095d1e426174854462f9f697370c0c69976b3e518",
+      "bodySha256": "4a6a0490e62487b435cb4c18ea39d2fa21c113034a7e10f48f2f123e28b9b71a",
       "storedLeadingWhitespace": false,
       "hasZWJ": false,
       "hasCombiningMark": false,
@@ -129957,5 +130074,5 @@
       "replacement": "c2/n3/m277"
     }
   ],
-  "logicalSha256": "e24c1c268063bea7fe5f38cf7c1da29bb824a0dca9f509e56f1b48d2cacf6a1e"
+  "logicalSha256": "7249264a77be99abeac738c7b24684ff5e3edecdcac6b8874b585182544bc93c"
 }
