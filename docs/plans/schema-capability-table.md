@@ -139,9 +139,9 @@ all processes before filesystem backup (`packaging/README.md:209`).
 | Interactive approval examples | `review-card` uses controlling-terminal confirmation bound to ID/revision (and optional applicability/dependencies). `methods import` and asset import show `storeUpgrade` before approving and opening the older store for upgrade. Method phrase is `IMPORT METHOD ACTION_ID`; asset phrase `IMPORT ASSET ACTION_ID`. They are operation-specific approvals, not a general migration command. Ordinary `review-card` opens/upgrades before the confirmation prompt, so it is not a migration-approval barrier. | `adapters/mcp/cli.mjs:65`, `adapters/mcp/review-card.mjs:90`, `adapters/mcp/review-card.mjs:130`, `adapters/mcp/review-card.mjs:170`, `adapters/mcp/method-package-command.mjs:140`, `adapters/mcp/method-package-command.mjs:161`, `adapters/mcp/asset-command.mjs:48`, `adapters/mcp/asset-command.mjs:84` |
 | `--check-config` | Syntax/configuration only, no database open; cannot attest backup, schema readiness or integrity. | `adapters/mcp/cli.mjs:161`, `adapters/mcp/cli.mjs:298`, `adapters/mcp/context-read-command.mjs:10` |
 | `context refresh` | Sidecar maintenance command, existing rollback-journal store, pinned noncreating identity. Prints an envelope, exit 1 for failure; rebuilding/partial is not completed coverage. Not canonical migration or a backup. | `adapters/mcp/context-read-command.mjs:20`, `adapters/mcp/context-read-command.mjs:27`, `docs/context-read-local.md:188` |
-| Backup today | Documented **stopped-store filesystem copy** including remaining WAL/SHM; no live consistent database-backup subcommand is dispatched by the shipped CLI. Model `verify` verifies an embedding pack, not SQLite. | `packaging/README.md:207`, `adapters/mcp/cli.mjs:283`, `adapters/mcp/cli.mjs:29` |
+| Backup today | Documented **stopped-store filesystem copy** including remaining WAL/SHM; no live consistent database-backup subcommand is dispatched by the shipped CLI. The offline measurement also uses the available low-level `node:sqlite.backup` API on Node 22.16.0; this is a SQLite primitive, not a shipped engine command. Model `verify` verifies an embedding pack, not SQLite. | `packaging/README.md:207`, `adapters/mcp/cli.mjs:283`, `adapters/mcp/cli.mjs:29`, `tools/testing/measure-schema-migration.mjs:11`, `tools/testing/measure-schema-migration.mjs:49` |
 | Verification today | Embedded validators check schema, identity and selected integrity constraints; role/current validators and the context sidecar include quick/foreign-key checks. Topic validation deliberately omits full unrelated Card/Raw attestation. No production count/integrity/readability-report command is dispatched. | `core/existing-store.mjs:85`, `core/role-profile-schema.mjs:115`, `core/card-current-schema.mjs:73`, `core/context-read-sidecar.mjs:209`, `core/read-database.mjs:38`, `adapters/mcp/cli.mjs:283` |
-| Dry-run/timing today | Synthetic E1-C helper can physically create v18; current WAL measurement migrates synthetic v18 to v33 via the internal opener. Neither is a live production backup/dry-run command or migration-time estimate. The optional script below measures the public constructor on closed copies. | `core/testing/topic-overview-raw29-fixture.mjs:24`, `tools/testing/measure-topic-overview-contention.mjs:112`, `tools/testing/measure-topic-reader-wal.mjs:293`, `tools/testing/measure-schema-migration.mjs:1` |
+| Dry-run/timing today | Synthetic E1-C helper can physically create v18; current WAL measurement migrates synthetic v18 to v33 via the internal opener. Neither is a live production backup/dry-run command or migration-time estimate. The optional script below measures a stopped-store SQLite backup, existing SQL precheck, public constructor migration and verification on isolated copies. | `core/testing/topic-overview-raw29-fixture.mjs:24`, `tools/testing/measure-topic-overview-contention.mjs:112`, `tools/testing/measure-topic-reader-wal.mjs:293`, `tools/testing/measure-schema-migration.mjs:1` |
 
 ## Proposed engine-owned package (not implemented commands)
 
@@ -192,9 +192,32 @@ generic SQL escape hatch, or silently migrate to “latest”.
 | Apply and approval | Require backup/check reports whose store, engine build, source schema, target, plan digest and maintenance checkpoint match. `--approve-plan` is an operator attestation, not a Card data authority token or secret. Reject stale/mismatched plans. Use a noncreating, WAL-capable identity fence and revalidate under the migration transaction; today's DELETE-only `storeFence` needs extension or a separately reviewed equivalent. Run the existing installers atomically. No data authoring/capture/role activation as a side effect. |
 | Deadline / failure state | The deadline covers open, lock acquisition, migration and cleanup. A synchronous native migration needs a supported execution/interrupt arrangement; a timer alone is insufficient. Before commit, roll back on failure and report confirmed source schema. If commit outcome or durability is uncertain, report `manual_recovery_required`, forbid automatic retry and inspect the file with all writers stopped. A post-commit verify failure is not reported as rollback. |
 | Post-migration verification | Full `PRAGMA integrity_check` must return only `ok`; `foreign_key_check` must return zero rows. Match application/store identity, exact target schema and expected DDL/guards. Compare **all pre-existing table counts and deterministic row commitments**, including tombstones, suppression, historical transitions, receipts, MOCs, placements, staged/episode/index state; enumerate permitted installer transformations separately. Check newly introduced feature tables against their expected empty/initialized state. Do not compare only live Memory totals. |
-| Readability | In every namespace, paginate topic overview and members to exact EOF and compare totals/members with baseline. Refetch all retained Memories/receipts with canonical `get/list` on the isolated copy and compare revisions/state/content internally; emit no prose. Exercise private Card capability/read paths with exact host read authority and empty expected Card results on v18-derived stores. Rebuild/refresh sidecar projections explicitly on a copy or approved maintenance handle, then find/fetch/assemble Memory and Card candidates. Empty Card data is a supported-type test, not proof of a nonempty Card lifecycle; use a separate synthetic canary for that. Report unsupported WAL/read-only context combination as a blocker, not as a successful zero-result search. |
+| Readability | In every namespace, paginate topic overview and members to exact EOF and compare totals/members with baseline. Refetch every nondeleted Memory and all of its receipt pages on the isolated copy using the visibility protocol below; compare revisions/state/content internally and emit no prose. Tombstones require raw commitments plus API invisibility, not successful `get` results. Exercise private Card capability/read paths with exact host read authority and empty expected Card results on v18-derived stores. Rebuild/refresh sidecar projections explicitly on a copy or approved maintenance handle, then find/fetch/assemble Memory and Card candidates. Empty Card data is a supported-type test, not proof of a nonempty Card lifecycle; use a separate synthetic canary for that. Report unsupported WAL/read-only context combination as a blocker, not as a successful zero-result search. |
 | Verify side effects | Baseline verification is read-only. Any sidecar rebuild/refresh is a separately named phase requiring explicit maintenance authority and a writable derived store. In-process engine `get/list` may need a non-migrating validated facade or a verified isolated copy; do not describe the ordinary writable opener as read-only verification. Do not invoke correction, forget, draft or confirmation on production as smoke tests. |
 | Structured outputs and supervision | Versioned JSON envelope with command/run ID, engine/runtime/SQLite, start/end UTC, elapsed phase times, source/target schema, journal, recovery-point ID, backup/check/plan digests, bytes, count comparisons, integrity/readability results and `complete/failed/partial/manual_recovery_required`. Progress records go to stderr with phase and numeric counters. Final report persists even on failure. Operator/runner waits for real exit, detects lost progress using actual phase/activity and deadlines, and surfaces failure/completion; detached processes and log files alone do not constitute monitoring. |
+
+Canonical verification must account for the actual public visibility rules:
+
+- Open the already validated isolated copy with
+  `openMemoryCore({path,decisionReview:'required-v1'})`. For each namespace,
+  exhaust both `list({namespace,states:['active','historical'],...})` and the
+  separate `list({namespace,states:['active','historical'],reviewState:'awaiting',...})`
+  traversal. Compare their exact ID sets with the nondeleted baseline partitions.
+  Default listing excludes awaiting rows; it is not an inventory of all stored
+  Memories (`core/contract.mjs:350`, `core/runtime.mjs:405`).
+- Use `get({namespace,memoryId,includeAwaiting:true,receiptLimit,...})` for every
+  nondeleted row. Keep `includeAwaiting` and `receiptLimit` fixed while following
+  `nextReceiptCursor` as `receiptCursor` until `exhausted:true` and a null cursor.
+  Compare every retained receipt's identity, attribution, canonical excerpt and
+  timestamp, plus body/revision/state/filing metadata. An awaiting row must also
+  fail ordinary `get` without `includeAwaiting` as `memory_not_found`
+  (`core/contract.mjs:375`, `core/runtime.mjs:431`).
+- Verify **every stored tombstone** through the original-table counts and raw
+  content commitments, including its stored fields and suppression effects.
+  Separately require absence from both listing partitions and `memory_not_found`
+  from `get`, both with and without `includeAwaiting:true`. Public `get/list`
+  exclude `deleted=1`; API invisibility does not replace checking retained stored
+  data (`core/runtime.mjs:413`, `core/runtime.mjs:438`, `core/runtime.mjs:288`).
 
 Proposed common exit codes:
 
@@ -214,89 +237,170 @@ restore under maintenance, not reopening the migrated file with `7467aeb`.
 The final backup recovery point must include all accepted pre-cutover writes;
 an earlier live rehearsal backup is not the final rollback baseline.
 
-## Offline timing observation
+## Offline timing observation — Revision 1
 
 Run: `node tools/testing/measure-schema-migration.mjs`, **exit 0**, on
-Node **22.16.0**, Linux x64, SQLite **3.49.1**. The script accepts no paths or
-arguments, creates only its own owned scratch workspace and removes it after
-completion (`tools/testing/measure-schema-migration.mjs:16`,
-`tools/testing/measure-schema-migration.mjs:36`,
-`tools/testing/measure-schema-migration.mjs:99`). Recorded observations:
+Node **22.16.0**, Linux x64, SQLite **3.49.1**. This replaces the earlier
+migration-only timing with `synthetic-schema-migration-timing-v2`. No Node
+24.15.0 timing or compatibility result is claimed by this run. The script
+accepts no paths/arguments, creates its own owned scratch workspace and removes
+it after completion (`tools/testing/measure-schema-migration.mjs:18`,
+`tools/testing/measure-schema-migration.mjs:135`,
+`tools/testing/measure-schema-migration.mjs:169`,
+`tools/testing/measure-schema-migration.mjs:223`).
 
-| Target / independent copy | Public migration wall time (ms) | Main file before (bytes) | Main file after (bytes) |
+| Target / independent backup copy | (a) Backup (ms) | (b) Precheck (ms) | (c) Migration (ms) | (d) Verification (ms) | Total wall (ms) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| v23 / 1 | 70.113 | 7.475 | 33.668 | 709.174 | 820.751 |
+| v23 / 2 | 61.942 | 8.359 | 32.927 | 687.577 | 791.143 |
+| v23 / 3 | 59.006 | 7.966 | 33.378 | 629.592 | 730.254 |
+| v33 / 1 | 64.715 | 7.336 | 66.657 | 729.242 | 868.235 |
+| v33 / 2 | 52.291 | 8.292 | 65.070 | 760.196 | 886.119 |
+| v33 / 3 | 69.897 | 7.833 | 76.562 | 722.399 | 876.969 |
+
+The numbers above retain all three independent trials per target from the
+script's `trials` records. All four steps are measured in the same warm process;
+seeding, untimed canaries and the original source baseline/hash inventory are
+outside the timed window. Total wall runs from immediately before backup until
+verification finishes. The sum of the four phase times is also retained as
+`stepSumMs` in JSON; total wall additionally includes **0.270–0.338 ms** per
+trial of phase handoff/progress-report overhead, so displayed phase sums need
+not equal total wall exactly (`tools/testing/measure-schema-migration.mjs:175`,
+`tools/testing/measure-schema-migration.mjs:184`,
+`tools/testing/measure-schema-migration.mjs:213`).
+
+| Target | Median backup (ms) | Median precheck (ms) | Median migration (ms) | Median verification (ms) | Median total wall (ms) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| v23 | 61.942 | 7.966 | 33.378 | 687.577 | 791.143 |
+| v33 | 64.715 | 7.833 | 66.657 | 729.242 | 876.969 |
+
+Each phase median is calculated independently; median total is the median of
+the three observed total wall times, not a sum of independent medians.
+
+| Target (same sizes in all three trials) | Source v18 (bytes) | Backup before migration (bytes) | Migrated file (bytes) |
 | --- | ---: | ---: | ---: |
-| v23 / 1 | 35.858 | 7,512,064 | 7,688,192 |
-| v23 / 2 | 38.337 | 7,512,064 | 7,688,192 |
-| v23 / 3 | 41.658 | 7,512,064 | 7,688,192 |
-| v33 / 1 | 75.189 | 7,512,064 | 8,388,608 |
-| v33 / 2 | 62.857 | 7,512,064 | 8,388,608 |
-| v33 / 3 | 66.857 | 7,512,064 | 8,388,608 |
+| v23 | 7,516,160 | 7,516,160 | 7,692,288 |
+| v33 | 7,516,160 | 7,516,160 | 8,392,704 |
 
-The table is the retained numeric result of the script's `trials` records;
-wall time brackets public construction and synchronous close, with
-modules already loaded, and excludes seeding, copying and verification
-(`tools/testing/measure-schema-migration.mjs:63`,
-`tools/testing/measure-schema-migration.mjs:67`,
-`tools/testing/measure-schema-migration.mjs:74`,
-`tools/testing/measure-schema-migration.mjs:92`). Median/range: **38.337 ms /
-35.858–41.658 ms** to v23; **66.857 ms / 62.857–75.189 ms** to v33, derived
-from the three observations per target. These are warm-process runs on fresh
-file copies, not independent cold-process or cold-disk samples.
+These sizes are observations of this fresh synthetic seed and its six copies,
+recorded before backup, immediately after backup and after verification
+(`tools/testing/measure-schema-migration.mjs:174`,
+`tools/testing/measure-schema-migration.mjs:187`,
+`tools/testing/measure-schema-migration.mjs:216`).
+
+### What each step measures
+
+- **(a) Consistent backup of the stopped store:** the script first confirms
+  that the closed DELETE-mode source has no journal/WAL/SHM companions. It opens
+  that existing source read-only, calls **`await backup(db,destination)` from
+  `node:sqlite`**, closes the source connection and sets the new destination to
+  0600 inside its owned private workspace. This is SQLite's available low-level
+  backup primitive, not an engine backup CLI. Each destination is a fresh
+  rehearsal copy; it is then migrated, rather than retained as a separate
+  rollback archive (`tools/testing/measure-schema-migration.mjs:11`,
+  `tools/testing/measure-schema-migration.mjs:49`,
+  `tools/testing/measure-schema-migration.mjs:182`).
+- **(b) Existing SQL precheck:** native read-only transaction, full
+  `PRAGMA integrity_check`, zero `foreign_key_check` rows, application ID
+  `0x43414952`, `user_version=18`, unchanged DELETE mode, exact original table
+  inventory and all original table counts. This phase uses existing SQLite
+  checks rather than the proposed engine `store check` command; it does not
+  compute content hashes or public-API reads (`tools/testing/measure-schema-migration.mjs:25`,
+  `tools/testing/measure-schema-migration.mjs:56`,
+  `tools/testing/measure-schema-migration.mjs:189`).
+- **(c) Migration:** public `openMemoryCore(options)` and synchronous close,
+  with modules already loaded. v23 selects private Cards; v33 additionally
+  selects current dependencies and method-package options, using the engine's
+  synthetic authority helper. No Card data operation is approved/performed
+  (`tools/testing/measure-schema-migration.mjs:178`,
+  `tools/testing/measure-schema-migration.mjs:196`,
+  `core/testing/raw-source-fixtures.mjs:8`).
+- **(d) Post-migration verification:** exact target/application ID/mode, full
+  integrity/foreign-key checks and equal counts plus deterministic content
+  hashes for **all 43 original non-internal tables**. Public readability uses
+  `decisionReview:'required-v1'`, exhausts ordinary and awaiting listings with
+  both active/historical states, and refetches every nondeleted Memory with
+  `includeAwaiting:true`. It follows every receipt cursor to exhaustion with
+  `receiptLimit:1`, comparing every canonical receipt and body/revision/state
+  metadata. Tombstone invisibility is checked by both listing partitions and
+  ordinary/awaiting `get` refusals; stored tombstones remain covered by raw
+  commitments. Each namespace also gets a public overview read with a matching
+  owner, including Worker construction/close. A second raw inspection confirms
+  that public verification preserved every original table, and no companions
+  remain on the closed trial copy (`tools/testing/measure-schema-migration.mjs:25`,
+  `tools/testing/measure-schema-migration.mjs:61`,
+  `tools/testing/measure-schema-migration.mjs:201`).
+
+On each of the six timed copies, verification read **1,112 Memories and 1,112
+retained receipts over 1,112 receipt pages**; these particular fixtures have
+**zero awaiting, historical or tombstoned Memories**. The nonempty visibility
+branches are therefore covered by a separate **untimed synthetic canary**:
+one awaiting Memory, one historical Memory with three receipts, one active
+replacement and one tombstone. The same verifier read three nondeleted Memories
+and five retained receipts over five pages, asserted default awaiting
+invisibility, exact list partitions, historical readability, tombstone
+invisibility and unchanged raw data (`tools/testing/measure-schema-migration.mjs:61`,
+`tools/testing/measure-schema-migration.mjs:101`,
+`tools/testing/measure-schema-migration.mjs:137`,
+`tools/testing/measure-schema-migration.mjs:217`).
+
+**WAL behavior of the chosen backup method:** an additional untimed synthetic
+probe held a WAL writer with an uncommitted second row while backing up through
+an independent read-only connection. The backup contained the committed first
+row from the still-present WAL, excluded the uncommitted row, and left the
+source in WAL mode. No source checkpoint or journal-mode change was requested
+by the backup helper. This demonstrates logical committed-data snapshot behavior
+on this runtime, rather than a filesystem copy of main/WAL/SHM. It is **not** a
+WAL timing cell or production live-backup qualification; timed migration trials
+remain DELETE only (`tools/testing/measure-schema-migration.mjs:49`,
+`tools/testing/measure-schema-migration.mjs:122`,
+`tools/testing/measure-schema-migration.mjs:138`). The shipped operational guidance
+still prescribes stopping all processes before filesystem copies including
+remaining sidecars. The new engine-owned live backup package above still needs
+bounded waiting, failure handling, protected archive publication/durability and
+operator qualification (`packaging/README.md:209`).
+
+### Fixture shape and supplied versus retained payload
 
 This is a **real physical v18 fixture**, created through E1-C's `seedStore`
 and `installOverviewLayout(...,18)`, which uses the baseline engine schema path
 and asserts v18 before any later installer. It is not v33 relabeled as v18
 (`tools/testing/measure-topic-overview-contention.mjs:112`,
-`core/testing/topic-overview-raw29-fixture.mjs:24`). The fixture contains 1,112
-Memories, four namespaces **across two synthetic owners**, and 71 MOCs. To
-approximate payload size, the script leaves the MOC title-support Memories
-intact and uses public correction to give the remaining **1,045** Memories a
-3,500-unit synthetic ASCII body and matching retained receipt. No arbitrary
-padding tables/pages are added (`tools/testing/measure-topic-overview-contention.mjs:58`,
-`tools/testing/measure-schema-migration.mjs:37`,
-`tools/testing/measure-schema-migration.mjs:59`).
+`core/testing/topic-overview-raw29-fixture.mjs:24`). It has 1,112 Memories, four
+namespaces **across two synthetic owners**, and 71 MOCs. MOC title-support
+Memories remain intact; the other **1,045** Memories receive public correction
+with synthetic ASCII payloads (`tools/testing/measure-topic-overview-contention.mjs:58`,
+`tools/testing/measure-schema-migration.mjs:142`,
+`tools/testing/measure-schema-migration.mjs:161`).
 
-Each target uses three independent copies of that same closed DELETE-mode
-source. v23 uses the actual private Card options; v33 additionally uses
-`currentDependencies` plus method-package options, with the engine's synthetic
-host authority helper. No Card data operation is approved or performed
-(`tools/testing/measure-schema-migration.mjs:67`,
-`core/testing/raw-source-fixtures.mjs:8`). On every copy the script checked exact
-target/mode, full integrity, zero foreign-key violations, and equal row counts
-and row hashes for **all 43 original non-internal tables**. It then refetched
-all 1,112 Memories and compared content/revision, read overview in each of the
-four namespaces using its matching owner, and checked that the closed copy had
-no journal/WAL/SHM companions. Source data and physical v18 were rechecked at
-completion (`tools/testing/measure-schema-migration.mjs:20`,
-`tools/testing/measure-schema-migration.mjs:78`,
-`tools/testing/measure-schema-migration.mjs:81`,
-`tools/testing/measure-schema-migration.mjs:86`,
-`tools/testing/measure-schema-migration.mjs:96`). This does **not** constitute
-full proposed runbook verification: it does not rebuild/query the context
-sidecar, exercise nonempty Cards, page through all topic members, or certify
-WAL production behavior.
+For each of those 1,045 corrections, the **supplied body is 3,500 UTF-16 units
+and the supplied receipt excerpt is also 3,500 units**, because the script passes
+the body as `receipt.excerpt`. The **retained body is 3,500 units, but the
+retained receipt excerpt is 800 units**: `contractReceipt` applies the 800-unit
+truncating `boundedText` path. The script asserts both retained lengths and
+reports all four supplied/retained length fields separately. “Matching receipt”
+means the same supplied source, not equal retained body/excerpt sizes
+(`core/contract.mjs:93`, `core/validation.mjs:37`,
+`tools/testing/measure-schema-migration.mjs:154`,
+`tools/testing/measure-schema-migration.mjs:166`). No arbitrary padding tables
+or pages are added. Source data and physical v18 are rechecked after all trials
+(`tools/testing/measure-schema-migration.mjs:220`).
 
-The source was **7.51 MB decimal (7.16 MiB), smaller than the supplied roughly
-10 MB production file**. It matches the requested Memory/namespace counts, not
-production payload distribution, schema-object provenance, tombstone/history
-mix, storage latency or runtime. The useful preliminary estimate is therefore
-**tens of milliseconds for the migration constructor at this nearby synthetic
-scale**, with no supported numeric bound for the actual 10 MB production file.
-Do not linearly scale these measurements or use them as the maintenance window:
-live backup, writer drain, actual-store copy rehearsal, verification and sidecar
-maintenance need separate measurements. Production scheduling requires the
-engine-owned dry-run package above and a rehearsal with the exact deployment
-engine/runtime/filesystem.
+The source is **7.52 MB decimal (7.17 MiB), smaller than the supplied roughly
+10 MB production file**. These are synthetic, warm-process observations on
+fresh DELETE-mode backup copies, not cold-process/cold-disk samples or a
+production downtime claim. They match the requested Memory/namespace counts,
+not production payload distribution, schema-object provenance, visibility mix,
+filesystem latency, runtime or concurrent load. Do not linearly scale the data
+or use these totals as the maintenance window: writer drain, durable backup
+archive publication, actual-store rehearsal, full runbook verification and
+sidecar maintenance need separate qualification. The timed verifier does not
+rebuild/query the context sidecar, exercise nonempty Cards or paginate all topic
+members; those remain part of the proposed production verification package.
 
-An initial measurement attempt exited **1** at the harness's overview check:
-it incorrectly reused one owner-bound reader across both synthetic owners.
-After selecting a matching owner per namespace, the complete six-trial run
-exited **0**. No measurements from the failed attempt are included. This is a
-harness correction, not an engine compatibility failure
-(`core/topic-overview-input.mjs:29`,
-`tools/testing/measure-schema-migration.mjs:86`). Syntax checking the final
-script (`node --check`) exited **0**. No broad suites or production access were
-used.
+The complete revised run and both untimed canaries exited **0**. The final
+script syntax check (`node --check`) exited **0**. No broad suites, network,
+provider keys or production access were used.
 
 ## Open decisions and delivery boundary
 
