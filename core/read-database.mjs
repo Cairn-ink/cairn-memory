@@ -5,6 +5,7 @@ import { validateExistingStore } from './existing-store.mjs';
 import { lstatSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { APPLICATION_ID, READ_SCHEMA_VERSIONS, CONTEXT_READ_SCHEMA_VERSIONS, readTransaction } from './database.mjs';
+import { topicJournalMode, recordSqliteFailure } from './topic-reader-sqlite.mjs';
 import { fail } from './validation.mjs';
 
 function identity(path) {
@@ -18,12 +19,17 @@ function identity(path) {
   }
   return stat;
 }
-export function openReadDatabase(path, { contextRead = false, topicMembers = false, deferTopicValidation = false, preflight } = {}) {
+export function openReadDatabase(path, { contextRead = false, topicMembers = false, deferTopicValidation = false, topicPolicy, preflight } = {}) {
   const initial = identity(path);
   preflight?.();
-  const db = new DatabaseSync(path, { readOnly: true });
+  const wal = topicPolicy ? topicJournalMode(path, initial) === 'WAL' : false;
+  let native;
+  try { native = new DatabaseSync(path, { readOnly: true }); }
+  catch (error) { throw recordSqliteFailure(error, 'open', 'connection'); }
+  const db = topicPolicy ? topicPolicy.database(native, wal) : native;
   try {
-    db.exec(`PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=${contextRead ? 5000 : 0};`);
+    try { native.exec(`PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=${contextRead ? 5000 : 0};`); }
+    catch (error) { throw recordSqliteFailure(error, 'configure', 'reader_configuration'); }
     const current = identity(path);
     if (initial.dev !== current.dev || initial.ino !== current.ino) fail('unsafe_database_file');
     const validate = () => {

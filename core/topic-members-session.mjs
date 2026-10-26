@@ -1,3 +1,4 @@
+import { unsupportedTopicStorage } from './topic-reader-sqlite.mjs';
 import { lstatSync } from 'node:fs';
 import { openReadDatabase } from './read-database.mjs';
 import { APPLICATION_ID, READ_SCHEMA_VERSIONS } from './database.mjs';
@@ -13,7 +14,7 @@ const configuration = db => ({ version: db.prepare('PRAGMA user_version').get().
 
 /** The native handle is lazy; all opening queries run after the caller installs
  * its work meter. The full schema walk resumes from acknowledged traversal data. */
-export function createTopicSession(path) {
+export function createTopicSession(path, topicPolicy) {
   let connection, schema, opening, overview, members, dirty = false;
   function dispose() {
     connection?.db.close(); connection = opening = overview = members = undefined; dirty = false;
@@ -37,7 +38,7 @@ export function createTopicSession(path) {
     // One bounded native/file setup step; one group of four header validations;
     // two groups of <=4 indexed seek-plan validations. No index-list scan.
     charge(1);
-    const opened = openReadDatabase(path, { topicMembers: true, deferTopicValidation: true });
+    const opened = openReadDatabase(path, { topicMembers: true, deferTopicValidation: true, topicPolicy });
     try {
       charge(1);
       schema = configuration(opened.db);
@@ -62,7 +63,7 @@ export function createTopicSession(path) {
       connection = opened;
     } catch (error) {
       opened.db.close();
-      if (error.code === 'ERR_SQLITE_ERROR' && ![5,6].includes(error.errcode & 255)) fail('unsupported_database');
+      if (error.code === 'ERR_SQLITE_ERROR' && ![5,6].includes(error.errcode & 255)) throw unsupportedTopicStorage(error);
       throw error;
     }
   }

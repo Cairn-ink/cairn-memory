@@ -29,8 +29,10 @@ try {
 
 The constructor validates own-data options synchronously and opens no file or
 Worker. The first asynchronous read opens an existing permission-safe regular
-file with native `readOnly`, `query_only`, `trusted_schema=OFF` and zero busy
-timeout. It rejects symlinks, missing files, unsupported application/layouts and
+file with native `readOnly`, `query_only` and `trusted_schema=OFF`. DELETE
+keeps a zero busy timeout. WAL uses one Worker-owned native lock-wait budget of
+at most 100ms per request, capped by the remaining request deadline; each
+prepare/execution refreshes the remaining budget, including opening and fences. It rejects symlinks, missing files, unsupported application/layouts and
 missing or malformed required indexes. Supported existing schemas are exactly
 18, 20, 21, 22, 23, 29, 30, 31, 32 and 33; intermediate Raw layouts 24–28 are not accepted.
 It never creates, migrates or changes journal mode. Validation covers consumed
@@ -228,7 +230,8 @@ opt-in overview and restart. Changed placement invalidates even when a Memory
 revision is unchanged. Close, idle expiry, Worker restart and file replacement
 also invalidate tokens. Missing/foreign/Card MOCs return `moc_not_found`;
 visible revision mismatches return `revision_conflict`, wrong levels `invalid_ref`.
-Failures contain only `{ok:false,error:{code}}`.
+Default failures contain only `{ok:false,error:{code}}`. The explicit
+`diagnostics:true` reader option adds the storage metadata described below.
 
 Member reads use the existing read-only opener and E1-C lock policy without
 another retry layer. Lock refusal is `storage_busy`; deadline cancellation is
@@ -266,3 +269,78 @@ requests retain their specified error codes and storage-busy behavior.
 Cached member replay must finish its fence and delivery checks within the
 call deadline. A call that cannot advance a checkpoint before its deadline
 returns `read_timeout` instead of minting another unchanged deadline cursor.
+
+
+## E1-C2 v1: opt-in storage diagnostics and WAL waits
+
+Use `openMemoryReader({ path, ownerId, diagnostics: true })` to attach
+`error.diagnostics` to native SQLite failures. This handle-level boolean covers
+both overview modes and members, including connection opening, and travels in
+Worker data; environment variables and `execArgv` are unnecessary. Omission,
+`false` and `undefined` retain the exact existing serialized error envelopes.
+Successful pages and validation/deadline/close errors gain no fields.
+
+```js
+{ ok: false, error: { code: 'storage_busy', diagnostics: {
+  stage: 'execute', statement: 'application_id',
+  sqlite: { code: 5, extendedCode: 5 }
+} } }
+```
+
+`stage` is one of `open`, `configure`, `prepare`, `execute`, `begin`, `commit`,
+`rollback`, `close`. `statement` is one of `connection`,
+`reader_configuration`, `application_id`, `user_version`, `schema_version`,
+`encoding`, `schema_metadata`, `snapshot_metadata`, `topic_metadata`,
+`transaction`. Codes are numeric: `code` is SQLite's primary byte and
+`extendedCode` is its original extended result code. No SQL text, native
+messages, paths, identifiers, owner/namespace values or content are emitted.
+Existing legacy statement-construction classification stays unchanged.
+
+The WAL budget is shared across the request, never restarted per statement or
+transaction. Native SQLite BUSY remains `storage_busy` when the permitted wait
+runs out; the existing host watchdog/Worker termination still returns
+`read_timeout` if cancellation wins. `close()` also terminates a waiting Worker.
+There is no application retry or sleep and no host-thread SQLite wait.
+DELETE gains no wait. Context reads and candidate evidence are unaffected.
+
+Before native SQLite access, the reader requires the complete 100-byte main-file header:
+SQLite format-3 signature and read/write version bytes 18/19 equal to 2/2 select
+WAL; every other header keeps zero wait and normal SQLite validation. The file
+is opened read-only without following a final symlink and checked against the
+safe-file device/inode. This avoids a journal-mode PRAGMA requiring the very
+lock being diagnosed. No mode is changed, no `immutable` connection is used,
+and schema18 needs no migration. Concurrent external journal-mode switching
+is not supported by this per-connection detection; normal writers keep the
+mode fixed.
+
+`npm run measure:topic-reader-wal -- --smoke --report PATH` exercises fresh
+public readers against a separate-process retained or fresh writer, including
+physical schema18/current, WAL/DELETE, paired no-reader baselines and an
+instrumented zero-wait control. Full runs pre-register five 30s repetitions and
+all latency/throughput/loop gates in the script header. Smoke is observational;
+the primary runs full acceptance under the machine-wide queue.
+
+
+### E1-C2 review corrections and measurement protocol v2
+
+The native wrappers preserve statement constructor identity and absent iterator
+methods, so delegating-generator cancellation releases the cursor normally.
+Timeout-installation failures are labelled `configure/reader_configuration`;
+rollback refreshes the remaining WAL budget, including zero after expiry.
+
+Measurement protocol v2 counts diagnostic SQLite primary 5/6 independently of
+public classification, retains a separate public `storage_busy` counter, counts
+permitted `cursor_stale` separately, and fails unexpected reader outcomes.
+Every full WAL reader-load cell needs at least 20 write-overlapping reader
+attempts, 10 per-write-close-overlapping attempts for fresh writers, and 100
+successful native commits inside public write calls and the fixed window, in
+both cell and baseline. Insufficient exposure is `invalid`; no attempts are
+removed. Retained shutdown close never substitutes for fresh per-write close.
+These are fixed full-window minima; smoke remains observational.
+
+Every reader-load cell reports public-write-call latency p95/max separately
+from the full writer open/write/close lifecycle latency. Public-write p95 keeps
+the 250ms gate; max is reported without inventing a new threshold. The original
+0.90 throughput ratio remains a reported engine reference and is excluded from
+product acceptance. The WAL wait stays 100ms. The script header and saved
+protocol v2 pre-register these criteria before measurement.
