@@ -1,7 +1,38 @@
 // Synthetic HTTP only. No native fetch/network fallback.
 import { setTimeout as delay } from 'node:timers/promises';
+import fsPromises from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 const notify = (kind, details = {}) => process.send?.({ kind, ...details });
-let attempt = 0, firstSignal;
+// Observe entry at creation of the hook's timer, without moving or replacing it.
+// hrtime has a common monotonic origin across parent/child processes; IPC receipt
+// latency is therefore excluded from application-entry-to-close measurement.
+const originalTimeout = globalThis.setTimeout;
+let entryObserved = false;
+globalThis.setTimeout = function (callback, milliseconds, ...args) {
+  if (!entryObserved && milliseconds === 2500 && callback.name === 'expireRecall') {
+    entryObserved = true;
+    notify('application-entry', { monotonicMs: Number(process.hrtime.bigint()) / 1e6 });
+  }
+  return originalTimeout(callback, milliseconds, ...args);
+};
+const originalLink = fsPromises.link;
+let contentionObserved = false;
+fsPromises.link = async function (source, target) {
+  try { return await originalLink(source, target); }
+  catch (error) {
+    if (!contentionObserved && error.code === 'EEXIST' &&
+        String(target).startsWith(`${process.env.CLAUDE_PLUGIN_DATA}/hosted-quota/`) &&
+        String(target).endsWith('.json.lock')) {
+      contentionObserved = true;
+      notify('quota-lock-contended');
+    }
+    throw error;
+  }
+};
+syncBuiltinESMExports();
+const abortSource = signal => signal.reason?.message === 'recall_timeout' ? 'application'
+  : signal.reason?.name === 'TimeoutError' ? 'http' : 'other';
+let attempt = 0, firstSignal, firstLegacyPayload;
 const memory = { id: '12345678-1234-4234-8234-123456789abc', content: 'Synthetic remembered preference.',
   kind: 'fact', scope: 'personal', projectId: null, origin: 'explicit', confidence: 1,
   createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z', receipts: [{ client: 'claude-code',
@@ -11,12 +42,15 @@ globalThis.fetch = async (url, options) => {
   if (url === 'https://synthetic.invalid/api/memory/recall') {
     const number = ++attempt;
     firstSignal ??= options.signal;
+    const body = JSON.parse(options.body);
+    const { session_id, ...legacy } = body;
+    firstLegacyPayload ??= JSON.stringify(legacy);
     notify('recall-fetch', { attempt: number, sameSignal: options.signal === firstSignal,
-      hasSession: Object.hasOwn(JSON.parse(options.body), 'session_id') });
+      hasSession: Object.hasOwn(body, 'session_id'), sameLegacyPayload: JSON.stringify(legacy) === firstLegacyPayload });
     const mode = process.env.CAIRN_TEST_RECALL_REPLY;
     const milliseconds = mode === 'old-schema' ? number === 1 ? 1300 : 900 : Number(process.env.CAIRN_TEST_RECALL_DELAY);
     try { await delay(milliseconds, undefined, { signal: options.signal }); }
-    catch (error) { notify('recall-aborted', { attempt: number }); throw error; }
+    catch (error) { notify('recall-aborted', { attempt: number, source: abortSource(options.signal) }); throw error; }
     notify('recall-response', { attempt: number });
     if (mode === 'old-schema' && number === 1 || mode === 'other-400') return Response.json({ error: 'Invalid recall payload.',
       issues: [{ code: 'unrecognized_keys', keys: [mode === 'old-schema' ? 'session_id' : 'other'], path: [] }] }, { status: 400 });

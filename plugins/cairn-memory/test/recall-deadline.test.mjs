@@ -1,111 +1,74 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { spawn } from 'node:child_process';
 import fsPromises from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
 import { mkdir, writeFile, readdir, readFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { withFileLock } from '../lib/file-lock.mjs';
-import { hostedTargetId } from '../lib/http.mjs';
 import { setPaused, startIfActive, runIfActive } from '../lib/control-state.mjs';
 import { projectKey, clientProjectId, resolveClient } from '../lib/pairing.mjs';
 import { recordCredentialConfiguration } from '../lib/credential-state.mjs';
 
-const hook = fileURLToPath(new URL('../scripts/hook.mjs', import.meta.url));
-const preload = fileURLToPath(new URL('./fixtures/recall-deadline-preload.mjs', import.meta.url));
-async function invocation(t, { lockMs = 0, recallMs = 0, telemetry = false, stalledInput = false,
-  reply = 'valid', missingToken = false, onFetch } = {}) {
-  const workspace = createTestWorkspace(t, { prefix: 'recall-deadline-' });
-  const home = join(workspace.path, 'home'), root = join(home, 'data');
-  await mkdir(root, { recursive: true, mode: 0o700 });
-  await writeFile(join(root, 'project-key'), '12345678-1234-4234-8234-123456789abc\n', { mode: 0o600 });
-  let ready, unlock, releaseTimer;
-  const acquired = new Promise(resolve => ready = resolve), release = new Promise(resolve => unlock = resolve);
-  const holder = lockMs ? withFileLock(join(root, 'hosted-quota', hostedTargetId({ endpoint: 'https://synthetic.invalid' }) + '.json.lock'),
-    async () => { ready(); await release; }) : Promise.resolve(true);
-  if (lockMs) await acquired;
-  workspace.defer(async () => { clearTimeout(releaseTimer); unlock(); await holder; });
-  const started = performance.now(), events = [];
-  const mark = event => events.push({ ...event, ms: performance.now() - started });
-  const child = spawn(process.execPath, ['--import', preload, hook, 'recall'], {
-    cwd: home, env: { PATH: '/usr/bin:/bin', HOME: home, TMPDIR: workspace.path,
-      CLAUDE_PLUGIN_DATA: root, CLAUDE_PLUGIN_OPTION_API_ENDPOINT: 'https://synthetic.invalid',
-      CLAUDE_PLUGIN_OPTION_API_TOKEN: missingToken ? '' : 'synthetic-token', CLAUDE_PLUGIN_OPTION_TELEMETRY: String(telemetry),
-      CAIRN_TEST_RECALL_DELAY: String(recallMs), CAIRN_TEST_RECALL_REPLY: reply }, stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
-  });
-  let stdout = '', stderr = '', hostKilled = false;
-  let duringFetch;
-  child.on('message', event => { mark(event); if (event.kind === 'preload-ready' && lockMs)
-    releaseTimer = setTimeout(unlock, lockMs);
-    if (event.kind === 'recall-fetch' && onFetch && !duringFetch) duringFetch = onFetch(root);
-  });
-  child.stdout.on('data', chunk => { if (!stdout) mark({ kind: 'stdout' }); stdout += chunk; });
-  child.stderr.on('data', chunk => stderr += chunk);
-  const done = new Promise((resolve, reject) => { child.once('error', reject);
-    child.once('close', (code, signal) => resolve({ code, signal })); });
-  workspace.defer(async () => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); await done; });
-  const timer = setTimeout(() => { hostKilled = true; child.kill('SIGTERM'); }, 3000);
-  if (!stalledInput) child.stdin.end(JSON.stringify({ session_id: 'synthetic-session', prompt: 'Synthetic question' }));
-  let outcome;
-  try { outcome = await done; } finally { clearTimeout(timer); }
-  await duringFetch;
-  mark({ kind: 'exit' });
-  console.log(JSON.stringify({ node: process.versions.node, lockMs, recallMs, telemetry, stalledInput,
-    ...outcome, hostKilled, stdoutBytes: Buffer.byteLength(stdout), stderrBytes: Buffer.byteLength(stderr), events }));
-  assert.equal(stderr, ''); assert.equal(outcome.code, 0); assert.equal(hostKilled, false);
-  return { stdout, events, root };
+import { invocation as invoke, assertProcessOutcome, assertScenario, scenarios }
+  from './fixtures/recall-deadline-harness.mjs';
+
+async function invocation(t, options) {
+  const result = await invoke(t, options);
+  console.log(JSON.stringify({ node: process.versions.node, code: result.code, signal: result.signal,
+    elapsedMs: result.elapsedMs, hostKilled: result.hostKilled,
+    stdoutBytes: Buffer.byteLength(result.stdout), stderrBytes: Buffer.byteLength(result.stderr), events: result.events }));
+  assertProcessOutcome(result);
+  return result;
 }
 
 test('RH-01 immediate recall returns validated context and exits before the host window', async t => {
   const result = await invocation(t);
-  assert.match(JSON.parse(result.stdout).hookSpecificOutput.additionalContext, /Synthetic remembered preference/);
+  assertScenario('success-slow-telemetry', result);
 });
 test('RH-02 actual recall with quota contention and slow telemetry completes inside the unchanged host window', async t => {
-  const result = await invocation(t, { lockMs: 450, recallMs: 1800, telemetry: true });
-  assert.match(JSON.parse(result.stdout).hookSpecificOutput.additionalContext, /Synthetic remembered preference/);
+  const result = await invocation(t, scenarios['success-slow-telemetry']);
+  assertScenario('success-slow-telemetry', result);
   assert.equal(result.events.filter(event => event.kind === 'telemetry-fetch').length, 0);
 });
 test('RH-03 pre-dispatch waits and HTTP share the invocation budget, with no late context', async t => {
   const result = await invocation(t, { lockMs: 1600, recallMs: 1800 });
-  assert.equal(result.stdout, '');
+  assert.ok(result.stdout === '', 'silent_stdout');
 });
 test('RH-03 stalled stdin is cancelled without a host kill or context', async t => {
   const result = await invocation(t, { stalledInput: true });
-  assert.equal(result.stdout, ''); assert.equal(result.events.filter(event => event.kind === 'recall-fetch').length, 0);
+  assert.ok(result.stdout === '', 'silent_stdout'); assert.equal(result.events.filter(event => event.kind === 'recall-fetch').length, 0);
 });
 test('RH-03 slow HTTP cancels within the narrower existing HTTP budget', async t => {
-  const result = await invocation(t, { recallMs: 5000 });
-  assert.equal(result.stdout, '');
-  assert.equal(result.events.filter(event => event.kind === 'recall-aborted').length, 1);
+  const result = await invocation(t, scenarios['slow-recall']);
+  assertScenario('slow-recall', result);
+});
+test('RH-03 unavailable quota lock exits silently without host intervention', async t => {
+  const result = await invocation(t, scenarios['unavailable-quota-lock']);
+  assertScenario('unavailable-quota-lock', result);
 });
 test('RH-04 schema fallback shares remaining invocation and HTTP deadlines', async t => {
-  const result = await invocation(t, { lockMs: 900, reply: 'old-schema' });
-  assert.equal(result.stdout, '');
-  const calls = result.events.filter(event => event.kind === 'recall-fetch');
-  assert.equal(calls.length, 2); assert.equal(calls[0].hasSession, true); assert.equal(calls[1].hasSession, false);
-  assert.equal(calls[1].sameSignal, true);
-  assert.equal(result.events.filter(event => event.kind === 'recall-aborted').length, 1);
+  const result = await invocation(t, scenarios['schema-fallback']);
+  assertScenario('schema-fallback', result);
 });
 test('RH-05 pause and resume during recall still suppress stale injection', async t => {
   const result = await invocation(t, { recallMs: 150, onFetch: async root => {
     await setPaused(root, true); await setPaused(root, false);
   } });
-  assert.equal(result.stdout, '');
+  assert.ok(result.stdout === '', 'silent_stdout');
 });
 for (const reply of ['empty', 'invalid', 'unauthorized', 'quota', 'other-400']) {
   test(`RH-01/04 ${reply} remains silent without retries or telemetry`, async t => {
     const result = await invocation(t, { reply, telemetry: true });
-    assert.equal(result.stdout, '');
+    assert.ok(result.stdout === '', 'silent_stdout');
     assert.equal(result.events.filter(event => event.kind === 'recall-fetch').length, 1);
     assert.equal(result.events.filter(event => event.kind === 'telemetry-fetch').length, 0);
   });
 }
 test('RH-01 missing token makes no request and remains silent', async t => {
   const result = await invocation(t, { missingToken: true });
-  assert.equal(result.stdout, ''); assert.equal(result.events.filter(event => event.kind === 'recall-fetch').length, 0);
+  assert.ok(result.stdout === '', 'silent_stdout'); assert.equal(result.events.filter(event => event.kind === 'recall-fetch').length, 0);
 });
 test('RH-05 already-aborted lock/control/identity/observation calls start no work', async t => {
   const workspace = createTestWorkspace(t, { prefix: 'recall-aborted-' }), root = join(workspace.path, 'absent');
