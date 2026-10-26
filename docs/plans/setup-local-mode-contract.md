@@ -1,4 +1,4 @@
-# Installer local mode: contract for `@cairn-ink/memory` 0.6.0
+# Installer local mode: contract for `@cairn-ink/memory` 0.6.0 (amended for 0.6.1)
 
 Status: v0.10 (setup session, 2026-10-25). v0.1 (`f053a18c`) was audited by a
 non-author Codex auditor (gpt-6.1-sol, xhigh, read-only): no P0, fourteen P1,
@@ -14,6 +14,13 @@ scoped uninstall only from `installed` (§4.2, §9), the Codex setup lock
 carries the holder pid for stale recovery (§7.2), and `--cloud` with local
 ownership plus unknown is `mode_unknown` (§6.3). v0.10 adds the L06
 version-normalization rule S3 needs when the package version becomes 0.6.0.
+v0.11 (2026-10-26, for installer 0.6.1) adds §15 on Codex inspection
+environment refusals. v0.12 answers its audit (`setup_21`: one P0, three
+P1, two P2): the local inspection falls back to `/tmp` instead of assuming
+absence, managed configuration stays refused, and refusals are named.
+v0.13 answers the re-check (four P1, one P2): candidates are re-evaluated
+per inspection, dry-run planning and uninstall completion are explicit,
+status deduplicates per cause, and L27–L32 are sharpened.
 
 Base: `main` at `b2513501` (PR #469 local V1 Raw chain and PR #470 unified
 memory V1 are merged). Branch `feat/setup-local-mode`.
@@ -770,3 +777,167 @@ lines and L23 checks their copyability.
 | Default store/identity | One per-user store, generated owner, personal scope (S4). |
 | Cloud/local coexistence in one client | No; refuse and print ordered detach steps (S7, §8). |
 | Platforms | Linux/WSL tested; macOS untested; Windows refused (S9). |
+
+## 15. 0.6.1 amendment: Codex inspection environment refusals
+
+### 15.1 Defect (found in the real-model M01 run, 2026-10-26)
+
+`inspectCodexServers` (`packages/setup/lib/codex.mjs`) refuses before running
+Codex when (a) any ancestor of its neutral directory under `TMPDIR` contains
+`.codex/config.toml` (`codex_tmpdir`), or (b) `/etc/codex/config.toml` or
+`/etc/codex/managed_config.toml` exists (`codex_managed`). These are the same
+pre-conditions the hosted inspection has had since 0.5.x, with the same
+message keys. Detection (§6.2) treats **every** inspection failure as a local
+probe failure (`localUnknown`), so routing (§6.3, row "unknown from a local
+probe") refuses with `mode_unknown` for **every** column, including cloud
+users. Measured with 0.5.3 (`b2513501`) against 0.6.0 in temp homes with a
+cloud Codex `config.toml` and `TMPDIR=<HOME>/tmp`:
+
+| Case | 0.5.3 | 0.6.0 |
+| --- | --- | --- |
+| `setup --client claude --dry-run` | exit 0, hosted Claude flow | exit 2, `mode_unknown` (`mcp list --json`) only |
+| `setup --dry-run` | exit 1, hosted flow, Codex reports `codex_tmpdir` | exit 2, `mode_unknown` only |
+| either, `TMPDIR` outside `HOME` | — | identical to 0.5.3 |
+| fresh `setup --local`, no Codex `config.toml` yet | — | `codex mcp add` writes the entry, verification then fails (`codex_mcp_unverified`, exit 1); every rerun is `mode_unknown` |
+| `uninstall --local` of an installed local Codex | — | Claude `detached`; native `codex mcp remove` may succeed but verification fails, so the Codex receipt stays `detaching`, the descriptor stays `uninstalling` and the engine is retained |
+
+This violates O4 / L06 ("existing cloud users unchanged") in that environment,
+and the message hides the cause. `TMPDIR=$HOME/tmp` (or any `TMPDIR` below a
+directory holding `.codex/config.toml`) is the realistic trigger; the default
+`/tmp` is not affected. The `codex_managed` case follows from the same code
+path (not run; `/etc/codex` needs root).
+Registration and detach verification both swallow the cause
+(`local-codex.mjs` registration and `detachCodex`). Unsafe or unreadable
+`config.toml` fails earlier, in the snapshot, and is not part of this defect.
+
+### 15.2 Rules (v0.12, after audit `setup_21`)
+
+The audit found that letting the cloud flow proceed on an environment
+refusal would treat "no observed local ownership" as "no local ownership":
+with the descriptor hidden (for example a different `CAIRN_MEMORY_HOME`), a
+Codex `cairn-local` registration could not be seen, and a cloud Claude
+install would create the mixed state S7 forbids. 0.6.1 therefore makes the
+local inspection **succeed** where it safely can, and refuses by name where
+it cannot. Absence is never assumed.
+
+1. **Neutral parent selection (local inspection only).** The local
+   `inspectCodexServers` chooses the parent of its `mkdtemp` directory from
+   the candidates `[env.TMPDIR || os.tmpdir(), '/tmp']` (the second only on
+   non-Windows and only when it differs from the first after
+   canonicalisation). A candidate is usable when no ancestor of the created
+   directory contains `.codex/config.toml`. The first usable candidate is
+   used; the other S12 guarantees are unchanged (private `mkdtemp`, `0600`
+   copy of the user's `config.toml` only, `CODEX_HOME` pointed at the copy,
+   removal in `finally`, no managed overlay). Exposure is the same as for
+   every user whose `TMPDIR` is the default `/tmp`. If a candidate's
+   `mkdtemp` fails, the next candidate is tried; if none is usable, the
+   refusal is `codex_tmpdir`. **Every** inspection (detection, pre-check,
+   registration and detach verification) re-evaluates the ordered
+   candidates from scratch, so detection may legitimately use a different
+   parent from a later verification. Checks use the canonical created
+   directory (`realpath` of the `mkdtemp` result), and every rejected or
+   used attempt directory is removed. The hosted inspection keeps its own
+   inline checks and parent choice (0.5.3 behaviour, L06).
+2. **Managed configuration stays a refusal.** `/etc/codex/config.toml` or
+   `/etc/codex/managed_config.toml` present remains `codex_managed`: the
+   user file cannot be inspected alone, so absence cannot be proven. 0.6.1
+   does not restore 0.5.3 behaviour for this case (documented limitation);
+   it only names the cause (rule 5).
+3. **Classification and detection.** `inspectCodexServers` reports
+   `codex_tmpdir` (no usable candidate) and `codex_managed`
+   distinguishably from every other failure (for example an error whose
+   `key` is set). Detection keeps them **local-probe unknowns** exactly as
+   0.6.0 (§6.2, §6.3 rows unchanged), and records the cause so refusals can
+   name it. Other unknown sources, their precedence (malformed
+   `~/.claude.json`, changed destinations, missing CLI, orphan, recovery
+   errors) and the `config.toml` snapshot that precedes the checks are
+   unchanged.
+4. **Plan-aware pre-check before local writes.** After selection, consent,
+   capability probes and pending checkpoints have determined the Codex steps
+   of a local `setup` or `uninstall --local`, and **before** the first
+   mutation (root, descriptor, lock, engine, `claude mcp …`, `codex mcp …`):
+   if a Codex step that runs native inspection is planned, evaluate rule 1
+   and the managed paths, treating the canonical `$CODEX_HOME/config.toml`
+   as present **only when a `codex mcp add` is planned**. Steps that run
+   inspection: register/repair with `add` (then verification), and detach
+   (`remove`, then verification). Not affected: the manual path (capability
+   probes failed, no `add`); a checkpoint already `detached`; a
+   `--client claude` scoped uninstall, which today completes without Codex
+   verification. On failure: rule 5, exit 2, nothing changed.
+   **Dry-run** exits before registration consent, so its preview targets
+   are every detected client that a non-interactive run would register,
+   repair or detach (plus a pending operation's clients). It first
+   evaluates the pre-check assuming `add`; only if that fails may it run
+   the read-only Codex capability probes (`codex mcp add|remove|list
+   --help`, the same probes as §7.2) to recognise the manual path. This is
+   the one exception to L21's "no child other than detection" and occurs
+   only in the refused environment. A refusal is reported with exit 2.
+   **Uninstall completion is unchanged**: a Claude-scoped uninstall while
+   a Codex receipt remains completes as in 0.6.0 (descriptor back to
+   `installed`, exit 0); an uninstall that removes the last receipt still
+   runs the final global detection, and an environment-caused Codex
+   unknown there retains the engine and exits 2 with
+   `local_uninstall_retained`, as 0.6.0 does for any unknown. If the
+   pre-check passes but verification later meets an environment refusal
+   (the environment changed meanwhile), today's `codex_mcp_unverified`
+   handling stays and the environment line is added.
+5. **Named refusal output**, existing keys only, no new prose: `mode_unknown`
+   with `client` Codex and `probe` `TMPDIR` (for `codex_tmpdir`) or
+   `/etc/codex` (for `codex_managed`), followed by the `codex_tmpdir` or
+   `codex_managed` line. It replaces the generic `mode_unknown` (`mcp list
+   --json`) wherever the Codex unknown comes from an environment refusal.
+   Exit 2, nothing written.
+6. **Status (§9).** No new message key. The Codex registration line
+   stays `unknown` when inspection is refused. Across the whole `status`
+   output (hosted and local parts, any `--client`), each distinct
+   environment cause that affected the output appears **exactly once**:
+   the local part appends `codex_tmpdir` or `codex_managed` when the
+   hosted part of the same run did not print that key, and does not
+   repeat it when it did. Different causes (the hosted inspection stops at
+   `codex_tmpdir` while the local fallback reaches `codex_managed`) each
+   appear once. Minimal emission bookkeeping in `setup.mjs` is permitted.
+7. **Unchanged.** Hosted code paths and messages; every §6.3 row and its
+   precedence; S7; `--client` still limits registration, not conflict
+   detection; no new message keys; the engine bundle.
+
+Effect: with `TMPDIR` under `HOME` and a usable `/tmp`, detection is
+complete, cloud users route exactly as 0.5.3 (the hosted flow reports its
+own `codex_tmpdir` for Codex, as 0.5.3 did), and local setup, repair and
+uninstall work. Only when both candidates are unusable, or a managed
+configuration exists, is every `setup` refused, now by name.
+
+### 15.3 Acceptance additions (Node 22.16.0 and 24.15.0)
+
+The fallback candidate is an internal parameter (default `/tmp`), and the
+managed paths likewise; neither is reachable from argv or the environment,
+and tests drive them through the library or the existing fixture runner.
+L06-derived cases run with `CAIRN_SETUP_REQUIRE_BASELINE=1` so the
+historical comparison cannot skip.
+
+| ID | Case | Expected |
+| --- | --- | --- |
+| L24 | L06 states {both configured; Claude-only; Codex-only qualified; Codex fallback} × {`setup`, `setup --client claude`, `setup --cloud`, `setup --dry-run`, `status`, `pause`} with `TMPDIR=<HOME>/tmp`, `<HOME>/.codex/config.toml` present, fallback usable | equal to 0.5.3 (`b2513501`) under the L06 definition and normalization: output, exit code, prompts, native call order, file inventory |
+| L25 | same environment, no local ownership: fresh `setup --local` with Codex `config.toml` present, and with it absent; then `status`; then `uninstall --local --yes` | as L01/L15: both clients registered and verified, descriptor `installed`; uninstall completes; no `cairn-codex-inspect-*` left in either parent |
+| L26 | hidden ownership: Codex has a `cairn-local` stdio entry, the descriptor is in another root; same environment; `setup` and `setup --client claude` | `local_orphan` (or the existing §6.3 outcome for that state), not the cloud flow; no writes |
+| L27 | neither candidate usable: no local ownership × {`setup`, `setup --client claude`, `setup --cloud`, `setup --local`, `setup --local --dry-run`}; installed local × {`setup`, `setup --dry-run`, `uninstall --local --yes`, `uninstall --local --client codex --yes`, `uninstall --local --client claude --yes`, resumed uninstall with Codex `detached` and Claude pending, `status`, `status --client claude`} | refusals print rule 5 with exit 2 and change nothing (descriptor, engine tree, `~/.claude.json`, `config.toml` byte-identical); the Claude-scoped uninstall completes with the Codex receipt kept (exit 0); the resumed uninstall detaches Claude, then the final detection keeps the engine and exits 2 with `local_uninstall_retained`; each status output contains the environment message exactly once |
+| L28 | managed paths present (internal parameter): the L27 matrix | same as L27 with `/etc/codex` and `codex_managed` |
+| L29 | precedence: environment refusal plus malformed `~/.claude.json`; plus a changed Codex destination; and a manual-path Codex whose `mcp list --json` works but whose `mcp add --help` lacks `-- <COMMAND>` (so detection passes and the pre-check exemption is exercised), for `setup --local` and `setup --local --dry-run`; and a pending setup operation under `--dry-run` | existing 0.6.0 outcome for the other unknown; the manual path is not refused by rule 4 and its dry-run reports the manual path |
+| L30 | verification race: pre-check passes, then the fake `codex mcp add` creates an ancestor `.codex/config.toml` (a) for the first parent only, (b) for both parents | (a) verification uses the other parent and setup completes; (b) `codex_mcp_unverified` plus the environment line, as 0.6.0 otherwise |
+| L31 | regression: L06, L07, L14, L15, L21, L22 | existing snapshots unchanged; L21's child list changes only as rule 4 allows |
+| L32 | candidate helper, by library call: symlinked parent aliasing the other candidate (canonical deduplication); first parent unusable, `mkdtemp` failure in the first parent; fallback parent below a `.codex/config.toml`; `process.platform === 'win32'` skips the fallback | correct candidate or refusal; private modes (directory `0700`, copy `0600`); canonical `cwd` and `CODEX_HOME` passed to Codex; no attempt directory left |
+| M02 | manual, setup session: real Codex 0.164.0 and Claude Code, temp homes with `TMPDIR` inside `HOME`; the packed 0.6.1 for L24 `setup --client claude --dry-run` (compare with the published 0.5.3) and L25 fresh `setup --local`; plus an upgrade from the published 0.6.0 local install to the packed 0.6.1 with both tools | L24/L25 as specified; the upgrade installs the new generation beside the old one, both registrations point at it, and a memory saved under 0.6.0 is readable through each client's registration |
+
+### 15.4 Packet and files
+
+One packet, **F1**. Files: `packages/setup/lib/codex.mjs` (`inspectCodexServers`
+and a local pre-condition helper it shares with the pre-check; the hosted
+inspection code path is not edited), `packages/setup/lib/local-mode.mjs`,
+`packages/setup/lib/local-codex.mjs`, `packages/setup/lib/setup.mjs` (only the
+rule 6 emission bookkeeping), `packages/setup/test/local-mode.test.mjs`,
+`packages/setup/test/local-cloud-unchanged.test.mjs`, test fakes if a case
+needs them, new snapshots, `packages/setup/package.json` (version `0.6.1`).
+The setup session edits this contract and, at release, the `CHANGELOG.md` top
+section and the release sentence in `packages/setup/README.md`. Not edited:
+`packages/setup/runtime/**`, `packages/setup/lib/messages.mjs`, hosted flow
+files other than the `setup.mjs` bookkeeping, anything outside
+`packages/setup/`.

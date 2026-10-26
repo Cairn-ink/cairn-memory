@@ -2,12 +2,12 @@ import { constants } from 'node:fs';
 import { readFile, lstat, stat, access, mkdir, open, readdir, rm } from 'node:fs/promises';
 import { dirname, join, sep } from 'node:path';
 import { homedir } from 'node:os';
-import { availableClient, codexHome, inspectCodexServers } from './codex.mjs';
+import { availableClient, codexHome, inspectCodexServers, withCodexInspectionEnvironment, codexEnvironmentCause, snapshot } from './codex.mjs';
 import { installEngine, engineIdFor, engineBaseId } from './local-engine.mjs';
 import { localRoot, requestedRoot, canonicalPath, readDescriptor, writeDescriptor, withLocalLock,
-  engineIdPattern, executableFor, newDescriptor, beginOperation, recordClient, publishedReferences, deletionPath, inside, ownedDirectory, ownedLocalTree } from './local-descriptor.mjs';
+  engineIdPattern, executableFor, newDescriptor, beginOperation, recordClient, publishedReferences, deletionPath, inside, ownedDirectory, ownedLocalTree, localFilesystemError } from './local-descriptor.mjs';
 import { readClaudeServers, registerClaude, detachClaude } from './local-claude.mjs';
-import { registerCodex, detachCodex, checkCodexLock } from './local-codex.mjs';
+import { registerCodex, detachCodex, checkCodexLock, codexCapabilities } from './local-codex.mjs';
 import { shellArgument } from './output.mjs';
 import { SetupError } from './errors.mjs';
 
@@ -22,7 +22,7 @@ export function modeUnion(states, pending = false) {
   const cloud = states.some(state => state.cloud), local = pending || states.some(state => state.local);
   return cloud && local ? 'mixed' : cloud ? 'cloud' : local ? 'local' : 'none';
 }
-export async function detectLocalMode({ env = process.env, runClaude }) {
+export async function detectLocalMode({ env = process.env, runClaude, inspection }) {
   let root, descriptor = null, descriptorError;
   try { root = await localRoot(env); descriptor = await readDescriptor(root); }
   catch (error) { root = requestedRoot(env); descriptorError = error; }
@@ -68,17 +68,22 @@ export async function detectLocalMode({ env = process.env, runClaude }) {
       }
     } else {
       try {
-        const entries = await inspectCodexServers({ home: codexHome(env), env });
+        const entries = await inspectCodexServers({ ...inspection, home: codexHome(env), env });
         state.cloud ||= entries.some(entry => entry.name === 'cairn' && entry.type === 'streamable_http');
         state.entry = entries.find(entry => entry.name === 'cairn-local' && entry.type === 'stdio') ?? null;
         state.local ||= Boolean(state.entry);
-      } catch { state.unknown = state.localUnknown = true; state.probe ||= 'mcp list --json'; }
+      } catch (error) {
+        state.unknown = state.localUnknown = true;
+        state.environmentCause = codexEnvironmentCause(error);
+        state.probe ||= state.environmentCause ? environmentProbe(state.environmentCause) : 'mcp list --json';
+      }
     }
   }
   const orphanEngine = !descriptor && !descriptorError && await exists(join(root, 'engine'));
   return { root, descriptor, descriptorError, orphanEngine, states, destinations,
     union: modeUnion(Object.values(states), descriptor?.operation?.kind === 'setup') };
 }
+const environmentProbe = cause => cause === 'codex_tmpdir' ? 'TMPDIR' : '/etc/codex';
 const command = (write, line) => write.literal(line);
 export function writeLocalResume(write, t, key = 'recovery_local_setup') {
   write(t(key)); write.literal('npx @cairn-ink/memory setup --local');
@@ -113,6 +118,7 @@ function refusal(key, detection, { write, t }, params = {}) {
     command(write, shellArgument(params.previous)); command(write, shellArgument(params.current));
     command(write, `${params.client === 'claude' ? 'HOME' : 'CODEX_HOME'}=${shellArgument(params.client === 'claude' ? params.previous : dirname(params.previous))} npx @cairn-ink/memory ${params.action ?? 'setup'} --local`);
   }
+  if (key === 'mode_unknown' && params.environmentCause) write(t(params.environmentCause));
   if (key === 'local_operation_pending') command(write, 'npx @cairn-ink/memory uninstall --local');
   return { handled: true, code: 2 };
 }
@@ -142,7 +148,11 @@ export async function routeLocalMode(options, selection, context) {
   if (controls.includes(action) || action === 'uninstall') {
     if (union === 'local') return refusal('local_control_unsupported', detection, context);
     if (union === 'mixed') return refusal('mode_mixed', detection, context);
-    if (union === 'unknown' && Object.values(states).some(state => state.local)) return refusal('mode_unknown', detection, context);
+    if (union === 'unknown' && Object.values(states).some(state => state.local)) {
+      const [client, state] = Object.entries(states).find(([, state]) => state.unknown);
+      return refusal('mode_unknown', detection, context, state.environmentCause && state.probe === environmentProbe(state.environmentCause) ?
+        { client, probe: state.probe, environmentCause: state.environmentCause } : {});
+    }
     return { handled: false };
   }
   const localOwnership = Object.values(states).some(state => state.local) || Boolean(descriptor?.operation);
@@ -150,7 +160,7 @@ export async function routeLocalMode(options, selection, context) {
   if (!descriptor && !detection.descriptorError && (detection.orphanEngine || Object.values(states).some(state => state.entry))) return refusal('local_orphan', detection, context);
   if (union === 'unknown' && (options.cloud || !Object.values(states).some(state => state.changedHome)) && (options.local || localOwnership || Object.values(states).some(state => state.localUnknown))) {
     const [client, state] = Object.entries(states).find(([, state]) => state.unknown);
-    return refusal('mode_unknown', detection, context, { client: client === 'claude' ? 'Claude Code' : 'Codex', probe: state.probe });
+    return refusal('mode_unknown', detection, context, { client: client === 'claude' ? 'Claude Code' : 'Codex', probe: state.probe, environmentCause: state.probe === environmentProbe(state.environmentCause) ? state.environmentCause : undefined });
   }
   if (options.cloud && localOwnership) return refusal('mode_conflict_local', detection, context);
   let local = options.local || union === 'local' || (!options.cloud && (localOwnership || Boolean(detection.descriptorError)));
@@ -175,6 +185,11 @@ export async function routeLocalMode(options, selection, context) {
   }
   if ((context.platform ?? process.platform) === 'win32') return refusal('local_windows_unsupported', detection, context);
   if (flags.includes('--dry-run')) {
+    const cp = descriptor?.operation?.checkpoints.codex;
+    if (!detection.descriptorError && !Object.values(states).some(state => state.changedHome) &&
+        previewClients(options, selection, detection).includes('codex') &&
+        !['done', 'manual', 'detached'].includes(cp?.state) &&
+        !await codexPrecheck(detection, context, { add: descriptor?.operation?.kind !== 'uninstall', dryRun: true })) return { handled: true, code: 2 };
     write(t('local_dry_run'));
     if (detection.descriptorError) {
       write(t(detection.descriptorError.key)); command(write, shellArgument(join(detection.root, 'installation.json')));
@@ -187,6 +202,30 @@ export async function routeLocalMode(options, selection, context) {
     { client, ...states[client].changedHome });
   if (descriptor?.operation && descriptor.operation.kind !== 'setup') return refusal('local_recovery_required', detection, context);
   return { handled: true, code: await setupLocal(options, selection, detection, context) };
+}
+async function codexPrecheck(detection, context, { add = false, dryRun = false } = {}) {
+  const { env, inspection, write, t } = context;
+  try {
+    await snapshot(detection.destinations.codex);
+    await withCodexInspectionEnvironment({ ...inspection, env,
+      plannedConfigPath: add ? detection.destinations.codex : undefined });
+    return true;
+  } catch (error) {
+    const cause = codexEnvironmentCause(error);
+    if (!cause) throw localFilesystemError(error, 'codex_mcp_unverified');
+    // Dry runs normally spawn detection only. Help probes are permitted solely
+    // when this pre-check failed, to exempt the non-mutating manual path.
+    if (dryRun && !await codexCapabilities(env)) {
+      write(t('codex_mcp_required')); write(t('local_manual_codex')); return true;
+    }
+    refusal('mode_unknown', detection, context, { client: 'codex', probe: environmentProbe(cause), environmentCause: cause });
+    return false;
+  }
+}
+function previewClients(options, selection, detection) {
+  return detection.descriptor?.operation?.clients ?? clientNames.filter(client =>
+    detection.states[client].available && (!selection.client || selection.client === client) &&
+    (options.local || recorded(detection.descriptor, client)));
 }
 async function setupLocal(options, selection, detection, context) {
   const { write, t, prompt, interactive, env, runClaude, installerVersion, progress = {} } = context;
@@ -205,6 +244,11 @@ async function setupLocal(options, selection, detection, context) {
   } else if (selection.client && selected.some(client => client !== selection.client)) throw new SetupError('local_option_invalid', 2);
   if (!selected.length) { write(t(detection.descriptor ? 'local_done' : 'clients_declined')); return 0; }
   if (selected.includes('codex') && !['done', 'manual'].includes(detection.descriptor?.operation?.checkpoints.codex?.state)) await checkCodexLock(dirname(detection.destinations.codex));
+  let codexCapable;
+  if (selected.includes('codex') && !['done', 'manual'].includes(detection.descriptor?.operation?.checkpoints.codex?.state)) {
+    codexCapable = await codexCapabilities(env);
+    if (codexCapable && !await codexPrecheck(detection, context, { add: true })) return 2;
+  }
   progress.localOperation = true; progress.localAction = 'setup';
   await ownedLocalTree(detection.root);
   // CAIRN_SETUP_NPM_CACHE is caller-supplied test storage, not an owned
@@ -286,7 +330,7 @@ async function setupLocal(options, selection, detection, context) {
       if (['done', 'manual'].includes(checkpoint.state)) continue;
       checkpoint.state = 'registering'; await writeDescriptor(root, descriptor);
       const state = client === 'claude' ? await registerClaude({ root, home: checkpoint.destination, checkpoint, run: runClaude, write, t }) :
-        await registerCodex({ root, checkpoint, env, write, t });
+        await registerCodex({ root, checkpoint, env, write, t, inspection: context.inspection, capable: codexCapable });
       if (state === 'done') progress['local_' + client] = true;
       recordClient(descriptor, client, checkpoint.desired);
       checkpoint.state = state; manual ||= state === 'manual'; await writeDescriptor(root, descriptor);
@@ -297,39 +341,48 @@ async function setupLocal(options, selection, detection, context) {
     write(t('local_done')); write(t('next_reopen')); return manual ? 1 : 0;
   });
 }
-export async function localStatus(detection, { write, t, verbose }) {
+export async function localStatus(detection, { write, t, verbose, emittedEnvironmentCauses = new Set() }) {
   if (!detection) return;
   const { descriptor, root, states } = detection;
-  if (detection.descriptorError) { refusal(detection.descriptorError.key, detection, { write, t }); return; }
-  if (!descriptor && (detection.orphanEngine || Object.values(states).some(state => state.entry))) { refusal('local_orphan', detection, { write, t }); return; }
-  const uninstalled = descriptor?.state === 'uninstalled';
-  const registration = state => state.unknown || !state.available ? 'unknown' : state.entry ? 'registered' : 'missing';
-  for (const client of clientNames) if (states[client].local || states[client].entry ||
-      (uninstalled && registration(states[client]) === 'unknown')) {
-    write(t('local_status_client', { client: client === 'claude' ? 'Claude Code' : 'Codex' }));
-    const state = registration(states[client]);
-    write(t('local_status_registration', { state: t('local_registration_' + state) }));
-  }
-  if (!descriptor) return;
-  if (uninstalled) write(t(clientNames.every(client => registration(states[client]) === 'missing') ?
-    'local_status_detached' : 'local_status_stale_registration'));
-  else {
-    write(t(descriptor.engine && await exists(executableFor(root, descriptor.engine.id)) ? 'local_status_engine' : 'local_status_unverified', { version: descriptor.installerVersion }));
-    let nodeOK = false;
-    if (descriptor.node) { try { await access(descriptor.node, constants.X_OK); nodeOK = (await stat(descriptor.node)).isFile(); } catch { /* Missing or non-executable Node. */ } }
-    write(t(nodeOK ? 'local_status_node_ok' : 'local_status_node_missing'));
-  }
-  write(t(descriptor.database.external || root !== join(detection.destinations.claude, '.cairn-memory') ? 'local_status_data_private' : 'local_status_data'));
-  if (verbose) {
-    for (const value of [descriptor.database.path, descriptor.node, descriptor.engine ? executableFor(root, descriptor.engine.id) : null, descriptor.ownerId, descriptor.engine?.id]) if (value) write.literal(shellArgument(value));
-    const failed = await readdir(join(root, 'engine')).catch(() => []);
-    if (failed.some(name => /\.failed-\d+$/u.test(name))) {
-      write(t('local_status_failed_dirs'));
-      for (const name of failed.filter(name => /\.failed-\d+$/u.test(name))) write.literal(shellArgument(join(root, 'engine', name)));
+  try {
+    if (detection.descriptorError) { refusal(detection.descriptorError.key, detection, { write, t }); return; }
+    if (!descriptor && (detection.orphanEngine || Object.values(states).some(state => state.entry))) { refusal('local_orphan', detection, { write, t }); return; }
+    const uninstalled = descriptor?.state === 'uninstalled';
+    const registration = state => state.unknown || !state.available ? 'unknown' : state.entry ? 'registered' : 'missing';
+    for (const client of clientNames) if (states[client].local || states[client].entry ||
+        (uninstalled && registration(states[client]) === 'unknown')) {
+      write(t('local_status_client', { client: client === 'claude' ? 'Claude Code' : 'Codex' }));
+      const state = registration(states[client]);
+      write(t('local_status_registration', { state: t('local_registration_' + state) }));
+    }
+    if (!descriptor) return;
+    if (uninstalled) write(t(clientNames.every(client => registration(states[client]) === 'missing') ?
+      'local_status_detached' : 'local_status_stale_registration'));
+    else {
+      write(t(descriptor.engine && await exists(executableFor(root, descriptor.engine.id)) ? 'local_status_engine' : 'local_status_unverified', { version: descriptor.installerVersion }));
+      let nodeOK = false;
+      if (descriptor.node) { try { await access(descriptor.node, constants.X_OK); nodeOK = (await stat(descriptor.node)).isFile(); } catch { /* Missing or non-executable Node. */ } }
+      write(t(nodeOK ? 'local_status_node_ok' : 'local_status_node_missing'));
+    }
+    write(t(descriptor.database.external || root !== join(detection.destinations.claude, '.cairn-memory') ? 'local_status_data_private' : 'local_status_data'));
+    if (verbose) {
+      for (const value of [descriptor.database.path, descriptor.node, descriptor.engine ? executableFor(root, descriptor.engine.id) : null, descriptor.ownerId, descriptor.engine?.id]) if (value) write.literal(shellArgument(value));
+      const failed = await readdir(join(root, 'engine')).catch(() => []);
+      if (failed.some(name => /\.failed-\d+$/u.test(name))) {
+        write(t('local_status_failed_dirs'));
+        for (const name of failed.filter(name => /\.failed-\d+$/u.test(name))) write.literal(shellArgument(join(root, 'engine', name)));
+      }
+    }
+  } finally {
+    const cause = states.codex.environmentCause;
+    if (cause && !emittedEnvironmentCauses.has(cause)) {
+      write(t(cause)); emittedEnvironmentCauses.add(cause);
     }
   }
 }
-async function uninstallLocal(options, selection, detection, { write, t, prompt, interactive, env, runClaude, progress = {} }) {
+
+async function uninstallLocal(options, selection, detection, context) {
+  const { write, t, prompt, interactive, env, runClaude, inspection, progress = {} } = context;
   const pendingSetup = detection.descriptor?.operation?.kind === 'setup';
   if (pendingSetup && selection.client) return refusal('local_operation_pending', detection, { write, t }).code;
   if (selection.client && detection.descriptor && !['installed', 'uninstalling'].includes(detection.descriptor.state)) throw new SetupError('local_option_invalid', 2);
@@ -347,8 +400,11 @@ async function uninstallLocal(options, selection, detection, { write, t, prompt,
   await ownedLocalTree(detection.root);
   write(t('local_uninstall_plan')); write(t('local_data_kept'));
   if (detection.descriptor?.operation?.kind !== 'uninstall' && !options.yes && (!interactive || !yes(await prompt(t('local_uninstall_confirm'))))) return 2;
-  progress.localOperation = true; progress.localAction = 'uninstall';
+  progress.localAction = 'uninstall';
   progress.localUninstallCommand = 'npx @cairn-ink/memory uninstall --local' + (options.yes ? ' --yes' : '') + (selection.client ? ' --client ' + selection.client : '') + (options.purgeConfig ? ' --purge-config' : '');
+  if (selected.includes('codex') && detection.descriptor?.operation?.checkpoints.codex?.state !== 'detached' &&
+      !await codexPrecheck(detection, context)) return 2;
+  progress.localOperation = true;
   const root = await localRoot(env, { create: true });
   return withLocalLock(root, async () => {
     let descriptor = detection.descriptorError ? null : await readDescriptor(root);
@@ -369,7 +425,7 @@ async function uninstallLocal(options, selection, detection, { write, t, prompt,
       if (cp?.state === 'detached') continue;
       if (cp) { cp.state = 'detaching'; await writeDescriptor(root, descriptor); }
       if (client === 'claude') await detachClaude({ home: detection.destinations.claude, run: runClaude });
-      else await detachCodex({ home: dirname(detection.destinations.codex), env });
+      else await detachCodex({ home: dirname(detection.destinations.codex), env, inspection, write, t });
       if (descriptor) { recordClient(descriptor, client, null); await writeDescriptor(root, descriptor); }
       write(t('local_uninstall_receipt')); write.literal(client + ': cairn-local');
     }
@@ -378,9 +434,10 @@ async function uninstallLocal(options, selection, detection, { write, t, prompt,
         descriptor.state = 'installed'; descriptor.operation = null; await writeDescriptor(root, descriptor);
         if (options.purgeConfig) throw new SetupError('local_option_invalid', 2);
       } else {
-        const after = await detectLocalMode({ env, runClaude });
+        const after = await detectLocalMode({ env, runClaude, inspection });
         if (Object.values(after.states).some(state => state.unknown || state.entry) ||
             Object.values(descriptor.operation?.checkpoints ?? {}).some(cp => cp.state !== 'detached')) {
+          if (after.states.codex.environmentCause) write(t(after.states.codex.environmentCause));
           write(t('local_uninstall_retained')); write.literal(shellArgument(join(root, 'engine'))); return 2;
         }
         await rm(await deletionPath(root, 'engine', { databasePath: descriptor.database.path }), { recursive: true, force: true });

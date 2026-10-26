@@ -1,10 +1,11 @@
-import { appendFileSync, readFileSync, writeSync, writeFileSync, mkdirSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 readFileSync(0, 'utf8');
 const args = process.argv.slice(2);
 const state = JSON.parse(readFileSync(process.env.FAKE_STATE, 'utf8'));
 const home = process.env.CODEX_HOME || join(process.env.HOME, '.codex');
 appendFileSync(process.env.FAKE_CALLS, JSON.stringify({ args, home, cwd: process.cwd(),
+  ...(state.recordInspectionModes && args.join(' ') === 'mcp list --json' ? { modes: { cwd: statSync(process.cwd()).mode & 0o777, home: statSync(home).mode & 0o777, config: statSync(join(home, 'config.toml')).mode & 0o777 } } : {}),
   ...(state.recordEnv ? {env:process.env} : {}) }) + '\n');
 if (process.env.FAKE_GLOBAL_CALLS) appendFileSync(process.env.FAKE_GLOBAL_CALLS, JSON.stringify({ client: 'codex', args }) + '\n');
 if (state.killBefore === args.join(' ')) {
@@ -80,6 +81,10 @@ if (args[0] === 'mcp' && ['add', 'remove'].includes(args[1])) {
     } else text += (text && !text.endsWith('\n') ? '\n' : '') + addition;
   }
   mkdirSync(home, { recursive: true, mode: 0o700 }); writeFileSync(join(home, 'config.toml'), text, { mode: 0o600 });
+  if (args[1] === 'add') for (const parent of state.blockInspectionParents ?? []) {
+    mkdirSync(join(parent, '.codex'), { recursive: true, mode: 0o700 });
+    writeFileSync(join(parent, '.codex/config.toml'), '', { mode: 0o600 });
+  }
   if (state.killAfterAdd && args[1] === 'add') { delete state.killAfterAdd; writeFileSync(process.env.FAKE_STATE, JSON.stringify(state)); process.kill(process.ppid, 'SIGKILL'); }
   process.exit(0);
 }
