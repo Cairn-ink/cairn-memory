@@ -69,28 +69,39 @@ test('native waits share a single bounded request deadline, including cached sta
   configured.length = 0; deletePolicy.database(native, false).prepare('SELECT metadata').get(); assert.deepEqual(configured, []);
   assert.equal(createTopicSqlitePolicy().database(native, false), native);
 });
-test('simulated busy preserves original code and labels at every native boundary', () => {
-  for (const method of ['prepare', 'exec', 'get', 'next', 'for-of']) {
-    const native = { exec: () => { if (method === 'exec') throw busy(); }, prepare: () => {
-      if (method === 'prepare') throw busy();
-      return { get() { throw busy(); }, iterate: function* () { throw busy(); } };
-    } };
+test('boundary-specific faults retain exact native labels, including timeout installation', () => {
+  for (const boundary of ['configure', 'prepare', 'begin', 'get', 'next', 'for-of']) {
+    const executed = [];
+    const native = {
+      exec(sql) {
+        executed.push(sql);
+        if ((boundary === 'configure' && sql.startsWith('PRAGMA busy_timeout=')) ||
+            (boundary === 'begin' && sql === 'BEGIN')) throw busy();
+      },
+      prepare(sql) {
+        executed.push(sql);
+        if (boundary === 'prepare') throw busy();
+        return { get() { throw busy(); }, iterate: function* () { throw busy(); } };
+      },
+    };
     const policy = createTopicSqlitePolicy({ diagnostics: true, now: () => 0 }); policy.start(1);
     const db = policy.database(native, true);
-    try {
-      if (method === 'exec') db.exec('BEGIN');
-      else if (method === 'prepare') db.prepare('PRAGMA application_id');
-      else if (method === 'for-of') { for (const row of db.prepare('SELECT SECRET').iterate()) void row; }
-      else if (method === 'next') db.prepare('SELECT SECRET').iterate().next();
+    assert.throws(() => {
+      if (boundary === 'begin') db.exec('BEGIN');
+      else if (['configure', 'prepare'].includes(boundary)) db.prepare('PRAGMA application_id');
+      else if (boundary === 'for-of') { for (const row of db.prepare('SELECT SECRET').iterate()) void row; }
+      else if (boundary === 'next') db.prepare('SELECT SECRET').iterate().next();
       else db.prepare('SELECT SECRET').get();
-      assert.fail('busy expected');
-    } catch (error) {
-      const result = safeReaderFailure(error, true);
-      assert.equal(result.error.code, 'storage_busy');
-      assert.ok(SQLITE_STAGES.includes(result.error.diagnostics.stage));
-      assert.ok(SQLITE_STATEMENTS.includes(result.error.diagnostics.statement));
-      assert.doesNotMatch(JSON.stringify(result), /SECRET/);
-    }
+    }, error => {
+      const labels = boundary === 'configure' ? ['configure', 'reader_configuration'] :
+        boundary === 'prepare' ? ['prepare', 'application_id'] :
+        boundary === 'begin' ? ['begin', 'transaction'] : ['execute', 'topic_metadata'];
+      assert.deepEqual(safeReaderFailure(error, true), { ok: false, error: { code: 'storage_busy', diagnostics: {
+        stage: labels[0], statement: labels[1], sqlite: { code: 5, extendedCode: 261 } } } });
+      return true;
+    });
+    assert.deepEqual(executed, boundary === 'configure' ? ['PRAGMA busy_timeout=1'] :
+      ['PRAGMA busy_timeout=1', boundary === 'begin' ? 'BEGIN' : boundary === 'prepare' ? 'PRAGMA application_id' : 'SELECT SECRET']);
   }
 });
 test('public Worker diagnostics cross boundary; default and false preserve exact failure bytes', async t => {
@@ -130,4 +141,48 @@ test('simulated native busy consumes the deadline once and is never retried or c
     assert.equal(reads, i + 1); assert.equal(now, 37);
   }
   assert.equal(installed, 0, 'expired deadline cannot reinstall the request budget');
+});
+
+test('complete 100-byte header required; WAL prefixes of every truncated length retain zero wait', t => {
+  const w = createTestWorkspace(t), path = join(w.path, 'prefix');
+  const header = Buffer.alloc(100); header.write('SQLite format 3\0'); header[18] = header[19] = 2;
+  for (let length = 20; length < 100; length++) {
+    writeFileSync(path, header.subarray(0, length));
+    assert.equal(topicJournalMode(path, lstatSync(path)), 'DELETE', 'truncated length ' + length);
+  }
+  writeFileSync(path, header); assert.equal(topicJournalMode(path, lstatSync(path)), 'WAL');
+  header[18] = header[19] = 1;
+  writeFileSync(path, header); assert.equal(topicJournalMode(path, lstatSync(path)), 'DELETE');
+});
+
+test('native statement constructor and iterator cancellation semantics are preserved', () => {
+  for (const wal of [false, true]) {
+    const native = new DatabaseSync(':memory:');
+    try {
+      native.exec('CREATE TABLE probe(id); INSERT INTO probe VALUES(1),(2)');
+      const policy = createTopicSqlitePolicy({ diagnostics: true, now: () => 0 }); policy.start(100);
+      const db = policy.database(native, wal), statement = db.prepare('SELECT id FROM probe');
+      const reference = native.prepare('SELECT id FROM probe');
+      assert.equal(statement.constructor, reference.constructor);
+      assert.equal(statement.constructor.prototype, reference.constructor.prototype);
+      assert.equal(statement instanceof reference.constructor, true);
+      const iterator = statement.iterate(), raw = reference.iterate();
+      for (const key of ['next', 'return', 'throw']) assert.equal(typeof iterator[key], typeof raw[key], String(key));
+      raw.return();
+      function* delegate() { yield* iterator; }
+      const generator = delegate(); assert.equal(generator.next().done, false);
+      assert.throws(() => generator.throw(new Error('cancel')));
+      // A fabricated throw() bypasses IteratorClose and leaves this cursor active.
+      assert.doesNotThrow(() => native.exec('DROP TABLE probe'));
+    } finally { native.close(); }
+  }
+});
+
+test('rollback refreshes the WAL timeout after the shared budget has expired', () => {
+  let now = 0; const executed = [];
+  const native = { exec: sql => executed.push(sql) };
+  const policy = createTopicSqlitePolicy({ now: () => now }); policy.start(5000);
+  const db = policy.database(native, true); db.exec('BEGIN');
+  now = 100; db.exec('ROLLBACK');
+  assert.deepEqual(executed, ['PRAGMA busy_timeout=100', 'BEGIN', 'PRAGMA busy_timeout=0', 'ROLLBACK']);
 });

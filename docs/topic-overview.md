@@ -303,7 +303,7 @@ runs out; the existing host watchdog/Worker termination still returns
 There is no application retry or sleep and no host-thread SQLite wait.
 DELETE gains no wait. Context reads and candidate evidence are unaffected.
 
-Before native SQLite access, the reader reads the existing main file header:
+Before native SQLite access, the reader requires the complete 100-byte main-file header:
 SQLite format-3 signature and read/write version bytes 18/19 equal to 2/2 select
 WAL; every other header keeps zero wait and normal SQLite validation. The file
 is opened read-only without following a final symlink and checked against the
@@ -319,3 +319,28 @@ physical schema18/current, WAL/DELETE, paired no-reader baselines and an
 instrumented zero-wait control. Full runs pre-register five 30s repetitions and
 all latency/throughput/loop gates in the script header. Smoke is observational;
 the primary runs full acceptance under the machine-wide queue.
+
+
+### E1-C2 review corrections and measurement protocol v2
+
+The native wrappers preserve statement constructor identity and absent iterator
+methods, so delegating-generator cancellation releases the cursor normally.
+Timeout-installation failures are labelled `configure/reader_configuration`;
+rollback refreshes the remaining WAL budget, including zero after expiry.
+
+Measurement protocol v2 counts diagnostic SQLite primary 5/6 independently of
+public classification, retains a separate public `storage_busy` counter, counts
+permitted `cursor_stale` separately, and fails unexpected reader outcomes.
+Every full WAL reader-load cell needs at least 20 write-overlapping reader
+attempts, 10 per-write-close-overlapping attempts for fresh writers, and 100
+successful native commits inside public write calls and the fixed window, in
+both cell and baseline. Insufficient exposure is `invalid`; no attempts are
+removed. Retained shutdown close never substitutes for fresh per-write close.
+These are fixed full-window minima; smoke remains observational.
+
+Every reader-load cell reports public-write-call latency p95/max separately
+from the full writer open/write/close lifecycle latency. Public-write p95 keeps
+the 250ms gate; max is reported without inventing a new threshold. The original
+0.90 throughput ratio remains a reported engine reference and is excluded from
+product acceptance. The WAL wait stays 100ms. The script header and saved
+protocol v2 pre-register these criteria before measurement.

@@ -1,8 +1,17 @@
 /**
- * E1-C2 PRE-REGISTERED before any run: every WAL cell, both writer lifecycles,
+ * E1-C2 v2 PRE-REGISTERED before any run: every WAL cell, both writer lifecycles,
  * both overview/member methods, physical schema18/current, >=5 x 30 seconds:
- * zero storage_busy; reader p95 <=250ms; writer successful public calls/s >=90%
- * of paired no-reader baseline; writer p95 <=250ms; host loop max <=100ms.
+ * zero public storage_busy AND diagnostic SQLite primary 5/6; no unexpected
+ * reader failures (cursor_stale is permitted and separately counted).
+ * Reader p95 <=250ms; public write-call p95 <=250ms; report write p95 AND max
+ * for EVERY reader-load cell. Keep >=90% baseline throughput as a reported
+ * engine reference, NOT an acceptance gate; never tune the wait to reach it.
+ * Host loop max <=100ms. Valid full WAL reader-load cells require >=20 reader
+ * attempts overlapping actual public writes, fresh writers >=10 attempts
+ * overlapping per-write close, and >=100 native COMMITs inside public write
+ * calls AND the window, in both cell and baseline. Insufficient exposure is
+ * INVALID, never pass. Attempts (including failures and drain) are all retained.
+ * These minima are fixed per full 30s cell; smoke does not assert exposure.
  * DELETE is report-only, with no new production wait. --smoke runs each cell
  * once for 2s, with NO performance acceptance. No full run outside primary's
  * machine-wide queue. Public fresh open/read/close; writer is a CHILD PROCESS.
@@ -24,13 +33,16 @@ import { namespaces, seedStore, latency, openWriter, publicWrite } from './measu
 import { overlapPageReport } from './measure-contention.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-export const PROTOCOL = Object.freeze({ version: 'E1-C2-v1', repetitions: 5, windowMs: 30000,
+export const PROTOCOL = Object.freeze({ version: 'E1-C2-v2', repetitions: 5, windowMs: 30000,
   smokeWindowMs: 2000, memories: 1112, namespaces: 4, mocs: 71, currentSchema: 33,
   writerPauseMs: 0, walWaitMs: 100, memberDeadlineMs: 250,
-  thresholds: { storageBusy: 0, readerP95Ms: 250, writerThroughputRatio: .9, writerP95Ms: 250, hostLoopMaxMs: 100 },
-  latencyPopulation: 'all attempts started in window, including failures/drain; writer includes open and close',
+  thresholds: Object.freeze({ storageBusy: 0, sqliteBusy: 0, readerP95Ms: 250, writerThroughputRatio: .9,
+    writerP95Ms: 250, hostLoopMaxMs: 100, writeOverlapAttempts: 20, freshCloseOverlapAttempts: 10, commits: 100 }),
+  throughputAcceptance: 'reported engine reference only; product acceptance uses public write-call latency',
+  latencyPopulation: 'all attempts started in window, including failures/drain; writeLatency measures only publicWrite; top-level writer latency includes open and close',
   throughputPopulation: 'successful public writes completed in window',
-  overlapPopulation: 'actual public writer-call intervals; open and close intervals separately recorded',
+  overlapPopulation: 'actual public writer-call and close intervals, clipped to the window; retained shutdown close is reported but never substitutes for fresh per-write close',
+  commitPopulation: 'successful native COMMITs only while publicWrite is active, finishing inside the fixed window; exclude opener commits',
   diagnostics: 'SQLite primary/extended numeric codes; errstr is canonical primary SQLite string, never native message',
   readerLifecycle: 'fresh public openMemoryReader/readTopicOverview or readTopicMembers/await close per request',
   baseline: 'paired fresh seed clone with no reader and no keeper; reverse trial order on odd repetitions',
@@ -62,6 +74,33 @@ export function failureRecord(result) {
     errstr: strings[primary] ?? null,
     errstrSource: 'canonical-sqlite-primary-code', stage: diagnostics?.stage ?? null, statement: diagnostics?.statement ?? null };
 }
+export function readerMetrics(attempts) {
+  let successes = 0, storageBusy = 0, sqliteBusy = 0, cursorStale = 0;
+  const unexpectedFailures = {};
+  for (const call of attempts) {
+    if (!call.failure) { successes++; continue; }
+    const { publicCode, errcode } = call.failure;
+    const nativeBusy = [5, 6].includes(errcode);
+    if (publicCode === 'storage_busy') storageBusy++;
+    if (nativeBusy) sqliteBusy++;
+    if (publicCode === 'cursor_stale' && errcode == null) cursorStale++;
+    else if (publicCode !== 'storage_busy' && !nativeBusy) unexpectedFailures[publicCode] = (unexpectedFailures[publicCode] ?? 0) + 1;
+  }
+  return { attempts: attempts.length, successes, storageBusy, sqliteBusy, cursorStale, unexpectedFailures,
+    ...latency(attempts.map(call => call.elapsedMs)) };
+}
+
+// Exposure is based on actual write/close intervals, never a writer PID/lifetime.
+export function exposureMetrics(attempts, calls, commits, startAt, endAt) {
+  const clip = intervals => intervals.filter(i => Number.isFinite(i.startedAt) && Number.isFinite(i.finishedAt))
+    .map(i => ({ startedAt: Math.max(i.startedAt, startAt), finishedAt: Math.min(i.finishedAt, endAt) }))
+    .filter(i => i.finishedAt > i.startedAt);
+  const writes = clip(calls.map(c => ({ startedAt: c.writeStartedAt, finishedAt: c.writeFinishedAt })));
+  const closes = clip(calls.map(c => ({ startedAt: c.closeStartedAt, finishedAt: c.finishedAt })));
+  return { activeWriteOverlap: overlapPageReport(attempts, writes), activeCloseOverlap: overlapPageReport(attempts, closes),
+    commits: commits.filter(at => at >= startAt && at < endAt).length };
+}
+
 export function diagnosticControl(directory) {
   const copied = new Set(), inventory = [];
   function visit(path) {
@@ -97,20 +136,20 @@ async function writerProcess(config) {
     let sequence = 0, lastProgress = Date.now();
     while (Date.now() < endAt) {
       const startedAt = Date.now(), start = performance.now();
-      let writeStartedAt, writeFinishedAt, closeStartedAt, failure;
-      active = true;
+      let writeStartedAt, writeFinishedAt, writeElapsedMs, closeStartedAt, failure;
       try {
         core ??= await openWriter(config.path, 'same-owner');
-        writeStartedAt = Date.now();
-        await publicWrite(core, 'same-owner', sequence++);
-        writeFinishedAt = Date.now();
+        writeStartedAt = Date.now(); active = true;
+        const writeStart = performance.now();
+        try { await publicWrite(core, 'same-owner', sequence++); }
+        finally { writeElapsedMs = performance.now() - writeStart; writeFinishedAt = Date.now(); active = false; }
       } catch (error) { failure = { code: error.code ?? 'writer_failed', errcode: error.errcode ?? null }; }
       finally {
         if (config.lifecycle === 'fresh') { closeStartedAt = Date.now(); core?.close(); core = undefined; }
         active = false;
       }
       calls.push({ startedAt, finishedAt: Date.now(), elapsedMs: performance.now() - start,
-        writeStartedAt, writeFinishedAt, closeStartedAt, walAfterClose: existsSync(config.path + '-wal'), ...(failure ? { failure } : {}) });
+        writeStartedAt, writeFinishedAt, writeElapsedMs, closeStartedAt, walAfterClose: existsSync(config.path + '-wal'), ...(failure ? { failure } : {}) });
       if (failure) break;
       if (Date.now() - lastProgress >= 1000) {
         process.send({ type: 'progress', calls: calls.length, commits: commits.length }); lastProgress = Date.now();
@@ -180,15 +219,12 @@ export async function runTrial(cell, path, control, signal) {
     }
     histogram.disable(); const exit = await exited; if (fatal) throw fatal;
     const successful = writer.calls.filter(c => !c.failure && c.finishedAt >= startAt && c.finishedAt < endAt);
-    const activeWrites = writer.calls.filter(c => c.writeStartedAt != null && c.writeFinishedAt != null)
-      .map(c => ({ startedAt: c.writeStartedAt, finishedAt: c.writeFinishedAt }));
-    const activeCloses = writer.calls.filter(c => c.closeStartedAt != null)
-      .map(c => ({ startedAt: c.closeStartedAt, finishedAt: c.finishedAt }));
-    if (writer.finalClose) activeCloses.push(writer.finalClose);
-    return { ...cell, startAt, endAt, reader: { attempts: attempts.length, successes: attempts.filter(c => !c.failure).length,
-      storageBusy: attempts.filter(c => c.failure?.publicCode === 'storage_busy').length, ...latency(attempts.map(c => c.elapsedMs)),
-      activeWriteOverlap: overlapPageReport(attempts, activeWrites), activeCloseOverlap: overlapPageReport(attempts, activeCloses) },
-      writer: { calls: writer.calls.length, callsPerSecond: successful.length / (cell.windowMs / 1000),
+    const exposure = exposureMetrics(attempts, writer.calls, writer.commits, startAt, endAt);
+    return { ...cell, startAt, endAt, reader: { ...readerMetrics(attempts),
+        activeWriteOverlap: exposure.activeWriteOverlap, activeCloseOverlap: exposure.activeCloseOverlap,
+        shutdownCloseOverlap: writer.finalClose ? overlapPageReport(attempts, writer.finalClose) : null },
+      writer: { calls: writer.calls.length, callsPerSecond: successful.length / (cell.windowMs / 1000), commits: exposure.commits,
+        writeLatency: latency(writer.calls.filter(c => c.writeElapsedMs !== undefined).map(c => c.writeElapsedMs)),
         failures: writer.calls.filter(c => c.failure), finalClose: writer.finalClose ?? null, ...latency(writer.calls.map(c => c.elapsedMs)), exit },
       hostLoopMaxMs: histogram.max / 1e6, readerCalls: attempts, writerCalls: writer.calls, commitTimes: writer.commits };
   } finally {
@@ -199,16 +235,39 @@ export async function runTrial(cell, path, control, signal) {
 }
 export function compare(trials, smoke) {
   return trials.map(t => {
+    // Re-derive from retained attempts instead of accepting a public-code-only counter.
+    const measured = exposureMetrics(t.readerCalls, t.writerCalls, t.commitTimes, t.startAt, t.endAt);
+    const reader = { ...t.reader, ...readerMetrics(t.readerCalls),
+      activeWriteOverlap: measured.activeWriteOverlap, activeCloseOverlap: measured.activeCloseOverlap };
+    const writer = { ...t.writer, commits: measured.commits,
+      writeLatency: latency(t.writerCalls.filter(c => c.writeElapsedMs !== undefined).map(c => c.writeElapsedMs)) };
     const baseline = trials.find(b => b.pair === t.pair && b.variant === 'baseline');
     const ratio = baseline?.writer.callsPerSecond > 0 ? t.writer.callsPerSecond / baseline.writer.callsPerSecond : null;
-    const eligible = !smoke && t.journal === 'WAL' && ['overview', 'members'].includes(t.variant);
-    const checks = eligible && baseline ? { busy: t.reader.storageBusy === 0,
-      readerProgress: t.reader.successes > 0, writerProgress: t.writer.calls > 0,
-      readerP95: t.reader.p95Ms !== null && t.reader.p95Ms <= 250, writerP95: t.writer.p95Ms !== null && t.writer.p95Ms <= 250,
-      throughput: ratio !== null && ratio >= .9, hostLoop: t.hostLoopMaxMs <= 100,
-      writerFailures: !t.writer.failures.length && !baseline.writer.failures.length } : null;
-    return { ...t, throughputRatio: ratio, gate: checks ? (Object.values(checks).every(Boolean) ? 'pass' : 'fail') :
-      eligible ? 'pending' : 'observation', checks };
+    const readerLoad = t.variant !== 'baseline';
+    const walLoad = readerLoad && t.journal === 'WAL';
+    const eligible = !smoke && walLoad && ['overview', 'members'].includes(t.variant);
+    const bounds = PROTOCOL.thresholds;
+    const exposure = !smoke && walLoad ? {
+      writeOverlap: reader.activeWriteOverlap.pages >= bounds.writeOverlapAttempts,
+      freshCloseOverlap: t.lifecycle !== 'fresh' || reader.activeCloseOverlap.pages >= bounds.freshCloseOverlapAttempts,
+      commitProgress: writer.commits >= bounds.commits,
+      baselineCommitProgress: Boolean(baseline && baseline.commitTimes.filter(at => at >= baseline.startAt && at < baseline.endAt).length >= bounds.commits),
+    } : null;
+    const valid = !exposure || Object.values(exposure).every(Boolean);
+    const checks = eligible ? { busy: reader.storageBusy === 0 && reader.sqliteBusy === 0,
+      readerFailures: Object.keys(reader.unexpectedFailures).length === 0,
+      readerProgress: reader.successes > 0,
+      readerP95: reader.p95Ms !== null && reader.p95Ms <= bounds.readerP95Ms,
+      writerP95: writer.writeLatency.p95Ms !== null && writer.writeLatency.p95Ms <= bounds.writerP95Ms,
+      hostLoop: t.hostLoopMaxMs <= bounds.hostLoopMaxMs,
+      writerFailures: !t.writer.failures.length && Boolean(baseline && !baseline.writer.failures.length) } : null;
+    const unexpected = readerLoad && Object.keys(reader.unexpectedFailures).length > 0;
+    return { ...t, reader, writer, throughputRatio: ratio,
+      engineThroughput: { referenceRatio: bounds.writerThroughputRatio, meetsReference: ratio === null ? null : ratio >= bounds.writerThroughputRatio,
+        acceptanceGate: false },
+      validity: { status: exposure ? (valid ? 'valid' : 'invalid') : 'not-evaluated', checks: exposure },
+      gate: !valid ? 'invalid' : unexpected ? 'fail' :
+        eligible ? (Object.values(checks).every(Boolean) ? 'pass' : 'fail') : 'observation', checks };
   });
 }
 export async function main(args = process.argv.slice(2)) {
@@ -252,7 +311,8 @@ export async function main(args = process.argv.slice(2)) {
       console.error(JSON.stringify({ start: i + 1, total: report.plan.length, ...cell }));
       report.trials.push(await runTrial(cell, path, report.control, controller.signal)); report.trials = compare(report.trials, smoke); save();
     }
-    report.status = report.trials.some(t => t.gate === 'fail' || t.writer.failures.length) ? 'failed' : 'complete';
+    report.status = report.trials.some(t => t.gate === 'fail' || t.writer.failures.length) ? 'failed' :
+      report.trials.some(t => t.gate === 'invalid') ? 'invalid' : 'complete';
   } catch (error) { report.status = 'failed'; report.failure = error.message; console.error(error); }
   finally {
     process.off('SIGINT', cancel); process.off('SIGTERM', cancel);
@@ -260,9 +320,12 @@ export async function main(args = process.argv.slice(2)) {
     catch (error) { report.status = 'failed'; report.cleanupFailure = error.message; }
     finally { save(); }
   }
-  console.log('schema journal writer variant attempts busy read95 writer/s write95 ratio loopMax gate');
-  for (const t of report.trials) console.log([t.schema, t.journal, t.lifecycle, t.variant, t.reader.attempts, t.reader.storageBusy,
-    t.reader.p95Ms?.toFixed(2), t.writer.callsPerSecond.toFixed(2), t.writer.p95Ms?.toFixed(2), t.throughputRatio?.toFixed(2), t.hostLoopMaxMs.toFixed(2), t.gate].join(' '));
+  console.log('schema journal writer variant attempts publicBusy sqliteBusy stale unexpected read95 writer/s lifecycle95 write95/writeMax commits writeOverlap/closeOverlap ratio loopMax gate');
+  for (const t of report.trials) console.log([t.schema, t.journal, t.lifecycle, t.variant, t.reader.attempts, t.reader.storageBusy, t.reader.sqliteBusy, t.reader.cursorStale, Object.values(t.reader.unexpectedFailures).reduce((a,b) => a+b, 0),
+    t.reader.p95Ms?.toFixed(2), t.writer.callsPerSecond.toFixed(2), t.writer.p95Ms?.toFixed(2),
+    [t.writer.writeLatency.p95Ms, t.writer.writeLatency.maxMs].map(v => v?.toFixed(2) ?? '-').join('/'), t.writer.commits,
+    [t.reader.activeWriteOverlap.pages, t.reader.activeCloseOverlap.pages].join('/'),
+    t.throughputRatio?.toFixed(2), t.hostLoopMaxMs.toFixed(2), t.gate].join(' '));
   console.log(JSON.stringify({ report: reportPath, status: report.status, trials: report.trials.length }));
   if (report.status !== 'complete') process.exitCode = 1;
   return report;

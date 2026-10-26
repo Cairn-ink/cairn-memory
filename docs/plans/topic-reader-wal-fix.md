@@ -189,3 +189,151 @@ tools/testing/measure-topic-overview-contention.mjs
 tools/testing/measure-topic-reader-wal.mjs
 tools/testing/measure-topic-reader-wal.test.mjs
 ~~~
+
+
+## Fix round 1: review resolution and protocol v2
+
+The sections above preserve the initial handoff. Its implementation is committed
+as 3e6185c2; this round is based on a85991e8 and remains uncommitted for the
+primary. The primary's writer IPC send-callback wait and exit/disconnect handling
+are preserved byte-for-byte (two independently extracted source blocks compared
+against a85991e8, exit 0).
+
+All seven findings are resolved:
+
+| Finding | Resolution and deterministic coverage |
+| --- | --- |
+| Standards P2: absent iterator methods | Only existing iterator functions are wrapped; absent throw stays undefined. A native in-memory yield-delegation cancellation test then drops the table, proving no active cursor remains, in both proxy modes. |
+| Standards P2: statement constructor | Pass through constructor; compare native constructor identity and prototype. |
+| Standards P2: timeout error attribution | Timeout installation has its own error boundary, outside the statement handler: configure/reader_configuration. Fault injection targets timeout, prepare, BEGIN, get and iterator steps separately, asserting exact labels and executed operations. |
+| Spec P1: native busy acceptance | Re-derive counters from retained attempts. Count primary SQLite 5/6 independently of public storage_busy; reject either in production WAL acceptance. One-success/99-legacy-mapped BUSY or LOCKED probes now fail. cursor_stale is separate; unexpected failures fail. |
+| Spec P1: missing overlap | Pre-register 20 write-overlapping attempts, 10 fresh per-write-close-overlapping attempts, and 100 in-window public-write commits in both cell and baseline. Re-derive exposure from raw intervals/commits; insufficient exposure is invalid. Tests cover absent/below-bound overlap, insufficient/window-excluded commits, retained close exemption and unchanged raw attempts. |
+| Spec P2: truncated headers | Require a complete 100-byte header; test all lengths 20 through 99 with valid-looking WAL prefixes, plus complete WAL and DELETE headers. |
+| Spec P2: stale rollback timeout | Refresh before rollback; controlled clock consumes 100ms and verifies busy_timeout=0 immediately before ROLLBACK. |
+
+Product reporting is implemented as writer.writeLatency.p95Ms/maxMs for every
+reader-load cell, measured around the public write call and separated from the
+full open/write/close lifecycle latency. Public-write p95 retains the 250ms gate;
+max is reported without inventing an additional limit. The original 0.90 ratio
+remains in engineThroughput as a reported reference with acceptanceGate:false.
+The WAL wait remains 100ms; it was not tuned. Commit instrumentation excludes
+opener commits. Overlap is clipped to the measurement window; retained shutdown
+close is reported separately and cannot satisfy fresh per-write-close exposure.
+
+The header and saved protocol were changed to E1-C2-v2 before the only smoke.
+Full-window exposure minima apply per 30s cell and are not asserted by smoke.
+The additive contract v2 and public docs state these changes. There are no new
+runtime modules or shipped docs in this round; existing registrations suffice.
+
+### Round 1 commands and actual exits
+
+Only the two touched test files were run, by explicit path. The same test command
+was run three times as assertions/diagnostic error-boundary structure were
+completed; every run exited 0 with 16/16 tests. The last run follows the final
+runtime change. No broad suites, network, paid calls or full measurement ran.
+
+~~~sh
+node --test core/test/topic-reader-sqlite.test.mjs tools/testing/measure-topic-reader-wal.test.mjs
+# exit 0; 16/16 tests
+npm run measure:topic-reader-wal -- --smoke --report <temp-dir>/smoke.json
+# exit 0; exactly one smoke, 40 cells, one 2s window per cell
+~~~
+
+After the smoke, the timeout-installation error handler was moved outside the
+caller handler (same tested boundary labels, no wait or gate change) and one
+trailing space was removed; the final 16-test rerun passed. No second smoke ran.
+This is smoke validation, not full performance acceptance.
+
+### Round 1 smoke output
+
+All 40 separate writer processes exited 0 and delivered complete results. All
+32 reader-load cells have numeric per-write p95/max. No unexpected reader
+failures occurred. Every recorded native commit belongs to an actual public
+write interval, independently cross-checked from the raw report. Every reader
+attempt remains present in readerCalls.
+
+Fixed WAL summary: {"attempts": 313, "cursorStale": 166, "maxWriteLatency": 31.22479099999987, "maxWriteP95": 27.2626479999999, "publicBusy": 0, "sqliteBusy": 0, "successes": 147}.
+
+Zero-wait WAL control: {"attempts": 326, "cursorStale": 162, "maxWriteLatency": 31.882817999999986, "maxWriteP95": 26.066855000000032, "publicBusy": 49, "sqliteBusy": 49, "successes": 115}.
+
+~~~text
+schema journal writer variant attempts publicBusy sqliteBusy stale unexpected read95 writer/s lifecycle95 write95/writeMax commits writeOverlap/closeOverlap ratio loopMax gate
+18 WAL retained baseline 0 0 0 0 0  108.50 9.98 9.97/20.74 217 0/0 1.00 10.43 observation
+18 WAL retained zero-wait-overview 44 0 0 18 0 46.52 106.50 11.30 11.30/29.54 213 44/0 0.98 10.97 observation
+18 WAL retained zero-wait-members 41 0 0 41 0 51.73 107.00 11.28 11.28/23.96 214 41/0 0.99 11.04 observation
+18 WAL retained overview 45 0 0 23 0 46.33 107.50 10.67 10.67/23.40 215 45/0 0.99 11.03 observation
+18 WAL retained members 43 0 0 41 0 48.01 110.50 9.78 9.78/22.28 221 43/0 1.02 11.05 observation
+18 WAL fresh baseline 0 0 0 0 0  27.50 39.44 25.87/30.37 55 0/0 1.00 10.27 observation
+18 WAL fresh zero-wait-overview 48 20 20 8 0 45.17 30.50 39.10 26.07/26.89 61 47/46 1.11 11.01 observation
+18 WAL fresh zero-wait-members 44 17 17 13 0 52.84 30.00 38.60 25.42/29.08 60 42/42 1.09 10.98 observation
+18 WAL fresh overview 42 0 0 5 0 61.94 26.50 44.33 27.21/31.02 54 40/39 0.96 10.90 observation
+18 WAL fresh members 38 0 0 17 0 69.80 31.00 38.72 27.26/31.22 62 36/35 1.13 11.08 observation
+18 DELETE retained baseline 0 0 0 0 0  36.50 32.48 32.48/35.08 73 0/0 1.00 10.46 observation
+18 DELETE retained zero-wait-overview 53 52 52 0 0 39.27 36.50 30.60 30.60/32.33 73 53/0 1.00 11.05 observation
+18 DELETE retained zero-wait-members 54 53 53 0 0 39.66 37.00 30.79 30.79/35.28 74 54/0 1.01 11.04 observation
+18 DELETE retained overview 54 54 54 0 0 38.12 36.50 34.65 34.65/35.35 73 54/0 1.00 11.02 observation
+18 DELETE retained members 52 51 51 0 0 41.16 39.50 29.32 29.32/35.55 79 52/0 1.08 11.06 observation
+18 DELETE fresh baseline 0 0 0 0 0  34.00 35.22 31.39/38.36 68 0/0 1.00 10.58 observation
+18 DELETE fresh zero-wait-overview 52 49 49 0 0 43.03 31.50 35.27 33.51/43.69 63 50/13 0.93 11.03 observation
+18 DELETE fresh zero-wait-members 50 47 47 0 0 52.39 28.50 41.41 38.43/42.17 57 48/17 0.84 11.08 observation
+18 DELETE fresh overview 48 46 46 0 0 45.48 31.00 35.86 33.99/37.33 62 46/21 0.91 11.08 observation
+18 DELETE fresh members 51 49 49 0 0 47.37 31.50 35.74 33.89/35.86 63 49/20 0.93 11.06 observation
+33 WAL retained baseline 0 0 0 0 0  110.00 11.54 11.54/26.80 220 0/0 1.00 10.31 observation
+33 WAL retained zero-wait-overview 34 1 1 19 0 61.10 108.50 11.85 11.84/31.88 217 34/0 0.99 11.03 observation
+33 WAL retained zero-wait-members 41 0 0 38 0 56.07 105.00 11.99 11.99/26.49 210 41/0 0.95 10.94 observation
+33 WAL retained overview 34 0 0 26 0 61.27 105.50 11.61 11.60/26.78 211 34/0 0.96 10.94 observation
+33 WAL retained members 41 0 0 38 0 56.23 102.50 12.66 12.65/27.74 205 41/0 0.93 10.99 observation
+33 WAL fresh baseline 0 0 0 0 0  21.50 51.06 24.74/30.74 43 0/0 1.00 10.37 observation
+33 WAL fresh zero-wait-overview 35 6 6 9 0 64.59 23.50 53.26 24.81/25.41 47 33/33 1.09 11.00 observation
+33 WAL fresh zero-wait-members 39 5 5 16 0 56.07 23.50 52.92 24.75/28.04 47 37/37 1.09 11.18 observation
+33 WAL fresh overview 33 0 0 5 0 63.20 26.50 48.36 26.03/27.08 53 31/31 1.23 11.07 observation
+33 WAL fresh members 37 0 0 11 0 63.96 26.00 50.06 23.81/24.80 53 35/35 1.21 10.95 observation
+33 DELETE retained baseline 0 0 0 0 0  36.00 34.68 34.68/37.13 72 0/0 1.00 10.32 observation
+33 DELETE retained zero-wait-overview 53 52 52 0 0 40.88 32.50 35.43 35.43/42.30 65 53/0 0.90 11.06 observation
+33 DELETE retained zero-wait-members 53 52 52 0 0 41.21 33.00 35.95 35.95/39.91 66 53/0 0.92 10.99 observation
+33 DELETE retained overview 53 52 52 0 0 40.71 35.00 34.84 34.84/37.38 70 53/0 0.97 11.03 observation
+33 DELETE retained members 53 52 52 0 0 39.61 35.00 35.14 35.13/37.00 70 53/0 0.97 10.90 observation
+33 DELETE fresh baseline 0 0 0 0 0  24.00 45.24 33.22/34.09 48 0/0 1.00 10.32 observation
+33 DELETE fresh zero-wait-overview 45 42 42 0 0 60.10 20.50 49.95 37.25/39.19 41 43/40 0.85 10.92 observation
+33 DELETE fresh zero-wait-members 46 44 44 0 0 50.32 21.50 49.53 36.39/37.73 43 44/43 0.90 10.86 observation
+33 DELETE fresh overview 47 45 45 0 0 57.35 22.00 48.70 35.14/37.05 44 45/43 0.92 11.15 observation
+33 DELETE fresh members 47 44 44 0 0 52.09 21.50 48.19 35.94/36.29 43 45/43 0.90 11.07 observation
+{"report":"<temp-dir>/smoke.json","status":"complete","trials":40}
+~~~
+
+### Round 1 final inventory and checks
+
+Changed-file sets from git diff --name-only HEAD plus git ls-files --others
+--exclude-standard and independently git status --porcelain=v1 -z are identical:
+**7 files**, exit 0. Whitespace scan includes all these paths and untracked files:
+exit 0. node --check on each of the four changed .mjs files: exit 0.
+
+~~~text
+core/test/topic-reader-sqlite.test.mjs
+core/topic-reader-sqlite.mjs
+docs/plans/topic-overview-member-pages.md
+docs/plans/topic-reader-wal-fix.md
+docs/topic-overview.md
+tools/testing/measure-topic-reader-wal.mjs
+tools/testing/measure-topic-reader-wal.test.mjs
+~~~
+
+
+Exact syntax/whitespace commands (each exit 0):
+
+~~~sh
+node --check core/test/topic-reader-sqlite.test.mjs
+node --check core/topic-reader-sqlite.mjs
+node --check tools/testing/measure-topic-reader-wal.mjs
+node --check tools/testing/measure-topic-reader-wal.test.mjs
+git diff --check
+~~~
+
+Inline read-only closure assertions exited 0: installedImportClosure over the
+reader and Worker found 52 required files, all in the manifest; all three
+modified shipped docs are registered. An independent repository-only static
+MCP traversal found 58 modules and zero node:sqlite imports (exit 0); external
+packages were not traversed. No new manifest entries were needed. Final
+inventory equality and whitespace were rechecked after this report update.
+The full v2 measurement remains for the primary's machine-wide queue. No claim
+of full performance acceptance follows from the single 2s smoke.

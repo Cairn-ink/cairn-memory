@@ -907,3 +907,35 @@ cells, >=5 x 30s, zero busy, reader/writer p95 <=250ms, writer throughput >=90%
 of paired no-reader baseline and host loop max <=100ms. DELETE is report-only.
 A 2s single-repetition smoke establishes harness operation and may reproduce the
 race; it does not establish production performance acceptance.
+
+
+## E1-C2 review correction v2 (2026-10-26)
+
+The preceding diagnostics DTO and legacy error classification are unchanged.
+WAL detection requires a complete **100-byte** main-file header before testing
+the signature and 2/2 version bytes. All shorter files, including valid-looking
+20–99 byte prefixes, retain zero wait and normal validation. Native rollback
+refreshes the request's remaining timeout, including zero after expiry.
+Timeout-installation errors have `configure/reader_configuration` provenance.
+Native statement constructors and absent iterator methods are preserved.
+
+Measurement protocol **E1-C2-v2** supersedes v1's throughput acceptance gate at
+the product's request: report public-write-call p95/max for every reader-load
+cell; gate public-write p95 at 250ms. Max is reported without an additional
+threshold. Keep the pre-registered 0.90 baseline throughput ratio as an engine
+reference with its comparison result, excluded from product acceptance. Do not
+tune the 100ms wait to reach it. Full lifecycle latency is separately reported.
+
+A zero-busy pass requires both zero public `storage_busy` and zero diagnostic
+SQLite primary 5/6, regardless of the public classification. `cursor_stale` is
+permitted and counted separately; other reader failures fail the cell. Every
+attempt, including failures and the final drain, remains in the report.
+
+Pre-register before a run, per full 30s WAL reader-load cell: **20** attempts
+overlapping actual public writes; for fresh writers, **10** attempts overlapping
+per-write close; and **100** successful native commits during public write calls
+and inside the fixed window in both cell and paired baseline. Opener commits,
+sleeps and retained shutdown close do not satisfy these requirements. Cells
+below any minimum are **invalid**, never passing. Smoke does not assert these
+full-window minima; DELETE latency/contention remains report-only. Existing
+five-repetition, zero-busy, reader p95 and host-loop thresholds remain unchanged.

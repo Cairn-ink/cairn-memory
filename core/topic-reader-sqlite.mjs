@@ -9,9 +9,9 @@ export function topicJournalMode(path, expected) {
   try {
     const stat = fstatSync(fd);
     if (!stat.isFile() || stat.dev !== expected.dev || stat.ino !== expected.ino) fail('unsafe_database_file');
-    const header = Buffer.alloc(20);
+    const header = Buffer.alloc(100);
     const size = readSync(fd, header, 0, header.length, 0);
-    return size === 20 && header.subarray(0, 16).equals(Buffer.from('SQLite format 3\0')) &&
+    return size === 100 && header.subarray(0, 16).equals(Buffer.from('SQLite format 3\0')) &&
       header[18] === 2 && header[19] === 2 ? 'WAL' : 'DELETE';
   } finally { closeSync(fd); }
 }
@@ -57,19 +57,21 @@ export function createTopicSqlitePolicy({ diagnostics = false, now = () => perfo
       if (!wal && !diagnostics) return native;
       let installed = 0;
       function invoke(object, method, args, stage, statement) {
-        try {
-          if (wal && !['close', 'rollback'].includes(stage)) {
-            const remaining = Math.max(0, Math.floor(until - now()));
-            if (installed !== remaining) {
-              native.exec('PRAGMA busy_timeout=' + remaining); installed = remaining;
-            }
+        if (wal && stage !== 'close') {
+          const remaining = Math.max(0, Math.floor(until - now()));
+          if (installed !== remaining) {
+            try { native.exec('PRAGMA busy_timeout=' + remaining); }
+            catch (error) { throw recordSqliteFailure(error, 'configure', 'reader_configuration'); }
+            installed = remaining;
           }
+        }
+        try {
           const result = Reflect.apply(object[method], object, args);
           if (method !== 'iterate') return result;
           const wrapped = new Proxy(result, { get(iterator, key) {
             if (key === Symbol.iterator) return () => wrapped;
             const value = Reflect.get(iterator, key, iterator);
-            if (['next', 'return', 'throw'].includes(key)) return (...values) => invoke(iterator, key, values, 'execute', statement);
+            if (typeof value === 'function' && ['next', 'return', 'throw'].includes(key)) return (...values) => invoke(iterator, key, values, 'execute', statement);
             return typeof value === 'function' ? value.bind(iterator) : value;
           } });
           return wrapped;
@@ -80,6 +82,7 @@ export function createTopicSqlitePolicy({ diagnostics = false, now = () => perfo
         if (key === 'prepare') return sql => {
           const statement = label(sql), prepared = invoke(object, key, [sql], 'prepare', statement);
           return new Proxy(prepared, { get(target, name) {
+            if (name === 'constructor') return target.constructor;
             const value = Reflect.get(target, name, target);
             return typeof value === 'function' ? (...args) => invoke(target, name, args, 'execute', statement) : value;
           } });
