@@ -714,11 +714,21 @@ otherwise warm host is not a substitute for this cold series.
 Use nearest-rank percentiles: sort durations and select ranks `ceil(0.50*n)`
 and `ceil(0.95*n)` for p50/p95. Report **p50, p95 and maximum**, sample counts,
 all error/status counts and the count of main-loop blocks **strictly >100ms**
-for each cell/series. Timed attempts include typed failures; also report
-successful-page latency separately so fast refusals cannot masquerade as page
-performance. An error is not a page; a cell with no successful pages cannot
-establish page performance and is inconclusive. Preserve all raw numeric
-attempt records. No silent retry, removal of slow samples or pooling of retries
+for each cell/series. Timed attempts include typed failures, and all-attempt
+latency and error counts are always reported.
+
+**Gated population.** Every latency gate in the decision table below (p95 and
+maximum, main series and cold series) is evaluated on the **successful-page
+population only**: requests that returned `ok:true` with a page (complete or a
+progressing partial), timed open→read→close. A cell's main series needs
+**>=50 successful pages** after the warm-ups, and its cold series **>=10
+successful cold runs**. Keep sampling, without selecting for speed, until the
+count is reached or a hard ceiling of 10x the target attempts (500 main, 100
+cold) is hit. A cell that stays below its successful-page minimum is
+**inconclusive**, not passing, and is reported as such with its full
+all-attempt record. Thus fast refusals (for example DELETE `storage_busy`) can
+neither lower a gated percentile nor substitute for missing page evidence. An
+error is not a page. Preserve all raw numeric attempt records. No silent retry, removal of slow samples or pooling of retries
 into one fast success is allowed; report any retry-inclusive user latency too.
 
 #### Per-request writers
