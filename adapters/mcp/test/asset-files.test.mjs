@@ -12,7 +12,7 @@ for(let position=1;position<=6;position++)test(`L02 input close ${position}: ret
   writeFileSync(child,`
     import assert from 'node:assert/strict';import fs from 'node:fs';import {syncBuiltinESMExports} from 'node:module';
     import {prepareAssetFiles} from ${JSON.stringify(new URL('../asset-files.mjs',import.meta.url).href)};
-    const files=prepareAssetFiles();files.read(${JSON.stringify(a)},100);files.read(${JSON.stringify(b)},100);
+    const files=prepareAssetFiles(${JSON.stringify(join(workspace.path,'store.sqlite'))});files.read(${JSON.stringify(a)},100);files.read(${JSON.stringify(b)},100);
     const original=fs.closeSync,attempts=[],first=Error('first private close error'),second=Error('second private close error');
     fs.closeSync=fd=>{attempts.push(fd);original(fd);if(attempts.length===${position})throw first;if(attempts.length===${position+1})throw second;};
     syncBuiltinESMExports();let failure;

@@ -209,3 +209,16 @@ test('exclusive creation and setup refuse a store with an active host writer', a
     assert.equal(result.status, 'blocked'); assert.equal(result.reason, 'store_invalid');
   } finally { f.db.exec('ROLLBACK'); }
 });
+
+test('wrong application ID plus malformed schema retains b2513501 legacy error precedence', async t => {
+  const { baselineReader } = await import('../testing/topic-members-round3-fixture.mjs');
+  const f = memberFixture(t);
+  f.db.exec("PRAGMA application_id=1; PRAGMA writable_schema=ON; UPDATE sqlite_master SET sql='CREATE TABLE invalid (' WHERE name='memories'; PRAGMA writable_schema=OFF;");
+  const oldOpen = await baselineReader(f.workspace, message => t.diagnostic(message));
+  const expected = { ok: false, error: { code: 'unsupported_database' } };
+  for (const open of [oldOpen, openMemoryReader]) {
+    const reader = open({ path: f.path, ownerId: namespace.ownerId });
+    try { assert.deepEqual(await reader.readTopicOverview({ namespace }), expected); }
+    finally { await reader.close(); }
+  }
+});

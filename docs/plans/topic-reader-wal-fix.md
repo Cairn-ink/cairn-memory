@@ -357,11 +357,12 @@ Worker threads share the process, and Worker exit closes even cached fds.
 | sidecar O_CREAT/O_EXCL creation | Yes, narrow creation race | Same child-owned exclusive creation; no host fd. |
 | local raw setup wx creation | Yes, narrow creation race | Additional site in integrations. Its awaited stat/sync previously widened the create-to-close window; use the same child-owned creation helper. |
 
-No additional intentional DB/companion reads were found in adapters, setup lib,
-integrations or plugins. The committed setup engine archive still contains all
-three unsafe probes and three creation closes until the primary regenerates
-it; the new guard detects all six. Generic prompt, package/asset, transcript and configuration readers
-are explicitly audited non-database input channels in the call-site allowlist.
+Historical initial audit: no additional intentional DB/companion reads were
+identified in adapters, setup lib, integrations or plugins. Review subsequently
+found that the generic asset input channel also needed explicit inode exclusions
+(see lock-safety fix round 1 below). At that initial handoff, the setup engine
+archive still contained the three unsafe probes and three creation closes;
+the primary later regenerated it in 3b94921d.
 
 Topic detection uses companion lstat hints, never raw descriptors. WAL/SHM
 without a rollback journal enables waiting on the first journal-mode query.
@@ -403,8 +404,9 @@ because a surviving SHM read-mark alone does not prove main-file lock safety.
 The CI guard scans source plus the setup runtime tree and compressed engine,
 uses exact source lines and multiplicity with one-line justifications, and
 self-tests the old header pattern and alternative fs spellings. The source
-and scanner self-tests pass. The archived-engine test intentionally remains
-red until the primary performs the required bundle regeneration.
+and scanner self-tests passed. Historically, the archived-engine test was red
+at the initial handoff; the primary's regenerated bundle passed verification
+at 3b94921d (see the round 1 verification below).
 
 
 ### Final scoped verification and handoff
@@ -432,9 +434,9 @@ was a 500ms context deadline exceeded during a measured 576ms filesystem commit.
 All affected files passed the focused reruns above; no full-matrix acceptance
 is claimed. Source syntax/JSON and whitespace checks passed, exit 0.
 
-The full guard remains intentionally failing until the primary regenerates
-packages/setup/runtime, including its compressed engine. No unsafe bundle
-exception was added to the allowlist.
+Historical handoff status: the full guard failed until the primary regenerated
+packages/setup/runtime, including its compressed engine, in 3b94921d. No unsafe
+bundle exception was added to the allowlist.
 
 Changed inventory: git diff --name-only HEAD plus git ls-files --others
 --exclude-standard was independently compared with git status --porcelain=v1 -z.
@@ -457,4 +459,154 @@ docs/plans/topic-reader-wal-fix.md
 docs/topic-overview.md
 integrations/client/raw/local-setup-init.mjs
 packaging/artifact-files.json
+```
+
+
+## Lock-safety fix round 1 (2026-10-27)
+
+Based on 3b94921d. The v1.0.1 exception remains accepted and unchanged: an
+exclusive DELETE transaction with no journal can receive the bounded opening
+wait. Detected DELETE statements retain zero wait. This round changes no wait
+budget or contention gate.
+
+| Finding | Fix | Regression |
+| --- | --- | --- |
+| Standards P1: guard bypasses | Tokenize imports across whitespace/comments; audit the entire import declaration and every fs binding (including metadata-only imports). Also audit dynamic import/require call boundaries, including createRequire aliases. Keep exact call-site multiplicity. No dependencies added. | no-raw-db-fd negative self-tests cover promises aliases, dollar identifiers, mixed imports, multiline dynamic imports, namespace/default bindings, quoted export names and FileHandle acquisition. |
+| Standards P1: asset inputs can open storage | Require the store path; pass the pinned store identity from the asset command. Retain and refresh dev/ino exclusions for the canonical DB, context sidecar and all WAL/SHM/journal companions. Check lstat/stat before pins and the pinned inode before opening for data. This preserves the existing O_PATH pin/revalidation protocol; inode checks avoid a new child protocol for asset review. | sqlite-lock-safety tests reject direct single-link paths and hard-link aliases during host transactions, then verify a separate-process contender stays BUSY. DELETE and WAL cover DBs, sidecar, journals, WAL and SHM. Existing asset close/error tests retain their assertions with the now-required store argument. |
+| Spec P1: unreadable sidecar enters rebuild | Isolated probe records open/query provenance. Open failures become unsafe_file; writable SQLite constructor failures also become unsafe_file. Neither can enter deletion/rebuild. | context-read-sidecar injects CANTOPEN at the actual child constructor; read-only and writable paths return unsafe_file, retain bytes/inode and emit no filesystem events. Existing checkpointed-WAL and corrupt-rebuild tests remain. |
+| Spec P1: legacy precedence | Non-BUSY/non-LOCKED mode detection failures defer to the original metadata validation. Correct the misleading header-only description: journal_mode may parse schema metadata. | topic-reader-sqlite compares wrong application ID plus malformed sqlite_master SQL against the vendored b2513501 reader; both return unsupported_database. |
+| Standards P2: failed exclusive creation | In the isolated child, create a unique same-directory 0600 wx stage, fsync and close it, publish with link (no replacement), unlink stage and fsync directory. Pre-publication failures clean the stage. A later attempt removes stages belonging to dead children; existing targets are never replaced or removed. | sqlite-journal-probe injects file-fsync failure and a timeout after stage creation. Both leave no target; normal local setup retries successfully and removes dead stages. A competing target between fsync and link remains intact. |
+| Spec P2: stale report | Mark initial red archived-guard claims historical and record primary-regenerated bundle verification separately from this round's stale bundle. | Run the generated-runtime/archive test from the 3b94921d guard and allowlist against the committed bundle: 1/1 pass, exit 0. |
+
+Publication recovery is deliberately no-replace. If interrupted before link,
+only a stage can remain and a subsequent attempt cleans it once its child PID
+is dead. If interrupted after link, the published target remains; an existing
+target is still refused with EEXIST rather than overwritten. Directory-sync
+errors after publication carry published:true. PID reuse can defer stale-stage
+cleanup until that PID exits; it cannot grant replacement of a target.
+
+### Round 1 verification
+
+Commands use explicit test paths, Node 22.16.0 unless specified, and actual
+process exit codes. No network, real keys, commits or bundle regeneration.
+
+- Original eight lock regressions on a newly created detached 546d57ac
+  worktree: Node 22.16.0 and 24.22.1 each exit 1, 2 pass / 6 fail. Test source
+  equals the current original-eight prefix and 3b94921d, ignoring only a separator
+  blank line; SHA256 760d63e31d1e472f52b5c04f302fbf6b25d98988438aefbc30ac593bab6b4c4a.
+  The detached worktree was removed; removal and absence verification exit 0.
+- Current expanded sqlite-lock-safety suite: Node 22.16.0 and 24.22.1 each
+  exit 0, 10/10 pass (original eight plus DELETE/WAL asset-input cases).
+- Regenerated baseline bundle: original 3b94921d guard/allowlist, generated
+  runtime and archived-engine test only: exit 0, 1/1 pass.
+- This round's source guard and negative self-tests: exit 0, 2/2 pass.
+  The complete guard exits 1 solely on the now-stale bundle; regeneration is
+  left to the primary. No stale-bundle exception was added.
+
+The first focused run exited 1 (49 pass / 1 fail): the new fixture updated an
+empty sidecar table, which produced no journal. The corrected fixture writes
+user_version to ensure a real journal; the lock reruns above pass.
+
+The complete scoped Node 22.16.0 run below finished with **637/637 tests
+passing, exit 0** (43 explicit files; 554 top-level cases plus nested tests).
+It includes every requested topic/context-read file, both lock/creation files,
+the existing asset-files/assets/asset-export tests and local-host-setup tests.
+The final sidecar constructor-fault rerun also exits 0, 1/1 pass. No broad npm
+suite was run. The source guard audits 276 exact references, including imports;
+unused or excess allowlist multiplicities are rejected in both directions.
+
+The explicit 43-path regression command (path set independently cross-checked
+using Python glob and rg --files, equality exit 0) is:
+
+```sh
+node --test --test-concurrency=1 \
+  core/test/topic-members-bounds.test.mjs \
+  core/test/topic-members-compatibility.test.mjs \
+  core/test/topic-members-integration.test.mjs \
+  core/test/topic-members-mutations.test.mjs \
+  core/test/topic-members-primary.test.mjs \
+  core/test/topic-members-recheck-findings.test.mjs \
+  core/test/topic-members-review-findings.test.mjs \
+  core/test/topic-members-round3-findings.test.mjs \
+  core/test/topic-members-scale.test.mjs \
+  core/test/topic-members-visibility.test.mjs \
+  core/test/topic-members.test.mjs \
+  core/test/topic-overview-lifecycle.test.mjs \
+  core/test/topic-overview-raw29.test.mjs \
+  core/test/topic-overview-visibility.test.mjs \
+  core/test/topic-overview.test.mjs \
+  core/test/topic-reader-sqlite.test.mjs \
+  core/test/context-read-assembly-races.test.mjs \
+  core/test/context-read-assembly-readonly.test.mjs \
+  core/test/context-read-assembly.test.mjs \
+  core/test/context-read-bm25.test.mjs \
+  core/test/context-read-budget.test.mjs \
+  core/test/context-read-core.test.mjs \
+  core/test/context-read-embedder.test.mjs \
+  core/test/context-read-fusion.test.mjs \
+  core/test/context-read-local-embedder.test.mjs \
+  core/test/context-read-local-status.test.mjs \
+  core/test/context-read-moc-source.test.mjs \
+  core/test/context-read-process.test.mjs \
+  core/test/context-read-recovery.test.mjs \
+  core/test/context-read-review.test.mjs \
+  core/test/context-read-sidecar.test.mjs \
+  core/test/context-read-source-work.test.mjs \
+  core/test/context-read-sources-authority.test.mjs \
+  core/test/context-read-sources-bounds.test.mjs \
+  core/test/context-read-sources-races.test.mjs \
+  core/test/context-read-sources.test.mjs \
+  core/test/context-read-tokenize.test.mjs \
+  core/test/sqlite-lock-safety.test.mjs \
+  core/test/sqlite-journal-probe.test.mjs \
+  adapters/mcp/test/asset-files.test.mjs \
+  adapters/mcp/test/assets.test.mjs \
+  adapters/mcp/test/asset-export.test.mjs \
+  integrations/client/test/local-host-setup.test.mjs
+```
+
+Additional final commands:
+
+```sh
+node --test core/test/sqlite-journal-probe.test.mjs
+node --test --test-concurrency=1 core/test/sqlite-lock-safety.test.mjs adapters/mcp/test/asset-files.test.mjs adapters/mcp/test/assets.test.mjs
+node --test --test-name-pattern='runtime raw|guard rejects' core/test/no-raw-db-fd.test.mjs
+node --test core/test/no-raw-db-fd.test.mjs
+# Node 24.22.1:
+node --test --test-reporter=tap core/test/sqlite-lock-safety.test.mjs
+```
+
+Final focused creation tests: exit 0, 5/5 pass (file fsync, pre-link timeout,
+competing publication, directory fsync and post-link timeout). Final Node 22
+asset/lock rerun: exit 0, 62/62 pass after the required store argument and retained
+inode exclusions. Final Node 24 lock rerun: exit 0, 10/10 pass.
+
+Import/Worker/CLI reachability (memory-reader, topic-overview-worker, MCP CLI,
+local-setup-init): 231 required files, zero missing from artifact-files.json;
+both changed shipped docs registered, exit 0. No new runtime module was added.
+
+### Round 1 changed inventory
+
+Union of git diff --name-only HEAD and git ls-files --others --exclude-standard
+compared with independently parsed git status --porcelain=v1 -z: diff exit 0,
+**14 files**. This includes the untracked creation regression test. Every changed
+.mjs (11) passes node --check, actual exits 0; JSON parse, git diff --check and
+independent whitespace/newline checks over all 14 files exit 0. The runtime
+bundle has no changed paths.
+
+```text
+adapters/mcp/asset-command.mjs
+adapters/mcp/asset-files.mjs
+adapters/mcp/test/asset-files.test.mjs
+core/context-read-sidecar.mjs
+core/read-database.mjs
+core/sqlite-journal-probe.mjs
+core/test/context-read-sidecar.test.mjs
+core/test/fixtures/no-raw-db-fd-allowlist.json
+core/test/no-raw-db-fd.test.mjs
+core/test/sqlite-journal-probe.test.mjs
+core/test/sqlite-lock-safety.test.mjs
+core/test/topic-reader-sqlite.test.mjs
+docs/plans/topic-overview-member-pages.md
+docs/plans/topic-reader-wal-fix.md
 ```

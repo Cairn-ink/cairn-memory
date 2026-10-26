@@ -29,7 +29,15 @@ export function openReadDatabase(path, { contextRead = false, topicMembers = fal
   try {
     try { native.exec(`PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=${contextRead ? 5000 : 0};`); }
     catch (error) { throw recordSqliteFailure(error, 'configure', 'reader_configuration'); }
-    const wal = topicPolicy ? topicJournalMode(native, path, topicPolicy) === 'WAL' : false;
+    let wal = false;
+    if (topicPolicy) {
+      try { wal = topicJournalMode(native, path, topicPolicy) === 'WAL'; }
+      catch (error) {
+        // The mode PRAGMA can parse a malformed schema before application_id.
+        // Preserve the legacy metadata validator's error precedence in that case.
+        if ([5, 6].includes(error.errcode & 255)) throw error;
+      }
+    }
     db = topicPolicy ? topicPolicy.database(native, wal) : native;
     const current = identity(path);
     if (initial.dev !== current.dev || initial.ino !== current.ino) fail('unsafe_database_file');

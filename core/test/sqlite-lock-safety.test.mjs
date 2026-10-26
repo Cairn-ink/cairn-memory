@@ -112,3 +112,30 @@ test('store fence check and close preserve same-process SQLite locks', t => {
     f.db.exec('COMMIT'); assert.deepEqual(child(f.path, 'BEGIN IMMEDIATE'), { rows: [] });
   } finally { if (f.db.isTransaction) f.db.exec('ROLLBACK'); pin.close(); }
 });
+
+for (const mode of ['DELETE', 'WAL']) test(`${mode}: asset input refuses store, sidecar and companion inodes without releasing host locks`, async t => {
+  const { prepareAssetFiles } = await import('../../adapters/mcp/asset-files.mjs');
+  const { linkSync, unlinkSync } = await import('node:fs');
+  const f = memberFixture(t, { mode }); f.admit('asset input lock');
+  const index = openContextReadSidecar({ path: f.path, db: f.db }); index.close();
+  for (const path of [f.path, f.path + '.context-read-v1.sqlite']) {
+    const db = path === f.path ? f.db : new DatabaseSync(path);
+    db.exec('PRAGMA busy_timeout=5000; BEGIN IMMEDIATE');
+    db.exec(path === f.path ? 'UPDATE store_metadata SET store_id=store_id' : 'UPDATE generations SET phase=phase');
+    if (path !== f.path) db.exec('PRAGMA user_version=1'); // Ensure a real journal even with no generations.
+    try {
+      const suffixes = path === f.path && mode === 'WAL' ? ['-wal', '-shm'] : ['-journal'];
+      for (const source of [path, ...suffixes.map(suffix => path + suffix)]) {
+        const refuse = input => {
+          const files = prepareAssetFiles(f.path);
+          try { assert.throws(() => files.read(input, 33554432, { binary: true }), { code: 'invalid_input' }); }
+          finally { files.close(); }
+          locked(path);
+        };
+        refuse(source); // Single-link DB must be excluded before a data open.
+        const alias = source + '.asset-link'; linkSync(source, alias);
+        try { refuse(alias); } finally { unlinkSync(alias); }
+      }
+    } finally { db.exec('ROLLBACK'); if (db !== f.db) db.close(); }
+  }
+});

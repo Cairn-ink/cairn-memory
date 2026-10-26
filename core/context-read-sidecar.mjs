@@ -38,6 +38,7 @@ function walHeader(path) {
   let result;
   try { result = probeRollbackJournal(path); }
   catch { unavailable('unsafe_file'); }
+  if (result.stage === 'open') unavailable('unsafe_file');
   // nolock SQLite refuses WAL with CANTOPEN before it can create companions.
   // Other malformed/inaccessible files fail closed through ordinary validation.
   if ([8, 11, 26].includes(result.code)) return false; // Normal recovery/corruption path.
@@ -201,7 +202,8 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       rebuildReason ??= 'missing';
     }
     fileIdentity = protectedFile(sidecarPath);
-    side = new DatabaseSync(sidecarPath, { readOnly, timeout: 5000 });
+    try { side = new DatabaseSync(sidecarPath, { readOnly, timeout: 5000 }); }
+    catch { unavailable('unsafe_file'); }
     side.exec('PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=5000;');
     checkFile();
     if (!initial) write(() => {

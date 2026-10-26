@@ -982,8 +982,8 @@ have zero wait. Corruption is left to normal SQLite validation.
 
 Context-read and store-fence also lose raw header descriptors. Their existing
 refusal of checkpointed WAL without transient companions is preserved through
-an isolated, read-only SQLite `nolock=1` journal-mode probe. This is a header-only
-query with no table reads, recovery or mode changes; SQLite refuses WAL before
+an isolated, read-only SQLite `nolock=1` journal-mode probe. This mode query can parse schema metadata but performs no application-table
+reads, recovery or mode changes; SQLite refuses WAL before
 creating companions. The no-lock connection MUST live in a separate process:
 its close must never share the process holding live database locks. Cache only
 successful DELETE probes against device/inode/size/nanosecond mtime/ctime,

@@ -1,10 +1,11 @@
-import { constants,openSync,closeSync,readSync } from 'node:fs';
+import { constants,openSync,closeSync,readSync,lstatSync,statSync } from 'node:fs';
 import { isAbsolute,dirname,basename,extname } from 'node:path';
 import { PATH_FLAGS,fdPath,sameFile,inspectFile,methodEntryName,probeMethodFileEnvironment,BINARY_MEDIA } from './method-package-files.mjs';
 import { fail } from '../../core/validation.mjs';
 
 /** Separate explicit input channels; descriptors and original names survive review. */
-export function prepareAssetFiles() {
+export function prepareAssetFiles(storePath,storeIdentity) {
+  if(typeof storePath!=='string'||!isAbsolute(storePath)||storePath.includes('\0'))fail('invalid_path');
   probeMethodFileEnvironment();
   const fds=[],pins=[];
   const hold=fd=>{fds.push(fd);return fd;};
@@ -13,11 +14,31 @@ export function prepareAssetFiles() {
     for(const fd of fds.splice(0).reverse())try{closeSync(fd);}catch(error){first??=error;}
     if(first)throw first;
   };
+  // O_PATH pins do not acquire a data descriptor. Check both the supplied path
+  // and the pinned inode before opening for data, including hard-link aliases.
+  const inode=stat=>`${stat.dev}:${stat.ino}`;
+  const protectedInodes=new Set(storeIdentity?[inode(storeIdentity)]:[]);
+  function collectStore() {
+    for (const base of [storePath,storePath+'.context-read-v1.sqlite']) {
+      for (const suffix of ['', '-wal', '-shm', '-journal']) {
+        try { protectedInodes.add(inode(statSync(base+suffix,{bigint:true}))); }
+        catch(error) { if(error.code!=='ENOENT')fail('invalid_input'); }
+      }
+    }
+  }
+  collectStore(); // Retain identities even if a protected pathname is replaced.
+  function refuseStore(input) {
+    collectStore();
+    if(protectedInodes.has(inode(input)))fail('invalid_input');
+  }
   function read(path,maximum,{binary=false,json=false}={}) {
     if(typeof path!=='string'||!isAbsolute(path)||path.includes('\0'))fail('invalid_path');
+    refuseStore(lstatSync(path,{bigint:true}));
+    refuseStore(statSync(path,{bigint:true}));
     const name=methodEntryName(basename(path)),parent=hold(openSync(dirname(path),PATH_FLAGS|constants.O_DIRECTORY));
     const root=inspectFile(parent,undefined,'directory');
     const fd=hold(openSync(`${fdPath(parent)}/${name}`,PATH_FLAGS)),saved={fd,parent,name,...inspectFile(fd,root.mount,'file')};
+    refuseStore(saved.stat);
     if(saved.stat.size>BigInt(maximum))fail('invalid_input');
     const data=hold(openSync(fdPath(fd),constants.O_RDONLY|constants.O_NONBLOCK));
     const verify=()=>{for(const handle of [fd,data])if(!sameFile(saved.stat,inspectFile(handle,root.mount,'file').stat))fail('invalid_input');};
@@ -32,6 +53,7 @@ export function prepareAssetFiles() {
   function validate(){
     for(const saved of pins){
       if(!sameFile(saved.stat,inspectFile(saved.fd,saved.mount,'file').stat))fail('invalid_input');
+      refuseStore(statSync(`${fdPath(saved.parent)}/${saved.name}`,{bigint:true}));
       const current=openSync(`${fdPath(saved.parent)}/${saved.name}`,PATH_FLAGS);
       try{if(!sameFile(saved.stat,inspectFile(current,saved.mount,'file').stat))fail('invalid_input');}finally{closeSync(current);}
     }
