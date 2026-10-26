@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "fa551462d353d7c017d3470a2e5a7a98fe62be90cf7b83da07c12fcb9dc62a31",
-  "bytes": 738229,
+  "sha256": "8a367361d4480add0841effa0ebd4e1843f5ebd12a2f6e3695cced8c0c96e88b",
+  "bytes": 739911,
   "files": [
     "LICENSE",
     "README.md",
@@ -592,7 +592,7 @@
     "core/context-read-local-status.mjs": "38dd77c82294d61f8396ed84e3c47ac0769b1508b81a37851c22c802c30cd8b8",
     "docs/local-embedder-bge-m3.md": "d2ceeb0bd952007ff4413eba515a99d7e90a6254ffeb88636ef6ac82f2909fdf",
     "core/topic-reader-sqlite.mjs": "6a63c242622dbc417a269e6c0237e0e53c547d8ee06aeff72c9055ff931dd68f",
-    "docs/plans/topic-reader-wal-fix.md": "6f187df1a97a096b25f3db5fc2c539b733c5b3b739cc9fcbf934dc936c17e560",
+    "docs/plans/topic-reader-wal-fix.md": "07bf06cd3980711e28e21438182ce49a8a0a3670e73968c1e8bae13f14878fee",
     "bin/cairn-memory.mjs": "7c24872a106de8d06c0a66499002f46aa8894b588b005ac9d39a50df4e586981",
     "README.md": "dcfd6be7a1a90d7016dbce352dbd06516443d6760e0dbfd74e6049632ec36891",
     "THIRD_PARTY_NOTICES.md": "f53d69106bd47f5c23acf119a83d3adc61ddcdcaf4ec908a1cf4f6cee9e4f23c",
