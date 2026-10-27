@@ -1,0 +1,1252 @@
+[
+  {
+    "path": "core/automatic-qualification.mjs",
+    "source": "const system = readFileSync(new URL('./prompts/qualify-memories.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/capture.mjs",
+    "source": "const system = readFileSync(new URL('./prompts/extract-memories.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/capture.mjs",
+    "source": "const retainedSystem = readFileSync(new URL('./prompts/extract-retained-sources.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/capture.mjs",
+    "source": "const episodeSystem = readFileSync(new URL('./prompts/extract-episode-sources.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/capture.mjs",
+    "source": "const windowSystem = readFileSync(new URL('./prompts/extract-source-windows.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/classification.mjs",
+    "source": "const system = readFileSync(new URL('./prompts/classify-placement.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/episode-capture.mjs",
+    "source": "const system = readFileSync(new URL('./prompts/interpret-episode.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/ordered-capture.mjs",
+    "source": "const system = readFileSync(new URL('./prompts/reconcile-memories.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/qualification-candidates-prompt.mjs",
+    "source": "const shared = readFileSync(new URL('./prompts/qualify-candidates-shared.md', import.meta.url), 'utf8').trimEnd();",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/qualification-candidates-prompt.mjs",
+    "source": "const wrapper = readFileSync(wrapperUrl, 'utf8').trimEnd();",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/rationale.mjs",
+    "source": "const system = readFileSync(new URL('./prompts/relate-rationale.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/rationale.mjs",
+    "source": "const focusGuidance = readFileSync(new URL('./prompts/relate-claim-focus.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/recall.mjs",
+    "source": "const selectPrompt = readFileSync(new URL('./prompts/recall-select.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/recall.mjs",
+    "source": "const rankPrompt = readFileSync(new URL('./prompts/recall-rank.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/recall.mjs",
+    "source": "const qualifiedRankPrompt = readFileSync(new URL('./prompts/recall-rank-qualified.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/recall.mjs",
+    "source": "const sourceRankPrompt = readFileSync(new URL('./prompts/recall-rank-source-evidence.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/recall.mjs",
+    "source": "const rationaleRankPrompt = readFileSync(new URL('./prompts/recall-rank-rationale-evidence.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/source-basis.mjs",
+    "source": "const system = readFileSync(new URL('./prompts/review-decision-basis.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/source-basis.mjs",
+    "source": "const addressedSystem = readFileSync(new URL('./prompts/review-addressed-basis.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "adapters/local-embedder/install.mjs",
+    "source": "handle = await open(path, 'wx', 0o600); iterator = response.body[Symbol.asyncIterator]();",
+    "reason": "Model archive input and exclusively created model-pack staging files, outside the SQLite store."
+  },
+  {
+    "path": "adapters/local-embedder/install.mjs",
+    "source": "const h = await open(join(root, path), 'wx', publisherArtifact(path, expected.role) ? 0o700 : 0o600), hash = createHash('sha256'); let bytes = 0;",
+    "reason": "Model archive input and exclusively created model-pack staging files, outside the SQLite store."
+  },
+  {
+    "path": "adapters/local-embedder/install.mjs",
+    "source": "await mkdir(dirname(join(root, name)), { recursive: true, mode: 0o700 }); handle = await open(join(root, name), 'wx', publisherArtifact(name, expected.role) ? 0o700 : 0o600);",
+    "reason": "Model archive input and exclusively created model-pack staging files, outside the SQLite store."
+  },
+  {
+    "path": "adapters/local-embedder/install.mjs",
+    "source": "const card = await readFile(join(stage, 'provenance/model-card.md'), 'utf8');",
+    "reason": "Model archive input and exclusively created model-pack staging files, outside the SQLite store."
+  },
+  {
+    "path": "adapters/local-embedder/install.mjs",
+    "source": "const license = await readFile(join(stage, 'provenance/model-license.txt'), 'utf8');",
+    "reason": "Model archive input and exclusively created model-pack staging files, outside the SQLite store."
+  },
+  {
+    "path": "adapters/local-embedder/install.mjs",
+    "source": "export async function installPack(packPath, { catalog = RELEASE_CATALOG, source = globalThis.fetch, signal, beforePublish = () => {}, publishNoReplace = publishPackNoReplace, transferClock = { setTimer: setTimeout, clearTimer: clearTimeout }, readArchive = createReadStream, ...verification } = {}) {",
+    "reason": "Model archive input and exclusively created model-pack staging files, outside the SQLite store."
+  },
+  {
+    "path": "adapters/local-embedder/install.mjs",
+    "source": "const h = await open(join(stage, 'manifest.json'), 'wx', 0o600); try { await h.writeFile(descriptor.manifestBytes); await h.sync(); } finally { await h.close(); }",
+    "reason": "Model archive input and exclusively created model-pack staging files, outside the SQLite store."
+  },
+  {
+    "path": "adapters/local-embedder/pack.mjs",
+    "source": "handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);",
+    "reason": "Qualified model-pack manifest, model and provenance files; no database path is passed here."
+  },
+  {
+    "path": "adapters/local-embedder/pack.mjs",
+    "source": "handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);",
+    "reason": "Qualified model-pack manifest, model and provenance files; no database path is passed here."
+  },
+  {
+    "path": "adapters/local-embedder/pack.mjs",
+    "source": "const metadata = path => readFile(join(packPath, path)).then(b => strictJSON(b, INVALID));",
+    "reason": "Qualified model-pack manifest, model and provenance files; no database path is passed here."
+  },
+  {
+    "path": "adapters/local-embedder/supervisor.mjs",
+    "source": "dataOutput = createWriteStream('', { fd: 1 }), registration = createWriteStream('', { fd: 3 }),",
+    "reason": "Wrap inherited stdout and registration pipe descriptors; does not open a filesystem path."
+  },
+  {
+    "path": "adapters/local-embedder/supervisor.mjs",
+    "source": "dataOutput = createWriteStream('', { fd: 1 }), registration = createWriteStream('', { fd: 3 }),",
+    "reason": "Wrap inherited stdout and registration pipe descriptors; does not open a filesystem path."
+  },
+  {
+    "path": "adapters/mcp/asset-command.mjs",
+    "source": "try{terminal=openSync('/dev/tty','r+');}catch{fail('approval_required');}if(!isatty(terminal))fail('approval_required');",
+    "reason": "Controlling terminal /dev/tty for explicit approval, never a store path."
+  },
+  {
+    "path": "adapters/mcp/asset-export.mjs",
+    "source": "parent=openSync(dirname(path),PATH_FLAGS|constants.O_DIRECTORY);const root=inspectFile(parent,undefined,'directory');",
+    "reason": "Export directories and exclusively created export staging files, never an existing DB file."
+  },
+  {
+    "path": "adapters/mcp/asset-export.mjs",
+    "source": "stage=openSync(entry(parent,stageName),PATH_FLAGS|constants.O_DIRECTORY);",
+    "reason": "Export directories and exclusively created export staging files, never an existing DB file."
+  },
+  {
+    "path": "adapters/mcp/asset-export.mjs",
+    "source": "data=openSync(entry(stage,temporary),constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW|constants.O_RDWR,0o600);",
+    "reason": "Export directories and exclusively created export staging files, never an existing DB file."
+  },
+  {
+    "path": "adapters/mcp/asset-export.mjs",
+    "source": "syncParent=openSync(fdPath(parent),constants.O_RDONLY|constants.O_DIRECTORY);",
+    "reason": "Export directories and exclusively created export staging files, never an existing DB file."
+  },
+  {
+    "path": "adapters/mcp/asset-export.mjs",
+    "source": "syncStage=openSync(fdPath(stage),constants.O_RDONLY|constants.O_DIRECTORY);",
+    "reason": "Export directories and exclusively created export staging files, never an existing DB file."
+  },
+  {
+    "path": "adapters/mcp/asset-files.mjs",
+    "source": "const name=methodEntryName(basename(path)),parent=hold(openSync(dirname(path),PATH_FLAGS|constants.O_DIRECTORY));",
+    "reason": "Host directory and O_PATH pins only; arbitrary input data descriptors live in the isolated child."
+  },
+  {
+    "path": "adapters/mcp/asset-files.mjs",
+    "source": "const fd=hold(openSync(`${fdPath(parent)}/${name}`,PATH_FLAGS)),saved={fd,parent,name,...inspectFile(fd,root.mount,'file')};",
+    "reason": "Host directory and O_PATH pins only; arbitrary input data descriptors live in the isolated child."
+  },
+  {
+    "path": "adapters/mcp/asset-files.mjs",
+    "source": "const current=openSync(`${fdPath(saved.parent)}/${saved.name}`,PATH_FLAGS);",
+    "reason": "Host directory and O_PATH pins only; arbitrary input data descriptors live in the isolated child."
+  },
+  {
+    "path": "adapters/mcp/method-package-command.mjs",
+    "source": "try{fd=openSync('/dev/tty','r+');}catch{fail('approval_required');}",
+    "reason": "Controlling terminal /dev/tty for explicit approval, never a store path."
+  },
+  {
+    "path": "adapters/mcp/method-package-files.mjs",
+    "source": "const mount=fd=>methodMountId(readFileSync(`/proc/self/fdinfo/${fd}`,'utf8'));",
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
+  },
+  {
+    "path": "adapters/mcp/method-package-files.mjs",
+    "source": "writeFileSync(join(scratch,'file'),'x',{mode:0o600});symlinkSync('file',join(scratch,'link'));",
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
+  },
+  {
+    "path": "adapters/mcp/method-package-files.mjs",
+    "source": "const root=openSync(scratch,PATH_FLAGS|constants.O_DIRECTORY);fds.push(root);",
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
+  },
+  {
+    "path": "adapters/mcp/method-package-files.mjs",
+    "source": "const path=openSync(`${fdPath(root)}/file`,PATH_FLAGS);fds.push(path);",
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
+  },
+  {
+    "path": "adapters/mcp/method-package-files.mjs",
+    "source": "const link=openSync(`${fdPath(root)}/link`,PATH_FLAGS);fds.push(link);",
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
+  },
+  {
+    "path": "adapters/mcp/method-package-files.mjs",
+    "source": "const read=openSync(fdPath(path),constants.O_RDONLY);fds.push(read);",
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
+  },
+  {
+    "path": "adapters/mcp/method-package-files.mjs",
+    "source": "const fd=hold(openSync(`${fdPath(parent)}/${name}`,PATH_FLAGS|(type==='directory'?constants.O_DIRECTORY:0)));",
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
+  },
+  {
+    "path": "adapters/mcp/method-package-files.mjs",
+    "source": "const root=hold(openSync(directory,PATH_FLAGS|constants.O_DIRECTORY)),rootInfo=inspectFile(root,undefined,'directory');",
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
+  },
+  {
+    "path": "adapters/mcp/method-package-files.mjs",
+    "source": "const current=openSync(`${fdPath(saved.parent)}/${saved.name}`,PATH_FLAGS);",
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
+  },
+  {
+    "path": "adapters/mcp/method-package-files.mjs",
+    "source": "const parent=hold(openSync(dirname(path),PATH_FLAGS|constants.O_DIRECTORY));",
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
+  },
+  {
+    "path": "adapters/mcp/retained-raw-profile.mjs",
+    "source": "const file = await open(profile.path, constants.O_RDONLY | constants.O_NOFOLLOW);",
+    "reason": "Retained runtime profile JSON; database contents are opened separately through SQLite."
+  },
+  {
+    "path": "adapters/mcp/review-card.mjs",
+    "source": "try { fd = openSync('/dev/tty', 'r+'); }",
+    "reason": "Host metadata-only inspection and controlling /dev/tty terminal; dependency data reads live in the child."
+  },
+  {
+    "path": "adapters/openai/index.mjs",
+    "source": "const episodeExtractPrompt = readFileSync(new URL('../../core/prompts/extract-episode-sources.md', import.meta.url), 'utf8');",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "packages/setup/lib/codex-runtime.mjs",
+    "source": "const version = JSON.parse(readFileSync(new URL('../package.json',import.meta.url))).version;",
+    "reason": "Installer package/runtime metadata, ownership files and exclusive staging/lock files, not the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/codex-runtime.mjs",
+    "source": "const file = await open(path,constants.O_RDONLY|constants.O_NOFOLLOW);",
+    "reason": "Installer package/runtime metadata, ownership files and exclusive staging/lock files, not the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/codex-runtime.mjs",
+    "source": "return await file.readFile('utf8');",
+    "reason": "Installer package/runtime metadata, ownership files and exclusive staging/lock files, not the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/codex-runtime.mjs",
+    "source": "const file = await open(temporary,'wx',0o600);",
+    "reason": "Installer package/runtime metadata, ownership files and exclusive staging/lock files, not the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/codex-runtime.mjs",
+    "source": "const bytes = await readFile(new URL('manifest.json',source));",
+    "reason": "Installer package/runtime metadata, ownership files and exclusive staging/lock files, not the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/codex-runtime.mjs",
+    "source": "const sourceBytes = await readFile(new URL(path,source));",
+    "reason": "Installer package/runtime metadata, ownership files and exclusive staging/lock files, not the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/codex-runtime.mjs",
+    "source": "try {lock = await open(lockPath,'wx',0o600);}",
+    "reason": "Installer package/runtime metadata, ownership files and exclusive staging/lock files, not the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/codex-runtime.mjs",
+    "source": "const expected=await readFile(new URL('../runtime/manifest.json',import.meta.url),'utf8');",
+    "reason": "Installer package/runtime metadata, ownership files and exclusive staging/lock files, not the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/codex-runtime.mjs",
+    "source": "try {lock = await open(lockPath,'wx',0o600);}",
+    "reason": "Installer package/runtime metadata, ownership files and exclusive staging/lock files, not the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/codex.mjs",
+    "source": "return { text: await readFile(path, 'utf8'), stat };",
+    "reason": "Codex configuration and installer-owned staging/lock files, not the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/codex.mjs",
+    "source": "const file = await open(path, 'wx', 0o600);",
+    "reason": "Codex configuration and installer-owned staging/lock files, not the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/codex.mjs",
+    "source": "try { lock = await open(lockPath, 'wx', 0o600); }",
+    "reason": "Codex configuration and installer-owned staging/lock files, not the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/local-codex.mjs",
+    "source": "try { lock = await open(path, 'wx', 0o600); }",
+    "reason": "Exclusive installer coordination lock file, distinct from the SQLite database."
+  },
+  {
+    "path": "packages/setup/lib/local-descriptor.mjs",
+    "source": "const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);",
+    "reason": "Local installation descriptor JSON and exclusive descriptor staging files, not database bytes."
+  },
+  {
+    "path": "packages/setup/lib/local-descriptor.mjs",
+    "source": "try { file = await open(path, 'wx', 0o600); }",
+    "reason": "Local installation descriptor JSON and exclusive descriptor staging files, not database bytes."
+  },
+  {
+    "path": "packages/setup/lib/local-descriptor.mjs",
+    "source": "const file = await open(temporary, 'wx', 0o600);",
+    "reason": "Local installation descriptor JSON and exclusive descriptor staging files, not database bytes."
+  },
+  {
+    "path": "packages/setup/lib/local-descriptor.mjs",
+    "source": "const directory = await open(root, 'r'); try { await directory.sync(); } finally { await directory.close(); }",
+    "reason": "Local installation descriptor JSON and exclusive descriptor staging files, not database bytes."
+  },
+  {
+    "path": "packages/setup/lib/local-engine.mjs",
+    "source": "if (hash(await readFile(join(directory, name))) !== hashes[name]) throw new Error('hash');",
+    "reason": "Installed engine program/package files and integrity manifest; the SQLite data directory is separate."
+  },
+  {
+    "path": "packages/setup/lib/local-engine.mjs",
+    "source": "const installed = JSON.parse(await readFile(dependency, 'utf8'));",
+    "reason": "Installed engine program/package files and integrity manifest; the SQLite data directory is separate."
+  },
+  {
+    "path": "packages/setup/lib/local-engine.mjs",
+    "source": "manifest = JSON.parse(await readFile(new URL('manifest.json', bundle), 'utf8'));",
+    "reason": "Installed engine program/package files and integrity manifest; the SQLite data directory is separate."
+  },
+  {
+    "path": "packages/setup/lib/local-engine.mjs",
+    "source": "const bytes = await readFile(archive);",
+    "reason": "Installed engine program/package files and integrity manifest; the SQLite data directory is separate."
+  },
+  {
+    "path": "packages/setup/lib/local-engine.mjs",
+    "source": "await writeFile(join(app, 'package.json'),",
+    "reason": "Installed engine program/package files and integrity manifest; the SQLite data directory is separate."
+  },
+  {
+    "path": "packages/setup/lib/local-mode.mjs",
+    "source": "bytes = await readFile(new URL('../runtime/engine/manifest.json', import.meta.url));",
+    "reason": "Installation configuration, ownership/lock files and manifest metadata, not database bytes."
+  },
+  {
+    "path": "packages/setup/lib/local-mode.mjs",
+    "source": "const npmrc = await open(join(root, '.npmrc'), constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600);",
+    "reason": "Installation configuration, ownership/lock files and manifest metadata, not database bytes."
+  },
+  {
+    "path": "packages/setup/lib/setup.mjs",
+    "source": "const installerVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;",
+    "reason": "Bundled installer package.json metadata, not a database path."
+  },
+  {
+    "path": "integrations/client/bundle.mjs",
+    "source": "schemas[name] = JSON.parse(await readFile(",
+    "reason": "Build-time integration source and schema copying; never receives a SQLite store path."
+  },
+  {
+    "path": "integrations/client/bundle.mjs",
+    "source": "if (await readFile(schemaPath, 'utf8') !== schemas) throw new Error('hosted_schemas_stale');",
+    "reason": "Build-time integration source and schema copying; never receives a SQLite store path."
+  },
+  {
+    "path": "integrations/client/bundle.mjs",
+    "source": "} else await writeFile(schemaPath, schemas);",
+    "reason": "Build-time integration source and schema copying; never receives a SQLite store path."
+  },
+  {
+    "path": "integrations/client/bundle.mjs",
+    "source": "if ((await readFile(join(target, entry.name), 'utf8')).startsWith(GENERATED_BANNER)) unexpected.push(entry.name);",
+    "reason": "Build-time integration source and schema copying; never receives a SQLite store path."
+  },
+  {
+    "path": "integrations/client/bundle.mjs",
+    "source": "const code = (await readFile(join(source,name),'utf8')).replace(/(['\"])\\.\\/([a-z-]+\\.mjs)\\1/gu,",
+    "reason": "Build-time integration source and schema copying; never receives a SQLite store path."
+  },
+  {
+    "path": "integrations/client/bundle.mjs",
+    "source": "try { actual = await readFile(join(target, output)); }",
+    "reason": "Build-time integration source and schema copying; never receives a SQLite store path."
+  },
+  {
+    "path": "integrations/client/bundle.mjs",
+    "source": "} else await writeFile(join(target, output), expected);",
+    "reason": "Build-time integration source and schema copying; never receives a SQLite store path."
+  },
+  {
+    "path": "integrations/client/capture-cursor.mjs",
+    "source": "const state = JSON.parse(await readFile(path, \"utf8\"));",
+    "reason": "Capture cursor JSON and exclusive staging files, not SQLite database or companion files."
+  },
+  {
+    "path": "integrations/client/capture-cursor.mjs",
+    "source": "await writeFile(temporary, JSON.stringify(cursor), {",
+    "reason": "Capture cursor JSON and exclusive staging files, not SQLite database or companion files."
+  },
+  {
+    "path": "integrations/client/control-state.mjs",
+    "source": "const value = JSON.parse(await readFile(path, \"utf8\"));",
+    "reason": "Pause/control JSON state and staging files, separate from the SQLite store."
+  },
+  {
+    "path": "integrations/client/control-state.mjs",
+    "source": "await writeFile(",
+    "reason": "Pause/control JSON state and staging files, separate from the SQLite store."
+  },
+  {
+    "path": "integrations/client/control-state.mjs",
+    "source": "await writeFile(controlPaths.legacyPause, \"paused\\n\", { mode: 0o600 });",
+    "reason": "Pause/control JSON state and staging files, separate from the SQLite store."
+  },
+  {
+    "path": "integrations/client/file-lock.mjs",
+    "source": "async function readOwner(path, read = readFile) {",
+    "reason": "Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "integrations/client/file-lock.mjs",
+    "source": "await writeFile(reaperOwnerPath, JSON.stringify(reaperOwner), {",
+    "reason": "Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "integrations/client/file-lock.mjs",
+    "source": "isAlive = processIsAlive, validatePath = async () => {}, read = readFile } = {},",
+    "reason": "Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "integrations/client/file-lock.mjs",
+    "source": "await writeFile(ownerPath, JSON.stringify(owner), {",
+    "reason": "Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "integrations/client/pairing.mjs",
+    "source": "read: () => readFile(path, \"utf8\"),",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/client/pairing.mjs",
+    "source": "await writeFile(temporaryPath, `${value}\\n`, { flag: \"wx\", mode: 0o600 });",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/client/pairing.mjs",
+    "source": "read: () => readFile(keyPath, \"utf8\"),",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/client/pairing.mjs",
+    "source": "const winner = (await readFile(keyPath, \"utf8\")).trim();",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/client/pairing.mjs",
+    "source": "const staged = await open(temporary, \"wx\", 0o600);",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/client/pairing.mjs",
+    "source": "await staged.writeFile(bytes);",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/client/pairing.mjs",
+    "source": "return readFile(join(root, \"project-key\"), \"utf8\");",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/client/pairing.mjs",
+    "source": "read: () => readFile(join(root, \"project-key\"), \"utf8\"),",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/client/pairing.mjs",
+    "source": "boot: (await readFile(\"/proc/sys/kernel/random/boot_id\", \"utf8\")).trim(),",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/client/pairing.mjs",
+    "source": "read: () => readFile(join(root, \"project-key\"), \"utf8\"),",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/client/private-state.mjs",
+    "source": "file = await open(",
+    "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
+  },
+  {
+    "path": "integrations/client/private-state.mjs",
+    "source": "const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);",
+    "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
+  },
+  {
+    "path": "integrations/client/private-state.mjs",
+    "source": "const file = await open(temporary, \"wx\", 0o600);",
+    "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
+  },
+  {
+    "path": "integrations/client/raw/local-host-preparation.mjs",
+    "source": "key = await open(profile.identityKeyPath,'wx',0o600);",
+    "reason": "Exclusively created host identity file; not the SQLite store."
+  },
+  {
+    "path": "integrations/client/raw/local-setup-files.mjs",
+    "source": "file = await open(path,constants.O_RDONLY|constants.O_NOFOLLOW); const stat = await file.stat();",
+    "reason": "Local JSON configuration/ownership files and exclusive replacement staging files, not database contents."
+  },
+  {
+    "path": "integrations/client/raw/local-setup-files.mjs",
+    "source": "file = await open(temporary,'wx',before.mode ?? 0o600); await file.writeFile(text); await file.sync(); await file.close(); file = undefined;",
+    "reason": "Local JSON configuration/ownership files and exclusive replacement staging files, not database contents."
+  },
+  {
+    "path": "integrations/client/raw/scratch.mjs",
+    "source": "directoryHandle = await open(directory,constants.O_RDONLY|constants.O_DIRECTORY|constants.O_NOFOLLOW);",
+    "reason": "Scratch directories and exclusively created capture-stage files, distinct from the SQLite store."
+  },
+  {
+    "path": "integrations/client/raw/scratch.mjs",
+    "source": "directoryHandle ??= await open(directory,constants.O_RDONLY|constants.O_DIRECTORY|constants.O_NOFOLLOW);",
+    "reason": "Scratch directories and exclusively created capture-stage files, distinct from the SQLite store."
+  },
+  {
+    "path": "integrations/client/raw/scratch.mjs",
+    "source": "const path = join(directory,'stage-'+serial++), handle = await open(path,constants.O_RDWR|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);",
+    "reason": "Scratch directories and exclusively created capture-stage files, distinct from the SQLite store."
+  },
+  {
+    "path": "integrations/client/transport-hosted.mjs",
+    "source": "try { file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW); }",
+    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
+  },
+  {
+    "path": "integrations/client/transport-hosted.mjs",
+    "source": "const file = await open(temporary, \"wx\", 0o600);",
+    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
+  },
+  {
+    "path": "integrations/codex/qualification.mjs",
+    "source": "export async function detectRunningHost({pid=process.ppid,proc='/proc',read=readFile,link=readlink,identity=binaryIdentity}={}) {",
+    "reason": "Bounded explicit transcript/source input, not the engine SQLite path."
+  },
+  {
+    "path": "integrations/codex/qualification.mjs",
+    "source": "const lock=await open(path,'wx',0o600);await lock.close();",
+    "reason": "Bounded explicit transcript/source input, not the engine SQLite path."
+  },
+  {
+    "path": "integrations/codex/schema-evidence.mjs",
+    "source": "const save=(name,value)=>writeFile(join(out,name),JSON.stringify(value,null,2)+'\\n',{mode:0o600,flag:'wx'});",
+    "reason": "Schema-evidence JSON and generated schema program files, not SQLite storage."
+  },
+  {
+    "path": "integrations/codex/schema-evidence.mjs",
+    "source": "const schemaBytes=await readFile(join(schemaDir,'codex_app_server_protocol.schemas.json'));",
+    "reason": "Schema-evidence JSON and generated schema program files, not SQLite storage."
+  },
+  {
+    "path": "integrations/codex/schema-evidence.mjs",
+    "source": "const bytes=await readFile(binary);",
+    "reason": "Schema-evidence JSON and generated schema program files, not SQLite storage."
+  },
+  {
+    "path": "integrations/codex/source.mjs",
+    "source": "let parent = await open('/', constants.O_RDONLY | constants.O_DIRECTORY);",
+    "reason": "Bounded capture source/transcript input, not the engine SQLite path."
+  },
+  {
+    "path": "integrations/codex/source.mjs",
+    "source": "const child = await open(`/proc/self/fd/${parent.fd}/${components[i]}`,",
+    "reason": "Bounded capture source/transcript input, not the engine SQLite path."
+  },
+  {
+    "path": "integrations/codex/tripwire.mjs",
+    "source": "const value = JSON.parse(await readFile(path, 'utf8'));",
+    "reason": "Hook configuration and runtime ownership evidence, not SQLite storage."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/capture-cursor.mjs",
+    "source": "const state = JSON.parse(await readFile(path, \"utf8\"));",
+    "reason": "Capture cursor JSON and exclusive staging files, not SQLite database or companion files."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/capture-cursor.mjs",
+    "source": "await writeFile(temporary, JSON.stringify(cursor), {",
+    "reason": "Capture cursor JSON and exclusive staging files, not SQLite database or companion files."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/control-state.mjs",
+    "source": "const value = JSON.parse(await readFile(path, \"utf8\"));",
+    "reason": "Pause/control JSON state and staging files, separate from the SQLite store."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/control-state.mjs",
+    "source": "await writeFile(",
+    "reason": "Pause/control JSON state and staging files, separate from the SQLite store."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/control-state.mjs",
+    "source": "await writeFile(controlPaths.legacyPause, \"paused\\n\", { mode: 0o600 });",
+    "reason": "Pause/control JSON state and staging files, separate from the SQLite store."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/credential-state.mjs",
+    "source": "const file = await open(temporary, \"wx\", 0o600);",
+    "reason": "Credential-state JSON staging file; this guard never reads actual credentials."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/file-lock.mjs",
+    "source": "async function readOwner(path, read = readFile) {",
+    "reason": "Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/file-lock.mjs",
+    "source": "await writeFile(reaperOwnerPath, JSON.stringify(reaperOwner), {",
+    "reason": "Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/file-lock.mjs",
+    "source": "isAlive = processIsAlive, validatePath = async () => {}, read = readFile } = {},",
+    "reason": "Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/file-lock.mjs",
+    "source": "await writeFile(ownerPath, JSON.stringify(owner), {",
+    "reason": "Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/http.mjs",
+    "source": "try { file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW); }",
+    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/http.mjs",
+    "source": "const file = await open(temporary, \"wx\", 0o600);",
+    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/pairing.mjs",
+    "source": "read: () => readFile(path, \"utf8\"),",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/pairing.mjs",
+    "source": "await writeFile(temporaryPath, `${value}\\n`, { flag: \"wx\", mode: 0o600 });",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/pairing.mjs",
+    "source": "read: () => readFile(keyPath, \"utf8\"),",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/pairing.mjs",
+    "source": "const winner = (await readFile(keyPath, \"utf8\")).trim();",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/pairing.mjs",
+    "source": "const staged = await open(temporary, \"wx\", 0o600);",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/pairing.mjs",
+    "source": "await staged.writeFile(bytes);",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/pairing.mjs",
+    "source": "return readFile(join(root, \"project-key\"), \"utf8\");",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/pairing.mjs",
+    "source": "read: () => readFile(join(root, \"project-key\"), \"utf8\"),",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/pairing.mjs",
+    "source": "boot: (await readFile(\"/proc/sys/kernel/random/boot_id\", \"utf8\")).trim(),",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/pairing.mjs",
+    "source": "read: () => readFile(join(root, \"project-key\"), \"utf8\"),",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/private-state.mjs",
+    "source": "file = await open(",
+    "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/private-state.mjs",
+    "source": "const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);",
+    "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/private-state.mjs",
+    "source": "const file = await open(temporary, \"wx\", 0o600);",
+    "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
+  },
+  {
+    "path": "plugins/cairn-memory/scripts/hook.mjs",
+    "source": "const transcript = await open(path, \"r\");",
+    "reason": "Hook transcript input and skill-turn JSON state; SQLite is accessed through the engine."
+  },
+  {
+    "path": "plugins/cairn-memory/scripts/hook.mjs",
+    "source": "if (JSON.parse(await readFile(statePath, \"utf8\")).ownSkillTurn === true) {",
+    "reason": "Hook transcript input and skill-turn JSON state; SQLite is accessed through the engine."
+  },
+  {
+    "path": "evaluation/live/diagnostics.mjs",
+    "source": "writeFileSync(path.join(directory, name), '', { mode: 0o600, flag: 'wx' });",
+    "reason": "Shipped diagnostic utility reads/writes exclusively created report-slot files in its diagnostic directory, never the SQLite store."
+  },
+  {
+    "path": "evaluation/live/diagnostics.mjs",
+    "source": "writeFileSync(path.join(directory, slotName(index)), bytes, { mode: 0o600, flag: 'wx' });",
+    "reason": "Shipped diagnostic utility reads/writes exclusively created report-slot files in its diagnostic directory, never the SQLite store."
+  },
+  {
+    "path": "evaluation/live/diagnostics.mjs",
+    "source": "descriptor = openSync(path.join(directory, name), constants.O_RDONLY",
+    "reason": "Shipped diagnostic utility reads/writes exclusively created report-slot files in its diagnostic directory, never the SQLite store."
+  },
+  {
+    "path": "core/automatic-qualification.mjs",
+    "source": "import { readFileSync } from 'node:fs'",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/capture.mjs",
+    "source": "import { readFileSync } from 'node:fs'",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/classification.mjs",
+    "source": "import { readFileSync } from 'node:fs'",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/episode-capture.mjs",
+    "source": "import { readFileSync } from 'node:fs'",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/ordered-capture.mjs",
+    "source": "import { readFileSync } from 'node:fs'",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/qualification-candidates-prompt.mjs",
+    "source": "import { readFileSync } from 'node:fs'",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/rationale.mjs",
+    "source": "import { readFileSync } from 'node:fs'",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/recall.mjs",
+    "source": "import { readFileSync } from 'node:fs'",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/source-basis.mjs",
+    "source": "import { readFileSync } from 'node:fs'",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "core/sqlite-journal-probe.mjs",
+    "source": "import { openSync, closeSync, fstatSync, fsyncSync, linkSync, unlinkSync, readdirSync } from 'node:fs'",
+    "reason": "Child-only staged creation and directory fsync; descriptors never share the host SQLite lock process."
+  },
+  {
+    "path": "core/sqlite-journal-probe.mjs",
+    "source": "fd = openSync(temporary, 'wx', 0o600);",
+    "reason": "Child-only staged creation and directory fsync; descriptors never share the host SQLite lock process."
+  },
+  {
+    "path": "core/sqlite-journal-probe.mjs",
+    "source": "dir = openSync(directory, 'r'); fsyncSync(dir);",
+    "reason": "Child-only staged creation and directory fsync; descriptors never share the host SQLite lock process."
+  },
+  {
+    "path": "adapters/local-embedder/install.mjs",
+    "source": "import { mkdir, open, lstat, mkdtemp, readFile, rm } from 'node:fs/promises'",
+    "reason": "Model archive input and exclusively created model-pack staging files, outside the SQLite store."
+  },
+  {
+    "path": "adapters/local-embedder/install.mjs",
+    "source": "import { createReadStream } from 'node:fs'",
+    "reason": "Model archive input and exclusively created model-pack staging files, outside the SQLite store."
+  },
+  {
+    "path": "adapters/local-embedder/pack.mjs",
+    "source": "import { lstat, readdir, open, readFile } from 'node:fs/promises'",
+    "reason": "Qualified model-pack manifest, model and provenance files; no database path is passed here."
+  },
+  {
+    "path": "adapters/local-embedder/supervisor.mjs",
+    "source": "import { createWriteStream } from 'node:fs'",
+    "reason": "Wrap inherited stdout and registration pipe descriptors; does not open a filesystem path."
+  },
+  {
+    "path": "adapters/mcp/asset-command.mjs",
+    "source": "import { openSync,closeSync,readSync,writeSync } from 'node:fs'",
+    "reason": "Controlling terminal /dev/tty for explicit approval, never a store path."
+  },
+  {
+    "path": "adapters/mcp/asset-export.mjs",
+    "source": "import { constants,openSync,closeSync,fstatSync,lstatSync,mkdirSync,rmdirSync,unlinkSync,linkSync,writeSync,readSync,fsyncSync } from 'node:fs'",
+    "reason": "Export directories and exclusively created export staging files, never an existing DB file."
+  },
+  {
+    "path": "adapters/mcp/method-package-command.mjs",
+    "source": "import { openSync,closeSync,readSync,writeSync } from 'node:fs'",
+    "reason": "Controlling terminal /dev/tty for explicit approval, never a store path."
+  },
+  {
+    "path": "adapters/mcp/method-package-files.mjs",
+    "source": "import { constants, openSync, closeSync, fstatSync, readSync, readFileSync, opendirSync,\n  mkdtempSync, writeFileSync, symlinkSync, rmSync } from 'node:fs'",
+    "reason": "Host directory/O_PATH pins, proc fd metadata and disposable environment-probe files only; arbitrary data reads live in the child."
+  },
+  {
+    "path": "adapters/mcp/retained-raw-profile.mjs",
+    "source": "import { open } from 'node:fs/promises'",
+    "reason": "Retained runtime profile JSON; database contents are opened separately through SQLite."
+  },
+  {
+    "path": "adapters/openai/index.mjs",
+    "source": "import { readFileSync } from 'node:fs'",
+    "reason": "Bundled Markdown model prompts read as program resources, never a database path."
+  },
+  {
+    "path": "packages/setup/lib/codex-runtime.mjs",
+    "source": "import { readFile, mkdir, lstat, open, unlink, rm, realpath, rename, chmod } from 'node:fs/promises'",
+    "reason": "Installer package/runtime metadata, ownership files and exclusive staging/lock files, not the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/codex-runtime.mjs",
+    "source": "import { readFileSync, constants, accessSync } from 'node:fs'",
+    "reason": "Installer package/runtime metadata, ownership files and exclusive staging/lock files, not the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/codex.mjs",
+    "source": "import { lstat, mkdir, open, readFile, rename, rm, mkdtemp, realpath } from 'node:fs/promises'",
+    "reason": "Codex configuration and installer-owned staging/lock files, not the SQLite store."
+  },
+  {
+    "path": "packages/setup/lib/local-codex.mjs",
+    "source": "import { lstat, mkdir, open, rm } from 'node:fs/promises'",
+    "reason": "Exclusive installer coordination lock file, distinct from the SQLite database."
+  },
+  {
+    "path": "packages/setup/lib/local-descriptor.mjs",
+    "source": "import { lstat, mkdir, open, readdir, realpath, rename, rm } from 'node:fs/promises'",
+    "reason": "Local installation descriptor JSON and exclusive descriptor staging files, not database bytes."
+  },
+  {
+    "path": "packages/setup/lib/local-engine.mjs",
+    "source": "import { lstat, mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises'",
+    "reason": "Installed engine program/package files and integrity manifest; the SQLite data directory is separate."
+  },
+  {
+    "path": "packages/setup/lib/local-mode.mjs",
+    "source": "import { readFile, lstat, stat, access, mkdir, open, readdir, rm } from 'node:fs/promises'",
+    "reason": "Installation configuration, ownership/lock files and manifest metadata, not database bytes."
+  },
+  {
+    "path": "packages/setup/lib/setup.mjs",
+    "source": "import { writeSync, readFileSync } from 'node:fs'",
+    "reason": "Bundled installer package.json metadata, not a database path."
+  },
+  {
+    "path": "integrations/client/bundle.mjs",
+    "source": "import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'",
+    "reason": "Build-time integration source and schema copying; never receives a SQLite store path."
+  },
+  {
+    "path": "integrations/client/capture-cursor.mjs",
+    "source": "import { mkdir, readFile, rename, unlink, writeFile } from \"node:fs/promises\"",
+    "reason": "Capture cursor JSON and exclusive staging files, not SQLite database or companion files."
+  },
+  {
+    "path": "integrations/client/control-state.mjs",
+    "source": "import { mkdir, readFile, rename, stat, unlink, writeFile } from \"node:fs/promises\"",
+    "reason": "Pause/control JSON state and staging files, separate from the SQLite store."
+  },
+  {
+    "path": "integrations/client/file-lock.mjs",
+    "source": "import { link, mkdir, readFile, unlink, writeFile } from \"node:fs/promises\"",
+    "reason": "Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "integrations/client/pairing.mjs",
+    "source": "import {\n  opendir,\n  open,\n  readFile,\n  readlink,\n  unlink,\n  lstat,\n  stat,\n  access,\n  realpath,\n  link,\n  mkdir,\n  writeFile,\n  rmdir,\n  rename,\n  readdir,\n} from \"node:fs/promises\"",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "integrations/client/private-state.mjs",
+    "source": "import { lstat, mkdir, open, link, rename, unlink, realpath } from \"node:fs/promises\"",
+    "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
+  },
+  {
+    "path": "integrations/client/raw/local-host-preparation.mjs",
+    "source": "import { mkdir, open } from 'node:fs/promises'",
+    "reason": "Exclusively created host identity file; not the SQLite store."
+  },
+  {
+    "path": "integrations/client/raw/local-setup-files.mjs",
+    "source": "import { lstat, open, realpath, rename, unlink } from 'node:fs/promises'",
+    "reason": "Local JSON configuration/ownership files and exclusive replacement staging files, not database contents."
+  },
+  {
+    "path": "integrations/client/raw/scratch.mjs",
+    "source": "import { mkdtemp, open, lstat, unlink, rmdir } from 'node:fs/promises'",
+    "reason": "Scratch directories and exclusively created capture-stage files, distinct from the SQLite store."
+  },
+  {
+    "path": "integrations/client/transport-hosted.mjs",
+    "source": "import { lstat, mkdir, realpath, open, rename, unlink } from \"node:fs/promises\"",
+    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
+  },
+  {
+    "path": "integrations/codex/qualification.mjs",
+    "source": "import { readFile, readlink, stat, realpath, mkdtemp, rm, open, unlink, lstat, mkdir, readdir } from 'node:fs/promises'",
+    "reason": "Bounded explicit transcript/source input, not the engine SQLite path."
+  },
+  {
+    "path": "integrations/codex/schema-evidence.mjs",
+    "source": "import { readFile,mkdir,lstat,writeFile } from 'node:fs/promises'",
+    "reason": "Schema-evidence JSON and generated schema program files, not SQLite storage."
+  },
+  {
+    "path": "integrations/codex/source.mjs",
+    "source": "import { open } from 'node:fs/promises'",
+    "reason": "Bounded capture source/transcript input, not the engine SQLite path."
+  },
+  {
+    "path": "integrations/codex/tripwire.mjs",
+    "source": "import { lstat, readFile, readlink, symlink, unlink } from 'node:fs/promises'",
+    "reason": "Hook configuration and runtime ownership evidence, not SQLite storage."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/capture-cursor.mjs",
+    "source": "import { mkdir, readFile, rename, unlink, writeFile } from \"node:fs/promises\"",
+    "reason": "Capture cursor JSON and exclusive staging files, not SQLite database or companion files."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/control-state.mjs",
+    "source": "import { mkdir, readFile, rename, stat, unlink, writeFile } from \"node:fs/promises\"",
+    "reason": "Pause/control JSON state and staging files, separate from the SQLite store."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/credential-state.mjs",
+    "source": "import { lstat, mkdir, open, rename, unlink } from \"node:fs/promises\"",
+    "reason": "Credential-state JSON staging file; this guard never reads actual credentials."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/file-lock.mjs",
+    "source": "import { link, mkdir, readFile, unlink, writeFile } from \"node:fs/promises\"",
+    "reason": "Transport coordination owner JSON files, distinct from SQLite database and journal locks."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/http.mjs",
+    "source": "import { lstat, mkdir, realpath, open, rename, unlink } from \"node:fs/promises\"",
+    "reason": "Hosted transport JSON state and exclusive staging files; no local SQLite database access."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/pairing.mjs",
+    "source": "import {\n  opendir,\n  open,\n  readFile,\n  readlink,\n  unlink,\n  lstat,\n  stat,\n  access,\n  realpath,\n  link,\n  mkdir,\n  writeFile,\n  rmdir,\n  rename,\n  readdir,\n} from \"node:fs/promises\"",
+    "reason": "Pairing configuration, identity/ownership files and proc boot identity; no SQLite store path."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/private-state.mjs",
+    "source": "import { lstat, mkdir, open, link, rename, unlink, realpath } from \"node:fs/promises\"",
+    "reason": "Private runtime directory handles and explicit identity/config JSON state; no database path."
+  },
+  {
+    "path": "plugins/cairn-memory/scripts/hook.mjs",
+    "source": "import { open, readFile, stat } from \"node:fs/promises\"",
+    "reason": "Hook transcript input and skill-turn JSON state; SQLite is accessed through the engine."
+  },
+  {
+    "path": "evaluation/live/diagnostics.mjs",
+    "source": "import {\n  closeSync, constants, fstatSync, lstatSync, openSync, readSync, realpathSync, writeFileSync,\n} from 'node:fs'",
+    "reason": "Shipped diagnostic utility reads/writes exclusively created report-slot files in its diagnostic directory, never the SQLite store."
+  },
+  {
+    "path": "core/context-read-sidecar.mjs",
+    "source": "import { lstatSync, unlinkSync } from 'node:fs'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "core/database.mjs",
+    "source": "import { lstatSync, mkdirSync } from \"node:fs\"",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "core/existing-store.mjs",
+    "source": "import { lstatSync, realpathSync } from 'node:fs'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "core/read-database.mjs",
+    "source": "import { lstatSync } from 'node:fs'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "core/sqlite-journal-probe.mjs",
+    "source": "import { lstatSync } from 'node:fs'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "core/store-fence.mjs",
+    "source": "import {lstatSync} from 'node:fs'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "core/topic-members-session.mjs",
+    "source": "import { lstatSync } from 'node:fs'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "core/topic-reader-sqlite.mjs",
+    "source": "import { lstatSync } from 'node:fs'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "adapters/local/cli.mjs",
+    "source": "import { writeSync } from 'node:fs'",
+    "reason": "Writes only inherited standard/terminal descriptors; this import cannot open a filesystem path."
+  },
+  {
+    "path": "adapters/local-embedder/pack.mjs",
+    "source": "import { constants } from 'node:fs'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "adapters/local-embedder/publish.mjs",
+    "source": "import { lstat } from 'node:fs/promises'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "adapters/mcp/demo-transcript.mjs",
+    "source": "import { mkdtemp } from 'node:fs/promises'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "adapters/mcp/retained-raw-profile.mjs",
+    "source": "import { constants, lstatSync, realpathSync } from 'node:fs'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "adapters/mcp/walkthrough.mjs",
+    "source": "import { mkdtemp, stat } from 'node:fs/promises'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "adapters/openai/live-harness.mjs",
+    "source": "import { mkdtempSync } from 'node:fs'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "packages/setup/lib/codex.mjs",
+    "source": "import { constants, accessSync } from 'node:fs'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "packages/setup/lib/device-ui.mjs",
+    "source": "import { writeSync } from 'node:fs'",
+    "reason": "Writes only inherited standard/terminal descriptors; this import cannot open a filesystem path."
+  },
+  {
+    "path": "packages/setup/lib/identity-choice.mjs",
+    "source": "import { realpath, lstat, link, unlink } from 'node:fs/promises'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "packages/setup/lib/local-descriptor.mjs",
+    "source": "import { constants } from 'node:fs'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "packages/setup/lib/local-mode.mjs",
+    "source": "import { constants } from 'node:fs'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "integrations/client/pairing.mjs",
+    "source": "import { constants } from \"node:fs\"",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "integrations/client/private-state.mjs",
+    "source": "import { constants } from \"node:fs\"",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "integrations/client/raw/local-hook.mjs",
+    "source": "import { lstat, realpath } from 'node:fs/promises'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "integrations/client/raw/local-host-profile.mjs",
+    "source": "import { realpath, lstat } from 'node:fs/promises'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "integrations/client/raw/local-host.mjs",
+    "source": "import { lstat } from 'node:fs/promises'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "integrations/client/raw/local-setup-files.mjs",
+    "source": "import { constants } from 'node:fs'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "integrations/client/raw/local-setup-init.mjs",
+    "source": "import { lstat } from 'node:fs/promises'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "integrations/client/raw/local-setup.mjs",
+    "source": "import { mkdir, lstat, readdir } from 'node:fs/promises'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "integrations/client/raw/local-transport.mjs",
+    "source": "import { lstat, stat } from 'node:fs/promises'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "integrations/client/raw/local-worker-state.mjs",
+    "source": "import { opendir } from 'node:fs/promises'",
+    "reason": "Enumerates runtime state directories only; never opens SQLite data files or companions."
+  },
+  {
+    "path": "integrations/client/raw/scratch.mjs",
+    "source": "import { constants } from 'node:fs'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "integrations/client/transport-hosted.mjs",
+    "source": "import { constants } from \"node:fs\"",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "integrations/codex/entry.mjs",
+    "source": "import { write } from 'node:fs'",
+    "reason": "Writes only inherited standard/terminal descriptors; this import cannot open a filesystem path."
+  },
+  {
+    "path": "integrations/codex/source.mjs",
+    "source": "import { constants } from 'node:fs'",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/http.mjs",
+    "source": "import { constants } from \"node:fs\"",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/pairing.mjs",
+    "source": "import { constants } from \"node:fs\"",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "plugins/cairn-memory/lib/private-state.mjs",
+    "source": "import { constants } from \"node:fs\"",
+    "reason": "Metadata and path operations only; this import binds no API that opens database data descriptors."
+  },
+  {
+    "path": "adapters/mcp/asset-files.mjs",
+    "source": "import { constants,openSync,closeSync } from 'node:fs'",
+    "reason": "Host directory and O_PATH pins only; arbitrary input data descriptors live in the isolated child."
+  },
+  {
+    "path": "adapters/mcp/review-card.mjs",
+    "source": "import { closeSync, openSync, readSync, writeSync, lstatSync } from 'node:fs'",
+    "reason": "Host metadata-only inspection and controlling /dev/tty terminal; dependency data reads live in the child."
+  },
+  {
+    "path": "integrations/codex/qualification.mjs",
+    "source": "try {vendor=join(dirname(createRequire(launcher).resolve(packageName+'/package.json')),'vendor');}",
+    "reason": "Installer qualification resolves package metadata beside a launcher; reviewed non-literal createRequire boundary, never reads a store."
+  },
+  {
+    "path": "core/isolated-file-read-child.mjs",
+    "source": "import { constants, openSync, closeSync, fstatSync, readSync, readFileSync } from 'node:fs'",
+    "reason": "Child-only bounded input reads; this script never opens SQLite connections."
+  },
+  {
+    "path": "core/isolated-file-read-child.mjs",
+    "source": "const { path, maximum, expected } = JSON.parse(readFileSync(0, 'utf8'));",
+    "reason": "Child-only bounded input reads; this script never opens SQLite connections."
+  },
+  {
+    "path": "core/isolated-file-read-child.mjs",
+    "source": "fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK);",
+    "reason": "Child-only bounded input reads; this script never opens SQLite connections."
+  }
+]
