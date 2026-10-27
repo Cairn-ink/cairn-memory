@@ -6,13 +6,21 @@ import { readerOptions, overviewInput, readerFailure, safeReaderFailure, safeLeg
 /** The trusted host authenticates ownerId; this handle only enforces its boundary. */
 export function openMemoryReader(input) {
   const options = readerOptions(input);
-  let worker, pending, idle, closed = false, termination = Promise.resolve();
-  const stop = async () => {
+  let worker, pending, idle, closed = false, cleaning = false, termination = Promise.resolve();
+  function stop() {
     clearTimeout(idle);
+    // Detach before requesting termination: a synchronous native call may keep
+    // the thread alive, but none of its later events may settle a request.
     const previous = worker; worker = undefined;
-    if (previous) termination = Promise.all([termination, previous.terminate()]);
-    await termination;
-  };
+    if (previous) {
+      cleaning = true;
+      termination = Promise.all([termination, previous.terminate()]).then(() => { cleaning = false; });
+      // Observe background cleanup failure; close() and queued dispatch also
+      // retain the rejecting promise, and no replacement starts on failure.
+      void termination.catch(() => {});
+    }
+    return termination;
+  }
   function finish(slot, result) {
     if (pending !== slot) return;
     pending = undefined; clearTimeout(slot.deadline);
@@ -23,10 +31,15 @@ export function openMemoryReader(input) {
     }
     slot.resolve(result);
   }
-  async function failed(instance, code) {
+  function cancel(slot, code) {
+    if (pending !== slot) return;
+    stop();
+    finish(slot, readerFailure(code));
+  }
+  function failed(instance, code) {
     if (worker !== instance) return;
     const slot = pending;
-    await stop();
+    stop();
     if (slot) finish(slot, readerFailure(code));
   }
   function start() {
@@ -39,11 +52,11 @@ export function openMemoryReader(input) {
     worker = instance;
     instance.on('message', result => {
       if (worker !== instance || !pending) return;
-      if ((result?.ok && pending.expiresAt !== undefined && performance.now() >= pending.expiresAt) || result?.error?.code === 'read_timeout') void failed(instance, 'read_timeout');
+      if ((result?.ok && pending.expiresAt !== undefined && performance.now() >= pending.expiresAt) || result?.error?.code === 'read_timeout') failed(instance, 'read_timeout');
       else finish(pending, result);
     });
-    instance.on('error', () => { void failed(instance, 'reader_failed'); });
-    instance.on('exit', () => { void failed(instance, 'reader_failed'); });
+    instance.on('error', () => { failed(instance, 'reader_failed'); });
+    instance.on('exit', () => { failed(instance, 'reader_failed'); });
     return instance;
   }
   async function dispatch(input, members = false) {
@@ -58,13 +71,20 @@ export function openMemoryReader(input) {
       const slot = { resolve }; pending = slot;
       const duration = members ? request.deadlineMs : 5000;
       if (members) slot.expiresAt = started + duration;
-      slot.deadline = setTimeout(() => {
-        void (async () => { await stop(); finish(slot, readerFailure('read_timeout')); })();
-      }, members ? Math.max(0, duration - (performance.now() - started)) : 5000);
-      try {
-        const instance = start(); instance.ref();
-        instance.postMessage(members ? { method: 'members', request, deadlineAt: started + duration } : { ...request, deadlineAt: started + duration });
-      } catch { void (async () => { await stop(); finish(slot, readerFailure('reader_failed')); })(); }
+      slot.deadline = setTimeout(() => { cancel(slot, 'read_timeout'); },
+        members ? Math.max(0, duration - (performance.now() - started)) : 5000);
+      function launch() {
+        if (pending !== slot || closed) return;
+        if (performance.now() >= started + duration) { cancel(slot, 'read_timeout'); return; }
+        try {
+          const instance = start(); instance.ref();
+          instance.postMessage(members ? { method: 'members', request, deadlineAt: started + duration } : { ...request, deadlineAt: started + duration });
+        } catch { cancel(slot, 'reader_failed'); }
+      }
+      // Cleanup wait belongs to this request's existing deadline. A timed-out
+      // or closed slot cannot launch from a later termination continuation.
+      if (cleaning) termination.then(launch, () => { finish(slot, readerFailure('reader_failed')); });
+      else launch();
     });
   }
   return Object.freeze({
@@ -73,8 +93,9 @@ export function openMemoryReader(input) {
     async close() {
       closed = true;
       const slot = pending;
-      await stop();
+      const released = stop();
       if (slot) finish(slot, readerFailure('store_closed'));
+      await released;
     },
   });
 }

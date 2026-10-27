@@ -18,6 +18,8 @@
  * Baselines have no keeper/reader; w2 really closes its last writer connection.
  * Diagnostic-control copies only the reader closure and changes the WAL budget
  * to zero; all other source bytes (including opt-in diagnostics) stay identical.
+ * Reader policy v1.1: min(remaining request deadline, 1000ms) minus 20ms reply
+ * reserve, shared across the request. Acceptance thresholds above are unchanged.
  * No retry, no journal change by readers, no network/models or real user data.
  */
 import assert from 'node:assert/strict';
@@ -35,7 +37,7 @@ import { overlapPageReport } from './measure-contention.mjs';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 export const PROTOCOL = Object.freeze({ version: 'E1-C2-v2', repetitions: 5, windowMs: 30000,
   smokeWindowMs: 2000, memories: 1112, namespaces: 4, mocs: 71, currentSchema: 33,
-  writerPauseMs: 0, walWaitMs: 100, memberDeadlineMs: 250,
+  writerPauseMs: 0, readerWaitPolicy: 'E1-C2-v1.1', walWaitMs: 1000, walReplyReserveMs: 20, memberDeadlineMs: 250,
   thresholds: Object.freeze({ storageBusy: 0, sqliteBusy: 0, readerP95Ms: 250, writerThroughputRatio: .9,
     writerP95Ms: 250, hostLoopMaxMs: 100, writeOverlapAttempts: 20, freshCloseOverlapAttempts: 10, commits: 100 }),
   throughputAcceptance: 'reported engine reference only; product acceptance uses public write-call latency',
@@ -87,7 +89,16 @@ export function readerMetrics(attempts) {
     else if (publicCode !== 'storage_busy' && !nativeBusy) unexpectedFailures[publicCode] = (unexpectedFailures[publicCode] ?? 0) + 1;
   }
   return { attempts: attempts.length, successes, storageBusy, sqliteBusy, cursorStale, unexpectedFailures,
-    ...latency(attempts.map(call => call.elapsedMs)) };
+    ...latency(attempts.map(call => call.elapsedMs)), tail: latencyTail(attempts.map(call => call.elapsedMs)) };
+}
+
+// Report-only reader-latency tail (v1.1 waits up to the remaining deadline in
+// the Worker): nearest-rank p99, maximum and counts above 150/500/1000 ms.
+export function latencyTail(values) {
+  const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+  const above = limit => sorted.filter(value => value > limit).length;
+  return { n: sorted.length, p99Ms: sorted.length ? sorted[Math.ceil(.99 * sorted.length) - 1] : null,
+    maxMs: sorted.at(-1) ?? null, over150Ms: above(150), over500Ms: above(500), over1000Ms: above(1000) };
 }
 
 // Exposure is based on actual write/close intervals, never a writer PID/lifetime.
@@ -97,7 +108,9 @@ export function exposureMetrics(attempts, calls, commits, startAt, endAt) {
     .filter(i => i.finishedAt > i.startedAt);
   const writes = clip(calls.map(c => ({ startedAt: c.writeStartedAt, finishedAt: c.writeFinishedAt })));
   const closes = clip(calls.map(c => ({ startedAt: c.closeStartedAt, finishedAt: c.finishedAt })));
+  const overlapsClose = call => closes.some(close => call.startedAt < close.finishedAt && call.finishedAt > close.startedAt);
   return { activeWriteOverlap: overlapPageReport(attempts, writes), activeCloseOverlap: overlapPageReport(attempts, closes),
+    closeOverlapTail: latencyTail(attempts.filter(overlapsClose).map(call => call.elapsedMs)),
     commits: commits.filter(at => at >= startAt && at < endAt).length };
 }
 
@@ -109,7 +122,7 @@ export function diagnosticControl(directory) {
     copied.add(path);
     const file = relative(root, path), source = readFileSync(path, 'utf8');
     const destination = join(directory, file); mkdirSync(dirname(destination), { recursive: true });
-    const patched = file === 'core/topic-reader-sqlite.mjs' ? source.replace('TOPIC_WAL_WAIT_MS = 100;', 'TOPIC_WAL_WAIT_MS = 0;') : source;
+    const patched = file === 'core/topic-reader-sqlite.mjs' ? source.replace('TOPIC_WAL_WAIT_MS = 1000;', 'TOPIC_WAL_WAIT_MS = 0;') : source;
     if (file === 'core/topic-reader-sqlite.mjs') assert.notEqual(patched, source);
     writeFileSync(destination, patched);
     inventory.push({ file, original: createHash('sha256').update(source).digest('hex'), control: createHash('sha256').update(patched).digest('hex') });
@@ -238,7 +251,8 @@ export function compare(trials, smoke) {
     // Re-derive from retained attempts instead of accepting a public-code-only counter.
     const measured = exposureMetrics(t.readerCalls, t.writerCalls, t.commitTimes, t.startAt, t.endAt);
     const reader = { ...t.reader, ...readerMetrics(t.readerCalls),
-      activeWriteOverlap: measured.activeWriteOverlap, activeCloseOverlap: measured.activeCloseOverlap };
+      activeWriteOverlap: measured.activeWriteOverlap, activeCloseOverlap: measured.activeCloseOverlap,
+      closeOverlapTail: measured.closeOverlapTail };
     const writer = { ...t.writer, commits: measured.commits,
       writeLatency: latency(t.writerCalls.filter(c => c.writeElapsedMs !== undefined).map(c => c.writeElapsedMs)) };
     const baseline = trials.find(b => b.pair === t.pair && b.variant === 'baseline');
