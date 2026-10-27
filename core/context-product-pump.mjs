@@ -1,11 +1,13 @@
 import { openContextIndexMaintainer } from './context-product-reader.mjs';
 import { supervisorOwner } from './context-read-supervisor.mjs';
 import { ownData } from './local-authority-input.mjs';
-import { boundedData, hostConfiguration } from './context-product-control.mjs';
+import { boundedData, hostConfiguration, coverage, PRODUCT_PROFILE } from './context-product-control.mjs';
+import { contextReadSet } from './context-read-input.mjs';
 import { fail } from './validation.mjs';
 import { resolve } from 'node:path';
 import { serviceIssuance } from './context-product-service.mjs';
 import { credentialDigest } from './context-product-control.mjs';
+import { canonicalJson } from './context-product-validation.mjs';
 
 const processKey=Symbol.for('context-read-product-v1.1/pumps');
 const state=()=>globalThis[processKey]??={entries:new Map(),ledgers:new Map()};
@@ -36,6 +38,8 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       const {supervisor,...data}=ownData(admitted.options,['supervisor','path','version','profile','readSet','ownerCoverage','requestControl','host','diagnostics','deadlineMs','sidecarJournalMode','wal']);
       const options={...hostConfiguration(data),supervisor};
       if(options.wal!==undefined && typeof options.wal!=='boolean')fail('invalid_input');
+      options.readSet=contextReadSet(options.readSet,PRODUCT_PROFILE);
+      options.ownerCoverage=coverage(options.ownerCoverage,options.readSet);
       if(options.supervisor!==c.supervisor)fail('invalid_input');
       const binding=serviceIssuance(options.host.configuration.serviceBinding,options.readSet,options.ownerCoverage);
       if(credentialDigest(credential)!==binding.credentialDigest)fail('authority_required');
@@ -46,7 +50,8 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     // A configuration whose nominal round-robin sweep exceeds the required
     // five-second observation interval is invalid before any service work.
     if(projections.length*Math.max(c.pollMs,quantum.maxMs)>5000)fail('invalid_input');
-    const fingerprint=JSON.stringify(projections.map(p=>[p.options.path,p.options.readSet,p.types,p.intent,p.options.host.moduleUrl,p.options.wal===true,p.options.sidecarJournalMode]));
+    const projectionKey=p=>JSON.stringify([p.options.path,p.options.readSet,canonicalJson(p.options.ownerCoverage),p.types,p.intent,p.options.host.moduleUrl,p.options.wal===true,p.options.sidecarJournalMode]);
+    const fingerprint=JSON.stringify(projections.map(projectionKey));
     const domainOf=p=>JSON.stringify([resolve(p.options.path),p.options.readSet[0].ownerId,p.options.host.moduleUrl]);
     const domains=[...new Set(projections.map(domainOf))];
     const all=state(), old=all.entries.get(c.id);
@@ -73,7 +78,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     let timer,closing,stopped=false,running,lastTick=now(),at=0,renewedUntil=now()+c.renewalMs,error=null,grant=credential;
     let report,completion,settled=false;
     function cycle(){settled=false;completion=new Promise(resolve=>{report=value=>{settled=true;resolve(value);};});}cycle();
-    const handles=new Map();
+    const handles=new Map(),writers=new Map();
     function observation(){return Object.freeze({id:c.id,state:error?'failed':stopped?'stopped':exhausted()?'budget_exhausted':now()>=renewedUntil?'renewal_expired':'active',
       windowId:window.id,usedItems:Math.max(...[...ledgers.values()].map(l=>l.items)),usedMs:Math.max(...[...ledgers.values()].map(l=>l.ms)),maxItems:budgets.maxItems,maxMs:budgets.maxMs,error});}
     // Stop this selection conservatively at its first exhausted domain; a new
@@ -101,14 +106,23 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       lastTick=now();
       return running=(async()=>{
         try {
-          const p=projections[at++%projections.length],key=JSON.stringify([p.options.path,p.options.readSet,p.options.host,p.options.wal===true,p.options.sidecarJournalMode]),ledger=ledgers.get(domainOf(p));
+          const p=projections[at++%projections.length],key=JSON.stringify([projectionKey(p),p.options.host]),ledger=ledgers.get(domainOf(p));
           const maxItems=Math.min(quantum.maxItems,ledger.maxItems-ledger.items),maxMs=Math.min(quantum.maxMs,ledger.maxMs-ledger.ms,Math.floor(ledger.endsAt-now()),Math.floor(renewedUntil-now()));
           if(maxItems<1||maxMs<1)return;
           // Reserve the full quantum before dispatch. Unknown usage remains
           // charged after crash/timeout; restarting or renewing cannot refund it.
           ledger.items+=maxItems;ledger.ms+=maxMs;
           let h=handles.get(key);
-          if(!h){h=await open({...p.options,deadlineMs:maxMs});handles.set(key,h);}
+          if(!h){
+            // Native admission permits one maintainer per physical selection,
+            // across intents/types/journal policies. Drain before replacing its
+            // full-key handle; never weaken admission to populate this cache.
+            const writer=JSON.stringify([resolve(p.options.path),p.options.readSet]),previous=writers.get(writer);
+            if(previous!==undefined){await handles.get(previous).close();handles.delete(previous);writers.delete(writer);}
+            const openingMs=Math.min(maxMs,Math.floor(maxMs-(now()-lastTick)));
+            if(openingMs<1){error='read_timeout';return;}
+            h=await open({...p.options,deadlineMs:openingMs});handles.set(key,h);writers.set(writer,key);
+          }
           const remainingMs=Math.min(maxMs,Math.floor(maxMs-(now()-lastTick)));
           if(remainingMs<1){error='read_timeout';return;}
           const result=await h.refreshContextIndex({readSet:p.options.readSet,types:p.types,intent:p.intent,mode:'lexical',budget:{maxItems,maxMs:remainingMs}},grant);

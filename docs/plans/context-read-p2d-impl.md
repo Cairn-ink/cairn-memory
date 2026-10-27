@@ -755,3 +755,269 @@ were performed. Test commands were actively supervised through progress logs
 and actual exits; managed runners checked child/process-group cleanup. All
 task-owned temporary archives, logs and the private cache were removed after
 verification; no test or monitoring task is left running.
+
+
+## Integration with P2c
+
+Integrated the approved P2c head `02abb03a` into the approved P2d-WAL head
+`e8fd46dc`. First merged the local `origin/main` ref at `3b6b57f6` as
+`8eda6920`, bringing protocol v4 documentation without conflicts (merge command exit **0**). Then
+`git merge 02abb03a` stopped with exit **1** for semantic conflict resolution.
+Both resulting commits are merges; no separate implementation, test, generated
+bundle or documentation commit is part of this integration. No network or keys
+were used. These functional checks establish no deployment qualification.
+
+### Conflict resolutions
+
+The two independent conflict-file enumerations, `git diff --name-only
+--diff-filter=U` and unique paths from `git ls-files -u`, matched: **6 files,
+zero differences**, with **9 conflict hunks**.
+
+| File | Hunks | Resolution |
+| --- | ---: | --- |
+| `core/context-product-pump.mjs` | 2 | Retained strict boolean WAL validation and P2c's `contextReadSet(..., PRODUCT_PROFILE)` / `coverage(...)` admission. Renewal and handle lookup include path, canonical readSet, canonicalJson ownerCoverage, types, intent, moduleUrl, `wal===true` and sidecarJournalMode. Handle lookup additionally retains the prior host-configuration binding. |
+| `core/context-product-sidecar.mjs` | 1 | Kept both independent helpers: P2d's original-error-preserving cleanup and P2c's validated widened projection. Retained the term-indexed 128-posting pages, with P2d's admitted handle ownership, configured-mode checks, lifecycle locks, safe file checks and native telemetry. Active-statement/iterator tracking remains in the unchanged SQLite policy module. |
+| `core/test/context-read-product-artifact.test.mjs` | 2 | Combined the installed four-namespace Memory/Card build, selection, candidates, assembly and evidence checks with the opted-in WAL sidecar and journal capability assertions. Kept both source/installed graph checks and P2d's independent installed reverse-edge closure. |
+| `core/test/context-read-product-pump.test.mjs` | 1 | Kept P2c's native four/32-selection and canonical-coverage renewal tests and both P2d journal-policy tests. Updated constructor/closure expectations for the complete identity and preserved native single-writer admission. |
+| `docs/context-read-product.md` | 2 | Retained the owner-wide selection/coverage section and all WAL deployment obligations. The introduction and anchor link explicitly apply owner-wide selection under WAL opt-in; semantic search and deployment qualification remain unavailable/unestablished. |
+| `packaging/artifact-files.json` | 1 | Took the ordered union, retaining the relative order of each parent's entries, including both the SQLite policy and pure selection modules and both handoff reports. |
+
+The full key distinguishes intents/types as requested, while native admission
+still permits only one maintainer for a physical file/selection. Before opening
+a different keyed handle in that writer slot, the pump awaits the incumbent's
+close/drain. Reopening and cleanup consume the already-reserved quantum; the
+opening deadline is reduced by elapsed cleanup time. It does not weaken or
+extend native ownership, renewal, operation cutoffs or cumulative quota rules.
+Alternating intents can consequently require additional Worker openings; no
+performance or freshness gate is claimed by this integration.
+
+The constructor/closure counts were recomputed from recorded mock dispatches:
+the existing eight-dispatch round robin now opens **8** handles and closes all
+**8**, since each selection alternates intent. The four-dispatch journal-policy
+case opens **4** handles with policies WAL/WAL/DELETE/DELETE and closes all
+**4**. Combined single-selection regressions observe seven completed closes
+before the eighth live handle, then eight after pump shutdown. Their mock also
+refuses any attempt to open a second live writer for the same selection.
+
+The source graph, installed literal-import graph and independent installed
+reverse-edge fixed point all compute **88 reachable modules**: P2c's 87 plus
+P2d's SQLite policy. The static reader/supervisor closure remains **23**, with
+no eager SQLite dependency. The manifest union is **310 entries** (each parent
+has 308, with two distinct additions per side); the manifest-only installed
+filesystem independently matches all 310. The generated engine package adds
+its six packaging/generated entries for **316 files**, alongside the existing
+**32-file** Codex client runtime. No runtime raw-fd allowlist entry was added.
+The SQLite policy module and raw-descriptor allowlist test are byte-identical
+to the approved P2d head.
+
+The WAL test's frozen P2b capability golden still contained the old namespace
+maximum of 2 and caused one deterministic integration failure. Its expected
+bytes now apply only P2c's approved 2-to-32 delta, retaining the historical
+fixture unchanged and comparing the full absent/false responses byte-for-byte.
+The expected maximum is explicitly asserted as 32; no other capability, journal
+refusal or runtime behavior is relaxed.
+
+### Added merged-behaviour regressions
+
+- `core/test/context-read-product-pump.test.mjs`: two otherwise identical
+  projections differ only in WAL permission, sidecar mode, coverage property
+  order, or type selection. Reordered coverage renews the same pump without
+  opening work; journal-policy changes refuse `read_in_progress`. Both intents
+  dispatch, incompatible cached writers drain before replacement, and shutdown
+  closes every opened handle. The inherited tests retain coverage-revision and
+  selected-membership renewal refusals.
+- `core/test/context-read-product-p2cd.test.mjs`: four namespaces with one Memory
+  and one Card each, both intents, independently configured WAL/WAL with opt-in
+  and default DELETE/DELETE. Checks ready complete coverage, all eight mixed
+  candidates across four namespaces, assembly and exact snapshot refetch,
+  journal capabilities, zero provider calls, complete supervisor telemetry,
+  actual sidecar mode and independently unchanged canonical logical state.
+
+### Integration verification
+
+The matrix invokes the verified installed executables for Node **22.16.0** and
+**24.15.0** directly, with that executable's directory first on PATH for
+subprocesses. Both `--version` commands exit **0**. `$p2cd_node` below denotes
+that verified executable; `$p2cd_test` is each separate explicit path in the
+results table. The child environment contains PATH, `NODE_NO_WARNINGS=1` and
+`NODE_DISABLE_COMPILE_CACHE=1`, without application environment or keys.
+
+```sh
+"$p2cd_node" tools/testing/run.mjs --test-reporter=tap --test-concurrency=1 "$p2cd_test"
+```
+
+Filesystem glob expansion and independent `rg --files` filtering produced
+identical lists of **56 paths**, **zero differences**. The new owner-wide test
+file and the expanded pump file are included. Tests run serially; each managed
+runner return code is captured directly by `Popen.wait()`, without a pipe.
+The runner also reaps its child process group before disposing its workspace.
+Progress, active process state, log growth and failures were inspected during
+the run; no background process was handed off without supervision. Packaging
+uses its existing offline npm commands with empty task-owned configuration;
+no dependency-install procedure or product assertion was weakened for this integration.
+
+Before the final matrix, focused commands recorded these actual results:
+
+| Node 24.15.0 focused command (same runner/options as above) | Exit | Finding |
+| --- | ---: | --- |
+| `core/test/context-read-product-pump.test.mjs core/test/context-read-product-p2cd.test.mjs core/test/context-read-product-artifact.test.mjs` | 1 | Installed graph/archive passed; native pump exposed the intent-handle ownership collision, and the DELETE fixture exhausted a prebuild quantum then reported store_closed. |
+| `core/test/context-read-product-pump.test.mjs core/test/context-read-product-p2cd.test.mjs` | 1 | After preserving writer admission through drain/reopen, failures were a native pump prebuild read_timeout and a DELETE prebuild timeout followed by store_closed. |
+| `--test-name-pattern='DELETE/DELETE' core/test/context-read-product-p2cd.test.mjs` | 0 | Unchanged DELETE case passed in approximately three seconds on recheck. |
+| `packaging/test/topic-overview-raw29.test.mjs` | 0 | All three installed physical-layout/raw-source cases passed. |
+
+The prebuild-timeout investigation found filesystem I/O waits (blocked processes
+and 4% aggregate I/O wait in sampled `vmstat` intervals); the identical DELETE
+case subsequently passed. No product deadline, fixture assertion, SQLite lock
+policy or read result was weakened. Initial ownership failure was fixed in the
+pump, rather than classified as load. Any matrix retries are recorded with
+their initial and subsequent return codes below.
+
+### Final runtime and test results
+
+The initial **112-command** matrix records one nonzero exit: Node 22's WAL
+file exited **1** solely for the old 2-namespace golden (84 of 85 cases passed).
+After the approved P2c maximum was applied to the expected bytes, the **entire
+85-case WAL file** was rerun on Node 22 and exited **0**. Node 24's WAL file
+exited **0** on its matrix run. Thus all **56 explicit paths on each runtime**
+ultimately exit **0**, with **zero skipped or cancelled tests**. The matrix
+wrapper's initial exit is **1**, preserving that original failure; the corrected
+per-file rerun is a separate command. No matrix prebuild-timeout retry was
+needed. Initial matrix plus corrective verification totals **113 commands**.
+
+Each row expands to the explicit per-file command above. `1 → 0` records both
+the initial and corrective exits rather than overwriting the failure.
+
+| Explicit test path | Node 22.16.0 exit(s) | Node 24.15.0 exit |
+| --- | ---: | ---: |
+| `adapters/mcp/test/context-read-default-entropy.test.mjs` | 0 | 0 |
+| `adapters/mcp/test/context-read-sources.test.mjs` | 0 | 0 |
+| `core/test/context-read-assembly-races.test.mjs` | 0 | 0 |
+| `core/test/context-read-assembly-readonly.test.mjs` | 0 | 0 |
+| `core/test/context-read-assembly.test.mjs` | 0 | 0 |
+| `core/test/context-read-bm25.test.mjs` | 0 | 0 |
+| `core/test/context-read-budget.test.mjs` | 0 | 0 |
+| `core/test/context-read-core.test.mjs` | 0 | 0 |
+| `core/test/context-read-default-entropy.test.mjs` | 0 | 0 |
+| `core/test/context-read-embedder.test.mjs` | 0 | 0 |
+| `core/test/context-read-fusion.test.mjs` | 0 | 0 |
+| `core/test/context-read-local-embedder.test.mjs` | 0 | 0 |
+| `core/test/context-read-local-status.test.mjs` | 0 | 0 |
+| `core/test/context-read-moc-source.test.mjs` | 0 | 0 |
+| `core/test/context-read-process.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-artifact.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-control.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-import.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-index.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-overflow-status.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-owner-evidence.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-owner.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-p2cd.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-pump.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-service.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-wal.test.mjs` | 1 → 0 | 0 |
+| `core/test/context-read-product.test.mjs` | 0 | 0 |
+| `core/test/context-read-recovery.test.mjs` | 0 | 0 |
+| `core/test/context-read-review.test.mjs` | 0 | 0 |
+| `core/test/context-read-sidecar.test.mjs` | 0 | 0 |
+| `core/test/context-read-source-work.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources-authority.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources-bounds.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources-races.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources.test.mjs` | 0 | 0 |
+| `core/test/context-read-tokenize.test.mjs` | 0 | 0 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 | 0 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 | 0 |
+| `core/test/topic-members-bounds.test.mjs` | 0 | 0 |
+| `core/test/topic-members-compatibility.test.mjs` | 0 | 0 |
+| `core/test/topic-members-integration.test.mjs` | 0 | 0 |
+| `core/test/topic-members-mutations.test.mjs` | 0 | 0 |
+| `core/test/topic-members-primary.test.mjs` | 0 | 0 |
+| `core/test/topic-members-recheck-findings.test.mjs` | 0 | 0 |
+| `core/test/topic-members-review-findings.test.mjs` | 0 | 0 |
+| `core/test/topic-members-round3-findings.test.mjs` | 0 | 0 |
+| `core/test/topic-members-scale.test.mjs` | 0 | 0 |
+| `core/test/topic-members-visibility.test.mjs` | 0 | 0 |
+| `core/test/topic-members.test.mjs` | 0 | 0 |
+| `core/test/topic-overview-lifecycle.test.mjs` | 0 | 0 |
+| `core/test/topic-overview-raw29.test.mjs` | 0 | 0 |
+| `core/test/topic-overview-visibility.test.mjs` | 0 | 0 |
+| `core/test/topic-overview.test.mjs` | 0 | 0 |
+| `core/test/topic-reader-cancellation.test.mjs` | 0 | 0 |
+| `core/test/topic-reader-sqlite.test.mjs` | 0 | 0 |
+| `packaging/test/topic-overview-raw29.test.mjs` | 0 | 0 |
+
+Runtime generation and verification use **Node 24.15.0**, with the same
+verified-executable/PATH handling:
+
+| Command | Exit |
+| --- | ---: |
+| `"$p2cd_node" packages/setup/build-runtime.mjs` | 0 |
+| `"$p2cd_node" packages/setup/build-runtime.mjs --check` | 0 |
+| `git diff --cached --check` | 0 |
+
+Both the initial generation/check and the final regeneration/check succeed.
+The final archive and manifest are regenerated from the merged sources and
+completed handoff; neither is hand-merged. `--check` verifies **32 client files**
+and **316 engine files**. Independent engine-manifest and tar-inventory routes
+match **316 files**, **zero differences**. The staged file cross-check below is
+repeated after regeneration with unchanged **29 / 11 / 30** counts.
+
+### Changed files, independently cross-checked
+
+At merge resolution, `git diff --cached --name-only 8eda6920` was compared with
+a separate enumeration of every staged blob/mode (`git ls-files --stage`)
+against the first parent's full recursive tree (`git ls-tree -r 8eda6920`).
+Both routes report **29 integration files**, **zero differences**:
+
+- `core/context-product-control.mjs`
+- `core/context-product-index.mjs`
+- `core/context-product-pump.mjs`
+- `core/context-product-reader.mjs`
+- `core/context-product-selection.mjs`
+- `core/context-product-service.mjs`
+- `core/context-product-sidecar.mjs`
+- `core/context-product-validation.mjs`
+- `core/context-product-worker.mjs`
+- `core/context-read-facade.mjs`
+- `core/context-read-input.mjs`
+- `core/index.mjs`
+- `core/test/context-read-product-artifact.test.mjs`
+- `core/test/context-read-product-overflow-status.test.mjs`
+- `core/test/context-read-product-owner-evidence.test.mjs`
+- `core/test/context-read-product-owner.test.mjs`
+- `core/test/context-read-product-p2cd.test.mjs`
+- `core/test/context-read-product-pump.test.mjs`
+- `core/test/context-read-product-wal.test.mjs`
+- `core/test/context-read-product.test.mjs`
+- `core/test/fixtures/context-product-index-worker.mjs`
+- `core/testing/context-product-index-host.mjs`
+- `core/testing/context-product-owner-fixture.mjs`
+- `docs/context-read-product.md`
+- `docs/plans/context-read-p2c-impl.md`
+- `docs/plans/context-read-p2d-impl.md`
+- `packages/setup/runtime/engine/cairn-memory-local-preview-0.0.0-preview.1.tgz`
+- `packages/setup/runtime/engine/manifest.json`
+- `packaging/artifact-files.json`
+
+The same two routes against Git's saved `AUTO_MERGE` tree identify **11 files
+changed by resolution, merged regressions, handoff and regeneration**, **zero
+differences**:
+
+- `core/context-product-pump.mjs`
+- `core/context-product-sidecar.mjs`
+- `core/test/context-read-product-artifact.test.mjs`
+- `core/test/context-read-product-p2cd.test.mjs`
+- `core/test/context-read-product-pump.test.mjs`
+- `core/test/context-read-product-wal.test.mjs`
+- `docs/context-read-product.md`
+- `docs/plans/context-read-p2d-impl.md`
+- `packages/setup/runtime/engine/cairn-memory-local-preview-0.0.0-preview.1.tgz`
+- `packages/setup/runtime/engine/manifest.json`
+- `packaging/artifact-files.json`
+
+The preceding main merge independently changes **1 file**,
+`docs/plans/context-read-product.md`: `git diff-tree -r --name-only 8eda6920^1 8eda6920`
+and recursive parent/child blob comparison agree. Both staged diff and recursive
+blob comparison against `e8fd46dc` independently report **30 files** for the
+whole two-merge task, **zero differences**. The final staged inventories are
+rechecked after bundle regeneration.

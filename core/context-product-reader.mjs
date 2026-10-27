@@ -58,7 +58,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     if (typeof options.path !== 'string' || !isAbsolute(options.path) || options.path.includes('\0')) fail('invalid_path');
     const owner = supervisorOwner(options.supervisor), { registry } = owner;
     let readSet;
-    try { readSet = contextReadSet(boundedData(options.readSet)); } catch { fail('invalid_read_set'); }
+    try { readSet = contextReadSet(options.readSet, PRODUCT_PROFILE); } catch { fail('invalid_read_set'); }
     const ownerCoverage = coverage(options.ownerCoverage, readSet);
     const host = ownData(options.host, ['moduleUrl', 'configuration']);
     try {
@@ -161,9 +161,16 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         signalAborted(signal);
         if (!opening) {
           if (method !== 'getContextReadCapabilities' && (credential === undefined || credential === null)) fail('authority_required');
+          let selected;
+          try {
+            if (types.isProxy(payload)) fail('invalid_read_set');
+            const descriptor = Object.getOwnPropertyDescriptor(payload, 'readSet');
+            if (!descriptor || !Object.hasOwn(descriptor, 'value')) fail('invalid_read_set');
+            selected = contextReadSet(descriptor.value, PRODUCT_PROFILE);
+          } catch { fail('invalid_read_set'); }
           input = boundedData(payload); token = method === 'getContextReadCapabilities' ? null : boundedData(credential, 16384);
           if (method !== 'getContextReadCapabilities' && credentialDigest(token) !== issuedBinding.credentialDigest) fail('authority_required');
-          if (JSON.stringify(contextReadSet(input.readSet)) !== JSON.stringify(readSet)) fail('invalid_read_set');
+          if (JSON.stringify(selected) !== JSON.stringify(readSet)) fail('invalid_read_set');
           duration = deadline(method === 'refreshContextIndex' ? input.budget?.maxMs : input.deadlineMs);
         } else duration = openDeadline;
       } catch (error) {

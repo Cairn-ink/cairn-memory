@@ -40,7 +40,7 @@ function dispose() {
 function capabilities() {
   return { ok: true, value: { version: 'context-read-v1', profile: PRODUCT_PROFILE,
     methods: workerData.maintenance ? ['refreshContextIndex','getContextIndexStatus'] : ['findCandidates','contextRead','fetchCandidateEvidence','getContextIndexStatus'], types: facade.capabilities.types, intents: ['current', 'history'],
-    execution: 'worker', hardResponseCutoff: true, cancellation: true, readSetMaximum: 2,
+    execution: 'worker', hardResponseCutoff: true, cancellation: true, readSetMaximum: 32,
     namespaceSelection: 'recent-projects-v1', readyOnly: true, maintenance: Boolean(workerData.maintenance), assembly: index.assembly,
     channels: { lexical: { enabled: true }, semantic: { configured: false, enabled: false } },
     schemas: { memory: [18, ...Array.from({ length: 14 }, (_, i) => i + 20)], card: Array.from({ length: 11 }, (_, i) => i + 23) },

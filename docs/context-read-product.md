@@ -1,20 +1,21 @@
-# Product adapter: P2a, P2b and P2d
+# Product adapter: P2a, P2b, P2c and P2d
 
 Select `profile:'context-read-product-v1.1'` and `version:'context-read-v1'`
 with `openContextProductReader` from the core entry. P2a releases capabilities
 and canonical exact evidence fetch for DELETE stores: Memories on physical
-v18/v20–v33, Cards on v23–v33, and one namespace or personal plus one project.
-P2b adds lexical candidates, representation-v2 assembly, index status and explicit
-service maintenance on that same scope. Reader requests use certified product
+v18/v20–v33 and Cards on v23–v33. P2b adds lexical candidates,
+representation-v2 assembly, index status and explicit service maintenance.
+P2c extends that path to one owner with up to 32 selected namespaces: at most
+one personal namespace and 31 projects. Reader requests use certified product
 indexes only. Semantic search remains unavailable; no provider is
-constructed. P2d adds explicitly opted-in WAL handling, subject to deployment
-qualification below. The legacy profile and sidecar remain unchanged.
+constructed. P2d adds explicitly opted-in WAL handling for the same owner-wide
+selection, subject to deployment qualification below. The legacy profile and
+sidecar remain unchanged.
 
 The product authenticates and resolves ACLs before opening. It supplies:
 
 - A process/service-owned `createContextReadSupervisor()` before any open.
-- The canonical `path`, fixed `readSet` and complete `ownerCoverage` descriptor
-  (`omittedNamespaces:0` for P2a/P2b).
+- The canonical `path`, fixed `readSet` and complete `ownerCoverage` descriptor.
 - Trusted `requestControl:{requestId,handleId,credentialBindingId,
   credentialExpiresUtcMs,requestMaxMs}`. The three identifiers must be freshly
   minted unguessable ASCII strings of at most 64 bytes. Actual authenticated
@@ -108,6 +109,90 @@ snapshot, under the existing mutual exclusions and exact evidence semantics.
 Snapshots bind the product profile and stable owner generation rather than a
 request credential; a fresh authenticated request may refetch them. Compact tool
 refs must first be expanded against the product's immutable namespace mapping.
+
+## Owner-wide selection and coverage
+
+This selection and coverage contract also applies with the [WAL deployment
+opt-in](#explicit-wal-deployment-opt-in); WAL support does not establish qualification.
+
+Authenticate and apply workspace ACLs before selecting scopes. The engine
+accepts a nonempty project-only or personal-only subset, or personal plus up to
+31 projects. Namespaces use the existing owner/project identifier rules. Raw
+selected lists over 32, duplicates, mixed owners, more than 31 projects, sparse
+arrays, accessors and unknown fields refuse `invalid_read_set` before storage.
+The engine does not discover an owner's inventory.
+
+For authorized inventories larger than the bound, use `recent-projects-v1`:
+retain requested authorized personal scope, then select at most 31 projects by
+descending host `lastActiveAt`, breaking ties by ascending UTF-8 project ID
+bytes. Missing activity is 0. Activity must be a nonnegative safe-integer UTC
+epoch millisecond value; explicit null/undefined, fractions and unsafe values
+are invalid. The host supplies the metadata source and a frozen inventory /
+activity snapshot revision; no content/index scan infers activity. Denied
+projects do not enter requested or omitted counts.
+
+The exported pure host utility `selectContextProductNamespaces` implements
+this rule. Run it in host background work or a host Worker after ACL filtering;
+HTTP admission consumes its cached bounded result. It scans the supplied
+inventory and retains only 31 project winners. For a very large inventory, a
+bounded indexed metadata query implementing the same ordering is also suitable.
+Neither reader startup nor the pump enumerates inventory for the host.
+
+```js
+const { readSet, ownerCoverage } = selectContextProductNamespaces([
+  { namespace: { ownerId, scope: 'personal', projectId: null } },
+  { namespace: { ownerId, scope: 'project', projectId: 'a' }, lastActiveAt: activityA },
+  { namespace: { ownerId, scope: 'project', projectId: 'b' } } // missing = 0
+], inventoryRevision);
+```
+
+The exact trusted constructor field is:
+
+```js
+ownerCoverage: {
+  policy: 'recent-projects-v1', selectionRevision,
+  requestedNamespaces, selectedNamespaces, omittedNamespaces
+}
+```
+
+`selectionRevision` is a nonempty well-formed string of at most 200 UTF-16
+units. Counts are nonnegative safe integers: selected equals `readSet.length`,
+requested equals selected plus omitted, and requested is at least one.
+Nonzero omitted counts require 31 selected projects. The host verifies that
+the set really includes requested personal scope and the first 31 authorized
+projects; the engine checks consistency without excluded IDs/statistics. Bind
+this exact descriptor into both request and service issuance. It is never a
+model/tool input.
+
+The fixed mapping sorts full namespace keys by UTF-8 bytes, preserving existing
+one/two-namespace indices. Recency chooses membership; it gives no ranking
+priority. Ranking pools every eligible selected Memory/Card for the exact
+types/intent into one N, df and token-length universe, then uses frozen T1/BM25
+and the existing fusion family. There is no per-namespace quota or top-k before
+global ranking. Equal bodies retain distinct typed identities. Permuting the
+readSet changes neither indices nor ranks. Semantic stays disabled, including
+`semantic:true`; all product calls make zero provider calls in P2c.
+
+When omitted is nonzero, ready candidate coverage is `partial` and its trace
+includes exactly `namespaceSelection:{...ownerCoverage}`. Assembly reports the
+same fields under `diagnostics.candidates.coverage` and
+`diagnostics.candidates.trace`, outside metered text. Lifecycle coverage always
+reports the descriptor in `coverage.namespaces`; ready status is partial on
+overflow. An empty selected-projection match remains partial for the owner.
+Missing/incomplete/stale projections remain unavailable even on overflow;
+scope partial coverage never permits searching incomplete lexical statistics.
+Evidence keeps exactly `{items,snapshot}`; the product carries the selection
+descriptor/partial status separately in HTTP/tool metadata outside model text.
+
+A different selection needs a fresh handle and compact-ref mapping and an
+explicitly maintained matching projection. Passing another well-formed set to
+a live handle refuses `invalid_read_set`. Until its projection is certified,
+the new handle returns `index_unavailable`; the product's reauthenticated
+fallback is partial. Issuance IDs, activity and selectionRevision never enter
+lexical statistics identity. A new revision with the same normalized selected
+set can reuse its certificate, while exposing its new bound coverage descriptor.
+
+## Authority sampling and cleanup
 
 Every authority-bearing fetch takes one entry sample and one final sample
 immediately before its authoritative canonical read. No authority callback
@@ -364,6 +449,15 @@ log provides this ownership. The product must supply a service lifetime that
 survives HTTP cron completion; if its host cannot do so, run the pump in an
 explicitly owned maintenance service. No freshness or availability gate has
 been measured by this package.
+
+Prebuild every active owner selection, including overflow selections, for both
+intents and the exact physical type combination before exposing search. A
+selection or coverage revision change is not an in-place pump renewal: close
+and await the old pump, supply a fresh pump/maintainer binding and build the
+new selection (or register it separately before cutover). Changed coverage on
+an existing pump ID refuses `read_in_progress`. Process-owned quota charges
+survive replacement. Record selection churn in the product; never turn a
+missing mixed projection into a Memory-only lookup or merge namespace results.
 
 ## Backup and restore
 

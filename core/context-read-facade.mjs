@@ -680,7 +680,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   function fetchCandidateEvidence(original, token, productPayload) {
     try {
       ready();
-      const { payload, input } = contextInput('fetchCandidateEvidence', original, supportedTypes), access = authorize('fetchCandidateEvidence', input, options.product ? productPayload ?? payload : payload, token);
+      const { payload, input } = contextInput('fetchCandidateEvidence', original, supportedTypes, undefined, options.product ? 'context-read-product-v1.1' : undefined), access = authorize('fetchCandidateEvidence', input, options.product ? productPayload ?? payload : payload, token);
       if (memoryOnly) fail('index_unavailable');
       const scope = bind('snapshot-scope', input.readSet);
       let intent = input.intent, refs = input.refs, previous;

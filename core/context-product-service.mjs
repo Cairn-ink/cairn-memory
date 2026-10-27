@@ -1,4 +1,4 @@
-import { boundedData, coverage } from './context-product-control.mjs';
+import { boundedData, coverage, PRODUCT_PROFILE } from './context-product-control.mjs';
 import { contextReadSet } from './context-read-input.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { fail } from './validation.mjs';
@@ -24,7 +24,7 @@ export function serviceIssuance(value, readSet, ownerCoverage) {
       b.credentialExpiresUtcMs !== null && (!Number.isSafeInteger(b.credentialExpiresUtcMs) || b.credentialExpiresUtcMs<0) ||
       b.ownerGeneration !== undefined && (!Number.isSafeInteger(b.ownerGeneration) || b.ownerGeneration<1)) fail('invalid_input');
   const ns = ownData(b.namespaces,['readSet','ownerCoverage']);
-  if (b.ownerId !== readSet[0].ownerId || JSON.stringify(contextReadSet(ns.readSet)) !== JSON.stringify(readSet) ||
+  if (b.ownerId !== readSet[0].ownerId || JSON.stringify(contextReadSet(ns.readSet, PRODUCT_PROFILE)) !== JSON.stringify(readSet) ||
       JSON.stringify(boundedData(coverage(ns.ownerCoverage,readSet))) !== JSON.stringify(boundedData(ownerCoverage))) fail('authority_required');
   return b;
 }
