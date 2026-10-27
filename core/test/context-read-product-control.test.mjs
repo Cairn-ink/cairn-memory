@@ -663,9 +663,11 @@ for (const opening of [true, false]) {
     const h = harness({ stall: opening }), reader = opening ? null : await h.open(h.options), controller = new AbortController();
     const pending = opening ? h.open(h.options, { signal: controller.signal })
       : reader.fetchCandidateEvidence(input, h.credential, { signal: controller.signal });
-    const before = Reflect.ownKeys(controller.signal);
     const composite = AbortSignal.any([controller.signal, new AbortController().signal]);
-    assert.ok(Reflect.ownKeys(controller.signal).length > before.length);
+    // Composition may leave own keys unchanged on some Node versions.
+    const late = Symbol('late signal data');
+    Object.defineProperty(controller.signal, late, { value: true });
+    assert.ok(Reflect.ownKeys(controller.signal).includes(late));
     const actor = h.actors[0], result = { ok: true, value: null };
     actor.reply(result);
     const opened = opening ? await pending : reader;

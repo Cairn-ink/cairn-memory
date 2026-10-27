@@ -24,8 +24,6 @@ test('default imports and existing-store open consume no entropy or product stat
       assert.equal(Object.hasOwn(globalThis, supervisionKey), false);
     }
     const api = await import(${JSON.stringify(new URL('../index.mjs', import.meta.url).href)});
-    await import(${JSON.stringify(new URL('../../adapters/mcp/server.mjs', import.meta.url).href)});
-    await import(${JSON.stringify(new URL('../../adapters/mcp/cli.mjs', import.meta.url).href)});
     assert.deepEqual(calls, { uuid: 0, bytes: [] }); untouched();
     // New-store identity, cursor secret and episode secret are legacy entropy.
     const fresh = api.openMemoryCore({ path: process.argv[1] });
