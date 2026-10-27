@@ -244,7 +244,7 @@ test('declarative v3 preserves every original cell and descriptor; a data-only r
 });
 
 test('--estimate is read-only, needs no registration, and reports the v3 lower bound',()=>{
-  const r=spawnSync(process.execPath,['tools/testing/measure-context-read-product.mjs','--estimate'],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+  const r=spawnSync(process.execPath,['tools/testing/measure-context-read-product.mjs','--protocol','v3','--estimate'],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
   const estimate=JSON.parse(r.stdout);assert.deepEqual(estimate,estimatePlan());
   assert.deepEqual(estimate.counts,{requests:7200,freshness:80,availability:48,overflow:48,backup:24,injection:120});
   assert.equal(estimate.fixedWindowMs,1728000000);assert.equal(estimate.minimumAttempts,541568);assert.equal(estimate.perAttemptFloorMs,1);

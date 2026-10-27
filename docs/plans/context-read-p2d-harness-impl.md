@@ -712,3 +712,337 @@ against the final tested content. Nothing is staged or committed; HEAD remains
 `cf60a27f` on `feat/context-read-p2d-harness`. Owned verification logs were
 removed after recording the results. No test, measurement or monitor is left
 running for unattended supervision.
+
+
+## P2-product-v4 encoding
+
+Base: `0cf0e3d3`, with `origin/main` at `3b6b57f6` integrated by a clean
+`git merge --no-commit origin/main`. The merge remains pending for the primary;
+HEAD has not advanced. The accepted contract is byte-identical to origin/main.
+No contract text or engine runtime module was edited for this encoding.
+
+`v4-definition.json` contains Appendix V4-A, Revision 1, as declarative data.
+`v4-plan.mjs` exposes two frozen definitions, `DEFINITIONS.engine` and
+`DEFINITIONS.production`, expands the registered rows, rejects duplicate cell
+and request-population keys, sorts numeric worlds/schemas before appendix order,
+and independently compares every expanded count with the appendix. Assembly
+aliases translate `maxItems` to the existing harness's `limit` field; the exact
+public budget is still checked by `validateWorkload`.
+
+Real qualification defaults to v4 and requires explicit `--profile engine` or
+`--profile production`, plus a pre-registered `--segment ID`. Arithmetic defaults
+to the engine column. `--protocol v3` preserves the previous 7,520-cell plan and
+its execution path. Functional-only and the existing operation-only smoke path
+retain their non-qualification decisions; neither was used for timing here.
+The report header records the selected platform profile, protocol and revision,
+full immutable inventory/hash, workload/environment inputs, estimate, reservation,
+segment definitions and the unchanged gates. It copies the exact V4.2 claims
+table, V4.7 coverage table and explicitly unclaimed list from `v4-claims.json`.
+
+| Delta rule | Code | Deterministic regression in `measure-context-read-product-v4.test.mjs` |
+| --- | --- | --- |
+| V4.1 unchanged populations, gates and fresh lifecycle | Existing `protocol.mjs`, `engine.mjs`, `series.mjs`; v4 request series attach cold and idle references only where registered. `normalDecision` retains known failures independently of incomplete coverage. | Exact plan/series attachment; loaded requests collect main only, failures advance language ordinals and never supply successes. Existing P2-19/P2-23/fix-round suites remain required. |
+| V4.2 two platform profiles and supplied production inputs | `v4-runner.mjs:validateV4Registration` and `runV4`; common registration validation remains in the CLI. Both profiles require the registered exact Node 24 patch; production additionally checks actual Linux/non-WSL/ext4. Existing protected workspace/copy/engine permission checks apply. | Missing host/volume/patch/capacities/reservation/deadline provenance/session/segment inputs refuse before collection. Null capture/review deadlines remain inconclusive through the existing writer gates. |
+| V4.3 R1-R7, language rotation, disjoint percentile populations | `v4-definition.json`, `v4-plan.mjs:buildV4Plan`, `rotatingCell`, existing `requestSeries` with per-attempt preparation. | Exact independent arithmetic; production mixed adapters remain compact-only; no loaded cold/reference attachment; failures consume ordinal and ceiling. |
+| V4.4 method-specific successful exposure | `v4-validation.mjs:validateExposure` re-derives clipped intersections after final telemetry drain, de-duplicates cell/window/attempt/method/target, checks independent 20/10 credits and three-window spread, plus every per-window/baseline minimum. | Successful control; unavailable/failed/unvalidated/bounds/oracle/WM/out-of-window exclusions; write/close intersection; spread; separate W3 targets without a fresh-close requirement. |
+| V4.4 labelled rotating mix and unique paired windows | `windowSlot`, `v4-windows.mjs:exposureCell`; five fresh pairs or eight retained pairs, odd-order reversal, separate placement/build for every member. W3 uses two retained connections with the frozen same/other capture/review cycle. `v4-writer.mjs` records both shutdown closes and per-target writer statistics. | Exact slot formula/mix/deduplication; actual orchestration with a manual clock, unique clones, immutable durations and pair reversal. No process or SQLite is started by this orchestration test. |
+| V4.4 WM | `windowReferences` immediately follows final-reader writer stop/drain, interleaves four independently counted reference series and keeps the identical pump until all finish. `startPump` records renewals/status/activity/drain; `validateWM` checks identity, ordering, intervals and coverage. Existing candidate reference 300/1,500-ms gates apply. | Four 50-success populations, per-series language ordinals including failures; replacement/readiness-wait/missing-activity/incomplete-telemetry rejection; integrated W-to-WM orchestration. |
+| V4.5 shared F/A sessions | `v4-session.mjs`, `v4-lane.mjs`, `v4-writer.mjs`; twelve fixed 180-second sessions, twenty serial probe lanes and a separate availability lane. Actual scheduled IDs, method/intent allocation, native commits and exits reconcile before decisions. Freshness quantiles remain separate by type/intent and retain explicit infinity flags. | Per-intent method alternation and balance; 99/1 and omitted/duplicate/substituted/reordered release rejection; session span, writer lifecycle/target/cycle/tail/seal checks. |
+| V4.5 first eligible revisions and fixed target recipes | `v4-eligibility.mjs` is a fixed, bounded intrinsic recorder used by the writer journal. It associates recognized canonical mutations with their own successful native COMMIT, never a later bookkeeping commit. Memory history/current and confirmed Card intent events are distinct. Native diagnostic chunks remain numeric and contain no SQL or target identities; target metadata transfers separately after the public operation. | Earlier Memory history commit/revision survives later bookkeeping/review; Card drafts cannot qualify, and Card intents share a timestamp only at actual confirmation. Intrinsic observer test verifies target metadata never enters diagnostic chunks. |
+| V4.5 O/B | Overflow retains selected-scope main/cold populations. `backupSeries` rebuilds both intents and independently opens/verifies each restored intent, including its loop observations and all five existing output timings. The unchanged §9 P2-04 physical-v18/old-pin acceptance remains required. | Exact O/B counts; both restored intents use independent fresh handles; history refusal prevents completion. Required core P2-04 tests cover physical-v18 preservation and old-pin reopen. |
+| V4.5 T: 60 cells / 288 mandatory subprobes | Exact manifest/defaults in the definition; `v4-state.mjs:stateCell` resets each branch and records immutable cutoff, entry, settlement, cleanup, writer progress and exit evidence. The injection-only native SQLite rendezvous runs in the reader Worker; ordinary Workers never load it. `validateSubprobes` refuses missing/unknown/duplicate IDs and checks each expected outcome independently. | Every branch of all five manifests is independently removed or given the wrong outcome. All eight abort-family branches independently lose cleanup/progress/disposal evidence or miss settlement. No real native hold or timing workload is run by these regressions. |
+| V4.6 arithmetic correction and reservation | `estimateV4` computes separate serial cost components, including 53 main/warm-up attempts, idle cold, idle/WM references, 432/224 placements, sessions, storage, T and failure allowances. | Exact 728/488 cells, 432/224 windows, 252/172 references, 288 subprobes and both estimates/reservations; CLI equality and preserved v3 estimate. |
+| V4.6 admission/observation supervision | `admissionBudget` and the active runner check projected remaining work, actual record/child activity and progress. Stop reasons prevent admitting more cells; owned resources still drain. V4 ordinary actors and storage work have no slow-sample kill watchdog. Fixed windows keep their original end times. | Fabricated projected-overrun/stalled-activity/missing-progress admission; manual-clock W orchestration proves fixed windows; no budget result contains a sample-termination action. |
+| V4.6 checkpoints/segments | `v4-checkpoints.mjs`, `mergeSegments`, CLI `--resume REPORT` and `--merge REPORT`. Require the same registration/source/workload, host, volume, patch and pre-registered segment identity; retain raw journals and only merge complete cell records. Duplicates refuse instead of replacing a faster repeat. Known failures in interrupted raw records remain a failure latch. Malformed checkpoint reports fail closed. | Identity changes, duplicate cells, incomplete-record exclusion and prior-failure retention; real journal/partial-file regression proves an interrupted failed cell cannot be erased by a later passing complete cell. |
+| V4.7 claim boundaries | `v4-claims.json` is copied into every v4 header, alongside exact profile/inventory. Engine qualification has no production-launch claim. | Copied appendix and every claims-table/unclaimed string match the accepted contract as data. |
+
+The existing lock-safe boundary is retained: database copy/hash work remains in
+`io-child.mjs`; the host only streams suffix-validated numeric checkpoint reports
+and performs metadata-only absent-sidecar checks. Four exact guard allowances
+cover these new imports/streaming sites; the estimate-registration allowance is
+updated to its revised expression. SQLite-reaching imports remain inside the
+existing dynamic boundaries. No runtime change, package installation, network,
+key use or generated setup-runtime update is part of this work.
+
+For a real run the primary supplies the original frozen fixture/adapter/counter,
+labels/queries and workload inputs, plus `host` and `volume` identities, the
+exact Node patch, `deadlineProvenance`, `telemetryCapacities`, `drainSchedule`,
+`reservation`, `observationBudgetMs`, `supervision`, `stateDeadlines`, frozen
+`stateProbes`, twelve `sessions`, and pre-registered `segments` containing IDs
+and cell keys. Session schedules declare targets, creation/review releases,
+batches/queries, availability IDs/times and lane capacities. The adapter's
+existing `prepare` receives the scalar rotated cell, and for probes the frozen
+`probeBatch`, intent-specific `probeTargets` and all first-eligible committed
+target proofs. Its `validateProbe` independently verifies batch membership;
+unsupported batching cannot pass. Preparation/oracle work remains outside the
+observed read interval. The primary still supplies a quiet reservation and live
+supervision; saving this report starts no monitor or unattended run.
+
+P2c/four-namespace and P2d-WAL availability remain actual capability probes,
+never operator readiness switches. This implementation and its deterministic
+tests make no platform timing/production acceptance claim.
+
+### Estimate outputs
+
+Both exact runtime executables ran these read-only commands; each exit was 0:
+
+```sh
+node tools/testing/measure-context-read-product.mjs --profile engine --estimate
+node tools/testing/measure-context-read-product.mjs --profile production --estimate
+```
+
+| Profile | Cells | Fixed windows | Idle + WM references | Estimated seconds | Reservation |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Engine | 728 | 432 | 108 + 144 = 252 | 46,627.4 | 47,700 s = 13 h 15 min |
+| Production | 488 | 224 | 92 + 80 = 172 | 26,284 | 27,000 s = 7 h 30 min |
+
+The complete JSON outputs, identical on both patches, are:
+
+```json
+{
+  "engine": {
+    "protocol": "P2-product-v4",
+    "revision": 1,
+    "profile": "engine-platform-v4",
+    "request": 532,
+    "exposure": 36,
+    "freshness": 40,
+    "availability": 24,
+    "overflow": 24,
+    "storage": 12,
+    "state": 60,
+    "stateSubprobes": 288,
+    "cells": 728,
+    "main": 556,
+    "warmupGroups": 556,
+    "cold": 420,
+    "idleReference": 108,
+    "windowReference": 144,
+    "reference": 252,
+    "fixedWindows": 432,
+    "writeSuccessCredits": 9600,
+    "freshCloseSuccessCredits": 2400,
+    "costSeconds": {
+      "mainAndWarmups": 16207.4,
+      "cold": 4200,
+      "idleReferences": 1620,
+      "windowReferences": 2160,
+      "fixedWindows": 12960,
+      "sharedSessions": 2160,
+      "storage": 1080,
+      "state": 480,
+      "placements": 2160,
+      "failuresAndSlowOperations": 3600
+    },
+    "estimateSeconds": 46627.4,
+    "reservationSeconds": 47700,
+    "inventoryHash": "500a41f1ba8adb60e5d5e7bb0e5b9dd523017bb762bc4f5355f0f1619b689d0a",
+    "assumption": "Planning allowances, not timeouts or measured timings; slower attempts are never censored."
+  },
+  "production": {
+    "protocol": "P2-product-v4",
+    "revision": 1,
+    "profile": "production-launch-v4",
+    "request": 308,
+    "exposure": 20,
+    "freshness": 40,
+    "availability": 24,
+    "overflow": 24,
+    "storage": 12,
+    "state": 60,
+    "stateSubprobes": 288,
+    "cells": 488,
+    "main": 332,
+    "warmupGroups": 332,
+    "cold": 292,
+    "idleReference": 92,
+    "windowReference": 80,
+    "reference": 172,
+    "fixedWindows": 224,
+    "writeSuccessCredits": 4800,
+    "freshCloseSuccessCredits": 1600,
+    "costSeconds": {
+      "mainAndWarmups": 8798,
+      "cold": 2628,
+      "idleReferences": 1150,
+      "windowReferences": 1000,
+      "fixedWindows": 6720,
+      "sharedSessions": 2160,
+      "storage": 720,
+      "state": 300,
+      "placements": 1008,
+      "failuresAndSlowOperations": 1800
+    },
+    "estimateSeconds": 26284,
+    "reservationSeconds": 27000,
+    "inventoryHash": "7f70e1cbf2558bcb1d167fc2c593916aec01a2e1529a8794a7c06d103072de99",
+    "assumption": "Planning allowances, not timeouts or measured timings; slower attempts are never censored."
+  }
+}
+```
+
+### Verification commands and actual exit codes
+
+Each command used the exact nvm-installed executable, with that executable's
+binary directory first in PATH for it and its children. No stdout pipeline
+provided a status; subprocess return codes and TAP totals were captured directly.
+
+```sh
+NODE22="$NVM_DIR/versions/node/v22.16.0/bin/node"
+NODE24="$NVM_DIR/versions/node/v24.15.0/bin/node"
+"$NODE22" --version
+"$NODE24" --version
+# Each ordinary explicit path in the table, serially, on each runtime:
+PATH="$NVM_DIR/versions/node/v22.16.0/bin:$PATH" "$NODE22" --test --test-reporter=tap <explicit-path>
+PATH="$NVM_DIR/versions/node/v24.15.0/bin:$PATH" "$NODE24" --test --test-reporter=tap <explicit-path>
+# Fix-round-2 exposes all cases with its established VM test seam:
+"$NODE22" --experimental-vm-modules --test --test-reporter=tap tools/testing/measure-context-read-product-fix2.test.mjs
+"$NODE24" --experimental-vm-modules --test --test-reporter=tap tools/testing/measure-context-read-product-fix2.test.mjs
+# Source checks, one command for each changed JavaScript path:
+"$NODE22" --check <explicit-changed-JavaScript-path>
+"$NODE24" --check <explicit-changed-JavaScript-path>
+# Arithmetic only, on each runtime:
+node tools/testing/measure-context-read-product.mjs --profile engine --estimate
+node tools/testing/measure-context-read-product.mjs --profile production --estimate
+node tools/testing/measure-context-read-product.mjs --protocol v3 --estimate
+```
+
+Both version commands exited **0**, printing **v22.16.0** and **v24.15.0**.
+All six standalone estimate commands exited **0**. The v3 estimate retains
+7,520 cells and 1,728,000,000 fixed-window milliseconds. Every one of the
+**23 changed JavaScript files** passed its individual syntax check on each
+runtime: **46 final per-file exit codes, all 0**. Final source hashes were
+checked unchanged across the corresponding tests/checks.
+
+The core test inventory was independently derived from filesystem glob and
+`rg --files`, with identical **29-path** sets. Both lock guards, four harness
+suites, the explicit tiny functional suite and E1-C2 tests make **37 distinct
+paths per runtime**. The table gives each path's final actual exit / passed count;
+it combines the full explicit-path sweep with final affected-source reruns.
+
+| Explicit test path | Node 22.16.0 exit / passed | Node 24.15.0 exit / passed |
+| --- | --- | --- |
+| `core/test/context-read-assembly-races.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/context-read-assembly-readonly.test.mjs` | 0 / 28 | 0 / 28 |
+| `core/test/context-read-assembly.test.mjs` | 0 / 19 | 0 / 19 |
+| `core/test/context-read-bm25.test.mjs` | 0 / 3 | 0 / 3 |
+| `core/test/context-read-budget.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-core.test.mjs` | 0 / 26 | 0 / 26 |
+| `core/test/context-read-default-entropy.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-embedder.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-fusion.test.mjs` | 0 / 4 | 0 / 4 |
+| `core/test/context-read-local-embedder.test.mjs` | 0 / 38 | 0 / 38 |
+| `core/test/context-read-local-status.test.mjs` | 0 / 3 | 0 / 3 |
+| `core/test/context-read-moc-source.test.mjs` | 0 / 15 | 0 / 15 |
+| `core/test/context-read-process.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-product-artifact.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-product-control.test.mjs` | 0 / 83 | 0 / 83 |
+| `core/test/context-read-product-import.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/context-read-product-index.test.mjs` | 0 / 65 | 0 / 65 |
+| `core/test/context-read-product-pump.test.mjs` | 0 / 16 | 0 / 16 |
+| `core/test/context-read-product-service.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/context-read-product.test.mjs` | 0 / 126 | 0 / 126 |
+| `core/test/context-read-recovery.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/context-read-review.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/context-read-sidecar.test.mjs` | 0 / 17 | 0 / 17 |
+| `core/test/context-read-source-work.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/context-read-sources-authority.test.mjs` | 0 / 6 | 0 / 6 |
+| `core/test/context-read-sources-bounds.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-sources-races.test.mjs` | 0 / 16 | 0 / 16 |
+| `core/test/context-read-sources.test.mjs` | 0 / 14 | 0 / 14 |
+| `core/test/context-read-tokenize.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 / 16 | 0 / 16 |
+| `tools/testing/measure-context-read-product.test.mjs` | 0 / 27 | 0 / 27 |
+| `tools/testing/measure-context-read-product-fix1.test.mjs` | 0 / 26 | 0 / 26 |
+| `tools/testing/measure-context-read-product-fix2.test.mjs` | 0 / 23 | 0 / 23 |
+| `tools/testing/measure-context-read-product-v4.test.mjs` | 0 / 47 | 0 / 47 |
+| `tools/testing/fixtures/context-product/functional-check.mjs` | 0 / 9 | 0 / 9 |
+| `tools/testing/measure-topic-reader-wal.test.mjs` | 0 / 7 | 0 / 7 |
+
+Node **22.16.0**: **37 distinct paths, every final exit 0; 697/698 passed, 1 existing skip, 0 failures and 0 cancellations**.
+
+Node **24.15.0**: **37 distinct paths, every final exit 0; 697/698 passed, 1 existing skip, 0 failures and 0 cancellations**.
+
+The new v4 suite contributes **47 deterministic checks on each runtime**, all
+exit **0**. It also verifies SQLite-free CLI import, exact stored-identity
+metadata after normalization/revision changes, invalid missing-loop evidence
+versus retained measured failures, and cleanup when T sampler/locker startup
+fails. Absolute window boundaries and repetition/variant labels are journaled
+before execution so overlap credits can be independently reconstructed.
+Insufficient F/A populations retain their statistics but receive an inconclusive
+quantity verdict; known independent failures remain failures.
+
+The initial 74-command sweep exited **1**: the then-new Node-22 v4 fixture ended
+its availability releases too early, causing four positive-fixture assertions
+to reject. The corrected schedule spans the final session slot. The affected
+commands were rerun on both patches after source refinement; the final affected
+matrix and subsequent final v4 runs exited **0**. Earlier development checks also
+reported exit **1** for the new exact filesystem allowances, a temporary local
+variable name collision, and a v3 pump test double without the v4 status API.
+Those were fixed; v3 tracing remains conditional and all final guard/harness
+commands in the table exit **0**. No failure is being inferred away from a
+successful output tail.
+
+The existing assembly counter skip is because `tiktoken` is unavailable; nothing
+was installed. Functional-only CLI children intentionally print `inconclusive`
+and exit **1**; their test wrappers assert that behavior and exit **0**. No
+qualification timing run, smoke, network/key operation or unattended process
+was started. Actual opt-in platform execution remains the primary's quiet-window
+work, with the product inputs and package capabilities described above.
+
+Final refinements also check that the same pump API object survives renewal,
+record actual active status/quanta before shutdown, distinguish missing loop
+proof (invalid) from observed threshold failures, and use bounded `get` by the
+publicly returned identity to refresh stored writer metadata. The latter avoids
+raw-text equality and whole-list selection when capture normalizes text or
+returns a revision older than the canonical stored revision. T startup failure
+regressions verify restoration, supervisor drain and retained actual locker
+exit codes. All 47 final v4 cases pass on both patches.
+
+### Changed files, cross-checked two ways
+
+The inventory from `git diff --name-only HEAD` plus untracked enumeration was
+independently re-derived by comparing every HEAD tree blob/mode with the working
+file and finding new files with `rg --files --hidden`. The sorted sets agree at
+**28 files**: one accepted-contract merge-only file and 27 implementation,
+test/data and handoff changes. `scripts/`, `public/`, package/configuration files
+and all other tracked/untracked paths were included in that comparison.
+
+- `core/test/fixtures/no-raw-db-fd-allowlist.json`
+- `docs/plans/context-read-p2d-harness-impl.md`
+- `docs/plans/context-read-product.md` — merge-only, byte-identical to origin/main
+- `tools/testing/fixtures/context-product/actors.mjs`
+- `tools/testing/fixtures/context-product/controller.mjs`
+- `tools/testing/fixtures/context-product/engine.mjs`
+- `tools/testing/fixtures/context-product/runner-child.mjs`
+- `tools/testing/fixtures/context-product/series.mjs`
+- `tools/testing/fixtures/context-product/storage-child.mjs`
+- `tools/testing/fixtures/context-product/v4-checkpoints.mjs`
+- `tools/testing/fixtures/context-product/v4-claims.json`
+- `tools/testing/fixtures/context-product/v4-definition.json`
+- `tools/testing/fixtures/context-product/v4-eligibility.mjs`
+- `tools/testing/fixtures/context-product/v4-lane.mjs`
+- `tools/testing/fixtures/context-product/v4-native-loader.mjs`
+- `tools/testing/fixtures/context-product/v4-native-preload.mjs`
+- `tools/testing/fixtures/context-product/v4-native-sqlite.mjs`
+- `tools/testing/fixtures/context-product/v4-plan.mjs`
+- `tools/testing/fixtures/context-product/v4-runner.mjs`
+- `tools/testing/fixtures/context-product/v4-session.mjs`
+- `tools/testing/fixtures/context-product/v4-state.mjs`
+- `tools/testing/fixtures/context-product/v4-validation.mjs`
+- `tools/testing/fixtures/context-product/v4-windows.mjs`
+- `tools/testing/fixtures/context-product/v4-writer.mjs`
+- `tools/testing/fixtures/context-product/writer-journal.mjs`
+- `tools/testing/measure-context-read-product-fix1.test.mjs`
+- `tools/testing/measure-context-read-product-v4.test.mjs`
+- `tools/testing/measure-context-read-product.mjs`
+
+Final whitespace/newline/JSON/source-hash checks and `git diff --check HEAD`
+exit **0**. The contract matches the accepted merge source byte for byte.
+The engine runtime, generated setup runtime, package and packaging manifest
+comparison exits **0**. The index contains only the accepted contract brought
+in by the pending merge; implementation files were not staged or committed.
+HEAD remains `0cf0e3d3`, MERGE_HEAD is `3b6b57f6`. The primary commits.
+Owned verification logs are removed after recording the results above; no
+process, measurement or monitor is left running.

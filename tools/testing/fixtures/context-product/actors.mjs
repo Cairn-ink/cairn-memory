@@ -5,8 +5,9 @@ import { observeLoop } from './engine.mjs';
 const childUrl=new URL('./runner-child.mjs',import.meta.url);
 export function actor(kind,config, {url=childUrl,stallMs=15000,forkChild=fork,quietWhenIdle=false}={}) {
   const encoded=typeof config==='string'?config:JSON.stringify(config);
-  const child=forkChild(fileURLToPath(url),[kind],{execArgv:kind==='cold'?['--import',new URL('./startup-loop.mjs',import.meta.url).href]:[],env:{},stdio:['pipe','ignore','pipe','ipc']});
+  const child=forkChild(fileURLToPath(url),[kind],{execArgv:['cold','writer-v4','lane'].includes(kind)?['--import',new URL('./startup-loop.mjs',import.meta.url).href]:[],env:{},stdio:['pipe','ignore','pipe','ipc']});
   child.stdin.on('error',()=>{});child.stdin.end(encoded);
+  const registry=typeof config==='object'&&config?.protocol==='P2-product-v4'?globalThis[Symbol.for('product-qualification-actors')]:null;registry?.add(child);
   const messages=[],waiters=[];let lastProgress=Date.now(),closed=false;
   child.stderr.on('data',()=>{});
   const deliver=m=>{lastProgress=Date.now();const i=waiters.findIndex(w=>w.type===m.type);
@@ -14,8 +15,8 @@ export function actor(kind,config, {url=childUrl,stallMs=15000,forkChild=fork,qu
   child.on('message',deliver);
   let resolveExit;
   child.exited=new Promise(r=>{resolveExit=r;});
-  const finish=(code,signal)=>{if(closed)return;closed=true;clearInterval(monitor);
-    for(const w of waiters.splice(0))w.reject(Object.assign(Error('child_exit'),{code:'child_failed',exitCode:code}));
+  const finish=(code,signal)=>{if(closed)return;closed=true;registry?.delete(child);clearInterval(monitor);
+    for(const w of waiters.splice(0))w.reject(Object.assign(Error('child_exit'),{code:'child_failed',exitCode:code,signal}));
     resolveExit({code,signal,disconnected:!child.connected});};
   child.on('error',error=>{
     child.ipcError=error;
@@ -23,7 +24,9 @@ export function actor(kind,config, {url=childUrl,stallMs=15000,forkChild=fork,qu
     // A failed spawn has no PID; an IPC error on a live process is not exit.
     if(child.pid===undefined)finish(null,null);
   });child.on('close',finish);
-  const monitor=setInterval(()=>{if((!quietWhenIdle||waiters.length||child.ipcError)&&Date.now()-lastProgress>stallMs){child.kill('SIGKILL');}},1000);
+  const monitor=setInterval(()=>{if((!quietWhenIdle||waiters.length||child.ipcError)&&Date.now()-lastProgress>stallMs){
+    if(typeof config==='object'&&config?.protocol==='P2-product-v4'){child.stalled=true;child.emit('qualification-stalled',{kind,lastProgress});}
+    else child.kill('SIGKILL');}},1000);
   child.wait=type=>{const i=messages.findIndex(m=>m.type===type);return i>=0?Promise.resolve(messages.splice(i,1)[0]):
     closed?Promise.reject(Error('child_closed')):child.ipcError?Promise.reject(child.ipcError):new Promise((resolve,reject)=>{
       if(quietWhenIdle&&!waiters.length)lastProgress=Date.now();waiters.push({type,resolve,reject});});};
@@ -46,7 +49,7 @@ export async function coldAttempt(config,{signal}={}) {
   if(Buffer.byteLength(encoded)>262144)throw Error('cold_configuration_size');
   const loop=observeLoop(),started=performance.now();let child,value,exit,launcherLoop;
   const abort=()=>child?.kill('SIGKILL');signal?.addEventListener('abort',abort,{once:true});
-  try {child=actor('cold',encoded,{stallMs:30000});await child.wait('window_end');launcherLoop=await loop.finish();child.send({type:'window_ack'});
+  try {child=actor('cold',config.protocol==='P2-product-v4'?runtimeConfig:encoded,{stallMs:config.protocol==='P2-product-v4'?config.supervision.stallMs:30000});await child.wait('window_end');launcherLoop=await loop.finish();child.send({type:'window_ack'});
     value=(await child.wait('result')).value;exit=await child.exited;
     if(exit.code!==0||exit.signal||!exit.disconnected)throw Error('cold_child_failed');}
   finally{signal?.removeEventListener('abort',abort);await terminate(child);launcherLoop??=await loop.finish();}

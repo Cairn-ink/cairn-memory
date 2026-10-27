@@ -9,7 +9,7 @@ let value;
 if(kind==='busy-probe') {
   const db=new DatabaseSync(c.path,{timeout:0});try{db.prepare('SELECT count(*) FROM memories').get();value={busy:0};}catch(e){value={busy:Number.isInteger(e.errcode)?e.errcode&255:0};}finally{db.close();}
 } else if(kind==='lock') {
-  const db=new DatabaseSync(c.path);db.exec('PRAGMA busy_timeout=5000;BEGIN IMMEDIATE');
+  const db=new DatabaseSync(c.path);db.exec(c.exclusive?'PRAGMA busy_timeout=5000;PRAGMA locking_mode=EXCLUSIVE;BEGIN EXCLUSIVE':'PRAGMA busy_timeout=5000;BEGIN IMMEDIATE');
   process.send({type:'ready'});await new Promise(r=>process.once('message',r));
   db.exec('ROLLBACK');db.close();
 } else if(kind==='seed') {

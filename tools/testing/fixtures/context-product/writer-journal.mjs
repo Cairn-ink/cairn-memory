@@ -1,3 +1,4 @@
+import { eligibilityLedger } from './v4-eligibility.mjs';
 import { isDeepStrictEqual } from 'node:util';
 export const WRITER_PROTOCOL = 'product-writer-v1';
 const stages = ['open','configure','prepare','execute','iterate','iterator_next','iterator_return','begin','commit','rollback','close','dispose'];
@@ -5,9 +6,9 @@ const phases = ['open','write','inspect','close','shutdown'];
 const exact=(value,keys)=>value&&Object.keys(value).sort().join(',')===keys.split(',').sort().join(',');
 const validCounters=c=>exact(c,'begun,completed,inFlight,failures,busy,commits,overflow')&&Object.values(c).every(v=>Number.isSafeInteger(v)&&v>=0);
 const zero = () => ({ begun:0, completed:0, inFlight:0, failures:0, busy:0, commits:0, overflow:0 });
-export function createWriterJournal({ stream, epoch, capacity, clock=Date.now }) {
-  let sequence = 0, acked = 0, operation = null, phase = null, lastCommitAt = null;
-  const records = [], counters = zero();
+export function createWriterJournal({ stream, epoch, capacity, clock=Date.now, observeEligibility=false }) {
+  let sequence = 0, acked = 0, operation = null, phase = null, lastCommitAt = null, lastCommit = null;
+  const records = [], counters = zero(), eligibility=observeEligibility?eligibilityLedger():null;
   const append = data => {
     if (records.length >= capacity) { counters.overflow++; return; }
     records.push({ sequence: ++sequence, at:clock(), operation, phase, ...data });
@@ -23,9 +24,15 @@ export function createWriterJournal({ stream, epoch, capacity, clock=Date.now })
       catch(e) { code=e?.code === 'ERR_SQLITE_ERROR' && Number.isInteger(e.errcode) ? e.errcode : 0;
         counters.failures++; if ([5,6].includes(code & 255)) counters.busy++; throw e; }
       finally { const outcomeAt=clock();counters.completed++; counters.inFlight--; if (ok && commit && phase === 'write') { counters.commits++; lastCommitAt=outcomeAt; }
-        append({ at:outcomeAt,kind:'native_end', stage, ok, primary:code & 255, extended:code, commit:ok && commit && phase === 'write' }); }
+        append({ at:outcomeAt,kind:'native_end', stage, ok, primary:code & 255, extended:code, commit:ok && commit && phase === 'write' });
+        if(ok&&commit&&phase==='write')lastCommit={at:outcomeAt,sequence,operation}; }
     },
     lastCommitAt() { return lastCommitAt; },
+    lastCommit() { return lastCommit; },
+    enableTargets(enabled){eligibility?.enable(enabled);},
+    recordStatement(sql,args,value,connection){eligibility?.statement(sql,args,value,connection,lastCommit);},
+    eligibleTargets(type,id){return eligibility?.targets(type,id)??[];},
+    eligibilityComplete(){return eligibility?.complete??true;},
     chunk() { return { type:'diagnostic_chunk', protocol:WRITER_PROTOCOL, stream, epoch, from:acked+1, through:sequence,
       records:records.map(r=>({...r})), counters:{...counters} }; },
     ack(through) { if (through < acked || through > sequence) throw Error('writer_ack'); acked=through; while(records.length && records[0].sequence<=through)records.shift(); },
@@ -104,6 +111,7 @@ export function observedDatabase(Native, journal) {
           return (...a) => {
             const stage=k==='iterate'?'iterate':k===Symbol.dispose?'dispose':k==='close'?'close':'execute';
             const v=journal.invoke(stage,()=>Reflect.apply(f,s,a));
+            if(k==='run')journal.recordStatement(args[0],a,v,native);
             if(k!=='iterate')return v;
             let p;p=new Proxy(v,{get(i,n){if(n===Symbol.iterator)return ()=>p;const f=Reflect.get(i,n,i);
               return typeof f !== 'function'?f:(...a)=>journal.invoke(n==='return'?'iterator_return':'iterator_next',()=>Reflect.apply(f,i,a));}});return p;
@@ -113,7 +121,8 @@ export function observedDatabase(Native, journal) {
       return (...args) => {
         const verb=key==='exec'?String(args[0]).trim().replace(/;\s*$/,'').toLowerCase():'';
         const stage=key===Symbol.dispose?'dispose':key==='close'?'close':['begin','commit','rollback'].includes(verb)?verb:'configure';
-        return journal.invoke(stage,()=>Reflect.apply(value,target,args),stage==='commit');
+        const result=journal.invoke(stage,()=>Reflect.apply(value,target,args),stage==='commit');
+        if(key==='exec')journal.recordStatement(args[0],[],result,native);return result;
       };
     }});
   }

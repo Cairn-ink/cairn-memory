@@ -23,7 +23,7 @@ export function observeLoop({now=()=>performance.now(), timers=true}={}) {
 export function resourceDelta(a,b) {
   return Object.fromEntries(['userCPUTime','systemCPUTime','minorPageFault','majorPageFault','voluntaryContextSwitches','involuntaryContextSwitches'].map(k=>[k,b[k]-a[k]]));
 }
-function instrumentGc() {
+export function instrumentGc() {
   const Native=threads.Worker,ports=[],entries=[],workers=[];
   const observer=new PerformanceObserver(list=>{for(const e of list.getEntries())entries.push({threadId:0,startAt:performance.timeOrigin+e.startTime,durationMs:e.duration,kind:e.detail.kind});});
   observer.observe({entryTypes:['gc']});

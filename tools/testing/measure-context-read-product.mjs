@@ -9,6 +9,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as delay } from 'node:timers/promises';
+import { DEFINITIONS, buildV4Plan, estimateV4 } from './fixtures/context-product/v4-plan.mjs';
+import { runV4 } from './fixtures/context-product/v4-runner.mjs';
+import { readSegments,checkedSegments } from './fixtures/context-product/v4-checkpoints.mjs';
 import { createTestWorkspace } from './workspace.mjs';
 import { PROTOCOL, buildPlan, expandPlan, aggregate, decide, availability, freshness, population, estimatePlan, V3_DEFINITION, readerLoops, maintainerCoverage, validateDefinition } from './fixtures/context-product/protocol.mjs';
 import { configure, drain, attempt, observeLoop, probeDependencies, selectReadSet } from './fixtures/context-product/engine.mjs';
@@ -16,14 +19,14 @@ import { fileChild, terminate, startSampler, actor } from './fixtures/context-pr
 import { startWriter, recordedWriter } from './fixtures/context-product/controller.mjs';
 import { build, startPump, requestSeries, pairedWindows } from './fixtures/context-product/series.mjs';
 import { createReportSink, digest, immutable } from './fixtures/context-product/report.mjs';
-export { PROTOCOL, buildPlan };
+export { PROTOCOL, buildPlan, buildV4Plan, DEFINITIONS };
 const storageUrl=new URL('./fixtures/context-product/storage-child.mjs',import.meta.url);
 export async function storage(kind,configuration) {
   const child=spawn(process.execPath,[fileURLToPath(storageUrl),kind,JSON.stringify(configuration)],{env:{},stdio:['ignore','pipe','pipe']});
   let stdout='',stderrBytes=0;child.stdout.on('data',b=>{stdout+=b;if(stdout.length>64*1024*1024)child.kill('SIGKILL');});child.stderr.on('data',b=>{stderrBytes+=b.length;});
-  const timeout=setTimeout(()=>child.kill('SIGKILL'),30000);
+  const timeout=configuration.protocol==='P2-product-v4'?null:setTimeout(()=>child.kill('SIGKILL'),30000);
   try {const exit=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',(code,signal)=>resolve({code,signal}));});
-    if(exit.code!==0||exit.signal)throw Object.assign(Error('storage_child_failed'),{code:'child_failed',exitCode:exit.code,stderrBytes});
+    if(exit.code!==0||exit.signal)throw Object.assign(Error('storage_child_failed'),{code:'child_failed',exitCode:exit.code,signal:exit.signal,stderrBytes});
     return {...JSON.parse(stdout),exit};
   }finally{clearTimeout(timeout);}
 }
@@ -86,8 +89,8 @@ export async function prepareCell(input,cell,workspace,adapter,suffix='main') {
   for(const suffix of ['-wal','-shm','-journal'])if(await stat(resolve(fixture.path)+suffix).then(()=>true,e=>{if(e.code==='ENOENT')return false;throw e;}))throw Error('fixture_not_quiescent');
   const copied=fileChild('copy',resolve(fixture.path),path);
   if(input.registeredFixtureHashes&&copied.value.hash!==input.registeredFixtureHashes[fixture.id])throw Error('fixture_changed_after_registration');
-  await storage('mode',{path,mode:cell.canonical});
-  const inspected=await storage('inspect',{path});
+  await storage('mode',{path,mode:cell.canonical,...(cell.protocol?{protocol:cell.protocol}:{})});
+  const inspected=await storage('inspect',{path,...(cell.protocol?{protocol:cell.protocol}:{})});
   if(inspected.value.schema!==cell.schema||inspected.value.memories!==cell.count||inspected.value.cardCount!==fixture.cards)throw Error('fixture_population_mismatch');
   const inventory=cell.scope==='overflow'?fixture.overflowInventory:fixture.inventory;
   if(!inventory)throw Error('missing_overflow_inventory');
@@ -210,25 +213,29 @@ export async function freshnessSeries(config,cell,input,sink,{startPump:makePump
   }finally{try {if(writer&&!writerResult)await writer.stop();}
     finally {if(pump&&!pumpDrain)await write('pump-drain',await pump.stop());}}
 }
-export async function backupSeries(config,cell,workspace,sink,oracle,{startSampler:makeSampler=startSampler,storage:store=storage,fileChild:files=fileChild,build:rebuild=build,configure:setup=configure,attempt:readAttempt=attempt,stat:fileStat=stat}={}) {
+export async function backupSeries(config,cell,workspace,sink,oracle,{startSampler:makeSampler=startSampler,storage:store=storage,fileChild:files=fileChild,build:rebuild=build,configure:setup=configure,attempt:readAttempt=attempt,stat:fileStat=stat,observeLoop:makeLoop=observeLoop}={}) {
   // All clients, writers and maintenance are stopped and drained before backup.
   const backupPath=join(workspace.path,`backup-${cell.id}.sqlite`),restored=join(workspace.path,`restore-${cell.id}.sqlite`);
   const sampler=await makeSampler([process.pid],workspace.path);let attribution;
   try {
-    const before=await store('verify',{path:config.path});
-    const backup=await store('backup',{path:config.path,destination:backupPath});
+    const before=await store('verify',{path:config.path,...(config.protocol?{protocol:config.protocol}:{})});
+    const backup=await store('backup',{path:config.path,destination:backupPath,...(config.protocol?{protocol:config.protocol}:{})});
     files('copy',backupPath,restored);
-    const canonical=await store('verify',{path:restored});
+    const canonical=await store('verify',{path:restored,...(config.protocol?{protocol:config.protocol}:{})});
     if(canonical.value.logicalHash!==before.value.logicalHash||canonical.value.schema!==cell.schema)throw Error('restore_canonical_mismatch');
     const fresh={...config,path:restored},started=performance.now(),rebuilt=await rebuild(fresh,(s,r)=>sink.record(cell.id,s,r));
     const sidecarRebuildMs=performance.now()-started,suffix='.context-read-product-v1.1.sqlite';
-    const deep=await store('verify-sidecar',{path:restored+suffix});
+    const deep=await store('verify-sidecar',{path:restored+suffix,...(config.protocol?{protocol:config.protocol}:{})});
     // A separately minted request observes bounded ready checks. Old request
     // bindings and copied certificates are never revived across this restore.
-    const c=await setup(fresh);let h,status;
+    let status;const verificationDiagnostics=[],verifiedIntents=[],verificationLoops=[];
     const verifyStart=performance.now();
-    try {h=await c.open();status=await h.getContextIndexStatus({readSet:config.readSet,types:config.types,intent:'current',deadlineMs:config.deadlines.readMs},c.token);}
-    finally{await h?.close();await c.supervisor.close();var verificationDiagnostics=await drain(c.supervisor);}
+    for(const intent of config.protocol==='P2-product-v4'?['current','history']:['current']){
+      const c=await setup(fresh);let h;const observed=config.protocol==='P2-product-v4'?makeLoop():null;
+      try {h=await c.open();status=await h.getContextIndexStatus({readSet:config.readSet,types:config.types,intent,deadlineMs:config.deadlines.readMs},c.token);}
+      finally{await h?.close();await c.supervisor.close();if(observed)verificationLoops.push(await observed.finish());verificationDiagnostics.push(...await drain(c.supervisor));}
+      if(!status?.ok||status.value.lexical.state!=='ready')throw Error('restore_not_ready');verifiedIntents.push(intent);
+    }
     const freshReaderVerifyMs=performance.now()-verifyStart;
     if(!status?.ok||status.value.lexical.state!=='ready')throw Error('restore_not_ready');
     const read=await readAttempt(fresh,{oracle});await sink.record(cell.id,'restored-reader',read.record);
@@ -239,13 +246,13 @@ export async function backupSeries(config,cell,workspace,sink,oracle,{startSampl
     const peaks=diskSamples.map(s=>(s.sizes??[]).reduce((n,f)=>n+f.bytes,0));
     const sidePeaks=diskSamples.map(s=>(s.sizes??[]).filter(f=>f.name.startsWith(`restore-${cell.id}.sqlite`+suffix)).reduce((n,f)=>n+f.bytes,0));
     const output={backupMs:backup.value.backupMs,restoreCanonicalVerifyMs:canonical.value.verifyMs,sidecarRebuildMs,sidecarVerifyMs:deep.value.sidecarVerifyMs,
-      freshReaderVerifyMs,freshReaderVerifyInterval:'fresh public open/status/await close; includes bounded verification and transport',
+      freshReaderVerifyMs,verifiedIntents,freshReaderVerifyInterval:'fresh public open/status/await close; includes bounded verification and transport',
       backupBytes:(await fileStat(backupPath)).size,restoredBytes:(await fileStat(restored)).size,
       sidecar:{...sizes,total:sizes.main+sizes.wal+sizes.shm,peak:sidePeaks.length?Math.max(...sidePeaks):null},
       temporaryPeakBytes:peaks.length?Math.max(...peaks):null,peakSamplingMs:PROTOCOL.sampler.intervalMs,peakSamplingCoverage:attribution.coverage??'incomplete',maintainerCoverage:rebuilt.coverage};
     await sink.record(cell.id,'backup-output',output);await sink.record(cell.id,'backup-attribution',attribution);
     const maintenance=[...(config.maintainerDiagnostics??[]),...rebuilt.diagnostics.map(r=>r.diagnostics),...verificationDiagnostics.map(r=>r.diagnostics)];
-    const decision=decide({...cell,method:config.method},{records:[read.record],populations:{restored:population([read.record],{rule:cell.sampleRules?.['restored-reader']??{minimum:1,ceiling:1}})},
+    const decision=decide({...cell,method:config.method},{records:[read.record],...(config.protocol==='P2-product-v4'?{loops:[...readerLoops([read.record]),...verificationLoops]}:{}),populations:{restored:population([read.record],{rule:cell.sampleRules?.['restored-reader']??{minimum:1,ceiling:1}})},
       readerCoverage:read.record.telemetry,maintainerCoverage:maintainerCoverage(maintenance,rebuilt.coverage),rebuildCoverage:rebuilt.coverage,
       writerCoverage:'complete',baselineCoverage:'complete',nativeBusy:(read.record.nativeBusy??0)+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:read.record.publicBusy,
       production:config.production,reportOutputsComplete:output.sidecar.peak!==null&&output.peakSamplingCoverage==='complete'});
@@ -354,25 +361,38 @@ export async function functionalOnly(reportPath,namespaces=1) {
   console.log(status);return {status,functionalPassed:status==='inconclusive',record};
 }
 export async function main(args=process.argv.slice(2)) {
-  let reportPath=resolve('context-read-product-report.jsonl'),registrationPath,profilePath,smoke=false,functional=false,namespaces=1,plan=false,estimate=false;
+  let reportPath=resolve('context-read-product-report.jsonl'),registrationPath,profilePath,smoke=false,functional=false,namespaces=1,plan=false,estimate=false,profile='engine',profileExplicit=false,protocol='v4',segmentId;const resume=[],merge=[];
   for(let i=0;i<args.length;i++) {
-    const a=args[i];if(a==='--estimate')estimate=true;else if(a==='--smoke')smoke=true;else if(a==='--functional-only')functional=true;else if(a==='--plan')plan=true;
+    const a=args[i];if(a==='--profile'){profile=args[++i];profileExplicit=true;}else if(a==='--protocol')protocol=args[++i];else if(a==='--segment')segmentId=args[++i];else if(a==='--resume')resume.push(resolve(args[++i]));else if(a==='--merge')merge.push(resolve(args[++i]));else if(a==='--estimate')estimate=true;else if(a==='--smoke')smoke=true;else if(a==='--functional-only')functional=true;else if(a==='--plan')plan=true;
     else if(a==='--report')reportPath=resolve(args[++i]);else if(a==='--registration')registrationPath=resolve(args[++i]);
     else if(a==='--writer-profile')profilePath=resolve(args[++i]);else if(a==='--namespaces')namespaces=Number(args[++i]);else throw Error('usage');
   }
   if(![1,2].includes(namespaces)||!reportPath.endsWith('.jsonl'))throw Error('invalid_output_or_namespace_count');
+  if(!['engine','production'].includes(profile)||!['v3','v4'].includes(protocol))throw Error('invalid_profile_or_protocol');
   let result;
+  if(merge.length){
+    const segments=await readSegments(merge),header=segments[0].header,checked=checkedSegments(header,segments),sink=await createReportSink(reportPath,{...header,mergedSegments:segments.map(s=>s.id)});
+    for(const c of checked.cells)await sink.cell(c.cell,c.record,c.summary);await sink.finish(checked.decision,{complete:checked.complete,mergedCells:checked.cells.length});
+    console.log(checked.decision);if(checked.decision!=='passed')process.exitCode=1;return checked;
+  }
   if(estimate){
-    const definition=registrationPath?JSON.parse(await readFile(registrationPath,'utf8')).protocolDefinition??V3_DEFINITION:V3_DEFINITION;
+    if(protocol==='v4'&&!registrationPath){const value=estimateV4(profile);console.log(JSON.stringify(value));return value;}
+    const definition=registrationPath?JSON.parse(await readFile(registrationPath,'utf8')).protocolDefinition??(protocol==='v4'?DEFINITIONS[profile]:V3_DEFINITION):V3_DEFINITION;
+    if(definition.protocol==='P2-product-v4'){if(!isDeepStrictEqual(definition,DEFINITIONS[definition.platformProfile??profile]))throw Error('protocol_revision_required');const value=estimateV4(definition.platformProfile??profile);console.log(JSON.stringify(value));return value;}
     const value=estimatePlan(buildPlan(definition),definition);console.log(JSON.stringify(value));return value;
   }
-  if(plan){const inventory=buildPlan();console.log(JSON.stringify({protocol:PROTOCOL,cellCount:inventory.length,inventory}));result={status:'inconclusive'};console.log(result.status);}
+  if(plan){const inventory=protocol==='v4'?buildV4Plan(profile):buildPlan();console.log(JSON.stringify({protocol:protocol==='v4'?{...PROTOCOL,version:'P2-product-v4',revision:1,platformProfile:profile}:PROTOCOL,cellCount:inventory.length,inventory}));result={status:'inconclusive'};console.log(result.status);}
   else if(functional)result=await functionalOnly(reportPath,namespaces);
   else {
     if(!registrationPath||!profilePath)throw Error('registration_and_writer_profile_required');
     if(!registrationPath.endsWith('.json')||!profilePath.endsWith('.json'))throw Error('json_inputs_required');
     const input=JSON.parse(await readFile(registrationPath,'utf8'));input.writerProfile=writerProfile(JSON.parse(await readFile(profilePath,'utf8')));
-    input.inputFiles=[...(input.inputFiles??[]),profilePath];result=await runRegistered(input,{reportPath,registrationPath,smoke});
+    input.inputFiles=[...(input.inputFiles??[]),profilePath];
+    if(protocol==='v4'&&!smoke){
+      if(!profileExplicit)throw Error('v4_explicit_profile_required');
+      result=await runV4(input,{profile,segmentId,reportPath,registrationPath,resume},{validateRegistration,preregister,prepareCell,prepareInput,backupSeries,probeDependencies,storage,
+        idleBaseline:async()=>{const loop=observeLoop();await delay(PROTOCOL.idleBaselineMs);return loop.finish();}});
+    }else result=await runRegistered(input,{reportPath,registrationPath,smoke});
   }
   if(result.status!=='passed')process.exitCode=1;return result;
 }

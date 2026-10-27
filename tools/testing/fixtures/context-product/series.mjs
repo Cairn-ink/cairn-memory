@@ -4,6 +4,8 @@ import { exposureMetrics, PROTOCOL as E1 } from '../../measure-topic-reader-wal.
 import { attempt, configure, drain } from './engine.mjs';
 import { coldAttempt, startSampler, attributeBlocks } from './actors.mjs';
 import { startWriter, recordedWriter } from './controller.mjs';
+import { rotationCoverage,normalizeV4Decision } from './v4-validation.mjs';
+import { rotatingCell } from './v4-plan.mjs';
 import { PROTOCOL, qualifies, population, exposure, decide, aggregate, maintainerCoverage, readerLoops } from './protocol.mjs';
 export function windows(smoke=false) {
   // Reuse E1-C2's frozen duration/repetition/order rather than importing its
@@ -34,7 +36,7 @@ export async function build(config,write=async()=>{}) {
 export async function startPump(config,write) {
   const {renewContextMaintenancePump}=await import('../../../../core/index.mjs');
   const c=await configure(config,true);let pump,renewal,tick=0,stopped=false,draining=null,lastDrain=performance.now(),drainIncomplete=false;
-  const exported=[],pending=[],observations=[];
+  const exported=[],pending=[],observations=[],trace=[{kind:'start',at:Date.now(),id:config.pump.id,settings:config.pump}];
   const exportNow=()=>draining??=(async()=>{
     if(performance.now()-lastDrain>500)drainIncomplete=true;
     const records=await c.supervisor.drain();
@@ -44,9 +46,10 @@ export async function startPump(config,write) {
   const windowBase=Number(process.hrtime.bigint()/1000000n);
   const renew=()=>{
     const now=Number(process.hrtime.bigint()/1000000n),windowId=Math.floor((now-windowBase)/60000),endsAtMonoMs=windowBase+(windowId+1)*60000;
-    pump=renewContextMaintenancePump({supervisor:c.supervisor,id:config.pump.id,window:{id:String(windowId),endsAtMonoMs,usedItems:0,usedMs:0},
+    const previous=pump;pump=renewContextMaintenancePump({supervisor:c.supervisor,id:config.pump.id,window:{id:String(windowId),endsAtMonoMs,usedItems:0,usedMs:0},
       budgets:config.pump.budgets,quantum:config.pump.quantum,pollMs:config.pump.pollMs,renewalMs:config.pump.renewalMs,
       projections:[{options:c.options,types:config.types}],serviceCredential:c.token});
+    if(config.protocol==='P2-product-v4')trace.push({kind:'renew',at:Date.now(),replaced:previous!==undefined&&pump!==previous,status:pump.getStatus()});
     // Every completion is observed, including expiry/exhaustion/failure. No
     // detached background task promises supervision after the caller returns.
     pump.completion.then(r=>{if(!stopped)observations.push({tick:tick++,state:r.state,error:r.error});}).catch(()=>{drainIncomplete=true;});
@@ -55,11 +58,11 @@ export async function startPump(config,write) {
   // Only public engine drain/ack and minimal queueing run on this timer. Record
   // validation and serialization are deferred until between reader observations.
   const drainTimer=setInterval(()=>{void exportNow();},PROTOCOL.pumpDrainMs);
-  const flush=async()=>{await exportNow();if(pending.length)await write('maintenance-drain',pending.splice(0));for(const observation of observations.splice(0))await write('pump',observation);};
-  return {flush,async stop(){stopped=true;clearInterval(renewal);clearInterval(drainTimer);await draining;await pump.close();await c.supervisor.close();await flush();
+  const flush=async()=>{if(config.protocol==='P2-product-v4')trace.push({kind:'quantum',at:Date.now(),status:pump.getStatus()});await exportNow();if(pending.length)await write('maintenance-drain',pending.splice(0));for(const observation of observations.splice(0))await write('pump',observation);};
+  return {flush,trace,async stop(){if(config.protocol==='P2-product-v4')trace.push({kind:'stopping',at:Date.now(),status:pump.getStatus()});stopped=true;clearInterval(renewal);clearInterval(drainTimer);await draining;await pump.close();await c.supervisor.close();await flush();if(config.protocol==='P2-product-v4')trace.push({kind:'stop',at:Date.now(),status:pump.getStatus()});
     if(drainIncomplete)exported.push({diagnostics:{protocol:'context-native-v1',coverage:'incomplete',busy:0,records:[]}});return exported;}};
 }
-export async function requestSeries(config,{cell,sink,oracle,smoke=false},{attempt:readAttempt=attempt,coldAttempt:readCold=coldAttempt,startPump:makePump=startPump,startWriter:makeWriter=startWriter,startSampler:makeSampler=startSampler}={}) {
+export async function requestSeries(config,{cell,sink,oracle,smoke=false},{attempt:readAttempt=attempt,coldAttempt:readCold=coldAttempt,startPump:makePump=startPump,startWriter:makeWriter=startWriter,startSampler:makeSampler=startSampler,prepareAttempt=async c=>c}={}) {
   const records={warmups:[],main:[],cold:[]},decisions=[];let writer,writerResult,pump,sampler;
   const seriesEnd=Date.now()+config.seriesCeilingMs;
   const concurrency=cell.load!=='idle',life=cell.load.startsWith('retained')?'retained':'fresh';
@@ -68,7 +71,10 @@ export async function requestSeries(config,{cell,sink,oracle,smoke=false},{attem
     if(concurrency){pump=await makePump(config,write);writer=await recordedWriter(()=>makeWriter(config,life),write);writer.start(Date.now(),Date.now()+config.seriesCeilingMs);}
     sampler=await makeSampler([process.pid,...(writer?[writer.child.pid]:[])]);
     const sample=async(series,cold=false)=>{
-      const value=cold?await readCold(config,{signal:config.signal}):await readAttempt(config,{oracle,signal:config.signal});
+      const slot=cell.protocol==='P2-product-v4'?rotatingCell(cell,records[series].length):cell;
+      const prepared=await prepareAttempt({...config,cell:slot},slot);
+      const value=cold?await readCold(prepared,{signal:config.signal}):await readAttempt(prepared,{oracle,signal:config.signal});
+      if(cell.protocol==='P2-product-v4')Object.assign(value.record,{language:slot.language,intent:slot.intent,methodLabel:slot.methodLabel});
       writer?.flush();await pump?.flush();value.record.overlap=!concurrency||overlap(value.record,writer?.calls??[]);records[series].push(value.record);
       if(writer)for(const list of Object.values(records))for(const r of list)r.overlap=overlap(r,writer.calls);if(!cold)attributeBlocks(value.record,await sampler.collect());else await sampler.collect();await write(series,value.record);return value.record;
     };
@@ -80,7 +86,7 @@ export async function requestSeries(config,{cell,sink,oracle,smoke=false},{attem
       while(records[series].filter(r=>qualifies(r,concurrency)).length<target&&records[series].length<ceiling&&Date.now()<seriesEnd&&!config.signal?.aborted)await sample(series,cold);
     };
     await collect('main',false,smoke?1:rules.main.minimum,smoke?3:rules.main.ceiling);
-    await collect('cold',true,smoke?1:rules.cold.minimum,smoke?3:rules.cold.ceiling);
+    if(!cell.series||cell.series.includes('cold'))await collect('cold',true,smoke?1:rules.cold.minimum,smoke?3:rules.cold.ceiling);else delete records.cold;
     if(writer){writerResult=await writer.stop();writer=null;}
     for(const [series,list] of Object.entries(records))for(const [index,r] of list.entries()){r.overlap=!concurrency||overlap(r,writerResult?.calls??[]);await write('overlap-final',{series,index,overlap:r.overlap});}
     // Warm candidate reference: initialization occurs outside the measured read
@@ -88,7 +94,11 @@ export async function requestSeries(config,{cell,sink,oracle,smoke=false},{attem
     if((cell.series??['warm-reference']).includes('warm-reference')&&cell.method==='findCandidates'&&!smoke) {
       records['warm-reference']=[];
       for(let i=0;i<rules['warm-reference'].ceiling&&records['warm-reference'].filter(r=>qualifies(r,false)).length<rules['warm-reference'].minimum;i++){
-        const value=await readAttempt(config,{oracle,initialize:true,signal:config.signal});records['warm-reference'].push(value.record);await write('warm-reference',value.record);
+        const slot=cell.protocol==='P2-product-v4'?rotatingCell(cell,i):cell;
+        const prepared=await prepareAttempt({...config,cell:slot},slot);
+        const value=await readAttempt(prepared,{oracle,initialize:true,signal:config.signal});
+        if(cell.protocol==='P2-product-v4')Object.assign(value.record,{language:slot.language,intent:slot.intent,methodLabel:slot.methodLabel});
+        records['warm-reference'].push(value.record);await write('warm-reference',value.record);
       }
     }
     const pumpDrain=pump?await pump.stop():[];pump=null;await write('pump-drain',pumpDrain);
@@ -100,7 +110,8 @@ export async function requestSeries(config,{cell,sink,oracle,smoke=false},{attem
       writerCoverage:writerResult?.diagnostics.coverage??'complete',baselineCoverage:writerResult?.diagnostics.coverage??'complete',
       nativeBusy:all.reduce((n,r)=>n+r.nativeBusy,0)+(writerResult?.diagnostics.busy??0)+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:all.reduce((n,r)=>n+r.publicBusy,0),
       writers:concurrency?writerResult?.calls:undefined,production:config.production});
-    return {decision,populations,writer:writerResult?{exit:writerResult.exit,coverage:writerResult.diagnostics.coverage}:null};
+    if(cell.protocol==='P2-product-v4')normalizeV4Decision(decision,[...readerLoops(all),...(writerResult?[writerResult.hostLoop]:[])]);
+    return {decision,populations,languageCoverage:cell.language!=='language-rotation-v4'||Object.entries(records).filter(([s])=>s!=='warmups').every(([series,rs])=>rotationCoverage(rs,concurrency&&series!=='warm-reference')),writer:writerResult?{exit:writerResult.exit,coverage:writerResult.diagnostics.coverage}:null};
   }finally {
     try {if(writer)await writer.stop();}
     finally {try {if(pump)await write('pump-drain',await pump.stop());}

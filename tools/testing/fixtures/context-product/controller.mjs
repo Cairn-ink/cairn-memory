@@ -19,7 +19,8 @@ export async function startWriter(config,lifecycle='fresh',{actor:makeActor=acto
   let nextExpected=0;const maximumOperations=PROTOCOL.telemetry.writerMaximumOperations;
   const expect=id=>{if(expected.has(id))return;expected.add(id);ledger.expect(id,id==='open'?['open']:id==='shutdown'?['shutdown']:lifecycle==='fresh'?['open','write','inspect','close']:['write','inspect']);};
   if(lifecycle==='retained')expect('open');expect(0);nextExpected=1;
-  const child=makeActor('writer',{...config,lifecycle,observation,maxOperations:maximumOperations},{stallMs:30000});
+  const {ledger:fixtureLedger,initialCounts,maintainerDiagnostics,signal,oracle,inspectLedger,input,responseSchema,schemas,oracleData,...runtimeConfig}=config;
+  const child=makeActor(config.protocol==='P2-product-v4'?'writer-v4':'writer',{...runtimeConfig,lifecycle,observation,maxOperations:maximumOperations},{stallMs:config.protocol==='P2-product-v4'?config.supervision.stallMs:30000});
   // Diagnostic processing is explicitly pumped between observed reader calls.
   // IPC listeners only queue frames. Native recording never awaits an IPC ack.
   function flush() {
@@ -43,7 +44,7 @@ export async function startWriter(config,lifecycle='fresh',{actor:makeActor=acto
         else {await stopChild(child);const exit=await child.exited;ledger.exit(exit.code,exit.signal,exit.disconnected);return {exit,diagnostics:ledger.result(),calls:[...calls],hostLoop:null};}
         await child.wait('seal_acknowledged');ledger.acknowledgedSeal();
         const result=await child.wait('result'),exit=await child.exited;ledger.exit(exit.code,exit.signal,exit.disconnected);
-        return {...result,exit,diagnostics:ledger.result(),statistics:writerStatistics(result)};
+        return {...result,exit,diagnostics:ledger.result(),statistics:writerStatistics(result),...(config.protocol==='P2-product-v4'?{targetStatistics:Object.fromEntries(['same','other'].map(target=>[target,writerStatistics({calls:result.calls.filter(c=>c.writerTarget===target)})]))}:{})};
       }catch {
         await stopChild(child);flush();const exit=await child.exited;ledger.exit(exit.code,exit.signal,exit.disconnected);
         return {exit,diagnostics:ledger.result(),calls:[...calls],hostLoop:null,error:'writer_failed',statistics:writerStatistics({calls})};
