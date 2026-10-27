@@ -5,9 +5,9 @@ import { createMaintenancePumpRuntime } from '../context-product-pump.mjs';
 import { createContextReadSupervisor } from '../context-read-supervisor.mjs';
 import { credentialDigest } from '../context-product-control.mjs';
 
-function setup(t,patch={}) {
+function setup(t,patch={},faults={}) {
   let now=0,serial=0;const timers=new Map(),calls=[],opened=[],closed=[];
-  const supervisor=createContextReadSupervisor();t.after(()=>supervisor.close());
+  const supervisor=createContextReadSupervisor();t.after(()=>supervisor.close().catch(e=>{if(!faults.close)throw e;}));
   const credential={service:randomUUID()},readSet=[{ownerId:'pump',scope:'personal',projectId:null}];
   const ownerCoverage={policy:'recent-projects-v1',selectionRevision:'fixture',requestedNamespaces:1,selectedNamespaces:1,omittedNamespaces:0};
   const serviceBinding={kind:'service',serviceId:'service',credentialBindingId:'service-binding',credentialExpiresUtcMs:null,credentialDigest:credentialDigest(credential),
@@ -18,7 +18,7 @@ function setup(t,patch={}) {
     projections:[{options,types:['memory']},{options:{...options,readSet:[{ownerId:'pump',scope:'project',projectId:'p'}],ownerCoverage,
       host:{...options.host,configuration:{serviceBinding:{...serviceBinding,namespaces:{readSet:[{ownerId:'pump',scope:'project',projectId:'p'}],ownerCoverage}}}}},types:['memory']}],...patch};
   const renew=createMaintenancePumpRuntime({now:()=>now,setTimer:(f,ms)=>{const id=++serial;timers.set(id,{f,at:now+ms});return id;},clearTimer:id=>timers.delete(id),
-    open:async opts=>{opened.push(opts);return {async refreshContextIndex(input,token){calls.push([input,token]);return {ok:true,value:{status:'complete'}};},async close(){closed.push(opts);}};}});
+    open:async opts=>{opened.push(opts);return {async refreshContextIndex(input,token){calls.push([input,token]);if(faults.refresh)throw Error('refresh failed');return {ok:true,value:{status:'complete'}};},async close(){closed.push(opts);if(faults.close)throw Error('close failed');}};}});
   return {renew,c,calls,opened,closed,timers,setTime:n=>{now=n;},async next(){const [id,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];timers.delete(id);now=timer.at;await timer.f();}};
 }
 
@@ -58,4 +58,50 @@ test('renewal expiry is observable and a new quota window cannot overlap its pre
   const expired=p.completion;s.renew({...s.c,renewalMs:60000});assert.notEqual(p.completion,expired);await s.next();assert.equal(s.calls.length,1);
   s.setTime(60000);const next={...s.c,window:{id:'minute-2',endsAtMonoMs:120000,usedItems:0,usedMs:0},renewalMs:60000};
   assert.equal(s.renew(next),p);await s.next();assert.equal(p.getStatus().windowId,'minute-2');assert.equal(s.calls.length,2);await p.close();
+});
+
+
+test('Fix1 domains retain charges independently across A -> A+B -> B selections',async t=>{
+  const s=setup(t),a=s.c.projections[0],b={...a,options:{...a.options,path:a.options.path+'-other'}};
+  const config={...s.c,projections:[a],budgets:{maxItems:1,maxMs:100}};
+  const first=s.renew(config);await s.next();await first.close();
+  const mixed=s.renew({...config,id:randomUUID(),projections:[a,b]});
+  assert.equal(mixed.getStatus().state,'budget_exhausted');assert.equal(mixed.getStatus().usedItems,1);await mixed.close();
+  const onlyB=s.renew({...config,id:randomUUID(),projections:[b]});
+  assert.equal(onlyB.getStatus().usedItems,0);await s.next();await onlyB.close();
+  const mixedAgain=s.renew({...config,id:randomUUID(),projections:[b,a]});
+  assert.equal(mixedAgain.getStatus().state,'budget_exhausted');await mixedAgain.close();
+});
+
+test('Fix1 renewal rejects a third window overlapping another pump current window',async t=>{
+  const s=setup(t),old=s.renew(s.c);s.setTime(60000);
+  const current={...s.c,id:randomUUID(),window:{id:'current',endsAtMonoMs:120000,usedItems:8,usedMs:800}};
+  const other=s.renew(current);
+  assert.throws(()=>s.renew({...current,id:s.c.id,window:{...current.window,id:'third',usedItems:0,usedMs:0}}),{code:'invalid_input'});
+  assert.equal(old.getStatus().windowId,'minute-1');await old.close();await other.close();
+});
+
+test('Fix1 boundary renewal settles every previously exposed completion before shutdown',async t=>{
+  const s=setup(t),p=s.renew(s.c),first=p.completion;s.setTime(60000);
+  s.renew({...s.c,window:{id:'next',endsAtMonoMs:120000,usedItems:0,usedMs:0}});
+  const second=p.completion;assert.notEqual(second,first);await p.close();
+  const result=await Promise.race([Promise.all([first,second]),new Promise(resolve=>setImmediate(()=>resolve('pending')))]);
+  assert.notEqual(result,'pending');assert.equal(result[0].windowId,'minute-1');assert.equal(result[0].state,'budget_exhausted');assert.equal(result[1].state,'stopped');
+});
+
+for(const automatic of [true,false])test(`Fix1 ${automatic?'refresh failure':'supervisor shutdown'} consumes disposal rejection and exposes failed drain`,async t=>{
+  const s=setup(t,{}, {refresh:automatic,close:true}),p=s.renew(s.c);
+  await s.next();
+  if(!automatic)await assert.rejects(s.c.supervisor.close(),{code:'reader_failed'});
+  assert.equal((await p.completion).state,'failed');assert.equal(p.getStatus().error,'reader_failed');
+  const drained=await s.c.supervisor.drain();assert.ok(drained.some(r=>r.state==='failed'));
+  await assert.rejects(p.close());
+});
+
+
+test('Fix1 a mixed pump reserves each quantum only against its dispatched domain',async t=>{
+  const s=setup(t),a=s.c.projections[0],b={...a,options:{...a.options,path:a.options.path+'-other'}};
+  const mixed=s.renew({...s.c,projections:[a,b]});for(let i=0;i<3;i++)await s.next();await mixed.close();
+  const onlyB=s.renew({...s.c,id:randomUUID(),projections:[b]});assert.equal(onlyB.getStatus().usedItems,1);assert.equal(onlyB.getStatus().usedMs,100);await onlyB.close();
+  const onlyA=s.renew({...s.c,id:randomUUID(),projections:[a]});assert.equal(onlyA.getStatus().usedItems,2);assert.equal(onlyA.getStatus().usedMs,200);await onlyA.close();
 });

@@ -318,3 +318,143 @@ Route one is `git diff --name-only -z` plus
 - `docs/context-read-product.md`
 - `docs/plans/context-read-p2b-impl.md`
 - `packaging/artifact-files.json`
+
+## Fix round 1
+
+Base: `8e4212b3`, `context-read-product-v1.1`, production index lifecycle.
+The frozen specification is unchanged. This round addresses the two independent
+reviews without widening the existing DELETE / one-or-two-namespace scope.
+
+| Finding | Fix | Regression test and before-fix evidence |
+| --- | --- | --- |
+| 1. Selection-set quota keys recharge an exhausted store | Keep cumulative ledgers independently for each normalized store/owner/host domain and window. Reserve a quantum only against its dispatched domain. Admission validates every domain before changing any counter. | Pump `Fix1 domains retain charges independently across A -> A+B -> B selections` fails at the base with active instead of exhausted. `Fix1 a mixed pump reserves each quantum only against its dispatched domain` independently checks A=2/B=1 and also exits 1 against the original runtime. |
+| 2. Renewal admits overlapping windows | Initial admission and renewal share the same per-domain validation, including immutable bounds and rejection of another unexpired window. Reject before switching the active window or completion promise. | Pump `Fix1 renewal rejects a third window overlapping another pump current window` fails at the base because the expected refusal is missing. |
+| 3. Rollover abandons completion observers | Settle the previous window's completion before installing the next window and promise. Shutdown settles the new observer too. | Pump `Fix1 boundary renewal settles every previously exposed completion before shutdown` finds an orphaned promise at the base. The test uses an event-loop rendezvous rather than a latency gate. |
+| 4. Discarded async stop wrappers reject unobserved | Return the original observed close promise directly. Await every handle disposal with allSettled before reporting cleanup; retain a failed status/completion and failed supervisor drain when disposal fails. | Both pump `Fix1 refresh failure ...` and `Fix1 supervisor shutdown ...` produce unhandledRejection and process exit 1 against the original runtime, even with completion and public close observed. The fixed tests check failed completion/status/drain and reject the explicit close. |
+| 5. Valid delta progress masks broken publication evidence | Authenticate and validate existing publication evidence before returning resumable progress. Missing/invalid publication evidence keeps unavailable precedence and null counts/progress. | P2-15/P2-18 combined-state goldens, `Fix1 ... delta progress cannot mask publication validation_missing/validation_invalid`, both return catching_up incorrectly at the base. Both status and candidate refusal are asserted after the fix. |
+| 6. Repair unlinks a newer cache and exposes a missing target | Use a cache-wide child-owned repair lock; stage and fsync an initialized successor, verify the expected inode immediately before rename inside the child, then publish atomically. Retain the identity whose validation failed, and refuse if a different maintainer has replaced it in the meantime. | Probe `Fix1 cache replacement stale-identity`, `stage-fsync`, and `competing-selection` all fail at the base. Child fault injection verifies a newer inode survives, staging failure preserves the incumbent, and a second selection cannot replace while the first stages its successor. Existing production repair and lock-safety tests remain required. |
+| 7. P2-09 only crashes after commit at checkpoint 0 | Add a Worker kill immediately before batch COMMIT, after document/posting/statistics mutations. Start from transformed durable checkpoint 1, compare all durable generation/document/posting/statistics/progress/pointer/certificate rows after rollback, then replay the next quantum and finish with four unique searchable documents. | `Fix1 P2-09 killed uncommitted ...` fails against the old fixture because it never interrupts the batch. The new crash marker proves the kill point was reached; unchanged checkpoint/rows and successful replay prove rollback and recovery. |
+| 8. P2-21 self-compares the certificate digest and lacks the later writer boundary | Independently hash E's canonical epoch vector before any writer commit and compare the durable certificate against that expected digest. Add an independent writer after the final canonical snapshot's COMMIT: completion remains complete at E; later status and fresh-reader candidates are stale/unavailable. | The strengthened existing precommit race checks the independent expected digest. New `Fix1 P2-21 writer after final snapshot ...` fails against the old fixture because no late writer runs. With the new deterministic boundary it verifies the already-required completion semantics without adding a production callback after final validation. |
+
+Before implementation, the three files run with `--test --test-name-pattern=Fix1`
+on Node 22.16.0 each exited **1**: pump, index and probe. The isolated original
+pump disposal tests also each exited **1**, with explicit unhandledRejection
+reports. These are recorded failures of the submitted implementation or missing
+acceptance instrumentation, as distinguished in the table; the independently
+strengthened digest oracle does not imply that the original digest was wrong.
+
+A pump selection stops conservatively when any selected domain is exhausted;
+another selection may still spend a different domain's remaining budget.
+Status usedItems/usedMs report the largest individual domain charges. Unknown
+or failed work remains reserved. Repair never removes the target first, and
+ordinary exclusive creation retains no-replace publication. A killed repair
+child can leave a repair lock: subsequent repair fails closed until an operator
+confirms the child has exited and removes that lock. Normal completion and
+handled errors remove the lock in the child. No host raw database descriptor,
+canonical write/migration, generated bundle update, network/key access or commit
+was introduced.
+
+The first matrix guard run exited **1** because the exact source allowlist
+rejected the expanded child import and an additional staging descriptor open.
+The descriptor reopen was removed: its original child-owned staging descriptor
+stays open until SQLite initialization has closed, then is fsynced and closed.
+A second guard run exited **1** because replacing the original import allowance
+also rejected the unchanged generated archive. The final change preserves the
+original raw-fd import/call sites, adds a separate metadata-only child import
+and its exact justified allowance, and leaves the guard implementation and
+generated bundle unchanged. The recovery guard run passed all **5** tests with
+exit **0**. The affected probe/index/artifact tests were rerun after this change.
+
+Changed files were derived from `git diff --name-only -z` plus untracked files,
+then independently from `git status --porcelain=v1 -z --untracked-files=all`.
+The sorted lists agree: `diff -u` exit **0**, **9 files**. All four changed
+shipped runtime/doc paths already occur in `packaging/artifact-files.json`; no
+new runtime module or manifest entry is needed. The mechanical inventory is:
+
+- `core/context-product-pump.mjs`
+- `core/context-product-sidecar.mjs`
+- `core/sqlite-journal-probe.mjs`
+- `core/test/context-read-product-index.test.mjs`
+- `core/test/context-read-product-pump.test.mjs`
+- `core/test/fixtures/context-product-index-worker.mjs`
+- `core/test/fixtures/no-raw-db-fd-allowlist.json`
+- `core/test/sqlite-journal-probe.test.mjs`
+- `docs/plans/context-read-p2b-impl.md`
+
+Final verification used the mechanically cross-checked **51 explicit paths**
+(filesystem glob versus `rg --files`, identical inventories) on both exact nvm
+runtimes, Node **22.16.0** and **24.15.0**. Every invocation used
+`nice -n 19 ionice -c3 <exact-nvm-node> <explicit-path>` with that runtime first
+in PATH. Each runtime's version command exited **0** and returned its expected
+version. Child exit codes were captured directly, independent of reporter output.
+The log summaries were separately checked for matching test/pass totals and zero
+failed, cancelled, skipped or todo tests.
+
+**Final: 804 passed on each runtime; every final test invocation exited 0.**
+The two development guard failures above were corrected; only their affected
+probe/index/artifact checks and failed/unrun paths were repeated. No broad suite
+was run. Both C06 source/wire checks, the default-path entropy check, lock tests,
+MCP source tests and packaging raw29 tests are included below.
+
+| Explicit path | 22.16.0 exit / passed | 24.15.0 exit / passed |
+| --- | --- | --- |
+| `adapters/mcp/test/context-read-sources.test.mjs` | 0 / 4 | 0 / 4 |
+| `core/test/context-read-assembly-races.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/context-read-assembly-readonly.test.mjs` | 0 / 28 | 0 / 28 |
+| `core/test/context-read-assembly.test.mjs` | 0 / 20 | 0 / 20 |
+| `core/test/context-read-bm25.test.mjs` | 0 / 3 | 0 / 3 |
+| `core/test/context-read-budget.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-core.test.mjs` | 0 / 26 | 0 / 26 |
+| `core/test/context-read-default-entropy.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-embedder.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-fusion.test.mjs` | 0 / 4 | 0 / 4 |
+| `core/test/context-read-local-embedder.test.mjs` | 0 / 38 | 0 / 38 |
+| `core/test/context-read-local-status.test.mjs` | 0 / 3 | 0 / 3 |
+| `core/test/context-read-moc-source.test.mjs` | 0 / 15 | 0 / 15 |
+| `core/test/context-read-process.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-product-artifact.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-product-control.test.mjs` | 0 / 83 | 0 / 83 |
+| `core/test/context-read-product-import.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/context-read-product-index.test.mjs` | 0 / 48 | 0 / 48 |
+| `core/test/context-read-product-pump.test.mjs` | 0 / 11 | 0 / 11 |
+| `core/test/context-read-product-service.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/context-read-product.test.mjs` | 0 / 126 | 0 / 126 |
+| `core/test/context-read-recovery.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/context-read-review.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/context-read-sidecar.test.mjs` | 0 / 17 | 0 / 17 |
+| `core/test/context-read-source-work.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/context-read-sources-authority.test.mjs` | 0 / 6 | 0 / 6 |
+| `core/test/context-read-sources-bounds.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-sources-races.test.mjs` | 0 / 16 | 0 / 16 |
+| `core/test/context-read-sources.test.mjs` | 0 / 14 | 0 / 14 |
+| `core/test/context-read-tokenize.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/sqlite-journal-probe.test.mjs` | 0 / 22 | 0 / 22 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 / 16 | 0 / 16 |
+| `core/test/topic-members-bounds.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/topic-members-compatibility.test.mjs` | 0 / 32 | 0 / 32 |
+| `core/test/topic-members-integration.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/topic-members-mutations.test.mjs` | 0 / 20 | 0 / 20 |
+| `core/test/topic-members-primary.test.mjs` | 0 / 26 | 0 / 26 |
+| `core/test/topic-members-recheck-findings.test.mjs` | 0 / 33 | 0 / 33 |
+| `core/test/topic-members-review-findings.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/topic-members-round3-findings.test.mjs` | 0 / 18 | 0 / 18 |
+| `core/test/topic-members-scale.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/topic-members-visibility.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/topic-members.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/topic-overview-lifecycle.test.mjs` | 0 / 11 | 0 / 11 |
+| `core/test/topic-overview-raw29.test.mjs` | 0 / 22 | 0 / 22 |
+| `core/test/topic-overview-visibility.test.mjs` | 0 / 8 | 0 / 8 |
+| `core/test/topic-overview.test.mjs` | 0 / 4 | 0 / 4 |
+| `core/test/topic-reader-cancellation.test.mjs` | 0 / 6 | 0 / 6 |
+| `core/test/topic-reader-sqlite.test.mjs` | 0 / 21 | 0 / 21 |
+| `packaging/test/topic-overview-raw29.test.mjs` | 0 / 3 | 0 / 3 |
+
+Final `node --check <explicit changed .mjs path>` passed for **7 files per
+runtime**, each exit **0**; the updated allowlist JSON parses successfully.
+`git diff --check` and the independent whitespace/final-newline scan passed
+with exit **0**. Frozen product docs, default `core/context-read*.mjs` source,
+and the generated setup runtime have empty diffs (`git diff --exit-code`: **0**).
+The branch remains `feat/context-read-p2b` at `8e4212b3`, with no staged changes
+and no commit. Temporary verification scripts/logs were removed after recording
+these results.

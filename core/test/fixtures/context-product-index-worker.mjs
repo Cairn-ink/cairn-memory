@@ -19,7 +19,15 @@ globalThis.productTestDatabase=class extends Native {
   exec(sql){
     if(c.trapReads && /CREATE|INSERT|UPDATE|DELETE|REPLACE|BEGIN IMMEDIATE|quick_check|foreign_key_check/i.test(sql))throw Error('read mutation/deep validation');
     if(this.side && sql==='COMMIT' && this.publishing && c.publicationRace){mutate();Atomics.add(state,6,1);}
+    if(this.side && sql==='COMMIT' && this.batchMutated && c.crashBeforeBatchCommit){
+      // The first transformed checkpoint was committed by the preceding call.
+      // These document/posting/statistic mutations are still in this transaction.
+      Atomics.add(state,6,1);process.exit(1);
+    }
     const result=super.exec(sql);
+    if(!this.side && sql==='COMMIT' && c.afterSnapshotRace && Atomics.load(state,7) && !Atomics.load(state,6)){
+      mutate();Atomics.add(state,6,1);
+    }
     if(this.side && sql==='COMMIT' && this.checkpoint && c.crashAfterCheckpoint)process.exit(1);
     if(this.side && sql==='COMMIT' && this.publishing){this.publishing=false;Atomics.store(state,7,1);}
     return result;
@@ -29,7 +37,9 @@ globalThis.productTestDatabase=class extends Native {
     if(c.trapReads && this.side && /FROM (documents|postings|statistics)/i.test(sql) && !/WHERE.*generation\s*=\s*\?/i.test(sql))throw Error('unkeyed index scan');
     const stmt=super.prepare(sql),native=this;
     return new Proxy(stmt,{get(target,key){const value=Reflect.get(target,key,target);if(typeof value!=='function')return value;
-      return (...args)=>{if(/UPDATE generations SET published=1/.test(sql))native.publishing=true;if(/INSERT OR REPLACE INTO progress_records/.test(sql))native.checkpoint=true;return Reflect.apply(value,target,args);};}});
+      return (...args)=>{if(/UPDATE generations SET published=1/.test(sql))native.publishing=true;if(/INSERT OR REPLACE INTO progress_records/.test(sql))native.checkpoint=true;const result=Reflect.apply(value,target,args);
+        if(native.side && /UPDATE statistics SET n=/.test(sql))native.batchMutated=true;
+        return result;};}});
   }
 };
 registerHooks({load(url,context,next){if(url!=='node:sqlite')return next(url,context);return {format:'module',shortCircuit:true,source:`

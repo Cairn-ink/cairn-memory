@@ -23,7 +23,8 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     let window=ownData(c.window,['id','endsAtMonoMs','usedItems','usedMs']);
     if(typeof window.id!=='string'||!window.id.length||window.id.length>200 || !Number.isSafeInteger(window.endsAtMonoMs)||window.endsAtMonoMs<=now()||window.endsAtMonoMs>now()+60000||
       ['usedItems','usedMs'].some(k=>!Number.isSafeInteger(window[k])||window[k]<0))fail('invalid_input');
-    const budgets=ownData(c.budgets,['maxItems','maxMs']), quantum=ownData(c.quantum,['maxItems','maxMs']);
+    let budgets=ownData(c.budgets,['maxItems','maxMs']);
+    const quantum=ownData(c.quantum,['maxItems','maxMs']);
     integer(budgets.maxItems,Number.MAX_SAFE_INTEGER);integer(budgets.maxMs,60000);
     integer(quantum.maxItems,1024);integer(quantum.maxMs,5000);integer(c.pollMs,5000);integer(c.renewalMs,60000);
     const credential=boundedData(c.serviceCredential,16384);
@@ -43,36 +44,51 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     // five-second observation interval is invalid before any service work.
     if(projections.length*Math.max(c.pollMs,quantum.maxMs)>5000)fail('invalid_input');
     const fingerprint=JSON.stringify(projections.map(p=>[p.options.path,p.options.readSet,p.types,p.intent,p.options.host.moduleUrl]));
-    const quotaDomain=JSON.stringify([...new Set(projections.map(p=>JSON.stringify([resolve(p.options.path),p.options.readSet[0].ownerId,p.options.host.moduleUrl])))].sort());
-    const all=state(), old=all.entries.get(c.id), ledgerKey=quotaDomain+'\n'+window.id;
+    const domainOf=p=>JSON.stringify([resolve(p.options.path),p.options.readSet[0].ownerId,p.options.host.moduleUrl]);
+    const domains=[...new Set(projections.map(domainOf))];
+    const all=state(), old=all.entries.get(c.id);
     if(old) {
       if(old.fingerprint!==fingerprint || old.supervisor!==c.supervisor)fail('read_in_progress');
       old.renew(c,window,budgets,credential); return old.api;
     }
-    let ledger=all.ledgers.get(ledgerKey);
-    if(ledger) {
-      if(ledger.endsAt!==window.endsAtMonoMs||ledger.maxItems!==budgets.maxItems||ledger.maxMs!==budgets.maxMs)fail('invalid_input');
-      ledger.items=Math.max(ledger.items,window.usedItems);ledger.ms=Math.max(ledger.ms,window.usedMs);
-    } else {
-      // Keep a bounded, nonrenewing window ledger. Restart cannot erase charges.
+    function admit(w,b) {
       for(const [key,l] of all.ledgers)if(now()>=l.endsAt)all.ledgers.delete(key);
-      for(const [key] of all.ledgers)if(key.startsWith(quotaDomain+'\n'))fail('invalid_input');
-      if(all.ledgers.size>=1024)fail('read_in_progress');
-      ledger={endsAt:window.endsAtMonoMs,maxItems:budgets.maxItems,maxMs:budgets.maxMs,items:window.usedItems,ms:window.usedMs};all.ledgers.set(ledgerKey,ledger);
+      // Validate the entire admission before changing any domain's ledger.
+      const candidates=domains.map(domain=>{
+        const key=JSON.stringify([domain,w.id]),existing=all.ledgers.get(key);
+        if(existing) {
+          if(existing.endsAt!==w.endsAtMonoMs||existing.maxItems!==b.maxItems||existing.maxMs!==b.maxMs)fail('invalid_input');
+        } else if([...all.ledgers.values()].some(l=>l.domain===domain))fail('invalid_input');
+        return {key,ledger:existing??{domain,endsAt:w.endsAtMonoMs,maxItems:b.maxItems,maxMs:b.maxMs,items:w.usedItems,ms:w.usedMs}};
+      });
+      if(all.ledgers.size+candidates.filter(x=>!all.ledgers.has(x.key)).length>1024)fail('read_in_progress');
+      for(const {key,ledger} of candidates){ledger.items=Math.max(ledger.items,w.usedItems);ledger.ms=Math.max(ledger.ms,w.usedMs);all.ledgers.set(key,ledger);}
+      return new Map(candidates.map(({ledger})=>[ledger.domain,ledger]));
     }
+    let ledgers=admit(window,budgets);
     const record=registry.register(owner,{path:projections[0].options.path,domain:'context-read-product-v1.1/pump/'+c.id});
     let timer,closing,stopped=false,running,lastTick=now(),at=0,renewedUntil=now()+c.renewalMs,error=null,grant=credential;
     let report,completion,settled=false;
     function cycle(){settled=false;completion=new Promise(resolve=>{report=value=>{settled=true;resolve(value);};});}cycle();
     const handles=new Map();
     function observation(){return Object.freeze({id:c.id,state:error?'failed':stopped?'stopped':exhausted()?'budget_exhausted':now()>=renewedUntil?'renewal_expired':'active',
-      windowId:window.id,usedItems:ledger.items,usedMs:ledger.ms,maxItems:ledger.maxItems,maxMs:ledger.maxMs,error});}
-    function exhausted(){return now()>=ledger.endsAt||ledger.items>=ledger.maxItems||ledger.ms>=ledger.maxMs;}
-    async function stop(){
+      windowId:window.id,usedItems:Math.max(...[...ledgers.values()].map(l=>l.items)),usedMs:Math.max(...[...ledgers.values()].map(l=>l.ms)),maxItems:budgets.maxItems,maxMs:budgets.maxMs,error});}
+    // Stop this selection conservatively at its first exhausted domain; a new
+    // selection can still use another domain, but cannot recharge this one.
+    function exhausted(){return [...ledgers.values()].some(l=>now()>=l.endsAt||l.items>=l.maxItems||l.ms>=l.maxMs);}
+    function stop(){
       if(closing)return closing;
       stopped=true;clearTimer(timer);registry.cleanup(record);
-      closing=(async()=>{await running;await Promise.all([...handles.values()].map(h=>h.close()));registry.finish(record);all.entries.delete(c.id);report(observation());})();
-      closing.catch(()=>{error='reader_failed';registry.finish(record,false);all.entries.delete(c.id);report(observation());});return closing;
+      closing=(async()=>{
+        await running;
+        const disposed=await Promise.allSettled([...handles.values()].map(h=>Promise.resolve().then(()=>h.close())));
+        if(disposed.some(r=>r.status==='rejected'))throw Error('reader_failed');
+        registry.finish(record);all.entries.delete(c.id);report(observation());
+      })();
+      // Return the observed promise itself. An async wrapper would create an
+      // additional rejecting promise when timer/supervisor callers discard it.
+      closing.catch(()=>{error='reader_failed';registry.finish(record,false);all.entries.delete(c.id);report(observation());});
+      return closing;
     }
     record.stop=()=>{void stop();};
     function schedule(){if(!stopped&&!error&&!exhausted()&&now()<renewedUntil)timer=setTimer(tick,Math.max(0,c.pollMs-(now()-lastTick)));}
@@ -81,7 +97,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       if(exhausted()||now()>=renewedUntil){report(observation());return;}
       lastTick=now();
       return running=(async()=>{
-        const p=projections[at++%projections.length],key=JSON.stringify([p.options.path,p.options.readSet,p.options.host]);
+        const p=projections[at++%projections.length],key=JSON.stringify([p.options.path,p.options.readSet,p.options.host]),ledger=ledgers.get(domainOf(p));
         const maxItems=Math.min(quantum.maxItems,ledger.maxItems-ledger.items),maxMs=Math.min(quantum.maxMs,ledger.maxMs-ledger.ms,Math.floor(ledger.endsAt-now()),Math.floor(renewedUntil-now()));
         if(maxItems<1||maxMs<1)return;
         // Reserve the full quantum before dispatch. Unknown usage remains
@@ -102,16 +118,11 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       if(stopped)fail('store_closed');
       if(next.pollMs!==c.pollMs||JSON.stringify(next.quantum)!==JSON.stringify(c.quantum))fail('invalid_input');
       if(w.id!==window.id){
-        if(now()<ledger.endsAt)fail('invalid_input');
-        for(const [expired,l] of all.ledgers)if(now()>=l.endsAt)all.ledgers.delete(expired);
-        const key=quotaDomain+'\n'+w.id;
-        let nextLedger=all.ledgers.get(key);
-        if(!nextLedger){nextLedger={endsAt:w.endsAtMonoMs,maxItems:b.maxItems,maxMs:b.maxMs,items:w.usedItems,ms:w.usedMs};all.ledgers.set(key,nextLedger);}
-        ledger=nextLedger;window=w;cycle();
-      }
-      if(w.endsAtMonoMs!==ledger.endsAt||b.maxItems!==ledger.maxItems||b.maxMs!==ledger.maxMs)fail('invalid_input');
-      // Renewal extends supervision only, never resets or extends the quota.
-      ledger.items=Math.max(ledger.items,w.usedItems);ledger.ms=Math.max(ledger.ms,w.usedMs);
+        if([...ledgers.values()].some(l=>now()<l.endsAt))fail('invalid_input');
+        const nextLedgers=admit(w,b);
+        // Retire the old observer before exposing the new window's promise.
+        report(observation());ledgers=nextLedgers;window=w;budgets=b;cycle();
+      } else ledgers=admit(w,b);
       if(settled&&!exhausted())cycle();
       renewedUntil=now()+next.renewalMs;grant=g;clearTimer(timer);if(!running)schedule();
     }};

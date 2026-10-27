@@ -117,6 +117,7 @@ test('P2-18 initial and delta durable progress survive close/reopen with exact c
 
 test('P2-21 DELETE publication race certifies E but fresh postcommit status/read stays stale until explicit catch-up',t=>{
   const f=fixture(t);f.admit('race needle');let writes=0;
+  const expected=createHash('sha256').update(JSON.stringify([{memory:f.db.prepare('SELECT epoch FROM namespace_epochs WHERE owner_id=? AND scope=? AND project_id=?').get(ns.ownerId,ns.scope,ns.projectId).epoch}])).digest('base64url');
   const a=local(f,{rendezvous(point){if(point==='precommit' && !writes++){independentWrite(f.path);}}});t.after(()=>a.close());
   a.storage.refresh(a.p,a.access,refresh.budget);
   const observed=readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access));
@@ -124,7 +125,7 @@ test('P2-21 DELETE publication race certifies E but fresh postcommit status/read
   assert.equal(observed.dto.coverage.byType.memory.eligible,null);
   const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX,{readOnly:true});
   const record=JSON.parse(side.prepare('SELECT record FROM validation_records').get().record);side.close();
-  assert.equal(record.canonicalFenceDigest,observed.publication.canonicalFenceDigest);
+  assert.equal(record.canonicalFenceDigest,expected);
   verifiedRecord(a.facade.port.identity.cursorSecret,'validation',canonicalJson(record));
   a.storage.refresh(a.p,a.access,refresh.budget);
   assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.state,'ready');
@@ -398,4 +399,47 @@ test('P2-15/17 native corruption status is closed, records one failed open and n
   const r=configured(t,f.path);r.options.host.configuration.syntheticCorrupt=true;const reader=await instrumented()(r.options);t.after(()=>reader.close());
   assert.deepEqual(ok(await reader.getContextIndexStatus(input,r.token)),scalarStatus('unavailable','corrupt'));assert.equal(r.view[6],1);assert.equal(r.view[1],2);
   await reader.close();const frames=await r.supervisor.drain();const failures=frames.flatMap(f=>f.diagnostics.records??[]);assert.equal(failures.filter(f=>f.sqlite.code===11).length,1);
+});
+
+
+for(const [change,reason] of [["DELETE FROM validation_records",'validation_missing'],["UPDATE validation_records SET record='{}'",'validation_invalid']])
+test('Fix1 P2-15/P2-18 delta progress cannot mask publication '+reason,async t=>{
+  const f=fixture(t);for(let i=0;i<3;i++)f.admit('combined needle '+i);
+  const s=configured(t,f.path,true),h=await s.open();await build(h,s.token);f.admit('delta combined needle');
+  const delta=ok(await h.refreshContextIndex({...refresh,budget:{maxItems:1,maxMs:5000}},s.token));await h.close();
+  assert.equal(delta.progress.lexical.baseSequence,1);
+  const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX);side.exec(change);side.close();
+  const r=configured(t,f.path),reader=await r.open();
+  assert.deepEqual(ok(await reader.getContextIndexStatus(input,r.token)),scalarStatus('unavailable',reason));
+  denied(await reader.findCandidates({...input,query:'needle'},r.token),'index_unavailable');
+});
+
+test('Fix1 P2-09 killed uncommitted document/posting/statistics batch rolls back and replays after checkpoint > 0',async t=>{
+  const f=fixture(t);for(let i=0;i<4;i++)f.admit('interrupted needle '+i);
+  const s=configured(t,f.path,true),h=await s.open();
+  ok(await h.refreshContextIndex({...refresh,budget:{maxItems:1,maxMs:5000}},s.token));await h.close();
+  const snapshot=()=>{const d=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX);try{return Object.fromEntries(['generations','documents','postings','statistics','progress_records','work','publications','validation_records'].map(table=>[table,d.prepare('SELECT * FROM '+table+' ORDER BY 1,2').all()]));}finally{d.close();}};
+  const before=snapshot();assert.equal(before.generations[0].checkpoint,1);assert.equal(before.documents.length,1);assert.ok(before.postings.length>0);
+  const crash=configured(t,f.path,true);crash.options.host.configuration.crashBeforeBatchCommit=true;
+  const worker=await instrumented(true)(crash.options);t.after(()=>worker.close());
+  denied(await worker.refreshContextIndex({...refresh,budget:{maxItems:1,maxMs:5000}},crash.token),'reader_failed');await worker.close();
+  assert.equal(crash.view[6],1);assert.deepEqual(snapshot(),before);
+  const resume=configured(t,f.path,true),next=await resume.open();
+  assert.deepEqual(ok(await next.getContextIndexStatus(input,resume.token)),scalarStatus('building','initial_build',{phase:0,checkpoint:1,sequence:1,baseSequence:0}));
+  const replay=ok(await next.refreshContextIndex({...refresh,budget:{maxItems:1,maxMs:5000}},resume.token));assert.equal(replay.progress.transformed,1);assert.equal(replay.progress.lexical.checkpoint,2);
+  await build(next,resume.token);await next.close();
+  const after=snapshot();assert.equal(after.documents.length,4);assert.equal(new Set(after.documents.map(r=>r.identity)).size,4);
+  const pub=JSON.parse(after.validation_records[0].record);assert.equal(pub.counts.documents,4);assert.equal(pub.counts.byType.memory.indexed,4);
+  const r=configured(t,f.path),reader=await r.open();assert.equal(ok(await reader.findCandidates({...input,query:'needle'},r.token)).items.length,4);
+});
+
+test('Fix1 P2-21 writer after final snapshot leaves completion at E complete and subsequent reads stale',async t=>{
+  const f=fixture(t);f.admit('late writer needle');
+  const expected=createHash('sha256').update(JSON.stringify([{memory:f.db.prepare('SELECT epoch FROM namespace_epochs WHERE owner_id=? AND scope=? AND project_id=?').get(ns.ownerId,ns.scope,ns.projectId).epoch}])).digest('base64url');
+  const s=configured(t,f.path,true);s.options.host.configuration.afterSnapshotRace=true;
+  const h=await instrumented(true)(s.options);t.after(()=>h.close());
+  const completed=ok(await h.refreshContextIndex(refresh,s.token));assert.equal(completed.status,'complete');assert.equal(s.view[6],1);
+  const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX,{readOnly:true});try{assert.equal(JSON.parse(side.prepare('SELECT record FROM validation_records').get().record).canonicalFenceDigest,expected);}finally{side.close();}
+  assert.deepEqual(ok(await h.getContextIndexStatus(input,s.token)),scalarStatus('stale','fence_changed',completed.progress.lexical,null,'stale'));await h.close();
+  const r=configured(t,f.path),reader=await r.open();denied(await reader.findCandidates({...input,query:'needle'},r.token),'index_unavailable');
 });

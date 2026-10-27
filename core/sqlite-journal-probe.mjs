@@ -97,20 +97,23 @@ function runProbe(path, structured) {
 // Stage and fsync before publication, then link atomically without replacing.
 // All descriptors, including the directory fsync, belong to this child.
 // A killed child can leave a stage; the next attempt removes only stages whose
-// recorded child PID no longer exists. Published targets are NEVER removed.
+// recorded child PID no longer exists. Ordinary creation never replaces a target;
+// explicit product repair stages a full successor and uses a verified rename.
 const create = `
   import { openSync, closeSync, fstatSync, fsyncSync, linkSync, unlinkSync, readdirSync } from 'node:fs';
+  import { lstatSync, renameSync, mkdirSync, rmdirSync } from 'node:fs';
   import { dirname, basename, join } from 'node:path';
   import { randomUUID } from 'node:crypto';
   const target = process.argv[1], directory = dirname(target);
   const prefix = '.' + basename(target) + '.cairn-create-';
-  let fd, dir, temporary, published = false;
+  let fd, dir, temporary, repairLock, published = false;
   try {
     if (process.argv[2] === 'replace-product-cache') {
-      // Only an explicitly authorized product maintainer uses this mode, after
-      // closing its old sidecar and rechecking its metadata in the parent.
+      // One lock for the whole cache, independent of projection, owner and
+      // Worker. A killed repair leaves a fail-closed lock for operator recovery.
       if (!target.endsWith('.context-read-product-v1.1.sqlite')) throw Error('unsafe_cache');
-      unlinkSync(target);
+      const lock = target + '.repair-lock';
+      mkdirSync(lock, { mode: 0o700 }); repairLock = lock;
     }
     for (const name of readdirSync(directory)) {
       if (!name.startsWith(prefix)) continue;
@@ -125,10 +128,30 @@ const create = `
     }
     temporary = join(directory, prefix + process.pid + '-' + randomUUID());
     fd = openSync(temporary, 'wx', 0o600);
-    const { dev, ino } = fstatSync(fd); fsyncSync(fd);
+    const { dev, ino } = fstatSync(fd);
+    if (process.argv[4]) {
+      // Repair publishes a complete format, so another selection cannot mistake
+      // an intermediate empty successor for a damaged cache and replace it.
+      const { DatabaseSync } = await import('node:sqlite');
+      const init = JSON.parse(process.argv[4]), db = new DatabaseSync(temporary);
+      try {
+        db.exec('BEGIN IMMEDIATE;' + init.sql);
+        db.prepare('INSERT INTO product_metadata VALUES(1,?,?,?,?)').run(init.storeId,init.profile,init.incarnation,'rebuild');
+        db.exec('COMMIT');
+      } finally { db.close(); }
+    }
+    fsyncSync(fd);
     closeSync(fd); fd = undefined;
-    linkSync(temporary, target); published = true;
-    unlinkSync(temporary); temporary = undefined;
+    if (repairLock) {
+      // All coordinated replacements hold this lock. Check immediately before
+      // rename, in the child; a stale parent observation never removes a winner.
+      const current = lstatSync(target, { bigint: true });
+      if (!current.isFile() || current.isSymbolicLink() || (current.mode & 0o777n) !== 0o600n ||
+          String(current.dev)+':'+String(current.ino) !== process.argv[3]) throw Object.assign(Error('stale_cache'), { code:'ESTALE' });
+      renameSync(temporary, target);
+    } else { linkSync(temporary, target); }
+    published = true;
+    if (!repairLock) unlinkSync(temporary); temporary = undefined;
     if (process.platform !== 'win32') {
       try {
         dir = openSync(directory, 'r'); fsyncSync(dir);
@@ -144,16 +167,17 @@ const create = `
     if (fd !== undefined) closeSync(fd);
     if (dir !== undefined) closeSync(dir);
     if (temporary !== undefined) { try { unlinkSync(temporary); } catch {} }
+    if (repairLock !== undefined) rmdirSync(repairLock);
   }
 `;
-export function createExclusiveSqliteFile(path, productReplacement) {
+export function createExclusiveSqliteFile(path, productReplacement, productInitialization) {
   if (productReplacement) {
     const current = sqliteFileStat(path);
     if (!path.endsWith('.context-read-product-v1.1.sqlite') || !current.isFile() || current.isSymbolicLink() ||
         (current.mode & 0o777n) !== 0o600n || String(current.dev)+':'+String(current.ino) !== productReplacement) throw Error('unsafe_cache');
   }
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', create, path,
-    ...(productReplacement ? ['replace-product-cache', productReplacement] : [])], {
+    ...(productReplacement ? ['replace-product-cache', productReplacement, ...(productInitialization ? [JSON.stringify(productInitialization)] : [])] : [])], {
     encoding: 'utf8', timeout: 5000, maxBuffer: 4096, env: {},
   });
   if (result.error || result.status !== 0 || result.signal) throw new Error('sqlite_file_creation_failed');

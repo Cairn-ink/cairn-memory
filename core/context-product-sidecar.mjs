@@ -173,6 +173,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         const t = target(p,access), pointer = side.prepare('SELECT * FROM publications WHERE projection=?').get(t.projectionDigest);
         const work = side.prepare('SELECT * FROM work WHERE projection=?').get(t.projectionDigest);
         let checkpoint;
+        const incomplete=()=>({ dto:status(p,checkpoint.baseSequence ? 'catching_up' : 'building',checkpoint.baseSequence ? 'resume_pending' : checkpoint.kind === 'rebuild' ? 'rebuild' : 'initial_build',checkpoint.progress),publication:null });
         if (work) {
           const g = side.prepare('SELECT * FROM generations WHERE id=?').get(work.generation);
           const text = side.prepare('SELECT record FROM progress_records WHERE generation=?').get(work.generation)?.record;
@@ -182,11 +183,10 @@ export function productSidecar({ path, db: canonical, identity, features, observ
               r.kind !== g.kind || r.projectionDigest !== g.projection || r.accessDigest !== g.access ||
               !same(JSON.parse(g.fences), { canonicalFenceDigest:r.canonicalFenceDigest,dependencyFenceDigest:r.dependencyFenceDigest })) return invalid(p,'validation_invalid');
           const mismatch = recordBindings(r,t,true);
-          if (!mismatch) return { dto:status(p,g.base_sequence ? 'catching_up' : 'building',g.base_sequence ? 'resume_pending' : g.kind === 'rebuild' ? 'rebuild' : 'initial_build',r.progress), publication:null };
-          if (!['access_changed','dependency_changed','fence_changed'].includes(mismatch)) return invalid(p,mismatch);
-          checkpoint = { mismatch };
+          if (mismatch && !['access_changed','dependency_changed','fence_changed'].includes(mismatch)) return invalid(p,mismatch);
+          checkpoint = { mismatch,baseSequence:g.base_sequence,kind:g.kind,progress:r.progress };
         }
-        if (!pointer) return checkpoint ? { dto:status(p,'stale',checkpoint.mismatch),publication:null } : { dto:status(p,'absent','missing'),publication:null };
+        if (!pointer) return checkpoint ? checkpoint.mismatch ? { dto:status(p,'stale',checkpoint.mismatch),publication:null } : incomplete() : { dto:status(p,'absent','missing'),publication:null };
         const g = side.prepare('SELECT * FROM generations WHERE id=?').get(pointer.generation);
         const text = side.prepare('SELECT record FROM validation_records WHERE publication=?').get(pointer.publication)?.record;
         if (!g || !text) return invalid(p,'validation_missing');
@@ -198,6 +198,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
             !same(r.counts,JSON.parse(g.verify).counts) || !same(Object.keys(r.counts.byType).sort(),expectedTypes.sort())) return invalid(p,'validation_invalid');
         const mismatch = recordBindings(r,t);
         if (mismatch && !['access_changed','dependency_changed','fence_changed'].includes(mismatch)) return invalid(p,mismatch);
+        if(checkpoint && !checkpoint.mismatch)return incomplete();
         return { dto:status(p,mismatch ? 'stale' : 'ready',mismatch,progressOf(g),r.counts), publication:r };
       });
     } catch (e) {
@@ -283,6 +284,9 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   function refresh(p,access,budget) {
     if (!writable) fail('invalid_input');
     const started = now(), m = { transformed:0,canonicalRows:0,metadataBytes:0,textRows:0,textBytes:0,supportLookups:0,supportBytes:0,verifiedRows:0 };
+    // Retain the identity whose validation failed. A different selection may
+    // repair the cache before this maintainer reaches its own repair branch.
+    const repairIdentity=productFile(sidePath,true);
     try { connection(true); }
     catch(e) {
       if (!['wrong_store','incompatible','corrupt'].includes(e.reason) && !(e.code==='ERR_SQLITE_ERROR' && [1,11,26].includes(e.errcode&255))) throw e;
@@ -291,13 +295,18 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       // unsafe companions; SQLite alone performs journal recovery on opening.
       auxiliaries(sidePath,false);
       const old=productFile(sidePath);
-      createExclusiveSqliteFile(sidePath,old.device+':'+old.inode);
-      // A newly created empty file is initialized through the same exclusive
-      // path as a first build, with a fixed rebuild kind.
+      if(!repairIdentity || !same(old,repairIdentity))unavailable('storage_unavailable');
+      try {
+        createExclusiveSqliteFile(sidePath,old.device+':'+old.inode,{
+          sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=1; ${ddl}`,
+          storeId:identity.storeId,profile:PRODUCT_PROFILE,incarnation:randomUUID(),
+        });
+      } catch(e) {
+        if(['ESTALE','EEXIST'].includes(e.code))unavailable('storage_unavailable');
+        throw e;
+      }
       openedIdentity=productFile(sidePath);side=openNative(true);sideWritable=true;if(observer)side=observer.database(side);
       side.exec('PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=0;');
-      write(()=>{side.exec(`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=1; ${ddl}`);
-        side.prepare('INSERT INTO product_metadata VALUES(1,?,?,?,?)').run(identity.storeId,PRODUCT_PROFILE,randomUUID(),'rebuild');});
       metadata=side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
     }
     let t = readTransaction(canonical,() => target(p,access));
