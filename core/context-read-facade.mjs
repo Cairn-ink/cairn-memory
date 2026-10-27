@@ -86,7 +86,7 @@ export function openContextProductFacade(path, product) {
     policy: { maxConcurrent: 1 }, budgetConfigured: false, product };
   const context = createContextFacade(path, options, { readOnly: true });
   return { fetchCandidateEvidence: context.methods.fetchCandidateEvidence, close: context.close,
-    capabilities: context.productCapabilities, fileIdentity: context.fileIdentity };
+    capabilities: context.productCapabilities, fileIdentity: context.fileIdentity, port: context.productPort };
 }
 
 function createContextFacade(path, options, { readOnly }) {
@@ -721,7 +721,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       });
     } catch (error) { return failure(error); }
   }
-  return { fileIdentity: database?.fileIdentity, productCapabilities: { types: supportedTypes }, methods: { getContextReadCapabilities() {
+  return { fileIdentity: database?.fileIdentity, productCapabilities: { types: supportedTypes },
+    ...(options.product ? { productPort: { db, read, ready, evidence, bind, encode, decode, identity, features: info, canonicalFence } } : {}),
+    methods: { getContextReadCapabilities() {
     return success(structuredClone({ version: CONTEXT_VERSION, methods: [...CONTEXT_METHODS], types: [...supportedTypes], intents: ['current', 'history'],
       channels: { lexical: { enabled: true }, semantic: { configured: Boolean(options.embedder), budgetConfigured: Boolean(dispatch) } },
       ...configuration, limits: { ...CONTEXT_LIMITS, ...(options.sources ? { horizon: 32, sources: SOURCE_LIMITS } : {}) }, maintenance: !readOnly && !memoryOnly,

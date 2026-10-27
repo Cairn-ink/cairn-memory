@@ -817,17 +817,22 @@
   {
     "path": "core/sqlite-journal-probe.mjs",
     "source": "import { openSync, closeSync, fstatSync, fsyncSync, linkSync, unlinkSync, readdirSync } from 'node:fs'",
-    "reason": "Child-only staged creation and directory fsync; descriptors never share the host SQLite lock process."
+    "reason": "Child-only staged creation/repair and directory fsync; descriptors never share the host SQLite lock process."
+  },
+  {
+    "path": "core/sqlite-journal-probe.mjs",
+    "source": "import { lstatSync, renameSync, mkdirSync, rmdirSync } from 'node:fs'",
+    "reason": "Child-only cache repair metadata, atomic rename and cache-wide lock directory; no database data descriptors."
   },
   {
     "path": "core/sqlite-journal-probe.mjs",
     "source": "fd = openSync(temporary, 'wx', 0o600);",
-    "reason": "Child-only staged creation and directory fsync; descriptors never share the host SQLite lock process."
+    "reason": "Child-only staged creation/repair and directory fsync; descriptors never share the host SQLite lock process."
   },
   {
     "path": "core/sqlite-journal-probe.mjs",
     "source": "dir = openSync(directory, 'r'); fsyncSync(dir);",
-    "reason": "Child-only staged creation and directory fsync; descriptors never share the host SQLite lock process."
+    "reason": "Child-only staged creation/repair and directory fsync; descriptors never share the host SQLite lock process."
   },
   {
     "path": "adapters/local-embedder/install.mjs",
@@ -1248,5 +1253,10 @@
     "path": "core/isolated-file-read-child.mjs",
     "source": "fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK);",
     "reason": "Child-only bounded input reads; this script never opens SQLite connections."
+  },
+  {
+    "path": "core/sqlite-journal-probe.mjs",
+    "source": "try { const pin = openSync(lock, 'wx', 0o600); closeSync(pin); }",
+    "reason": "Child-only creation of the persistent SQLite lifecycle lock file before opening its SQLite connection."
   }
 ]

@@ -31,7 +31,7 @@ function closure(base, entries, dynamic = true) {
 test('P2-02/13 manifest-only installation executes exported product Worker and cross-checks installed closure', async t => {
   const workspace = createTestWorkspace(t), staged = join(workspace.path, 'staged'), artifact = join(workspace.path, 'installed');
   const manifest = JSON.parse(readFileSync(join(root, 'packaging/artifact-files.json'), 'utf8'));
-  const entries = ['core/context-product-reader.mjs', 'core/context-product-worker.mjs', 'core/context-read-supervisor.mjs'];
+  const entries = ['core/context-product-reader.mjs', 'core/context-product-worker.mjs', 'core/context-product-pump.mjs', 'core/context-read-supervisor.mjs'];
   const expected = closure(root, entries);
   for (const file of expected) assert.ok(manifest.includes(file), 'missing artifact file: ' + file);
   for (const file of manifest) {
@@ -55,7 +55,7 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   t.diagnostic(`runtime/Worker closure cross-check: source=${expected.length}, installed=${installed.length}; static SQLite-free closure=${staticFiles.length}`);
   // Bootstrap code is supplied by the host, copied into the installed tree;
   // it imports no source-checkout module and has no network/provider dependency.
-  copyFileSync(new URL('../testing/context-product-host.mjs', import.meta.url), join(artifact, 'host.mjs'));
+  copyFileSync(new URL('../testing/context-product-index-host.mjs', import.meta.url), join(artifact, 'host.mjs'));
   const api = await import(pathToFileURL(join(artifact, 'core/index.mjs')));
   const f = fixture(t), memory = f.admit('installed canonical evidence');
   const supervisor = api.createContextReadSupervisor(); t.after(() => supervisor.close());
@@ -64,12 +64,27 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   const { requestMaxMs, ...ids } = requestControl;
   const binding = { kind: 'request', ...ids, credentialDigest: credentialDigest(credential), ownerId: ns.ownerId, namespaces: { readSet: [ns], ownerCoverage }, issuedAt: 0 };
   const state = new SharedArrayBuffer(32); new Int32Array(state)[0] = 1;
+  const serviceCredential={opaque:randomUUID()},serviceBinding={kind:'service',serviceId:randomUUID(),credentialBindingId:randomUUID(),credentialExpiresUtcMs:null,
+    credentialDigest:credentialDigest(serviceCredential),ownerId:ns.ownerId,namespaces:{readSet:[ns],ownerCoverage},issuedAt:0};
+  const maintainer=await api.openContextIndexMaintainer({supervisor,path:f.path,version:'context-read-v1',profile:PRODUCT_PROFILE,
+    readSet:[ns],ownerCoverage,sidecarJournalMode:'DELETE',diagnostics:true,
+    host:{moduleUrl:pathToFileURL(join(artifact,'host.mjs')).href,configuration:{serviceBinding,state}}});
+  try {
+    for(const intent of ['current','history']) {
+      const result=ok(await maintainer.refreshContextIndex({readSet:[ns],types:['memory'],intent,mode:'lexical',budget:{maxItems:1024,maxMs:5000}},serviceCredential));
+      assert.equal(result.status,'complete');
+    }
+  } finally {await maintainer.close();}
   const reader = await api.openContextProductReader({ supervisor, path: f.path, version: 'context-read-v1', profile: PRODUCT_PROFILE,
     readSet: [ns], ownerCoverage, requestControl, diagnostics: true, host: { moduleUrl: pathToFileURL(join(artifact, 'host.mjs')).href, configuration: { requestBinding: binding, state, requestReservation: new SharedArrayBuffer(4) } } });
   try {
     assert.equal(ok(await reader.getContextReadCapabilities()).execution, 'worker');
     const evidence = ok(await reader.fetchCandidateEvidence({ readSet: [ns], refs: [{ type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision }], intent: 'current' }, credential));
     assert.equal(evidence.items[0].content, f.db.prepare('SELECT content FROM memories WHERE id=?').get(memory.id).content);
+    const candidates=ok(await reader.findCandidates({readSet:[ns],types:['memory'],intent:'current',query:'installed'},credential));
+    assert.equal(candidates.items[0].ref.memoryId,memory.id);
+    const assembly=ok(await reader.contextRead({readSet:[ns],types:['memory'],intent:'history',query:'installed',budget:{maxTokens:4000,maxItems:12}},credential));
+    assert.equal(assembly.metered.items[0].body,'installed canonical evidence');
   } finally { await reader.close(); }
   assert.ok((await supervisor.drain()).every(r => r.telemetry === 'complete'));
   const newRuntime = readdirSync(join(root, 'core')).filter(name => name.startsWith('context-product-') && name.endsWith('.mjs')).map(name => 'core/' + name);
