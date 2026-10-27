@@ -55,6 +55,11 @@ pilot. Do not claim its expected state behavior has been implemented.
   Missing declared archive members or `package/package.json` fail explicitly
   with `invalid_cairn_artifact`. Corrupt gzip may surface native zlib errors;
   exact parity with the legacy tar subprocess error is impossible.
+  The in-memory reader accepts only regular-file and directory ustar members.
+  PAX (`x`/`g`) and GNU long-name (`L`/`K`) headers, links and devices fail
+  closed with `invalid_cairn_artifact`. A packed path that `npm pack` could
+  only express with PAX (one longer than the 100-byte name plus 155-byte ustar
+  prefix allow, or one that is not ASCII) therefore fails closed as well.
 - E4: exclusive durable `qualification-pilot-v1-intent.json` in the existing
   ledger directory prevents this fixed pilot being rerun via another output
   directory. Use existing safe exclusive/fsynced evidence helpers. Provision
