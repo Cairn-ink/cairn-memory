@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { randomUUID, createHmac } from 'node:crypto';
-import { registerContextReadTools } from '../../adapters/mcp/context-read-tools.mjs';
-import { contextToolResponse } from '../../adapters/mcp/context-read-transport.mjs';
-import { meteredText } from '../context-read-assembly.mjs';
-import { fixture, ok } from '../testing/context-read-fixture.mjs';
-import { four, configured, prebuild, card, canonicalSet, denied } from '../testing/context-product-owner-fixture.mjs';
-import { STORAGE_BUSY_TIMEOUT_MS } from '../database.mjs';
+import { registerContextReadTools } from '../context-read-tools.mjs';
+import { contextToolResponse } from '../context-read-transport.mjs';
+import { meteredText } from '../../../core/context-read-assembly.mjs';
+import { fixture, ok } from '../../../core/testing/context-read-fixture.mjs';
+import { four, configured, prebuild, card, canonicalSet, denied } from '../../../core/testing/context-product-owner-fixture.mjs';
+import { STORAGE_BUSY_TIMEOUT_MS } from '../../../core/database.mjs';
 
 function tools(h, config) {
   const readSet = canonicalSet(config.options.readSet), registered = new Map();
