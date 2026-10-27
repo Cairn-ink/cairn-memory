@@ -265,5 +265,9 @@ test(`P2c/P2d pump identity combines canonical coverage with ${difference}`,asyn
     const changed={...canonicalRenewal,projections:canonicalRenewal.projections.map((p,i)=>i?p:{...p,options:{...p.options,...patch}})};
     assert.throws(()=>s.renew(changed),{code:'read_in_progress'});
   }
+  // A renewal that changes only one projection's types must not reuse the window.
+  const typesOnly={...canonicalRenewal,projections:canonicalRenewal.projections.map((p,i)=>i?p:
+    {...p,types:p.types.includes('card')?['memory']:['memory','card']})};
+  assert.throws(()=>s.renew(typesOnly),{code:'read_in_progress'});
   await pump.close();assert.equal(s.closed.length,8);
 });
