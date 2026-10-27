@@ -79,3 +79,34 @@ test('SQLite-free copy/hash child preserves a host-held exclusive SQLite lock',a
     db.exec('COMMIT');assert.equal((await storage('busy-probe',{path})).value.busy,0);
   }finally{db.close();}
 });
+
+test('P2-23 retained writer reports native shutdown close separately after its public write interval',async t=>{
+  const w=createTestWorkspace(t),path=join(w.path,'retained.sqlite'),namespace={ownerId:'synthetic-product',scope:'personal',projectId:null};
+  await storage('seed',{path,count:1,inventory:[namespace]});
+  const writer=await startWriter({path,namespace,oneOperation:true,writerProfile:{captureMs:null,reviewMs:null,provenance:'functional'}},'retained');
+  try {
+    writer.start(Date.now(),Date.now());const result=await writer.stop();
+    assert.equal(result.exit.code,0);assert.equal(result.diagnostics.coverage,'complete');
+    const call=result.calls[0],shutdown=result.diagnostics.records.filter(r=>r.operation==='shutdown');
+    assert.equal(Object.hasOwn(call,'closeStartedAt'),false);assert.ok(result.finalClose.startedAt>=call.writeFinishedAt);
+    assert.ok(shutdown.some(r=>r.phase==='shutdown'&&r.kind==='native_begin'&&r.stage==='close'));
+    assert.ok(shutdown.some(r=>r.phase==='shutdown'&&r.kind==='native_end'&&r.stage==='close'&&r.ok));
+    assert.ok(shutdown.every(r=>r.at>=Math.floor(call.writeFinishedAt)&&r.commit!==true));
+  }finally{await terminate(writer.child);}
+});
+
+test('history Memory freshness exports a storage-refreshed target at capture before confirmation',async t=>{
+  const w=createTestWorkspace(t),path=join(w.path,'history.sqlite'),namespace={ownerId:'synthetic-product',scope:'personal',projectId:null};
+  await storage('seed',{path,count:1,inventory:[namespace]});
+  const writer=await startWriter({path,namespace,cell:{intent:'history'},targetType:'memory',oneOperation:true,
+    probes:['uniquelexicalprobe0001'],writerProfile:{captureMs:null,reviewMs:null,provenance:'functional'}});
+  try {
+    writer.start(Date.now(),Date.now());const result=await writer.stop();
+    assert.deepEqual(result.calls.map(c=>c.operation),['capture']);
+    const targets=writer.child.take('target');assert.equal(targets.length,1);
+    const target=targets[0].target,stored=(await storage('inspect',{path})).value.memory.find(m=>m.id===target.id);
+    assert.equal(target.revision,stored.revision);assert.equal(target.type,'memory');
+    const commits=result.diagnostics.records.filter(r=>r.phase==='write'&&r.commit);
+    assert.equal(target.committedAt,commits.at(-1).at);
+  }finally{await terminate(writer.child);}
+});

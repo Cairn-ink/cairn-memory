@@ -1,3 +1,4 @@
+import { PROTOCOL } from './protocol.mjs';
 import { randomUUID } from 'node:crypto';
 import { performance, monitorEventLoopDelay, PerformanceObserver } from 'node:perf_hooks';
 import threads, { MessageChannel } from 'node:worker_threads';
@@ -108,7 +109,7 @@ export async function validateResponse(result,config) {
   const shape=closedShape(result,config.responseSchema);
   const v=result?.value;
   const snapshot=v?.snapshot??null,cursor=v?.nextCursor??null;
-  const size=bytes<=65536&&(!snapshot||snapshot.length<=16384)&&(!cursor||cursor.length<=8192);
+  const size=bytes<=PROTOCOL.bounds.responseBytes&&(!snapshot||snapshot.length<=PROTOCOL.bounds.snapshotUnits)&&(!cursor||cursor.length<=PROTOCOL.bounds.cursorUnits);
   let functional=true,tokens=null;
   if(result?.ok&&config.method==='findCandidates')functional=Array.isArray(v.items)&&v.items.length<=(config.input.limit??12)&&v.items.every((item,i)=>item.rank===i+1);
   if(result?.ok&&config.method==='fetchCandidateEvidence')functional=Array.isArray(v.items)&&v.items.length===(config.cell?.refs??config.input.refs?.length??v.items.length);
@@ -131,7 +132,7 @@ export function retrievalQuality(result,config) {
   return {relevant:relevant.size,hits5:hits(5),hits12:hits(12),recallAt5:relevant.size?hits(5)/relevant.size:null,
     recallAt12:relevant.size?hits(12)/relevant.size:null,knownMisses:config.oracleData.knownMisses?.length??0};
 }
-export async function attempt(config,{open,validate=validateResponse,oracle,loopFactory=observeLoop,initialize=false,signal,onWindowEnd,onWindowStart}={}) {
+export async function attempt(config,{open,validate=validateResponse,oracle,loopFactory=observeLoop,initialize=false,signal,onWindowEnd,onWindowStart,clock=timestamp}={}) {
   // All configuration, input construction and harness instrumentation is outside observation.
   const c=await configure(config),gc=instrumentGc(),usage=process.resourceUsage();
   const input=config.input;let h,result,readStartedAt=null,readFinishedAt=null,readMs=0,rejectedAt=null,code=null,cleanupId,cancelObservedAt=null;
@@ -140,23 +141,23 @@ export async function attempt(config,{open,validate=validateResponse,oracle,loop
   await onWindowStart?.();
   const loop=loopFactory();
   try {
-    await immediate();startedAt=timestamp();const start=performance.now();
+    await immediate();startedAt=clock();const start=performance.now();
     try {
       h??=await (open?open(c):c.open({signal}));loop.sample();
       let initialized=true;
       if(initialize){const initial=await h[config.method](input,c.token,{signal});if(!initial.ok){result=initial;initialized=false;}}
-      readStartedAt=timestamp();const read=performance.now();
+      readStartedAt=clock();const read=performance.now();
       if(config.injection==='crash')void gc.workers.at(-1)?.terminate();
-      const abort=config.injection==='abort'?new AbortController():null;if(abort){cancelObservedAt=timestamp();abort.abort();}
-      if(initialized)result=await h[config.method](input,c.token,{signal:abort?.signal??signal});readMs=performance.now()-read;readFinishedAt=timestamp();
+      const abort=config.injection==='abort'?new AbortController():null;if(abort){cancelObservedAt=clock();abort.abort();}
+      if(initialized)result=await h[config.method](input,c.token,{signal:abort?.signal??signal});readMs=performance.now()-read;readFinishedAt=clock();
       code=result.ok?null:result.error.code;
-    }catch(e){rejectedAt=timestamp();code=e.code??'reader_failed';cleanupId=e.cleanupId;}
+    }catch(e){rejectedAt=clock();code=e.code??'reader_failed';cleanupId=e.cleanupId;}
     finally {
       publicMs=performance.now()-start;
       try {await h?.close();if(cleanupId)await c.supervisor.drain(cleanupId);}
       finally {await c.supervisor.close();exports=await c.supervisor.drain();}
     }
-    finishedAt=timestamp();elapsedMs=performance.now()-start;
+    finishedAt=clock();elapsedMs=performance.now()-start;
   }finally {
     // Final host-loop drain includes engine shutdown. Serialization, oracle and
     // ack record processing start only after the observed window is stopped.
@@ -173,9 +174,9 @@ export async function attempt(config,{open,validate=validateResponse,oracle,loop
   for(const r of exports)c.supervisor.ackCleanup(r.cleanupId);
   const gcBlocks=hostLoop.blocks.map(b=>({...b,gc:gc.entries.filter(g=>g.startAt<b.finishedAt&&g.startAt+g.durationMs>b.startedAt)}));
   const cutoff=Math.min(startedAt+config.deadlines.requestMs,readStartedAt===null?startedAt+config.deadlines.openMs:readStartedAt+(config.input.deadlineMs??5000));
-  return {record:{startedAt,finishedAt,readStartedAt,readFinishedAt,elapsedMs,readMs,publicMs,openMs:(readStartedAt??rejectedAt)-startedAt,cleanupLagMs:elapsedMs-publicMs,rejectedAt,code,ok:result?.ok===true,
+  return {record:{hostPid:process.pid,startedAt,finishedAt,readStartedAt,readFinishedAt,elapsedMs,readMs,publicMs,openMs:(readStartedAt??rejectedAt)-startedAt,cleanupLagMs:elapsedMs-publicMs,rejectedAt,code,ok:result?.ok===true,
     ...checked,expected,quality:retrievalQuality(result,config),scopePartial,overlap:config.load==='idle',hostLoop:{...hostLoop,blocks:gcBlocks},resources,gc:gc.entries,
     nativeBusy:diagnostics.reduce((n,d)=>n+(d.busy??0),0),publicBusy:code==='storage_busy'?1:0,
     telemetry:diagnostics.length&&diagnostics.every(d=>d.coverage==='complete')?'complete':'incomplete',diagnostics,
-    overshootMs:code==='read_timeout'?Math.max(0,(rejectedAt??readFinishedAt)-cutoff):code==='read_cancelled'&&cancelObservedAt!==null?Math.max(0,readFinishedAt-cancelObservedAt):0,lateSuccess:result?.ok===true&&readFinishedAt>=cutoff},result};
+    overshootMs:Math.max(0,(rejectedAt??readFinishedAt)-cutoff,code==='read_cancelled'&&cancelObservedAt!==null?(rejectedAt??readFinishedAt)-cancelObservedAt:0),lateSuccess:result?.ok===true&&readFinishedAt>=cutoff},result};
 }

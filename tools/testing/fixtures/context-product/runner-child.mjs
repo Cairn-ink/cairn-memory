@@ -8,8 +8,8 @@ try {
   if(kind==='writer')await writerProcess(config);
   else if(kind==='cold') {
     // The fresh process imports the oracle before starting the engine window.
-    startup?.pause();const oracle=config.oracleModule?(await import(config.oracleModule)).validate:undefined;startup?.resume();
-    const sampler=await startSampler([process.pid]);
+    startup?.pause();const oracle=config.oracleModule?(await import(config.oracleModule)).validate:undefined;
+    const sampler=await startSampler([process.pid]);startup?.resume();
     let value,attribution,startupLoop;try{value=await attempt(config,{oracle,onWindowStart:async()=>{startupLoop=await startup?.finish();},onWindowEnd:async()=>{
       await new Promise((resolve,reject)=>process.send({type:'window_end'},e=>e?reject(e):resolve()));
       await new Promise(resolve=>process.once('message',resolve));

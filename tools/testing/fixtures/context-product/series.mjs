@@ -4,7 +4,7 @@ import { exposureMetrics, PROTOCOL as E1 } from '../../measure-topic-reader-wal.
 import { attempt, configure, drain } from './engine.mjs';
 import { coldAttempt, startSampler, terminate, attributeBlocks } from './actors.mjs';
 import { startWriter } from './controller.mjs';
-import { PROTOCOL, qualifies, population, exposure, decide, aggregate } from './protocol.mjs';
+import { PROTOCOL, qualifies, population, exposure, decide, aggregate, maintainerCoverage, readerLoops } from './protocol.mjs';
 export function windows(smoke=false) {
   // Reuse E1-C2's frozen duration/repetition/order rather than importing its
   // topic-specific write workload or claiming its surfaced failures are native coverage.
@@ -59,43 +59,44 @@ export async function startPump(config,write) {
   return {flush,async stop(){stopped=true;clearInterval(renewal);clearInterval(drainTimer);await draining;await pump.close();await c.supervisor.close();await flush();
     if(drainIncomplete)exported.push({diagnostics:{protocol:'context-native-v1',coverage:'incomplete',busy:0,records:[]}});return exported;}};
 }
-export async function requestSeries(config,{cell,sink,oracle,smoke=false}) {
+export async function requestSeries(config,{cell,sink,oracle,smoke=false},{attempt:readAttempt=attempt,coldAttempt:readCold=coldAttempt,startPump:makePump=startPump,startWriter:makeWriter=startWriter,startSampler:makeSampler=startSampler}={}) {
   const records={warmups:[],main:[],cold:[]},decisions=[];let writer,writerResult,pump,sampler;
   const seriesEnd=Date.now()+config.seriesCeilingMs;
   const concurrency=cell.load!=='idle',life=cell.load.startsWith('retained')?'retained':'fresh';
   const write=async(series,record)=>sink.record(cell.id,series,record);
   try {
-    if(concurrency){pump=await startPump(config,write);writer=await startWriter(config,life);writer.start(Date.now(),Date.now()+config.seriesCeilingMs);}
-    sampler=await startSampler([process.pid,...(writer?[writer.child.pid]:[])]);
+    if(concurrency){pump=await makePump(config,write);writer=await makeWriter(config,life);writer.start(Date.now(),Date.now()+config.seriesCeilingMs);}
+    sampler=await makeSampler([process.pid,...(writer?[writer.child.pid]:[])]);
     const sample=async(series,cold=false)=>{
-      const value=cold?await coldAttempt(config,{signal:config.signal}):await attempt(config,{oracle,signal:config.signal});
+      const value=cold?await readCold(config,{signal:config.signal}):await readAttempt(config,{oracle,signal:config.signal});
       writer?.flush();await pump?.flush();value.record.overlap=!concurrency||overlap(value.record,writer?.calls??[]);records[series].push(value.record);
-      if(writer)for(const list of Object.values(records))for(const r of list)r.overlap=overlap(r,writer.calls);attributeBlocks(value.record,sampler.current());await write(series,value.record);return value.record;
+      if(writer)for(const list of Object.values(records))for(const r of list)r.overlap=overlap(r,writer.calls);if(!cold)attributeBlocks(value.record,await sampler.collect());else await sampler.collect();await write(series,value.record);return value.record;
     };
-    for(let i=0;i<3;i++)await sample('warmups');
+    const rules=cell.sampleRules??{warmups:{minimum:3},main:{minimum:50,ceiling:500},cold:{minimum:10,ceiling:100},'warm-reference':{minimum:50,ceiling:500}};
+    for(let i=0;i<rules.warmups.minimum;i++)await sample('warmups');
     // Live overlap cannot be certified until writer intervals have arrived. Keep
     // every attempt and collect to a fixed ceiling if necessary; never select speed.
     const collect=async(series,cold,target,ceiling)=>{
       while(records[series].filter(r=>qualifies(r,concurrency)).length<target&&records[series].length<ceiling&&Date.now()<seriesEnd&&!config.signal?.aborted)await sample(series,cold);
     };
-    await collect('main',false,smoke?1:50,smoke?3:500);
-    await collect('cold',true,smoke?1:10,smoke?3:100);
+    await collect('main',false,smoke?1:rules.main.minimum,smoke?3:rules.main.ceiling);
+    await collect('cold',true,smoke?1:rules.cold.minimum,smoke?3:rules.cold.ceiling);
     if(writer){writerResult=await writer.stop();writer=null;await write('writer',writerResult);}
     for(const [series,list] of Object.entries(records))for(const [index,r] of list.entries()){r.overlap=!concurrency||overlap(r,writerResult?.calls??[]);await write('overlap-final',{series,index,overlap:r.overlap});}
     // Warm candidate reference: initialization occurs outside the measured read
     // window, and each record still includes its engine host loop.
-    if(cell.method==='findCandidates'&&!smoke) {
+    if((cell.series??['warm-reference']).includes('warm-reference')&&cell.method==='findCandidates'&&!smoke) {
       records['warm-reference']=[];
-      for(let i=0;i<500&&records['warm-reference'].filter(r=>qualifies(r,false)).length<50;i++){
-        const value=await attempt(config,{oracle,initialize:true,signal:config.signal});records['warm-reference'].push(value.record);await write('warm-reference',value.record);
+      for(let i=0;i<rules['warm-reference'].ceiling&&records['warm-reference'].filter(r=>qualifies(r,false)).length<rules['warm-reference'].minimum;i++){
+        const value=await readAttempt(config,{oracle,initialize:true,signal:config.signal});records['warm-reference'].push(value.record);await write('warm-reference',value.record);
       }
     }
     const pumpDrain=pump?await pump.stop():[];pump=null;await write('pump-drain',pumpDrain);
     const maintenance=[...(config.maintainerDiagnostics??[]),...pumpDrain.map(r=>r.diagnostics).filter(d=>d.protocol==='context-native-v1')];
-    const all=Object.values(records).flat(),populations=Object.fromEntries(Object.entries(records).filter(([s])=>s!=='warmups').map(([s,r])=>[s,population(r,{cold:s==='cold',concurrent:concurrency&&s!=='warm-reference',warmReference:s==='warm-reference'})]));
+    const all=Object.values(records).flat(),populations=Object.fromEntries(Object.entries(records).filter(([s])=>s!=='warmups').map(([s,r])=>[s,population(r,{cold:s==='cold',concurrent:concurrency&&s!=='warm-reference',warmReference:s==='warm-reference',rule:rules[s]})]));
     const decision=decide(cell,{smoke,records:all,populations,warmups:records.warmups.length,
-      loops:[...all.flatMap(r=>[r.hostLoop,...(r.launcherLoop?[r.launcherLoop]:[]),...(r.startupLoop?[r.startupLoop]:[])]),...(writerResult?[writerResult.hostLoop]:[])],
-      readerCoverage:all.every(r=>r.telemetry==='complete')?'complete':'incomplete',maintainerCoverage:maintenance.length&&maintenance.every(d=>d.coverage==='complete')?'complete':config.maintainerCoverage,
+      ownerCoverage:config.ownerCoverage,loops:[...readerLoops(all),...(writerResult?[writerResult.hostLoop]:[])],
+      readerCoverage:all.every(r=>r.telemetry==='complete')?'complete':'incomplete',maintainerCoverage:maintainerCoverage(maintenance,config.maintainerCoverage),
       writerCoverage:writerResult?.diagnostics.coverage??'complete',baselineCoverage:writerResult?.diagnostics.coverage??'complete',
       nativeBusy:all.reduce((n,r)=>n+r.nativeBusy,0)+(writerResult?.diagnostics.busy??0)+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:all.reduce((n,r)=>n+r.publicBusy,0),
       writers:concurrency?writerResult?.calls:undefined,production:config.production});
@@ -115,7 +116,7 @@ export async function contentionWindow(config,{cell,sink,oracle,baseline=false,w
     const startAt=Date.now()+50,endAt=startAt+windowMs;writer.start(startAt,endAt);await delay(Math.max(0,startAt-Date.now()));
     while(Date.now()<endAt&&!config.signal?.aborted){
       if(baseline){await delay(20);writer.flush();continue;}
-      const {record}=await attempt(config,{oracle,signal:config.signal});attributeBlocks(record,sampler.current());attempts.push(record);writer.flush();await pump?.flush();await sink.record(cell.id,'window',record);
+      const {record}=await attempt(config,{oracle,signal:config.signal});attributeBlocks(record,await sampler.collect());attempts.push(record);writer.flush();await pump?.flush();await sink.record(cell.id,'window',record);
     }
     result=await writer.stop();
     if(pump){maintenance=await pump.stop();pump=null;await sink.record(cell.id,'pump-drain',maintenance);}
@@ -130,7 +131,7 @@ export async function contentionWindow(config,{cell,sink,oracle,baseline=false,w
 }
 export async function pairedWindows(config,options,prepareClone) {
   const decisions=[];
-  for(const window of windows(options.smoke)) {
+  for(const window of options.smoke?windows(true):Array.from({length:options.cell.windows??PROTOCOL.repetitions},(_,repetition)=>({repetition,windowMs:options.cell.windowMs??PROTOCOL.windowMs,order:repetition%2?['reader','baseline']:['baseline','reader']}))) {
     const pair={};
     for(const variant of window.order) {
       // Separate quiescent seed clone/build for each member of every pair.

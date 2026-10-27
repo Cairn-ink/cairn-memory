@@ -27,7 +27,7 @@ export async function writerProcess(config) {
   const {rationaleModel}=await import('../../../../core/testing/rationale-model.mjs');
   const cardHost=config.targetType==='card'?(await import('../../../../core/testing/raw-source-fixtures.mjs')).cardHost():null;
   let core,pending=null,sequence=0,lastProgress=Date.now();
-  const calls=[],operations=[],loops=[];let finalClose=null,disposalComplete=true;
+  const eligibleCommits=new Map(),calls=[],operations=[],loops=[];let finalClose=null,disposalComplete=true;
   const probe=()=>config.probes?.[Math.floor((sequence-1)/2)]??null;
   const open=()=>openMemoryCore({path:config.path,decisionReview:'required-v1',...(cardHost?{privateCards:cardHost.options}:{}),
     ...(config.writerProfile.captureMs===null?{}:{captureDeadlineMs:config.writerProfile.captureMs}),
@@ -65,7 +65,8 @@ export async function writerProcess(config) {
       core=measured.core;result=measured.value;if(measured.disposed===false)disposalComplete=false;
       loops.push(await callLoop.finish());
       code=measured.error?(measured.error.code??'writer_failed'):result?.ok===false?result.error.code:null;
-      if(targetStored&&probe())await send({type:'target',target:{type:cardHost?'card':'memory',id:targetStored.id,revision:targetStored.revision,...(cardHost?{bodyRevision:targetStored.bodyRevision}:{}),committedAt:journal.lastCommitAt(),probe:probe()}});
+      const target=freshnessTarget({eligible:code===null,type:cardHost?'card':'memory',intent:config.cell?.intent,operation,stored:targetStored??pending,committedAt:journal.lastCommitAt(),probe:probe()},eligibleCommits);
+      if(target)await send({type:'target',target});
       calls.push({...measured.call,id,operation,deadlineMs,code});
       await send({type:'call',call:calls.at(-1)});await send(journal.chunk());
       if(Date.now()-lastProgress>1000){await send({type:'progress',operations:sequence});lastProgress=Date.now();}
@@ -73,10 +74,27 @@ export async function writerProcess(config) {
       await delay(Math.max(0,20-(performance.now()-paceStart)));
     }while(!stop&&Date.now()<endAt&&sequence<config.maxOperations);
   }finally {
-    if(core){const loop=observeLoop(),startedAt=timestamp();try{operations.push('shutdown');phase('shutdown','shutdown',()=>core.close());core=null;}finally{finalClose={startedAt,finishedAt:timestamp()};loops.push(await loop.finish());}}
+    if(core){const shutdown=await shutdownRetained(core,{journal,operations});core=null;finalClose=shutdown.finalClose;disposalComplete&&=shutdown.disposed;loops.push(shutdown.hostLoop);}
     const hostLoop={maxMs:Math.max(0,...loops.map(l=>l.maxMs)),over100:loops.reduce((n,l)=>n+l.over100,0),blocks:loops.flatMap(l=>l.blocks)};await send(journal.chunk());
     const seal=journal.seal(operations,disposalComplete);await send(seal);await wait('seal_ack');sealed=true;
     await send({type:'seal_acknowledged'});await send({type:'result',calls,hostLoop,finalClose,operations});
     if(sealed)process.disconnect();
   }
+}
+
+// History Memories are eligible at capture; current Memories and Cards enter at
+// confirmation. Later revisions update the expected ref, never the time origin.
+export function freshnessTarget({eligible=true,type,intent,operation,stored,committedAt,probe},eligibleCommits=new Map()) {
+  if(!eligible||!stored||!probe||operation==='capture'&&!(type==='memory'&&intent==='history'))return null;
+  if(!eligibleCommits.has(stored.id))eligibleCommits.set(stored.id,committedAt);
+  return {type,id:stored.id,revision:stored.revision,...(type==='card'?{bodyRevision:stored.bodyRevision}:{}),
+    committedAt:eligibleCommits.get(stored.id),probe};
+}
+
+export async function shutdownRetained(core,{journal,operations,clock=timestamp,loopFactory=observeLoop}) {
+  const loop=loopFactory(),startedAt=clock();let disposed=false;
+  try {operations.push('shutdown');journal.enter('shutdown','shutdown');try{core.close();disposed=true;}finally{journal.leave();}}
+  catch { /* Export the native ledger even when final disposal fails. */ }
+  finally {var finalClose={startedAt,finishedAt:clock()},hostLoop=await loop.finish();}
+  return {finalClose,hostLoop,disposed};
 }

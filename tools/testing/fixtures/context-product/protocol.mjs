@@ -5,6 +5,18 @@ export const PROTOCOL = Object.freeze({ version: 'P2-product-v3', profile: 'cont
   loopMs: 100, settlementMs: 50, notReadyFraction: .01, availabilityMinimum: 100,
   freshnessMs: 30000, freshnessMinimum: 100, probeIntervalMs: 1000,
   writeOverlap: 20, closeOverlap: 10, commits: 100,
+  latency: { findCandidates: { p95ByCount: {1112:700,3336:1000}, referenceP95Ms:300, maxMs:1500 },
+    contextRead:{p95Ms:800,maxMs:2000}, fetchCandidateEvidence:{p95Ms:150,maxMs:500} },
+  bounds: {responseBytes:65536,snapshotUnits:16384,cursorUnits:8192,candidateLimit:24,
+    assembly:[{maxTokens:1500,maxItems:12},{maxTokens:4000,maxItems:24}]},
+  gates: {walNativeBusy:0,walPublicBusy:0,walCoverage:['reader','maintainer','writer','baseline'],
+    deleteBusy:'report_only',writerDeadline:'host_profile_no_overrun',writerTimeouts:['model_timeout','read_timeout'],
+    expectedErrors:['storage_busy','index_unavailable','read_timeout','read_cancelled'],
+    functional:'closed_DTO_and_frozen_selected_projection_oracle',overflow:'omissions_required',
+    language:'frozen_known_answers_and_ranking; recall_and_known_misses_report_only',
+    outputs:'size_backup_restore_build_deep_verify_fresh_reader_verify_required; no_numeric_threshold',
+    production:'exact_registered_Node_patch_on_production_linux_ext4'},
+  sampler: {intervalMs:10,capacity:4096,batchSize:128},
   telemetry: { readerProtocol: 'context-native-v1', readerFailureCapacity: 512,
     writerProtocol: 'product-writer-v1', writerCapacity: 65536, writerMaximumOperations:100000, chunkRecords: 65536 },
   drainSchedule: 'after every read and close; pump engine drain/ack every 100ms (over 500ms is incomplete), serialize between observations; export before immediate ack; writer chunks after every lifecycle; seal after final close, ack before disconnect',
@@ -14,32 +26,76 @@ export const METHODS = Object.freeze([
   { method: 'contextRead', limit: 12, maxTokens: 1500 }, { method: 'contextRead', limit: 24, maxTokens: 4000 },
   ...[1,24].flatMap(refs => ['full','compact','snapshot'].map(adapter => ({ method: 'fetchCandidateEvidence', refs, adapter }))),
 ]);
-export function buildPlan() {
-  const cells = [];
-  const add = c => cells.push({ id: cells.length, ...c });
-  for (const count of [1112,3336]) for (const schema of [18,23,33])
-    for (const canonical of ['DELETE','WAL']) for (const sidecar of ['DELETE','WAL'])
-      for (const intent of ['current','history']) for (const language of ['zh','ja','mixed'])
-        for (const method of METHODS) for (const load of ['idle','fresh-same','fresh-other','retained-same','retained-other'])
-          add({ kind: 'requests', count, schema, canonical, sidecar, intent, language, ...method, load,
-            scope: 'launch', series: ['warmups','main','cold', ...(method.method === 'findCandidates' ? ['warm-reference'] : [])],
-            windows: load === 'idle' ? 0 : 5, pairedBaseline: load !== 'idle' });
-  for (const count of [1112,3336]) for (const schema of [18,23,33])
-    for (const canonical of ['DELETE','WAL']) for (const sidecar of ['DELETE','WAL'])
-      for (const intent of ['current','history']) {
-        for (const type of schema === 18 ? ['memory'] : ['memory','card'])
-          add({ kind: 'freshness', count, schema, canonical, sidecar, intent, type, scope: 'launch' });
-        add({ kind: 'availability', count, schema, canonical, sidecar, intent, scope: 'launch' });
-        add({ kind: 'overflow', count, schema, canonical, sidecar, intent, scope: 'overflow', method:'findCandidates', limit:24, language:'mixed', load:'idle' });
+// The plan is data: axes name dimensions; dependent dimensions resolve from the
+// partial row. Ordering is deliberate and preserves the registered v3 inventory.
+const samples={warmups:{minimum:3,ceiling:3},main:{minimum:50,ceiling:500},cold:{minimum:10,ceiling:100},
+  'warm-reference':{minimum:50,ceiling:500}};
+export const V3_DEFINITION = {
+  version:'P2-product-v3', perAttemptFloorMs:1,
+  dimensions:{count:[1112,3336],schema:[18,23,33],canonical:['DELETE','WAL'],sidecar:['DELETE','WAL'],
+    intent:['current','history'],language:['zh','ja','mixed'],method:METHODS,
+    load:['idle','fresh-same','fresh-other','retained-same','retained-other'],
+    type:{by:'schema',values:{18:['memory'],23:['memory','card'],33:['memory','card']}},
+    injection:['absent','exhaustion','abort','crash','post-catch-up']},
+  modeClasses:{required:[['DELETE','DELETE'],['WAL','WAL']],control:[['DELETE','WAL'],['WAL','DELETE']]},
+  fixedWindows:{loads:['fresh-same','fresh-other','retained-same','retained-other'],repetitions:5,windowMs:30000,paired:true},
+  groups:[{axes:[],kinds:['requests']},
+    {axes:['count','schema','canonical','sidecar','intent'],kinds:['freshness','availability','overflow']},
+    {axes:['count','schema','canonical','sidecar'],kinds:['backup','injection']}],
+  kinds:[
+    {kind:'requests',fixedWindows:true,axes:['count','schema','canonical','sidecar','intent','language','method','load'],scope:'launch',
+      series:['warmups','main','cold'],additionalSeries:{by:'method',values:{findCandidates:['warm-reference']}},samples},
+    {kind:'freshness',axes:['count','schema','canonical','sidecar','intent','type'],scope:'launch',samples:{freshness:{minimum:100,ceiling:null}}},
+    {kind:'availability',axes:['count','schema','canonical','sidecar','intent'],scope:'launch',samples:{availability:{minimum:100,ceiling:null}}},
+    {kind:'overflow',axes:['count','schema','canonical','sidecar','intent'],scope:'overflow',
+      defaults:{method:'findCandidates',limit:24,language:'mixed',load:'idle'},series:['warmups','main','cold'],samples},
+    {kind:'backup',axes:['count','schema','canonical','sidecar'],scope:'launch',samples:{'restored-reader':{minimum:1,ceiling:1}}},
+    {kind:'injection',axes:['count','schema','canonical','sidecar','injection'],scope:'launch',samples:{injection:{minimum:1,ceiling:1}}},
+  ],
+};
+function cross(axes,dimensions,row={}) {
+  if(!axes.length)return [row];
+  const [axis,...rest]=axes,dimension=dimensions[axis];
+  const values=Array.isArray(dimension)?dimension:dimension.values[row[dimension.by]];
+  return values.flatMap(value=>cross(rest,dimensions,{...row,...(typeof value==='object'?value:{[axis]:value})}));
+}
+export function buildPlan(definition=V3_DEFINITION) {
+  const cells=[];
+  for(const group of definition.groups)for(const prefix of cross(group.axes,definition.dimensions)) {
+    for(const kind of group.kinds) {
+      const spec=definition.kinds.find(s=>s.kind===kind);
+      for(const row of cross(spec.axes.filter(a=>!group.axes.includes(a)),definition.dimensions,prefix)) {
+        const series=spec.series?[...spec.series,...(spec.additionalSeries?.values[row[spec.additionalSeries.by]]??[])]:undefined;
+        const modeClass=Object.entries(definition.modeClasses).find(([,pairs])=>pairs.some(([c,s])=>c===row.canonical&&s===row.sidecar))?.[0];
+        if(!modeClass)throw Error('unregistered_mode_cross_product');
+        const fixed=spec.fixedWindows&&definition.fixedWindows.loads.includes(row.load);
+        cells.push({id:cells.length,kind:spec.kind,scope:spec.scope,...spec.defaults,...row,modeClass,
+          ...(series?{series}:{}),sampleRules:spec.samples,
+          ...(spec.fixedWindows?{windows:fixed?definition.fixedWindows.repetitions:0,pairedBaseline:fixed&&definition.fixedWindows.paired,
+            windowMs:definition.fixedWindows.windowMs}:{})});
       }
-  for (const count of [1112,3336]) for (const schema of [18,23,33])
-    for (const canonical of ['DELETE','WAL']) for (const sidecar of ['DELETE','WAL']) {
-      add({ kind: 'backup', count, schema, canonical, sidecar, scope: 'launch' });
-      for (const injection of ['absent','exhaustion','abort','crash','post-catch-up'])
-        add({ kind: 'injection', injection, count, schema, canonical, sidecar, scope: 'launch' });
     }
+  }
   return cells;
 }
+export function estimatePlan(plan=buildPlan(),definition=V3_DEFINITION) {
+  const counts={},minimumSamplesByKind={};let fixedWindowMs=0,minimumAttempts=0;
+  for(const cell of plan) {
+    counts[cell.kind]=(counts[cell.kind]??0)+1;
+    fixedWindowMs+=(cell.windows??0)*(cell.pairedBaseline?2:1)*(cell.windowMs??definition.fixedWindows.windowMs);
+    const rules=cell.sampleRules??{};
+    const n=(cell.series??Object.keys(rules)).reduce((sum,s)=>sum+(rules[s]?.minimum??0),0);
+    minimumSamplesByKind[cell.kind]=(minimumSamplesByKind[cell.kind]??0)+n;minimumAttempts+=n;
+  }
+  const perAttemptFloorMs=definition.perAttemptFloorMs;
+  return {protocol:definition.version,cellCount:plan.length,counts,minimumSamplesByKind,fixedWindowMs,minimumAttempts,perAttemptFloorMs,
+    lowerBoundWallClockMs:fixedWindowMs+minimumAttempts*perAttemptFloorMs,
+    assumption:`Serial cells; assumed ${perAttemptFloorMs} ms per minimum attempt outside fixed windows; excludes setup, rebuilds, extra attempts, availability windows and freshness waits. Not a measured runtime guarantee.`};
+}
+export function maintainerCoverage(diagnostics,fallback) {
+  return fallback==='incomplete'?'incomplete':diagnostics.length?diagnostics.every(d=>d.coverage==='complete')?'complete':'incomplete':fallback??'incomplete';
+}
+export const readerLoops=records=>records.flatMap(r=>[r.hostLoop,...(r.launcherLoop?[r.launcherLoop]:[]),...(r.startupLoop?[r.startupLoop]:[])]);
 export function quantiles(values) {
   if (values.some(v => typeof v !== 'number' || Number.isNaN(v) || v < 0)) throw Error('invalid_numeric_sample');
   const a = [...values].sort((a,b) => a-b), n = a.length;
@@ -47,9 +103,9 @@ export function quantiles(values) {
 }
 export const qualifies = (r, concurrent = false) => r.ok === true && r.validated === true && r.bounds === true &&
   r.expected === true && (!concurrent || r.overlap === true);
-export function population(records, { cold = false, concurrent = false, warmReference = false } = {}) {
+export function population(records, { cold = false, concurrent = false, warmReference = false, rule } = {}) {
   const a = records.filter(r => qualifies(r,concurrent));
-  const minimum = cold ? 10 : 50, ceiling = cold ? 100 : 500;
+  const {minimum,ceiling}=rule??{minimum:cold?10:50,ceiling:cold?100:500};
   return { attempts: records.length, successes: a.length, minimum, ceiling,
     allAttempts: quantiles(records.map(r => warmReference ? r.readMs : r.elapsedMs)),
     successful: quantiles(a.map(r => warmReference ? r.readMs : r.elapsedMs)),
@@ -57,15 +113,15 @@ export function population(records, { cold = false, concurrent = false, warmRefe
 }
 export function exposure(kind, measured, baselineCommits = measured.commits) {
   if (['idle','injection'].includes(kind)) return { decision: 'passed' };
-  const checks = { commits: measured.commits >= 100 };
+  const checks = { commits: measured.commits >= PROTOCOL.commits };
   if (kind !== 'baseline') {
-    checks.baselineCommits = baselineCommits >= 100;
-    checks.write = measured.activeWriteOverlap.pages >= 20;
-    if (kind === 'fresh') checks.close = measured.activeCloseOverlap.pages >= 10;
+    checks.baselineCommits = baselineCommits >= PROTOCOL.commits;
+    checks.write = measured.activeWriteOverlap.pages >= PROTOCOL.writeOverlap;
+    if (kind === 'fresh') checks.close = measured.activeCloseOverlap.pages >= PROTOCOL.closeOverlap;
   }
   return { checks, decision: Object.values(checks).every(Boolean) ? 'passed' : 'invalid' };
 }
-export function availability(records) {
+export function availability(records,{minimum=PROTOCOL.availabilityMinimum}={}) {
   const categories = { success:0, not_ready:0, timeout:0, other_error:0, scope_partial:0 };
   for (const r of records) {
     if (!['findCandidates','contextRead'].includes(r.method) || r.scheduled !== true) throw Error('availability_population');
@@ -74,12 +130,12 @@ export function availability(records) {
     categories[category]++;
   }
   const fraction = records.length ? categories.not_ready / records.length : null;
-  return { categories, fraction, decision: fraction > .01 ? 'failed' : records.length < 100 ? 'inconclusive' : 'passed' };
+  return { categories, fraction, decision: fraction > PROTOCOL.notReadyFraction ? 'failed' : records.length < minimum ? 'inconclusive' : 'passed' };
 }
-export function freshness(targets) {
+export function freshness(targets,{minimum=PROTOCOL.freshnessMinimum}={}) {
   const q = quantiles(targets.map(t => t.observedAt === null ? Infinity : t.observedAt - t.committedAt));
   return { ...q, censored: targets.filter(t => t.observedAt === null).length,
-    decision: q.p95Ms > 30000 ? 'failed' : targets.length < 100 ? 'inconclusive' : 'passed' };
+    decision: q.p95Ms > PROTOCOL.freshnessMs ? 'failed' : targets.length < minimum ? 'inconclusive' : 'passed' };
 }
 export function aggregate(decisions) {
   return decisions.includes('failed') ? 'failed' : decisions.includes('invalid') ? 'invalid' :
@@ -91,24 +147,25 @@ export function decide(cell, data) {
   if (data.blocked) return { decision: 'invalid', reason: 'blocked_dependency', dependency: data.blocked, checks };
   if (data.smoke || data.functionalOnly) return { decision: 'inconclusive', reason: 'operation_only', checks };
   const records = data.records ?? [], wal = cell.canonical === 'WAL' || cell.sidecar === 'WAL';
+  if(cell.scope==='overflow'&&!(data.ownerCoverage?.omittedNamespaces>0))invalid.push('overflow_without_omissions');
+  if(data.rebuildCoverage!==undefined&&data.rebuildCoverage!=='complete')invalid.push('rebuild_telemetry');
   checks.functional = records.every(r => r.bounds && r.expected && r.validated);
-  checks.unexpectedErrors = records.every(r => !r.code || ['storage_busy','index_unavailable','read_timeout','read_cancelled'].includes(r.code));
+  checks.unexpectedErrors = records.every(r => !r.code || PROTOCOL.gates.expectedErrors.includes(r.code));
   const loops = data.loops ?? records.flatMap(r => [r.hostLoop, ...(r.launcherLoop ? [r.launcherLoop] : []),...(r.startupLoop?[r.startupLoop]:[])]);
   if (!loops.length) invalid.push('missing_loop_coverage');
-  checks.loop = loops.every(l => l && l.maxMs <= 100 && l.over100 === 0);
-  checks.settlement = records.every(r => (r.overshootMs ?? 0) <= 50 && r.lateSuccess !== true);
+  checks.loop = loops.every(l => l && l.maxMs <= PROTOCOL.loopMs && l.over100 === 0);
+  checks.settlement = records.every(r => (r.overshootMs ?? 0) <= PROTOCOL.settlementMs && r.lateSuccess !== true);
   if (wal) {
     if (data.readerCoverage !== 'complete' || data.maintainerCoverage !== 'complete' || data.writerCoverage !== 'complete' || data.baselineCoverage !== 'complete') invalid.push('telemetry');
-    checks.busy = (data.nativeBusy ?? 0) === 0 && (data.publicBusy ?? 0) === 0;
+    checks.busy = (data.nativeBusy ?? 0) === PROTOCOL.gates.walNativeBusy && (data.publicBusy ?? 0) === PROTOCOL.gates.walPublicBusy;
   }
   if (data.exposure && data.exposure.decision !== 'passed') invalid.push('exposure');
-  if (data.warmups !== undefined && data.warmups !== 3) invalid.push('warmups');
+  if (data.warmups !== undefined && data.warmups !== (cell.sampleRules?.warmups.minimum??PROTOCOL.warmups)) invalid.push('warmups');
   for (const [series, sample] of Object.entries(data.populations ?? {})) {
     if (sample.decision === 'invalid') invalid.push(series);
     if (sample.decision === 'inconclusive') unknown.push(series);
     const p = sample.successful, candidate = cell.method === 'findCandidates';
-    const p95 = candidate ? series === 'warm-reference' ? 300 : cell.count === 1112 ? 700 : 1000 : cell.method === 'contextRead' ? 800 : 150;
-    const max = candidate ? 1500 : cell.method === 'contextRead' ? 2000 : 500;
+    const limits=PROTOCOL.latency[cell.method],p95=candidate?(series==='warm-reference'?limits.referenceP95Ms:limits.p95ByCount[cell.count]):limits.p95Ms,max=limits.maxMs;
     checks[series+'Latency'] = p.n === 0 ? null : p.p95Ms <= p95 && p.maxMs <= max;
   }
   if(data.writers)checks.writerErrors=data.writers.every(w=>!w.code||!wal&&w.code==='storage_busy');
@@ -116,7 +173,7 @@ export function decide(cell, data) {
     const w = data.writers.filter(w => w.operation === op);
     if (!w.length || w.some(w => w.deadlineMs === null)) unknown.push(op+'Deadline');
     checks[op+'Deadline'] = w.every(w => w.deadlineMs === null || w.writeElapsedMs <= w.deadlineMs);
-    checks[op+'Timeout'] = w.every(w => !['model_timeout','read_timeout'].includes(w.code));
+    checks[op+'Timeout'] = w.every(w => !PROTOCOL.gates.writerTimeouts.includes(w.code));
   }
   if (data.availability) checks.availability = data.availability.decision === 'failed' ? false : data.availability.decision === 'inconclusive' ? null : true;
   if (data.freshness) checks.freshness = data.freshness.decision === 'failed' ? false : data.freshness.decision === 'inconclusive' ? null : true;
@@ -130,7 +187,7 @@ export function expandPlan(plan) {
   for(const cell of plan) {
     for(const series of cell.series??(cell.kind==='overflow'?['warmups','main','cold']:[cell.kind]))expanded.push({cell:cell.id,series});
     for(let repetition=0;repetition<(cell.windows??0);repetition++)
-      for(const variant of repetition%2?['reader','baseline']:['baseline','reader'])expanded.push({cell:cell.id,series:'contention',repetition,variant,windowMs:30000});
+      for(const variant of cell.pairedBaseline?(repetition%2?['reader','baseline']:['baseline','reader']):['reader'])expanded.push({cell:cell.id,series:'contention',repetition,variant,windowMs:cell.windowMs??PROTOCOL.windowMs});
   }
   return expanded;
 }

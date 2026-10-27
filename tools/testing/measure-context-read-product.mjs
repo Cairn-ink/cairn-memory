@@ -6,10 +6,11 @@ import { readFile, stat, statfs } from 'node:fs/promises';
 import { cpus, platform, release, arch, totalmem, loadavg } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createTestWorkspace } from './workspace.mjs';
-import { PROTOCOL, buildPlan, expandPlan, aggregate, decide, availability, freshness } from './fixtures/context-product/protocol.mjs';
+import { PROTOCOL, buildPlan, expandPlan, aggregate, decide, availability, freshness, population, estimatePlan, V3_DEFINITION, readerLoops, maintainerCoverage } from './fixtures/context-product/protocol.mjs';
 import { configure, drain, attempt, observeLoop, probeDependencies, selectReadSet } from './fixtures/context-product/engine.mjs';
 import { fileChild, terminate, startSampler, actor } from './fixtures/context-product/actors.mjs';
 import { startWriter } from './fixtures/context-product/controller.mjs';
@@ -35,6 +36,7 @@ function git(...args) {
   const r=spawnSync('git',args,{encoding:'utf8'});if(r.status!==0)throw Error('git_failed');return r.stdout.trim();
 }
 export function validateRegistration(input) {
+  if(input.protocolDefinition?.version===V3_DEFINITION.version&&!isDeepStrictEqual(input.protocolDefinition,V3_DEFINITION))throw Error('protocol_revision_required');
   const positive=k=>Number.isSafeInteger(input[k])&&input[k]>0;
   if(new Set(input.fixtures?.map(f=>f.id)).size!==6||input.fixtures?.some(f=>typeof f.id!=='string'||!f.id))throw Error('fixture_ids');
   if(!/^v24\.\d+\.\d+$/.test(input.productionNode)||!['production-linux-ext4','wsl2-ext4','apfs'].includes(input.platformRole)||
@@ -49,6 +51,7 @@ export function validateRegistration(input) {
   for(const count of [1112,3336])for(const schema of [18,23,33]) {
     const f=input.fixtures.filter(f=>f.count===count&&f.schema===schema);if(f.length!==1)throw Error('fixture_inventory');
     if(f[0].consistency!=='closed-snapshot'||f[0].cards<(schema===18?0:1)||schema===18&&f[0].cards!==0||f[0].inventory?.length!==4||!f[0].overflowInventory||!f[0].otherOwnerNamespace)throw Error('fixture_metadata');
+    requireOverflow(selectReadSet(f[0].overflowInventory,f[0].selectionRevision));
   }
   for(const k of ['adapterModule','counterModule'])if(!input[k]?.startsWith('file:'))throw Error('local_module_required');
   if(typeof input.volumeRoot!=='string'||!input.volumeRoot)throw Error('production_volume_required');
@@ -56,14 +59,15 @@ export function validateRegistration(input) {
   return input;
 }
 export async function preregister(input,profile,plan,registrationPath) {
+  const definition=input.protocolDefinition??V3_DEFINITION;
   const changedSources=git('ls-files','--modified','--others','--exclude-standard').split('\n').filter(p=>/^(core\/|tools\/testing\/|package\.json$)/.test(p)&&!p.includes('.p2d-'));
   const sourceHashes=changedSources.length?fileChild('hash',...changedSources).value:[];
   const paths=[registrationPath,...input.fixtures.map(f=>resolve(f.path)),fileURLToPath(input.adapterModule),fileURLToPath(input.counterModule),...(input.inputFiles??[]).map(p=>resolve(p)),resolve(input.labelsFile),resolve(input.queriesFile)];
   const hashes=fileChild('hash',...paths).value;
   const fs=await statfs(resolve(input.volumeRoot));
-  return immutable({protocol:PROTOCOL,registeredAt:new Date().toISOString(),implementationCommit:git('rev-parse','HEAD'),
+  return immutable({protocol:{...PROTOCOL,version:definition.version},registeredAt:new Date().toISOString(),implementationCommit:git('rev-parse','HEAD'),
     sourceDiffHash:digest(git('diff','HEAD')),changedSourceHashes:changedSources.map((path,i)=>({path,...sourceHashes[i]})),profileCommit:input.profileCommit,protocolCommit:input.protocolCommit,
-    inventory:plan,cellCount:plan.length,expandedInventory:expandPlan(plan),expandedCellCount:expandPlan(plan).length,minimumFixedWindowMs:expandPlan(plan).filter(c=>c.series==='contention').reduce((n,c)=>n+c.windowMs,0),corpus:input.fixtures.map((f,i)=>({id:f.id,count:f.count,schema:f.schema,cards:f.cards,hash:hashes[i+1].hash,inventory:f.inventory,selectionRevision:f.selectionRevision})),
+    protocolDefinition:definition,estimate:estimatePlan(plan,definition),inventory:plan,cellCount:plan.length,expandedInventory:expandPlan(plan),expandedCellCount:expandPlan(plan).length,minimumFixedWindowMs:expandPlan(plan).filter(c=>c.series==='contention').reduce((n,c)=>n+c.windowMs,0),corpus:input.fixtures.map((f,i)=>({id:f.id,count:f.count,schema:f.schema,cards:f.cards,hash:hashes[i+1].hash,inventory:f.inventory,selectionRevision:f.selectionRevision})),
     inputHashes:hashes,labelsHash:hashes.at(-2).hash,queriesHash:hashes.at(-1).hash,node:process.version,productionNode:input.productionNode,
     hardware:{platform:platform(),release:release(),arch:arch(),cpus:cpus().map(c=>({model:c.model,speed:c.speed})),memoryBytes:totalmem()},
     filesystem:{type:String(fs.type),blockSize:fs.bsize,hostDescription:input.filesystem},load:loadavg(),platformRole:input.platformRole,
@@ -87,6 +91,7 @@ export async function prepareCell(input,cell,workspace,adapter,suffix='main') {
   const inventory=cell.scope==='overflow'?fixture.overflowInventory:fixture.inventory;
   if(!inventory)throw Error('missing_overflow_inventory');
   const selection=selectReadSet(cell.scope==='smoke'?inventory.slice(0,2):inventory,fixture.selectionRevision);
+  if(cell.scope==='overflow')requireOverflow(selection);
   if(cell.scope==='launch'&&selection.readSet.length!==4)throw Error('launch_requires_four_namespaces');
   const config={path,...selection,types:cell.schema===18?['memory']:['memory','card'],canonical:cell.canonical,sidecar:cell.sidecar,
     deadlines:input.deadlines,pump:{...input.pump,id:`product-${cell.id}-${suffix}`},buildCeiling:input.buildCeiling,
@@ -100,99 +105,132 @@ export async function prepareCell(input,cell,workspace,adapter,suffix='main') {
 }
 export async function prepareInput(config,adapter) {
   const prepared=await adapter.prepare({cell:config.cell,config,ledger:config.ledger});
-  if(JSON.stringify(prepared.input?.readSet)!==JSON.stringify(config.readSet))throw Error('adapter_read_set');
-  if(prepared.input.deadlineMs!==config.deadlines.readMs)throw Error('adapter_deadline');
+  validateWorkload(config,prepared.input);
   if(['findCandidates','contextRead'].includes(config.method)&&(!Array.isArray(prepared.oracleData?.relevant)||!Array.isArray(prepared.oracleData?.knownMisses)))throw Error('frozen_relevance_labels_required');
   return {...config,input:prepared.input,responseSchema:prepared.responseSchema,schemas:prepared.schemas,oracleData:prepared.oracleData};
 }
 
-export async function availabilitySeries(config,cell,input,sink,oracle) {
-  const write=(series,record)=>sink.record(cell.id,series,record),pump=await startPump(config,write),writer=await startWriter(config);
-  const records=[];let result,pumpDrain;
+export function requireOverflow(selection) {
+  if(!(selection.ownerCoverage?.omittedNamespaces>0))throw Object.assign(Error('overflow_without_omissions'),{code:'invalid_cell'});
+}
+export function validateWorkload(config,input) {
+  const invalid=dimension=>{throw Object.assign(Error('adapter_'+dimension),{code:'invalid_cell'});};
+  if(!isDeepStrictEqual(input?.readSet,config.readSet))invalid('read_set');
+  if(input.deadlineMs!==config.deadlines.readMs)invalid('deadline');
+  const intent=config.cell.intent??'current';
+  if(config.method==='fetchCandidateEvidence') {
+    // Fetch's public DTO has no types/budget/limit. Snapshot intent/ref/type
+    // binding is checked by the frozen oracle, direct refs by the registration.
+    if(config.cell.adapter==='snapshot'){if(typeof input.snapshot!=='string'||!input.snapshot)invalid('snapshot');}
+    else if(input.intent!==intent||input.refs?.length!==config.cell.refs||input.refs.some(r=>!config.types.includes(r.type)))invalid('refs');
+    return;
+  }
+  if(input.intent!==intent)invalid('intent');
+  if(!isDeepStrictEqual(input.types,config.types))invalid('types');
+  if(config.method==='findCandidates'&&input.limit!==(config.cell.limit??12))invalid('limit');
+  if(config.method==='contextRead'&&!isDeepStrictEqual(input.budget,{maxTokens:config.cell.maxTokens??1500,maxItems:config.cell.limit??12}))invalid('budget');
+}
+export function ingestTargets(targets,messages) {
+  for(const {target} of messages) {
+    const old=targets.find(t=>t.id===target.id&&t.type===target.type);
+    if(old)Object.assign(old,target,{committedAt:old.committedAt});
+    else targets.push({...target,observedAt:null,lastProbeAt:null});
+  }
+}
+export async function availabilitySeries(config,cell,input,sink,oracle,{startPump:makePump=startPump,startWriter:makeWriter=startWriter,attempt:readAttempt=attempt,now=Date.now}={}) {
+  const write=(series,record)=>sink.record(cell.id,series,record);
+  const records=[];let result,pumpDrain,pump,writer;
   try {
-    const endAt=Date.now()+input.availabilityWindows*30000;writer.start(Date.now(),endAt);
-    while(Date.now()<endAt&&!config.signal?.aborted){
+    pump=await makePump(config,write);writer=await makeWriter(config);
+    const endAt=now()+input.availabilityWindows*30000;writer.start(now(),endAt);
+    while(now()<endAt&&!config.signal?.aborted){
       for(const method of ['findCandidates','contextRead']){
         const inputFor=method==='contextRead'?{...config.input,budget:{maxTokens:1500,maxItems:12}}:{...config.input,limit:12};delete inputFor.budget;if(method==='contextRead'){delete inputFor.limit;inputFor.budget={maxTokens:1500,maxItems:12};}
-        const {record}=await attempt({...config,method,input:inputFor,responseSchema:config.schemas?.[method]??config.responseSchema},{oracle,signal:config.signal});
+        const {record}=await readAttempt({...config,method,input:inputFor,responseSchema:config.schemas?.[method]??config.responseSchema},{oracle,signal:config.signal});
         const r={...record,method,scheduled:true,notReady:record.code==='index_unavailable',scopePartial:record.scopePartial};records.push(r);writer.flush();await pump.flush();await write('availability',r);
       }
     }
     result=await writer.stop();await write('writer',result);pumpDrain=await pump.stop();await write('pump-drain',pumpDrain);
     const maintenance=[...(config.maintainerDiagnostics??[]),...pumpDrain.map(r=>r.diagnostics).filter(d=>d.protocol==='context-native-v1')];
-    const metrics=availability(records);
-    return {...decide(cell,{records,availability:metrics,readerCoverage:records.every(r=>r.telemetry==='complete')?'complete':'incomplete',
-      maintainerCoverage:maintenance.every(d=>d.coverage==='complete')?'complete':'incomplete',writerCoverage:result.diagnostics.coverage,baselineCoverage:result.diagnostics.coverage,
+    const metrics=availability(records,{minimum:cell.sampleRules?.availability.minimum??PROTOCOL.availabilityMinimum});
+    return {...decide(cell,{records,loops:[...readerLoops(records),result.hostLoop],availability:metrics,readerCoverage:records.every(r=>r.telemetry==='complete')?'complete':'incomplete',
+      maintainerCoverage:maintainerCoverage(maintenance,config.maintainerCoverage),writerCoverage:result.diagnostics.coverage,baselineCoverage:result.diagnostics.coverage,
       nativeBusy:records.reduce((n,r)=>n+r.nativeBusy,0)+result.diagnostics.busy+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:records.reduce((n,r)=>n+r.publicBusy,0),writers:result.calls,production:config.production}),availability:metrics};
-  }finally{if(!result)await terminate(writer.child);if(!pumpDrain)await write('pump-drain',await pump.stop());}
+  }finally{if(writer&&!result)await terminate(writer.child);if(pump&&!pumpDrain)await write('pump-drain',await pump.stop());}
 }
-export async function freshnessSeries(config,cell,input,sink) {
+export async function freshnessSeries(config,cell,input,sink,{startPump:makePump=startPump,startWriter:makeWriter=startWriter,attempt:readAttempt=attempt,now=Date.now}={}) {
+  const minimum=cell.sampleRules?.freshness.minimum??PROTOCOL.freshnessMinimum;
   const probes=input.probes?.[`${cell.count}:${cell.schema}:${cell.type}:${cell.intent}`];
-  if(!Array.isArray(probes)||probes.length<100||new Set(probes).size!==probes.length||probes.some(p=>typeof p!=='string'||!/^[a-z][a-z0-9]{12,80}$/.test(p)))throw Error('unregistered_unique_probes');
+  if(!Array.isArray(probes)||probes.length<minimum||new Set(probes).size!==probes.length||probes.some(p=>typeof p!=='string'||!/^[a-z][a-z0-9]{12,80}$/.test(p)))throw Error('unregistered_unique_probes');
   const corpus=JSON.stringify([config.ledger.memory,config.ledger.cards]).normalize('NFKC').toLowerCase();
   if(probes.some(p=>corpus.includes(p)))throw Error('probe_already_in_corpus');
-  const write=(series,r)=>sink.record(cell.id,series,r),pump=await startPump(config,write);
-  const writer=await startWriter({...config,targetType:cell.type,probes}),targets=[],records=[];let writerResult,intervalValid=true,pumpDrain;
-  const endAt=Date.now()+input.freshnessObservationMs;writer.start(Date.now(),endAt);
+  const write=(series,r)=>sink.record(cell.id,series,r),targets=[],records=[];let writerResult,intervalValid=true,pumpDrain,pump,writer;
   try {
-    while(Date.now()<endAt&&!config.signal?.aborted) {
-      for(const {target} of writer.child.take('target'))targets.push({...target,observedAt:null,lastProbeAt:null});
+    pump=await makePump(config,write);writer=await makeWriter({...config,targetType:cell.type,probes});
+    const endAt=now()+input.freshnessObservationMs;writer.start(now(),endAt);
+    while(now()<endAt&&!config.signal?.aborted) {
+      ingestTargets(targets,writer.child.take('target'));
       for(const target of targets.filter(t=>t.observedAt===null)) {
-        const at=Date.now();if(at-(target.lastProbeAt??target.committedAt)>1000)intervalValid=false;target.lastProbeAt=at;
-        const {record,result}=await attempt({...config,method:'findCandidates',input:{readSet:config.readSet,types:config.types,intent:cell.intent,query:target.probe,limit:24,deadlineMs:config.deadlines.readMs},responseSchema:config.schemas?.findCandidates??config.responseSchema,oracleData:{relevant:[{type:target.type,namespace:config.namespace,...(target.type==='memory'?{memoryId:target.id}:{cardId:target.id})}],knownMisses:[]}},
+        const at=now();if(at-(target.lastProbeAt??target.committedAt)>PROTOCOL.probeIntervalMs)intervalValid=false;target.lastProbeAt=at;
+        const {record,result}=await readAttempt({...config,method:'findCandidates',input:{readSet:config.readSet,types:config.types,intent:cell.intent,query:target.probe,limit:24,deadlineMs:config.deadlines.readMs},responseSchema:config.schemas?.findCandidates??config.responseSchema,oracleData:{relevant:[{type:target.type,namespace:config.namespace,...(target.type==='memory'?{memoryId:target.id}:{cardId:target.id})}],knownMisses:[]}},
           {oracle:r=>r?.ok!==true||r.value.items.length===1&&r.value.items[0].ref.type===target.type&&(r.value.items[0].ref.memoryId??r.value.items[0].ref.cardId)===target.id&&r.value.items[0].ref.revision===target.revision&&(target.type!=='card'||r.value.items[0].ref.bodyRevision===target.bodyRevision)});
-        if(result?.ok&&result.value.items.some(i=>i.ref.type===target.type&&(i.ref.memoryId??i.ref.cardId)===target.id&&i.ref.revision===target.revision&&(target.type!=='card'||i.ref.bodyRevision===target.bodyRevision)))target.observedAt=Date.now();
+        if(result?.ok&&result.value.items.some(i=>i.ref.type===target.type&&(i.ref.memoryId??i.ref.cardId)===target.id&&i.ref.revision===target.revision&&(target.type!=='card'||i.ref.bodyRevision===target.bodyRevision)))target.observedAt=now();
         records.push(record);await pump.flush();await write('probe',{...record,targetIndex:targets.indexOf(target)});writer.flush();
       }
-      if(targets.length>=100&&Date.now()-Math.max(...targets.map(t=>t.committedAt))>=30000)break;
-      await delay(Math.min(250,Math.max(1,endAt-Date.now())));writer.flush();
+      if(targets.length>=minimum&&now()-Math.max(...targets.map(t=>t.committedAt))>=PROTOCOL.freshnessMs)break;
+      await delay(Math.min(250,Math.max(1,endAt-now())));writer.flush();
     }
-    writerResult=await writer.stop();for(const {target} of writer.child.take('target'))targets.push({...target,observedAt:null,lastProbeAt:null});await write('writer',writerResult);await write('freshness-targets',targets);
+    writerResult=await writer.stop();ingestTargets(targets,writer.child.take('target'));await write('writer',writerResult);await write('freshness-targets',targets);
     pumpDrain=await pump.stop();await write('pump-drain',pumpDrain);
     const maintenance=[...(config.maintainerDiagnostics??[]),...pumpDrain.map(r=>r.diagnostics).filter(d=>d.protocol==='context-native-v1')];
-    const metrics=freshness(targets);
-    const decision=decide(cell,{records,freshness:metrics,readerCoverage:records.every(r=>r.telemetry==='complete')?'complete':'incomplete',
-      maintainerCoverage:maintenance.every(d=>d.coverage==='complete')?'complete':'incomplete',writerCoverage:writerResult.diagnostics.coverage,baselineCoverage:writerResult.diagnostics.coverage,
+    const metrics=freshness(targets,{minimum:cell.sampleRules?.freshness.minimum??PROTOCOL.freshnessMinimum});
+    const decision=decide(cell,{records,loops:[...readerLoops(records),writerResult.hostLoop],freshness:metrics,readerCoverage:records.every(r=>r.telemetry==='complete')?'complete':'incomplete',
+      maintainerCoverage:maintainerCoverage(maintenance,config.maintainerCoverage),writerCoverage:writerResult.diagnostics.coverage,baselineCoverage:writerResult.diagnostics.coverage,
       nativeBusy:records.reduce((n,r)=>n+r.nativeBusy,0)+writerResult.diagnostics.busy+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:records.reduce((n,r)=>n+r.publicBusy,0),writers:writerResult.calls,production:config.production});
-    if(!intervalValid||targets.some(t=>Date.now()-t.committedAt<30000))return {...decision,decision:'invalid',reason:'probe_cadence_or_writer_drain'};
+    if(!intervalValid||targets.some(t=>now()-t.committedAt<PROTOCOL.freshnessMs))return {...decision,decision:'invalid',reason:'probe_cadence_or_writer_drain'};
     return {...decision,freshness:{...metrics,p50Ms:Number.isFinite(metrics.p50Ms)?metrics.p50Ms:null,p95Ms:Number.isFinite(metrics.p95Ms)?metrics.p95Ms:null,maxMs:Number.isFinite(metrics.maxMs)?metrics.maxMs:null,p95Infinite:metrics.p95Ms===Infinity,maxInfinite:metrics.maxMs===Infinity,finiteMaximumMs:Math.max(0,...targets.filter(t=>t.observedAt!==null).map(t=>t.observedAt-t.committedAt))}};
-  }finally{if(!writerResult)await terminate(writer.child);if(!pumpDrain)await write('pump-drain',await pump.stop());}
+  }finally{if(writer&&!writerResult)await terminate(writer.child);if(pump&&!pumpDrain)await write('pump-drain',await pump.stop());}
 }
-export async function backupSeries(config,cell,workspace,sink,oracle) {
+export async function backupSeries(config,cell,workspace,sink,oracle,{startSampler:makeSampler=startSampler,storage:store=storage,fileChild:files=fileChild,build:rebuild=build,configure:setup=configure,attempt:readAttempt=attempt,stat:fileStat=stat}={}) {
   // All clients, writers and maintenance are stopped and drained before backup.
   const backupPath=join(workspace.path,`backup-${cell.id}.sqlite`),restored=join(workspace.path,`restore-${cell.id}.sqlite`);
-  const sampler=await startSampler([process.pid],workspace.path);let attribution;
+  const sampler=await makeSampler([process.pid],workspace.path);let attribution;
   try {
-    const before=await storage('verify',{path:config.path});
-    const backup=await storage('backup',{path:config.path,destination:backupPath});
-    fileChild('copy',backupPath,restored);
-    const canonical=await storage('verify',{path:restored});
+    const before=await store('verify',{path:config.path});
+    const backup=await store('backup',{path:config.path,destination:backupPath});
+    files('copy',backupPath,restored);
+    const canonical=await store('verify',{path:restored});
     if(canonical.value.logicalHash!==before.value.logicalHash||canonical.value.schema!==cell.schema)throw Error('restore_canonical_mismatch');
-    const fresh={...config,path:restored},started=performance.now(),rebuilt=await build(fresh,(s,r)=>sink.record(cell.id,s,r));
+    const fresh={...config,path:restored},started=performance.now(),rebuilt=await rebuild(fresh,(s,r)=>sink.record(cell.id,s,r));
     const sidecarRebuildMs=performance.now()-started,suffix='.context-read-product-v1.1.sqlite';
-    const deep=await storage('verify-sidecar',{path:restored+suffix});
+    const deep=await store('verify-sidecar',{path:restored+suffix});
     // A separately minted request observes bounded ready checks. Old request
     // bindings and copied certificates are never revived across this restore.
-    const c=await configure(fresh);let h,status;
+    const c=await setup(fresh);let h,status;
     const verifyStart=performance.now();
     try {h=await c.open();status=await h.getContextIndexStatus({readSet:config.readSet,types:config.types,intent:'current',deadlineMs:config.deadlines.readMs},c.token);}
-    finally{await h?.close();await c.supervisor.close();await drain(c.supervisor);}
+    finally{await h?.close();await c.supervisor.close();var verificationDiagnostics=await drain(c.supervisor);}
     const freshReaderVerifyMs=performance.now()-verifyStart;
     if(!status?.ok||status.value.lexical.state!=='ready')throw Error('restore_not_ready');
-    const read=await attempt(fresh,{oracle});await sink.record(cell.id,'restored-reader',read.record);
+    const read=await readAttempt(fresh,{oracle});await sink.record(cell.id,'restored-reader',read.record);
     const sizes={};
-    for(const [key,path] of Object.entries({main:restored+suffix,wal:restored+suffix+'-wal',shm:restored+suffix+'-shm'}))sizes[key]=await stat(path).then(s=>s.size,e=>{if(e.code==='ENOENT')return 0;throw e;});
+    for(const [key,path] of Object.entries({main:restored+suffix,wal:restored+suffix+'-wal',shm:restored+suffix+'-shm'}))sizes[key]=await fileStat(path).then(s=>s.size,e=>{if(e.code==='ENOENT')return 0;throw e;});
     attribution=await sampler.stop();
     const diskSamples=attribution.samples??[];
     const peaks=diskSamples.map(s=>(s.sizes??[]).reduce((n,f)=>n+f.bytes,0));
     const sidePeaks=diskSamples.map(s=>(s.sizes??[]).filter(f=>f.name.startsWith(`restore-${cell.id}.sqlite`+suffix)).reduce((n,f)=>n+f.bytes,0));
     const output={backupMs:backup.value.backupMs,restoreCanonicalVerifyMs:canonical.value.verifyMs,sidecarRebuildMs,sidecarVerifyMs:deep.value.sidecarVerifyMs,
       freshReaderVerifyMs,freshReaderVerifyInterval:'fresh public open/status/await close; includes bounded verification and transport',
-      backupBytes:(await stat(backupPath)).size,restoredBytes:(await stat(restored)).size,
+      backupBytes:(await fileStat(backupPath)).size,restoredBytes:(await fileStat(restored)).size,
       sidecar:{...sizes,total:sizes.main+sizes.wal+sizes.shm,peak:sidePeaks.length?Math.max(...sidePeaks):null},
-      temporaryPeakBytes:peaks.length?Math.max(...peaks):null,peakSamplingMs:10,maintainerCoverage:rebuilt.coverage};
+      temporaryPeakBytes:peaks.length?Math.max(...peaks):null,peakSamplingMs:PROTOCOL.sampler.intervalMs,peakSamplingCoverage:attribution.coverage??'incomplete',maintainerCoverage:rebuilt.coverage};
     await sink.record(cell.id,'backup-output',output);await sink.record(cell.id,'backup-attribution',attribution);
-    return {decision:!read.record.expected?'failed':output.sidecar.peak===null?'inconclusive':'passed',outputs:output};
+    const maintenance=[...(config.maintainerDiagnostics??[]),...rebuilt.diagnostics.map(r=>r.diagnostics),...verificationDiagnostics.map(r=>r.diagnostics)];
+    const decision=decide({...cell,method:config.method},{records:[read.record],populations:{restored:population([read.record],{rule:cell.sampleRules?.['restored-reader']??{minimum:1,ceiling:1}})},
+      readerCoverage:read.record.telemetry,maintainerCoverage:maintainerCoverage(maintenance,rebuilt.coverage),rebuildCoverage:rebuilt.coverage,
+      writerCoverage:'complete',baselineCoverage:'complete',nativeBusy:(read.record.nativeBusy??0)+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:read.record.publicBusy,
+      production:config.production,reportOutputsComplete:output.sidecar.peak!==null&&output.peakSamplingCoverage==='complete'});
+    return {...decision,outputs:output};
   }finally{if(!attribution)await sampler.stop();}
 }
 export async function injectionSeries(config,cell,sink,oracle) {
@@ -217,38 +255,43 @@ export async function injectionSeries(config,cell,sink,oracle) {
     if(lock){try{if(lock.connected){lock.send({type:'release'});await lock.wait('result');await lock.exited;}}finally{await terminate(lock);}}
   }
 }
-export async function runRegistered(input,{reportPath,registrationPath,smoke=false}) {
-  validateRegistration(input);
-  const fullPlan=buildPlan(),plan=smoke?[{...fullPlan[0],scope:'smoke'}]:fullPlan,header=await preregister(input,input.writerProfile,plan,registrationPath),sink=await createReportSink(reportPath,header);
+export async function runRegistered(input,{reportPath,registrationPath,smoke=false},{
+  validateRegistration:validate=validateRegistration,buildPlan:makePlan=buildPlan,preregister:register=preregister,
+  prepareCell:prepare=prepareCell,probeDependencies:probeCell=probeDependencies,build:buildCell=build,
+  prepareInput:prepareRequest=prepareInput,requestSeries:requestsFor=requestSeries,storage:store=storage,
+  loadAdapter=url=>import(url),idleBaseline=async()=>{const loop=observeLoop();await delay(PROTOCOL.idleBaselineMs);return loop.finish();},
+}={}) {
+  validate(input);
+  const fullPlan=makePlan(input.protocolDefinition??V3_DEFINITION),plan=smoke?[{...fullPlan[0],scope:'smoke'}]:fullPlan,header=await register(input,input.writerProfile,plan,registrationPath),sink=await createReportSink(reportPath,header);
   input.registeredFixtureHashes=Object.fromEntries(header.corpus.map(f=>[f.id,f.hash]));
-  const workspace=createTestWorkspace(null,{parent:resolve(input.volumeRoot),prefix:'product-qualification-'}),adapter=await import(input.adapterModule),tally={},dependencyProbes=new Map();let status='invalid';
+  const workspace=createTestWorkspace(null,{parent:resolve(input.volumeRoot),prefix:'product-qualification-'}),adapter=await loadAdapter(input.adapterModule),tally={},dependencyProbes=new Map();let status='invalid';
   const controller=new AbortController(),cancel=()=>controller.abort();process.once('SIGINT',cancel);process.once('SIGTERM',cancel);
   try {
-    const idle=observeLoop();await delay(PROTOCOL.idleBaselineMs);await sink.record(-1,'idle-baseline',await idle.finish());
+    await sink.record(-1,'idle-baseline',await idleBaseline());
     for(const cell of plan) {
       if(controller.signal.aborted)throw Error('interrupted');
       console.error(JSON.stringify({cell:cell.id,total:plan.length,kind:cell.kind}));
-      let decision;
+      let decision,summary={};
       const dependencyKey=JSON.stringify([cell.count,cell.schema,cell.canonical,cell.sidecar,cell.scope]);
       const cached=dependencyProbes.get(dependencyKey);
       if(cached?.blocked){decision=decide(cell,{blocked:cached.blocked});tally.invalid=(tally.invalid??0)+1;await sink.record(cell.id,'capability',{...cached,reused:true});await sink.cell(cell,decision);continue;}
       const cellWorkspace=createTestWorkspace(null,{parent:workspace.path,prefix:'cell-'});
       try {
-      let config=await prepareCell(input,cell,cellWorkspace,null);config.signal=controller.signal;const probe=await probeDependencies(config);dependencyProbes.set(dependencyKey,probe);
+      let config=await prepare(input,cell,cellWorkspace,null);config.signal=controller.signal;const probe=await probeCell(config);dependencyProbes.set(dependencyKey,probe);
       await sink.record(cell.id,'capability',probe);
       if(!probe.ready)decision=probe.blocked?decide(cell,{blocked:probe.blocked}):{decision:'failed',reason:probe.code};
       else {
-        if(!(cell.kind==='injection'&&cell.injection==='absent')) {const built=await build(config,(series,r)=>sink.record(cell.id,series,r));config.maintainerCoverage=built.coverage;config.maintainerDiagnostics=built.diagnostics.map(r=>r.diagnostics);await sink.record(cell.id,'maintenance-drain',built.diagnostics);}
-        config=await prepareInput(config,adapter);
+        if(!(cell.kind==='injection'&&cell.injection==='absent')) {const built=await buildCell(config,(series,r)=>sink.record(cell.id,series,r));config.maintainerCoverage=built.coverage;config.maintainerDiagnostics=built.diagnostics.map(r=>r.diagnostics);await sink.record(cell.id,'maintenance-drain',built.diagnostics);}
+        config=await prepareRequest(config,adapter);
         if(smoke) {
           const end=Date.now()+2000;let attempts=0,valid=true;while(Date.now()<end&&!controller.signal.aborted){const r=await attempt(config,{oracle:adapter.validate});valid&&=r.record.bounds&&r.record.validated&&r.record.expected;await sink.record(cell.id,'smoke',r.record);attempts++;}
           decision={decision:valid?'inconclusive':'failed',reason:'smoke_operation_only',attempts,windowMs:2000};
         } else if(cell.kind==='requests'||cell.kind==='overflow') {
-          const requests=await requestSeries(config,{cell:{...cell,load:cell.load??'idle'},sink,oracle:adapter.validate,smoke});
-          decision=requests.decision;
-          if(cell.load&&cell.load!=='idle') {
+          const requests=await requestsFor(config,{cell:{...cell,load:cell.load??'idle'},sink,oracle:adapter.validate,smoke});
+          decision={...requests.decision,populations:requests.populations};summary.reader=requests.populations;
+          if((cell.windows??0)>0) {
             const pairs=await pairedWindows(config,{cell,sink,oracle:adapter.validate,smoke},async suffix=>{
-              const fresh=await prepareCell(input,cell,cellWorkspace,null,suffix);const b=await build(fresh);return {...await prepareInput(fresh,adapter),maintainerCoverage:b.coverage,maintainerDiagnostics:b.diagnostics.map(r=>r.diagnostics)};
+              const fresh=await prepare(input,cell,cellWorkspace,null,suffix);const b=await buildCell(fresh);return {...await prepareRequest(fresh,adapter),maintainerCoverage:b.coverage,maintainerDiagnostics:b.diagnostics.map(r=>r.diagnostics)};
             });decision={decision:aggregate([decision.decision,pairs.decision]),requests:decision,pairs:pairs.decisions};
           }
         } else if(cell.kind==='availability')decision=await availabilitySeries(config,cell,input,sink,adapter.validate);
@@ -256,13 +299,16 @@ export async function runRegistered(input,{reportPath,registrationPath,smoke=fal
         else if(cell.kind==='backup')decision=await backupSeries(config,cell,cellWorkspace,sink,adapter.validate);
         else decision=await injectionSeries(config,cell,sink,adapter.validate);
       }
-      const finalCounts=(await storage('inspect',{path:config.path})).value;await sink.record(cell.id,'population',{initial:config.initialCounts,final:{memories:finalCounts.memories,cards:finalCounts.cardCount,schema:finalCounts.schema}});
-      tally[decision.decision]=(tally[decision.decision]??0)+1;await sink.cell(cell,decision);
+      const finalCounts=(await store('inspect',{path:config.path})).value;await sink.record(cell.id,'population',{initial:config.initialCounts,final:{memories:finalCounts.memories,cards:finalCounts.cardCount,schema:finalCounts.schema}});
+      tally[decision.decision]=(tally[decision.decision]??0)+1;await sink.cell(cell,decision,summary);
       if(smoke)break;
+      }catch(e){
+        if(e.code!=='invalid_cell')throw e;
+        decision={decision:'invalid',reason:e.message};tally.invalid=(tally.invalid??0)+1;await sink.cell(cell,decision);
       }finally{await cellWorkspace.cleanup();}
     }
     status=smoke?(tally.failed?'failed':tally.invalid?'invalid':'inconclusive'):aggregate(Object.keys(tally));
-  }catch(e){await sink.record(-1,'failure',{code:e.code??'harness_failed',exitCode:e.exitCode??null});status=controller.signal.aborted?'invalid':'failed';}
+  }catch(e){await sink.record(-1,'failure',{code:e.code??'harness_failed',exitCode:e.exitCode??null,...(e.writerEvidence?{writerEvidence:e.writerEvidence}:{})});status=controller.signal.aborted?'invalid':'failed';}
   finally{process.off('SIGINT',cancel);process.off('SIGTERM',cancel);try{await workspace.cleanup();}catch{status='failed';}await sink.finish(status,{tally});}
   console.log(status);return {status,tally};
 }
@@ -290,14 +336,18 @@ export async function functionalOnly(reportPath,namespaces=1) {
   console.log(status);return {status,functionalPassed:status==='inconclusive',record};
 }
 export async function main(args=process.argv.slice(2)) {
-  let reportPath=resolve('context-read-product-report.jsonl'),registrationPath,profilePath,smoke=false,functional=false,namespaces=1,plan=false;
+  let reportPath=resolve('context-read-product-report.jsonl'),registrationPath,profilePath,smoke=false,functional=false,namespaces=1,plan=false,estimate=false;
   for(let i=0;i<args.length;i++) {
-    const a=args[i];if(a==='--smoke')smoke=true;else if(a==='--functional-only')functional=true;else if(a==='--plan')plan=true;
+    const a=args[i];if(a==='--estimate')estimate=true;else if(a==='--smoke')smoke=true;else if(a==='--functional-only')functional=true;else if(a==='--plan')plan=true;
     else if(a==='--report')reportPath=resolve(args[++i]);else if(a==='--registration')registrationPath=resolve(args[++i]);
     else if(a==='--writer-profile')profilePath=resolve(args[++i]);else if(a==='--namespaces')namespaces=Number(args[++i]);else throw Error('usage');
   }
   if(![1,2].includes(namespaces)||!reportPath.endsWith('.jsonl'))throw Error('invalid_output_or_namespace_count');
   let result;
+  if(estimate){
+    const definition=registrationPath?JSON.parse(await readFile(registrationPath,'utf8')).protocolDefinition??V3_DEFINITION:V3_DEFINITION;
+    const value=estimatePlan(buildPlan(definition),definition);console.log(JSON.stringify(value));return value;
+  }
   if(plan){const inventory=buildPlan();console.log(JSON.stringify({protocol:PROTOCOL,cellCount:inventory.length,inventory}));result={status:'inconclusive'};console.log(result.status);}
   else if(functional)result=await functionalOnly(reportPath,namespaces);
   else {

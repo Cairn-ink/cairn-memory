@@ -3,9 +3,9 @@ import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import { observeLoop } from './engine.mjs';
 const childUrl=new URL('./runner-child.mjs',import.meta.url);
-export function actor(kind,config, {url=childUrl,stallMs=15000}={}) {
+export function actor(kind,config, {url=childUrl,stallMs=15000,forkChild=fork,quietWhenIdle=false}={}) {
   const encoded=typeof config==='string'?config:JSON.stringify(config);
-  const child=fork(fileURLToPath(url),[kind],{execArgv:kind==='cold'?['--import',new URL('./startup-loop.mjs',import.meta.url).href]:[],env:{},stdio:['pipe','ignore','pipe','ipc']});
+  const child=forkChild(fileURLToPath(url),[kind],{execArgv:kind==='cold'?['--import',new URL('./startup-loop.mjs',import.meta.url).href]:[],env:{},stdio:['pipe','ignore','pipe','ipc']});
   child.stdin.on('error',()=>{});child.stdin.end(encoded);
   const messages=[],waiters=[];let lastProgress=Date.now(),closed=false;
   child.stderr.on('data',()=>{});
@@ -17,10 +17,16 @@ export function actor(kind,config, {url=childUrl,stallMs=15000}={}) {
   const finish=(code,signal)=>{if(closed)return;closed=true;clearInterval(monitor);
     for(const w of waiters.splice(0))w.reject(Object.assign(Error('child_exit'),{code:'child_failed',exitCode:code}));
     resolveExit({code,signal,disconnected:!child.connected});};
-  child.on('error',()=>finish(1,null));child.on('close',finish);
-  const monitor=setInterval(()=>{if(Date.now()-lastProgress>stallMs){child.kill('SIGKILL');}},1000);
+  child.on('error',error=>{
+    child.ipcError=error;
+    for(const w of waiters.splice(0))w.reject(error);
+    // A failed spawn has no PID; an IPC error on a live process is not exit.
+    if(child.pid===undefined)finish(null,null);
+  });child.on('close',finish);
+  const monitor=setInterval(()=>{if((!quietWhenIdle||waiters.length||child.ipcError)&&Date.now()-lastProgress>stallMs){child.kill('SIGKILL');}},1000);
   child.wait=type=>{const i=messages.findIndex(m=>m.type===type);return i>=0?Promise.resolve(messages.splice(i,1)[0]):
-    closed?Promise.reject(Error('child_closed')):new Promise((resolve,reject)=>waiters.push({type,resolve,reject}));};
+    closed?Promise.reject(Error('child_closed')):child.ipcError?Promise.reject(child.ipcError):new Promise((resolve,reject)=>{
+      if(quietWhenIdle&&!waiters.length)lastProgress=Date.now();waiters.push({type,resolve,reject});});};
   child.take=type=>{const found=messages.filter(m=>m.type===type);for(let i=messages.length-1;i>=0;i--)if(messages[i].type===type)messages.splice(i,1);return found;};
   return child;
 }
@@ -47,6 +53,7 @@ export async function coldAttempt(config,{signal}={}) {
   return {...value,record:{...value.record,launcherLoop,processExit:exit,outerProcessLaunchAndSampleMs:performance.now()-started}};
 }
 export function attributeBlocks(record,samples,pid=process.pid) {
+  if(record.hostPid!==undefined&&record.hostPid!==pid)return record;
   const source=samples.filter(s=>s.pid===pid);
   for(const block of record.hostLoop?.blocks??[]) {
     const before=source.findLast(s=>s.at<=block.startedAt),after=source.find(s=>s.at>=block.finishedAt);
@@ -59,9 +66,16 @@ export function attributeBlocks(record,samples,pid=process.pid) {
   return record;
 }
 export async function startSampler(pids,directory=null) {
-  if(process.platform!=='linux')return {supported:false,current(){return [];},async stop(){return {supported:false,samples:[]};}};
-  const child=actor('sample',null,{url:new URL('./io-child.mjs',import.meta.url)});await child.wait('ready');child.send({type:'start',pids,directory});
-  const samples=[],flush=()=>{samples.push(...child.take('sample').map(m=>m.sample));return samples;};
-  return {supported:true,current:flush,async stop(){try{child.send({type:'stop'});await child.wait('stopped');const exit=await child.exited;
-    return {supported:true,exit,samples:flush(),missing:child.take('sample_missing').length};}finally{await terminate(child);}}};
+  if(process.platform!=='linux')return {supported:false,async collect(){return [];},async stop(){return {supported:false,samples:[]};}};
+  const child=actor('sample',null,{url:new URL('./io-child.mjs',import.meta.url),quietWhenIdle:true});
+  try{await child.wait('ready');child.send({type:'start',pids,directory});await child.wait('started');}
+  catch(e){await terminate(child);throw e;}
+  let previous=[],missing=0,dropped=0;
+  const flush=()=>{const samples=child.take('samples').flatMap(m=>m.samples);
+    for(const c of child.take('sample_coverage')){missing+=c.missing;dropped+=c.dropped;}
+    const result=[...previous,...samples];previous=pids.flatMap(pid=>{const last=samples.findLast(s=>s.pid===pid);return last?[last]:[];});return result;};
+  return {supported:true,async collect(){child.send({type:'collect'});await child.wait('collected');return flush();},
+    async stop(){try{child.send({type:'stop'});await child.wait('stopped');const exit=await child.exited;
+      return {supported:true,exit,samples:flush(),missing,dropped,coverage:missing||dropped?'incomplete':'complete'};
+    }finally{await terminate(child);}}};
 }

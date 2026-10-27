@@ -141,7 +141,7 @@ test('P2-23 lost chunk/seal, wrong epoch, conflicting duplicate, overflow, missi
     assert.equal(decide(cell,evidence({writerCoverage:r.coverage})).decision,'invalid');
   }
 });
-test('P2-23 exact resends deduplicate, retained final close has native coverage outside write interval',()=>{
+test('P2-23 exact resends deduplicate and journal overflow is explicit',()=>{
   const s=stream();complete(s);assert.equal(s.ledger.result().coverage,'complete');assert.equal(s.ledger.result().commits,1);
   const closes=s.ledger.result().records.filter(r=>r.phase==='close');assert.ok(closes.length);assert.ok(closes.every(r=>!r.commit));
   const overflow=createWriterJournal({stream:'s',epoch:1,capacity:1});overflow.enter(0,'write');overflow.invoke('execute',()=>1);overflow.leave();assert.ok(overflow.seal([0],true).counters.overflow>0);
@@ -169,7 +169,7 @@ test('numeric journal, immutable registration, interrupted partial and streaming
   await sink.record(0,'main',{hostLoop:{blocks:[{gapMs:101}]}});await sink.cell({id:0},{decision:'invalid',reason:'blocked_dependency'});
   const partial=await summarize(path+'.partial',()=>{});assert.equal(partial.status,'interrupted');assert.equal(partial.cells,1);
   await sink.finish('invalid');assert.equal(await readFile(path+'.header.json','utf8'),before);
-  assert.equal((await summarize(path,()=>{})).tally.invalid,1);assert.equal((await summarize(path+'.records.jsonl',()=>{})).blocks.length,1);
+  assert.equal((await summarize(path,()=>{})).tally.invalid,1);assert.equal((await summarize(path+'.records.jsonl',()=>{})).blockCount,1);
   await assert.rejects(createReportSink(path,header),{code:'EEXIST'});
 });
 

@@ -5,12 +5,12 @@ const phases = ['open','write','inspect','close','shutdown'];
 const exact=(value,keys)=>value&&Object.keys(value).sort().join(',')===keys.split(',').sort().join(',');
 const validCounters=c=>exact(c,'begun,completed,inFlight,failures,busy,commits,overflow')&&Object.values(c).every(v=>Number.isSafeInteger(v)&&v>=0);
 const zero = () => ({ begun:0, completed:0, inFlight:0, failures:0, busy:0, commits:0, overflow:0 });
-export function createWriterJournal({ stream, epoch, capacity }) {
+export function createWriterJournal({ stream, epoch, capacity, clock=Date.now }) {
   let sequence = 0, acked = 0, operation = null, phase = null, lastCommitAt = null;
   const records = [], counters = zero();
   const append = data => {
     if (records.length >= capacity) { counters.overflow++; return; }
-    records.push({ sequence: ++sequence, at:Date.now(), operation, phase, ...data });
+    records.push({ sequence: ++sequence, at:clock(), operation, phase, ...data });
   };
   return {
     enter(id, next) { if (operation !== null || !phases.includes(next)) throw Error('writer_operation'); operation=id; phase=next; append({ kind:'operation_begin' }); },
@@ -22,8 +22,8 @@ export function createWriterJournal({ stream, epoch, capacity }) {
       try { const value=work(); ok=true; return value; }
       catch(e) { code=e?.code === 'ERR_SQLITE_ERROR' && Number.isInteger(e.errcode) ? e.errcode : 0;
         counters.failures++; if ([5,6].includes(code & 255)) counters.busy++; throw e; }
-      finally { counters.completed++; counters.inFlight--; if (ok && commit && phase === 'write') { counters.commits++; lastCommitAt=Date.now(); }
-        append({ kind:'native_end', stage, ok, primary:code & 255, extended:code, commit:ok && commit && phase === 'write' }); }
+      finally { const outcomeAt=clock();counters.completed++; counters.inFlight--; if (ok && commit && phase === 'write') { counters.commits++; lastCommitAt=outcomeAt; }
+        append({ at:outcomeAt,kind:'native_end', stage, ok, primary:code & 255, extended:code, commit:ok && commit && phase === 'write' }); }
     },
     lastCommitAt() { return lastCommitAt; },
     chunk() { return { type:'diagnostic_chunk', protocol:WRITER_PROTOCOL, stream, epoch, from:acked+1, through:sequence,

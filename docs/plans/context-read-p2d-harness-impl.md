@@ -375,3 +375,175 @@ The changed-file inventory was derived by `git diff --name-only HEAD` plus untra
 - `tools/testing/summarize-context-read-product.mjs`
 
 Final `git diff --check` and an independent trailing-whitespace/final-newline check over every changed file exited **0**. The allowlist and package JSON parse. `git diff --cached --exit-code` exited **0**: nothing is staged. Frozen contract sections, core runtime modules and the generated setup runtime have empty diffs, **exit 0**. Owned temporary verification files/logs were removed after recording the results. No measurement/test child or monitoring process is left running; this handoff promises no unattended supervision.
+
+## Fix round 1
+
+Implemented against `41669767`, without a commit. Read both non-author reviews,
+all extra lessons and the original brief. The references below use S1–S12 for
+spec review findings and T1–T9 for standards review findings. Overlaps reduce the
+21 review entries to 17 distinct issues. Regressions are fabricated numeric
+inputs, injected dependencies or explicit message/callback rendezvous; no timing
+or smoke measurement was run.
+
+| Finding | Fix | Regression |
+| --- | --- | --- |
+| S1 incomplete maintainer coverage | `maintainerCoverage()` preserves any incomplete collected coverage and any incomplete build coverage; configuration cannot turn it complete. | Fix suite S1 runs `requestSeries` with a complete build configuration and incomplete pump drain, requiring `invalid`. |
+| S2/T1 sampler IPC inside observations and unbounded buffering | SQLite-free sampler retains at most 4,096 samples, counts drops, sends only on explicit collection after reader/launcher `loop.finish()`, and awaits callbacks for batches of 128. The parent retains one previous sample per PID plus the current bounded transfer. Cold startup pauses around sampler setup. Silent idle sampling does not trigger a false progress timeout; outstanding collection and IPC errors retain the kill watchdog. | S2/T1 uses manual samples and callback acknowledgements, asserts silence during observation, a fixed storage ceiling, drop counts and no next transfer before acknowledgement. A second test drives the production sampler message handler with a manual timer and explicit collection rendezvous. |
+| S3/T5 missing writer loop gate | Availability and freshness supply reader, launcher/startup and writer loops to the common absolute gate. | Both series run with fabricated 100-read/100-target populations and writer maxima of 1 or 101 ms; the latter fails. |
+| S4 backup reader bypasses gates | The restored reader uses `decide()` with method latency, DTO/oracle bounds, settlement, all reader loops, native/public BUSY and diagnostic coverage. Rebuild coverage is independently required complete even for DELETE. Missing peak-sampling coverage cannot claim complete outputs. | S4 drives the real backup orchestration with fabricated dependencies, independently violating each acceptance condition and the rebuild coverage condition. |
+| S5 late errors lose overshoot | Every delivered outcome computes deadline overshoot from its delivery/rejection time; cancellation also retains host-observed abort settlement. Cleanup lag stays separate. | S5 injects a clock: non-timeout returned/thrown errors at 5,060 ms against a 5,000 ms cutoff retain 60 ms and fail; exactly 50 ms remains allowed. |
+| S6 substituted workload dimensions | `prepareInput()` validates registered intent, types, candidate limit, assembly token/item budget, exact selected readSet and deadline before execution. Fetch validates its applicable direct-ref or snapshot DTO. Invalid workloads produce an invalid cell. | S6 independently substitutes each dimension in an otherwise valid history mixed-type stress input; every substitution is rejected as `invalid_cell`. |
+| S7 overflow without omissions | Registration, prepared overflow selection and the decision gate require positive omissions. | S7 rejects the ordinary four-namespace inventory and accepts a genuine 33-namespace selection with one omission. |
+| S8/T6 history freshness starts too late | Memory history exports the storage-refreshed capture target at its first eligible commit. Confirmation updates its exact revision while preserving that origin and any earlier successful observation; target ingestion deduplicates identities. Current Memory/Card targets still start at successful confirmation; failed operations cannot create targets. | S8/T6 fabricates capture at 0, confirmation at 20 and search at 30,010 ms: p95 fails. The explicit functional suite additionally captures one Memory without any review and checks the emitted target against storage and native commit records. |
+| S9 retained shutdown regression gap | The actual writer uses `shutdownRetained()` to record the distinct shutdown phase, final-close interval and native close outcome. A failed close still exports diagnostics before the incomplete seal. | P2-23 fake native close outcomes 0/5/6 include retained open, write/inspect and shutdown records, with shutdown at 30 outside the write interval [10,20]. The explicit retained writer test asserts real shutdown native records, absent per-write close and final close after public write. |
+| S10 preregistration omits gates | `PROTOCOL` now includes method-specific p95/max, response/snapshot/cursor limits, assembly token/item limits, zero-BUSY and coverage policies, writer deadline/timeout and output/platform policies. Evaluators consume those registered numeric thresholds. | S10 inspects the actual preregistration result for exact latency and bounds values plus the declarative definition and estimate. |
+| S11 discarded reader statistics | Request cell summaries retain both successful-only and all-attempt populations, including p50/p95/max. Pair wrapping retains them. The summary emits each cell's statistics incrementally. | S11 checks an actual report/summary and runs the registration orchestrator with fabricated request-series output, checking its persisted cell summary. |
+| S12/T2 IPC errors masquerade as exit | IPC failure rejects message waits, while `child.exited` resolves only on actual process close (or confirmed spawn failure with no process). Termination still kills and waits for close; the watchdog remains active. | S12/T2 emits an IPC error on a fake live child, verifies exit and terminate remain pending, then supplies the actual close event. |
+| T3 writer startup leaks pump | Both series acquire the pump and writer inside `try/finally`, stopping the acquired pump even when writer arming rejects. | Separate T3 availability/freshness regressions inject arming failure and require exactly one pump stop and exported drain. |
+| T4 writer crash loses native BUSY | Controller stop drains queued chunks after confirmed termination, returns incomplete evidence with known BUSY/calls, and callers journal it. Startup errors also carry their ledger into the top-level failure journal. | T4 acknowledges a native primary-5 chunk, injects child exit before seal, and checks BUSY=1/incomplete coverage in the numeric report. |
+| T7 cold attribution overwritten | Records carry their host PID; launcher samples cannot overwrite attribution belonging to the cold host. The request path also skips launcher attribution for cold host records. | T7 supplies complete cold scheduling data and conflicting launcher samples and requires the original data unchanged. |
+| T8 summary retains every block | Block and cell-statistic rows stream immediately to an awaited sink; only tallies and block count survive. CLI stdout writes await callbacks. | T8 blocks a sink callback at the first row of a 1,000-row report, asserts incremental delivery, then checks only aggregate counts are returned. |
+| T9 maximum-only loops disappear | Legacy loop maxima render with explicit `unavailable` timestamps and resource fields. | T9 supplies `{maxMs:250,over100:1}` without blocks and requires the 250 ms row. |
+
+The fix regressions live in
+`tools/testing/measure-context-read-product-fix1.test.mjs`; retained shutdown and
+capture-only storage checks also live in the explicit functional suite. The
+original synthetic per-write-close test was renamed to describe its actual
+resend/overflow scope. No SQLite-reaching static import, engine runtime change,
+raw database descriptor allowance or generated runtime change was introduced.
+
+The inventory is generated by `buildPlan(definition)` from `V3_DEFINITION`:
+ordered dimension cross-products, required/control journal combinations,
+schema-dependent target types, per-kind series/sample rules, and fixed-window
+loads/repetitions/duration/pairing. Registered cells carry their actual sample
+rules and window counts. Execution uses those counts and skips paired windows
+for cells without registered windows. The registration JSON may provide a
+`protocolDefinition` object for a separately approved revision; changed data
+cannot retain the v3 revision label. The default is unchanged v3. The header freezes that complete definition and its estimate.
+The inventory regression loads the original pure protocol module from git and
+compares every old cell field, stable ID and all expanded descriptors: **7,520
+cells / 81,056 descriptors / 57,600 fixed windows**, unchanged.
+
+`node tools/testing/measure-context-read-product.mjs --estimate` requires no
+profile, fixture access, workspace or engine invocation. It exits 0 and prints:
+
+```json
+{"protocol":"P2-product-v3","cellCount":7520,"counts":{"requests":7200,"freshness":80,"availability":48,"overflow":48,"backup":24,"injection":120},"minimumSamplesByKind":{"requests":525600,"freshness":8000,"availability":4800,"overflow":3024,"backup":24,"injection":120},"fixedWindowMs":1728000000,"minimumAttempts":541568,"perAttemptFloorMs":1,"lowerBoundWallClockMs":1728541568,"assumption":"Serial cells; assumed 1 ms per minimum attempt outside fixed windows; excludes setup, rebuilds, extra attempts, availability windows and freshness waits. Not a measured runtime guarantee."}
+```
+
+This is **1,728,000 s** of fixed windows plus **541.568 s** at the stated assumed
+per-attempt floor, approximately **20.006 days**. It is conditional arithmetic,
+not measured feasibility or a promised runtime. `--estimate --registration
+registration.json` reads only the definition in that JSON, so a revised cell
+plan can be estimated before supplying production inputs. The immutable header
+stores the same estimate for its registered plan.
+
+The raw-fd guard adds one exact allowance for reading the estimate command's
+operator registration JSON before engine startup. It permits no database or
+companion access. The existing database copy/hash allowances remain confined to
+the SQLite-free child.
+
+Fix-round changed files were derived from `git diff --name-only HEAD` plus
+`git ls-files --others --exclude-standard`, then independently from every
+tracked file’s Git blob hash/mode versus index and porcelain untracked entries.
+The sorted sets matched at **16 files** (including this document and the
+JSON guard allowance).
+
+- `core/test/fixtures/no-raw-db-fd-allowlist.json`
+- `docs/plans/context-read-p2d-harness-impl.md`
+- `tools/testing/fixtures/context-product/actors.mjs`
+- `tools/testing/fixtures/context-product/controller.mjs`
+- `tools/testing/fixtures/context-product/engine.mjs`
+- `tools/testing/fixtures/context-product/functional-check.mjs`
+- `tools/testing/fixtures/context-product/io-child.mjs`
+- `tools/testing/fixtures/context-product/protocol.mjs`
+- `tools/testing/fixtures/context-product/runner-child.mjs`
+- `tools/testing/fixtures/context-product/series.mjs`
+- `tools/testing/fixtures/context-product/writer-journal.mjs`
+- `tools/testing/fixtures/context-product/writer.mjs`
+- `tools/testing/measure-context-read-product-fix1.test.mjs`
+- `tools/testing/measure-context-read-product.mjs`
+- `tools/testing/measure-context-read-product.test.mjs`
+- `tools/testing/summarize-context-read-product.mjs`
+
+During development, the expanded functional suite initially exited **1** because
+its new retained-call assertion expected `null` where the established shape omits
+`closeStartedAt`. The assertion now checks absence; the next run exited **0**,
+9/9. A later raw-fd guard invocation exited **1**, identifying the new JSON-only
+estimate registration read; after adding its exact allowance it exited **0**,
+5/5. These initial failures were test/allowance corrections, not relaxed gates.
+
+Verification uses each exact nvm-installed executable with its directory first
+in PATH. `node --version` exited **0** for **22.16.0** and **24.15.0**. Each test
+path below is a separate serial command:
+`node --test --test-reporter=tap <explicit-path>`. Return codes come directly
+from the child process, without pipes. The 29 core context-read paths were
+cross-checked using filesystem glob and `rg --files`; adding the two lock guards,
+two harness suites, explicit functional suite and original E1-C2 suite gives
+**35 distinct paths per runtime**.
+
+All **14 changed JavaScript paths** were independently enumerated from the
+cross-checked changed-file set and `rg`; individual `node --check <path>` calls
+on both runtimes produced **28 actual exit codes, all 0**. The read-only
+`node tools/testing/measure-context-read-product.mjs --estimate` command exited
+**0** on each runtime and printed the v3 arithmetic above.
+
+Node **22.16.0**: **35 distinct paths, every final exit 0; 627/628 tests passed, 1 existing skip, 0 failures and 0 cancellations**.
+Node **24.15.0**: **35 distinct paths, every final exit 0; 627/628 tests passed, 1 existing skip, 0 failures and 0 cancellations**.
+
+| Explicit test path | Node 22.16.0 final exit / passed | Node 24.15.0 final exit / passed |
+| --- | --- | --- |
+| `core/test/context-read-assembly-races.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/context-read-assembly-readonly.test.mjs` | 0 / 28 | 0 / 28 |
+| `core/test/context-read-assembly.test.mjs` | 0 / 19 | 0 / 19 |
+| `core/test/context-read-bm25.test.mjs` | 0 / 3 | 0 / 3 |
+| `core/test/context-read-budget.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-core.test.mjs` | 0 / 26 | 0 / 26 |
+| `core/test/context-read-default-entropy.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-embedder.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-fusion.test.mjs` | 0 / 4 | 0 / 4 |
+| `core/test/context-read-local-embedder.test.mjs` | 0 / 38 | 0 / 38 |
+| `core/test/context-read-local-status.test.mjs` | 0 / 3 | 0 / 3 |
+| `core/test/context-read-moc-source.test.mjs` | 0 / 15 | 0 / 15 |
+| `core/test/context-read-process.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-product-artifact.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-product-control.test.mjs` | 0 / 83 | 0 / 83 |
+| `core/test/context-read-product-import.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/context-read-product-index.test.mjs` | 0 / 65 | 0 / 65 |
+| `core/test/context-read-product-pump.test.mjs` | 0 / 16 | 0 / 16 |
+| `core/test/context-read-product-service.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/context-read-product.test.mjs` | 0 / 126 | 0 / 126 |
+| `core/test/context-read-recovery.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/context-read-review.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/context-read-sidecar.test.mjs` | 0 / 17 | 0 / 17 |
+| `core/test/context-read-source-work.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/context-read-sources-authority.test.mjs` | 0 / 6 | 0 / 6 |
+| `core/test/context-read-sources-bounds.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-sources-races.test.mjs` | 0 / 16 | 0 / 16 |
+| `core/test/context-read-sources.test.mjs` | 0 / 14 | 0 / 14 |
+| `core/test/context-read-tokenize.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 / 16 | 0 / 16 |
+| `tools/testing/measure-context-read-product.test.mjs` | 0 / 27 | 0 / 27 |
+| `tools/testing/measure-context-read-product-fix1.test.mjs` | 0 / 26 | 0 / 26 |
+| `tools/testing/fixtures/context-product/functional-check.mjs` | 0 / 9 | 0 / 9 |
+| `tools/testing/measure-topic-reader-wal.test.mjs` | 0 / 7 | 0 / 7 |
+
+The complete serial matrix executed **70 test commands and exited 0**. After the
+final failed-operation freshness guard, these four affected Node 22 commands
+were repeated, all **exit 0**: the original harness suite (27/27), fix suite
+(26/26), explicit functional suite (9/9), and raw-fd guard (5/5). The table gives
+the final result for each distinct path. Node 24 exercised that final source in
+its matrix. Source hashes were checked unchanged after those final tests.
+
+The existing A13 `o200k_base` counter test skips because `tiktoken` is unavailable;
+no package was installed. Functional-only CLI children deliberately return
+`inconclusive`/exit 1; their test wrappers assert this and exit 0. No production
+latency, availability, freshness or contention gate was measured.
+
+Final `git diff --check`, independent whitespace/final-newline checks over all
+16 files, allowlist JSON parsing, `git diff --cached --exit-code`, and the diff
+check for frozen contract/core runtime/generated runtime changes all exited
+**0**. No staging or commit occurred; HEAD remains `41669767`. Owned verification
+logs are removed after recording these results. No running task is left for
+unattended supervision.

@@ -1353,5 +1353,10 @@
     "path": "tools/testing/fixtures/context-product/report.mjs",
     "source": "const journal=await open(path+'.records.jsonl','wx',0o600),partial=await open(path+'.partial','wx',0o600);",
     "reason": "Harness-owned exclusive numeric report/header/journal files only; never database files or companions."
+  },
+  {
+    "path": "tools/testing/measure-context-read-product.mjs",
+    "source": "const definition=registrationPath?JSON.parse(await readFile(registrationPath,'utf8')).protocolDefinition??V3_DEFINITION:V3_DEFINITION;",
+    "reason": "Reads only operator registration JSON for estimate-only plan arithmetic, before any engine or SQLite handle invocation."
   }
 ]
