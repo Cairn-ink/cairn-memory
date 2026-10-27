@@ -31,8 +31,8 @@
  * --plan writes the preregistered plan without generating fixtures or samples.
  */
 import assert from 'node:assert/strict';
-import { fork } from 'node:child_process';
-import { copyFileSync, readFileSync } from 'node:fs';
+import { fork, spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { open, rename, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -66,8 +66,14 @@ const previewReasons = ['empty','trimmed_prefix_empty','content_limit','invalid_
 const timestamp = () => performance.timeOrigin + performance.now();
 let boundSegmenter;
 function previewFits(row) {
-  if (row.preview.status !== 'available') return true;
-  if (Buffer.byteLength(row.preview.text) > 1024) return false;
+  const preview = row?.preview;
+  if (!preview || typeof preview !== 'object' || Array.isArray(preview)) return false;
+  const keys = Object.keys(preview);
+  if (preview.status === 'unavailable') return keys.length === 2 &&
+    keys.includes('reason') && previewReasons.includes(preview.reason);
+  if (preview.status !== 'available' || keys.length !== 3 ||
+      typeof preview.text !== 'string' || typeof preview.truncated !== 'boolean') return false;
+  if (Buffer.byteLength(preview.text) > 1024) return false;
   boundSegmenter ??= new Intl.Segmenter('und', { granularity: 'grapheme' });
   let count = 0;
   for (const part of boundSegmenter.segment(row.preview.text)) if (++count > 72) return false;
@@ -173,8 +179,8 @@ export async function attempt(config, writer) {
     const page = result.ok ? result.value : null;
     const reasons = Object.fromEntries(previewReasons.map(reason => [reason, 0])); let previewBounds = true;
     if (page) for (const row of page.items) {
-      if (row.preview.status === 'unavailable') reasons[row.preview.reason] = (reasons[row.preview.reason] ?? 0) + 1;
-      else previewBounds &&= previewFits(row);
+      previewBounds &&= previewFits(row);
+      if (row.preview?.status === 'unavailable' && previewReasons.includes(row.preview.reason)) reasons[row.preview.reason]++;
     }
     const writes = writerResult?.calls ?? [];
     const overlap = !writer || writes.some(w => w.writeStartedAt < readFinishedAt && readStartedAt < w.writeFinishedAt);
@@ -361,6 +367,16 @@ export function decide(cell, series, records, required, production, cold = false
     summary.gatedPages < required || Object.values(checks).some(v => v === null) || !production || missingWriters ? 'inconclusive' : 'pass' };
 }
 
+// Sources must be closed/quiescent, with WAL checkpointed, before copying.
+// This child links no SQLite and owns every raw descriptor; its closes cannot
+// release the measuring process's POSIX locks. Copies preserve physical pages.
+export function cloneDatabase(source, destination) {
+  const result = spawnSync(process.execPath, ['--input-type=module', '--eval', `
+    import { copyFileSync } from 'node:fs';
+    copyFileSync(process.argv[1], process.argv[2]);
+  `, source, destination], { env: {}, stdio: 'ignore', timeout: 10000 });
+  if (result.error || result.signal || result.status !== 0) throw measurementError('child_failed', { childExitCode: result.status ?? 1 });
+}
 export async function seed(count, schema, workspace) {
   const { buildMemberWorld, ledgerMembers } = await import('../../core/testing/topic-members-world.mjs');
   const { f, spaces } = buildMemberWorld(null, count);
@@ -398,9 +414,9 @@ export async function seed(count, schema, workspace) {
     assert.deepEqual(physical, ledgerShape); assert.equal(physical.l1, 60); assert.equal(physical.l2, 11);
     const expectedIds = Object.fromEntries(['L1','L2','unfiled'].map(level => [level,
       ledgerMembers(f, namespace, level === 'unfiled' ? { type: 'unfiled' } : selection[level]).map(r => r.id)]));
-    f.core.close();
+    f.core.close(); f.closeDb();
     if (schema === 33) { const { openDatabase } = await import('../../core/database.mjs'); const db = openDatabase(f.path, { currentDependencies: true }); db.close(); }
-    const path = join(workspace.path, `seed-${count}-${schema}.sqlite`); copyFileSync(f.path, path);
+    const path = join(workspace.path, `seed-${count}-${schema}.sqlite`); cloneDatabase(f.path, path);
     return { path, namespace, selection, expectedIds, sourceCases, physical, ledgerShape, ledger: f.ledger.map(({ id, revision, kind, parents, namespace }) => ({ id, revision, kind, parents, namespace })),
       memories: count, namespaces: spaces.length, mocs: f.mocs.size, l1: nodes.filter(n => n.level === 'L1').length };
   } finally { await f.workspace.cleanup(); }
@@ -514,7 +530,7 @@ async function run(args) {
       process.stderr.write(JSON.stringify({ progress: i + 1, total: report.plan.length, cell }) + '\n');
       const key = `${cell.count}:${cell.schema}`;
       if (!seeds.has(key)) seeds.set(key, await seed(cell.count, cell.schema, workspace));
-      const fixture = seeds.get(key), path = join(workspace.path, `cell-${i}.sqlite`); copyFileSync(fixture.path, path);
+      const fixture = seeds.get(key), path = join(workspace.path, `cell-${i}.sqlite`); cloneDatabase(fixture.path, path);
       const { DatabaseSync } = await import('node:sqlite'); const db = new DatabaseSync(path);
       try { assert.equal(db.prepare(`PRAGMA journal_mode=${cell.journal}`).get().journal_mode.toUpperCase(), cell.journal); } finally { db.close(); }
       const input = { namespace: fixture.namespace, selection: cell.selection === 'unfiled' ? { type: 'unfiled' } : fixture.selection[cell.selection],

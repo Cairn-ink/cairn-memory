@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "a9d9856b780043964215ff227db95ad56886948161ea6c390bc4febc1d7a1dd2",
-  "bytes": 800960,
+  "sha256": "d6db6d090f0b95edad93adb7832096c60aa99031b723b1e67597cc34c300ab06",
+  "bytes": 803298,
   "files": [
     "LICENSE",
     "README.md",
@@ -603,7 +603,7 @@
     "core/topic-member-previews-storage.mjs": "74990d01ee87b21afd9d7c48ce342d39487c811e28e0b385a111951cb4dc7c6f",
     "core/topic-member-previews-text.mjs": "89d34c1d8edd456ea57fb7853f74cddf73321580c5c5481e1d8ba3d26f2671ba",
     "docs/plans/topic-member-previews.md": "b0bf5087864e2f5ec8ca91fedac3dd56acfccc7d7961a9af793e0d37b1a7ca60",
-    "docs/plans/topic-member-previews-impl.md": "03bd26f5ae30e09e32cc67f69fd6da1d4f6a2231289870f9f9c90d138c8a73ed",
+    "docs/plans/topic-member-previews-impl.md": "fde85daed254e45781c7e851bcd50ba7d3f7c7ec0793558aacd00b7db91e8aa5",
     "docs/plans/topic-member-previews-smoke.json": "1d7374d0cea72b257ed24d3633e5c6b9304f1cc8f862875a7aa738c84a0d5536",
     "bin/cairn-memory.mjs": "7c24872a106de8d06c0a66499002f46aa8894b588b005ac9d39a50df4e586981",
     "README.md": "dcfd6be7a1a90d7016dbce352dbd06516443d6760e0dbfd74e6049632ec36891",

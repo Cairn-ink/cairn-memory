@@ -304,3 +304,150 @@ test('P1 report sink appends raw attempts once and assembles the existing JSON s
   assert.deepEqual(report.cells, entries); assert.deepEqual(report.protocol, PROTOCOL);
   assert.equal(report.status, 'failed'); assert.equal(report.failure.code, 'measurement_failed');
 });
+
+test('P1 measurement rejects unknown preview statuses and malformed unavailable shapes before deciding', async () => {
+  const { EventEmitter } = await import('node:events');
+  const { default: threads } = await import('node:worker_threads');
+  const { syncBuiltinESMExports } = await import('node:module');
+  const { attempt } = await import('../../tools/testing/measure-topic-member-previews.mjs');
+  const native = threads.Worker;
+  let preview;
+  threads.Worker = class extends EventEmitter {
+    stdout = { resume() {} }; stderr = { resume() {} };
+    constructor(url, options) { super(); this.metricsPort = options.workerData.previewMetricsPort; }
+    ref() {} unref() {} async terminate() { return 0; }
+    postMessage() {
+      const result = { ok: true, value: { status: 'page', items: [{ preview }], nextCursor: null } };
+      const bytes = new TextEncoder().encode(JSON.stringify(result));
+      this.metricsPort.postMessage({ extractions: 1, sourceBytes: 1, decodedUnits: 1, normalizationUnits: 1 });
+      setImmediate(() => this.emit('message', bytes.buffer));
+    }
+  };
+  syncBuiltinESMExports();
+  try {
+    const invalid = [
+      { status: 'unexpected', text: 'x'.repeat(2048) },
+      { status: 'unexpected' }, {}, null,
+      { status: 'unavailable' }, { status: 'unavailable', reason: 'unexpected' },
+      { status: 'unavailable', reason: 'empty', text: 'x'.repeat(2048) },
+      { status: 'unavailable', reason: 'empty', truncated: false },
+      { status: 'available', text: 'x'.repeat(73), truncated: true },
+      { status: 'available', text: 'a' + '\u0301'.repeat(600), truncated: true },
+      { status: 'available', text: 'ok' },
+    ];
+    const valid = ['empty','trimmed_prefix_empty','content_limit','invalid_text','grapheme_too_large','segmenter_unavailable']
+      .map(reason => ({ status: 'unavailable', reason }));
+    valid.push({ status: 'available', text: '界'.repeat(72), truncated: false });
+    for (const [value, expected] of [...invalid.map(p => [p, false]), ...valid.map(p => [p, true])]) {
+      preview = value;
+      const observed = await attempt({ path: 'unused.sqlite', namespace: { ownerId: 'bounds-owner', scope: 'personal', projectId: null },
+        cell, input: { namespace: { ownerId: 'bounds-owner', scope: 'personal', projectId: null },
+          selection: { type: 'unfiled' }, accessRevision: 'bounds', previews: { version: PROTOCOL.version }, limit: 24 } });
+      assert.equal(observed.failure, null);
+      assert.equal(observed.bounds, expected, JSON.stringify(value));
+      const decision = decide(cell, 'main', Array.from({ length: 50 }, () => ({ ...observed,
+        hostLoop: { maxMs: 1, blocksOver100: 0 }, elapsedMs: 1 })), 50, true);
+      assert.equal(decision.checks.bytes, expected);
+      assert.equal(decision.decision, expected ? 'pass' : 'fail');
+      assert.deepEqual(Object.keys(observed.reasons).sort(), valid.slice(0,6).map(p => p.reason).sort());
+    }
+  } finally { threads.Worker = native; syncBuiltinESMExports(); }
+});
+
+test('P1 isolated database cloning preserves bytes/schema/journal and host POSIX locks', async t => {
+  const { cloneDatabase, seed } = await import('../../tools/testing/measure-topic-member-previews.mjs');
+  const { fileBytes } = await import('../testing/topic-overview-raw29-fixture.mjs');
+  const { createTestWorkspace } = await import('../../tools/testing/workspace.mjs');
+  const { DatabaseSync } = await import('node:sqlite');
+  const { spawnSync } = await import('node:child_process');
+  const { join } = await import('node:path');
+  const workspace = createTestWorkspace(t);
+  for (const schema of [18,33]) {
+    const fixture = await seed(112, schema, workspace);
+    for (const mode of ['DELETE','WAL']) {
+      const setup = new DatabaseSync(fixture.path);
+      setup.exec(`PRAGMA journal_mode=${mode}`); setup.close(); // Checkpoints WAL.
+      const source = new DatabaseSync(fixture.path, { readOnly: true });
+      source.exec('BEGIN'); source.prepare('SELECT * FROM store_metadata').all();
+      const probe = () => {
+        const result = spawnSync(process.execPath, ['--input-type=module','--eval', `
+          import { DatabaseSync } from 'node:sqlite';
+          const db = new DatabaseSync(process.argv[1]); db.exec('PRAGMA busy_timeout=0');
+          try { db.exec('PRAGMA locking_mode=EXCLUSIVE; BEGIN EXCLUSIVE'); db.prepare('SELECT * FROM store_metadata').all(); console.log(0); }
+          catch (e) { console.log(e.errcode & 255); }
+          finally { if (db.isTransaction) db.exec('ROLLBACK'); db.close(); }
+        `, fixture.path], { env: {}, encoding: 'utf8', timeout: 10000 });
+        assert.equal(result.error, undefined); assert.equal(result.status, 0, result.stderr);
+        assert.equal(result.signal, null); assert.equal(result.stdout.trim(), '5');
+      };
+      try {
+        probe(); fileBytes(fixture.path); probe();
+        const copies = [0,1].map(i => join(workspace.path, `clone-${schema}-${mode}-${i}.sqlite`));
+        for (const path of copies) { cloneDatabase(fixture.path, path); probe(); }
+        // Only the SQLite-free child opens raw database descriptors for hashing.
+        const hashes = spawnSync(process.execPath, ['--input-type=module','--eval', `
+          import { readFileSync } from 'node:fs'; import { createHash } from 'node:crypto';
+          console.log(JSON.stringify(process.argv.slice(1).map(path => createHash('sha256').update(readFileSync(path)).digest('hex'))));
+        `, fixture.path, ...copies], { env: {}, encoding: 'utf8', timeout: 10000 });
+        assert.equal(hashes.error, undefined); assert.equal(hashes.status, 0, hashes.stderr); assert.equal(hashes.signal, null);
+        assert.equal(new Set(JSON.parse(hashes.stdout)).size, 1);
+        for (const path of copies) {
+          const db = new DatabaseSync(path, { readOnly: true });
+          try {
+            assert.equal(db.prepare('PRAGMA user_version').get().user_version, schema);
+            assert.equal(db.prepare('PRAGMA journal_mode').get().journal_mode.toUpperCase(), mode);
+            assert.deepEqual(db.prepare('SELECT * FROM sqlite_master ORDER BY name').all(), source.prepare('SELECT * FROM sqlite_master ORDER BY name').all());
+            assert.equal(db.prepare('SELECT count(*) n FROM memories').get().n, 112);
+          } finally { db.close(); }
+        }
+      } finally { source.exec('ROLLBACK'); source.close(); }
+    }
+  }
+  assert.throws(() => cloneDatabase(join(workspace.path, 'missing.sqlite'), join(workspace.path, 'failed.sqlite')),
+    { code: 'child_failed' });
+});
+
+test('P1 SQLite diagnostics count iterator execution, metadata and native finalization without SQL or row data', async () => {
+  const { Worker, MessageChannel } = await import('node:worker_threads');
+  const { port1, port2 } = new MessageChannel(), observations = [];
+  port1.on('message', value => observations.push(value.sqlite));
+  const worker = new Worker(`
+    const { workerData } = await import('node:worker_threads');
+    const { performance } = await import('node:perf_hooks');
+    let tick = 0; Object.defineProperty(performance, 'now', { value: () => ++tick });
+    await import(workerData.preload);
+    const { DatabaseSync } = await import('node:sqlite');
+    const { channel } = await import('node:diagnostics_channel');
+    const report = () => channel('cairn.topic-member-previews.metrics').publish({});
+    const db = new DatabaseSync(':memory:');
+    const statement = db.prepare("SELECT 'PRIVATE_SQL_ROW_SENTINEL' AS value UNION ALL SELECT 'second'"); report();
+    const iterator = statement.iterate(); report();
+    iterator.next(); report(); iterator.next(); report(); iterator.next(); report();
+    iterator.return(); report(); statement.columns(); report();
+    const abandoned = statement.iterate(); report(); abandoned.next(); report(); abandoned.return(); report();
+    try { statement.get('extra parameter'); } catch {} report();
+    if (typeof statement.close === 'function') { statement.close(); report(); }
+    if (typeof statement[Symbol.dispose] === 'function') {
+      const other = db.prepare('SELECT 1'); report(); other[Symbol.dispose](); report();
+    }
+    db.close(); report(); workerData.previewMetricsPort.close();
+  `, { eval: true, type: 'module', workerData: { previewMetricsPort: port2,
+    preload: new URL('../../tools/testing/fixtures/topic-member-previews-metrics.mjs', import.meta.url).href }, transferList: [port2] });
+  try {
+    await new Promise((resolve, reject) => { worker.once('error', reject); worker.once('exit', code => code === 0 ? resolve() : reject(Error('probe exit ' + code))); });
+    await new Promise(resolve => setImmediate(resolve));
+    const stages = ['prepare','iterate','iterate_next','iterate_next','iterate_next','iterate_return','columns',
+      'iterate','iterate_next','iterate_return','get'];
+    if (process.versions.node.startsWith('24.')) stages.push('close','prepare','dispose');
+    stages.push('close');
+    assert.deepEqual(observations.map(s => s.longest.stage), stages);
+    for (const metrics of observations) {
+      assert.equal(metrics.calls, 1); assert.equal(metrics.totalMs, 1); assert.equal(metrics.longest.elapsedMs, 1);
+      assert.equal(typeof metrics.longest.startedAt, 'number');
+      assert.ok(['topic_metadata','connection'].includes(metrics.longest.statement));
+      assert.deepEqual(Object.keys(metrics).sort(), ['calls','longest','totalMs']);
+      assert.deepEqual(Object.keys(metrics.longest).sort(), ['elapsedMs','stage','startedAt','statement']);
+    }
+    assert.equal(JSON.stringify(observations).includes('PRIVATE_SQL_ROW_SENTINEL'), false);
+  } finally { port1.close(); await worker.terminate(); }
+});

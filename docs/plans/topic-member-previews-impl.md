@@ -604,3 +604,111 @@ docs/plans/topic-member-previews-impl.md
 tools/testing/fixtures/topic-member-previews-metrics.mjs
 tools/testing/measure-topic-member-previews.mjs
 ```
+
+
+### Harness fix round 1
+
+The two P1 findings and the P2 diagnostics finding at `c2d258a6` are fixed in
+this worktree. The preregistered header, `PROTOCOL`, Cartesian matrix and
+`decide()` are byte-identical to that revision; only the preview bounds
+validation is tightened. No full measurement, smoke, setup regeneration,
+network access or commit was performed in this round.
+
+* **Raw descriptors → isolated copies → bytes and locks regression.** Both
+  seed and cell cloning now execute the literal `node:fs` copy program in a
+  short child with an empty environment and no SQLite import or connection.
+  The seed closes both its core and fixture connection before copying; the
+  fixture exposes idempotent `closeDb()` so deferred cleanup remains safe.
+  A schema-33 migration also closes before copying. Every cell uses this same
+  copy method outside the observed intervals, and its journal-mode assignment
+  is unchanged. The operation preserves physical pages, rather than rewriting
+  them with `VACUUM INTO`: a SQLite-free hash child verifies byte-identical
+  source/two-clone SHA-256 values on physical schemas 18/33 and DELETE/WAL.
+  SQLite checks additionally compare schema, user version, journal mode and
+  memory count. A different process's exclusive-lock probe stays BUSY before
+  and after each copy while the host holds a quiescent read transaction; a
+  missing-source copy fails closed with sanitized `child_failed`.
+* **Fixture audit → isolated hashing → shared guard.** The audit of all
+  `core/testing` filesystem imports found an additional live-database read in
+  `topic-overview-raw29-fixture.fileBytes()`. Main-file/WAL/SHM hashing now runs
+  in a SQLite-free child, and the same lock regression checks it. The other
+  database writes in the fixture inventory are exclusive new-file creation
+  (`ax`/`wx`) or closed frozen-store restoration; remaining reads/writes cover
+  source assets, archives, JSON, reports and rendezvous markers. The filesystem
+  inventory was cross-checked with a recursive Path scan and `rg`: **40
+  modules**, identical. No additional raw database/companion descriptor is used
+  by the previews harness or its fixture helpers in the measuring process.
+  The existing raw-fd guard now scans the harness, preload, workspace and
+  preview fixture helpers plus the shared hash fixture. Its API set includes
+  `copyFile`/`cp` and synchronous forms. Exact source/multiplicity allowances
+  cover report I/O, directory metadata and only the literal isolated child
+  programs; regression injections reject parent-process copies and companion
+  opens even with these allowances.
+* **Unknown status exemption → contract shapes → measurement-path regression.**
+  Bounds now accept only `available` with string text, boolean `truncated` and
+  exactly those three keys, or `unavailable` with exactly `status`/`reason` and
+  one of the contract's six reasons. Available text retains the existing
+  1,024-byte/72-grapheme caps. Every item goes through this check, including
+  unavailable items; unknown reasons cannot introduce arbitrary diagnostic
+  labels. The Worker-response regression submits the reported `unexpected`
+  status with 2,048 bytes, malformed unavailable variants, valid unavailable
+  variants and available byte/grapheme boundary cases through `attempt()` and
+  the existing 50-sample decision. Invalid responses fail bounds and acceptance;
+  valid unavailable responses remain accepted. Restoring only the original
+  harness makes this regression fail with `true !== false` on both runtimes.
+* **Partial SQLite call metrics → executing and cleanup calls → deterministic
+  counter regression.** In addition to prepare/exec/get/all/run, the preload
+  times iterator creation, every `next()` (including exhaustion) and `return()`,
+  `columns()`, explicit statement `close()`/`Symbol.dispose` where supported,
+  and database `close()` (which includes native statement cleanup on Node 22).
+  Each call updates only bounded numeric aggregates and fixed stage/category
+  labels, never SQL, parameters or row text. A Worker probe with an injected
+  clock checks one call and exactly one timing unit per operation, including
+  early iterator return and a throwing execution. Cleanup by GC or forced
+  Worker termination outside per-request publication is not separately timed.
+  An informational Node 24 in-memory probe (five 20,000-cycle batches after
+  warmup) measured raw iterate/next/return/columns cycles at 0.00113–0.00125 ms
+  versus 0.00158–0.00176 ms instrumented, about 0.5 microseconds added per cycle.
+  This is diagnostic overhead evidence, not a launch latency measurement.
+
+Verification uses the explicit nvm binaries for Node 22.16.0 and 24.22.1.
+The final command for each is `node tools/testing/run.mjs
+--test-concurrency=1 --test-reporter=tap` followed by the same 28 explicit files
+listed in the preceding verification section (all 26 `core/test/topic-*.test.mjs`
+files plus the raw-fd and SQLite lock-safety guards). The file selection was
+independently derived with glob and `rg`, then compared: **28 files**, identical.
+New/touched tests and all previews measurement tests are included. Commands run
+sequentially, with owned scratch on memory-backed storage and checked child exit
+codes. No broad suite or timing acceptance gate was run.
+
+| Verification | Actual exit code / result |
+| --- | --- |
+| First focused measurement/guard run, Node 22.16.0 | 1; two new test assertions needed correction (decision field name and WAL exclusive-lock probe); product fixes retained |
+| Corrected focused regressions and harness guard, Node 22.16.0 | 0; 4/4 |
+| New status regression against the original `c2d258a6` harness, Node 22.16.0 | 1, expected; `true !== false`; fixed harness restored in `finally` |
+| Same original-harness status regression, Node 24.22.1 | 1, expected; `true !== false`; fixed harness restored in `finally` |
+| Final 28 required files, Node 22.16.0 | 0; 361/361 |
+| Final 28 required files, Node 24.22.1 | 0; 361/361 |
+| Informational in-memory instrumentation overhead probe, Node 24.22.1 | 0 |
+| Header/protocol/matrix/decision byte comparison and filesystem inventory cross-check | 0 |
+| Final whitespace, added-path and changed-file inventory checks | 0; 8 changed files, 0 untracked files |
+
+The final round-1 delivery list is **8 files**, derived from
+`git diff --name-only HEAD` and independently from `git ls-tree -rz HEAD`
+blob IDs versus `git hash-object --stdin-paths` hashes of all tracked working
+files. The sorted lists match exactly. Untracked inventory was independently
+checked with `git ls-files --others --exclude-standard` and
+`git status --porcelain`: **0 files**, identical. The complete diff passes
+whitespace/newline checks and contains no added machine-specific home or
+temporary paths. No new runtime module or shipped document was added.
+
+```text
+core/test/fixtures/no-raw-db-fd-allowlist.json
+core/test/no-raw-db-fd.test.mjs
+core/test/topic-member-previews-measurement.test.mjs
+core/testing/topic-members-fixture.mjs
+core/testing/topic-overview-raw29-fixture.mjs
+docs/plans/topic-member-previews-impl.md
+tools/testing/fixtures/topic-member-previews-metrics.mjs
+tools/testing/measure-topic-member-previews.mjs
+```

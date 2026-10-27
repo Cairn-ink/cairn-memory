@@ -12,7 +12,8 @@ import { spawnSync } from 'node:child_process';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const allow = JSON.parse(readFileSync(new URL('./fixtures/no-raw-db-fd-allowlist.json', import.meta.url)));
 const apis = new Set(['open', 'openSync', 'readFile', 'readFileSync', 'writeFile', 'writeFileSync',
-  'appendFile', 'appendFileSync', 'createReadStream', 'createWriteStream', 'FileHandle']);
+  'appendFile', 'appendFileSync', 'createReadStream', 'createWriteStream', 'FileHandle',
+  'copyFile', 'copyFileSync', 'cp', 'cpSync']);
 const decode = value => value.replace(/\\(?:u\{([\da-f]+)\}|u([\da-f]{4})|x([\da-f]{2})|([\s\S]))/gi,
   (_, point, unicode, hex, escaped) => point || unicode || hex ? String.fromCodePoint(parseInt(point ?? unicode ?? hex, 16)) : escaped);
 function tokenize(source, offset = 0) {
@@ -144,6 +145,27 @@ test('runtime raw filesystem access has an exact, justified allowlist', () => {
     assert.deepEqual(sites(readFileSync(join(root, path), 'utf8')).map(site => site.source).sort(),
       allow.filter(entry => entry.path === path).map(entry => entry.source).sort(),
       'stale allowlist entries or multiplicity: ' + path);
+  }
+});
+// Include the measuring entry and its fixture closure, which the runtime walk
+// deliberately skips. Only the literal SQLite-free child may copy DB bytes.
+const previewHarnessPaths = [
+  'tools/testing/measure-topic-member-previews.mjs',
+  'tools/testing/fixtures/topic-member-previews-metrics.mjs',
+  'tools/testing/workspace.mjs',
+  'core/testing/topic-members-fixture.mjs',
+  'core/testing/topic-members-world.mjs',
+  'core/testing/topic-member-previews-fixture.mjs',
+  'core/testing/rationale-model.mjs',
+  'core/testing/topic-overview-raw29-fixture.mjs',
+];
+test('preview measurement harness and fixtures obey the raw descriptor guard', () => {
+  assert.deepEqual(audit(root, previewHarnessPaths.map(path => join(root, path))), []);
+  const path = previewHarnessPaths[0], source = readFileSync(join(root, path), 'utf8');
+  // A reintroduced parent copy fails even when the isolated child is allowed.
+  for (const call of ['copyFileSync(f.path, path);', 'fs.copyFileSync(fixture.path, path);',
+    'readFileSync(f.path);', 'fs.openSync(f.path + "-wal");', 'fs.cpSync(f.path, path);']) {
+    assert.ok(violations(path, source + '\n' + call).length > 0, call);
   }
 });
 test('generated setup runtime and archived engine obey the same guard', () => {

@@ -4,7 +4,7 @@ import { workerData } from 'node:worker_threads';
 import { DatabaseSync } from 'node:sqlite';
 import { performance } from 'node:perf_hooks';
 import { PREVIEW_SOURCE_SQL } from '../../../core/topic-member-previews-storage.mjs';
-const prepare = DatabaseSync.prototype.prepare, exec = DatabaseSync.prototype.exec;
+const prepare = DatabaseSync.prototype.prepare, exec = DatabaseSync.prototype.exec, close = DatabaseSync.prototype.close;
 let extractions = [0,0,0,0], bytes = [0,0,0,0], mismatches = 0;
 let sqlite = { calls: 0, totalMs: 0, longest: null };
 const category = sql => /journal_mode/i.test(sql) ? 'journal_mode' :
@@ -22,12 +22,30 @@ function timed(stage, statement, call) {
 DatabaseSync.prototype.exec = function(sql) {
   return timed('exec', /^\s*(BEGIN|COMMIT|ROLLBACK)\b/i.test(sql) ? 'transaction' : 'configuration', () => Reflect.apply(exec, this, [sql]));
 };
+// Node 22 finalizes statements during database close. Node 24 also exposes
+// explicit statement close/dispose. Count native cleanup as well as execution.
+DatabaseSync.prototype.close = function(...args) {
+  return timed('close', 'connection', () => Reflect.apply(close, this, args));
+};
 DatabaseSync.prototype.prepare = function(sql) {
   const label = category(sql), statement = timed('prepare', label, () => Reflect.apply(prepare, this, [sql]));
-  for (const method of ['get','all','run']) {
+  for (const method of ['get','all','run','columns','close',Symbol.dispose]) {
     const native = statement[method];
-    statement[method] = function(...args) { return timed(method, label, () => Reflect.apply(native, this, args)); };
+    if (typeof native !== 'function') continue;
+    const stage = method === Symbol.dispose ? 'dispose' : method;
+    statement[method] = function(...args) { return timed(stage, label, () => Reflect.apply(native, this, args)); };
   }
+  const iterate = statement.iterate;
+  statement.iterate = function(...args) {
+    const iterator = timed('iterate', label, () => Reflect.apply(iterate, this, args));
+    for (const method of ['next','return']) {
+      const native = iterator[method];
+      iterator[method] = function(...values) {
+        return timed('iterate_' + method, label, () => Reflect.apply(native, this, values));
+      };
+    }
+    return iterator;
+  };
   if (sql !== PREVIEW_SOURCE_SQL) return statement;
   const get = statement.get;
   statement.get = function(...args) {

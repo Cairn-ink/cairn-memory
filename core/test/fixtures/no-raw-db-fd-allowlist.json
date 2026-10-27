@@ -1248,5 +1248,115 @@
     "path": "core/isolated-file-read-child.mjs",
     "source": "fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK);",
     "reason": "Child-only bounded input reads; this script never opens SQLite connections."
+  },
+  {
+    "path": "tools/testing/measure-topic-member-previews.mjs",
+    "source": "import { readFileSync } from 'node:fs'",
+    "reason": "Reads only the explicitly supplied writer-profile JSON; database sources are passed exclusively to the SQLite-free copy child."
+  },
+  {
+    "path": "tools/testing/measure-topic-member-previews.mjs",
+    "source": "import { open, rename, writeFile } from 'node:fs/promises'",
+    "reason": "Writes only the numeric measurement JSON, partial report and records journal outside observations; never opens database or SQLite companion paths."
+  },
+  {
+    "path": "tools/testing/measure-topic-member-previews.mjs",
+    "source": "import { copyFileSync } from 'node:fs'",
+    "reason": "Literal isolated child program links only node:fs, has no SQLite connection and owns all copy descriptors; parent never executes this import/call."
+  },
+  {
+    "path": "tools/testing/measure-topic-member-previews.mjs",
+    "source": "copyFileSync(process.argv[1], process.argv[2]);",
+    "reason": "Literal isolated child program links only node:fs, has no SQLite connection and owns all copy descriptors; parent never executes this import/call."
+  },
+  {
+    "path": "tools/testing/measure-topic-member-previews.mjs",
+    "source": "const output = await open(path + '.partial', 'w', 0o600);",
+    "reason": "Writes only the numeric measurement JSON, partial report and records journal outside observations; never opens database or SQLite companion paths."
+  },
+  {
+    "path": "tools/testing/measure-topic-member-previews.mjs",
+    "source": "journal = await open(path + '.records.jsonl', 'w', 0o600);",
+    "reason": "Writes only the numeric measurement JSON, partial report and records journal outside observations; never opens database or SQLite companion paths."
+  },
+  {
+    "path": "tools/testing/measure-topic-member-previews.mjs",
+    "source": "await output.writeFile('{\"cells\":[');",
+    "reason": "Writes only the numeric measurement JSON, partial report and records journal outside observations; never opens database or SQLite companion paths."
+  },
+  {
+    "path": "tools/testing/measure-topic-member-previews.mjs",
+    "source": "async record(cell, series, record) { await journal.writeFile(JSON.stringify({ cell, series, record }) + '\\n'); },",
+    "reason": "Writes only the numeric measurement JSON, partial report and records journal outside observations; never opens database or SQLite companion paths."
+  },
+  {
+    "path": "tools/testing/measure-topic-member-previews.mjs",
+    "source": "await output.writeFile(cells++ ? ',{' : '{');",
+    "reason": "Writes only the numeric measurement JSON, partial report and records journal outside observations; never opens database or SQLite companion paths."
+  },
+  {
+    "path": "tools/testing/measure-topic-member-previews.mjs",
+    "source": "await output.writeFile((fields++ ? ',' : '') + JSON.stringify(key) + ':');",
+    "reason": "Writes only the numeric measurement JSON, partial report and records journal outside observations; never opens database or SQLite companion paths."
+  },
+  {
+    "path": "tools/testing/measure-topic-member-previews.mjs",
+    "source": "await output.writeFile('[');",
+    "reason": "Writes only the numeric measurement JSON, partial report and records journal outside observations; never opens database or SQLite companion paths."
+  },
+  {
+    "path": "tools/testing/measure-topic-member-previews.mjs",
+    "source": "for (const [i, record] of value.entries()) await output.writeFile((i ? ',' : '') + JSON.stringify(record));",
+    "reason": "Writes only the numeric measurement JSON, partial report and records journal outside observations; never opens database or SQLite companion paths."
+  },
+  {
+    "path": "tools/testing/measure-topic-member-previews.mjs",
+    "source": "await output.writeFile(']');",
+    "reason": "Writes only the numeric measurement JSON, partial report and records journal outside observations; never opens database or SQLite companion paths."
+  },
+  {
+    "path": "tools/testing/measure-topic-member-previews.mjs",
+    "source": "} else await output.writeFile(JSON.stringify(value));",
+    "reason": "Writes only the numeric measurement JSON, partial report and records journal outside observations; never opens database or SQLite companion paths."
+  },
+  {
+    "path": "tools/testing/measure-topic-member-previews.mjs",
+    "source": "await output.writeFile('}');",
+    "reason": "Writes only the numeric measurement JSON, partial report and records journal outside observations; never opens database or SQLite companion paths."
+  },
+  {
+    "path": "tools/testing/measure-topic-member-previews.mjs",
+    "source": "try { await output.writeFile('],' + JSON.stringify(metadata).slice(1) + '\\n'); }",
+    "reason": "Writes only the numeric measurement JSON, partial report and records journal outside observations; never opens database or SQLite companion paths."
+  },
+  {
+    "path": "tools/testing/measure-topic-member-previews.mjs",
+    "source": "writerProfile = writerProfileInput(JSON.parse(readFileSync(resolve(args[++i]), 'utf8')));",
+    "reason": "Reads only the explicitly supplied writer-profile JSON; database sources are passed exclusively to the SQLite-free copy child."
+  },
+  {
+    "path": "tools/testing/measure-topic-member-previews.mjs",
+    "source": "await writeFile(reportPath, JSON.stringify(report) + '\\n', { mode: 0o600 });",
+    "reason": "Writes only the numeric measurement JSON, partial report and records journal outside observations; never opens database or SQLite companion paths."
+  },
+  {
+    "path": "tools/testing/workspace.mjs",
+    "source": "import { lstatSync, mkdtempSync, realpathSync } from 'node:fs'",
+    "reason": "Test workspace directory identity checks and owned directory removal use metadata only, never raw database descriptors."
+  },
+  {
+    "path": "tools/testing/workspace.mjs",
+    "source": "import { rm } from 'node:fs/promises'",
+    "reason": "Test workspace directory identity checks and owned directory removal use metadata only, never raw database descriptors."
+  },
+  {
+    "path": "core/testing/topic-overview-raw29-fixture.mjs",
+    "source": "import { existsSync, readFileSync } from 'node:fs'",
+    "reason": "Literal SQLite-free hash child reads database and companions with isolated descriptors; parent retains all SQLite POSIX locks."
+  },
+  {
+    "path": "core/testing/topic-overview-raw29-fixture.mjs",
+    "source": "existsSync(path + suffix) ? createHash('sha256').update(readFileSync(path + suffix)).digest('hex') : null]))));",
+    "reason": "Literal SQLite-free hash child reads database and companions with isolated descriptors; parent retains all SQLite POSIX locks."
   }
 ]

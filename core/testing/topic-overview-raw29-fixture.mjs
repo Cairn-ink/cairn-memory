@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { openMemoryCore, openMemoryReader } from '../index.mjs';
@@ -36,8 +35,18 @@ export function installOverviewLayout(path, version) {
     return db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all().map(row => row.name);
   } finally { db.close(); }
 }
-export const fileBytes = path => Object.fromEntries(['', '-wal', '-shm'].map(suffix => [suffix,
-  existsSync(path + suffix) ? createHash('sha256').update(readFileSync(path + suffix)).digest('hex') : null]));
+// Hashing in a SQLite-free child preserves locks held by live fixture handles.
+export function fileBytes(path) {
+  const child = spawnSync(process.execPath, ['--input-type=module', '--eval', `
+    import { existsSync, readFileSync } from 'node:fs';
+    import { createHash } from 'node:crypto';
+    const path = process.argv[1];
+    console.log(JSON.stringify(Object.fromEntries(['', '-wal', '-shm'].map(suffix => [suffix,
+      existsSync(path + suffix) ? createHash('sha256').update(readFileSync(path + suffix)).digest('hex') : null]))));
+  `, path], { env: {}, encoding: 'utf8', timeout: 10000 });
+  assert.equal(child.error, undefined); assert.equal(child.signal, null); assert.equal(child.status, 0);
+  return JSON.parse(child.stdout);
+}
 
 export function rawOverviewFixture(t, { client = 'claude-code', matching = false } = {}) {
   const workspace = createTestWorkspace(t, { prefix: 'raw29-overview-' }), path = join(workspace.path, 'memory.sqlite');

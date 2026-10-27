@@ -45,7 +45,9 @@ export function memberFixture(t, { mode = 'DELETE', coreOptions = {} } = {}) {
   const path = join(workspace.path, 'memory.sqlite'), core = openMemoryCore({ path, ...coreOptions });
   workspace.defer(() => core.close());
   const db = new DatabaseSync(path); db.exec(`PRAGMA busy_timeout=${STORAGE_BUSY_TIMEOUT_MS}; PRAGMA journal_mode=${mode}`);
-  workspace.defer(() => db.close());
+  let dbClosed = false;
+  const closeDb = () => { if (!dbClosed) { db.close(); dbClosed = true; } };
+  workspace.defer(closeDb);
   const ledger = [], mocs = new Map(), edges = new Map(), epochs = new Map();
   const key = ns => JSON.stringify(ns);
   const admit = (name, kind = 'fact', ns = namespace) => {
@@ -92,7 +94,7 @@ export function memberFixture(t, { mode = 'DELETE', coreOptions = {} } = {}) {
     const value = openMemoryReader({ path: location, ownerId: ns.ownerId }); workspace.defer(() => value.close()); return value;
   };
   const epoch = ns => epochs.get(key(ns));
-  return { workspace, path, core, db, ledger, mocs, edges, admit, memory, place, reader, epoch, setEpoch: (ns, value) => epochs.set(key(ns), value) };
+  return { workspace, path, core, db, closeDb, ledger, mocs, edges, admit, memory, place, reader, epoch, setEpoch: (ns, value) => epochs.set(key(ns), value) };
 }
 export function smallHierarchy(f, ns = namespace) {
   const a = f.admit('a', 'fact', ns), b = f.admit('b', 'decision', ns), c = f.admit('c', 'context', ns), u = f.admit('u', 'preference', ns);
