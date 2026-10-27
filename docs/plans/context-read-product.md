@@ -1629,3 +1629,22 @@ This revises the P2e delta at `194bf599`; the preceding measurement delta's own 
 New/changed field inventory: coordinator `ledgerIdentity` and `validateOwnerSemanticCoverage({ownerId,expectedTargetDigest,budget:{maxTargets,maxMs}})`; runtime `semanticLedgerAuthority.load/compareAndSwap` and `semanticPriceAuthority.current`; PriceTable `authorityId/sequence/effectiveFromUtcMs/effectiveUntilUtcMs` and CurrentPriceRevision `tableDigest`; SemanticServiceBinding `scope/accountingDomainId/ledgerId/ledgerEpoch/bindingRevision`; OwnerLedgerAnchor/header/row/checkpoint continuity fields; pump `semanticServiceCredential/firstCoverageValidation`; owner-only nullable `owner/firstCoverage` and FirstCoverageStatus fields, with refresh/purge removed from projection status; E.4.1's closed vector record/manifest/pointer fields and exact bytes; trace reasons `price_unavailable/validation_invalid`, with trace.semantic absent for semantic:false. All exact closed shapes/bounds are normative above.
 
 Acceptance inventory against `194bf599`: changed **P2e-01/03/05/07/08/10/13/14**; added **P2e-15–22**; **22 rows total**. Remaining open questions are concrete host integration/registration/run inputs in E.11; the five audit protocol gaps and supplied enablement criteria have specified resolutions. The primary owns independent re-check and any commit.
+
+### Revision 2 (P2e, 2026-10-28): product-profile local provider deferred
+
+**Finding (implementation review).** Three rules cannot all hold for an explicitly local product-profile configuration:
+- E.2 constructs the provider, including the local synchronous `localStatus` observer port, inside the coordinator service Worker.
+- E.6 requires a per-read `semantic:false` to take the lexical path "without semantic preflight/coordinator/provider work".
+- Frozen unified §20.6 requires the explicitly local observer to be sampled at preparation and again before final reading, including on lexical paths.
+
+A synchronous observer cannot be sampled across the Worker boundary without coordinator work. Caching its last value does not satisfy §20.6's sampling. This delta specifies no shared observer-status publication protocol.
+
+**Resolution.** Under `context-read-product-p2e-v1`, the product profile's semantic provider selection is **hosted only**:
+
+- `semanticConfig` on the product profile accepts only `HostedSelection`. A `LocalSelection` (`provider:'local'`, `model:'bge-m3'`) is refused as `invalid_input` before effects. This is the same pre-effect validation as E.2's other configuration refusals. A host runtime that returns `contextEmbedding:{embedder,policy,localStatus}` to a product-profile coordinator is refused the same way.
+- Product-profile capabilities advertise only the hosted selection. No product-profile response gains `trace.localEmbedder`, and no product-profile path invokes a local observer.
+- Explicit local `bge-m3` is **unchanged** on its existing frozen path: unified §20, through the `context-read-v1` local engine and its adapters. That path already serves the owner's decision that local engines use `bge-m3` as an explicit opt-in.
+- E.4's local paragraph, the local parts of E.5 (local refresh/pump item counters) and every acceptance-row clause specific to local selection apply **only to a later revision**. That revision must specify a shared observer-status publication protocol consistent with §20.6 and E.6, with its own acceptance rows.
+- Rows P2e-01 to P2e-22 are otherwise unchanged. Where a row names local selection or child runtimes on the product profile, the required observable for this revision is the `invalid_input` refusal with zero effects. That means no coordinator, ledger, provider, child, observer, network or pack activity.
+
+Everything else in this delta is unchanged. This revision edits no frozen section, and it does not change any earlier P2e text in place.
