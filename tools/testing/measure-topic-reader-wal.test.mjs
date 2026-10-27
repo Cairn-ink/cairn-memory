@@ -1,3 +1,4 @@
+import { TOPIC_WAL_WAIT_MS, TOPIC_WAL_REPLY_RESERVE_MS } from '../../core/topic-reader-sqlite.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { join } from 'node:path';
@@ -13,7 +14,10 @@ test('registered full matrix and smoke cover both modes, schemas, lifecycles and
   for (const cells of Map.groupBy(full, c => c.pair).values()) {
     assert.deepEqual(cells.map(c => c.variant).sort(), ['baseline', 'members', 'overview', 'zero-wait-members', 'zero-wait-overview']);
   }
-  assert.equal(PROTOCOL.thresholds.hostLoopMaxMs, 100);
+  assert.deepEqual(PROTOCOL.thresholds, { storageBusy: 0, sqliteBusy: 0, readerP95Ms: 250, writerThroughputRatio: .9,
+    writerP95Ms: 250, hostLoopMaxMs: 100, writeOverlapAttempts: 20, freshCloseOverlapAttempts: 10, commits: 100 });
+  assert.equal(PROTOCOL.readerWaitPolicy, 'E1-C2-v1.1');
+  assert.equal(PROTOCOL.walWaitMs, TOPIC_WAL_WAIT_MS); assert.equal(PROTOCOL.walReplyReserveMs, TOPIC_WAL_REPLY_RESERVE_MS);
   assert.deepEqual(failureRecord({ ok: false, error: { code: 'storage_busy', diagnostics: {
     stage: 'prepare', statement: 'application_id', sqlite: { code: 5, extendedCode: 261 } } } }), {
     publicCode: 'storage_busy', stage: 'prepare', statement: 'application_id', errcode: 5, extendedCode: 261,
@@ -101,4 +105,16 @@ test('diagnostic control changes only the WAL wait constant in a temporary reade
   const control = diagnosticControl(dir);
   assert.deepEqual(control.inventory.filter(f => f.original !== f.control).map(f => f.file), ['core/topic-reader-sqlite.mjs']);
   assert.match(readFileSync(join(dir, 'core/topic-reader-sqlite.mjs'), 'utf8'), /TOPIC_WAL_WAIT_MS = 0;/);
+  assert.match(readFileSync(join(dir, 'core/topic-reader-sqlite.mjs'), 'utf8'), /TOPIC_WAL_REPLY_RESERVE_MS = 20;/);
+});
+
+test('latencyTail reports nearest-rank p99, max and threshold counts', async () => {
+  const { latencyTail } = await import('./measure-topic-reader-wal.mjs');
+  const values = Array.from({ length: 100 }, (_, i) => i + 1).concat([151, 501, 1001]);
+  const tail = latencyTail(values);
+  assert.equal(tail.n, 103);
+  assert.equal(tail.p99Ms, 501);
+  assert.equal(tail.maxMs, 1001);
+  assert.deepEqual([tail.over150Ms, tail.over500Ms, tail.over1000Ms], [3, 2, 1]);
+  assert.deepEqual(latencyTail([]), { n: 0, p99Ms: null, maxMs: null, over150Ms: 0, over500Ms: 0, over1000Ms: 0 });
 });

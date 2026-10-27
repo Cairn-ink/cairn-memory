@@ -1,7 +1,10 @@
 # E1-C2 WAL fresh-reader fix and smoke
 
-Current implementation: see **Lock-safety fix round 2** below. Earlier handoff
-results and header/inode-exclusion designs are historical and superseded.
+Current implementation composes **E1-C2 v1.0.1 lock-safety** (SQLite-based
+journal detection, including its installation/reset error handling and later
+fix rounds) with **E1-C2 v1.1** (deadline-bounded waiting and prompt public
+cancellation). The deltas appear in that order below. Earlier handoff results
+and header/inode-exclusion designs are historical and superseded.
 
 Date: 2026-10-26. Node: v22.16.0. Branch: fix/wal-fresh-reader-busy. Uncommitted; primary commits and runs full queued acceptance.
 
@@ -11,15 +14,25 @@ The instrumented zero-wait WAL control returned 35 storage_busy outcomes in 313 
 
 All **34** busy responses in fresh-writer cells returned during recorded writer close intervals. The WAL was absent after those closes. For example, the schema18 overview reader returned at 1793022571139 during close [1793022571138,1793022571144], after the public write finished at 1793022571138. Another returned at 1793022571177 during [1793022571176,1793022571182]. This supports **H1**, last-connection close/checkpoint/deletion racing the first metadata read with busy_timeout=0. The failure precedes overview enumeration.
 
-The other busy result was retained/schema33 after window end: endAt 1793022605241, response 1793022605246, last public write finished 1793022605240. The retained writer then closed. That shutdown attribution is an inference because this smoke revision did not separately timestamp the retained shutdown close. The final harness records it explicitly. No recovery-specific code supports H2 in this run; H2 is not proven impossible. Missing companions alone are tolerated in quiet WAL reads and header tests; no CANTOPEN outcome supports H3 as an independent cause.
+The other busy result was retained/schema33 after window end: endAt 1793022605241, response 1793022605246, last public write finished 1793022605240. The retained writer then closed. That shutdown attribution is an inference because this smoke revision did not separately timestamp the retained shutdown close. The final harness records it explicitly. No recovery-specific code supports H2 in this run; H2 is not proven impossible. Missing companions alone are tolerated in quiet WAL reads and SQLite detection tests; no CANTOPEN outcome supports H3 as an independent cause.
 
 ## Implementation
 
 The explicit handle-level own-data option diagnostics:true adds error.diagnostics = {stage,statement,sqlite:{code,extendedCode}} to captured native storage failures. It covers opening, overview and members via Worker data, independent of env/execArgv. Closed enums exclude SQL, paths, identifiers, namespace/owner values, content and native messages. Default/false/undefined envelopes remain byte-identical. Existing legacy error classification is preserved.
 
-WAL uses one **100ms request-wide native wait budget**, capped by the remaining monotonic request deadline. Refresh before prepare/execution, cached statements and iterator steps; SQL work consumes the same budget. No application retry/sleep or host-thread SQLite wait is added. Existing watchdog and close terminate the Worker. DELETE retains zero wait. Context-read and candidate evidence are unchanged.
+WAL uses one request-wide cutoff of **min(request deadline, Worker start +
+1000ms) - 20ms**, including the hinted opening query and its one BUSY fallback.
+Refresh the floored nonnegative remaining timeout before prepare/execution,
+cached statements and iterator steps; SQL work consumes the same budget.
+There is no transaction/traversal retry, sleep or host-thread SQLite wait.
+Watchdog and close settle public cancellation promptly and track Worker cleanup.
+Detected DELETE retains zero wait. Context-read and candidate evidence are unchanged.
 
-Detection reads the existing main-file format-3 signature and read/write version bytes 18/19, enabling WAL waiting only for 2/2. A read-only descriptor uses O_NOFOLLOW and matches safe-file device/inode. Unknown/truncated headers retain zero wait and normal SQLite validation. This avoids a lock-taking PRAGMA journal_mode. No write connection, mode change, migration or immutable connection is introduced. Concurrent external journal-mode switching is outside this per-connection policy.
+Detection uses SQLite's read-only `PRAGMA journal_mode` and companion `lstat`
+hints as specified by v1.0.1 below; v1.1 builds on that mechanism with a new
+shared wait budget. No raw database or companion descriptor is permitted.
+No write connection, mode change, migration or immutable connection is introduced.
+Concurrent external journal-mode switching is outside this per-connection policy.
 
 The E1-C candidate-copy anchors were updated so its existing tests still exercise the old measurement-only DELETE candidate. Its rejected wait is not used by production DELETE readers.
 
@@ -133,7 +146,7 @@ Four DELETE/schema33/fresh/zero-wait-overview control outcomes have null native 
 
 ## Contract delta
 
-The complete additive contract text is [E1-C2 additive contract v1](topic-overview-member-pages.md#e1-c2-additive-contract-v1-2026-10-26). Public usage and allowlists are in [topic-overview.md](../topic-overview.md#e1-c2-v1-opt-in-storage-diagnostics-and-wal-waits). Existing E1-M text is unchanged; the delta adds diagnostics and selects the 100ms deadline-capped WAL policy. Existing legacy parity assertions were not edited.
+The complete additive contract text is [E1-C2 additive contract v1](topic-overview-member-pages.md#e1-c2-additive-contract-v1-2026-10-26). Public usage and allowlists are in [topic-overview.md](../topic-overview.md#e1-c2-v1-opt-in-storage-diagnostics-and-wal-waits). Existing E1-M text is unchanged. v1.0.1 replaces raw-header detection with SQLite-based detection; v1.1 builds on it and replaces the original 100ms budget with the deadline-bounded cutoff and 20ms reserve. Existing legacy parity assertions were not edited.
 
 ## Commands and actual exit codes
 
@@ -211,7 +224,7 @@ All seven findings are resolved:
 | Standards P2: timeout error attribution | Timeout installation has its own error boundary, outside the statement handler: configure/reader_configuration. Fault injection targets timeout, prepare, BEGIN, get and iterator steps separately, asserting exact labels and executed operations. |
 | Spec P1: native busy acceptance | Re-derive counters from retained attempts. Count primary SQLite 5/6 independently of public storage_busy; reject either in production WAL acceptance. One-success/99-legacy-mapped BUSY or LOCKED probes now fail. cursor_stale is separate; unexpected failures fail. |
 | Spec P1: missing overlap | Pre-register 20 write-overlapping attempts, 10 fresh per-write-close-overlapping attempts, and 100 in-window public-write commits in both cell and baseline. Re-derive exposure from raw intervals/commits; insufficient exposure is invalid. Tests cover absent/below-bound overlap, insufficient/window-excluded commits, retained close exemption and unchanged raw attempts. |
-| Spec P2: truncated headers | Require a complete 100-byte header; test all lengths 20 through 99 with valid-looking WAL prefixes, plus complete WAL and DELETE headers. |
+| Spec P2: truncated headers (historical) | Superseded by v1.0.1 SQLite-based detection; no raw header read is permitted. |
 | Spec P2: stale rollback timeout | Refresh before rollback; controlled clock consumes 100ms and verifies busy_timeout=0 immediately before ROLLBACK. |
 
 Product reporting is implemented as writer.writeLatency.p95Ms/maxMs for every
@@ -954,3 +967,249 @@ packaging/test/fixtures/installed-import-closure.mjs
 packaging/test/installed-import-closure.test.mjs
 tools/testing/measure-topic-overview-contention.mjs
 ```
+
+
+## E1-C2 v1.1: deadline-bounded WAL wait (2026-10-27)
+
+This round is based on 69900556 on fix/wal-reader-wait-v11 and remains
+uncommitted for the primary. Earlier sections describe the historical 100ms
+policy. Product supplied a Node24.22.1 full run of 200 trials: four of twenty
+fresh-writer WAL trials failed zero-busy, with five busy member attempts out
+of 4668 and five busy overview attempts out of 4813. Writer-close checkpoint
+or WAL reset exceeded the fixed 100ms budget. The reported no-wait control had
+21–25% busy; reader p95 peaked at 132ms and the maximum at 161ms. Those are the
+product's supplied observations, not a measurement run in this round.
+
+### Policy and reserve
+
+At Worker request start t with the host's absolute monotonic deadline D:
+
+~~~text
+cutoff = min(D, t + 1000ms) - 20ms
+native timeout before each operation = max(0, floor(cutoff - now))
+~~~
+
+This replaces the fixed 100ms limit. The single request-wide budget is the
+remaining request deadline capped at 1000ms, minus a 20ms reserve (maximum
+980ms native waiting). Startup already consumed part of D; SQL work and all
+statements/fences consume the same budget. The cap never restarts per statement.
+
+The 20ms reserve leaves four normal 5ms quanta of headroom for rollback,
+constructing the small failure envelope, posting it and host delivery. It is
+practical delivery headroom, not an extension of the deadline or a guarantee
+against arbitrary scheduling delay. The existing watchdog remains the fallback.
+Members use their deadlineMs-derived deadline; legacy and opt-in overview keep
+the existing 5000ms watchdog deadline. No host-thread wait or new retry is added.
+DELETE stays at zero wait. Native busy exhaustion keeps storage_busy under the
+existing classification; cancellation keeps read_timeout. v1.1 builds on
+v1.0.1's SQLite-based detection: the hinted-WAL opening query and the one
+BUSY fallback share the same cutoff as all later WAL statements. SQLite detection,
+diagnostics, read-only behavior and the writer IPC fix remain unchanged.
+
+The exact versioned contract delta is [E1-C2 additive contract v1.1](topic-overview-member-pages.md#e1-c2-additive-contract-v11-2026-10-27).
+Public usage is updated in [topic-overview.md](../topic-overview.md#e1-c2-v11-deadline-bounded-wal-waiting).
+Measurement metadata now identifies reader policy E1-C2-v1.1 and its ceiling
+and reserve. The zero-wait control still patches only the ceiling constant to
+zero. Protocol v2's pre-registered thresholds are byte-identical to the base;
+all matrix windows, exposure requirements, failure gates and throughput's
+reported-only role are unchanged. The two IPC delivery/judgment blocks are
+also byte-identical to 69900556. No new runtime modules or shipped docs need
+manifest entries.
+
+### v1.1 verification
+
+Only the two touched test files were run, by explicit path. They cover late
+Worker startup, short/exhausted/fractional deadlines, the 1000ms cap, reserve
+headroom at each native call, shared cached-statement/iterator budgets,
+rollback after exhaustion, host forwarding of member and overview deadlines,
+simulated locks over 100ms, busy exhaustion without retry, default byte parity,
+DELETE, diagnostics, SQLite detection, native iterator fidelity and unchanged
+measurement thresholds/control copying.
+
+~~~sh
+node --test core/test/topic-reader-sqlite.test.mjs tools/testing/measure-topic-reader-wal.test.mjs
+# first run exit 0: 18/18; final run exit 0: 19/19
+node --version
+# exit 0: v22.16.0
+~~~
+
+No smoke or full measurement ran in this round. No broad suite, network,
+provider/model call, key read or commit was performed. No background work is
+left running. Full performance acceptance requires the primary's queued rerun;
+the deterministic simulations establish the new bounds, not a zero-busy
+performance claim under production contention.
+
+
+### v1.1 delivery inventory and checks
+
+Changed files were derived from git diff --name-only HEAD plus git ls-files
+--others --exclude-standard, then independently from git status --porcelain=v1
+-z. Exact set equality: **7 files**, exit 0. Whitespace includes untracked paths;
+no trailing whitespace, missing final newline or machine-local path literals
+in the changed files (exit 0).
+
+~~~text
+core/test/topic-reader-sqlite.test.mjs
+core/topic-reader-sqlite.mjs
+docs/plans/topic-overview-member-pages.md
+docs/plans/topic-reader-wal-fix.md
+docs/topic-overview.md
+tools/testing/measure-topic-reader-wal.mjs
+tools/testing/measure-topic-reader-wal.test.mjs
+~~~
+
+Exact syntax checks (each exit 0):
+
+~~~sh
+node --check core/test/topic-reader-sqlite.test.mjs
+node --check core/topic-reader-sqlite.mjs
+node --check tools/testing/measure-topic-reader-wal.mjs
+node --check tools/testing/measure-topic-reader-wal.test.mjs
+~~~
+
+
+Additional checks: git diff --check exited 0. The inline source comparison of
+measurement thresholds and both IPC blocks against 69900556 exited 0, with
+byte-identical results. The reader/Worker import closure check exited 0:
+52 required files, zero manifest misses; all three affected shipped docs are
+already registered. Final inventory and whitespace/path checks were repeated
+after this report update; no new entries are needed in the artifact manifest.
+
+
+## v1.1 fix round 1: public cancellation independent of native cleanup
+
+The preceding v1.1 work is committed as d89abc79. This uncommitted correction
+addresses Spec P1 and Standards' deadline qualification. The former host awaited
+Worker termination before settling read_timeout/store_closed. Worker termination
+cannot interrupt an active synchronous SQLite call, so that await could delay
+public cancellation even though the host loop remained responsive.
+
+### Implementation and review locations
+
+- core/memory-reader.mjs:10 detaches the old Worker before requesting termination
+  and tracks its cleanup promise. A synchronous native call may still run; its
+  later events cannot reach a request slot.
+- core/memory-reader.mjs:34 settles cancellation without awaiting cleanup;
+  core/memory-reader.mjs:74 invokes it directly in the watchdog callback.
+  core/memory-reader.mjs:39 also settles Worker failures independently of cleanup.
+- core/memory-reader.mjs:54 rejects messages from detached Workers. The identity
+  guard also rejects their late error/exit events.
+- core/memory-reader.mjs:76 guards deferred launches by slot identity, closure
+  and the new request's own deadline; core/memory-reader.mjs:86 waits for previous
+  cleanup before starting a replacement. This chooses one live Worker per handle
+  to avoid accumulating threads after repeated deadlines. One request may wait
+  for cleanup; another concurrent read still returns read_in_progress. Timed-out
+  and closed slots cannot launch later; cleanup failure prevents replacement.
+- core/memory-reader.mjs:93 settles the pending request with store_closed before
+  awaiting resource release. close() itself remains a cleanup promise, including
+  concurrent close calls, and can lag by the remaining native wait/step and
+  Worker shutdown. No native-interruption facility is introduced.
+
+The corrected [v1.1 contract](topic-overview-member-pages.md#e1-c2-additive-contract-v11-2026-10-27)
+bounds configured timeouts rather than synchronous completion. Public watchdog
+settlement occurs in the timer callback without awaiting native execution;
+normal host timer scheduling applies. Native waiting does not block the host
+loop. The 1000ms cap, 20ms reserve, DELETE zero wait, SQLite detector, diagnostic
+shape/classification, schema support and read-only policy are unchanged.
+
+### Native cancellation coverage
+
+The new core/test/topic-reader-cancellation.test.mjs drives the actual public
+host dispatch/cancellation implementation. Its test-only Worker is
+core/test/fixtures/topic-reader-native-wait-worker.mjs. A read-only connection
+executes a real SQLite query against an owned file held by an EXCLUSIVE lock.
+An outer in-memory SQLite UDF signals that native execution has entered; the
+inner query is genuinely blocked by SQLite, rather than Atomics.wait or a fake
+clock pretending to be a native call. The fixture uses DELETE locking only to
+force this known native wait; this is not a production WAL-contention claim.
+Its 5000ms timeout is test-only and does not change the reader's wait policy.
+
+- core/test/topic-reader-cancellation.test.mjs:82 covers both overview and members:
+  pending store_closed settles while close() and concurrent close remain pending.
+- core/test/topic-reader-cancellation.test.mjs:103 exercises the watchdog, an
+  expired request waiting for cleanup, read_in_progress, and successful
+  replacement only after cleanup. An explicit termination latch lets the blocked
+  query finish and send a genuine abandoned reply while the new slot is pending;
+  that reply is observed by the test and ignored by the public host.
+- core/test/topic-reader-cancellation.test.mjs:129 covers both close and watchdog
+  using actual Worker.terminate(), without the termination latch. Public results
+  settle while real termination still waits for the blocked native call.
+- core/test/topic-reader-cancellation.test.mjs:146 closes a request waiting for
+  cleanup and proves its deferred launch never starts a Worker.
+
+The fixture deliberately retains its read transaction after the late reply.
+A zero-wait native EXCLUSIVE probe gets SQLite 5 while the Worker remains alive;
+the same lock acquisition succeeds after termination. This verifies eventual
+native resource release. Host event-loop turns and controlled watchdog callbacks
+establish ordering, without elapsed-time/p95/throughput acceptance gates. Owned
+locks, Workers and ports are released on assertion failure as well as success.
+
+### Commands and verification
+
+Focused command (exit 0 on each run; tests grew from 3 to 5 to 6 as native
+coverage was completed):
+
+~~~sh
+node --test core/test/topic-reader-cancellation.test.mjs
+~~~
+
+Exact requested regression command (output redirected, rc captured before
+printing its tail):
+
+~~~sh
+node --test --test-concurrency=1 core/test/topic-reader-cancellation.test.mjs core/test/topic-overview.test.mjs core/test/topic-overview-lifecycle.test.mjs core/test/topic-overview-raw29.test.mjs core/test/topic-overview-visibility.test.mjs core/test/topic-members.test.mjs core/test/topic-members-bounds.test.mjs core/test/topic-members-compatibility.test.mjs core/test/topic-members-integration.test.mjs core/test/topic-members-mutations.test.mjs core/test/topic-members-primary.test.mjs core/test/topic-members-recheck-findings.test.mjs core/test/topic-members-review-findings.test.mjs core/test/topic-members-round3-findings.test.mjs core/test/topic-members-scale.test.mjs core/test/topic-members-visibility.test.mjs
+~~~
+
+The final exit, count and inventory checks are recorded below after completion.
+No smoke, full measurement, broad suite, network access or key read was performed.
+No other session's tests or fixtures were edited. The new Worker fixture is
+strictly test-only and is not a new runtime dependency or shipped artifact.
+
+
+### v1.1 cancellation fix: final result and delivery inventory
+
+The exact explicit regression command above exited **0**, **217/217 passed**,
+on Node v22.16.0 (node --version exit 0). Its path inventory independently
+matches all 15 existing topic-overview/topic-members files from rg --files,
+plus the new cancellation test: 16 files total. The legacy b2513501 comparisons
+remain unchanged and passed: 184 comparisons, zero differences; 154 fault
+comparisons, zero differences. No old test or assertion was weakened or edited.
+
+Changed paths were derived mechanically using git diff --name-only HEAD plus
+git ls-files --others --exclude-standard, then independently from git status
+--porcelain=v1 -z. Exact set equality: **6 files**, exit 0 (including the new
+native Worker fixture). Whitespace and machine-local-path checks cover every
+changed and untracked file, exit 0. No new runtime module or shipped doc was
+introduced; the fixture and its driver are test-only.
+
+~~~text
+core/memory-reader.mjs
+core/test/fixtures/topic-reader-native-wait-worker.mjs
+core/test/topic-reader-cancellation.test.mjs
+docs/plans/topic-overview-member-pages.md
+docs/plans/topic-reader-wal-fix.md
+docs/topic-overview.md
+~~~
+
+Syntax commands (each exit 0):
+
+~~~sh
+node --check core/memory-reader.mjs
+node --check core/test/topic-reader-cancellation.test.mjs
+node --check core/test/fixtures/topic-reader-native-wait-worker.mjs
+~~~
+
+An inline byte comparison against HEAD exited 0 for core/topic-reader-sqlite.mjs,
+tools/testing/measure-topic-reader-wal.mjs and its test: configured waits,
+measurement thresholds, latency tail and IPC behavior are untouched. No full
+performance acceptance is claimed in this cancellation-only correction.
+
+
+Closure/manifest verification exited 0: installedImportClosure and an independent
+Python literal-import/Worker-URL traversal agreed on all 52 reader closure
+files; zero are missing from the artifact manifest. All three modified shipped
+docs remain registered; the new test fixture is absent from the runtime closure.
+git diff --check and the independent whitespace/local-path scan exited 0. The
+six-file inventory was rechecked after this report update. Temporary evidence
+was removed after recording the verified results; no tests or native Workers
+remain running. No commit was made.

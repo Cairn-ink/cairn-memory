@@ -466,12 +466,12 @@
   },
   {
     "path": "integrations/client/file-lock.mjs",
-    "source": "isAlive = processIsAlive, validatePath = async () => {}, read = readFile } = {},",
+    "source": "isAlive = processIsAlive, validatePath = async () => {}, read = readFile, signal } = {},",
     "reason": "Transport coordination owner JSON files, distinct from SQLite database and journal locks."
   },
   {
     "path": "integrations/client/file-lock.mjs",
-    "source": "await writeFile(ownerPath, JSON.stringify(owner), {",
+    "source": "await writeFile(ownerPath, JSON.stringify(owner), { mode: 0o600, flag: 'wx' });",
     "reason": "Transport coordination owner JSON files, distinct from SQLite database and journal locks."
   },
   {
@@ -661,12 +661,12 @@
   },
   {
     "path": "plugins/cairn-memory/lib/file-lock.mjs",
-    "source": "isAlive = processIsAlive, validatePath = async () => {}, read = readFile } = {},",
+    "source": "isAlive = processIsAlive, validatePath = async () => {}, read = readFile, signal } = {},",
     "reason": "Transport coordination owner JSON files, distinct from SQLite database and journal locks."
   },
   {
     "path": "plugins/cairn-memory/lib/file-lock.mjs",
-    "source": "await writeFile(ownerPath, JSON.stringify(owner), {",
+    "source": "await writeFile(ownerPath, JSON.stringify(owner), { mode: 0o600, flag: 'wx' });",
     "reason": "Transport coordination owner JSON files, distinct from SQLite database and journal locks."
   },
   {
