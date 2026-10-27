@@ -1258,5 +1258,100 @@
     "path": "core/sqlite-journal-probe.mjs",
     "source": "try { const pin = openSync(lock, 'wx', 0o600); closeSync(pin); }",
     "reason": "Child-only creation of the persistent SQLite lifecycle lock file before opening its SQLite connection."
+  },
+  {
+    "path": "tools/testing/measure-context-read-product.mjs",
+    "source": "import { readFile, stat, statfs } from 'node:fs/promises'",
+    "reason": "Read-only registration and production writer-profile JSON inputs; database copy/hash uses the separate SQLite-free child."
+  },
+  {
+    "path": "tools/testing/measure-context-read-product.mjs",
+    "source": "const input=JSON.parse(await readFile(registrationPath,'utf8'));input.writerProfile=writerProfile(JSON.parse(await readFile(profilePath,'utf8')));",
+    "reason": "Read-only registration and production writer-profile JSON inputs; database copy/hash uses the separate SQLite-free child."
+  },
+  {
+    "path": "tools/testing/measure-context-read-product.mjs",
+    "source": "const input=JSON.parse(await readFile(registrationPath,'utf8'));input.writerProfile=writerProfile(JSON.parse(await readFile(profilePath,'utf8')));",
+    "reason": "Read-only registration and production writer-profile JSON inputs; database copy/hash uses the separate SQLite-free child."
+  },
+  {
+    "path": "tools/testing/summarize-context-read-product.mjs",
+    "source": "import { createReadStream } from 'node:fs'",
+    "reason": "Streaming summary reads only the operator-selected numeric JSONL report or record journal."
+  },
+  {
+    "path": "tools/testing/summarize-context-read-product.mjs",
+    "source": "import { stat } from 'node:fs/promises'",
+    "reason": "Streaming summary reads only the operator-selected numeric JSONL report or record journal."
+  },
+  {
+    "path": "tools/testing/summarize-context-read-product.mjs",
+    "source": "for await(const line of createInterface({input:createReadStream(source),crlfDelay:Infinity})) {",
+    "reason": "Streaming summary reads only the operator-selected numeric JSONL report or record journal."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/functional-check.mjs",
+    "source": "import { readFile, access } from 'node:fs/promises'",
+    "reason": "Explicit functional test reads only its owned JSONL report, numeric journal and immutable JSON header."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/functional-check.mjs",
+    "source": "const lines=(await readFile(report,'utf8')).trim().split('\\n').map(l=>JSON.parse(l));",
+    "reason": "Explicit functional test reads only its owned JSONL report, numeric journal and immutable JSON header."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/functional-check.mjs",
+    "source": "const journal=(await readFile(report+'.records.jsonl','utf8')).trim().split('\\n').map(l=>JSON.parse(l));",
+    "reason": "Explicit functional test reads only its owned JSONL report, numeric journal and immutable JSON header."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/functional-check.mjs",
+    "source": "const header=JSON.parse(await readFile(report+'.header.json','utf8'));assert.equal(header.timingGates,false);",
+    "reason": "Explicit functional test reads only its owned JSONL report, numeric journal and immutable JSON header."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/io-child.mjs",
+    "source": "import { copyFileSync, readFileSync, statSync, readdirSync, chmodSync, constants } from 'node:fs'",
+    "reason": "SQLite-free child only: exclusive database copy/hash with owner mode and procfs sampling cannot release host SQLite locks."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/io-child.mjs",
+    "source": "const hash = path => createHash('sha256').update(readFileSync(path)).digest('hex');",
+    "reason": "SQLite-free child only: exclusive database copy/hash with owner mode and procfs sampling cannot release host SQLite locks."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/io-child.mjs",
+    "source": "const [runtimeNs,runqueueNs,slices]=readFileSync(`/proc/${pid}/task/${tid}/schedstat`,'utf8').trim().split(/\\s+/).map(Number);",
+    "reason": "SQLite-free child only: exclusive database copy/hash with owner mode and procfs sampling cannot release host SQLite locks."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/io-child.mjs",
+    "source": "const vm=Object.fromEntries(readFileSync('/proc/vmstat','utf8').split('\\n').map(l=>l.split(/\\s+/)).filter(([k])=>['pswpin','pswpout','pgmajfault'].includes(k)).map(([k,v])=>[k,Number(v)]));",
+    "reason": "SQLite-free child only: exclusive database copy/hash with owner mode and procfs sampling cannot release host SQLite locks."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/io-child.mjs",
+    "source": "copyFileSync(process.argv[3],process.argv[4],constants.COPYFILE_EXCL);chmodSync(process.argv[4],0o600);",
+    "reason": "SQLite-free child only: exclusive database copy/hash with owner mode and procfs sampling cannot release host SQLite locks."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/report.mjs",
+    "source": "import { open, rename } from 'node:fs/promises'",
+    "reason": "Harness-owned exclusive numeric report/header/journal files only; never database files or companions."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/report.mjs",
+    "source": "const registration=await open(path+'.header.json','wx',0o400);",
+    "reason": "Harness-owned exclusive numeric report/header/journal files only; never database files or companions."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/report.mjs",
+    "source": "const journal=await open(path+'.records.jsonl','wx',0o600),partial=await open(path+'.partial','wx',0o600);",
+    "reason": "Harness-owned exclusive numeric report/header/journal files only; never database files or companions."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/report.mjs",
+    "source": "const journal=await open(path+'.records.jsonl','wx',0o600),partial=await open(path+'.partial','wx',0o600);",
+    "reason": "Harness-owned exclusive numeric report/header/journal files only; never database files or companions."
   }
 ]
