@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { Worker } from 'node:worker_threads';
+import { createProductReaderRuntime } from '../context-product-reader.mjs';
 import { existsSync, statSync, renameSync, chmodSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { openContextProductReader, createContextReadSupervisor } from '../index.mjs';
@@ -325,4 +327,73 @@ for (const predicate of ['WHERE deleted=1', '']) test(`P2-05 real Worker refuses
   await config.open().catch(error => { failure = error; });
   assert.equal(failure?.code, 'unsupported_database');
   assert.equal((await config.supervisor.drain(failure.cleanupId)).state, 'complete');
+});
+
+function openingRuntime(results = []) {
+  return createProductReaderRuntime({ spawnWorker: data => {
+    const worker = new Worker(new URL('./fixtures/context-product-opening-worker.mjs', import.meta.url), {
+      workerData: data, env: {}, execArgv: [], stdout: true, stderr: true,
+    });
+    worker.on('message', message => { if (message.result) results.push(message.result); });
+    return worker;
+  } });
+}
+for (const version of [32, 33]) test(`Fix round 4 v${version}: native content execution starts after entry isCurrent`, async t => {
+  const f = fixture(t), memory = f.admit('selected canonical evidence'); f.core.close(); installVersion(f.path, version);
+  const config = configured(t, f.path), state = new Int32Array(new SharedArrayBuffer(64)); state[0] = 1;
+  config.options.host.configuration.state = state.buffer;
+  const reader = await openingRuntime()(config.options); t.after(() => reader.close());
+  assert.equal(state[1], 0); assert.equal(state[8], 0); assert.equal(state[9], 0); assert.ok(state[10] > 0);
+  assert.equal((await reader.fetchCandidateEvidence(fetchInput(memory), config.credential)).ok, true);
+  assert.equal(state[1], 2); assert.equal(state[8], 0); assert.ok(state[9] > 0);
+});
+
+for (const kind of ['native', 'probe']) for (const code of [5, 261, 6, 7, 10])
+for (const stage of kind === 'native' ? ['open', 'configure', 'prepare'] : ['open', 'prepare', 'execute', 'close'])
+test(`Fix round 4 real Worker ${kind} ${stage} SQLite ${code}: frozen mapping and native diagnostics`, async t => {
+  const f = fixture(t); f.core.close();
+  const config = configured(t, f.path);
+  config.options.host.configuration.openingFault = { kind, stage, code };
+  const messages = []; let failure;
+  await openingRuntime(messages)(config.options).catch(error => { failure = error; });
+  assert.deepEqual(messages.at(-1), { ok: false, error: { code: [5, 6].includes(code & 255) ? 'storage_busy' : 'storage_error', retryable: [5, 6].includes(code & 255) } });
+  assert.equal(failure?.code, [5, 6].includes(code & 255) ? 'storage_busy' : 'storage_error');
+  assert.equal(failure.message, failure.code);
+  const status = await config.supervisor.drain(failure.cleanupId), diagnostic = status.diagnostics;
+  assert.equal(status.state, 'complete'); assert.equal(diagnostic.coverage, 'complete');
+  assert.equal(diagnostic.failures, 1); assert.equal(diagnostic.busy, [5, 6].includes(code & 255) ? 1 : 0);
+  if (kind === 'probe') assert.equal(diagnostic.begun, { open: 1, prepare: 3, execute: 4, close: 4 }[stage]);
+  const [record] = diagnostic.records;
+  assert.equal(record.stage, stage); assert.equal(record.statement, kind === 'probe' && !['open', 'close'].includes(stage) ? 'journal_mode' : stage === 'configure' ? 'reader_configuration' : stage === 'prepare' ? 'user_version' : 'connection');
+  assert.deepEqual(record.sqlite, { code: code & 255, extendedCode: code });
+});
+
+for (const damage of ['missing', 'unknown', 'lost-close']) test(`Fix round 4 real Worker ${damage} probe outcomes cannot seal complete`, async t => {
+  const f = fixture(t); f.core.close(); const config = configured(t, f.path);
+  config.options.host.configuration.openingFault = { kind: 'probe', damage };
+  let failure; await openingRuntime()(config.options).catch(error => { failure = error; });
+  assert.equal(failure?.code, 'index_unavailable');
+  const status = await config.supervisor.drain(failure.cleanupId);
+  assert.equal(status.state, 'complete'); assert.equal(status.telemetry, 'incomplete');
+});
+
+for (const kind of ['native', 'probe']) for (const code of [261, 7])
+test(`Fix round 4 real Worker ${kind} SQLite ${code} mapping also applies with diagnostics disabled`, async t => {
+  const f = fixture(t); f.core.close(); const config = configured(t, f.path);
+  config.options.diagnostics = false; config.options.host.configuration.openingFault = { kind, stage: 'open', code };
+  let failure; await openingRuntime()(config.options).catch(error => { failure = error; });
+  assert.equal(failure?.code, code === 261 ? 'storage_busy' : 'storage_error');
+  assert.equal((await config.supervisor.drain(failure.cleanupId)).telemetry, 'disabled');
+});
+
+test('Fix round 4 checkpointed WAL probe retains DELETE-only refusal and native CANTOPEN telemetry', async t => {
+  const f = fixture(t); f.core.close();
+  const db = new DatabaseSync(f.path); db.exec('PRAGMA journal_mode=WAL'); db.close();
+  const config = configured(t, f.path); let failure;
+  await config.open().catch(error => { failure = error; });
+  assert.equal(failure?.code, 'index_unavailable');
+  const status = await config.supervisor.drain(failure.cleanupId);
+  assert.equal(status.telemetry, 'complete');
+  assert.equal(status.diagnostics.records[0].statement, 'journal_mode');
+  assert.equal(status.diagnostics.records[0].sqlite.code, 14);
 });

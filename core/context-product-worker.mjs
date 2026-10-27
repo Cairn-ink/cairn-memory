@@ -19,6 +19,10 @@ const resourceOwner = Object.freeze({
 });
 const observer = nativeObserver(workerData.frame);
 
+// Match the legacy native mapping without linking SQLite into bootstrap.
+const nativeFailure = error => productFailure(error?.code === 'ERR_SQLITE_ERROR'
+  ? Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 255) ? 'storage_busy' : 'storage_error'
+  : error?.code);
 const within = op => { if (process.hrtime.bigint() >= mono(op.operationCutoffMonoNs)) fail('read_timeout'); };
 function result(operation, result, extra = {}) { parentPort.postMessage({ operation, result, ...extra }); }
 function dispose() {
@@ -66,7 +70,7 @@ try {
   result(opening, { ok: true, value: null }, { fileIdentity: facade.fileIdentity });
 } catch (error) {
   try { await dispose(); sealNative(workerData.frame); } catch { /* No seal: diagnostic coverage is incomplete. */ }
-  result(opening, productFailure(error.code));
+  result(opening, nativeFailure(error));
 }
 parentPort.on('message', async message => {
   if (message?.method === 'close') {
@@ -106,6 +110,6 @@ parentPort.on('message', async message => {
       response = productFailure('index_unavailable');
     }
     within(operation); sealNative(frame); result(operation, response);
-  } catch (error) { sealNative(frame); result(operation, productFailure(error.code)); }
+  } catch (error) { sealNative(frame); result(operation, nativeFailure(error)); }
   finally { active = false; }
 });

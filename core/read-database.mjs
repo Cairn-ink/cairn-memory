@@ -51,7 +51,9 @@ export function openReadDatabase(path, { contextRead = false, topicMembers = fal
     if (!topicMembers && db.prepare('PRAGMA user_version').get().user_version < 33) assertNoCardCurrentDependencies(db);
     if (!topicMembers && db.prepare('PRAGMA user_version').get().user_version < 32) assertNoRoleProfiles(db);
     if (!topicMembers && db.prepare('PRAGMA user_version').get().user_version < 31) assertNoAssets(db);
-    if (!topicMembers && db.prepare('PRAGMA user_version').get().user_version >= 30) validateExistingStore(db, {
+    // Product attestation above is metadata-only; full-store content checks
+    // belong to legacy openers, never to unauthenticated product bootstrap.
+    if (!validateProduct && !topicMembers && db.prepare('PRAGMA user_version').get().user_version >= 30) validateExistingStore(db, {
       storeId: db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id });
     if (topicMembers) {
       // Attest version boundaries from schema metadata, never private data rows.

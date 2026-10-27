@@ -563,3 +563,177 @@ Route one: `git diff --name-only -z` plus
 - `core/context-product-reader.mjs`
 - `core/test/context-read-product-control.test.mjs`
 - `docs/plans/context-read-p2a-impl.md`
+
+## Fix round 4
+
+Scope: the three ordinary-path P1 findings against `e5df5afd`. Earlier fixes,
+the frozen v1.1 contract and the generated bundle are unchanged.
+
+### Journal probe observation and mapping
+
+The product-only child program emits a bounded transcript with begin/outcome
+records for SQLite open, prepare, execute and close. The Worker reserves an
+in-flight coverage marker before synchronous child dispatch, then imports every
+returned native outcome into the selected operation's shared telemetry frame
+before public mapping. The child cannot share the Worker's shared buffer: a
+termination before transcript import therefore leaves incomplete coverage,
+never a complete zero-busy claim. Missing, malformed, interrupted or unknown
+outcomes set the existing overflow/lost-outcome marker; a begun call without an
+outcome remains unmatched. Already returned BUSY/LOCKED outcomes survive an
+incomplete transcript. A verified fingerprint-cache hit explicitly reports no
+native work, so it adds no native calls.
+
+The closed enums have no dedicated probe value. Use existing stages `open`,
+`prepare`, `execute`, `close`, with `connection` for open/close and
+`journal_mode` for prepare/execute. No public enum extension or contract edit.
+Native primary/extended codes remain exclusively in supervisor diagnostics.
+BUSY and LOCKED families, including extended BUSY_RECOVERY 261, map to
+retryable `storage_busy`; NOMEM 7, IOERR 10 and other ordinary native failures
+map to nonretryable `storage_error`, matching the legacy reader mapping.
+Existing query-policy signals retain their refusal/validation route: CANTOPEN
+14 from nolock journal querying identifies WAL and remains `index_unavailable`
+for this DELETE-only profile; READONLY/CORRUPT/NOTADB continue ordinary canonical
+validation. Their native failures are still recorded. The legacy child program,
+return shape, failure handling and fingerprint caching remain unchanged.
+
+### Authority ordering and native opening failures
+
+Product opening uses the existing metadata-only physical-layout/version
+attestation and skips legacy `validateExistingStore`. Full-store role-profile
+and dependency content attestation is unnecessary for P2a bootstrap. Existing
+namespace-scoped Card dependency/currentness reads remain behind the entry
+authority sample. Legacy openers retain full-store validation.
+
+The Worker maps native exceptions from opening with the same primary-code
+mapping as the legacy reader, before applying the product error allowlist.
+Numeric native diagnostics have already been committed by the observer.
+The mapping is SQLite-free at link time and also handles native preflight
+exceptions on subsequent operations. It applies with diagnostics disabled.
+
+### Deterministic regression coverage
+
+- `core/test/context-read-product.test.mjs`: real Worker injections for codes
+  5, 261, 6, 7 and 10 at native open/configure/prepare and child probe
+  open/prepare/execute/close. Assert the returned error/retryable envelope,
+  supervised cleanup, native stage/statement, primary/extended codes, failure
+  and BUSY counts, and exact probe call counts. Native instrumentation on v32
+  and v33 verifies zero content-table executions before the first `isCurrent`,
+  actual metadata work during opening, and content work after entry. Missing,
+  unknown and lost-close probe transcripts cannot seal complete. Also cover
+  disabled diagnostics and checkpointed WAL's retained refusal.
+- `core/test/context-read-product-control.test.mjs`: synthetic interruption
+  verifies the pre-dispatch coverage reservation; an incomplete transcript
+  retains BUSY_RECOVERY and an unmatched close. A complete probe counts four
+  native calls and an acknowledged cache hit adds none.
+- `core/test/sqlite-journal-probe.test.mjs`: the five injected codes retain the
+  original legacy probe result and `index_unavailable` refusal.
+- `core/test/fixtures/context-product-opening-worker.mjs`: test-only synchronous
+  module hook installs synthetic native instrumentation before the actual
+  product Worker loads; no production fault hook or shipped module is added.
+
+No sleeps, elapsed-time assertions or new timing gates are introduced.
+
+### Round-4 verification results
+
+Each row below was run as `node <explicit test path>`, sequentially. The runner
+verified the exact executable version before dispatch and captured every
+child return code directly; no pipeline status or stdout tail was used to infer
+success. The Node 22 inventory was independently derived by filesystem glob
+and `rg --files`, then compared: **44 test paths**.
+
+Development-only runs exposed test instrumentation issues: SQLite named
+exports do not follow `syncBuiltinESMExports` on Node 22, and `PRAGMA query_only`
+is configuration metadata. Those fixture/expectation failures exited **1** and
+were corrected before the final matrix. One redundant development product run
+was deliberately stopped with exit **143**. The corrected focused regressions
+exited **0**. The final results below supersede development runs.
+
+Node **22.16.0**: **44 commands**, **729 passed**,
+zero failed, cancelled or skipped; every command exited **0**.
+
+| Explicit test path | Actual exit | Tests passed |
+| --- | --- | --- |
+| `core/test/context-read-assembly-races.test.mjs` | 0 | 7 |
+| `core/test/context-read-assembly-readonly.test.mjs` | 0 | 28 |
+| `core/test/context-read-assembly.test.mjs` | 0 | 20 |
+| `core/test/context-read-bm25.test.mjs` | 0 | 3 |
+| `core/test/context-read-budget.test.mjs` | 0 | 5 |
+| `core/test/context-read-core.test.mjs` | 0 | 26 |
+| `core/test/context-read-embedder.test.mjs` | 0 | 5 |
+| `core/test/context-read-fusion.test.mjs` | 0 | 4 |
+| `core/test/context-read-local-embedder.test.mjs` | 0 | 38 |
+| `core/test/context-read-local-status.test.mjs` | 0 | 3 |
+| `core/test/context-read-moc-source.test.mjs` | 0 | 15 |
+| `core/test/context-read-process.test.mjs` | 0 | 1 |
+| `core/test/context-read-product-artifact.test.mjs` | 0 | 1 |
+| `core/test/context-read-product-control.test.mjs` | 0 | 83 |
+| `core/test/context-read-product.test.mjs` | 0 | 126 |
+| `core/test/context-read-recovery.test.mjs` | 0 | 10 |
+| `core/test/context-read-review.test.mjs` | 0 | 10 |
+| `core/test/context-read-sidecar.test.mjs` | 0 | 17 |
+| `core/test/context-read-source-work.test.mjs` | 0 | 7 |
+| `core/test/context-read-sources-authority.test.mjs` | 0 | 6 |
+| `core/test/context-read-sources-bounds.test.mjs` | 0 | 5 |
+| `core/test/context-read-sources-races.test.mjs` | 0 | 16 |
+| `core/test/context-read-sources.test.mjs` | 0 | 14 |
+| `core/test/context-read-tokenize.test.mjs` | 0 | 2 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 | 5 |
+| `core/test/sqlite-journal-probe.test.mjs` | 0 | 19 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 | 15 |
+| `core/test/topic-members-bounds.test.mjs` | 0 | 7 |
+| `core/test/topic-members-compatibility.test.mjs` | 0 | 32 |
+| `core/test/topic-members-integration.test.mjs` | 0 | 1 |
+| `core/test/topic-members-mutations.test.mjs` | 0 | 20 |
+| `core/test/topic-members-primary.test.mjs` | 0 | 26 |
+| `core/test/topic-members-recheck-findings.test.mjs` | 0 | 33 |
+| `core/test/topic-members-review-findings.test.mjs` | 0 | 7 |
+| `core/test/topic-members-round3-findings.test.mjs` | 0 | 18 |
+| `core/test/topic-members-scale.test.mjs` | 0 | 2 |
+| `core/test/topic-members-visibility.test.mjs` | 0 | 10 |
+| `core/test/topic-members.test.mjs` | 0 | 10 |
+| `core/test/topic-overview-lifecycle.test.mjs` | 0 | 11 |
+| `core/test/topic-overview-raw29.test.mjs` | 0 | 22 |
+| `core/test/topic-overview-visibility.test.mjs` | 0 | 8 |
+| `core/test/topic-overview.test.mjs` | 0 | 4 |
+| `core/test/topic-reader-cancellation.test.mjs` | 0 | 6 |
+| `core/test/topic-reader-sqlite.test.mjs` | 0 | 21 |
+
+Node **24.22.1**: **5 commands**, **248 passed**,
+zero failed, cancelled or skipped; every command exited **0**.
+
+| Explicit test path | Actual exit | Tests passed |
+| --- | --- | --- |
+| `core/test/context-read-product-control.test.mjs` | 0 | 83 |
+| `core/test/context-read-product.test.mjs` | 0 | 126 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 | 15 |
+| `core/test/sqlite-journal-probe.test.mjs` | 0 | 19 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 | 5 |
+
+The sequential runner exited **0**. The Node 24 selection includes the
+requested control/product/lock suites and repeats the journal probe and raw-fd
+checks. No broad npm suite, network access, key access or bundle generation was
+used. These are functional checks, not performance qualification.
+
+### Round-4 changed-file cross-check
+
+`git diff --name-only -z` plus untracked `git ls-files` and the independent
+`git status --porcelain=v1 -z` route match exactly: **11 files**; the
+list diff exits **0**. The list below is generated from those results.
+
+- `core/context-product-telemetry.mjs`
+- `core/context-product-worker.mjs`
+- `core/context-read-facade.mjs`
+- `core/context-read-sidecar.mjs`
+- `core/read-database.mjs`
+- `core/sqlite-journal-probe.mjs`
+- `core/test/context-read-product-control.test.mjs`
+- `core/test/context-read-product.test.mjs`
+- `core/test/fixtures/context-product-opening-worker.mjs`
+- `core/test/sqlite-journal-probe.test.mjs`
+- `docs/plans/context-read-p2a-impl.md`
+
+Syntax checks for every changed JavaScript file exited **0**. Whitespace and
+final-newline checks include the untracked fixture; `git diff --check` exits
+**0**. All seven changed shipped runtime/document files already belong to
+`packaging/artifact-files.json`; the new fixture is test-only. The frozen
+contract is unchanged, the bundle is unchanged, and no commit was created.

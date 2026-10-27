@@ -77,6 +77,59 @@ export function nativeObserver(initialFrame) {
   return {
     select(next) { frame = next; },
     invoke,
+    journalProbe(work) {
+      const v = frame ? view(frame) : null;
+      // The child cannot share this buffer. Reserve coverage before dispatch;
+      // termination before replay leaves an in-flight marker, never zero-busy.
+      if (v) increment(v, 5);
+      let received = false;
+      try {
+        const result = work();
+        let expected = 'open', pending, firstFailure;
+        let valid = result?.complete === true && Array.isArray(result.events);
+        for (const event of Array.isArray(result?.events) ? result.events : []) {
+          if (event.begin) {
+            const { stage, statement } = event.begin;
+            if (pending || stage !== expected || statement !== (['open', 'close'].includes(stage) ? 'connection' : 'journal_mode')) {
+              valid = false; continue;
+            }
+            pending = event.begin;
+          } else if (event.outcome && pending) {
+            const outcome = event.outcome, { stage, statement } = pending;
+            if (outcome.stage !== stage || outcome.statement !== statement || typeof outcome.ok !== 'boolean' ||
+                !outcome.ok && (!Number.isInteger(outcome.extendedCode) || outcome.extendedCode <= 0)) {
+              valid = false; pending = undefined; continue;
+            }
+            const error = outcome.ok ? null : Object.assign(new Error('sqlite_journal_probe_failed'), {
+              code: 'ERR_SQLITE_ERROR', errcode: outcome.extendedCode,
+            });
+            try { invoke(stage, statement, () => { if (error) throw error; }); }
+            catch (failure) { firstFailure ??= failure; }
+            expected = stage === 'close' || stage === 'open' && error ? 'done'
+              : error ? 'close' : ({ open: 'prepare', prepare: 'execute', execute: 'close' })[stage];
+            pending = undefined;
+          } else valid = false;
+        }
+        // An empty event list is valid only for an acknowledged cache hit.
+        const cached = result?.cached === true && result.events?.length === 0 && result.value?.mode === 'delete';
+        valid &&= cached || expected === 'done' && !pending;
+        valid &&= Boolean(result.value) && (firstFailure ? !result.value.mode : result.value.mode === 'delete' || typeof result.value.mode === 'string');
+        if (v && pending) { increment(v, 0); increment(v, 5); }
+        if (v && !valid) Atomics.store(v, 6, 1);
+        received = true;
+        // These query failures are existing journal-policy signals: CANTOPEN
+        // means nolock refused WAL; read-only/corruption continues validation.
+        // Preserve the refusal path while retaining its native diagnostic.
+        const policySignal = valid && result.value.stage === 'query' &&
+          [8, 11, 14, 26].includes(firstFailure?.errcode & 255);
+        if (firstFailure && !policySignal) throw firstFailure;
+        if (!valid) fail('index_unavailable');
+        return result.value;
+      } finally {
+        if (v && !received) Atomics.store(v, 6, 1);
+        if (v) Atomics.sub(v, 5, 1);
+      }
+    },
     database: function wrapDatabase(native) {
       function method(object, key, args, stage, label) {
         const result = invoke(stage, label, () => Reflect.apply(object[key], object, args));

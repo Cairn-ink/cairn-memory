@@ -733,3 +733,39 @@ test('P2-03 final acceptance rejects an aborted opening even when notification i
   assert.equal((await h.supervisor.drain(failure.cleanupId)).state, 'complete');
   await h.supervisor.close(); assert.equal(h.registry.counters().live, 0);
 });
+
+test('Fix round 4 probe reservation survives interruption and known BUSY survives missing close outcomes', async () => {
+  const { nativeObserver } = await import('../context-product-telemetry.mjs');
+  const frame = nativeTelemetry('probe-interrupted', 1), observer = nativeObserver(frame);
+  assert.throws(() => observer.journalProbe(() => {
+    assert.equal(drainNative(frame, false).inFlight, 1);
+    throw Error('synthetic child interrupted');
+  }));
+  sealNative(frame); assert.equal(drainNative(frame, true).coverage, 'incomplete');
+  const busy = nativeTelemetry('probe-busy-lost-close', 1), observed = nativeObserver(busy);
+  const events = [
+    { begin: { stage: 'open', statement: 'connection' } },
+    { outcome: { stage: 'open', statement: 'connection', ok: true } },
+    { begin: { stage: 'prepare', statement: 'journal_mode' } },
+    { outcome: { stage: 'prepare', statement: 'journal_mode', ok: false, extendedCode: 261 } },
+    { begin: { stage: 'close', statement: 'connection' } },
+  ];
+  assert.throws(() => observed.journalProbe(() => ({ events, complete: false })), { code: 'ERR_SQLITE_ERROR', errcode: 261 });
+  sealNative(busy); const diagnostics = drainNative(busy, true);
+  assert.equal(diagnostics.coverage, 'incomplete'); assert.equal(diagnostics.busy, 1);
+  assert.equal(diagnostics.begun, 3); assert.equal(diagnostics.completed, 2); assert.equal(diagnostics.inFlight, 1);
+  assert.deepEqual(diagnostics.records[0].sqlite, { code: 5, extendedCode: 261 });
+  assert.throws(() => nativeObserver().journalProbe(() => ({ events, complete: false })), { code: 'ERR_SQLITE_ERROR', errcode: 261 });
+});
+
+test('Fix round 4 complete probe counts four native calls; acknowledged cache hits add none', async () => {
+  const { nativeObserver } = await import('../context-product-telemetry.mjs');
+  const frame = nativeTelemetry('probe-clean', 1), observer = nativeObserver(frame);
+  const events = [['open', 'connection'], ['prepare', 'journal_mode'], ['execute', 'journal_mode'], ['close', 'connection']]
+    .flatMap(([stage, statement]) => [{ begin: { stage, statement } }, { outcome: { stage, statement, ok: true } }]);
+  assert.deepEqual(observer.journalProbe(() => ({ value: { mode: 'delete' }, events, complete: true })), { mode: 'delete' });
+  assert.deepEqual(observer.journalProbe(() => ({ value: { mode: 'delete' }, events: [], complete: true, cached: true })), { mode: 'delete' });
+  sealNative(frame); const diagnostic = drainNative(frame, true);
+  assert.equal(diagnostic.coverage, 'complete'); assert.equal(diagnostic.begun, 4);
+  assert.equal(diagnostic.completed, 4); assert.equal(diagnostic.failures, 0); assert.equal(diagnostic.busy, 0);
+});

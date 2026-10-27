@@ -95,7 +95,7 @@ function createContextFacade(path, options, { readOnly }) {
     if (path !== ':memory:') database = openReadDatabase(path, { contextRead: true,
       nativeObserver: options.product?.observer,
       validateProduct: options.product ? validateContextProductLayout : undefined,
-      preflight: () => { if (readOnly) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path); } });
+      preflight: () => { if (readOnly) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path, options.product?.observer); } });
     return initializeContextFacade(path, options, { readOnly, database });
   } catch (error) {
     try { if (database?.db.isOpen) database.db.close(); } catch { /* Preserve the initialization refusal. */ }
@@ -107,7 +107,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   let retainedSourceBytes = 0;
   const rankings = new Map(), controllers = new Set(), indexes = new Map(), dispatch = contextBudget(options);
   const memoryOnly = path === ':memory:';
-  const guardAuxiliaries = () => { if (readOnly) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path); };
+  const guardAuxiliaries = () => { if (readOnly) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path, options.product?.observer); };
   const db = database?.db;
   function ready() {
     if (closed || db && (!db.isOpen || isConnectionDiscarded(db))) fail('store_closed');

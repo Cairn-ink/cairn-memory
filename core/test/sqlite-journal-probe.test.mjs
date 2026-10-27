@@ -117,3 +117,23 @@ for (const fault of ['directory-fsync', 'post-link-timeout']) test(`${fault}: in
   assert.equal(fs.statSync(path).ino, before.ino);
   assert.deepEqual(fs.readdirSync(workspace.path), ['published.sqlite']);
 });
+
+for (const code of [5, 261, 6, 7, 10]) test(`Fix round 4 legacy probe SQLite ${code} retains its original result and refusal`, async t => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const { probeRollbackJournal } = await import('../sqlite-journal-probe.mjs');
+  const { assertContextReadCanonicalDelete } = await import('../context-read-sidecar.mjs');
+  const workspace = createTestWorkspace(t), path = join(workspace.path, 'legacy.sqlite');
+  createExclusiveSqliteFile(path);
+  const db = new DatabaseSync(path); db.exec('CREATE TABLE synthetic(id INTEGER)'); db.close();
+  const spawn = childProcess.spawnSync;
+  t.mock.method(childProcess, 'spawnSync', (command, args, options) => {
+    args = [...args];
+    args[2] = args[2].replace("db.prepare('PRAGMA journal_mode').get().journal_mode",
+      `(() => { throw Object.assign(Error('synthetic'), { errcode: ${code} }); })()`);
+    return spawn(command, args, options);
+  });
+  syncBuiltinESMExports();
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  assert.deepEqual(probeRollbackJournal(path), { stage: 'query', code: code & 255 });
+  assert.throws(() => assertContextReadCanonicalDelete(path), { code: 'index_unavailable', reason: 'unsafe_file' });
+});
