@@ -201,7 +201,7 @@ syncBuiltinESMExports();
 | `core/test/context-read-product-control.test.mjs` | 0 / 83 | 0 / 83 |
 | `core/test/context-read-product-import.test.mjs` | 0 / 2 | 0 / 2 |
 | `core/test/context-read-product-index.test.mjs` | 0 / 65 | 0 / 65 |
-| `core/test/context-read-product-owner-evidence.test.mjs` | 0 / 27 | 0 / 27 |
+| `adapters/mcp/test/context-read-product-owner-evidence.test.mjs` | 0 / 27 | 0 / 27 |
 | `core/test/context-read-product-owner.test.mjs` | 0 / 11 | 0 / 11 |
 | `core/test/context-read-product-pump.test.mjs` | 0 / 17 | 0 / 17 |
 | `core/test/context-read-product-service.test.mjs` | 0 / 2 | 0 / 2 |
@@ -263,7 +263,7 @@ were rerun by the same explicit-path command. Every actual exit was **0**:
 | `adapters/mcp/test/context-read-sources.test.mjs` | 22.16.0 | 0 / 4 |
 | `core/test/context-read-default-entropy.test.mjs` | 22.16.0 | 0 / 1 |
 | `core/test/context-read-product-index.test.mjs` | 22.16.0 | 0 / 65 |
-| `core/test/context-read-product-owner-evidence.test.mjs` | 22.16.0 | 0 / 27 |
+| `adapters/mcp/test/context-read-product-owner-evidence.test.mjs` | 22.16.0 | 0 / 27 |
 | `core/test/context-read-product-owner.test.mjs` | 22.16.0 | 0 / 11 |
 | `core/test/context-read-product-pump.test.mjs` | 22.16.0 | 0 / 17 |
 | `core/test/context-read-product.test.mjs` | 22.16.0 | 0 / 126 |
@@ -329,7 +329,7 @@ product maximum from 2 to 32; legacy capability/wire assertions are untouched.
 - `core/context-read-input.mjs`
 - `core/index.mjs`
 - `core/test/context-read-product-artifact.test.mjs`
-- `core/test/context-read-product-owner-evidence.test.mjs`
+- `adapters/mcp/test/context-read-product-owner-evidence.test.mjs`
 - `core/test/context-read-product-owner.test.mjs`
 - `core/test/context-read-product-pump.test.mjs`
 - `core/test/context-read-product.test.mjs`
@@ -554,7 +554,7 @@ Final results: **54/54 paths per runtime, every final process exit 0; 871 passed
 | `core/test/context-read-product-import.test.mjs` | 0 / 2 | 0 / 2 |
 | `core/test/context-read-product-index.test.mjs` | 0 / 65 | 0 / 65 |
 | `core/test/context-read-product-overflow-status.test.mjs` | 0 / 16 | 0 / 16 |
-| `core/test/context-read-product-owner-evidence.test.mjs` | 0 / 34 | 0 / 34 |
+| `adapters/mcp/test/context-read-product-owner-evidence.test.mjs` | 0 / 34 | 0 / 34 |
 | `core/test/context-read-product-owner.test.mjs` | 0 / 14 | 0 / 14 |
 | `core/test/context-read-product-pump.test.mjs` | 0 / 18 | 0 / 18 |
 | `core/test/context-read-product-service.test.mjs` | 0 / 2 | 0 / 2 |
@@ -621,7 +621,7 @@ or packaging-manifest changes are omitted.
 - `core/context-product-pump.mjs`
 - `core/context-product-sidecar.mjs`
 - `core/test/context-read-product-overflow-status.test.mjs`
-- `core/test/context-read-product-owner-evidence.test.mjs`
+- `adapters/mcp/test/context-read-product-owner-evidence.test.mjs`
 - `core/test/context-read-product-owner.test.mjs`
 - `core/test/context-read-product-pump.test.mjs`
 - `core/test/fixtures/context-product-index-worker.mjs`
