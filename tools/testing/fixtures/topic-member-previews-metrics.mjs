@@ -6,7 +6,21 @@ import { DatabaseSync } from 'node:sqlite';
 import { performance } from 'node:perf_hooks';
 import { PREVIEW_SOURCE_SQL } from '../../../core/topic-member-previews-storage.mjs';
 import { observeGC } from './topic-member-previews-attribution.mjs';
-const gc = observeGC();
+const completedReads = [];
+const overlapsRead = (e, r) => e.startedAt < r.finishedAt && e.startedAt + e.durationMs > r.startedAt;
+const gc = observeGC(entries => {
+  for (const read of completedReads) {
+    const late = entries.filter(e => overlapsRead(e, read));
+    if (late.length) workerData.previewMetricsPort.postMessage({ type: 'worker-gc',
+      workerId: threadId, readIndex: read.readIndex, gc: late, deliveredAt: stamp() });
+  }
+  // Completed reads have their own updates. Keep only entries that might
+  // belong to the current (not yet completed) read.
+  const end = completedReads.at(-1)?.finishedAt ?? -Infinity;
+  for (let i = gc.entries.length - 1; i >= 0; i--) {
+    if (gc.entries[i].startedAt + gc.entries[i].durationMs <= end) gc.entries.splice(i, 1);
+  }
+});
 let tid = null;
 try { tid = Number(readlinkSync('/proc/thread-self').split('/').at(-1)); } catch {}
 const cpuSource = typeof process.threadCpuUsage === 'function' ? 'threadCpuUsage' : 'schedstat';
@@ -32,26 +46,23 @@ parentPort.on = function(event, listener) {
 };
 const postMessage = parentPort.postMessage;
 parentPort.postMessage = function(...args) {
+  // Deliver the engine reply first, synchronously, with the original receiver,
+  // arguments, return value and exceptions. Diagnostics never gate delivery.
+  const result = Reflect.apply(postMessage, this, args);
   const finishedAt = stamp(), cpuEnd = threadCPU(), index = readIndex, startedAt = readStart;
   const threadCPUTime = cpuStart && cpuEnd ? cpuSource === 'threadCpuUsage' ? {
     userMicros: cpuEnd.user - cpuStart.user, systemMicros: cpuEnd.system - cpuStart.system,
     totalMs: (cpuEnd.user - cpuStart.user + cpuEnd.system - cpuStart.system) / 1000,
   } : { totalMs: (cpuEnd.totalNs - cpuStart.totalNs) / 1e6 } : null;
-  // GC performance entries arrive asynchronously. One diagnostic delivery turn
-  // lets that read's pending GC entries arrive before the host can terminate us.
-  // The yield is included in the observed engine window; never subtract it.
-  const publish = () => {
-    const entries = gc.drain();
-    workerData.previewMetricsPort.postMessage({ type: 'worker-timing', read: {
-      readIndex: index, workerId: threadId, tid, startedAt, finishedAt, cpuSource, threadCPUTime,
-      gc: entries.filter(e => e.startedAt < finishedAt && e.startedAt + e.durationMs > startedAt),
-      deliveredAt: stamp(),
-    } });
-    entries.length = 0;
-    Reflect.apply(postMessage, this, args);
-  };
-  setImmediate(publish);
+  const entries = gc.drain();
+  const read = { readIndex: index, workerId: threadId, tid, startedAt, finishedAt, cpuSource, threadCPUTime,
+    gc: entries.filter(e => overlapsRead(e, { startedAt, finishedAt })) };
+  completedReads.push({ readIndex: index, startedAt, finishedAt });
+  workerData.previewMetricsPort.postMessage({ type: 'worker-timing', read });
+  entries.length = 0;
+  return result;
 };
+
 const prepare = DatabaseSync.prototype.prepare, exec = DatabaseSync.prototype.exec, close = DatabaseSync.prototype.close;
 let extractions = [0,0,0,0], bytes = [0,0,0,0], mismatches = 0;
 let sqlite = { calls: 0, totalMs: 0, longest: null };

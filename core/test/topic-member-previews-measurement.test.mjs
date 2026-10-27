@@ -551,9 +551,10 @@ test('P1 summary preserves per-series tallies, launcher blocks and older maxima-
   const report = { cells: [{ cell, main: [{ ...record(1), startedAt: 100, finishedAt: 200, page: sentinel,
     hostLoop: { maxMs: 60 }, launcherLoop: { maxMs: 70, blocks: [{ startedAt: 120, finishedAt: 190, gapMs: 70, attribution: { classification: 'unattributed' } }] } }],
     decisions: [{ series: 'main', decision: 'inconclusive', checks: { reviewDeadline: null } }],
-    retained: { decision: 'pass', hostLoop: { maxMs: 1 } } }] };
+    // r3 retained observations have neither loop nor record timestamps.
+    retained: { decision: 'pass', hostLoop: { maxMs: 80, blocksOver100: 0 } } }] };
   const result = analyzeReport(report);
-  assert.equal(result.blocks.length, 2);
+  assert.equal(result.blocks.length, 3);
   assert.equal(result.blocks[0].precision, 'interval-maximum-only');
   assert.equal(result.blocks[0].startedAt, null);
   assert.equal(result.blocks[1].kind, 'launcherLoop');
@@ -562,12 +563,21 @@ test('P1 summary preserves per-series tallies, launcher blocks and older maxima-
   const lines = []; printSummary(report, line => lines.push(line));
   assert.equal(lines.join('\n').includes(sentinel), false);
   assert.ok(lines.join('\n').includes('unattributed'));
+  assert.ok(lines.some(line => line.startsWith('unavailable..unavailable |') && line.includes('retained/-')));
 });
 
 test('P1 Worker GC delivered after synchronous collection is attached to the completed read', async () => {
   const { Worker, MessageChannel } = await import('node:worker_threads');
   const { port1, port2 } = new MessageChannel();
-  const timing = new Promise(resolve => port1.on('message', m => { if (m.type === 'worker-timing') resolve(m.read); }));
+  const reads = [];
+  const timing = new Promise(resolve => port1.on('message', m => {
+    if (m.type === 'worker-timing') reads.push(m.read);
+    if (m.type === 'worker-gc') {
+      const read = reads.find(r => r.workerId === m.workerId && r.readIndex === m.readIndex);
+      assert.ok(read, 'late GC update must identify an already completed read');
+      read.gc.push(...m.gc); resolve(read);
+    }
+  }));
   const worker = new Worker(`
     const { parentPort, workerData } = await import('node:worker_threads');
     await import(workerData.preload);
@@ -602,4 +612,166 @@ test('P1 public retained buffering preserves page counters, byte accounting, mem
   assert.equal(result.records.length, 2); assert.equal(result.workerReads.length, 3);
   assert.deepEqual(result.records.map(r => r.counters.readIndex), [1,2]);
   assert.ok(result.records.every(r => r.bytes === r.actualTransportPayloadBytes && r.resourceBounds));
+});
+
+
+test('P1 native reply at 990ms stays successful and gated even if the next turn is at 1001ms', async () => {
+  const { default: threads } = await import('node:worker_threads');
+  const { performance } = await import('node:perf_hooks');
+  const { syncBuiltinESMExports } = await import('node:module');
+  const { openMemoryReader } = await import('../memory-reader.mjs');
+  const Native = threads.Worker, originalNow = Object.getOwnPropertyDescriptor(performance, 'now');
+  const { port1, port2 } = new threads.MessageChannel();
+  port1.on('message', () => {});
+  let time = 0, reader;
+  Object.defineProperty(performance, 'now', { configurable: true, value: () => time });
+  threads.Worker = class extends Native {
+    constructor(url, options) {
+      super(`
+        const { parentPort, workerData } = await import('node:worker_threads');
+        const native = parentPort.postMessage;
+        let clock = 0;
+        // Record exactly when the actual native delivery is invoked. A deferred
+        // delivery observes 1001; synchronous delivery observes 990.
+        parentPort.postMessage = function(payload) {
+          return Reflect.apply(native, this, [{ clock, payload }]);
+        };
+        await import(workerData.preload);
+        parentPort.on('message', () => {
+          const result = { ok: true, value: { status: 'page', items: [], nextCursor: null } };
+          clock = 990;
+          parentPort.postMessage(new TextEncoder().encode(JSON.stringify(result)).buffer);
+          clock = 1001;
+        });
+      `, { ...options, eval: true, execArgv: [], workerData: { previewMetricsPort: port2,
+        preload: new URL('../../tools/testing/fixtures/topic-member-previews-metrics.mjs', import.meta.url).href }, transferList: [port2] });
+    }
+    emit(event, ...args) {
+      if (event === 'message') { time = args[0].clock; args = [args[0].payload]; }
+      return super.emit(event, ...args);
+    }
+  };
+  syncBuiltinESMExports();
+  try {
+    const namespace = { ownerId: 'reply-order', scope: 'personal', projectId: null };
+    reader = openMemoryReader({ path: 'unused.sqlite', ownerId: namespace.ownerId });
+    const result = await reader.readTopicMembers({ namespace, selection: { type: 'unfiled' },
+      accessRevision: 'reply-order', limit: 24, deadlineMs: 1000, previews: { version: PROTOCOL.version } });
+    const observed = record(time, { successfulPage: result.ok, failure: result.ok ? null : result.error });
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(observed.elapsedMs, 990);
+    const attempts = [...Array.from({ length: 49 }, () => record(1)), observed, record(1)];
+    const decision = decide(cell, 'main', attempts, 50, true);
+    assert.equal(decision.summary.successfulPages, 51);
+    assert.equal(decision.summary.gatedPopulation.maxMs, 990);
+    assert.equal(decision.decision, 'fail');
+  } finally {
+    await reader?.close(); port1.close();
+    threads.Worker = Native; syncBuiltinESMExports();
+    if (originalNow) Object.defineProperty(performance, 'now', originalNow); else delete performance.now;
+  }
+});
+
+test('P1 sampler delivers no messages between observation start and loop finish', async () => {
+  const { fork } = await import('node:child_process');
+  const { setTimeout: delay } = await import('node:timers/promises');
+  const { startSampler } = await import('../../tools/testing/fixtures/topic-member-previews-attribution.mjs');
+  const { observeLoop } = await import('../../tools/testing/measure-topic-member-previews.mjs');
+  let observing = false;
+  const messages = [];
+  const sampler = await startSampler({ forkChild(...args) {
+    const child = fork(...args);
+    child.on('message', m => messages.push({ type: m.type, observing }));
+    return child;
+  } });
+  try {
+    messages.length = 0; observing = true;
+    const loop = observeLoop({ sampler });
+    await delay(40); // Allow child-local periodic samples; no performance gate.
+    const observation = await loop.finish();
+    observing = false;
+    assert.deepEqual(messages, [], 'sampler IPC ran while the heartbeat was observing');
+    const result = await loop.diagnostics(observation);
+    assert.equal(result.samplerUnavailable, false);
+    assert.ok(messages.some(m => m.type === 'samples'));
+    assert.ok(messages.every(m => !m.observing));
+  } finally { observing = false; assert.deepEqual(await sampler.close(), { code: 0, signal: null }); }
+});
+
+test('P1 stopped sampler with disconnected IPC is killed and leaves no interval or watchdog', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const tool = new URL('../../tools/testing/fixtures/topic-member-previews-attribution.mjs', import.meta.url).href;
+  const probe = `
+    import assert from 'node:assert/strict';
+    import { fork } from 'node:child_process';
+    import { readFileSync } from 'node:fs';
+    import { setTimeout as delay } from 'node:timers/promises';
+    const { startSampler } = await import(process.argv[1]);
+    let child;
+    const sampler = await startSampler({ timeoutMs: 50, forkChild(...args) { child = fork(...args); return child; } });
+    try {
+      child.kill('SIGSTOP');
+      while (!/^State:\\s+T/m.test(readFileSync('/proc/' + child.pid + '/status', 'utf8'))) await delay(1);
+      child.disconnect();
+      // Reproduce an IPC send error while the actual process remains alive.
+      child.send({ type: 'flush', id: -1 }, error => { if (error) child.emit('error', error); });
+      assert.equal((await sampler.finish()).unavailable, true);
+      const exit = await sampler.close();
+      assert.deepEqual(exit, { code: null, signal: 'SIGKILL' });
+      assert.equal(child.exitCode, null); assert.equal(child.signalCode, 'SIGKILL');
+      assert.throws(() => process.kill(child.pid, 0), { code: 'ESRCH' });
+      assert.equal(process.getActiveResourcesInfo().filter(t => t === 'Timeout').length, 0);
+      console.log(JSON.stringify(exit));
+    } finally { if (child.exitCode === null && child.signalCode === null) { child.kill('SIGKILL'); await sampler.close(); } }
+  `;
+  const result = spawnSync(process.execPath, ['--input-type=module','--eval',probe,tool], { env: {}, encoding: 'utf8', timeout: 10000 });
+  assert.equal(result.error, undefined, 'cleanup probe did not exit naturally');
+  assert.equal(result.signal, null); assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { code: null, signal: 'SIGKILL' });
+});
+
+test('P1 sampler waits for send callbacks under backpressure before sending another batch', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const tool = new URL('../../tools/testing/fixtures/topic-member-previews-sampler.mjs', import.meta.url).href;
+  const probe = `
+    import assert from 'node:assert/strict';
+    process.argv[2] = String(process.pid);
+    Object.defineProperty(process, 'connected', { value: true });
+    let pending = false, samples = 0, completed;
+    const flushed = new Promise(resolve => { completed = resolve; });
+    process.send = (message, callback) => {
+      assert.equal(pending, false, 'send ignored backpressure'); pending = true;
+      if (message.samples) { assert.ok(message.samples.length <= 128); samples += message.samples.length; }
+      setImmediate(() => { pending = false; callback(null); if (message.type === 'flush') completed(); });
+      return false;
+    };
+    globalThis.setInterval = callback => { for (let i = 0; i < 260; i++) callback(); return null; };
+    await import(process.argv[1]);
+    process.emit('message', { type: 'flush', id: 1, startedAt: 0 });
+    await flushed;
+    assert.equal(samples, 262); assert.equal(pending, false);
+    process.emit('disconnect');
+  `;
+  const result = spawnSync(process.execPath, ['--input-type=module','--eval',probe,tool], { env: {}, encoding: 'utf8', timeout: 10000 });
+  assert.equal(result.error, undefined); assert.equal(result.signal, null); assert.equal(result.status, 0, result.stderr);
+});
+
+test('P1 streaming summary matches object analysis across cell, string and escape boundaries', async () => {
+  const { analyzeReport, analyzeReportStream } = await import('../../tools/testing/summarize-topic-member-previews.mjs');
+  const entries = [0,1,2].map(i => ({ cell: { ...cell, schema: i ? 33 : 18 },
+    main: [{ ...record(1), note: 'private \" } ], cells: [ 界', hostLoop: { maxMs: 60 + i } }],
+    retained: { decision: 'pass', hostLoop: { maxMs: 80 } },
+    decisions: [{ series: 'main', decision: i ? 'inconclusive' : 'fail', checks: { loop: false } }] }));
+  for (const report of [{ status: 'failed', node: 'synthetic', cells: entries, other: { nested: [false,null,3] } },
+    { cells: entries, node: 'synthetic', status: 'failed' }, { cells: [] }]) {
+    const text = JSON.stringify(report);
+    for (const size of [1,7,64,65536]) {
+      const chunks = (function*() { for (let i = 0; i < text.length; i += size) yield text.slice(i, i + size); })();
+      const streamed = await analyzeReportStream(chunks);
+      assert.deepEqual(streamed.result, analyzeReport(report));
+      assert.equal(streamed.cells, report.cells.length);
+      assert.equal(streamed.header.status, report.status); assert.equal(streamed.header.node, report.node);
+    }
+    await assert.rejects(analyzeReportStream([text.slice(0,-1)]), /incomplete_report/);
+  }
 });

@@ -137,19 +137,28 @@ export function observeLoop({ now = () => performance.now(), epoch = performance
       attribution: { hostHeapUsed: { start: previous.heapUsed, end: current.heapUsed }, resources: resourceDelta(previous.resources, current.resources) } });
     last = time; lastPhase = phase; previous = current; };
   const timer = setInterval(sample, 1);
-  let completion;
+  let completion, diagnostics;
   return { sample, phase(value) { phase = value; phases.push({ phase, at: epoch + now() }); }, finish() { return completion ??= (async () => {
     try {
       await new Promise(r => setImmediate(r)); await delay(2); sample();
       clearInterval(timer);
       const resources = resourceDelta(initial.resources, previous.resources), hostGC = gc.drain();
-      const scheduler = await sampler?.finish();
-      for (const block of blocks) attributeBlock(block, { gc: hostGC, samples: scheduler?.samples, phases });
+      for (const block of blocks) attributeBlock(block, { gc: hostGC, phases });
       return { maxMs, blocksOver100, blocks, phases, startedAt: phases[0].at, finishedAt: epoch + last,
         resources, hostHeapUsed: { start: initial.heapUsed, end: previous.heapUsed }, hostGC,
-        samplerUnavailable: !scheduler || scheduler.unavailable };
+        samplerUnavailable: true };
     } finally { clearInterval(timer); gc.close(); }
+  })(); }, diagnostics(result) { return diagnostics ??= (async () => {
+    const scheduler = await sampler?.finish();
+    for (const block of result.blocks) attributeBlock(block, { gc: result.hostGC, samples: scheduler?.samples, phases });
+    result.samplerUnavailable = !scheduler || scheduler.unavailable;
+    return result;
   })(); } };
+}
+// The heartbeat and GC observation are finished before any sampler transfer.
+export async function finishObservedLoop(loop) {
+  const result = await loop.finish();
+  return loop.diagnostics ? loop.diagnostics(result) : result;
 }
 function addWorkerAttribution(loop, observation) {
   for (const block of loop.blocks) attributeBlock(block, { gc: loop.hostGC,
@@ -168,6 +177,10 @@ function instrumentWorkers(sourceCases = {}) {
     constructor(url, options) {
       const { port1, port2 } = new MessageChannel(); ports.push(port1); port1.on('message', m => {
         if (m.type === 'worker-timing') workerReads.push(m.read);
+        else if (m.type === 'worker-gc') {
+          const read = workerReads.find(r => r.workerId === m.workerId && r.readIndex === m.readIndex);
+          if (read) { read.gc.push(...m.gc); read.gcDeliveredAt = m.deliveredAt; }
+        }
         else if (m.type === 'worker-online') workerThreads.push(m);
         else metrics.push(m);
       });
@@ -204,7 +217,7 @@ export async function attempt(config, writer) {
     const finishedAt = timestamp(), elapsedMs = performance.now() - started;
     if (writer) { loop.phase('writer-stop-ipc'); writer.send({ type: 'stop' }); writerResult = await writer.wait('stopped'); }
     loop.phase('drain');
-    const hostLoop = await loop.finish();
+    const hostLoop = await finishObservedLoop(loop);
     addWorkerAttribution(hostLoop, observation);
     const bytes = Buffer.byteLength(JSON.stringify(result)), cloneRepresentationBytes = serialize(result).byteLength;
     const page = result.ok ? result.value : null;
@@ -225,7 +238,7 @@ export async function attempt(config, writer) {
         counters.decodedUnits <= 12000 * config.cell.limit && counters.normalizationUnits <= 4000 * config.cell.limit && counters.extractions <= config.cell.limit)) };
   } finally {
     try { await reader?.close(); }
-    finally { try { await loop.finish(); } finally { observation.close(); } }
+    finally { try { await finishObservedLoop(loop); } finally { observation.close(); } }
   }
 }
 function actor(args) {
@@ -270,7 +283,7 @@ export async function coldAttempt(config, { spawn = actor } = {}) {
   } finally {
     try { await terminateActor(child); }
     finally {
-      const launcherLoop = await processLoop.finish();
+      const launcherLoop = await finishObservedLoop(processLoop);
       if (record) record.launcherLoop = launcherLoop;
     }
   }
@@ -497,7 +510,7 @@ export async function retainedEngineSeries(config, expected, {
     loop.phase('retained-close');
     try { await reader?.close(); }
     finally {
-      try { config.retainedLoop = await loop.finish(); addWorkerAttribution(config.retainedLoop, observation); }
+      try { config.retainedLoop = await finishObservedLoop(loop); addWorkerAttribution(config.retainedLoop, observation); }
       finally { observation.close(); }
     }
     finishedAt = timestamp();
@@ -578,7 +591,7 @@ async function run(args) {
     sink = await createReportSink(reportPath);
     const idleLoop = observeLoop();
     try { await delay(100); }
-    finally { report.idleBaseline = await idleLoop.finish(); }
+    finally { report.idleBaseline = await finishObservedLoop(idleLoop); }
     for (const [i, cell] of report.plan.entries()) {
       process.stderr.write(JSON.stringify({ progress: i + 1, total: report.plan.length, cell }) + '\n');
       const key = `${cell.count}:${cell.schema}`;

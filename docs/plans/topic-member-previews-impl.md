@@ -806,8 +806,9 @@ read after 63.125 ms; almost the entire 286.589 ms block lies between the
 close and writer-stop markers, with only 6.870 ms of recorded SQLite calls.
 It is a close/termination candidate, without evidence distinguishing a native
 join from process scheduling or GC. Cell 94's read takes 770.235 ms with
-10.523 ms of SQLite calls and returns `cursor_stale`; both host and Worker
-were slow concurrently. Process-wide or VM scheduling, paging, Worker CPU and
+10.523 ms of SQLite calls and returns `cursor_stale`; concurrent Worker
+slowness is a hypothesis. The read duration uses host timestamps, and r4 has no
+Worker completion timestamp. Process-wide or VM scheduling, paging, Worker CPU and
 unmeasured waits remain possible. No individual r4 failure can be assigned a
 proven GC, page-fault or run-queue cause from these fields.
 
@@ -889,19 +890,20 @@ warmup, main, cold, retained and launcher, have a diagnostic `attribution`.
   finish, preserving scheduler attribution even if forced termination prevents
   read timing publication. Such termination can leave no completed CPU/GC
   read record; absence does not mean zero CPU or zero GC.
-* Worker GC entries are delivered asynchronously. The preload adds one
-  `setImmediate` delivery turn before forwarding each engine reply so pending
-  GC entries can be collected before termination. `finishedAt` and CPU end
-  precede this turn; `deliveredAt` follows it. The host's elapsed read and loop
-  measurements include its cost. No cost is subtracted, and no such yield is
-  added to engine runtime modules. An explicit-GC Worker regression verifies
-  attachment of a synchronous collection to the completed read.
+* Worker GC entries are delivered asynchronously. After fix 1, the preload
+  forwards each engine reply synchronously before collecting completion
+  diagnostics. Late GC entries travel separately on the metrics port, keyed
+  by Worker ID and read index, and update the completed read afterwards.
+  Forced termination may prevent late diagnostics from arriving; delivery and
+  termination never wait for them. The explicit-GC regression verifies the
+  separate update, and the 990 ms regression protects native reply timing.
 * `scheduler` retains raw timestamped procfs samples, per-thread points,
   `runQueueMs`, `cpuMs`, `bracketed`, the largest observed sample spacing, and
   enclosing `vmstatDelta` (`pswpin`, `pswpout`, `pgmajfault`). A separate
   SQLite-free child samples all measuring-process tasks every 10 ms, using
   schedstat's second field for run-queue ns and first for CPU ns. Ten samples
-  per 100 ms ceiling give useful resolution at moderate read/IPC volume.
+  per 100 ms ceiling give useful resolution; samples stay in the child during
+  observation and transfer afterwards.
   Both ends of every sample are timestamped; sampler descheduling is visible
   in sample spacing. All task samples allow mapping Worker TIDs without an
   online-registration race. A short-lived or terminating Worker may lack
@@ -912,13 +914,16 @@ warmup, main, cold, retained and launcher, have a diagnostic `attribution`.
   event attribution. No pressure metric or hypervisor steal measurement is
   inferred from schedstat.
 * One sampler is reused per measuring process; a cold measuring child gets
-  its own sampler, and the launcher continues sampling itself. The parent
-  retains only the active window plus its preceding sample, then flushes by
-  IPC rendezvous after the gate has stopped. Sampler failure or a 5 s IPC
-  watchdog makes data unavailable, never silently zero; the sampler is
-  disconnected and its actual exit is awaited. Diagnostic assembly and flush
-  are outside the gate. Standalone helper tests without a sampler explicitly
-  mark `samplerUnavailable`; launch entry points install it automatically.
+  its own sampler, and the launcher continues sampling itself. After fix 1,
+  the child retains a bounded ring of 16,384 samples. Only after `loop.finish()`
+  resolves does the host request the active window plus its preceding sample.
+  Transfers use batches of at most 128 samples and wait for every send callback,
+  including under backpressure. Ring overflow, failure or a 5 s IPC watchdog
+  makes data unavailable, never silently zero. A failed transfer is reaped
+  before another observation can start. IPC failure is separate from process
+  exit; cleanup keeps its kill watchdog until actual exit or signal. Diagnostic
+  assembly and transfer are outside the gate. Standalone helper tests without
+  a sampler mark `samplerUnavailable`; launch entry points install it automatically.
 * `workerLifecycle` timestamps `Worker.terminate()` invocation, synchronous
   return, promise completion and the Worker exit event. Together with close
   phase markers, these expose synchronous termination-call time versus the
@@ -1079,4 +1084,92 @@ tools/testing/fixtures/topic-member-previews-sampler.mjs
 tools/testing/measure-topic-member-previews.mjs
 tools/testing/summarize-topic-member-previews.mjs
 tools/testing/verify-topic-member-previews-protocol.mjs
+```
+
+
+### Harness round 2 fix 1
+
+Both non-author reviews were read in full. All six findings are addressed:
+
+* **Reply delay (spec P1):** native `postMessage` now runs synchronously first,
+  preserving its receiver, arguments and return value. Late GC updates use the
+  metrics port and Worker/read IDs. The public-reader regression keeps a reply
+  at 990 ms successful with its 990 ms gated latency even when the next turn is
+  at 1,001 ms; unchanged `decide()` therefore fails the maximum. That same test
+  fails on `1cfd9b8d` with `read_timeout` on both Node versions (exit **1** each).
+  The explicit-GC test verifies subsequent attachment to the completed read.
+* **Sampler IPC inside windows (standards P1):** the bounded child ring replaces
+  periodic sample messages. `finishObservedLoop()` awaits `loop.finish()` before
+  requesting samples. Regressions assert zero host messages from observation
+  start through finish, and serialize sends when `process.send()` returns false.
+* **IPC error bypassing cleanup (standards P1):** IPC failure no longer resolves
+  the exit promise. The kill watchdog lasts until actual process exit. The
+  stopped-child/disconnected-IPC reproduction calls `finish()` and `close()`,
+  checks confirmed SIGKILL/ESRCH, and checks zero surviving timers. Failed
+  transfers also finish cleanup before another observation can start.
+* **r3 timestamp crash (standards P2):** missing or invalid timestamps print
+  `unavailable`. The compatibility regression now includes an r3 retained
+  maximum above 50 ms with neither loop nor record timestamps.
+* **Whole-report loading (standards P2):** the dependency-free streaming parser
+  releases each cell after aggregation and retains only aggregates/block rows.
+  Chunk-boundary tests cover strings, escapes, nesting, header order and empty
+  cells. On the real r4 report, both versions with a 32 MiB heap reproduce
+  **286/285/5**, 144 cells and 20 block rows, with stdout byte-identical to the
+  previous summary. Independently streaming the real records journal confirms
+  **41,080 attempts** and all **18** non-retained block rows; two retained rows
+  are available only in the report.
+* **Cell 94 wording (spec P2):** the diagnosis now states concurrent Worker
+  slowness as a hypothesis, explicitly identifies host timestamps, and notes
+  that r4 contains no Worker completion timestamp. The documentation diff
+  verifies the correction; no new causal attribution is asserted.
+
+Attribution remains diagnostic only. All seven protected sections, including
+header, protocol/thresholds, matrix, populations and decisions, remain
+byte-identical to `87ced4d0`. No core runtime, measurement, smoke, network, keys
+or commits were involved. The summary's exact raw-fd allowlist entries now
+permit its report stream; no host database or companion descriptor was added.
+
+Commands use the same **28 explicit paths** in the preceding round-2 `tests`
+array; the touched test is already included. Glob and `rg --files` independently
+re-derived the selection and `diff -u` agreed (exit **0**, **28** files).
+For each version, `node_binary="$NVM_DIR/versions/node/v$version/bin/node"`:
+
+```sh
+TMPDIR="$fix1_scratch" "$node_binary" tools/testing/run.mjs \
+  --test-concurrency=1 --test-reporter=tap "${tests[@]}"
+"$node_binary" tools/testing/verify-topic-member-previews-protocol.mjs
+"$node_binary" --max-old-space-size=32 \
+  tools/testing/summarize-topic-member-previews.mjs "$REPORT"
+```
+
+Each command's actual status is captured directly (`rc=$?`), without a pipe.
+
+| Verification | Node 22.16.0 | Node 24.22.1 |
+| --- | --- | --- |
+| 28 explicit files, including touched regressions | 0; 372/372 | 0; 372/372 |
+| Seven protected byte comparisons | 0; 7/7 identical | 0; 7/7 identical |
+| Real r4 streaming summary, 32 MiB heap | 0; 286/285/5, 20 rows | 0; 286/285/5, 20 rows |
+| Six touched modules/tests, `node --check` | 0 each | 0 each |
+| Summary stdout vs previous CLI (`cmp`) | 0; identical | 0; identical |
+| Baseline native-reply regression (expected failure) | 1; `read_timeout` | 1; `read_timeout` |
+
+Both final test runs were supervised through their actual exit codes. The
+earlier 28-file Node 22 run also passed 372/372 (exit **0**), before the final
+failed-transfer cleanup guard; the final runs include that guard.
+
+Changed files were cross-checked two ways: Git diff plus untracked inventory,
+and recursive baseline blob/mode comparison plus an independent filesystem
+walk. After excluding the worktree's `.git` metadata pointer, sorted lists
+agree (`diff -u`, exit **0**): **8 files**, no untracked additions. Final
+whitespace/newline/added-machine-path checks: exit **0**.
+
+```text
+core/test/fixtures/no-raw-db-fd-allowlist.json
+core/test/topic-member-previews-measurement.test.mjs
+docs/plans/topic-member-previews-impl.md
+tools/testing/fixtures/topic-member-previews-attribution.mjs
+tools/testing/fixtures/topic-member-previews-metrics.mjs
+tools/testing/fixtures/topic-member-previews-sampler.mjs
+tools/testing/measure-topic-member-previews.mjs
+tools/testing/summarize-topic-member-previews.mjs
 ```

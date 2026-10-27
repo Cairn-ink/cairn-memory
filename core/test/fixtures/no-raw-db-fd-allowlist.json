@@ -1385,16 +1385,6 @@
     "reason": "Fixed procfs counter only; no database or companion path is accepted. Sampling child is SQLite-free."
   },
   {
-    "path": "tools/testing/summarize-topic-member-previews.mjs",
-    "source": "import { readFile } from 'node:fs/promises'",
-    "reason": "Standalone SQLite-free summary CLI reads only the explicitly supplied report JSON."
-  },
-  {
-    "path": "tools/testing/summarize-topic-member-previews.mjs",
-    "source": "const report = JSON.parse(await readFile(process.argv[2], 'utf8'));",
-    "reason": "Standalone SQLite-free summary CLI reads only the explicitly supplied report JSON."
-  },
-  {
     "path": "tools/testing/verify-topic-member-previews-protocol.mjs",
     "source": "import { readFileSync } from 'node:fs'",
     "reason": "Standalone SQLite-free verifier reads only the fixed harness JavaScript source for a byte comparison."
@@ -1403,5 +1393,15 @@
     "path": "tools/testing/verify-topic-member-previews-protocol.mjs",
     "source": "const current = readFileSync(new URL('./measure-topic-member-previews.mjs', import.meta.url));",
     "reason": "Standalone SQLite-free verifier reads only the fixed harness JavaScript source for a byte comparison."
+  },
+  {
+    "path": "tools/testing/summarize-topic-member-previews.mjs",
+    "source": "import { createReadStream } from 'node:fs'",
+    "reason": "Standalone SQLite-free summary CLI streams only the explicitly supplied report JSON, one cell at a time."
+  },
+  {
+    "path": "tools/testing/summarize-topic-member-previews.mjs",
+    "source": "const input = createReadStream(process.argv[2], { encoding: 'utf8', highWaterMark: 65536 });",
+    "reason": "Standalone SQLite-free summary CLI streams only the explicitly supplied report JSON, one cell at a time."
   }
 ]

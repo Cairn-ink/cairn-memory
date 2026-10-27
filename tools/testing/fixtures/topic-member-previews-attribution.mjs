@@ -5,10 +5,14 @@ export const resourceKeys = ['majorPageFault','minorPageFault','voluntaryContext
   'involuntaryContextSwitches','userCPUTime','systemCPUTime'];
 export const resourceDelta = (a, b) => Object.fromEntries(resourceKeys.map(k => [k, b[k] - a[k]]));
 export const resourceSnapshot = () => ({ heapUsed: process.memoryUsage().heapUsed, resources: process.resourceUsage() });
-export function observeGC() {
+export function observeGC(onEntries = () => {}) {
   const entries = [];
-  const add = records => { for (const e of records) entries.push({ kind: e.detail.kind,
-    startedAt: performance.timeOrigin + e.startTime, durationMs: e.duration }); };
+  const add = records => {
+    const added = records.map(e => ({ kind: e.detail.kind,
+      startedAt: performance.timeOrigin + e.startTime, durationMs: e.duration }));
+    entries.push(...added);
+    if (added.length) onEntries(added);
+  };
   const observer = new PerformanceObserver(list => add(list.getEntries()));
   observer.observe({ type: 'gc' });
   return { entries, drain() { add(observer.takeRecords()); return entries; }, close() { observer.disconnect(); } };
@@ -59,44 +63,51 @@ export function attributeBlock(block, { gc = [], samples = [], workerReads = [],
   return block;
 }
 
-// One child per measuring process, reused across attempts. Only the active
-// observation's samples are retained. Flush is an IPC rendezvous, not a sleep.
-export async function startSampler() {
-  const child = fork(new URL('./topic-member-previews-sampler.mjs', import.meta.url), [String(process.pid)],
+// One child per measuring process. The child buffers samples; the host only
+// requests/receives them after the heartbeat's final sample and timer cleanup.
+export async function startSampler({ forkChild = fork, timeoutMs = 5000 } = {}) {
+  const child = forkChild(new URL('./topic-member-previews-sampler.mjs', import.meta.url), [String(process.pid)],
     { execArgv: [], env: {}, stdio: ['ignore','ignore','ignore','ipc'] });
-  let samples = [], latest, nextId = 0, unavailable = false, collecting = false;
+  let samples = [], nextId = 0, unavailable = false, startedAt, completion, closing;
   const waiters = new Map();
+  const fail = () => { unavailable = true; for (const resolve of waiters.values()) resolve(null); waiters.clear(); };
   const exited = new Promise(resolve => {
-    child.once('exit', (code, signal) => resolve({ code, signal }));
-    child.once('error', () => resolve({ code: null, signal: null, error: 'sampler_failed' }));
+    child.once('exit', (code, signal) => { fail(); resolve({ code, signal }); });
+    // A failed spawn has no process to reap. IPC errors on a live child are
+    // failures of diagnostics only; they never stand in for confirmed exit.
+    child.on('error', () => { fail(); if (!child.pid) resolve({ code: null, signal: null, error: 'sampler_failed' }); });
   });
-  child.on('error', () => { unavailable = true; for (const resolve of waiters.values()) resolve(null); waiters.clear(); });
-  child.on('exit', () => { unavailable = true; for (const resolve of waiters.values()) resolve(null); waiters.clear(); });
+  child.on('disconnect', fail);
   child.on('message', m => {
-    if (m.sample) { latest = m.sample; if (collecting) samples.push(latest); }
-    const resolve = waiters.get(m.id ?? 'ready');
-    if (resolve) { waiters.delete(m.id ?? 'ready'); resolve(m.sample); }
+    if (m.type === 'samples') { samples.push(...m.samples); return; }
+    const key = m.type === 'ready' ? 'ready' : m.id, resolve = waiters.get(key);
+    if (resolve) { waiters.delete(key); resolve(m); }
   });
   async function rendezvous(id, send) {
     if (unavailable) return null;
     let timer;
     try { return await new Promise(resolve => {
       waiters.set(id, resolve);
-      timer = setTimeout(() => { waiters.delete(id); unavailable = true; resolve(null); }, 5000);
-      send?.();
+      timer = setTimeout(() => { fail(); }, timeoutMs);
+      try { send?.(); } catch { fail(); }
     }); } finally { clearTimeout(timer); }
   }
-  await rendezvous('ready');
-  return { begin() { samples = latest ? [latest] : []; collecting = true; },
-    async finish() {
+  function closeChild() { return closing ??= (async () => {
+    // Keep the watchdog until real exit, including after disconnect/send errors.
+    const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
+    try { if (child.connected) child.disconnect(); } catch { fail(); }
+    try { return await exited; } finally { clearTimeout(timer); }
+  })(); }
+  if (!await rendezvous('ready')) await closeChild();
+  return { begin() { samples = []; startedAt = performance.timeOrigin + performance.now(); completion = undefined; },
+    finish() { return completion ??= (async () => {
       const id = nextId++;
-      await rendezvous(id, () => child.send({ type: 'flush', id }));
-      collecting = false;
-      return { samples, unavailable };
-    },
-    async close() {
-      if (child.connected) child.disconnect();
-      const timer = setTimeout(() => child.kill('SIGKILL'), 5000);
-      try { return await exited; } finally { clearTimeout(timer); }
-    } };
+      const response = await rendezvous(id, () => child.send({ type: 'flush', id, startedAt }, error => { if (error) fail(); }));
+      // A failed transfer must finish cleanup before another window can start;
+      // otherwise its queued batches could arrive inside that next observation.
+      if (!response) await closeChild();
+      return { samples, unavailable: unavailable || !response || response.unavailable };
+    })(); },
+    close: closeChild };
+
 }
