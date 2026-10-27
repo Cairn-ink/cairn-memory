@@ -2,6 +2,7 @@ import { sampleLocalStatus } from './context-read-local-status.mjs';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { isAbsolute, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { validateContextProductLayout } from './context-product-schema.mjs';
 import { openReadDatabase } from './read-database.mjs';
 import { readTransaction, isConnectionDiscarded, isStorageBusy } from './database.mjs';
 import { ownData } from './local-authority-input.mjs';
@@ -12,7 +13,7 @@ import { createPrivateCardStorage } from './private-card-storage.mjs';
 import { createPrivateEvidenceStorage } from './private-evidence-storage.mjs';
 import { createCardReceiptSources } from './card-receipt-sources.mjs';
 import { MemoryStoreError, fail } from './validation.mjs';
-import { openContextReadSidecar, assertContextReadReadOnlyAuxiliaries, contextSourceFences } from './context-read-sidecar.mjs';
+import { openContextReadSidecar, assertContextReadReadOnlyAuxiliaries, assertContextReadCanonicalDelete, contextSourceFences } from './context-read-sidecar.mjs';
 import { createSourceContext, expandRelations, relationDiagnostic, sourceReader, sourceBudget, sourceStateBytes, validateRelationWitness, SourceStop } from './context-read-relations.mjs';
 import { rankMoc, mocDiagnostic } from './context-read-moc.mjs';
 import { fuseCandidates, RRF_PRESETS } from './context-read-fusion.mjs';
@@ -79,11 +80,22 @@ export function openContextReader(value) {
   return Object.freeze({ ...context.methods, close() { context.close(); return success(null); } });
 }
 
+// Internal Worker-only entry. Legacy configuration never selects this branch.
+export function openContextProductFacade(path, product) {
+  const options = { family: 'local', preset: 'rrf-k60-d12', authority: null, embedder: null, counter: null,
+    policy: { maxConcurrent: 1 }, budgetConfigured: false, product };
+  const context = createContextFacade(path, options, { readOnly: true });
+  return { fetchCandidateEvidence: context.methods.fetchCandidateEvidence, close: context.close,
+    capabilities: context.productCapabilities, fileIdentity: context.fileIdentity, port: context.productPort };
+}
+
 function createContextFacade(path, options, { readOnly }) {
   let database;
   try {
     if (path !== ':memory:') database = openReadDatabase(path, { contextRead: true,
-      preflight: () => { if (readOnly) assertContextReadReadOnlyAuxiliaries(path); } });
+      nativeObserver: options.product?.observer,
+      validateProduct: options.product ? validateContextProductLayout : undefined,
+      preflight: () => { if (readOnly) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path, options.product?.observer); } });
     return initializeContextFacade(path, options, { readOnly, database });
   } catch (error) {
     try { if (database?.db.isOpen) database.db.close(); } catch { /* Preserve the initialization refusal. */ }
@@ -95,7 +107,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   let retainedSourceBytes = 0;
   const rankings = new Map(), controllers = new Set(), indexes = new Map(), dispatch = contextBudget(options);
   const memoryOnly = path === ':memory:';
-  const guardAuxiliaries = () => { if (readOnly) assertContextReadReadOnlyAuxiliaries(path); };
+  const guardAuxiliaries = () => { if (readOnly) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path, options.product?.observer); };
   const db = database?.db;
   function ready() {
     if (closed || db && (!db.isOpen || isConnectionDiscarded(db))) fail('store_closed');
@@ -107,13 +119,13 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     if (!row) fail('unsupported_database');
     const has = table => Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table));
     return { storeId: row.store_id, cursorSecret: row.cursor_secret,
-      cards: has('private_cards') && has('card_memory_bindings') && has('card_applicability_reviews'), raw: has('card_raw_bindings'),
+      cards: (!options.product || db.prepare('PRAGMA user_version').get().user_version >= 23) && has('private_cards') && has('card_memory_bindings') && has('card_applicability_reviews'), raw: has('card_raw_bindings'),
       ...(options.sources ? { organization: ['card_mocs', 'card_moc_epochs', 'card_moc_title_sources', 'card_moc_refs', 'card_moc_edges'].every(has),
         reviews: has('card_applicability_reviews'), receipts: has('card_memory_bindings') } : {}) };
   });
   const supportedTypes = ['memory', ...(info.cards ? ['card'] : [])];
   const bind = (purpose, value) => createHmac('sha256', info.cursorSecret ?? 'unavailable')
-    .update(JSON.stringify([CONTEXT_VERSION, purpose, info.storeId, value])).digest('base64url');
+    .update(JSON.stringify([...(options.product && purpose !== 'snapshot-item' ? ['context-read-product-v1.1'] : []), CONTEXT_VERSION, purpose, info.storeId, value])).digest('base64url');
   const configuration = deepFreeze({ family: options.family, preset: options.preset, embedder: metadata(options.embedder),
     tokenizer: TOKENIZER_VERSION, representation: REPRESENTATION_VERSION,
     ...(options.sources ? { sources: options.sources } : {}) });
@@ -136,6 +148,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   }
   function authorize(method, input, payload, token) {
     ready();
+    if (options.product) return options.product.authorize(method, payload, token);
     if (!token || typeof token !== 'object') fail('authority_required');
     const grants = input.readSet.map(namespace => {
       const request = deepFreeze({ method, namespace, actionClass: 'read', actionId: null, targetId: null,
@@ -663,10 +676,10 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         channels: candidates.channels, coverage: candidates.coverage, trace: finalTrace } } : undefined);
     }
   }
-  function fetchCandidateEvidence(original, token) {
+  function fetchCandidateEvidence(original, token, productPayload) {
     try {
       ready();
-      const { payload, input } = contextInput('fetchCandidateEvidence', original, supportedTypes), access = authorize('fetchCandidateEvidence', input, payload, token);
+      const { payload, input } = contextInput('fetchCandidateEvidence', original, supportedTypes), access = authorize('fetchCandidateEvidence', input, options.product ? productPayload ?? payload : payload, token);
       if (memoryOnly) fail('index_unavailable');
       const scope = bind('snapshot-scope', input.readSet);
       let intent = input.intent, refs = input.refs, previous;
@@ -708,7 +721,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       });
     } catch (error) { return failure(error); }
   }
-  return { methods: { getContextReadCapabilities() {
+  return { fileIdentity: database?.fileIdentity, productCapabilities: { types: supportedTypes },
+    ...(options.product ? { productPort: { db, read, ready, evidence, bind, encode, decode, identity, features: info, canonicalFence } } : {}),
+    methods: { getContextReadCapabilities() {
     return success(structuredClone({ version: CONTEXT_VERSION, methods: [...CONTEXT_METHODS], types: [...supportedTypes], intents: ['current', 'history'],
       channels: { lexical: { enabled: true }, semantic: { configured: Boolean(options.embedder), budgetConfigured: Boolean(dispatch) } },
       ...configuration, limits: { ...CONTEXT_LIMITS, ...(options.sources ? { horizon: 32, sources: SOURCE_LIMITS } : {}) }, maintenance: !readOnly && !memoryOnly,

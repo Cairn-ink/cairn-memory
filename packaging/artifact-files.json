@@ -287,5 +287,22 @@
   "core/context-read-local-status.mjs",
   "docs/local-embedder-bge-m3.md",
   "core/topic-reader-sqlite.mjs",
-  "docs/plans/topic-reader-wal-fix.md"
+  "docs/plans/topic-reader-wal-fix.md",
+  "core/context-product-authority.mjs",
+  "core/context-product-control.mjs",
+  "core/context-product-reader.mjs",
+  "core/context-product-schema.mjs",
+  "core/context-product-telemetry.mjs",
+  "core/context-product-worker.mjs",
+  "core/context-read-supervisor.mjs",
+  "core/reader-worker-lifecycle.mjs",
+  "docs/context-read-product.md",
+  "docs/plans/context-read-p2a-impl.md",
+  "core/context-product-validation.mjs",
+  "core/context-product-manifest.mjs",
+  "core/context-product-service.mjs",
+  "core/context-product-sidecar.mjs",
+  "core/context-product-index.mjs",
+  "core/context-product-pump.mjs",
+  "docs/plans/context-read-p2b-impl.md"
 ]

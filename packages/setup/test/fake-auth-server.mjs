@@ -15,7 +15,8 @@ export async function fakeAuthServer(t, options = {}) {
   const serverNow = () => Date.now() + (options.clockSkew ?? 0);
   const server = http.createServer(async (req, res) => {
     const chunks = [];
-    for await (const chunk of req) chunks.push(chunk);
+    try { for await (const chunk of req) chunks.push(chunk); }
+    catch { return; }
     let body;
     try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : undefined; }
     catch { violations.push('invalid JSON request'); res.writeHead(400).end(); return; }

@@ -117,3 +117,54 @@ for (const fault of ['directory-fsync', 'post-link-timeout']) test(`${fault}: in
   assert.equal(fs.statSync(path).ino, before.ino);
   assert.deepEqual(fs.readdirSync(workspace.path), ['published.sqlite']);
 });
+
+for (const code of [5, 261, 6, 7, 10]) test(`Fix round 4 legacy probe SQLite ${code} retains its original result and refusal`, async t => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const { probeRollbackJournal } = await import('../sqlite-journal-probe.mjs');
+  const { assertContextReadCanonicalDelete } = await import('../context-read-sidecar.mjs');
+  const workspace = createTestWorkspace(t), path = join(workspace.path, 'legacy.sqlite');
+  createExclusiveSqliteFile(path);
+  const db = new DatabaseSync(path); db.exec('CREATE TABLE synthetic(id INTEGER)'); db.close();
+  const spawn = childProcess.spawnSync;
+  t.mock.method(childProcess, 'spawnSync', (command, args, options) => {
+    args = [...args];
+    args[2] = args[2].replace("db.prepare('PRAGMA journal_mode').get().journal_mode",
+      `(() => { throw Object.assign(Error('synthetic'), { errcode: ${code} }); })()`);
+    return spawn(command, args, options);
+  });
+  syncBuiltinESMExports();
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  assert.deepEqual(probeRollbackJournal(path), { stage: 'query', code: code & 255 });
+  assert.throws(() => assertContextReadCanonicalDelete(path), { code: 'index_unavailable', reason: 'unsafe_file' });
+});
+
+for(const fault of ['stale-identity','stage-fsync','competing-selection','late-companion'])test('Fix1 cache replacement '+fault+' preserves the incumbent until atomic publication',t=>{
+  const workspace=createTestWorkspace(t),path=join(workspace.path,'repair.context-read-product-v1.1.sqlite');
+  createExclusiveSqliteFile(path);const before=fs.statSync(path),expected=before.dev+':'+before.ino;
+  const spawn=childProcess.spawnSync;
+  t.mock.method(childProcess,'spawnSync',(command,args,options)=>{
+    args=[...args];
+    if(fault==='stale-identity')args[2]=`import {writeFileSync,renameSync as replaceWinner} from 'node:fs';
+      writeFileSync(process.argv[1]+'.winner','newer certificate',{mode:0o600});replaceWinner(process.argv[1]+'.winner',process.argv[1]);\n`+args[2];
+    if(fault==='late-companion')args[2]=args[2].replace('fsyncSync(fd);',"fsyncSync(fd); const journal=openSync(target+'-journal','wx',0o600);closeSync(journal);");
+    if(fault==='stage-fsync')args[2]=args[2].replace('fsyncSync(fd);',"throw Object.assign(Error('stage fault'),{code:'EIO'});");
+    if(fault==='competing-selection')args[2]=args[2].replace('fsyncSync(fd);',`fsyncSync(fd);
+      const {spawnSync}=await import('node:child_process');
+      const competitor=spawnSync(process.execPath,['--input-type=module','-e',
+        ${JSON.stringify("import {createExclusiveSqliteFile} from '"+new URL('../sqlite-journal-probe.mjs',import.meta.url).href+"';try{createExclusiveSqliteFile(process.argv[1],process.argv[2]);process.exit(9);}catch(e){if(e.code!=='ERR_SQLITE_ERROR'||(e.errcode&255)!==5)process.exit(8);}")},target,process.argv[3]],{encoding:'utf8',env:{}});
+      if(competitor.status!==0)throw Object.assign(Error('repair not coordinated'),{code:'EIO'});
+      const incumbent=(await import('node:fs')).lstatSync(target);
+      if(incumbent.dev+':'+incumbent.ino!==process.argv[3])throw Error('target disappeared before publish');`);
+    return spawn(command,args,options);
+  });syncBuiltinESMExports();
+  t.after(()=>{t.mock.restoreAll();syncBuiltinESMExports();});
+  if(fault==='competing-selection'){
+    const successor=createExclusiveSqliteFile(path,expected);assert.notEqual(successor.ino,before.ino);
+    assert.deepEqual(fs.readdirSync(workspace.path).sort(),['repair.context-read-product-v1.1.sqlite','repair.context-read-product-v1.1.sqlite.lifecycle-lock.sqlite'].sort());
+  }else{
+    assert.throws(()=>createExclusiveSqliteFile(path,expected),{code:fault==='stage-fsync'?'EIO':fault==='late-companion'?'EBUSY':'ESTALE',published:false});
+    assert.equal(fs.existsSync(path),true);
+    if(['stage-fsync','late-companion'].includes(fault))assert.equal(fs.statSync(path).ino,before.ino);
+    else assert.notEqual(fs.statSync(path).ino,before.ino);
+  }
+});
