@@ -8,7 +8,7 @@ import { experimentPolicy } from './session.mjs';
 import { createRationaleLiveSession } from './qualification-session.mjs';
 import { createRationaleAttempt, RATIONALE_LIMITS } from './qualification-pilot-attempt.mjs';
 import { getQualificationPilotPins } from './qualification-pilot.mjs';
-import { inspectArtifact, privateDirectory } from './installed-capture-support.mjs';
+import { inspectArtifact, verifyInspectedArtifact, privateDirectory } from './installed-capture-support.mjs';
 import { writeQualifiedEvidence } from './qualified-attempt.mjs';
 import { startExperimentProxy } from './proxy.mjs';
 import { readDiagnostics } from './diagnostics.mjs';
@@ -99,7 +99,7 @@ async function execute(options) {
     if (!same(canonical(binding), canonical({ version: 1, runId: ledgerOptions.runId, policy: experimentPolicy() }))) fail('policy_mismatch');
     report.budgetBefore = budget(ledger.getState());
     attempt = createRationaleAttempt({ readState: () => ledger.getState(), expectedCheckpoint,
-      checkPins: () => { verifyPins(); verifyCapability(); if (!firstSent) inspectArtifact(executable, archive, artifactSha256); },
+      checkPins: () => { verifyPins(); verifyCapability(); if (!firstSent) verifyInspectedArtifact(executable, archive, provenance); },
       persist: evidence,
       send: async (route, body, requestOptions) => {
         if (!activeRecord || !['capture-0', 'capture-1', 'recall'].includes(activePhase)
@@ -114,7 +114,7 @@ async function execute(options) {
         report.traces.push(trace);
         const prefix = `case-${report.cases.indexOf(activeRecord)}-trace-${trace.sequence}`;
         evidence(`${prefix}-request`, trace);
-        verifyPins(); verifyCapability(); if (!firstSent) inspectArtifact(executable, archive, artifactSha256);
+        verifyPins(); verifyCapability(); if (!firstSent) verifyInspectedArtifact(executable, archive, provenance);
         firstSent = true;
         const response = await session.request(route, body, requestOptions);
         const bytes = new Uint8Array(await response.clone().arrayBuffer());
@@ -123,7 +123,7 @@ async function execute(options) {
         trace.responseAvailable = true; evidence(`${prefix}-response`, trace);
         return response;
       } });
-    verifyPins(); verifyCapability(); inspectArtifact(executable, archive, artifactSha256);
+    verifyPins(); verifyCapability(); verifyInspectedArtifact(executable, archive, provenance);
     // Construction verifies the existing capability; never provision a missing one.
     session = createRationaleLiveSession({ ledger: ledgerOptions, rationaleExtension, apiKey, fetchImpl });
     writeQualifiedEvidence(ledgerOptions.directory, `${ID}-intent`, { version: 1, id: ID,
