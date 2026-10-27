@@ -8,7 +8,7 @@ import { authorizeQualificationExtension } from '../experiment-budget/request-gu
 import { createQualificationLiveSession } from './qualification-session.mjs';
 import { experimentPolicy } from './session.mjs';
 import { startExperimentProxy } from './proxy.mjs';
-import { inspectArtifact, privateDirectory } from './installed-capture-support.mjs';
+import { inspectArtifact, verifyInspectedArtifact, privateDirectory } from './installed-capture-support.mjs';
 import { writeQualifiedEvidence } from './qualified-attempt.mjs';
 import { createQualificationPilotAttempt } from './qualification-pilot-attempt.mjs';
 
@@ -108,11 +108,11 @@ async function executeQualificationPilot(options) {
     attempt = createQualificationPilotAttempt({ readState: () => ledger.getState(), expectedCheckpoint,
       checkPins: () => {
         verifyPins();
-        if (!firstRequestSent) inspectArtifact(executable, archive, artifactSha256);
+        if (!firstRequestSent) verifyInspectedArtifact(executable, archive, provenance);
       }, persist: evidence,
       send: (...args) => { firstRequestSent = true; return session.request(...args); } });
     verifyPins();
-    inspectArtifact(executable, archive, artifactSha256);
+    verifyInspectedArtifact(executable, archive, provenance);
     writeQualifiedEvidence(ledgerOptions.directory, 'qualification-pilot-v1-intent', {
       version: 1, id: 'qualification-pilot-v1', expectedCheckpoint, pins,
       artifactSha256: provenance.artifactSha256, limits: { requests: 100, microUsd: 1_000_000 } });

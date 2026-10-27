@@ -46,6 +46,20 @@ pilot. Do not claim its expected state behavior has been implemented.
   verify before first and every subsequent request. New helper modules, if
   needed, must join the pin set. Recheck installed archive/runtime correspondence
   before first request. Never silently accept missing or updated pins.
+  Full artifact inspection reads and hashes the archive once, then decompresses
+  and validates its tar members in memory before server startup, without child
+  processes or filesystem extraction. Subsequent checks use the retained
+  provenance to re-hash the archive and installed sources with the same path/file
+  checks; request guards never decompress the archive while the installed
+  model-call timer is running.
+  Missing declared archive members or `package/package.json` fail explicitly
+  with `invalid_cairn_artifact`. Corrupt gzip may surface native zlib errors;
+  exact parity with the legacy tar subprocess error is impossible.
+  The in-memory reader accepts only regular-file and directory ustar members.
+  PAX (`x`/`g`) and GNU long-name (`L`/`K`) headers, links and devices fail
+  closed with `invalid_cairn_artifact`. A packed path that `npm pack` could
+  only express with PAX (one longer than the 100-byte name plus 155-byte ustar
+  prefix allow, or one that is not ASCII) therefore fails closed as well.
 - E4: exclusive durable `qualification-pilot-v1-intent.json` in the existing
   ledger directory prevents this fixed pilot being rerun via another output
   directory. Use existing safe exclusive/fsynced evidence helpers. Provision
