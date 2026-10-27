@@ -79,11 +79,11 @@ export function canonicalProductIdentity(path, db) {
 
 // Construction acquires no sidecar. Only a separately authorized operation
 // invokes observe/refresh, including when the file is missing or malformed.
-export function productSidecar({ path, db: canonical, identity, features, observer, writable = false,
+export function productSidecar({ path, db: canonical, identity, features, observer, sqlite, sidecarJournalMode = 'DELETE', writable = false,
   now = () => performance.now(), rendezvous = () => {} }) {
   features={...features,reviews:features.cards,receipts:features.cards};
   const sidePath = path + PRODUCT_SIDECAR_SUFFIX;
-  let side, sideWritable, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0;
+  let side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0;
   const lockPath=sidePath+'.lifecycle-lock.sqlite';
   const stamp=()=>{const s=sqliteFileStat(sidePath);return [s.dev,s.ino,s.size,s.mtimeNs,s.ctimeNs].join(':');};
   function acquire(createLock=false) {
@@ -95,7 +95,8 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       lockIdentity=productFile(lockPath);
       const open=()=>new DatabaseSync(lockPath,{readOnly:true});
       lifecycle=observer ? observer.invoke('open','connection',open) : open();
-      if(observer)lifecycle=observer.database(lifecycle);
+      if(sqlite)lifecycle=sqlite.open(lifecycle,lockPath).db;
+      else if(observer)lifecycle=observer.database(lifecycle);
     }
     lifecycle.exec('BEGIN');
     // A deferred BEGIN alone has no OS lock. This query pins the shared lock.
@@ -119,6 +120,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     return observer ? observer.invoke('execute','transaction',work) : work();
   }
   function verifyOpened() {
+    sideFiles?.();
     if(!same(openedIdentity,productFile(sidePath,true)))unavailable('storage_unavailable');
   }
   function read(work) {
@@ -127,9 +129,12 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       verifyOpened();rendezvous('snapshot');return work();
     }); } catch(e) { if(e.reason==='storage_unavailable')close();throw e; }
   }
-  const openNative = (write = false) => observer ? observer.invoke('open','connection', () => new DatabaseSync(sidePath, { readOnly: !write }))
-    : new DatabaseSync(sidePath, { readOnly: !write });
-  function close() { if (side?.isOpen) side.close(); side = null; metadata = null; }
+  const openNative = (write = false) => {
+    try { return observer ? observer.invoke('open','connection', () => new DatabaseSync(sidePath, { readOnly: !write }))
+      : new DatabaseSync(sidePath, { readOnly: !write }); }
+    catch (error) { if(sqlite)sqlite.openingFailure(error);throw error; }
+  };
+  function close() { if (side?.isOpen) side.close(); side = null; metadata = null; sideFiles = null; }
   function write(work) {
     side.exec('BEGIN IMMEDIATE');
     try { verifyOpened();const result = work();rendezvous('batch');side.exec('COMMIT'); return result; }
@@ -141,7 +146,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     const physical = productFile(sidePath, true), wantsWrite=writable&&create;
     if (!physical && !create) return false;
     if (side && physical && same(physical, openedIdentity) && sideWritable===wantsWrite) {
-      auxiliaries(sidePath, wantsWrite);
+      if(sqlite)sideFiles?.(); else auxiliaries(sidePath, wantsWrite);
       if (create) read(() => {
         metadata=side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
         if (!metadata || metadata.store_id!==identity.storeId) unavailable('wrong_store');
@@ -151,7 +156,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       return true;
     }
     close();
-    auxiliaries(sidePath, wantsWrite);
+    if(!sqlite)auxiliaries(sidePath, wantsWrite);
     if (!physical) {
       if (!writable) unavailable('missing');
       // The child publishes the complete format before any connection opens it.
@@ -160,13 +165,20 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       try { publish(null,initialization()); }
       catch(e) { if(e.code!=='EEXIST')throw e; }
       finally { acquire(); }
-    } else {
+    } else if (!sqlite) {
       const mode = probeRollbackJournal(sidePath, observer ? { observe: observer.journalProbe } : {});
       if (mode.code === 14 || mode.mode && mode.mode !== 'delete') unavailable('incompatible');
     }
     openedIdentity = productFile(sidePath);
-    side = openNative(wantsWrite);sideWritable=wantsWrite; if (observer) side = observer.database(side);
-    side.exec('PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=0;');
+    sideMode=undefined;
+    sideFiles=sqlite?.files(sidePath);
+    side = openNative(wantsWrite);sideWritable=wantsWrite;
+    if(sqlite){
+      const opened=sqlite.open(side,sidePath);side=opened.db;sideMode=opened.mode;
+      sideFiles({afterProbe:true});
+      if(wantsWrite && opened.mode!==sidecarJournalMode)unavailable('storage_unavailable');
+    }else if (observer) side = observer.database(side);
+    side.exec(sqlite ? 'PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF;' : 'PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=0;');
     if (!same(openedIdentity, productFile(sidePath))) unavailable('storage_unavailable');
     read(() => {
       metadata = side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
@@ -179,7 +191,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     });
     return true;
   }
-  const initialization=()=>({sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=1; ${ddl}`,
+  const initialization=()=>({...(sqlite ? {journalMode:sidecarJournalMode} : {}),sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=1; ${ddl}`,
     storeId:identity.storeId,profile:PRODUCT_PROFILE,incarnation:randomUUID(),
     attestation:{applicationId:APPLICATION_ID,schema:expectedSchema}});
   const sideIdentity = () => ({ ...productFile(sidePath), incarnation: metadata.incarnation,
@@ -342,6 +354,9 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     catch(e) {
       if (!['wrong_store','incompatible','corrupt'].includes(e.reason) && !(e.code==='ERR_SQLITE_ERROR' && [1,11,26].includes(e.errcode&255))) throw e;
       close();
+      // A WAL cache (or an indeterminate mode) cannot enter the legacy nolock
+      // replacement protocol. Quiesce and rebuild it explicitly at the host.
+      if(sqlite && sideMode!=='DELETE')unavailable('storage_unavailable');
       // Repair is explicit maintenance, never a read fallback. Refuse live or
       // unsafe companions; SQLite alone performs journal recovery on opening.
       auxiliaries(sidePath,false);
@@ -355,8 +370,10 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         if(['ESTALE','EEXIST','EBUSY'].includes(e.code))unavailable('storage_unavailable');
         throw e;
       }
-      openedIdentity=productFile(sidePath);side=openNative(true);sideWritable=true;if(observer)side=observer.database(side);
-      side.exec('PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=0;');
+      openedIdentity=productFile(sidePath);sideFiles=sqlite?.files(sidePath);
+      side=openNative(true);sideWritable=true;
+      if(sqlite){side=sqlite.open(side,sidePath).db;sideFiles({afterProbe:true});}else if(observer)side=observer.database(side);
+      side.exec(sqlite ? 'PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF;' : 'PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=0;');
       read(()=>{metadata=side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();});
     }
     let t = readTransaction(canonical,() => target(p,access));

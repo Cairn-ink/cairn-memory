@@ -65,7 +65,7 @@ export function drainNative(frame, terminated) {
 }
 function statementLabel(sql) {
   if (/query_only|trusted_schema|busy_timeout/i.test(sql)) return 'reader_configuration';
-  for (const name of ['application_id', 'user_version', 'schema_version', 'encoding']) if (new RegExp('^PRAGMA\\s+' + name + '\\b', 'i').test(sql)) return name;
+  for (const name of ['journal_mode', 'application_id', 'user_version', 'schema_version', 'encoding']) if (new RegExp('^PRAGMA\\s+' + name + '\\b', 'i').test(sql)) return name;
   if (/^\s*(BEGIN|COMMIT|ROLLBACK)\b/i.test(sql)) return 'transaction';
   if (/sqlite_master|pragma_|EXPLAIN/i.test(sql)) return 'schema_metadata';
   if (/namespace_epochs|store_metadata/i.test(sql)) return 'snapshot_metadata';

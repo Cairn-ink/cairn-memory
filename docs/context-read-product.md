@@ -1,4 +1,4 @@
-# Product adapter: P2a and P2b
+# Product adapter: P2a, P2b and P2d
 
 Select `profile:'context-read-product-v1.1'` and `version:'context-read-v1'`
 with `openContextProductReader` from the core entry. P2a releases capabilities
@@ -6,8 +6,9 @@ and canonical exact evidence fetch for DELETE stores: Memories on physical
 v18/v20–v33, Cards on v23–v33, and one namespace or personal plus one project.
 P2b adds lexical candidates, representation-v2 assembly, index status and explicit
 service maintenance on that same scope. Reader requests use certified product
-indexes only. Semantic search and WAL remain unavailable; no provider is
-constructed. The legacy profile and sidecar remain unchanged.
+indexes only. Semantic search remains unavailable; no provider is
+constructed. P2d adds explicitly opted-in WAL handling, subject to deployment
+qualification below. The legacy profile and sidecar remain unchanged.
 
 The product authenticates and resolves ACLs before opening. It supplies:
 
@@ -217,11 +218,71 @@ performs no lexical build or inference and reports disabled semantic coverage.
 `semantic:true` keeps the validated lexical result with a disabled semantic
 channel; it cannot enable a provider. All these calls make zero provider calls.
 
-`sidecarJournalMode:'WAL'` refuses the stable `index_unavailable` code before
-opening. Capabilities advertise `journals:['DELETE']`,
+Without `wal:true`, `sidecarJournalMode:'WAL'` still refuses `index_unavailable`
+before opening. Default capabilities retain `journals:['DELETE']`,
 `sidecarJournals:['DELETE']` and
-`wal:{available:false,reason:'deferred_to_p2d'}`. No partial WAL support, canonical
-mode change, migration, hook or writer callback is installed.
+`wal:{available:false,reason:'deferred_to_p2d'}` byte-for-byte.
+
+### Explicit WAL deployment opt-in
+
+The host sets **`wal:true` on both product reader and maintainer constructors**
+to permit SQLite's coordinated WAL/SHM creation and read marks. It is a boolean
+constructor option, separate from authentication and from the maintainer's
+required `sidecarJournalMode:'DELETE'|'WAL'`. The opt-in supports all four
+canonical/sidecar journal combinations, including read-only readers. Opted-in
+capabilities advertise both journal lists as `['DELETE','WAL']` and
+`wal:{available:true}`; this means code support, not platform qualification.
+Omitting the option or setting false preserves P2b refusal and capabilities.
+The legacy `openContextReader`/`context-read-v1` defaults do not accept this option.
+
+```js
+const reader = await openContextProductReader({ ...requestOptions, wal: true });
+const maintainer = await openContextIndexMaintainer({
+  ...serviceOptions, wal: true, sidecarJournalMode: 'WAL'
+});
+```
+
+Use an owner-controlled **0700 directory**, with canonical, product sidecar,
+lifecycle lock and every existing/created companion protected **0600**, regular,
+owner-owned and single-linked. Directory, file and companion symlinks refuse.
+The owner must allow SQLite to create WAL/SHM and read marks even for a read-only
+handle. Metadata-only identity checks precede SQLite access and repeat at
+statement boundaries. Concurrent external journal-mode changes or uncoordinated
+file replacement are unsupported. A protected active DELETE journal retains zero wait. Canonical connections
+are read-only and refuse a hot journal requiring recovery; only explicit
+sidecar maintenance can recover its own rollback journal. Unsafe/unusable WAL arrangements report `index_unavailable`;
+there is no writable-canonical fallback.
+
+The maintainer establishes the configured mode only while initializing a new
+staged sidecar under exclusive lifecycle exclusion. It never switches an
+existing sidecar's mode; a configured-mode mismatch refuses. A damaged WAL
+sidecar, or one whose mode cannot be established, also refuses the legacy
+replacement protocol. Stop clients and maintenance, verify native drain, then
+use the host's explicit cache-discard/rebuild procedure. Never manually remove
+live WAL/SHM, force a checkpoint, restore SHM bytes or use immutable live reads.
+No canonical journal-mode change or migration is performed by this API.
+
+One Worker operation shares the existing topic policy across canonical and
+sidecar connections: `min(operation deadline, operation start + 1000 ms) - 20 ms`.
+Every prepare, cached step, iterator step and transaction boundary refreshes
+the remaining floored native timeout; connection/transaction/statement admission
+does not restart it. Detected DELETE uses zero wait. Detection uses SQLite's
+zero-wait opening `PRAGMA journal_mode`, companion hints and at most one bounded
+opening fallback when BUSY occurs without a rollback journal. An exclusive
+DELETE connection before its first journaled write may receive that fallback;
+a stale rollback journal may suppress a WAL opening wait. Neither transactions
+nor traversals retry. Native exhaustion remains `storage_busy`; parent cutoff
+remains `read_timeout`. Public cancellation does not await native reaping.
+
+**Must qualify:** Linux ext4 on the production volume and deployed Node patch.
+**Should qualify separately:** WSL2 ext4 and macOS APFS. Network filesystems are
+outside deployment scope. Deterministic tests on development runtimes do not
+qualify any of these platforms or establish zero-busy, latency, freshness,
+availability or writer-progress measurement gates. The separate qualification
+packet must combine P2a/P2b/P2c/P2d and retain complete native writer/reader drain.
+**Production stays DELETE until the owner explicitly switches after the baseline
+re-run and production-volume qualification.** Setting `wal:true` grants companion
+access; it does not switch a live canonical database.
 
 Before enabling search, explicitly complete both `current` and `history` for
 every planned normalized projection. Physical v18/v20–v22 use

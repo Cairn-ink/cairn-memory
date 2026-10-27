@@ -150,3 +150,16 @@ for(const exhausted of [true,false])test(`Fix3 settled renewal expiry gets a fre
   assert.equal(await first,expired);assert.equal(expired.state,'renewal_expired');assert.equal(expired.usedItems,0);
   await p.close();
 });
+
+// P2d: the pump forwards the same explicit deployment permission as direct
+// maintenance. Renewal cannot silently change live sidecar configuration.
+test('P2d pump forwards WAL opt-in and refuses journal-policy changes during renewal',async t=>{
+  const s=setup(t);
+  for(const p of s.c.projections)Object.assign(p.options,{wal:true,sidecarJournalMode:'WAL'});
+  const pump=s.renew(s.c);await s.next();assert.equal(s.opened[0].wal,true);assert.equal(s.opened[0].sidecarJournalMode,'WAL');
+  const changed={...s.c,projections:s.c.projections.map(p=>({...p,options:{...p.options,sidecarJournalMode:'DELETE'}}))};
+  assert.throws(()=>s.renew(changed),{code:'read_in_progress'});
+  await pump.close();
+  for(const p of s.c.projections)p.options.wal='WAL';
+  assert.throws(()=>s.renew({...s.c,id:randomUUID()}),{code:'invalid_input'});
+});

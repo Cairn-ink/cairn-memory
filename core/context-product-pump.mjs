@@ -33,8 +33,9 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     // capability explicitly (v18 memory only). Never downgrade a Card request.
     const projections=c.projections.flatMap(p=>{
       const admitted=ownData(p,['options','types']),types=admitted.types;
-      const {supervisor,...data}=ownData(admitted.options,['supervisor','path','version','profile','readSet','ownerCoverage','requestControl','host','diagnostics','deadlineMs','sidecarJournalMode']);
+      const {supervisor,...data}=ownData(admitted.options,['supervisor','path','version','profile','readSet','ownerCoverage','requestControl','host','diagnostics','deadlineMs','sidecarJournalMode','wal']);
       const options={...hostConfiguration(data),supervisor};
+      if(options.wal!==undefined && typeof options.wal!=='boolean')fail('invalid_input');
       if(options.supervisor!==c.supervisor)fail('invalid_input');
       const binding=serviceIssuance(options.host.configuration.serviceBinding,options.readSet,options.ownerCoverage);
       if(credentialDigest(credential)!==binding.credentialDigest)fail('authority_required');
@@ -45,7 +46,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     // A configuration whose nominal round-robin sweep exceeds the required
     // five-second observation interval is invalid before any service work.
     if(projections.length*Math.max(c.pollMs,quantum.maxMs)>5000)fail('invalid_input');
-    const fingerprint=JSON.stringify(projections.map(p=>[p.options.path,p.options.readSet,p.types,p.intent,p.options.host.moduleUrl]));
+    const fingerprint=JSON.stringify(projections.map(p=>[p.options.path,p.options.readSet,p.types,p.intent,p.options.host.moduleUrl,...(p.options.wal===true?[true,p.options.sidecarJournalMode]:[])]));
     const domainOf=p=>JSON.stringify([resolve(p.options.path),p.options.readSet[0].ownerId,p.options.host.moduleUrl]);
     const domains=[...new Set(projections.map(domainOf))];
     const all=state(), old=all.entries.get(c.id);

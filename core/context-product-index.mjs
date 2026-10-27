@@ -18,9 +18,9 @@ const channels = ready => ({lexical:{state:ready?'ready':'unavailable',causes:re
 const trace = semantic => ({requested:semantic?'hybrid':'lexical',effective:'lexical',family:'local',preset:'rrf-k60-d12',embedder:null,
   tokenizer:TOKENIZER_VERSION,representation:REPRESENTATION_VERSION,
   timings:{maintenanceMs:0,lexicalMs:0,semanticPreflightMs:0,embeddingMs:0,fusionMs:0}});
-export function openProductIndex({ path, facade, authorize, ownerCoverage, observer, maintenance, counter }) {
+export function openProductIndex({ path, facade, authorize, ownerCoverage, observer, sqlite, sidecarJournalMode, maintenance, counter }) {
   const { db,read,evidence,bind,encode,identity,features,canonicalFence } = facade.port;
-  const storage = productSidecar({path,db,identity,features,observer,writable:maintenance}), rankings=new Map();
+  const storage = productSidecar({path,db,identity,features,observer,sqlite,sidecarJournalMode,writable:maintenance}), rankings=new Map();
   const types=facade.capabilities.types;
   function validate(method,original) {
     if (method==='getContextIndexStatus') {

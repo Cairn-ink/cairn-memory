@@ -1,0 +1,119 @@
+import { sqliteFileStat } from './sqlite-journal-probe.mjs';
+import { dirname } from 'node:path';
+import { createTopicSqlitePolicy, topicJournalMode } from './topic-reader-sqlite.mjs';
+
+const unavailable = () => { throw Object.assign(Error('index_unavailable'), { code: 'index_unavailable', reason: 'storage_unavailable' }); };
+const openingFailure = error => {
+  if (error?.code === 'ERR_SQLITE_ERROR' && [8, 14].includes(error.errcode & 255)) unavailable();
+  throw error;
+};
+const same = (a, b) => a.dev === b.dev && a.ino === b.ino;
+function protectedEntry(path, directory = false, optional = false) {
+  let s;
+  try { s = sqliteFileStat(path); } catch (e) { if (optional && e.code === 'ENOENT') return null; unavailable(); }
+  if (s.isSymbolicLink() || !(directory ? s.isDirectory() : s.isFile()) ||
+      (s.mode & 0o777n) !== (directory ? 0o700n : 0o600n) ||
+      typeof process.getuid !== 'function' || s.uid !== BigInt(process.getuid()) || !directory && s.nlink !== 1n) unavailable();
+  return s;
+}
+
+/** Metadata only: never acquire a raw database/companion descriptor. SQLite may
+ * create/remove companions; a continuously present inode may not be replaced.
+ * The owner-only directory is the deployment's exclusion boundary. Concurrent
+ * external mode changes and uncoordinated file replacement are unsupported. */
+export function productSqliteFiles(path) {
+  const directory = protectedEntry(dirname(path), true), file = protectedEntry(path);
+  const companions = new Map();
+  function check({ afterProbe = false } = {}) {
+    if (!same(directory, protectedEntry(dirname(path), true)) || !same(file, protectedEntry(path))) unavailable();
+    for (const suffix of ['-wal', '-shm', '-journal']) {
+      const current = protectedEntry(path + suffix, false, true), previous = companions.get(suffix);
+      // Journal presence is only a detection hint. The caller's canonical
+      // read-only connection cannot perform hot-journal recovery.
+      // A last writer can remove companions during the opening probe;
+      // SQLite may recreate them before our next lstat. Validate and adopt
+      // those new identities only at this explicit opening boundary.
+      if (current && previous && !same(previous, current) && !afterProbe) unavailable();
+      if (current) companions.set(suffix, current); else companions.delete(suffix);
+    }
+  }
+  check();
+  return check;
+}
+
+/** One operation clock, shared by every product connection. Reuse the topic
+ * policy's TOPIC_WAL_WAIT_MS / TOPIC_WAL_REPLY_RESERVE_MS pair without a copy.
+ * start() is called only at Worker operation admission, never at connection or
+ * transaction admission. The observer remains immediately around native calls. */
+export function createProductSqlitePolicy({ observer, now = () => Number(process.hrtime.bigint()) / 1e6 } = {}) {
+  const policy = createTopicSqlitePolicy({ now });
+  return {
+    start: deadlineAt => policy.start(deadlineAt),
+    files: productSqliteFiles,
+    openingFailure,
+    open(native, path) {
+      const observed = observer ? observer.database(native) : native;
+      // Configuration cannot take a storage lock. The mode query is the first
+      // storage statement, including on brand-new/checkpointed WAL databases.
+      let mode, check;
+      try {
+        check = productSqliteFiles(path);
+        observed.exec('PRAGMA busy_timeout=0');
+        mode = topicJournalMode(observed, path, policy);
+        check({ afterProbe: true });
+        if (!['DELETE', 'WAL'].includes(mode)) unavailable();
+      } catch (error) {
+        try { observed.close(); } catch { /* Keep the first failure and native telemetry. */ }
+        openingFailure(error);
+      }
+      const db = policy.database(observed, mode === 'WAL');
+      // Check before and after prepare/step/transaction. Wrapping outside
+      // the wait policy also covers cached statements and iterator disposal.
+      function call(object, key, args) {
+        // Rollback and query_only restoration must release the pinned native
+        // connection even after replacement/refusal. They read no storage.
+        if (key === 'exec' && /^\s*(?:ROLLBACK\s*$|PRAGMA query_only=)/i.test(args[0])) return Reflect.apply(object[key], object, args);
+        check();
+        let result;
+        try { result = Reflect.apply(object[key], object, args); }
+        catch (error) {
+          // Companion races cannot overwrite a committed native BUSY outcome.
+          try { check(); } catch { /* Retain the original native outcome. */ }
+          openingFailure(error);
+        }
+        check();
+        return result;
+      }
+      function statement(target) {
+        return new Proxy(target, { get(object, key) {
+          if (key === 'constructor') return object.constructor;
+          const value = Reflect.get(object, key, object);
+          if (typeof value !== 'function') return value;
+          return (...args) => {
+            const result = call(object, key, args);
+            return key === 'iterate' ? iterator(result) : result;
+          };
+        } });
+      }
+      function iterator(target) {
+        const wrapped = new Proxy(target, { get(object, key) {
+          if (key === Symbol.iterator) return () => wrapped;
+          const value = Reflect.get(object, key, object);
+          return typeof value === 'function' ? (...args) => call(object, key, args) : value;
+        } });
+        return wrapped;
+      }
+      return { mode, db: new Proxy(db, { get(object, key) {
+        if (key === 'constructor') return object.constructor;
+        const value = Reflect.get(object, key, object);
+        if (typeof value !== 'function') return value;
+        // Always dispose native connections even if a file was replaced.
+        if (key === 'close') return value.bind(object);
+        return (...args) => {
+          const result = call(object, key, args);
+          return key === 'prepare' ? statement(result) : result;
+        };
+      } }) };
+    },
+  };
+}

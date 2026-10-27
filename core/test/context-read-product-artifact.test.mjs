@@ -51,6 +51,22 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   t.diagnostic(`manifest/archive filesystem cross-check: manifest=${manifest.length}, installed=${archiveFiles.length}; tar pack exit=${packed.status}, unpack exit=${unpacked.status}`);
   const installed = closure(artifact, entries);
   assert.deepEqual(installed, expected);
+  // Independent route: enumerate installed files first, then close a set over
+  // all reverse edges, rather than discovering files from entry-point reads.
+  const edges=[];
+  for(const file of archiveFiles.filter(name=>name.endsWith('.mjs'))){
+    const source=readFileSync(join(artifact,file),'utf8');
+    for(const pattern of [/\bfrom\s+['"]([^'"]+)['"]/g,/\bimport\s*(?:\(\s*)?['"]([^'"]+)['"]/g,/new\s+URL\(\s*['"]([^'"]+)['"]\s*,\s*import\.meta\.url/g]){
+      for(const match of source.matchAll(pattern))if(match[1].startsWith('.') && match[1].endsWith('.mjs'))
+        edges.push([file,relative(artifact,resolve(artifact,dirname(file),match[1]))]);
+    }
+  }
+  const independentlyReached=new Set(entries);let changed=true;
+  while(changed){changed=false;for(const [from,to]of edges)if(independentlyReached.has(from)&&!independentlyReached.has(to)){independentlyReached.add(to);changed=true;}}
+  assert.deepEqual([...independentlyReached].sort(),expected);
+  t.diagnostic(`independent installed edge-set closure=${independentlyReached.size}; differences=0`);
+  assert.ok(installed.includes('core/context-product-sqlite.mjs')); // P2d Worker dependency.
+
   const staticFiles = closure(artifact, ['core/context-product-reader.mjs', 'core/context-read-supervisor.mjs'], false);
   t.diagnostic(`runtime/Worker closure cross-check: source=${expected.length}, installed=${installed.length}; static SQLite-free closure=${staticFiles.length}`);
   // Bootstrap code is supplied by the host, copied into the installed tree;
@@ -67,7 +83,7 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   const serviceCredential={opaque:randomUUID()},serviceBinding={kind:'service',serviceId:randomUUID(),credentialBindingId:randomUUID(),credentialExpiresUtcMs:null,
     credentialDigest:credentialDigest(serviceCredential),ownerId:ns.ownerId,namespaces:{readSet:[ns],ownerCoverage},issuedAt:0};
   const maintainer=await api.openContextIndexMaintainer({supervisor,path:f.path,version:'context-read-v1',profile:PRODUCT_PROFILE,
-    readSet:[ns],ownerCoverage,sidecarJournalMode:'DELETE',diagnostics:true,
+    readSet:[ns],ownerCoverage,wal:true,sidecarJournalMode:'WAL',diagnostics:true,
     host:{moduleUrl:pathToFileURL(join(artifact,'host.mjs')).href,configuration:{serviceBinding,state}}});
   try {
     for(const intent of ['current','history']) {
@@ -76,9 +92,10 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
     }
   } finally {await maintainer.close();}
   const reader = await api.openContextProductReader({ supervisor, path: f.path, version: 'context-read-v1', profile: PRODUCT_PROFILE,
-    readSet: [ns], ownerCoverage, requestControl, diagnostics: true, host: { moduleUrl: pathToFileURL(join(artifact, 'host.mjs')).href, configuration: { requestBinding: binding, state, requestReservation: new SharedArrayBuffer(4) } } });
+    readSet: [ns], ownerCoverage, requestControl, wal: true, diagnostics: true, host: { moduleUrl: pathToFileURL(join(artifact, 'host.mjs')).href, configuration: { requestBinding: binding, state, requestReservation: new SharedArrayBuffer(4) } } });
   try {
     assert.equal(ok(await reader.getContextReadCapabilities()).execution, 'worker');
+    assert.deepEqual(ok(await reader.getContextReadCapabilities()).sidecarJournals, ['DELETE','WAL']);
     const evidence = ok(await reader.fetchCandidateEvidence({ readSet: [ns], refs: [{ type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision }], intent: 'current' }, credential));
     assert.equal(evidence.items[0].content, f.db.prepare('SELECT content FROM memories WHERE id=?').get(memory.id).content);
     const candidates=ok(await reader.findCandidates({readSet:[ns],types:['memory'],intent:'current',query:'installed'},credential));

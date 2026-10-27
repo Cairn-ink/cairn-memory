@@ -176,6 +176,10 @@ const create = `
       const { DatabaseSync } = await import('node:sqlite');
       const db = new DatabaseSync(temporary);
       try {
+        if (init.journalMode !== undefined) {
+          if (!['DELETE','WAL'].includes(init.journalMode)) throw Error('unsafe_journal_mode');
+          db.exec('PRAGMA journal_mode=' + init.journalMode);
+        }
         db.exec('BEGIN IMMEDIATE;' + init.sql);
         db.prepare('INSERT INTO product_metadata VALUES(1,?,?,?,?)').run(init.storeId,init.profile,init.incarnation,replacing ? 'rebuild' : 'initial');
         db.exec('COMMIT');
