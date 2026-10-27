@@ -3,7 +3,7 @@ import { createReadStream,constants } from 'node:fs';
 import { lstat } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import { validateSubprobes } from './v4-validation.mjs';
-import { PROTOCOL,qualifies } from './protocol.mjs';
+import { PROTOCOL,qualifies,freshness } from './protocol.mjs';
 import { methodProfile } from './v4-plan.mjs';
 import { digest } from './report.mjs';
 async function* rows(path) {
@@ -37,6 +37,45 @@ function knownFailure(cell,record,series) {
   }
   return bad(record);
 }
+// Retain only scalar counts and overlap-reconciliation slots for the current
+// cell. Evaluate at the cell boundary/EOF, never latch a transient prefix p95.
+function percentileFailures(cell) {
+  const populations=new Map(),slots=new Map();
+  const change=(slot,include)=>{
+    if(!slot||slot.included===include)return;
+    slot.included=include;const delta=include?1:-1;
+    slot.population.n+=delta;if(slot.above)slot.population.above+=delta;
+  };
+  return {
+    record(series,r){
+      if(series==='overlap-final'){
+        const slot=slots.get(r.series)?.[r.index];
+        if(slot)change(slot,slot.eligible&&r.overlap===true);return;
+      }
+      if(!['main','cold','warm-reference','WM','restored-reader'].includes(series))return;
+      const method=r.method??(r.methodLabel?methodProfile(r.methodLabel).method:cell?.method??(cell?.kind==='backup'?'findCandidates':undefined));
+      const limit=PROTOCOL.latency[method];if(!limit)return;
+      const warm=['warm-reference','WM'].includes(series);
+      const threshold=method==='findCandidates'?(warm?limit.referenceP95Ms:limit.p95ByCount[cell?.count]):limit.p95Ms;
+      if(threshold===undefined)return;
+      // WM's four interleaved method/intent populations never share samples.
+      const key=JSON.stringify([series,method,...(series==='WM'?[r.methodLabel,r.intent]:[])]);
+      if(!populations.has(key))populations.set(key,{n:0,above:0,minimum:cell?.sampleRules?.[series]?.minimum??(series==='cold'?10:series==='restored-reader'?1:50)});
+      const population=populations.get(key),eligible=qualifies(r),concurrent=typeof cell?.load==='string'&&cell.load!=='idle'&&!warm;
+      const slot={population,eligible,above:(warm?r.readMs:r.elapsedMs)>threshold,included:false};
+      change(slot,eligible&&(!concurrent||r.overlap===true));
+      if(concurrent&&['main','cold'].includes(series)){
+        if(!slots.has(series))slots.set(series,[]);slots.get(series).push(slot);
+      }
+    },
+    failed(){return [...populations.values()].some(p=>p.n>=p.minimum&&p.above>p.n-Math.ceil(p.n*.95));},
+  };
+}
+function freshnessFailure(targets) {
+  const groups=new Map();
+  for(const target of targets){const key=JSON.stringify([target.type,target.intent]);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(target);}
+  return [...groups.values()].some(group=>group.length>=PROTOCOL.freshnessMinimum&&freshness(group).decision==='failed');
+}
 async function readSegments(paths) {
   const segments=[];
   for(const path of paths){
@@ -51,12 +90,14 @@ async function readSegments(paths) {
     const base=path.endsWith('.partial')?path.slice(0,-8):path,journal=base+'.records.jsonl';
     if(!await lstat(journal).then(()=>true,e=>{if(e.code==='ENOENT')return false;throw e;}))throw Error('v4_checkpoint_missing_journal');
     let failed=final?.status==='failed',currentCell;
-    let ordinals=new Map(),pendingLatency=new Set();
+    let ordinals=new Map(),pendingLatency=new Set(),percentiles;
     for await(const row of rows(journal)){
       if(row.type==='header'&&row.headerHash!==headerHash)throw Error('v4_checkpoint_journal_identity');
       if(row.type==='record'){
         const cell=header.inventory.find(c=>c.id===row.cell);
-        if(row.cell!==currentCell){currentCell=row.cell;ordinals=new Map();pendingLatency=new Set();}
+        if(row.cell!==currentCell){failed||=percentiles?.failed()??false;currentCell=row.cell;ordinals=new Map();pendingLatency=new Set();percentiles=percentileFailures(cell);}
+        percentiles.record(row.series,row.record);
+        if(row.series==='freshness-targets'&&freshnessFailure(row.record))failed=true;
         if(['main','cold'].includes(row.series)){
           const index=ordinals.get(row.series)??0;ordinals.set(row.series,index+1);
           const limit=PROTOCOL.latency[row.record.method??cell?.method];
@@ -66,6 +107,7 @@ async function readSegments(paths) {
         if(row.series==='failure'||knownFailure(cell,row.record,row.series))failed=true;
       }
     }
+    failed||=percentiles?.failed()??false;
     segments.push({id:header.segmentId,registrationHash:header.registrationHash,hostId:header.host.id,volumeId:header.volume.id,node:header.node,header,cells,knownFailure:failed});
   }
   return segments;

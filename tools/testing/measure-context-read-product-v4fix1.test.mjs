@@ -2,6 +2,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { AsyncResource } from 'node:async_hooks';
+import { performance } from 'node:perf_hooks';
 import { spawnSync } from 'node:child_process';
 import { readFile,writeFile,symlink,mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -122,6 +124,67 @@ test('partial evidence latches loop, overshoot, busy, bounds, functional and wri
   const cases=[{hostLoop:loop(101)},{launcherLoop:loop(101)},{startupLoop:loop(101)},{overshootMs:51},{lateSuccess:true},{nativeBusy:1},{publicBusy:1},{bounds:false},{validated:false},{expected:false},{calls:[{operation:'review',deadlineMs:10,writeElapsedMs:11}]},{calls:[{operation:'capture',deadlineMs:100,writeElapsedMs:1,code:'read_timeout'}]},{calls:[{operation:'review',code:'storage_error'}]}];
   for(const [i,patch] of cases.entries()){const p=join(w.path,i+'.jsonl'),s=await createReportSink(p,header(cell));await s.record(0,'main',good(patch));await s.interrupt();assert.equal((await readSegments([p+'.partial']))[0].knownFailure,true,JSON.stringify(patch));}
 });
+async function percentileCheckpoint(t,cell,rows,{boundary=false}={}){
+  const w=createTestWorkspace(t),h=header(cell),path=join(w.path,'interrupted.jsonl'),sink=await createReportSink(path,h);
+  for(const [series,record] of rows)await sink.record(cell.id,series,record);
+  if(boundary)await sink.record(cell.id+1,'main',good());await sink.interrupt();
+  const {readSegments}=await load('v4-checkpoint-child.mjs',{},s=>s.slice(0,s.indexOf('\ntry{console.log'))+'\nexport {readSegments};');
+  const [segment]=await readSegments([path+'.partial']);
+  const faster={...segment,cells:[{key:cell.key,cell,complete:true,decision:'passed'}],knownFailure:false};
+  return {failed:segment.knownFailure,merged:checkedSegments(h,[segment,faster]).decision};
+}
+const percentileCases=[
+  ['candidate main 1112','requests','findCandidates','main',1112,50,800],
+  ['candidate main 3336','requests','findCandidates','main',3336,50,1100],
+  ['candidate cold','requests','findCandidates','cold',1112,10,800],
+  ['assembly main','requests','contextRead','main',1112,50,900],
+  ['assembly cold','requests','contextRead','cold',1112,10,900],
+  ['fetch main','requests','fetchCandidateEvidence','main',1112,50,200],
+  ['fetch cold','requests','fetchCandidateEvidence','cold',1112,10,200],
+  ['overflow main','overflow','findCandidates','main',1112,50,800],
+  ['idle reference','requests','findCandidates','warm-reference',1112,50,350],
+  ['WM reference','exposure','findCandidates','WM',1112,50,350],
+  ['restored reader','backup',undefined,'restored-reader',1112,1,800],
+];
+for(const [name,kind,method,series,count,n,ms] of percentileCases)test(`round2 interrupted ${name} completed p95 survives a faster resume`,async t=>{
+  const cell={id:0,key:name,kind,method,count,load:'idle'};
+  const record=good({methodLabel:series==='WM'?'c12':undefined,intent:'current',elapsedMs:['warm-reference','WM'].includes(series)?1:ms,readMs:ms});
+  const r=await percentileCheckpoint(t,cell,Array.from({length:n},()=>[series,record]));
+  assert.equal(r.failed,true);assert.equal(r.merged,'failed');
+});
+test('round2 completed p95 is retained at a cell boundary as well as EOF',async t=>{
+  const cell={id:0,key:'boundary',kind:'requests',method:'findCandidates',count:1112};
+  assert.equal((await percentileCheckpoint(t,cell,Array.from({length:50},()=>['main',good({elapsedMs:800})]),{boundary:true})).failed,true);
+});
+for(const overlap of [false,true])test(`round2 completed loaded p95 uses final overlap ${overlap}`,async t=>{
+  const cell={id:0,key:'loaded',kind:'requests',method:'findCandidates',count:1112,load:'fresh-same'};
+  const rows=Array.from({length:50},()=>['main',good({elapsedMs:800,overlap:false})]);
+  rows.push(...Array.from({length:50},(_,index)=>['overlap-final',{series:'main',index,overlap}]));
+  assert.equal((await percentileCheckpoint(t,cell,rows)).failed,overlap);
+});
+test('round2 incomplete and failed attempts do not complete a percentile population',async t=>{
+  const cell={id:0,key:'short',kind:'requests',method:'findCandidates',count:1112};
+  const rows=Array.from({length:49},()=>['main',good({elapsedMs:800})]);rows.push(['main',good({ok:false,elapsedMs:1})]);
+  assert.equal((await percentileCheckpoint(t,cell,rows)).failed,false);
+});
+test('round2 prefix percentile failures are evaluated on the final population',async t=>{
+  const cell={id:0,key:'prefix',kind:'requests',method:'findCandidates',count:1112};
+  const rows=Array.from({length:100},(_,i)=>['main',good({elapsedMs:i<3?800:1})]);
+  assert.equal((await percentileCheckpoint(t,cell,rows)).failed,false);
+});
+test('round2 WM keeps method and intent percentiles separate',async t=>{
+  const cell={id:0,key:'WM',kind:'exposure',count:1112,load:'fresh-same'};
+  const rows=['c12','c24'].flatMap(methodLabel=>['current','history'].flatMap(intent=>Array.from({length:50},()=>['WM',good({methodLabel,intent,elapsedMs:1,readMs:methodLabel==='c12'&&intent==='current'?350:1})])));
+  assert.equal((await percentileCheckpoint(t,cell,rows)).failed,true);
+  const incomplete=rows.filter(([,r])=>r.methodLabel==='c24'||r.intent==='history').concat(rows.filter(([,r])=>r.methodLabel==='c12'&&r.intent==='current').slice(0,49));
+  assert.equal((await percentileCheckpoint(t,cell,incomplete)).failed,false);
+});
+test('round2 completed freshness percentile survives interruption and resume',async t=>{
+  const cell={id:0,key:'F',kind:'freshness',count:1112,type:'memory',intent:'current'};
+  const targets=Array.from({length:100},()=>({type:'memory',intent:'current',committedAt:0,observedAt:31000}));
+  const r=await percentileCheckpoint(t,cell,[['freshness-targets',targets]]);assert.equal(r.failed,true);assert.equal(r.merged,'failed');
+  assert.equal((await percentileCheckpoint(t,cell,[['freshness-targets',targets.slice(0,99)]])).failed,false);
+});
 test('checkpoint database names never open a descriptor in the measuring process; links and non-files refuse',async t=>{
   const w=createTestWorkspace(t),path=join(w.path,'canonical.sqlite.jsonl');await writeFile(path,'SQLite format 3\u0000');
   const opens=[],fs=await import('node:fs');const {readSegments}=await load('v4-checkpoints.mjs',{'node:fs':{...fs,createReadStream:(...args)=>{opens.push(args[0]);return fs.createReadStream(...args);}}});
@@ -133,14 +196,31 @@ test('checkpoint database names never open a descriptor in the measuring process
   // A valid report copied with a linked journal is also refused.
   const copy=join(w.path,'copy.jsonl');await writeFile(copy,await readFile(p));await symlink(p+'.records.jsonl',copy+'.records.jsonl');await assert.rejects(readSegments([copy]),/regular_file_required/);
 });
-async function runSession({blockAt,failure}={}){
+async function runSession({blockAt,failure,afterAwait=false,attribution='complete',probe=false,concurrentEngine=false,realPump=false}={}){
   const {sharedSession}=await load('v4-session.mjs'),{observeLoop}=await import('./fixtures/context-product/engine.mjs');
-  const session=sessionFixture(),report=output(),lanes=[];let clock=0,parentClock=0,pumpStopped=false,writerStopped=false;
+  const session=sessionFixture(),report=output(),lanes=[];let clock=0,parentClock=0,pumpStopped=false,writerStopped=false,finished=false,sampled=false,samplerStopped=false,validateCalls=0,engineCallback;
+  if(probe)session.batches=[{ordinal:0,query:'frozen'}];
+  const target={targetId:'m0',type:'memory',id:'m0',revision:1,namespace,batch:0,intent:'history',committedAt:50};
+  let targetSent=false;
+  const originalRecord=report.record;
+  report.record=async function(...args){if(afterAwait)await Promise.resolve();if(blockAt==='harness-record')parentClock+=150;return originalRecord.apply(this,args);};
   const block=phase=>{if(blockAt===phase)parentClock+=150;};
   const cells=['current','history'].map(intent=>({id:0,key:intent,kind:'availability',intent,canonical:'WAL',sidecar:'WAL',schema:18}));
-  const config={cell:cells[0],supervision:{stallMs:1000},maintainerCoverage:'complete',maintainerDiagnostics:[{coverage:'complete',busy:0}]};
-  const promise=sharedSession(cells,session,{config,sink:report,prepareInput:async c=>{block('harness-validation');return {...c,input:{}};},validateProbe:()=>true},{
-    now:()=>clock,wait:async ms=>{clock+=ms;},loopFactory:()=>observeLoop({timers:false,now:()=>parentClock}),
+  const config={protocol:'P2-product-v4',pump:{cronMs:1000,budgets:{},quantum:{}},cell:cells[0],supervision:{stallMs:1000},maintainerCoverage:'complete',maintainerDiagnostics:[{coverage:'complete',busy:0}]};
+  const promise=sharedSession(cells,session,{config,sink:report,prepareInput:async c=>{if(afterAwait)await Promise.resolve();block('harness-validation');if(concurrentEngine)await engineCallback();return {...c,input:c.cell.kind==='freshness'?{query:'frozen'}:{}};},validateProbe:async()=>{validateCalls++;if(afterAwait)await Promise.resolve();block('harness-probe');return true;}},{
+    now:()=>clock,wait:async ms=>{
+      if(realPump&&ms===1){const next=session.availability.find(s=>s.releaseMs>clock-50)?.releaseMs??180000;clock+=Math.min(100,Math.max(1,next-(clock-50)-5));}
+      else clock+=ms;
+    },loopFactory:()=>{
+      const observed=observeLoop({timers:false,now:()=>parentClock});return {...observed,async finish(){const r=await observed.finish();finished=true;return r;}};
+    },
+    makeSampler:async pids=>{assert.deepEqual(pids,[process.pid]);sampled=true;return {async collect(){assert.fail('sampler transfer during observation');},async stop(){
+      assert.equal(finished,true);samplerStopped=true;if(attribution==='failed')throw Error('sampler_exit');
+      const sample=(at,n)=>({pid:process.pid,at,threads:[{tid:process.pid,runtimeNs:n*10,runqueueNs:n*20,slices:n},{tid:123,runtimeNs:n*30,runqueueNs:n*40,slices:n}],vm:{pswpin:n,pswpout:n*2,pgmajfault:n*3}});
+      const samples=attribution==='unsupported'||attribution==='missing'?[]:[sample(performance.timeOrigin-1,1),sample(performance.timeOrigin+parentClock+1,2)];
+      if(attribution==='missing-main')for(const sample of samples)sample.threads=sample.threads.filter(t=>t.tid!==process.pid);
+      return {supported:attribution!=='unsupported',coverage:attribution==='dropped'?'incomplete':'complete',dropped:attribution==='dropped'?1:0,samples};
+    }};},
     makeLane:()=>{
       const queue=[],waiters=[];let exit;const exited=new Promise(r=>{exit=r;});
       const send=m=>{const i=waiters.findIndex(w=>Array.isArray(w.type)?w.type.includes(m.type):w.type===m.type);if(i>=0)waiters.splice(i,1)[0].resolve(m);else queue.push(m);};
@@ -148,24 +228,77 @@ async function runSession({blockAt,failure}={}){
         if(m.type==='read'){
           if(failure==='rejected-wait'){for(const w of waiters.splice(0))w.reject(Error('attempt_rejected'));lane.reject=true;}
           else if(failure==='lane-failure')send({type:'lane-failure',id:m.id,code:'sampler_failed'});
-          else send({type:'read-result',id:m.id,value:{record:good({startedAt:clock,readStartedAt:clock,readFinishedAt:clock+1})}});
+          else send({type:'read-result',id:m.id,value:{record:good({startedAt:clock,readStartedAt:clock,readFinishedAt:clock+1}),result:{value:{items:[{ref:{type:'memory',memoryId:'m0',revision:1,namespace}}]}}}});
         }else if(m.type==='stop'){block('lane-stop');lane.connected=false;lane.stopped=true;send({type:'result',attribution:{}});exit({code:0,signal:null});}
       },wait(type){if(type==='ready')return Promise.resolve({startupLoop:loop()});if(lane.reject)return Promise.reject(Error('attempt_rejected'));
         const i=queue.findIndex(m=>Array.isArray(type)?type.includes(m.type):m.type===type);return i>=0?Promise.resolve(queue.splice(i,1)[0]):new Promise((resolve,reject)=>waiters.push({type,resolve,reject}));}};
       lanes.push(lane);return lane;
     },
-    makePump:async()=>({async flush(){block('pump-renewal');},async stop(){block('pump-stop');pumpStopped=true;return [{diagnostics:{protocol:'context-native-v1',coverage:'complete',busy:0}}];}}),
-    makeWriter:async()=>{let startAt,endAt;return {child:{take:()=>[]},flush(){},start(s,e){startAt=s;endAt=e;},async stop(){writerStopped=true;
+    makePump:async(config,write,{harness=fn=>fn()}={})=>{
+      if(realPump){
+        const engineModule=await import('./fixtures/context-product/engine.mjs');
+        const context=vm.createContext({process,Date,setInterval:()=>1,clearInterval(){}});
+        const nativePump={completion:new Promise(()=>{}),getStatus:()=>({}),async close(){await Promise.resolve();block('pump-stop');}};
+        const {startPump}=await load('series.mjs',{
+          './engine.mjs':{...engineModule,configure:async()=>{await Promise.resolve();block('harness-pump-setup');return {token:{},options:{},supervisor:{async drain(){await Promise.resolve();block('pump-drain');return [];},ackCleanup(){},async close(){await Promise.resolve();block('pump-supervisor-stop');}}};}},
+          '../../../../core/index.mjs':{renewContextMaintenancePump:()=>{block('pump-renewal');return nativePump;}},
+        },s=>s,context);
+        const pump=await startPump(config,write,{harness});
+        return {...pump,async stop(){const drained=await pump.stop();pumpStopped=true;return [...drained,{diagnostics:{protocol:'context-native-v1',coverage:'complete',busy:0}}];}};
+      }
+      // Created in the engine scope. Delivery while preparation is awaiting must
+      // remain observed, independently of that harness Promise's lifetime.
+      const resource=new AsyncResource('fixture-engine');
+      engineCallback=()=>resource.runInAsyncScope(()=>Promise.resolve().then(()=>{parentClock+=150;}));
+      return {async flush(){if(afterAwait)await Promise.resolve();block('pump-renewal');},async stop(){if(afterAwait)await Promise.resolve();block('pump-stop');pumpStopped=true;resource.emitDestroy();return [{diagnostics:{protocol:'context-native-v1',coverage:'complete',busy:0}}];}};
+    },
+    makeWriter:async()=>{let startAt,endAt;return {child:{take:()=>{if(!probe||targetSent)return [];targetSent=true;return [{target}];}},flush(){},start(s,e){startAt=s;endAt=e;},async stop(){writerStopped=true;await Promise.resolve();block('harness-writer-bookkeeping');
       const calls=[0,179990].map((offset,k)=>({id:k,ordinaryOrdinal:k,streamKind:'ordinary',operation:k?'review':'capture',lifecycle:'fresh',writerTarget:'same',nativeCommit:true,startedAt:startAt+offset,
         cycleStartedMono:offset,openStartedAt:startAt+offset+1,openFinishedAt:startAt+offset+2,writeStartedAt:startAt+offset+3,writeFinishedAt:startAt+offset+4,closeStartedAt:startAt+offset+5,closeFinishedAt:startAt+offset+6,finishedAt:startAt+offset+6,deadlineMs:5000,writeElapsedMs:1}));
       return {writerEndAt:endAt,calls,hostLoop:loop(),exit:{code:0,signal:null},diagnostics:{coverage:'complete',busy:0,records:[]},pacing:[0,179990].map((offset,ordinal)=>({ordinal,startedMono:offset,workFinishedMono:offset+6,delayMs:14,resumedMono:offset+20}))};}};},
   });
-  return {promise,report,lanes,drained:()=>pumpStopped&&writerStopped&&lanes.every(l=>l.stopped)};
+  return {promise,report,lanes,coverage:()=>({sampled,samplerStopped,validateCalls}),drained:()=>pumpStopped&&writerStopped&&lanes.every(l=>l.stopped)};
 }
 for(const blockAt of [undefined,'harness-validation','pump-renewal','pump-stop','lane-stop'])test(`shared-session parent loop includes ${blockAt??'healthy control'} through final drain`,async()=>{
   const r=await runSession({blockAt}),ds=await r.promise;assert.equal(r.drained(),true);const engineBlock=blockAt&&blockAt!=='harness-validation';
   for(const d of ds.values())assert.equal(d.decision,engineBlock?'failed':'passed',JSON.stringify(d));
   if(engineBlock){const observed=r.report.rows.find(r=>r.series==='session-parent-loop').record.hostLoop;assert.equal(observed.maxMs>100,true);}
+});
+for(const blockAt of ['harness-validation','harness-record','harness-probe','harness-writer-bookkeeping'])test(`round2 async ${blockAt} stays outside the parent loop`,async()=>{
+  const r=await runSession({blockAt,afterAwait:true,probe:blockAt==='harness-probe'}),ds=await r.promise;
+  const observed=r.report.rows.find(r=>r.series==='session-parent-loop').record.hostLoop;
+  assert.equal(observed.maxMs,0);assert.equal(observed.over100,0);assert.equal(r.drained(),true);
+  if(blockAt==='harness-probe')assert.ok(r.coverage().validateCalls>0);
+  else for(const d of ds.values())assert.equal(d.decision,'passed',JSON.stringify(d));
+});
+for(const blockAt of ['pump-renewal','pump-stop'])test(`round2 async engine ${blockAt} remains observed`,async()=>{
+  const r=await runSession({blockAt,afterAwait:true}),ds=await r.promise;
+  for(const d of ds.values())assert.equal(d.decision,'failed');assert.equal(r.drained(),true);
+});
+test('round2 engine callback delivered during async harness preparation stays observed',async()=>{
+  const r=await runSession({afterAwait:true,concurrentEngine:true}),ds=await r.promise;
+  for(const d of ds.values())assert.equal(d.decision,'failed');assert.equal(r.drained(),true);
+});
+for(const blockAt of ['harness-pump-setup','pump-renewal','pump-drain','pump-stop','pump-supervisor-stop'])test(`round2 real pump helper isolates ${blockAt}`,async()=>{
+  const r=await runSession({blockAt,realPump:true}),ds=await r.promise;
+  const engineBlock=blockAt!=='harness-pump-setup';
+  for(const d of ds.values())assert.equal(d.decision,engineBlock?'failed':'passed',JSON.stringify(d));
+  const observed=r.report.rows.find(r=>r.series==='session-parent-loop').record.hostLoop;
+  assert.equal(observed.maxMs>100,engineBlock);assert.equal(r.drained(),true);
+});
+for(const attribution of ['complete','unsupported','missing','dropped','missing-main','failed'])test(`round2 parent scheduling attribution ${attribution} is collected after finish`,async()=>{
+  const r=await runSession({blockAt:'pump-stop',attribution});await r.promise;
+  assert.deepEqual(r.coverage(),{sampled:true,samplerStopped:true,validateCalls:0});
+  const record=r.report.rows.find(r=>r.series==='session-parent-loop').record;
+  assert.equal(record.hostPid,process.pid);assert.ok(record.hostLoop.blocks.length>0);
+  for(const block of record.hostLoop.blocks){
+    assert.equal(block.scheduling.coverage,attribution==='complete'?'complete':'incomplete');
+    if(attribution==='complete'){
+      assert.deepEqual(block.scheduling.threads.map(t=>t.runqueueNs),[20,40]);
+      assert.deepEqual(block.scheduling.vm,{pswpin:1,pswpout:2,pgmajfault:3});
+    }
+  }
+  assert.ok(r.report.rows.some(r=>r.series==='session-parent-attribution'));assert.equal(r.drained(),true);
 });
 for(const failure of ['lane-failure','rejected-wait'])test(`session ${failure} settles pending work and drains every actor`,async()=>{
   const r=await runSession({failure});let timer;

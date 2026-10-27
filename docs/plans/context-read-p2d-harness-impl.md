@@ -1258,3 +1258,202 @@ check and the inventory `diff -u` each exited **0**. `git diff --cached
 setup runtime comparison against `06743bd8` also exited **0**. The branch remains
 at `06743bd8`, with 12 unstaged changed files. Verification processes finished;
 owned temporary loaders/logs were removed after recording these results.
+
+## v4 encoding fix round 2
+
+Base `55ad96fb`; both re-reviews were read in full, together with the original
+nine lessons and four additional lessons. This round addresses the three
+remaining findings. Engine runtime sources, lazy SQLite boundaries, raw-fd
+allowances, frozen protocol data, counts and estimates remain unchanged. No
+timing run, smoke, network/key operation or commit was performed.
+
+### Findings, fixes and regressions
+
+1. **Async harness continuations entered the parent-loop gate (P1).**
+   `v4-session.mjs` now runs session orchestration in an explicit harness async
+   scope. Preparation still uses the targets learned from the live writer.
+   A small async-hook bracket excludes each synchronous harness callback
+   and continuation, including preparation, probe validation/oracle work,
+   record construction, serialization and byte accounting after an `await`.
+   Parent engine entry points use an explicit `engine()` boundary; their
+   asynchronous descendants (including independent pump callbacks) stay
+   observed while harness preparation is awaiting. Scope restoration preserves
+   the prior observer state, including the callback already running when hooks
+   are enabled. Hooks are disabled when final observation finishes.
+   The extended `measure-context-read-product-v4fix1.test.mjs` fixture places
+   `await Promise.resolve()` before fabricated 150 ms preparation, oracle and
+   record blocks: none appears in the parent loop. Separate 150 ms blocks in
+   async pump renewal/shutdown and an independently created engine callback
+   delivered during async preparation remain observed and fail both session
+   cells. The real pump helper also excludes async configuration and trace
+   construction through its optional harness boundary, preserving observed
+   renewal, drain, pump close and supervisor close. Writer control, diagnostic
+   ledger validation and statistics stay in the harness scope; the independent
+   writer engine remains gated by its child loop. Additional regressions inject
+   async writer bookkeeping and exercise the real pump helper with manual
+   timers and fabricated engine calls. Existing synchronous renewal, pump
+   shutdown, lane shutdown and
+   lane-failure/resource-drain regressions remain in the suite.
+2. **Resume erased completed-population p95 failures (P1).**
+   The SQLite-free checkpoint child now keeps per-population success/threshold
+   counters and scalar final-overlap reconciliation slots for the current
+   cell, evaluating its completed percentile populations at cell boundaries
+   and journal EOF. It retains the failure latch through a faster resumed
+   segment without pooling samples. Main/cold method populations, overflow,
+   initialized idle references, all four separate WM method/intent populations,
+   restored-reader verification and freshness type/intent populations are
+   covered. Minimum success counts and the lifecycle versus initialized-read
+   clocks remain distinct; a transient prefix p95 is not prematurely latched.
+   Regressions include the reviewer's 50 candidate successes at 800 ms for
+   1,112 items against the 700 ms p95 gate, every other percentile population,
+   boundary/EOF evaluation, late overlap reconciliation and faster-resume
+   retention. Controls exclude failed attempts, incomplete populations and
+   repaired prefix percentiles, and prohibit pooling WM populations.
+3. **Parent blocks lacked scheduling attribution (P2).**
+   Shared sessions now start the existing SQLite-free sampler for the parent
+   PID before observation. It samples the process's main/Worker threads'
+   schedstat runtime/run-queue/slice counters and vmstat through the same actor
+   used elsewhere. Sample transfer and final stop occur only after parent
+   `loop.finish()`, including error cleanup. Parent records carry `hostPid`;
+   `attributeBlocks()` attaches scheduling deltas to each block alongside the
+   existing GC/resource evidence. Unsupported platforms, missing bracketing
+   samples/main-thread data, dropped coverage and sampler failure explicitly
+   mark block scheduling `coverage:'incomplete'`. Attribution stays diagnostic;
+   measured loop failures still fail. Manual-sample regressions assert both
+   thread deltas and vmstat deltas, reject collection before finish, and cover
+   all six complete/incomplete attribution cases.
+
+Counts stay **728 / 488 cells**, **432 / 224 fixed windows**, **252 / 172
+references**, with **46,627.4 s / 26,284 s** estimates; the v4 inventory and
+CLI-estimate regressions check these unchanged values.
+
+### Changed files, cross-checked two ways
+
+The first inventory uses `git diff --name-only 55ad96fb` and Git's untracked
+file enumeration. The second independently compares every base tree blob hash
+and file mode with worktree bytes, then adds new paths from an
+`rg --files --hidden` walk, excluding Git metadata. The sorted inventories
+agree at **5 changed files** (`diff -u`: **exit 0**). Both routes cover scripts,
+docs, public assets and configuration as well as harness sources.
+
+- `docs/plans/context-read-p2d-harness-impl.md`
+- `tools/testing/fixtures/context-product/series.mjs`
+- `tools/testing/fixtures/context-product/v4-checkpoint-child.mjs`
+- `tools/testing/fixtures/context-product/v4-session.mjs`
+- `tools/testing/measure-context-read-product-v4fix1.test.mjs`
+
+The test inventory is independently derived from a filesystem glob and an
+`rg --files` walk, with exact harness/guard/E1-C2 additions. Its sorted manifests
+also agree (`diff -u`: **exit 0**): **37 test paths**, including **32 required
+paths** (29 context-read files, two lock guards and E1-C2).
+
+### Verification commands and actual exit codes
+
+Commands used the exact nvm Node **22.16.0** or **24.15.0** executable with
+that runtime first in PATH. Both `node --version` commands exited **0**.
+Each test file ran separately through the following command; the table records
+the actual process return codes, captured directly rather than inferred from
+reporter output:
+
+```sh
+node tools/testing/run.mjs --test-reporter=tap <test-path>
+```
+
+| Explicit test path | Node 22.16.0 exit | Node 24.15.0 exit |
+| --- | --- | --- |
+| `tools/testing/measure-context-read-product-v4fix1.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-fix1.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-fix2.test.mjs` | 0 | 0 |
+| `core/test/context-read-assembly-races.test.mjs` | 0 | 0 |
+| `core/test/context-read-assembly-readonly.test.mjs` | 0 | 0 |
+| `core/test/context-read-assembly.test.mjs` | 0 | 0 |
+| `core/test/context-read-bm25.test.mjs` | 0 | 0 |
+| `core/test/context-read-budget.test.mjs` | 0 | 0 |
+| `core/test/context-read-core.test.mjs` | 0 | 0 |
+| `core/test/context-read-default-entropy.test.mjs` | 0 | 0 |
+| `core/test/context-read-embedder.test.mjs` | 0 | 0 |
+| `core/test/context-read-fusion.test.mjs` | 0 | 0 |
+| `core/test/context-read-local-embedder.test.mjs` | 0 | 0 |
+| `core/test/context-read-local-status.test.mjs` | 0 | 0 |
+| `core/test/context-read-moc-source.test.mjs` | 0 | 0 |
+| `core/test/context-read-process.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-artifact.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-control.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-import.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-index.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-pump.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-service.test.mjs` | 0 | 0 |
+| `core/test/context-read-product.test.mjs` | 0 | 0 |
+| `core/test/context-read-recovery.test.mjs` | 0 | 0 |
+| `core/test/context-read-review.test.mjs` | 0 | 0 |
+| `core/test/context-read-sidecar.test.mjs` | 0 | 0 |
+| `core/test/context-read-source-work.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources-authority.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources-bounds.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources-races.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources.test.mjs` | 0 | 0 |
+| `core/test/context-read-tokenize.test.mjs` | 0 | 0 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 | 0 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 | 0 |
+| `tools/testing/measure-topic-reader-wal.test.mjs` | 0 | 0 |
+
+All **74 initial file invocations exited 0**. After tightening the helper
+boundaries and adding their regressions, the five harness files, both lock
+guards and E1-C2 were rerun sequentially on both patches: **16 final affected
+file invocations, every exit 0**. The table above uses those latest results
+where applicable. Both complete matrix runners also exited **0**.
+
+The extended v4fix1 file runs its **69 deterministic cases** (33 prior and
+36 round-two checks) in a VM-enabled child; its outer wrapper asserts the
+child's actual exit code. The v4 suite separately passes all **47** cases on
+each patch. Both assembly-suite commands retain the existing A13 skip because
+the optional `tiktoken` package is unavailable: 19 passes, one skip, exit **0**
+on each patch. No dependency installation was attempted.
+
+The final new-regression commands were also run directly on both patches:
+
+```sh
+node --experimental-vm-modules --test --test-reporter=tap --test-name-pattern=round2 tools/testing/measure-context-read-product-v4fix1.test.mjs
+P2D_V4FIX1_BASE=55ad96fb node --experimental-vm-modules --test --test-reporter=tap --test-name-pattern=round2 tools/testing/measure-context-read-product-v4fix1.test.mjs
+```
+
+| Direct regression command | Node 22.16.0 | Node 24.15.0 |
+| --- | --- | --- |
+| Working implementation | exit 0; 36/36 passed | exit 0; 36/36 passed |
+| Reviewed sources at `55ad96fb` | exit 1; 26 failed / 10 controls passed | exit 1; 26 failed / 10 controls passed |
+
+These base runs load the reviewed session, pump and checkpoint-child sources
+through the same VM loader and dependency doubles. They reproduce each of the
+three findings; passing controls verify retained engine observation and proper
+population qualification. No wall-clock blocking injection is used.
+
+Final syntax commands, each run on both patches:
+
+| Command | Node 22.16.0 exit | Node 24.15.0 exit |
+| --- | --- | --- |
+| `node --check tools/testing/fixtures/context-product/v4-session.mjs` | 0 | 0 |
+| `node --check tools/testing/fixtures/context-product/v4-checkpoint-child.mjs` | 0 | 0 |
+| `node --check tools/testing/fixtures/context-product/series.mjs` | 0 | 0 |
+| `node --check tools/testing/measure-context-read-product-v4fix1.test.mjs` | 0 | 0 |
+
+Development test runs initially exited **1** while correcting the synthetic
+release-step fixture and observer-state restoration for a hook enabled during
+an existing callback. Those were corrected before the final runs above. An
+intermediate `git diff --check` exited **2** for an extra blank line at the end
+of this unfinished report; final whitespace checks are recorded below.
+
+Final `git diff --check`, the independent whitespace/final-newline scan over
+all **5 changed files**, the added-local-path/debug scan and both inventory
+`diff -u` comparisons exited **0** (5 changed paths / 37 test paths). The
+unchanged engine/runtime, lazy-import helpers, raw-fd allowances, frozen
+contract/protocol/counts and generated-setup comparison against `55ad96fb`
+exited **0**. `git diff --cached --exit-code` exited **0**. The branch remains
+`feat/context-read-p2d-harness` at `55ad96fb`, with five unstaged changed files;
+the primary commits.
+
+Both verification runners finished with actual exit **0**. Per-file test
+wrappers verified their process groups drained; the owned-runner process check
+also exited **0**. Owned temporary verification logs/scripts were removed after
+recording the results. No measurement, smoke, process or monitor is left running.

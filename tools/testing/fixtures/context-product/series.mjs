@@ -33,14 +33,17 @@ export async function build(config,write=async()=>{}) {
   }finally{await h?.close();await c.supervisor.close();var diagnostics=await drain(c.supervisor);}
   return {calls,coverage:diagnostics.length&&diagnostics.every(r=>r.diagnostics.coverage==='complete')?'complete':'incomplete',diagnostics};
 }
-export async function startPump(config,write) {
+export async function startPump(config,write,{harness=fn=>fn()}={}) {
   const {renewContextMaintenancePump}=await import('../../../../core/index.mjs');
-  const c=await configure(config,true);let pump,renewal,tick=0,stopped=false,draining=null,lastDrain=performance.now(),drainIncomplete=false;
-  const exported=[],pending=[],observations=[],trace=[{kind:'start',at:Date.now(),id:config.pump.id,settings:config.pump}];
+  const c=await harness(()=>configure(config,true));let pump,renewal,tick=0,stopped=false,draining=null,lastDrain=performance.now(),drainIncomplete=false;
+  const exported=[],pending=[],observations=[],trace=harness(()=>[{kind:'start',at:Date.now(),id:config.pump.id,settings:config.pump}]);
+  // Engine calls stay in the caller's observed scope; only harness preparation
+  // and diagnostic record construction cross this optional boundary.
+  const traceEvent=(kind,extra={})=>{const at=harness(()=>Date.now()),status=pump.getStatus();harness(()=>trace.push({kind,at,...extra,status}));};
   const exportNow=()=>draining??=(async()=>{
     if(performance.now()-lastDrain>500)drainIncomplete=true;
     const records=await c.supervisor.drain();
-    for(const record of records){exported.push(record);pending.push(record);c.supervisor.ackCleanup(record.cleanupId);}
+    for(const record of records){harness(()=>{exported.push(record);pending.push(record);});c.supervisor.ackCleanup(record.cleanupId);}
     lastDrain=performance.now();
   })().catch(()=>{drainIncomplete=true;}).finally(()=>{draining=null;});
   const windowBase=Number(process.hrtime.bigint()/1000000n);
@@ -49,18 +52,18 @@ export async function startPump(config,write) {
     const previous=pump;pump=renewContextMaintenancePump({supervisor:c.supervisor,id:config.pump.id,window:{id:String(windowId),endsAtMonoMs,usedItems:0,usedMs:0},
       budgets:config.pump.budgets,quantum:config.pump.quantum,pollMs:config.pump.pollMs,renewalMs:config.pump.renewalMs,
       projections:[{options:c.options,types:config.types}],serviceCredential:c.token});
-    if(config.protocol==='P2-product-v4')trace.push({kind:'renew',at:Date.now(),replaced:previous!==undefined&&pump!==previous,status:pump.getStatus()});
+    if(config.protocol==='P2-product-v4')traceEvent('renew',{replaced:previous!==undefined&&pump!==previous});
     // Every completion is observed, including expiry/exhaustion/failure. No
     // detached background task promises supervision after the caller returns.
-    pump.completion.then(r=>{if(!stopped)observations.push({tick:tick++,state:r.state,error:r.error});}).catch(()=>{drainIncomplete=true;});
+    pump.completion.then(r=>harness(()=>{if(!stopped)observations.push({tick:tick++,state:r.state,error:r.error});})).catch(()=>{drainIncomplete=true;});
   };
   renew();renewal=setInterval(renew,config.pump.cronMs);
   // Only public engine drain/ack and minimal queueing run on this timer. Record
   // validation and serialization are deferred until between reader observations.
   const drainTimer=setInterval(()=>{void exportNow();},PROTOCOL.pumpDrainMs);
-  const flush=async()=>{if(config.protocol==='P2-product-v4')trace.push({kind:'quantum',at:Date.now(),status:pump.getStatus()});await exportNow();if(pending.length)await write('maintenance-drain',pending.splice(0));for(const observation of observations.splice(0))await write('pump',observation);};
-  return {flush,trace,async stop(){if(config.protocol==='P2-product-v4')trace.push({kind:'stopping',at:Date.now(),status:pump.getStatus()});stopped=true;clearInterval(renewal);clearInterval(drainTimer);await draining;await pump.close();await c.supervisor.close();await flush();if(config.protocol==='P2-product-v4')trace.push({kind:'stop',at:Date.now(),status:pump.getStatus()});
-    if(drainIncomplete)exported.push({diagnostics:{protocol:'context-native-v1',coverage:'incomplete',busy:0,records:[]}});return exported;}};
+  const flush=async()=>{if(config.protocol==='P2-product-v4')traceEvent('quantum');await exportNow();if(pending.length)await harness(()=>write('maintenance-drain',pending.splice(0)));for(const observation of observations.splice(0))await harness(()=>write('pump',observation));};
+  return {flush,trace,async stop(){if(config.protocol==='P2-product-v4')traceEvent('stopping');stopped=true;clearInterval(renewal);clearInterval(drainTimer);await draining;await pump.close();await c.supervisor.close();await flush();if(config.protocol==='P2-product-v4')traceEvent('stop');
+    if(drainIncomplete)harness(()=>exported.push({diagnostics:{protocol:'context-native-v1',coverage:'incomplete',busy:0,records:[]}}));return exported;}};
 }
 export async function requestSeries(config,{cell,sink,oracle,smoke=false},{attempt:readAttempt=attempt,coldAttempt:readCold=coldAttempt,startPump:makePump=startPump,startWriter:makeWriter=startWriter,startSampler:makeSampler=startSampler,prepareAttempt=async c=>c}={}) {
   const records={warmups:[],main:[],cold:[]},decisions=[];let writer,writerResult,pump,sampler;
