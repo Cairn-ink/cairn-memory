@@ -31,7 +31,10 @@ export async function prebuild(config, types = ['memory', 'card']) {
     for (const intent of ['current', 'history']) {
       let complete = false;
       for (let i = 0; i < 100; i++) {
-        const result = ok(await h.refreshContextIndex({ readSet: config.options.readSet, types, intent, mode: 'lexical', budget: { maxItems: 1024, maxMs: 5000 } }, config.token));
+        const raw = await h.refreshContextIndex({ readSet: config.options.readSet, types, intent, mode: 'lexical', budget: { maxItems: 1024, maxMs: 5000 } }, config.token);
+        // A loaded host can overrun one quantum's cutoff; committed checkpoints let the next quantum resume.
+        if (!raw.ok && raw.error?.code === 'read_timeout') continue;
+        const result = ok(raw);
         if (result.status === 'complete') { results.push(result); complete = true; break; }
       }
       if (!complete) throw Error('fixture prebuild did not complete');
