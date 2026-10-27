@@ -1,4 +1,5 @@
 // Pure protocol arithmetic. No clocks, storage, imports of SQLite or runtime hooks.
+import { isDeepStrictEqual } from 'node:util';
 export const PROTOCOL = Object.freeze({ version: 'P2-product-v3', profile: 'context-read-product-v1.1',
   warmups: 3, pumpDrainMs:100, idleBaselineMs:100, mainMinimum: 50, mainCeiling: 500, coldMinimum: 10, coldCeiling: 100,
   repetitions: 5, windowMs: 30000, smokeWindowMs: 2000, writerCadenceMs: 20,
@@ -53,18 +54,80 @@ export const V3_DEFINITION = {
     {kind:'injection',axes:['count','schema','canonical','sidecar','injection'],scope:'launch',samples:{injection:{minimum:1,ceiling:1}}},
   ],
 };
+const scalarDimensions={count:[1112,3336],schema:[18,23,33],canonical:['DELETE','WAL'],sidecar:['DELETE','WAL'],
+  intent:['current','history'],language:['zh','ja','mixed'],load:['idle','fresh-same','fresh-other','retained-same','retained-other'],
+  type:['memory','card'],injection:['absent','exhaustion','abort','crash','post-catch-up']};
+const kindAxes=Object.fromEntries(V3_DEFINITION.kinds.map(s=>[s.kind,[...s.axes]]));
+const definitionError=field=>{throw Error('invalid_protocol_definition:'+field);};
+const uniqueArray=value=>Array.isArray(value)&&new Set(value).size===value.length;
+function dimensionValues(axis,values) {
+  if(!uniqueArray(values)||!values.length)definitionError(axis);
+  for(const value of values) {
+    // A method entry is a closed workload profile, not an arbitrary row to
+    // spread. Every field of the selected profile is a registered scalar.
+    if(axis==='method') {if(!METHODS.some(m=>isDeepStrictEqual(m,value)))definitionError(axis);}
+    else if(!scalarDimensions[axis]?.includes(value))definitionError(axis);
+  }
+}
+export function validateDefinition(definition=V3_DEFINITION) {
+  if(!definition||typeof definition.version!=='string'||!definition.version||!definition.dimensions||
+    !Array.isArray(definition.kinds)||!definition.kinds.length||!Array.isArray(definition.groups)||!definition.groups.length)definitionError('shape');
+  for(const [axis,dimension] of Object.entries(definition.dimensions)) {
+    if(axis!=='method'&&!Object.hasOwn(scalarDimensions,axis))definitionError('axis');
+    if(Array.isArray(dimension))dimensionValues(axis,dimension);
+    else {
+      if(axis!=='type'||!isDeepStrictEqual(Object.keys(dimension??{}).sort(),['by','values'])||dimension.by!=='schema'||
+        !dimension.values||!isDeepStrictEqual(Object.keys(dimension.values).sort(),['18','23','33']))definitionError(axis);
+      for(const [schema,values] of Object.entries(dimension.values)) {
+        dimensionValues(axis,values);
+        if(schema==='18'&&values.includes('card'))definitionError('type_schema');
+      }
+    }
+  }
+  const kinds=new Set();
+  for(const spec of definition.kinds) {
+    const required=kindAxes[spec.kind];
+    if(!required||kinds.has(spec.kind)||!uniqueArray(spec.axes)||spec.axes.length!==required.length||
+      required.some(axis=>!spec.axes.includes(axis)||!Object.hasOwn(definition.dimensions,axis)))definitionError('required_axes');
+    kinds.add(spec.kind);
+    if(spec.scope!==(spec.kind==='overflow'?'overflow':'launch'))definitionError('scope');
+    const defaults=spec.kind==='overflow'?['method','limit','language','load']:[];
+    if(Object.keys(spec.defaults??{}).some(key=>!defaults.includes(key)))definitionError('defaults');
+    if(spec.kind==='overflow'&&(!['findCandidates'].includes(spec.defaults?.method)||![12,24].includes(spec.defaults?.limit)||
+      !scalarDimensions.language.includes(spec.defaults?.language)||!scalarDimensions.load.includes(spec.defaults?.load)))definitionError('overflow_identity');
+  }
+  const grouped=[];
+  for(const group of definition.groups) {
+    if(!uniqueArray(group.axes)||!uniqueArray(group.kinds)||!group.kinds.length)definitionError('groups');
+    for(const kind of group.kinds) {
+      const spec=definition.kinds.find(s=>s.kind===kind);
+      if(!spec||group.axes.some(axis=>!spec.axes.includes(axis)))definitionError('group_axes');
+      grouped.push(kind);
+    }
+  }
+  if(new Set(grouped).size!==grouped.length||grouped.length!==kinds.size)definitionError('group_kinds');
+  const fixed=definition.fixedWindows;
+  // The execution protocol always requires a separately seeded baseline.
+  if(fixed?.paired!==true)definitionError('paired_baseline_required');
+  if(!uniqueArray(fixed.loads)||fixed.loads.some(load=>!scalarDimensions.load.includes(load)||load==='idle')||
+    !Number.isSafeInteger(fixed.repetitions)||fixed.repetitions<1||!Number.isSafeInteger(fixed.windowMs)||fixed.windowMs<1)definitionError('fixed_windows');
+  return definition;
+}
 function cross(axes,dimensions,row={}) {
   if(!axes.length)return [row];
   const [axis,...rest]=axes,dimension=dimensions[axis];
   const values=Array.isArray(dimension)?dimension:dimension.values[row[dimension.by]];
-  return values.flatMap(value=>cross(rest,dimensions,{...row,...(typeof value==='object'?value:{[axis]:value})}));
+  return values.flatMap(value=>cross(rest,dimensions,{...row,...(axis==='method'?value:{[axis]:value})}));
 }
 export function buildPlan(definition=V3_DEFINITION) {
+  validateDefinition(definition);
   const cells=[];
   for(const group of definition.groups)for(const prefix of cross(group.axes,definition.dimensions)) {
     for(const kind of group.kinds) {
       const spec=definition.kinds.find(s=>s.kind===kind);
       for(const row of cross(spec.axes.filter(a=>!group.axes.includes(a)),definition.dimensions,prefix)) {
+        if(spec.axes.some(axis=>axis==='method'?!METHODS.some(m=>Object.entries(m).every(([k,v])=>row[k]===v)):
+          !scalarDimensions[axis].includes(row[axis]))||row.schema===18&&row.type==='card')definitionError('population_identity');
         const series=spec.series?[...spec.series,...(spec.additionalSeries?.values[row[spec.additionalSeries.by]]??[])]:undefined;
         const modeClass=Object.entries(definition.modeClasses).find(([,pairs])=>pairs.some(([c,s])=>c===row.canonical&&s===row.sidecar))?.[0];
         if(!modeClass)throw Error('unregistered_mode_cross_product');

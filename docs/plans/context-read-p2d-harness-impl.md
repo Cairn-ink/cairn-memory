@@ -547,3 +547,168 @@ check for frozen contract/core runtime/generated runtime changes all exited
 **0**. No staging or commit occurred; HEAD remains `41669767`. Owned verification
 logs are removed after recording these results. No running task is left for
 unattended supervision.
+
+
+## Fix round 2
+
+Base `cf60a27f`; both spec and standards re-reviews were read in full. The
+primary commits. All changes remain in measurement code, its deterministic
+regressions and this handoff. No timing measurement or smoke run was performed.
+
+| Re-review finding | Fix | Regression in `tools/testing/measure-context-read-product-fix2.test.mjs` |
+| --- | --- | --- |
+| Spec P1, S1 residual: paired WAL promotes incomplete build coverage | Each contention window returns its maintainer coverage, requiring an explicit complete clone build as well as complete available diagnostics. The paired decision requires both returned coverage values. Empty diagnostic drains cannot promote an incomplete build. | S1 runs the actual paired/window orchestration with fabricated writer intervals, commits and a manual clock. Each member independently has incomplete build coverage, with empty or complete diagnostic arrays; both are invalid. Complete pairs pass as a control. |
+| Spec P1: nested dimensions or missing language pool gated populations | `validateDefinition()` runs at registration validation and before plan expansion. Every kind must have its complete required axes, every scalar dimension value comes from its closed domain, groups must preserve those axes, and expanded rows must have complete identities. Arbitrary objects are no longer spread into rows. | Separate nested-array and omitted-language cases reproduce the spec examples under a fabricated revision. Every required axis of every cell kind is also independently removed and rejected. |
+| Standards P1: object-valued language pools gated populations | Method descriptors are the sole structured dimension entries and must match one entire closed `METHODS` profile exactly. The dependent type dimension resolves to registered scalar values for each physical schema. Overflow defaults must also retain scalar population identities. | The reviewer's `{language:[...]}` dimension is rejected. Additional cases substitute arrays, objects, null and unknown values into every dimension and pool the overflow language default. |
+| Standards P1, T4: exceptional cleanup loses acknowledged writer evidence | `recordedWriter()` writes startup evidence or the recovered stop result to the numeric journal before returning or rethrowing, sharing one stop promise. Requests, contention, availability, freshness and injection writers all use it. Nested cleanup still drains pumps and samplers after writer cleanup failure. Post-catch-up injection also retains its writer result. | Four regressions use the real writer controller with an in-memory child: acknowledge a native extended BUSY=261 chunk, then inject `reader_cleanup_failed`. Each actual series must journal exactly one recovered BUSY=1 result, incomplete coverage, native records and confirmed exit before propagating the original error. Startup-evidence retention is checked separately. |
+| Standards P1, S6 residual: compact fetch accepts the full profile | Full fetch requires complete typed refs and excludes fences/snapshot. Compact fetch requires expanded full refs and one mandatory eight-character base64url fence per ref. Snapshot fetch requires a bounded nonempty snapshot and excludes refs, intent and fences. | Full/compact/snapshot cross-substitutions, missing/null/malformed/sparse compact fences, mixed snapshot/direct inputs and incomplete typed refs are rejected. Valid 1- and 24-item full/compact inputs and valid snapshot inputs remain accepted. |
+| Standards P2: `paired:false` estimate differs from execution | Unsupported unpaired definitions are rejected before registration and plan/estimate expansion. Paired orchestration also refuses an explicit false baseline flag before preparing any clone. | A fabricated revision sets `paired:false` and one repetition; registration, estimation and orchestration all reject it, with zero clones executed. |
+
+The contention regressions link the production module through VM import doubles;
+function bodies are unchanged. Imported waits advance a manual clock, native
+observations and commits are fabricated, and neither a process nor SQLite is
+started. The cleanup regressions use real exclusive report/journal files and
+in-memory writer children. No elapsed-time threshold is an assertion. Ordinary
+`*.test.mjs` discovery launches the new suite in its own VM-enabled runner when
+needed; the explicit command below exposes all 23 cases directly.
+
+All 23 new checks passed on the fixed implementation. The same new suite was
+also run against the four exact implementation files from `cf60a27f`, with no
+other source substitutions: **21 behavior regressions failed, 2 controls passed,
+exit 1 on both Node versions**. In particular, the old paired case returned
+`passed` for an incomplete reader clone with empty drains, both scalar-pooling
+reproductions were accepted, all four exceptional cleanup paths omitted the
+writer journal row, and full/compact substitutions were accepted. The four
+modified implementation files were restored byte-for-byte in a `finally` block
+before fixed-source verification.
+
+The default v3 remains exactly **7,520 cells, 81,056 expanded descriptors and
+57,600 fixed windows**, totaling **1,728,000,000 fixed-window milliseconds**.
+The existing fix-round-1 test additionally compares every original cell field
+and every expanded descriptor against the original implementation. No frozen
+contract, engine runtime, generated runtime, SQLite import boundary, raw-fd
+allowance or shared E1 helper is changed.
+
+### Commands and actual exit codes
+
+The executable paths are explicit, with the corresponding binary directory
+first in `PATH` for each command and its children:
+
+```sh
+NODE22="$NVM_DIR/versions/node/v22.16.0/bin/node"
+NODE24="$NVM_DIR/versions/node/v24.15.0/bin/node"
+"$NODE22" --version
+"$NODE24" --version
+# Each ordinary table row, once per runtime, serially:
+"$NODE22" --test --test-reporter=tap <explicit-test-path>
+"$NODE24" --test --test-reporter=tap <explicit-test-path>
+# New regressions, exposing every case:
+"$NODE22" --experimental-vm-modules --test --test-reporter=tap tools/testing/measure-context-read-product-fix2.test.mjs
+"$NODE24" --experimental-vm-modules --test --test-reporter=tap tools/testing/measure-context-read-product-fix2.test.mjs
+# Arithmetic only; no collection:
+"$NODE22" tools/testing/measure-context-read-product.mjs --estimate
+"$NODE24" tools/testing/measure-context-read-product.mjs --estimate
+```
+
+Both version commands exited **0** and printed the requested exact patches.
+The required core test inventory was independently derived from the filesystem
+glob and `rg --files` filtered to the same immediate-directory pattern: **29
+matching paths**. Including both lock guards, all three harness suites, the
+explicit functional checks and the E1 helper tests gives **36 distinct explicit
+paths per runtime**. Actual subprocess return codes and TAP totals were captured
+directly, without a stdout pipeline. The functional suite checks tiny DELETE
+outcomes and cleanup; it does not measure qualification gates.
+
+| Explicit test path | Node 22.16.0 exit / passed | Node 24.15.0 exit / passed |
+| --- | --- | --- |
+| `core/test/context-read-assembly-races.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/context-read-assembly-readonly.test.mjs` | 0 / 28 | 0 / 28 |
+| `core/test/context-read-assembly.test.mjs` | 0 / 19 | 0 / 19 |
+| `core/test/context-read-bm25.test.mjs` | 0 / 3 | 0 / 3 |
+| `core/test/context-read-budget.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-core.test.mjs` | 0 / 26 | 0 / 26 |
+| `core/test/context-read-default-entropy.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-embedder.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-fusion.test.mjs` | 0 / 4 | 0 / 4 |
+| `core/test/context-read-local-embedder.test.mjs` | 0 / 38 | 0 / 38 |
+| `core/test/context-read-local-status.test.mjs` | 0 / 3 | 0 / 3 |
+| `core/test/context-read-moc-source.test.mjs` | 0 / 15 | 0 / 15 |
+| `core/test/context-read-process.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-product-artifact.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-product-control.test.mjs` | 0 / 83 | 0 / 83 |
+| `core/test/context-read-product-import.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/context-read-product-index.test.mjs` | 0 / 65 | 0 / 65 |
+| `core/test/context-read-product-pump.test.mjs` | 0 / 16 | 0 / 16 |
+| `core/test/context-read-product-service.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/context-read-product.test.mjs` | 0 / 126 | 0 / 126 |
+| `core/test/context-read-recovery.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/context-read-review.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/context-read-sidecar.test.mjs` | 0 / 17 | 0 / 17 |
+| `core/test/context-read-source-work.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/context-read-sources-authority.test.mjs` | 0 / 6 | 0 / 6 |
+| `core/test/context-read-sources-bounds.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-sources-races.test.mjs` | 0 / 16 | 0 / 16 |
+| `core/test/context-read-sources.test.mjs` | 0 / 14 | 0 / 14 |
+| `core/test/context-read-tokenize.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 / 16 | 0 / 16 |
+| `tools/testing/fixtures/context-product/functional-check.mjs` | 0 / 9 | 0 / 9 |
+| `tools/testing/measure-context-read-product-fix1.test.mjs` | 0 / 26 | 0 / 26 |
+| `tools/testing/measure-context-read-product-fix2.test.mjs` | 0 / 23 | 0 / 23 |
+| `tools/testing/measure-context-read-product.test.mjs` | 0 / 27 | 0 / 27 |
+| `tools/testing/measure-topic-reader-wal.test.mjs` | 0 / 7 | 0 / 7 |
+
+Node **22.16.0**: **36 commands, every exit 0; 650/651 passed, 1 existing skip, 0 failures and 0 cancellations**.
+Node **24.15.0**: **36 commands, every exit 0; 650/651 passed, 1 existing skip, 0 failures and 0 cancellations**.
+
+The complete serial matrix exited **0**. After the final test-only refinement
+of the unpaired assertion order, the new suite was rerun on both runtimes:
+**23/23, exit 0 each**. The same final suite against `cf60a27f` again produced
+**21 failures / 2 controls passed, exit 1 each**; its first unpaired failure was
+acceptance of the unsupported estimate. Ordinary discovery without VM flags
+also exited **0 on each runtime**, with its one wrapper requiring the complete
+inner suite to exit 0. All four implementation files were unchanged throughout
+the matrix and final regression reruns.
+
+The one existing assembly counter test skips because `tiktoken` is unavailable.
+No dependency was installed. Functional-only CLI children deliberately return
+`inconclusive` / exit 1; the functional test commands assert that behavior and
+exit 0. No production qualification gate was measured.
+
+Each changed JavaScript file also ran with `--check <explicit-path>`:
+
+| Syntax-check path | Node 22.16.0 exit | Node 24.15.0 exit |
+| --- | --- | --- |
+| `tools/testing/fixtures/context-product/controller.mjs` | 0 | 0 |
+| `tools/testing/fixtures/context-product/protocol.mjs` | 0 | 0 |
+| `tools/testing/fixtures/context-product/series.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-fix2.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product.mjs` | 0 | 0 |
+
+The standalone `--estimate` command exited **0 on Node 22.16.0** and **0 on
+Node 24.15.0**, with the exact default arithmetic stated above. The final new
+test file also passed `--check` again after its test-only refinement, exit **0**
+on each runtime.
+
+### Changed files, cross-checked two ways
+
+The inventory from `git diff --name-only HEAD` plus
+`git ls-files --others --exclude-standard` was independently re-derived by
+comparing HEAD tree blob IDs with hashes of working files and discovering new
+files with `rg --files --hidden`. The sorted inventories matched: **6 files**.
+
+- `docs/plans/context-read-p2d-harness-impl.md`
+- `tools/testing/fixtures/context-product/controller.mjs`
+- `tools/testing/fixtures/context-product/protocol.mjs`
+- `tools/testing/fixtures/context-product/series.mjs`
+- `tools/testing/measure-context-read-product-fix2.test.mjs`
+- `tools/testing/measure-context-read-product.mjs`
+
+Final `git diff --check`, an independent trailing-whitespace/final-newline check
+over all six files, `git diff --cached --exit-code`, and the diff check over
+`core`, `packages/setup/runtime`, the frozen contract and packaging manifest
+all exited **0**. Source hashes for all five JavaScript files were checked
+against the final tested content. Nothing is staged or committed; HEAD remains
+`cf60a27f` on `feat/context-read-p2d-harness`. Owned verification logs were
+removed after recording the results. No test, measurement or monitor is left
+running for unattended supervision.

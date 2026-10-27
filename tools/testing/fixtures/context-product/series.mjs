@@ -2,8 +2,8 @@ import { performance } from 'node:perf_hooks';
 import { setTimeout as delay } from 'node:timers/promises';
 import { exposureMetrics, PROTOCOL as E1 } from '../../measure-topic-reader-wal.mjs';
 import { attempt, configure, drain } from './engine.mjs';
-import { coldAttempt, startSampler, terminate, attributeBlocks } from './actors.mjs';
-import { startWriter } from './controller.mjs';
+import { coldAttempt, startSampler, attributeBlocks } from './actors.mjs';
+import { startWriter, recordedWriter } from './controller.mjs';
 import { PROTOCOL, qualifies, population, exposure, decide, aggregate, maintainerCoverage, readerLoops } from './protocol.mjs';
 export function windows(smoke=false) {
   // Reuse E1-C2's frozen duration/repetition/order rather than importing its
@@ -65,7 +65,7 @@ export async function requestSeries(config,{cell,sink,oracle,smoke=false},{attem
   const concurrency=cell.load!=='idle',life=cell.load.startsWith('retained')?'retained':'fresh';
   const write=async(series,record)=>sink.record(cell.id,series,record);
   try {
-    if(concurrency){pump=await makePump(config,write);writer=await makeWriter(config,life);writer.start(Date.now(),Date.now()+config.seriesCeilingMs);}
+    if(concurrency){pump=await makePump(config,write);writer=await recordedWriter(()=>makeWriter(config,life),write);writer.start(Date.now(),Date.now()+config.seriesCeilingMs);}
     sampler=await makeSampler([process.pid,...(writer?[writer.child.pid]:[])]);
     const sample=async(series,cold=false)=>{
       const value=cold?await readCold(config,{signal:config.signal}):await readAttempt(config,{oracle,signal:config.signal});
@@ -81,7 +81,7 @@ export async function requestSeries(config,{cell,sink,oracle,smoke=false},{attem
     };
     await collect('main',false,smoke?1:rules.main.minimum,smoke?3:rules.main.ceiling);
     await collect('cold',true,smoke?1:rules.cold.minimum,smoke?3:rules.cold.ceiling);
-    if(writer){writerResult=await writer.stop();writer=null;await write('writer',writerResult);}
+    if(writer){writerResult=await writer.stop();writer=null;}
     for(const [series,list] of Object.entries(records))for(const [index,r] of list.entries()){r.overlap=!concurrency||overlap(r,writerResult?.calls??[]);await write('overlap-final',{series,index,overlap:r.overlap});}
     // Warm candidate reference: initialization occurs outside the measured read
     // window, and each record still includes its engine host loop.
@@ -102,17 +102,18 @@ export async function requestSeries(config,{cell,sink,oracle,smoke=false},{attem
       writers:concurrency?writerResult?.calls:undefined,production:config.production});
     return {decision,populations,writer:writerResult?{exit:writerResult.exit,coverage:writerResult.diagnostics.coverage}:null};
   }finally {
-    if(writer)try{await writer.stop();}catch{await terminate(writer.child);}
-    if(pump)await write('pump-drain',await pump.stop());
-    if(sampler)await write('attribution',await sampler.stop());
+    try {if(writer)await writer.stop();}
+    finally {try {if(pump)await write('pump-drain',await pump.stop());}
+      finally {if(sampler)await write('attribution',await sampler.stop());}}
   }
 }
 export async function contentionWindow(config,{cell,sink,oracle,baseline=false,windowMs=30000}) {
-  const writer=await startWriter(config,cell.load.startsWith('retained')?'retained':'fresh');
+  const write=(series,record)=>sink.record(cell.id,series,record);
+  const writer=await recordedWriter(()=>startWriter(config,cell.load.startsWith('retained')?'retained':'fresh'),write,'window-writer');
   const attempts=[];let result,sampler,pump,maintenance=[];
   try {
     sampler=await startSampler([process.pid,writer.child.pid]);
-    if(!baseline)pump=await startPump(config,(s,r)=>sink.record(cell.id,s,r));
+    if(!baseline)pump=await startPump(config,write);
     const startAt=Date.now()+50,endAt=startAt+windowMs;writer.start(startAt,endAt);await delay(Math.max(0,startAt-Date.now()));
     while(Date.now()<endAt&&!config.signal?.aborted){
       if(baseline){await delay(20);writer.flush();continue;}
@@ -125,11 +126,15 @@ export async function contentionWindow(config,{cell,sink,oracle,baseline=false,w
     // reader intervals are adapted to public read-call intervals here.
     const measured=exposureMetrics(attempts.map(r=>({...r,startedAt:r.readStartedAt,finishedAt:r.readFinishedAt})),result.calls,commits,startAt,endAt);
     const exp=exposure(baseline?'baseline':cell.load.startsWith('retained')?'retained':'fresh',measured);
-    await sink.record(cell.id,'window-writer',result);
-    return {startAt,endAt,measured,exposure:exp,writer:result,attempts,maintenance:[...(config.maintainerDiagnostics??[]),...maintenance.map(r=>r.diagnostics).filter(d=>d.protocol==='context-native-v1')]};
-  }finally{if(!result)await terminate(writer.child);if(pump)await pump.stop();if(sampler)await sink.record(cell.id,'attribution',await sampler.stop());}
+    const diagnostics=[...(config.maintainerDiagnostics??[]),...maintenance.map(r=>r.diagnostics).filter(d=>d.protocol==='context-native-v1')];
+    return {startAt,endAt,measured,exposure:exp,writer:result,attempts,maintenance:diagnostics,
+      maintainerCoverage:config.maintainerCoverage==='complete'?maintainerCoverage(diagnostics,config.maintainerCoverage):'incomplete'};
+  }finally{try {if(!result)await writer.stop();}
+    finally {try {if(pump)await write('pump-drain',await pump.stop());}
+      finally {if(sampler)await write('attribution',await sampler.stop());}}}
 }
 export async function pairedWindows(config,options,prepareClone) {
+  if(options.cell.pairedBaseline===false)throw Error('paired_baseline_required');
   const decisions=[];
   for(const window of options.smoke?windows(true):Array.from({length:options.cell.windows??PROTOCOL.repetitions},(_,repetition)=>({repetition,windowMs:options.cell.windowMs??PROTOCOL.windowMs,order:repetition%2?['reader','baseline']:['baseline','reader']}))) {
     const pair={};
@@ -143,7 +148,8 @@ export async function pairedWindows(config,options,prepareClone) {
     const records=reader.attempts,writer=reader.writer;
     const d=decide(options.cell,{smoke:options.smoke,records,exposure:exp,
       loops:[...records.flatMap(r=>[r.hostLoop,...(r.launcherLoop?[r.launcherLoop]:[]),...(r.startupLoop?[r.startupLoop]:[])]),writer.hostLoop,base.writer.hostLoop],
-      readerCoverage:records.every(r=>r.telemetry==='complete')?'complete':'incomplete',maintainerCoverage:[...reader.maintenance,...base.maintenance].every(d=>d.coverage==='complete')?'complete':'incomplete',
+      readerCoverage:records.every(r=>r.telemetry==='complete')?'complete':'incomplete',
+      maintainerCoverage:[reader,base].every(w=>w.maintainerCoverage==='complete')?'complete':'incomplete',
       writerCoverage:writer.diagnostics.coverage,baselineCoverage:base.writer.diagnostics.coverage,
       nativeBusy:records.reduce((n,r)=>n+r.nativeBusy,0)+writer.diagnostics.busy+base.writer.diagnostics.busy+[...reader.maintenance,...base.maintenance].reduce((n,d)=>n+(d.busy??0),0),
       publicBusy:records.reduce((n,r)=>n+r.publicBusy,0)+[...writer.calls,...base.writer.calls].filter(w=>w.code==='storage_busy').length,

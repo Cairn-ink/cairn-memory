@@ -2,6 +2,17 @@ import { randomUUID } from 'node:crypto';
 import { actor, terminate } from './actors.mjs';
 import { createWriterLedger } from './writer-journal.mjs';
 import { PROTOCOL, writerStatistics } from './protocol.mjs';
+// Persist stop/startup evidence at the actor boundary, before a caller's
+// cleanup can rethrow. Sharing the stop promise also prevents double teardown.
+export async function recordedWriter(start,write,series='writer') {
+  try {
+    const writer=await start();let stopping;
+    return {...writer,stop(){return stopping??=(async()=>{
+      try {const result=await writer.stop();await write(series,result);return result;}
+      catch(e){if(e.writerEvidence)await write(series,e.writerEvidence);throw e;}
+    })();}};
+  }catch(e){if(e.writerEvidence)await write(series,e.writerEvidence);throw e;}
+}
 export async function startWriter(config,lifecycle='fresh',{actor:makeActor=actor,terminate:stopChild=terminate}={}) {
   const observation={stream:randomUUID(),epoch:1,capacity:PROTOCOL.telemetry.writerCapacity};
   const ledger=createWriterLedger(observation),expected=new Set(),calls=[];

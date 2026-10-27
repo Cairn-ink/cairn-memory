@@ -10,10 +10,10 @@ import { isDeepStrictEqual } from 'node:util';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createTestWorkspace } from './workspace.mjs';
-import { PROTOCOL, buildPlan, expandPlan, aggregate, decide, availability, freshness, population, estimatePlan, V3_DEFINITION, readerLoops, maintainerCoverage } from './fixtures/context-product/protocol.mjs';
+import { PROTOCOL, buildPlan, expandPlan, aggregate, decide, availability, freshness, population, estimatePlan, V3_DEFINITION, readerLoops, maintainerCoverage, validateDefinition } from './fixtures/context-product/protocol.mjs';
 import { configure, drain, attempt, observeLoop, probeDependencies, selectReadSet } from './fixtures/context-product/engine.mjs';
 import { fileChild, terminate, startSampler, actor } from './fixtures/context-product/actors.mjs';
-import { startWriter } from './fixtures/context-product/controller.mjs';
+import { startWriter, recordedWriter } from './fixtures/context-product/controller.mjs';
 import { build, startPump, requestSeries, pairedWindows } from './fixtures/context-product/series.mjs';
 import { createReportSink, digest, immutable } from './fixtures/context-product/report.mjs';
 export { PROTOCOL, buildPlan };
@@ -37,6 +37,7 @@ function git(...args) {
 }
 export function validateRegistration(input) {
   if(input.protocolDefinition?.version===V3_DEFINITION.version&&!isDeepStrictEqual(input.protocolDefinition,V3_DEFINITION))throw Error('protocol_revision_required');
+  validateDefinition(input.protocolDefinition??V3_DEFINITION);
   const positive=k=>Number.isSafeInteger(input[k])&&input[k]>0;
   if(new Set(input.fixtures?.map(f=>f.id)).size!==6||input.fixtures?.some(f=>typeof f.id!=='string'||!f.id))throw Error('fixture_ids');
   if(!/^v24\.\d+\.\d+$/.test(input.productionNode)||!['production-linux-ext4','wsl2-ext4','apfs'].includes(input.platformRole)||
@@ -119,10 +120,26 @@ export function validateWorkload(config,input) {
   if(input.deadlineMs!==config.deadlines.readMs)invalid('deadline');
   const intent=config.cell.intent??'current';
   if(config.method==='fetchCandidateEvidence') {
-    // Fetch's public DTO has no types/budget/limit. Snapshot intent/ref/type
-    // binding is checked by the frozen oracle, direct refs by the registration.
-    if(config.cell.adapter==='snapshot'){if(typeof input.snapshot!=='string'||!input.snapshot)invalid('snapshot');}
-    else if(input.intent!==intent||input.refs?.length!==config.cell.refs||input.refs.some(r=>!config.types.includes(r.type)))invalid('refs');
+    // Compact tool refs reach the engine as full refs plus mandatory aligned
+    // eight-character fences. These three profiles must remain distinct.
+    const profile=config.cell.adapter,has=key=>Object.hasOwn(input,key);
+    if(profile==='snapshot') {
+      if(typeof input.snapshot!=='string'||!input.snapshot||input.snapshot.length>PROTOCOL.bounds.snapshotUnits||
+        ['refs','intent','fences'].some(has))invalid('snapshot');
+    } else {
+      if(!['full','compact'].includes(profile)||has('snapshot')||input.intent!==intent||!Array.isArray(input.refs)||
+        input.refs.length!==config.cell.refs)invalid('refs');
+      for(const ref of input.refs) {
+        const keys=ref?.type==='card'?['type','namespace','cardId','revision','bodyRevision']:['type','namespace','memoryId','revision'];
+        if(!ref||!config.types.includes(ref.type)||!isDeepStrictEqual(Object.keys(ref).sort(),keys.sort())||
+          !config.readSet.some(ns=>isDeepStrictEqual(ns,ref.namespace))||
+          typeof (ref.memoryId??ref.cardId)!=='string'||!(ref.memoryId??ref.cardId)||
+          !Number.isSafeInteger(ref.revision)||ref.revision<1||ref.type==='card'&&(!Number.isSafeInteger(ref.bodyRevision)||ref.bodyRevision<1))invalid('refs');
+      }
+      if(profile==='full'&&has('fences'))invalid('full_fences');
+      if(profile==='compact'&&(!Array.isArray(input.fences)||input.fences.length!==input.refs.length||
+        Array.from(input.fences).some(f=>typeof f!=='string'||!/^[A-Za-z0-9_-]{8}$/.test(f))))invalid('compact_fences');
+    }
     return;
   }
   if(input.intent!==intent)invalid('intent');
@@ -141,7 +158,7 @@ export async function availabilitySeries(config,cell,input,sink,oracle,{startPum
   const write=(series,record)=>sink.record(cell.id,series,record);
   const records=[];let result,pumpDrain,pump,writer;
   try {
-    pump=await makePump(config,write);writer=await makeWriter(config);
+    pump=await makePump(config,write);writer=await recordedWriter(()=>makeWriter(config),write);
     const endAt=now()+input.availabilityWindows*30000;writer.start(now(),endAt);
     while(now()<endAt&&!config.signal?.aborted){
       for(const method of ['findCandidates','contextRead']){
@@ -150,13 +167,14 @@ export async function availabilitySeries(config,cell,input,sink,oracle,{startPum
         const r={...record,method,scheduled:true,notReady:record.code==='index_unavailable',scopePartial:record.scopePartial};records.push(r);writer.flush();await pump.flush();await write('availability',r);
       }
     }
-    result=await writer.stop();await write('writer',result);pumpDrain=await pump.stop();await write('pump-drain',pumpDrain);
+    result=await writer.stop();pumpDrain=await pump.stop();await write('pump-drain',pumpDrain);
     const maintenance=[...(config.maintainerDiagnostics??[]),...pumpDrain.map(r=>r.diagnostics).filter(d=>d.protocol==='context-native-v1')];
     const metrics=availability(records,{minimum:cell.sampleRules?.availability.minimum??PROTOCOL.availabilityMinimum});
     return {...decide(cell,{records,loops:[...readerLoops(records),result.hostLoop],availability:metrics,readerCoverage:records.every(r=>r.telemetry==='complete')?'complete':'incomplete',
       maintainerCoverage:maintainerCoverage(maintenance,config.maintainerCoverage),writerCoverage:result.diagnostics.coverage,baselineCoverage:result.diagnostics.coverage,
       nativeBusy:records.reduce((n,r)=>n+r.nativeBusy,0)+result.diagnostics.busy+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:records.reduce((n,r)=>n+r.publicBusy,0),writers:result.calls,production:config.production}),availability:metrics};
-  }finally{if(writer&&!result)await terminate(writer.child);if(pump&&!pumpDrain)await write('pump-drain',await pump.stop());}
+  }finally{try {if(writer&&!result)await writer.stop();}
+    finally {if(pump&&!pumpDrain)await write('pump-drain',await pump.stop());}}
 }
 export async function freshnessSeries(config,cell,input,sink,{startPump:makePump=startPump,startWriter:makeWriter=startWriter,attempt:readAttempt=attempt,now=Date.now}={}) {
   const minimum=cell.sampleRules?.freshness.minimum??PROTOCOL.freshnessMinimum;
@@ -166,7 +184,7 @@ export async function freshnessSeries(config,cell,input,sink,{startPump:makePump
   if(probes.some(p=>corpus.includes(p)))throw Error('probe_already_in_corpus');
   const write=(series,r)=>sink.record(cell.id,series,r),targets=[],records=[];let writerResult,intervalValid=true,pumpDrain,pump,writer;
   try {
-    pump=await makePump(config,write);writer=await makeWriter({...config,targetType:cell.type,probes});
+    pump=await makePump(config,write);writer=await recordedWriter(()=>makeWriter({...config,targetType:cell.type,probes}),write);
     const endAt=now()+input.freshnessObservationMs;writer.start(now(),endAt);
     while(now()<endAt&&!config.signal?.aborted) {
       ingestTargets(targets,writer.child.take('target'));
@@ -180,7 +198,7 @@ export async function freshnessSeries(config,cell,input,sink,{startPump:makePump
       if(targets.length>=minimum&&now()-Math.max(...targets.map(t=>t.committedAt))>=PROTOCOL.freshnessMs)break;
       await delay(Math.min(250,Math.max(1,endAt-now())));writer.flush();
     }
-    writerResult=await writer.stop();ingestTargets(targets,writer.child.take('target'));await write('writer',writerResult);await write('freshness-targets',targets);
+    writerResult=await writer.stop();ingestTargets(targets,writer.child.take('target'));await write('freshness-targets',targets);
     pumpDrain=await pump.stop();await write('pump-drain',pumpDrain);
     const maintenance=[...(config.maintainerDiagnostics??[]),...pumpDrain.map(r=>r.diagnostics).filter(d=>d.protocol==='context-native-v1')];
     const metrics=freshness(targets,{minimum:cell.sampleRules?.freshness.minimum??PROTOCOL.freshnessMinimum});
@@ -189,7 +207,8 @@ export async function freshnessSeries(config,cell,input,sink,{startPump:makePump
       nativeBusy:records.reduce((n,r)=>n+r.nativeBusy,0)+writerResult.diagnostics.busy+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:records.reduce((n,r)=>n+r.publicBusy,0),writers:writerResult.calls,production:config.production});
     if(!intervalValid||targets.some(t=>now()-t.committedAt<PROTOCOL.freshnessMs))return {...decision,decision:'invalid',reason:'probe_cadence_or_writer_drain'};
     return {...decision,freshness:{...metrics,p50Ms:Number.isFinite(metrics.p50Ms)?metrics.p50Ms:null,p95Ms:Number.isFinite(metrics.p95Ms)?metrics.p95Ms:null,maxMs:Number.isFinite(metrics.maxMs)?metrics.maxMs:null,p95Infinite:metrics.p95Ms===Infinity,maxInfinite:metrics.maxMs===Infinity,finiteMaximumMs:Math.max(0,...targets.filter(t=>t.observedAt!==null).map(t=>t.observedAt-t.committedAt))}};
-  }finally{if(writer&&!writerResult)await terminate(writer.child);if(pump&&!pumpDrain)await write('pump-drain',await pump.stop());}
+  }finally{try {if(writer&&!writerResult)await writer.stop();}
+    finally {if(pump&&!pumpDrain)await write('pump-drain',await pump.stop());}}
 }
 export async function backupSeries(config,cell,workspace,sink,oracle,{startSampler:makeSampler=startSampler,storage:store=storage,fileChild:files=fileChild,build:rebuild=build,configure:setup=configure,attempt:readAttempt=attempt,stat:fileStat=stat}={}) {
   // All clients, writers and maintenance are stopped and drained before backup.
@@ -234,25 +253,24 @@ export async function backupSeries(config,cell,workspace,sink,oracle,{startSampl
   }finally{if(!attribution)await sampler.stop();}
 }
 export async function injectionSeries(config,cell,sink,oracle) {
-  const kind=cell.injection;let lock,writer,result;
+  const kind=cell.injection,write=(series,record)=>sink.record(cell.id,series,record);let lock,writer,result;
   try {
     if(kind==='exhaustion') {
       lock=actor('lock',{path:config.path},{url:storageUrl,stallMs:30000});await lock.wait('ready');
-      writer=await startWriter({...config,oneOperation:true});writer.start(Date.now(),Date.now());result=await writer.stop();writer=null;
-      await sink.record(cell.id,'injected-writer',result);
+      writer=await recordedWriter(()=>startWriter({...config,oneOperation:true}),write,'injected-writer');writer.start(Date.now(),Date.now());result=await writer.stop();writer=null;
       return {decision:result.diagnostics.busy>0&&result.calls.some(c=>c.code==='storage_busy')?'passed':'failed',
         expected:'storage_busy',diagnosticCoverage:result.diagnostics.coverage,normalZeroBusyPopulation:false};
     }
     if(kind==='post-catch-up') {
-      writer=await startWriter({...config,oneOperation:true});writer.start(Date.now(),Date.now());result=await writer.stop();writer=null;
+      writer=await recordedWriter(()=>startWriter({...config,oneOperation:true}),write,'injected-writer');writer.start(Date.now(),Date.now());result=await writer.stop();writer=null;
       await build(config,(s,r)=>sink.record(cell.id,s,r));
     }
     const {record}=await attempt({...config,injection:kind},{oracle:kind==='post-catch-up'?oracle:(r,c)=>c.code===({absent:'index_unavailable',abort:'read_cancelled',crash:'reader_failed'})[kind]});
     await sink.record(cell.id,'injection',record);
     return {decision:record.expected&&record.hostLoop.maxMs<=100&&record.hostLoop.over100===0&&record.overshootMs<=50?'passed':'failed',expected:kind,diagnosticCoverage:record.telemetry,normalZeroBusyPopulation:false};
   }finally {
-    if(writer)await terminate(writer.child);
-    if(lock){try{if(lock.connected){lock.send({type:'release'});await lock.wait('result');await lock.exited;}}finally{await terminate(lock);}}
+    try {if(writer)await writer.stop();}
+    finally {if(lock){try{if(lock.connected){lock.send({type:'release'});await lock.wait('result');await lock.exited;}}finally{await terminate(lock);}}}
   }
 }
 export async function runRegistered(input,{reportPath,registrationPath,smoke=false},{
