@@ -197,6 +197,22 @@ test('T7 cold host attribution is preserved when launcher scheduling samples are
   attributeBlocks(record,samples);assert.deepEqual(record.hostLoop.blocks[0].scheduling,original);
 });
 
+test('T7b a thread missing from either bracketing sample makes block scheduling incomplete',()=>{
+  const thread=(tid,ns)=>({tid,runtimeNs:ns,runqueueNs:ns,slices:ns});
+  const sample=(at,threads)=>({pid:process.pid,at,threads,vm:{pswpin:at}});
+  for(const [first,last] of [[[thread(1,0),thread(2,0)],[thread(1,5)]],[[thread(1,0)],[thread(1,5),thread(2,5)]]]){
+    const record={hostLoop:{blocks:[{startedAt:10,finishedAt:20}]}};
+    attributeBlocks(record,[sample(0,first),sample(30,last)]);
+    const scheduling=record.hostLoop.blocks[0].scheduling;
+    assert.equal(scheduling.coverage,'incomplete');assert.deepEqual(scheduling.missingTids,[2]);
+    assert.deepEqual(scheduling.threads.map(t=>t.tid),[1]);
+  }
+  const record={hostLoop:{blocks:[{startedAt:10,finishedAt:20}]}};
+  attributeBlocks(record,[sample(0,[thread(1,0)]),sample(30,[thread(1,5)])]);
+  assert.equal(record.hostLoop.blocks[0].scheduling.coverage,'complete');
+  assert.equal(record.hostLoop.blocks[0].scheduling.missingTids,undefined);
+});
+
 test('T8 summary streams blocks before EOF, awaits sink backpressure, and keeps aggregates only',async t=>{
   const w=createTestWorkspace(t),path=join(w.path,'stream.records.jsonl');
   await writeFile(path,Array.from({length:1000},(_,i)=>JSON.stringify({type:'record',cell:i,series:'main',record:{hostLoop:{blocks:[{gapMs:101}]}}})).join('\n')+'\n'+JSON.stringify({type:'final',status:'failed'})+'\n');

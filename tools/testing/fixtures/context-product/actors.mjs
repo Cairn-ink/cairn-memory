@@ -63,7 +63,10 @@ export function attributeBlocks(record,samples,pid=process.pid) {
     if(!before||!after){block.scheduling={coverage:'incomplete'};continue;}
     const threads=after.threads.flatMap(t=>{const old=before.threads.find(o=>o.tid===t.tid);return old?[{tid:t.tid,
       runtimeNs:t.runtimeNs-old.runtimeNs,runqueueNs:t.runqueueNs-old.runqueueNs,slices:t.slices-old.slices}]:[];});
-    block.scheduling={coverage:'complete',sampleStartAt:before.at,sampleEndAt:after.at,threads,
+    // A thread seen in only one bracketing sample has unknown scheduling for this block.
+    const missingTids=[...new Set([...before.threads,...after.threads].map(t=>t.tid))].filter(tid=>!threads.some(t=>t.tid===tid));
+    block.scheduling={coverage:missingTids.length?'incomplete':'complete',...(missingTids.length?{missingTids}:{}),
+      sampleStartAt:before.at,sampleEndAt:after.at,threads,
       vm:Object.fromEntries(Object.keys(after.vm).map(k=>[k,after.vm[k]-before.vm[k]]))};
   }
   return record;
