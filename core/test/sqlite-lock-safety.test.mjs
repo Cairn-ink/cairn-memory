@@ -3,7 +3,7 @@ import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { openContextProductReader, createContextReadSupervisor } from '../index.mjs';
+import { openContextProductReader, openContextIndexMaintainer, createContextReadSupervisor } from '../index.mjs';
 import { credentialDigest, PRODUCT_PROFILE } from '../context-product-control.mjs';
 import { openMemoryReader } from '../memory-reader.mjs';
 import { memberFixture, namespace } from '../testing/topic-members-fixture.mjs';
@@ -203,3 +203,27 @@ for (const mode of ['DELETE', 'WAL']) for (const channel of ['asset', 'method-pa
       assert.deepEqual(child(path, 'BEGIN IMMEDIATE'), { rows: [] });
     }
   });
+
+test('DELETE: maintainer open, production refresh and close preserve host writer exclusivity across processes', async t => {
+  const f=memberFixture(t,{mode:'DELETE'});f.admit('maintainer locks');
+  const supervisor=createContextReadSupervisor();t.after(()=>supervisor.close());
+  const credential={nonce:randomUUID()},state=new SharedArrayBuffer(32);new Int32Array(state)[0]=1;
+  const readSet=[namespace],ownerCoverage={policy:'recent-projects-v1',selectionRevision:'locks',requestedNamespaces:1,selectedNamespaces:1,omittedNamespaces:0};
+  const serviceBinding={kind:'service',serviceId:randomUUID(),credentialBindingId:randomUUID(),credentialExpiresUtcMs:null,
+    credentialDigest:credentialDigest(credential),ownerId:namespace.ownerId,namespaces:{readSet,ownerCoverage},issuedAt:0};
+  let maintainer;
+  // RESERVED is the exclusive writer role in DELETE. It permits independent
+  // read-only canonical connections, while a child writer must remain BUSY.
+  f.db.exec('BEGIN IMMEDIATE');
+  try {
+    locked(f.path);
+    maintainer=await openContextIndexMaintainer({supervisor,path:f.path,version:'context-read-v1',profile:PRODUCT_PROFILE,
+      readSet,ownerCoverage,sidecarJournalMode:'DELETE',host:{moduleUrl:new URL('../testing/context-product-index-host.mjs',import.meta.url).href,
+        configuration:{serviceBinding,state}}});
+    locked(f.path);
+    const built=await maintainer.refreshContextIndex({readSet,types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:1024,maxMs:5000}},credential);
+    assert.equal(built.ok,true,JSON.stringify(built));assert.equal(built.value.status,'complete');locked(f.path);
+    await maintainer.close();locked(f.path);
+    f.db.exec('COMMIT');assert.deepEqual(child(f.path,'BEGIN IMMEDIATE'),{rows:[]});
+  } finally {await maintainer?.close();if(f.db.isTransaction)f.db.exec('ROLLBACK');}
+});

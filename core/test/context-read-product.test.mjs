@@ -67,14 +67,16 @@ for (const version of [18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 3
   const capabilities = ok(await reader.getContextReadCapabilities());
   assert.ok(config.view[4] > 0);
   assert.equal(capabilities.profile, PRODUCT_PROFILE); assert.equal(capabilities.execution, 'worker');
-  assert.equal(capabilities.readSetMaximum, 2); assert.deepEqual(capabilities.methods, ['fetchCandidateEvidence']);
+  assert.equal(capabilities.readSetMaximum, 2); assert.deepEqual(capabilities.methods, ['findCandidates','contextRead','fetchCandidateEvidence','getContextIndexStatus']);
   assert.deepEqual(capabilities.types, version >= 23 ? ['memory', 'card'] : ['memory']);
   const fetched = ok(await reader.fetchCandidateEvidence(fetchInput(memory), config.credential));
   assert.equal(fetched.items[0].content, canonical); assert.equal(config.view[1], 2);
   assert.equal(typeof fetched.snapshot, 'string');
   assert.deepEqual(ok(await reader.fetchCandidateEvidence({ readSet: [ns], snapshot: fetched.snapshot }, config.credential)), fetched);
   assert.equal(config.view[1], 4);
-  denied(await reader.findCandidates({ readSet: [ns], query: 'canonical', types: ['memory'], intent: 'current' }, config.credential), 'index_unavailable');
+  const unavailable = await reader.findCandidates({ readSet: [ns], query: 'canonical', types: ['memory'], intent: 'current' }, config.credential);
+  assert.equal(unavailable.error.code, 'index_unavailable');
+  assert.equal(unavailable.error.details.coverage.status, 'unavailable');
   await reader.close();
   assert.equal(fingerprint(f.path), before); assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, version);
   assert.equal(existsSync(f.path + '.context-read-product-v1.1.sqlite'), false);

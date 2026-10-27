@@ -49,6 +49,8 @@ const observedProbe = `
 // The header cannot change without inode/size/mtime/ctime changing. Bound this
 // cache; compare nanosecond stats before AND after probing, never cache errors.
 const cache = new Map();
+// Metadata only: safe while this process (including Workers) holds SQLite locks.
+export const sqliteFileStat = path => lstatSync(path, { bigint: true });
 const fingerprint = path => {
   const s = lstatSync(path, { bigint: true });
   return [s.dev, s.ino, s.size, s.mtimeNs, s.ctimeNs].join(':');
@@ -104,6 +106,12 @@ const create = `
   const prefix = '.' + basename(target) + '.cairn-create-';
   let fd, dir, temporary, published = false;
   try {
+    if (process.argv[2] === 'replace-product-cache') {
+      // Only an explicitly authorized product maintainer uses this mode, after
+      // closing its old sidecar and rechecking its metadata in the parent.
+      if (!target.endsWith('.context-read-product-v1.1.sqlite')) throw Error('unsafe_cache');
+      unlinkSync(target);
+    }
     for (const name of readdirSync(directory)) {
       if (!name.startsWith(prefix)) continue;
       const suffix = name.slice(prefix.length), dash = suffix.indexOf('-');
@@ -138,8 +146,14 @@ const create = `
     if (temporary !== undefined) { try { unlinkSync(temporary); } catch {} }
   }
 `;
-export function createExclusiveSqliteFile(path) {
-  const result = spawnSync(process.execPath, ['--input-type=module', '-e', create, path], {
+export function createExclusiveSqliteFile(path, productReplacement) {
+  if (productReplacement) {
+    const current = sqliteFileStat(path);
+    if (!path.endsWith('.context-read-product-v1.1.sqlite') || !current.isFile() || current.isSymbolicLink() ||
+        (current.mode & 0o777n) !== 0o600n || String(current.dev)+':'+String(current.ino) !== productReplacement) throw Error('unsafe_cache');
+  }
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', create, path,
+    ...(productReplacement ? ['replace-product-cache', productReplacement] : [])], {
     encoding: 'utf8', timeout: 5000, maxBuffer: 4096, env: {},
   });
   if (result.error || result.status !== 0 || result.signal) throw new Error('sqlite_file_creation_failed');

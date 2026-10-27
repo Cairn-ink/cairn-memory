@@ -1,0 +1,320 @@
+# Context-read P2b implementation handoff
+
+Implemented on `feat/context-read-p2b`, base `9312c5d9`, without a commit.
+The frozen product and unified-memory contracts and the legacy sidecar are
+unchanged. This package releases lexical candidates, representation-v2 assembly,
+closed index status and explicit service maintenance for physical v18 Memories
+and v23+ Cards, on one namespace or personal plus one project, in DELETE.
+Deployment performance qualification and the broader P2c/P2d scope remain open.
+
+The product adapter handoff is in [context-read-product.md](../context-read-product.md).
+It describes trusted service issuance, the supervisor, quantum and cumulative
+budgets, exact prebuild selections, cron renewal, completion observation,
+shutdown, fallback and restore admission gates. No private product integration,
+provider/key/model operation or network access is claimed.
+
+## Design
+
+`openContextIndexMaintainer` uses the same fixed isolated Worker entry and
+parent watchdog/supervisor machinery as the reader, with an independent service
+role. Its constructor validates trusted service issuance; each later quantum
+gets a fresh bounded service control record and authenticated expiry handoff.
+HTTP credentials cannot open or operate it. Both maintenance and status sample
+service currentness at entry and immediately before the fresh final canonical
+transaction. Changed final authority returns bare `scope_changed`, even when a
+checkpoint or publication has already committed. Request controls retain P2a's
+original cumulative admission window.
+
+The canonical connection remains read-only. Product storage is the separate
+`.context-read-product-v1.1.sqlite` cache, format 1 with its own application ID,
+incarnation, keyed projection pointers, immutable captured generations and
+validation/progress records. It never imports a migration-capable core. Safe
+metadata checks use stat only; new and replacement cache files are created in
+the existing isolated child path. No runtime raw-fd allowlist entry was added.
+A cross-process child proves that host writer exclusivity survives maintainer
+open, refresh and close in the same process.
+
+The builder reuses the existing metadata keysets, canonical eligibility,
+current-dependent fences, tokenizer and BM25/scoring rules. Staging generations
+scan bounded canonical pages, copying unchanged indexed tuples/postings without
+refetching or tokenizing unchanged candidate text. Changed candidate text is
+bounded by 128 rows/2,000,000 units per batch. Reconciliation still scans the
+projection; this is not an O(changes) cost claim. Published rows are never updated
+in place. Old, no-longer-pointed generations remain derived cache data; erase or
+restore must discard the cache under the documented quiescence procedure.
+
+Deep validation is resumable across quanta. Its three fixed verification streams
+are documents by canonical identity, postings by identity/term, and statistics by
+term. Each hashes newline-delimited JSON tuples with standard SHA-256 after
+checking joins, token lengths, eligibility and statistics. A checkpointable
+compression state, committed by the signed checkpoint incarnation together
+with scan position and verified counts, permits bounded verification pages without restarting a whole
+manifest hash. Known-answer tests independently compare it with Node SHA-256
+across empty, block-boundary, Unicode and resumed inputs. Scan phase ordinals
+include those three verification streams after the canonical scan streams.
+
+Certificates are the frozen closed record, at most 16,384 bytes, with full
+43-character digests, store/schema/file identities, tokenizer/representation,
+captured canonical/dependency fences, publication, manifest and verified counts.
+Progress is the separate closed signed record, at most 4,096 bytes, committed
+atomically with each batch or verification checkpoint. Both use recursively
+UTF-8-key-sorted canonical JSON and distinct product HMAC domains. The certificate
+MAC, projection, access and fence digests have independent known-answer tests.
+Stable access binds owner, canonical readSet and optional ownerGeneration/null;
+request IDs, issuance, deadlines, credentials and selection provenance do not
+enter the certificate or snapshot access binding. Compact item fence bytes retain
+the frozen representation-v2 rule; product opaque snapshots/cursors and cache
+certificates use distinct domains from v1.
+
+The final sidecar-only transaction installs captured E's complete generation,
+certificate and pointer together, after the last pre-commit fence check. No
+current-ready bit is persisted. After commit, the second service sample precedes
+a new deferred canonical transaction whose first actual read acquires a fresh
+snapshot. Its bounded pointer/certificate and current-fence comparison determines
+completion. Independent E+1 writes between the pre-commit check and sidecar COMMIT
+leave an intact E certificate but force `rebuilding`, unavailable/stale coverage
+and null current counts. No-op refreshes skip publication and use the same final
+fresh-snapshot rule. Timeout after publication discards the envelope while keeping
+the durable artifact; later fresh authorized readers independently validate it.
+
+Readers perform constant-size physical format/schema checks, keyed pointer,
+record and generation reads, bounded HMAC/binding checks and scalar currentness
+probes. Counts come from authenticated records. Reads perform no creation,
+refresh, repair, quick_check, integrity/statistics scan or corpus tokenization.
+The real Worker regression traps writable opens, mutations and deep scans.
+Search retains bounded pages/top-24 ranking state, the frozen trace metadata
+and channel timing fields, and exact empty-population fractions/omission counts; canonical final refetch and
+pointer/fence revalidation precede delivery. Assembly uses the existing frozen
+serializer/metering/source logic with a Worker-local exact host counter, and a
+single final canonical validation. Missing counter refuses
+`token_count_unavailable`. A semantic request flag retains a validated lexical
+result with disabled semantics and zero provider calls; it cannot enable a port. Diagnostic not-ready errors take the final-envelope
+currentness sample; no private data survives failed final sampling.
+
+The closed status DTO reports durable `absent`, `building`, `ready`, `stale`,
+`catching_up` or `unavailable` state, never Worker liveness. Counts are unknown
+outside ready state. Every embedded count is null and semantics are disabled.
+Initial and delta crash/reopen tests retain signed checkpoints and independently
+specified progress values. Missing/invalid evidence, format/store failures and
+current-fence/access/dependency mismatches preserve their closed reasons and
+precedence. Explicit maintenance may repair an unusable protected cache; readers
+never repair it. Copied file identities cannot reuse old certificates.
+
+The service-owned pump reserves full quantum allowances before opening or
+refresh, retaining unknown usage on failure. Cumulative process-owned charges are
+keyed by store/owner/stable host domain and quota window, so a new handle or pump
+ID cannot reset exhaustion. A different window cannot overlap an unexpired one.
+The host persists charges across process replacement and supplies fresh process
+clock-domain windows. Current/history work round-robins active projections;
+validated settings must fit a nominal full sweep within the five-second epoch
+observation interval. Actual scheduling overhead remains a qualification gate.
+Renewal reuses the same owned pump/handles, extends supervision without resetting
+quotas, and cannot create a second projection writer. The parent retains
+maintenance-writer ownership by canonical identity/normalized selection through
+confirmed cleanup. The product coordinates ownership between service processes.
+Pump completion/status expose exhaustion, renewal expiry and failures; failure
+stops dispatch and drains handles. Supervisor shutdown owns timers, pending work,
+failed constructors and native disposal.
+
+## Deterministic acceptance mapping
+
+All file names below are under `core/test/` unless another path is displayed.
+A deferred portion is not claimed complete by an inherited or narrower test.
+
+| Row | Evidence and package boundary |
+| --- | --- |
+| P2-01 | `context-read-default-entropy.test.mjs`; C06 in `adapters/mcp/test/context-read-sources.test.mjs`; product certificate domain known answers in `context-read-product-index.test.mjs`. Legacy sidecar and wire fixtures unchanged. |
+| P2-02 | Product index/assembly tests record Worker counter execution; `context-read-product-import.test.mjs` runs both existing SQLite-free import fixtures and records child exits; installed artifact exercises actual exported maintainer/Worker. |
+| P2-03 | Existing `context-read-product-control.test.mjs` plus publication timeout in index tests and failed maintainer opening in service tests. No elapsed-time gate. |
+| P2-04 | Index tests physically build v18, compare canonical logical and DELETE file hashes in a separate child, reopen the pinned old implementation, and refuse Cards; P2a physical layout matrix retained. WAL preservation belongs to P2d. |
+| P2-05 | Index tests use physical v18/v23/v33 and actual mixed Card candidates/assembly on v23; P2a accepted/intermediate/malformed layout matrix retained. |
+| P2-06 | Production personal/project prebuild, pooled lookup, assembly compact mapping and snapshot fetch across readSet permutations in index tests; P2a authority tests retained. Selection overflow and 32 namespaces are P2c. |
+| P2-07 | Existing BM25/fusion tests retained and lexical mixed candidates exercised. Four-namespace bilingual pooled oracle is P2c; semantic execution is unavailable. |
+| P2-08 | Index tests trap writable opens, creation, mutation, repair and deep scans in a real reader Worker; missing/building/stale/invalid states refuse. Explicit maintenance repair is separate. Exact evidence still works without an index. |
+| P2-09 | Index tests rendezvous independent checkpoint/publication writers; feature-off correction/deletion and v33 method adoption change current eligibility/dependency fences. Immutable staging/checkpoint replay and unchanged-text reuse are exercised. Semantic/vector cases are unavailable. |
+| P2-10 | DELETE-only product refusal/capabilities and retained legacy topic lock/WAL tests. Product canonical/sidecar WAL and wait-policy qualification are P2d. |
+| P2-11 | Product candidates/assembly/snapshot fetch round trip; frozen assembly and source mutation suites retained. Final assembly mismatch refuses snapshot_stale. Four-namespace extension is P2c. |
+| P2-12 | Fake provider counter stays zero for lexical maintenance/reads; embeddings-only refresh never creates or builds storage and reports disabled semantic state. No provider coordination or model execution is released. |
+| P2-13 | `context-read-product-artifact.test.mjs` independently compares source/installed runtime closure, manifest/archive inventory and all shipped bytes; actual installed current/history maintenance, candidates, assembly, fetch and cleanup run offline. R29 installed closure retained. |
+| P2-14 | P2a request entry/final/cutoff tests retained; real data-bearing candidate/assembly errors and service final denial tested in index tests. |
+| P2-15 | Fresh HTTP credentials consume production certificates without maintenance/deep scans; independent HMAC/digest oracle, missing/MAC/manifest/pointer/generation/schema/store/incarnation/projection/binding matrix, restore copies and ownerGeneration access staleness in index tests. |
+| P2-16 | `context-read-product-service.test.mjs` proves failed-opening settlement before delayed disposal and cross-supervisor quarantine; index tests cover resource-acquisition bootstrap failure; pump tests prove supervisor-owned shutdown. |
+| P2-17 | Existing product native telemetry/control fault matrix retained. Actual publication timeout keeps retrieval cutoff separate from cleanup; observed native corruption produces the closed DTO with one failed open and no retry. Broader WAL writer native qualification is P2d. |
+| P2-18 | Independently constructed full status goldens, explicit progress values, initial/delta committed Worker crash/reopen, missing/invalid/identity precedence and disabled semantics in index tests. Enabled semantic states are outside this lexical package. |
+| P2-19 | Measurement population/exposure harness work belongs to later qualification. No timing gate was added or run. |
+| P2-20 | Index tests copy canonical/sidecar files, observe unavailable certificates, explicitly rebuild and admit a fresh reader. Product-owned stopped-client admission, consistent backup, old-binding invalidation, fallback and erase/restore procedures remain required integration. |
+| P2-21 | Real Worker sidecar-COMMIT rendezvous with independent DELETE writer: rebuilding/stale refresh, null counts, durable E certificate and explicit catch-up. Separate no-op and post-publication timeout tests. WAL variant is P2d. |
+| P2-22 | Request credentials refuse at service construction/use; service tests move mock time beyond the opening window and verify a later independent bounded quantum. Pump rejects HTTP credentials before timer/handle work. |
+| P2-23 | Independent writer provenance/drain measurement instrumentation is P2d. Functional writer children in these tests have actual exit-code assertions and supply no zero-busy measurement claim. |
+| P2-24 | Existing 10,000-operation supervisor retention/quarantine tests retained unchanged. |
+| P2-25 | Existing request ownerGeneration tests retained; index tests prove a new valid generation makes the old certificate access-stale while fresh request identity does not. |
+| P2-26 | Actual service refresh/status count two synchronous samples, with final failure stripping progress; request ready and not-ready data envelopes also assert exact counts. No callback follows final canonical reading. |
+| P2-27 | Real candidate/assembly not-ready error tests revoke at the second sample and assert exact bare scope_changed; service progress denial and late publication discard also covered. |
+| P2-28 | P2a trusted control/expiry matrix retained. Service tests assert parent-stamped later-call admission/cutoff and failed-opening ownership. |
+| P2-29 | P2a original request window/cumulative cutoff tests retained; service windows are independently bounded. Publication response held at the parent receipt cutoff yields bare timeout and no data. |
+| Pump | `context-read-product-pump.test.mjs`: mock clocks/timers, both intents and active selections, renewal reuse, cumulative reservation/exhaustion across new IDs, bounds/cadence, expired renewal, no HTTP authority, new-window sequencing and supervisor shutdown. |
+| Lock safety | `sqlite-lock-safety.test.mjs`: independent writer remains BUSY throughout same-process maintainer open/production refresh/close, then succeeds after host COMMIT. Raw-fd guard passes with unchanged allowlist. |
+
+## Verification
+
+The final commands, actual exits, test counts and inventory cross-checks follow
+below. No broad suite,
+network, key access, generated runtime update, frozen-contract edit or commit was
+performed. Every test command uses low CPU and I/O priority.
+
+## Deferred work and product inputs
+
+P2c widens validators/mapping to owner-wide selection and the 32-namespace pooled
+oracle; digest formats already accept general canonical projection arrays.
+P2d supplies canonical/sidecar WAL policy, wait/checkpoint qualification, the WAL
+publication-race variant, independently observed writer native diagnostics and
+complete deployment measurements. `sidecarJournalMode:'WAL'` currently refuses
+`index_unavailable`, with an explicit deferred capability statement; no mode is
+half-enabled. Semantic/provider paths remain disabled/unavailable, including
+embeddings-only maintenance. No vector/provider budget service is constructed.
+
+The product supplies and freezes service ownership, cumulative per-minute quotas,
+renewal/capacity policy, active projection selections and selection metadata.
+It observes pump completion/failure and persists reservations before process
+replacement. It supplies an exact Worker-local counter for assembly and maps
+both diagnostic `_meta` keys outside model input. It owns HTTP disconnect,
+reauthenticated partial fallback and stopped-client erase/restore admission gates.
+No latency/freshness/availability, sidecar-size or backup-time measurement has
+been run; the contract's production qualifications remain unmet until measured.
+P2a's two documented deliberately forging in-process caller hardening cases are
+unchanged, as is its intentionally bounded post-second-sample authority window.
+
+## Final verification results
+
+The permitted test inventory was derived independently by filesystem glob and
+`rg --files`, then compared: **50 explicit paths**. Every invocation used
+`nice -n 19 ionice -c3 node <explicit path>` with PATH and the executable pinned
+to the indicated nvm runtime. Both exact runtime versions were checked before
+dispatch. Child return codes were captured directly; no pipeline tail or stdout
+summary supplied the exit status.
+
+Final consolidated results: **772 passed on Node 22.16.0** and **772 passed on
+Node 24.15.0**, across the same 50 paths, with every final command exiting **0**.
+The sequential matrix stopped on development findings and resumed only failed
+or unrun paths. Focused lifecycle/artifact reruns after the final changes
+supersede earlier index counts. These are functional checks, not deployment
+performance qualification.
+
+| Explicit path after the command prefix above | 22.16.0 exit / passed | 24.15.0 exit / passed |
+| --- | --- | --- |
+| `adapters/mcp/test/context-read-sources.test.mjs` | 0 / 4 | 0 / 4 |
+| `core/test/context-read-assembly-races.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/context-read-assembly-readonly.test.mjs` | 0 / 28 | 0 / 28 |
+| `core/test/context-read-assembly.test.mjs` | 0 / 20 | 0 / 20 |
+| `core/test/context-read-bm25.test.mjs` | 0 / 3 | 0 / 3 |
+| `core/test/context-read-budget.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-core.test.mjs` | 0 / 26 | 0 / 26 |
+| `core/test/context-read-default-entropy.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-embedder.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-fusion.test.mjs` | 0 / 4 | 0 / 4 |
+| `core/test/context-read-local-embedder.test.mjs` | 0 / 38 | 0 / 38 |
+| `core/test/context-read-local-status.test.mjs` | 0 / 3 | 0 / 3 |
+| `core/test/context-read-moc-source.test.mjs` | 0 / 15 | 0 / 15 |
+| `core/test/context-read-process.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-product-artifact.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-product-control.test.mjs` | 0 / 83 | 0 / 83 |
+| `core/test/context-read-product-import.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/context-read-product-index.test.mjs` | 0 / 44 | 0 / 44 |
+| `core/test/context-read-product-pump.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-product-service.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/context-read-product.test.mjs` | 0 / 126 | 0 / 126 |
+| `core/test/context-read-recovery.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/context-read-review.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/context-read-sidecar.test.mjs` | 0 / 17 | 0 / 17 |
+| `core/test/context-read-source-work.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/context-read-sources-authority.test.mjs` | 0 / 6 | 0 / 6 |
+| `core/test/context-read-sources-bounds.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-sources-races.test.mjs` | 0 / 16 | 0 / 16 |
+| `core/test/context-read-sources.test.mjs` | 0 / 14 | 0 / 14 |
+| `core/test/context-read-tokenize.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 / 16 | 0 / 16 |
+| `core/test/topic-members-bounds.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/topic-members-compatibility.test.mjs` | 0 / 32 | 0 / 32 |
+| `core/test/topic-members-integration.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/topic-members-mutations.test.mjs` | 0 / 20 | 0 / 20 |
+| `core/test/topic-members-primary.test.mjs` | 0 / 26 | 0 / 26 |
+| `core/test/topic-members-recheck-findings.test.mjs` | 0 / 33 | 0 / 33 |
+| `core/test/topic-members-review-findings.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/topic-members-round3-findings.test.mjs` | 0 / 18 | 0 / 18 |
+| `core/test/topic-members-scale.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/topic-members-visibility.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/topic-members.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/topic-overview-lifecycle.test.mjs` | 0 / 11 | 0 / 11 |
+| `core/test/topic-overview-raw29.test.mjs` | 0 / 22 | 0 / 22 |
+| `core/test/topic-overview-visibility.test.mjs` | 0 / 8 | 0 / 8 |
+| `core/test/topic-overview.test.mjs` | 0 / 4 | 0 / 4 |
+| `core/test/topic-reader-cancellation.test.mjs` | 0 / 6 | 0 / 6 |
+| `core/test/topic-reader-sqlite.test.mjs` | 0 / 21 | 0 / 21 |
+| `packaging/test/topic-overview-raw29.test.mjs` | 0 / 3 | 0 / 3 |
+
+Development runs exited **1** for two fixture mistakes (a duplicate physical
+schema installation and the Card confirmation return shape), a mock cleanup
+ordering cancellation, and Node 24 defensive mode ignoring the deliberate
+schema-version mutation. The fixture now disables defensive mode only on that
+test writer and asserts the actual mutation. A read-only preparation change
+also exposed three expected-unavailable states escaping as bare errors; those
+runs exited **1** on both versions. The final observation now acquires a fresh
+canonical snapshot, returns the closed DTO, and carries a preparation failure
+without retrying its native call. All were corrected and superseded by the
+final results above. No unrelated expensive workload was restarted.
+
+`node --check <explicit changed .mjs path>` ran for **21 files on each runtime**,
+with every actual exit **0**. `git diff --check` exited **0**. The independent
+whitespace/final-newline scan includes every untracked deliverable. The frozen
+product/unified-memory contracts, legacy sidecar and generated setup runtime
+have empty diffs (actual exit **0**).
+
+The installed product test cross-checks **306 manifest/archive files**, all
+shipped bytes, and **86 source/installed runtime and Worker modules**; its
+SQLite-free static reader/supervisor closure contains **23 modules**. It runs
+installed current/history maintenance, fresh candidates/assembly/fetch and
+confirmed shutdown. Both existing SQLite-free import fixtures exit **0** on
+both runtimes through the new import test. R29's fixed Worker entry list stays
+unchanged because reader and maintainer use separate isolates of the same fixed
+product entry; the installed graph assertions pass without weakening them.
+P2a capability assertions now list the newly released methods, and its absent-
+index assertion accepts the required authorized diagnostic envelope. The
+installed closure explicitly includes the pump because it is a new public
+service entry. These are additive P2b expectation changes; frozen legacy
+assertions and fixtures are unchanged.
+The raw-fd allowlist is unchanged. There are **14 changed shipped runtime/docs
+files**, all registered; the manifest has six new runtime entries and this new
+handoff document, with its original ordering preserved.
+
+## Changed-file cross-check
+
+Route one is `git diff --name-only -z` plus
+`git ls-files --others --exclude-standard -z`. Route two is the independent
+`git status --porcelain=v1 -z` inventory. Sorted files were compared with
+`diff -u`: actual exit **0**, **24 files**. The mechanically generated list is:
+
+- `core/context-product-authority.mjs`
+- `core/context-product-index.mjs`
+- `core/context-product-manifest.mjs`
+- `core/context-product-pump.mjs`
+- `core/context-product-reader.mjs`
+- `core/context-product-service.mjs`
+- `core/context-product-sidecar.mjs`
+- `core/context-product-validation.mjs`
+- `core/context-product-worker.mjs`
+- `core/context-read-facade.mjs`
+- `core/index.mjs`
+- `core/sqlite-journal-probe.mjs`
+- `core/test/context-read-product-artifact.test.mjs`
+- `core/test/context-read-product-import.test.mjs`
+- `core/test/context-read-product-index.test.mjs`
+- `core/test/context-read-product-pump.test.mjs`
+- `core/test/context-read-product-service.test.mjs`
+- `core/test/context-read-product.test.mjs`
+- `core/test/fixtures/context-product-index-worker.mjs`
+- `core/test/sqlite-lock-safety.test.mjs`
+- `core/testing/context-product-index-host.mjs`
+- `docs/context-read-product.md`
+- `docs/plans/context-read-p2b-impl.md`
+- `packaging/artifact-files.json`

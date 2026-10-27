@@ -2,6 +2,7 @@ import { isDeepStrictEqual, types } from 'node:util';
 import { boundedData, credentialDigest } from './context-product-control.mjs';
 import { deepFreeze } from './private-card-input.mjs';
 import { fail } from './validation.mjs';
+import { accessDigest } from './context-product-validation.mjs';
 
 const promiseThen = Promise.prototype.then;
 function observePromise(value) {
@@ -44,7 +45,7 @@ export function requestAuthority(host, binding, control) {
     return Object.freeze({
       // Kept stable across independently authenticated requests; no synthetic
       // namespace generations, request IDs or issuedAt enter snapshots.
-      accessGenerations: { ownerGeneration: binding.ownerGeneration ?? null },
+      accessGenerations: accessDigest(binding),
       check() {
         if (finalState === 'passed') fail('reader_failed');
         final();
