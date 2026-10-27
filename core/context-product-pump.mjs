@@ -1,7 +1,7 @@
 import { openContextIndexMaintainer } from './context-product-reader.mjs';
 import { supervisorOwner } from './context-read-supervisor.mjs';
 import { ownData } from './local-authority-input.mjs';
-import { boundedData } from './context-product-control.mjs';
+import { boundedData, hostConfiguration } from './context-product-control.mjs';
 import { fail } from './validation.mjs';
 import { resolve } from 'node:path';
 import { serviceIssuance } from './context-product-service.mjs';
@@ -32,7 +32,9 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     // Each active selection includes both intents; host supplies physical type
     // capability explicitly (v18 memory only). Never downgrade a Card request.
     const projections=c.projections.flatMap(p=>{
-      const {options,types}=ownData(p,['options','types']);
+      const admitted=ownData(p,['options','types']),types=admitted.types;
+      const {supervisor,...data}=ownData(admitted.options,['supervisor','path','version','profile','readSet','ownerCoverage','requestControl','host','diagnostics','deadlineMs','sidecarJournalMode']);
+      const options={...hostConfiguration(data),supervisor};
       if(options.supervisor!==c.supervisor)fail('invalid_input');
       const binding=serviceIssuance(options.host.configuration.serviceBinding,options.readSet,options.ownerCoverage);
       if(credentialDigest(credential)!==binding.credentialDigest)fail('authority_required');
@@ -97,13 +99,13 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       if(exhausted()||now()>=renewedUntil){report(observation());return;}
       lastTick=now();
       return running=(async()=>{
-        const p=projections[at++%projections.length],key=JSON.stringify([p.options.path,p.options.readSet,p.options.host]),ledger=ledgers.get(domainOf(p));
-        const maxItems=Math.min(quantum.maxItems,ledger.maxItems-ledger.items),maxMs=Math.min(quantum.maxMs,ledger.maxMs-ledger.ms,Math.floor(ledger.endsAt-now()),Math.floor(renewedUntil-now()));
-        if(maxItems<1||maxMs<1)return;
-        // Reserve the full quantum before dispatch. Unknown usage remains
-        // charged after crash/timeout; restarting or renewing cannot refund it.
-        ledger.items+=maxItems;ledger.ms+=maxMs;
         try {
+          const p=projections[at++%projections.length],key=JSON.stringify([p.options.path,p.options.readSet,p.options.host]),ledger=ledgers.get(domainOf(p));
+          const maxItems=Math.min(quantum.maxItems,ledger.maxItems-ledger.items),maxMs=Math.min(quantum.maxMs,ledger.maxMs-ledger.ms,Math.floor(ledger.endsAt-now()),Math.floor(renewedUntil-now()));
+          if(maxItems<1||maxMs<1)return;
+          // Reserve the full quantum before dispatch. Unknown usage remains
+          // charged after crash/timeout; restarting or renewing cannot refund it.
+          ledger.items+=maxItems;ledger.ms+=maxMs;
           let h=handles.get(key);
           if(!h){h=await open({...p.options,deadlineMs:maxMs});handles.set(key,h);}
           const remainingMs=Math.min(maxMs,Math.floor(maxMs-(now()-lastTick)));
@@ -124,7 +126,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
         report(observation());ledgers=nextLedgers;window=w;budgets=b;cycle();
       } else ledgers=admit(w,b);
       if(settled&&!exhausted())cycle();
-      renewedUntil=now()+next.renewalMs;grant=g;clearTimer(timer);if(!running)schedule();
+      renewedUntil=now()+next.renewalMs;grant=g;clearTimer(timer);if(exhausted())report(observation());else if(!running)schedule();
     }};
     all.entries.set(c.id,entry);if(exhausted())report(observation());schedule();return api;
   };

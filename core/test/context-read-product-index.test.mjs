@@ -4,7 +4,10 @@ import { createProductReaderRuntime } from '../context-product-reader.mjs';
 import assert from 'node:assert/strict';
 import { createHash,createHmac,randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync,existsSync } from 'node:fs';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
+import { copyFileSync,existsSync,lstatSync,readdirSync } from 'node:fs';
+import { createExclusiveSqliteFile } from '../sqlite-journal-probe.mjs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { openContextProductReader,openContextIndexMaintainer,createContextReadSupervisor } from '../index.mjs';
@@ -442,4 +445,184 @@ test('Fix1 P2-21 writer after final snapshot leaves completion at E complete and
   const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX,{readOnly:true});try{assert.equal(JSON.parse(side.prepare('SELECT record FROM validation_records').get().record).canonicalFenceDigest,expected);}finally{side.close();}
   assert.deepEqual(ok(await h.getContextIndexStatus(input,s.token)),scalarStatus('stale','fence_changed',completed.progress.lexical,null,'stale'));await h.close();
   const r=configured(t,f.path),reader=await r.open();denied(await reader.findCandidates({...input,query:'needle'},r.token),'index_unavailable');
+});
+
+test('Fix2 missing publication certificate preserves authenticated bounded rebuild progress',async t=>{
+  const f=fixture(t);for(let i=0;i<5;i++)f.admit('bounded rebuild '+i);
+  const s=configured(t,f.path,true),h=await s.open();await build(h,s.token);
+  const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX);side.exec('DELETE FROM validation_records');side.close();
+  let last=0,generation,complete=false;
+  for(let i=0;i<20;i++){
+    const r=ok(await h.refreshContextIndex({...refresh,budget:{maxItems:1,maxMs:5000}},s.token));
+    const d=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX);
+    const work=d.prepare('SELECT g.id,g.checkpoint FROM work w JOIN generations g ON g.id=w.generation').get();
+    assert.equal(d.prepare('SELECT count(*) AS n FROM generations').get().n,2);
+    d.close();
+    if(r.status==='complete'){complete=true;break;}
+    assert.ok(work.checkpoint>last);last=work.checkpoint;
+    if(generation)assert.equal(work.id,generation);else generation=work.id;
+    assert.deepEqual(ok(await h.getContextIndexStatus(input,s.token)),scalarStatus('unavailable','validation_missing'));
+  }
+  assert.equal(complete,true);assert.equal(ok(await h.getContextIndexStatus(input,s.token)).lexical.state,'ready');await h.close();
+});
+
+// Intercept only the isolated creation program. Rendezvous code runs inside
+// that child, while it owns the actual OS lock, rather than relying on sleeps.
+function creationBoundary(t,transform){
+  const spawn=childProcess.spawnSync;
+  t.mock.method(childProcess,'spawnSync',(command,args,options)=>{
+    if(args[2]?.includes('const replacing =')){args=[...args];args[2]=transform(args[2],args);}
+    return spawn(command,args,options);
+  });syncBuiltinESMExports();
+  t.after(()=>{t.mock.restoreAll();syncBuiltinESMExports();});
+  return ()=>{t.mock.restoreAll();syncBuiltinESMExports();};
+}
+function ordinaryAttempt(a,path){
+  const code=`
+    import {openContextProductFacade} from '${new URL('../context-read-facade.mjs',import.meta.url).href}';
+    import {productSidecar} from '${new URL('../context-product-sidecar.mjs',import.meta.url).href}';
+    const facade=openContextProductFacade(process.argv[1],{});
+    const s=productSidecar({path:process.argv[1],db:facade.port.db,identity:facade.port.identity,features:facade.port.features,writable:true});
+    try{s.refresh(${JSON.stringify({...a.p,intent:'history'})},${JSON.stringify(a.access)},{maxItems:1,maxMs:5000});console.log('entered');}
+    catch(e){console.log((e.errcode&255)===5||e.reason==='storage_unavailable'?'excluded':'unexpected:'+e.code);}
+    finally{s.close();facade.close();}`;
+  return `
+    const {spawnSync:attempt}=await import('node:child_process');
+    const result=attempt(process.execPath,['--input-type=module','-e',${JSON.stringify(code)},${JSON.stringify(path)}],{encoding:'utf8',env:{},timeout:4000});
+    if(result.status!==0||result.stdout.trim()!=='excluded')throw Error('ordinary user entered: '+result.stdout+result.stderr);
+  `;
+}
+
+test('Fix2 first creation publishes complete metadata and excludes a different selection during staging',t=>{
+  const f=fixture(t);f.admit('first creation');const a=local(f);t.after(()=>a.close());let seen=0;
+  creationBoundary(t,(source,args)=>{
+    if(args[3]!==f.path+PRODUCT_SIDECAR_SUFFIX)return source;
+    seen++;
+    return source.replace('fsyncSync(fd);',`if((await import('node:fs')).existsSync(target))throw Error('empty cache was published');
+      ${ordinaryAttempt(a,f.path)} fsyncSync(fd);`).replace('published = true;',`published = true;
+      const {DatabaseSync:Inspect}=await import('node:sqlite');const inspect=new Inspect(target,{readOnly:true});
+      if(!inspect.prepare('SELECT incarnation FROM product_metadata').get()?.incarnation || inspect.prepare('PRAGMA application_id').get().application_id!==0x43525032)throw Error('incomplete format');inspect.close();`);
+  });
+  a.storage.refresh(a.p,a.access,{maxItems:1,maxMs:5000});assert.equal(seen,1);
+});
+
+test('Fix2 A starting an ordinary batch while B stages repair is excluded',t=>{
+  const f=fixture(t);f.admit('staged repair');const a=local(f);t.after(()=>a.close());a.storage.refresh(a.p,a.access,{maxItems:1024,maxMs:5000});
+  const d=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX);d.exec("UPDATE product_metadata SET store_id='damaged'");d.close();let seen=0;
+  creationBoundary(t,(source,args)=>{
+    if(args[4]!=='replace-product-cache')return source;seen++;
+    return source.replace('fsyncSync(fd);',ordinaryAttempt(a,f.path)+'fsyncSync(fd);');
+  });
+  a.storage.refresh(a.p,a.access,{maxItems:1024,maxMs:5000});assert.equal(seen,1);
+  assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.state,'ready');
+});
+
+for(const point of ['batch','snapshot'])test('Fix2 repair refuses while an ordinary '+point+' holds its lock',t=>{
+  const f=fixture(t);f.admit('held transaction');let enabled=false,seen=0;
+  const a=local(f,{rendezvous(actual){
+    if(!enabled||actual!==point)return;seen++;
+    const path=f.path+PRODUCT_SIDECAR_SUFFIX,stat=lstatSync(path);
+    if(point==='batch')assert.equal(existsSync(path+'-journal'),true);
+    assert.throws(()=>createExclusiveSqliteFile(path,stat.dev+':'+stat.ino),{code:'ERR_SQLITE_ERROR',errcode:5,published:false});
+    assert.equal(lstatSync(path).ino,stat.ino);
+  }});t.after(()=>a.close());a.storage.refresh(a.p,a.access,{maxItems:1024,maxMs:5000});enabled=true;
+  if(point==='batch'){f.admit('new batch');a.storage.refresh(a.p,a.access,{maxItems:1,maxMs:5000});}
+  else assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.state,'ready');
+  assert.ok(seen>0);
+});
+
+const repairKillSteps=[
+  "lifecycle.exec('PRAGMA busy_timeout=0; BEGIN EXCLUSIVE');",
+  "fd = openSync(temporary, 'wx', 0o600);",
+  "db.exec('BEGIN IMMEDIATE;' + init.sql);",
+  "db.exec('COMMIT');",
+  'fsyncSync(fd);',
+  'renameSync(temporary, target);',
+  'fsyncSync(dir);',
+];
+for(const [step,marker] of repairKillSteps.entries())test('Fix2 killed repair step '+step+' releases exclusion and ordinary refresh recovers',t=>{
+  const f=fixture(t);f.admit('repair kill');const a=local(f);t.after(()=>a.close());a.storage.refresh(a.p,a.access,{maxItems:1024,maxMs:5000});
+  const path=f.path+PRODUCT_SIDECAR_SUFFIX,d=new DatabaseSync(path);d.exec("UPDATE product_metadata SET store_id='damaged'");d.close();const before=lstatSync(path);
+  let killed=0;
+  const restore=creationBoundary(t,(source,args)=>{
+    if(args[4]!=='replace-product-cache')return source;killed++;
+    assert.ok(source.includes(marker));return source.replace(marker,marker+"process.kill(process.pid,'SIGKILL');");
+  });
+  assert.throws(()=>a.storage.refresh(a.p,a.access,{maxItems:1024,maxMs:5000}),/sqlite_file_creation_failed/);restore();assert.equal(killed,1);
+  assert.equal(existsSync(path),true);
+  if(step<5)assert.equal(lstatSync(path).ino,before.ino);
+  else {assert.notEqual(lstatSync(path).ino,before.ino);const check=new DatabaseSync(path);assert.notEqual(check.prepare('SELECT store_id FROM product_metadata').get().store_id,'damaged');check.close();}
+  a.storage.refresh(a.p,a.access,{maxItems:1024,maxMs:5000});
+  assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.state,'ready');
+  // A post-rename kill may leave a stage name only for first creation; repair
+  // stages and their rollback companions are reclaimed under exclusion.
+  assert.equal(readdirSync(f.workspace.path).some(name=>name.includes('.cairn-create-')),false);
+});
+
+test('Fix2 an idle reader reopens the successor after another maintainer repairs',t=>{
+  const f=fixture(t);f.admit('idle reader');const a=local(f),b=local(f);t.after(()=>{a.close();b.close();});
+  a.storage.refresh(a.p,a.access,{maxItems:1024,maxMs:5000});
+  assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.state,'ready');
+  const path=f.path+PRODUCT_SIDECAR_SUFFIX,before=lstatSync(path),d=new DatabaseSync(path);
+  d.exec("UPDATE product_metadata SET store_id='damaged'");d.close();
+  b.storage.refresh(b.p,b.access,{maxItems:1024,maxMs:5000});assert.notEqual(lstatSync(path).ino,before.ino);
+  assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.state,'ready');
+});
+
+test('Fix2 a commit during repair lock handoff invalidates the decision even with indistinguishable timestamps',t=>{
+  const f=fixture(t);f.admit('committed winner');const a=local(f);t.after(()=>a.close());a.storage.refresh(a.p,a.access,{maxItems:1024,maxMs:5000});
+  const path=f.path+PRODUCT_SIDECAR_SUFFIX,d=new DatabaseSync(path),storeId=d.prepare('SELECT store_id FROM product_metadata').get().store_id;
+  d.exec("UPDATE product_metadata SET store_id='damaged'");d.close();const before=lstatSync(path);let committed=0;
+  const restore=creationBoundary(t,(source,args)=>{
+    if(args[4]!=='replace-product-cache')return source;committed++;
+    const lock=new DatabaseSync(path+'.lifecycle-lock.sqlite',{readOnly:true});lock.exec('BEGIN');lock.prepare('PRAGMA schema_version').get();
+    const winner=new DatabaseSync(path);winner.exec('BEGIN IMMEDIATE');winner.prepare('UPDATE product_metadata SET store_id=?').run(storeId);winner.exec('COMMIT');winner.close();lock.close();
+    // Emulate a timestamp collision: semantic revalidation must still refuse.
+    return source.replace('if (init?.expectedStamp && stamp !== init.expectedStamp)', 'if (false && init?.expectedStamp && stamp !== init.expectedStamp)');
+  });
+  assert.throws(()=>a.storage.refresh(a.p,a.access,{maxItems:1024,maxMs:5000}),{code:'index_unavailable',reason:'storage_unavailable'});restore();assert.equal(committed,1);
+  assert.equal(lstatSync(path).ino,before.ino);assert.equal(existsSync(path+'-journal'),false);
+  a.storage.refresh(a.p,a.access,{maxItems:1024,maxMs:5000});
+  assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.state,'ready');
+});
+
+test('Fix2 repair child timeout releases its OS lock and later refresh recovers automatically',t=>{
+  const f=fixture(t);f.admit('timeout repair');const a=local(f);t.after(()=>a.close());a.storage.refresh(a.p,a.access,{maxItems:1024,maxMs:5000});
+  const path=f.path+PRODUCT_SIDECAR_SUFFIX,d=new DatabaseSync(path);d.exec("UPDATE product_metadata SET store_id='damaged'");d.close();const before=lstatSync(path);
+  const spawn=childProcess.spawnSync;
+  t.mock.method(childProcess,'spawnSync',(command,args,options)=>{
+    if(args[4]==='replace-product-cache'){
+      args=[...args];args[2]=args[2].replace('fsyncSync(fd);','Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0);fsyncSync(fd);');options={...options,timeout:500};
+    }
+    return spawn(command,args,options);
+  });syncBuiltinESMExports();
+  try{assert.throws(()=>a.storage.refresh(a.p,a.access,{maxItems:1024,maxMs:5000}),/sqlite_file_creation_failed/);}
+  finally{t.mock.restoreAll();syncBuiltinESMExports();}
+  assert.equal(lstatSync(path).ino,before.ino);
+  a.storage.refresh(a.p,a.access,{maxItems:1024,maxMs:5000});
+  assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.state,'ready');
+  assert.equal(readdirSync(f.workspace.path).some(name=>name.includes('.cairn-create-')),false);
+});
+
+for(const writing of [false,true])test(`Fix2 ${writing?'writer':'reader'} checks the opened inode inside its own transaction and refuses a mismatch`,t=>{
+  const f=fixture(t);f.admit('inode check');const a=local(f);t.after(()=>a.close());a.storage.refresh(a.p,a.access,{maxItems:1024,maxMs:5000});
+  const path=f.path+PRODUCT_SIDECAR_SUFFIX,before=lstatSync(path),exec=DatabaseSync.prototype.exec;let changed=false;
+  t.mock.method(DatabaseSync.prototype,'exec',function(sql){
+    const result=exec.call(this,sql);
+    if(!changed && sql===(writing?'BEGIN IMMEDIATE':'BEGIN') && this.prepare('PRAGMA database_list').get().file===path){
+      changed=true;assert.equal(existsSync(path+'-journal'),false);
+      // Deliberately bypass coordination to exercise the last inode defense.
+      // Raw copy descriptors stay in this isolated child, away from host locks.
+      const r=spawnSync(process.execPath,['--input-type=module','-e',`
+        import {copyFileSync,renameSync} from 'node:fs';
+        const p=process.argv[1];copyFileSync(p,p+'.successor');renameSync(p+'.successor',p);`,path],{encoding:'utf8',env:{}});
+      assert.equal(r.status,0,r.stderr);
+    }
+    return result;
+  });
+  if(writing){f.admit('force transaction');assert.throws(()=>a.storage.refresh(a.p,a.access,{maxItems:1,maxMs:5000}),{code:'index_unavailable',reason:'storage_unavailable'});}
+  else assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.reason,'storage_unavailable');
+  assert.equal(changed,true);assert.notEqual(lstatSync(path).ino,before.ino);assert.equal(existsSync(path+'-journal'),false);
+  t.mock.restoreAll();
+  assert.equal(readTransaction(a.facade.port.db,()=>a.storage.observe(a.p,a.access)).dto.lexical.reason,'validation_invalid');
 });

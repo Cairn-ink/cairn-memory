@@ -458,3 +458,210 @@ and the generated setup runtime have empty diffs (`git diff --exit-code`: **0**)
 The branch remains `feat/context-read-p2b` at `8e4212b3`, with no staged changes
 and no commit. Temporary verification scripts/logs were removed after recording
 these results.
+
+## Fix round 2
+
+Base: `eb304e74`, `context-read-product-v1.1`, production index lifecycle.
+The frozen product specification and both independent re-reviews were read.
+No commit or setup-bundle regeneration is part of this fix.
+
+| Finding | Fix | Deterministic verification |
+| --- | --- | --- |
+| A: empty first publication; replacement races initialization, ordinary batches and readers | First creation initializes and commits format, metadata and incarnation in its private stage. Every production cache operation pins a shared SQLite transaction on a persistent `.lifecycle-lock.sqlite` coordination file. Creation/replacement children hold its exclusive transaction through publication. Sidecar transactions check the opened inode after obtaining their SQLite lock; idle handles reopen a successor. | Index Fix2 tests rendezvous inside the creation child, inside an ordinary batch and a reader snapshot, and while repair stages. A different selection cannot initialize or start a batch under exclusive exclusion. First publication contains complete metadata. An idle reader reopens the successor. |
+| A: work may commit during the shared-to-exclusive handoff; late companions | The child checks the failed observation's device/inode/size/nanosecond modification and change timestamps after obtaining exclusion. Changed observations refuse replacement; independently, the child rechecks format, store/profile and integrity under exclusion and refuses a valid incumbent even if timestamps collide. Immediately before rename it rechecks the incumbent identity and all three companion paths. | Index Fix2 commits a valid winner during handoff, disables the timestamp shortcut to emulate indistinguishable timestamps, and verifies refusal, preserved inode/publication and subsequent readiness. Probe `late-companion` creates a journal after staging and verifies refusal without replacement. |
+| B: killed child or timeout leaves permanent directory exclusion | SQLite owns exclusion; process death releases it. The coordination file persists and is never unlinked or replaced by the lifecycle. Exclusive owners reclaim previous product stages and stage companions without depending on PID liveness. | Index Fix2 kills the actual child after exclusive acquisition, stage creation, initialization transaction, initialization COMMIT, stage fsync, rename and directory fsync. Each ordinary refresh recovers; pre-rename kills retain the incumbent and post-rename kills retain a fully initialized successor. A separate actual child timeout recovers automatically. |
+| C: invalid publication evidence repeatedly discards valid rebuild progress | Status retains publication-validation precedence. Maintenance independently authenticates resumable work and continues a rebuild without trusting the broken publication. A delta with an invalid base starts one full rebuild. Superseded unpublished work belonging to that projection is removed; published generations are protected. | Index Fix2 removes the certificate from a five-document publication, runs repeated `maxItems:1` refreshes, checks strictly increasing checkpoints and a stable work generation, checks unchanged unavailable status until publication, and checks exactly two generations throughout. |
+| D: renewal exposes a completion with no timer to settle it | Exhausted renewal immediately reports its terminal observation, including a newly admitted exhausted window and same-window host usage. | Pump Fix2 tests both renewal paths, zero scheduled timers and settled `budget_exhausted` completions, including the previous window's observer. |
+| E: retained mutable options cause a rejection outside tick handling | Admission validates and copies options, preserving only the intended shared host state and supervisor identity. Ledger lookup and quantum accounting execute inside the tick error boundary. | Pump Fix2 mutates the caller's path, namespace and host after admission; timer dispatch uses the admitted values and completion settles normally. |
+
+### Replacement interleaving argument
+
+The coordination database is separate from the cache and is never replaced.
+Its zero-byte initial file is a valid empty SQLite database used only for OS
+locks; a deferred BEGIN is followed by a schema query to acquire a real shared
+lock. Only explicit maintenance creates that file, in a child. Status/read paths
+open it read-only and create no files. Missing-cache observations linearize at
+the missing-file check and cannot subsequently open a newly published cache
+without coordination. A restored cache without its coordination file refuses
+reads until explicit maintenance establishes coordination.
+
+Every ordinary cache open, observation, query and complete refresh quantum holds
+that shared lock. This includes initialization decisions and all batch
+transactions. A replacement child must obtain an exclusive SQLite transaction
+before staging; therefore a live ordinary writer or reader snapshot prevents
+replacement, and a new ordinary operation cannot enter while the child stages.
+The same exclusion covers other processes and selections. The parent closes its
+failed cache handle and releases its shared lock before spawning the child;
+the child rechecks the failed-observation stamp under exclusion, then independently
+revalidates schema, store/profile metadata and integrity before deciding repair
+is still needed. It refuses a valid incumbent. Timestamp changes can reject an
+obsolete decision early, but correctness does not depend on timestamp resolution:
+a completed valid initialization or ordinary commit during handoff cannot make
+the child replace a healthy cache. The test deliberately disables the timestamp
+shortcut while the writer restores a valid incumbent, and replacement still refuses. Initial creation uses no-replace link publication of the already
+committed, closed and fsynced stage, so a second creator never sees an empty
+cache and cannot replace a winner.
+
+Under exclusive exclusion the child checks the incumbent inode and refuses
+`-journal`, `-wal` or `-shm` immediately before rename. A killed ordinary writer
+can leave a hot journal after its OS locks disappear; that companion still
+prevents replacement. Writable SQLite opening performs recovery on the incumbent
+before a subsequent repair decision; repair never deletes a journal to force
+progress. After rename the initialized successor is already present. Idle cache
+connections may still refer to the old inode, but hold no transaction or journal;
+their next operation reacquires coordination and reopens on identity change.
+Every read transaction also pins its SQLite snapshot before rechecking inode,
+and every write checks immediately after BEGIN IMMEDIATE, refusing and closing
+on a mismatch. Thus no coordinated operation uses the old inode alongside a
+replacement pathname, no concurrent committed work is overwritten, and no old
+journal can be paired with the successor.
+
+SIGKILL/timeout releases the child's exclusive lock automatically. Before rename
+the incumbent remains; after rename the full successor remains. The next repair
+reclaims abandoned private stages while holding exclusion, including rollback
+companions left during stage initialization. No directory lock or manual stale
+owner recovery is needed. The persistent coordination file must stay in place
+while clients are admitted; ordinary canonical-only backup and restore still
+requires the existing drained-client gate.
+
+All raw file creation, publication and lock-file creation remain child-only.
+The sole added raw-fd allowlist entry is the child-only lock-file creation call,
+with its one-line reason. Host inspection uses only metadata; host data and lock
+access uses SQLite connections. The prior child import is retained for the
+unchanged setup archive's exact-source guard. No new shipped module or document
+is introduced, so existing artifact manifest entries cover the runtime changes.
+
+The final defense is tested separately for both readers and writers: a child
+intentionally replaces the path immediately after the connection's own BEGIN,
+before the inode check. The operation refuses `storage_unavailable`, leaves no
+journal, closes the old connection, and the next observation authenticates the
+successor rather than reusing the old certificate. SQLite contention from the
+publication child's exclusive lock preserves its numeric SQLite error and maps
+to `storage_busy`; the observed child call is covered by the native transaction
+boundary. Companion-path refusal remains a separate storage-availability check.
+
+### Changed-file inventory
+
+`git diff --name-only HEAD` was cross-checked against an independent comparison
+of every tracked worktree blob with its index object (`git ls-files -s` plus
+`git hash-object`), augmented with untracked-file enumeration. The sorted lists
+match: **8 changed files**. This includes the report and allowlist, with no new
+runtime modules, scripts, public assets or configuration files omitted.
+
+- `core/context-product-pump.mjs`
+- `core/context-product-sidecar.mjs`
+- `core/sqlite-journal-probe.mjs`
+- `core/test/context-read-product-index.test.mjs`
+- `core/test/context-read-product-pump.test.mjs`
+- `core/test/fixtures/no-raw-db-fd-allowlist.json`
+- `core/test/sqlite-journal-probe.test.mjs`
+- `docs/plans/context-read-p2b-impl.md`
+
+
+### Verification and actual exit codes
+
+The required inventory was derived by filesystem glob and independently by
+`rg --files` with the matching filename predicates; the sorted inventories
+match at **51 explicit test paths**. Each path ran directly with the exact nvm
+Node **22.16.0** and **24.15.0** executables, with that runtime first in PATH;
+both version commands exited **0**. Each child process return code was captured
+directly. Reporter summaries were independently parsed for matching test/pass
+counts and zero failed, cancelled, skipped or todo tests on final invocations.
+Node 22 used TAP and Node 24 used its spec reporter; both were checked.
+
+**Final result: 825 tests passed per runtime; every final per-file invocation
+exited 0.** These are deterministic functional checks, with no broad suites or
+performance/qualification measurements. After the final child-side semantic
+recheck was added, the index, probe, both lock guards, entropy and both C06 source
+files were rerun by explicit path on both runtimes; all 14 invocations exited 0.
+
+Earlier failures are retained here rather than counted as first-pass success:
+
+- Initial required Node 22 `context-read-local-embedder.test.mjs`: **exit 1**,
+  37/38 passed; L12's first lexical query reached its ordinary deadline. After
+  both matrices finished, one isolated rerun of the unchanged test and default
+  implementation passed **38/38, exit 0**, with no deadline or test adjustment.
+- Initial required Node 22 `sqlite-journal-probe.test.mjs`: **exit 1**, 22/23
+  passed; the new late-companion fixture had a duplicated out-of-scope statement.
+  That statement was removed; the corrected file passed **23/23, exit 0**,
+  including the final reruns on both runtimes.
+- Development index invocations exited **1** while integrating missing-cache
+  status and read-only service observation with the new coordination file;
+  corrected full-file runs exited **0**. Development raw-fd guard runs exited
+  **1** for the unchanged archive's exact import and then a stale allowlist entry;
+  retaining the original child import fixed both, with final guard exits **0**.
+  Development pump and legacy probe runs exited **0**. Filtered Fix2 rendezvous
+  runs exited **0**, including **17/17** after disabling the timestamp shortcut
+  in the handoff test. No filtered run substitutes for the full-file results.
+
+The following table records each final explicit-path exit and passed count;
+`1 → 0` also preserves an initial required-run failure above.
+
+| Explicit path | Node 22.16.0 exit / passed | Node 24.15.0 exit / passed |
+| --- | --- | --- |
+| `adapters/mcp/test/context-read-sources.test.mjs` | 0 / 4 | 0 / 4 |
+| `core/test/context-read-assembly-races.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/context-read-assembly-readonly.test.mjs` | 0 / 28 | 0 / 28 |
+| `core/test/context-read-assembly.test.mjs` | 0 / 20 | 0 / 20 |
+| `core/test/context-read-bm25.test.mjs` | 0 / 3 | 0 / 3 |
+| `core/test/context-read-budget.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-core.test.mjs` | 0 / 26 | 0 / 26 |
+| `core/test/context-read-default-entropy.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-embedder.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-fusion.test.mjs` | 0 / 4 | 0 / 4 |
+| `core/test/context-read-local-embedder.test.mjs` | 1 → 0 / 38 | 0 / 38 |
+| `core/test/context-read-local-status.test.mjs` | 0 / 3 | 0 / 3 |
+| `core/test/context-read-moc-source.test.mjs` | 0 / 15 | 0 / 15 |
+| `core/test/context-read-process.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-product-artifact.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-product-control.test.mjs` | 0 / 83 | 0 / 83 |
+| `core/test/context-read-product-import.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/context-read-product-index.test.mjs` | 0 / 65 | 0 / 65 |
+| `core/test/context-read-product-pump.test.mjs` | 0 / 14 | 0 / 14 |
+| `core/test/context-read-product-service.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/context-read-product.test.mjs` | 0 / 126 | 0 / 126 |
+| `core/test/context-read-recovery.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/context-read-review.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/context-read-sidecar.test.mjs` | 0 / 17 | 0 / 17 |
+| `core/test/context-read-source-work.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/context-read-sources-authority.test.mjs` | 0 / 6 | 0 / 6 |
+| `core/test/context-read-sources-bounds.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-sources-races.test.mjs` | 0 / 16 | 0 / 16 |
+| `core/test/context-read-sources.test.mjs` | 0 / 14 | 0 / 14 |
+| `core/test/context-read-tokenize.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/sqlite-journal-probe.test.mjs` | 1 → 0 / 23 | 0 / 23 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 / 16 | 0 / 16 |
+| `core/test/topic-members-bounds.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/topic-members-compatibility.test.mjs` | 0 / 32 | 0 / 32 |
+| `core/test/topic-members-integration.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/topic-members-mutations.test.mjs` | 0 / 20 | 0 / 20 |
+| `core/test/topic-members-primary.test.mjs` | 0 / 26 | 0 / 26 |
+| `core/test/topic-members-recheck-findings.test.mjs` | 0 / 33 | 0 / 33 |
+| `core/test/topic-members-review-findings.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/topic-members-round3-findings.test.mjs` | 0 / 18 | 0 / 18 |
+| `core/test/topic-members-scale.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/topic-members-visibility.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/topic-members.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/topic-overview-lifecycle.test.mjs` | 0 / 11 | 0 / 11 |
+| `core/test/topic-overview-raw29.test.mjs` | 0 / 22 | 0 / 22 |
+| `core/test/topic-overview-visibility.test.mjs` | 0 / 8 | 0 / 8 |
+| `core/test/topic-overview.test.mjs` | 0 / 4 | 0 / 4 |
+| `core/test/topic-reader-cancellation.test.mjs` | 0 / 6 | 0 / 6 |
+| `core/test/topic-reader-sqlite.test.mjs` | 0 / 21 | 0 / 21 |
+| `packaging/test/topic-overview-raw29.test.mjs` | 0 / 3 | 0 / 3 |
+
+All six changed `.mjs` files passed `node --check` by explicit path on both
+runtimes: **12 invocations, each exit 0**. The allowlist JSON parses. Final
+`git diff --check` and an independent trailing-whitespace/final-newline scan
+passed with **exit 0**, covering all eight changed files, including the report.
+The changed-file inventories were re-derived after implementation and still
+match at **8 files**. All four changed shipped runtime/doc paths already occur
+in `packaging/artifact-files.json`; no manifest addition is needed.
+
+The frozen specification, default `core/context-read*.mjs` sources and generated
+setup runtime have empty diffs (**exit 0**, 50 explicitly enumerated paths).
+C06 and default entropy checks pass on both runtimes. The branch remains
+`feat/context-read-p2b` at `eb304e74`; nothing is staged or committed. Temporary
+verification scripts and logs are removed after these results are recorded;
+no test or repair process is left running.

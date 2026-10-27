@@ -105,3 +105,22 @@ test('Fix1 a mixed pump reserves each quantum only against its dispatched domain
   const onlyB=s.renew({...s.c,id:randomUUID(),projections:[b]});assert.equal(onlyB.getStatus().usedItems,1);assert.equal(onlyB.getStatus().usedMs,100);await onlyB.close();
   const onlyA=s.renew({...s.c,id:randomUUID(),projections:[a]});assert.equal(onlyA.getStatus().usedItems,2);assert.equal(onlyA.getStatus().usedMs,200);await onlyA.close();
 });
+
+for(const nextWindow of [true,false])test(`Fix2 ${nextWindow?'new window':'same window'} exhausted renewal settles completion without a timer`,async t=>{
+  const s=setup(t),p=s.renew(s.c),first=p.completion;
+  if(nextWindow)s.setTime(60000);
+  s.renew({...s.c,window:{...s.c.window,...(nextWindow?{id:'exhausted-next',endsAtMonoMs:120000}:{}),usedItems:8}});
+  const result=await Promise.race([p.completion,new Promise(resolve=>setImmediate(()=>resolve('pending')))]);
+  assert.notEqual(result,'pending');assert.equal(result.state,'budget_exhausted');assert.equal(s.timers.size,0);
+  if(nextWindow){assert.notEqual(p.completion,first);assert.equal((await first).state,'budget_exhausted');}
+  await p.close();
+});
+
+test('Fix2 admitted options are detached from caller mutations before timer dispatch',async t=>{
+  const s=setup(t),p=s.renew(s.c),admitted=s.c.projections[0].options,path=admitted.path;
+  admitted.path+='-mutated';admitted.readSet[0].ownerId='mutated';admitted.host.moduleUrl='mutated';
+  await s.next();
+  assert.equal(s.opened[0].path,path);assert.equal(s.opened[0].readSet[0].ownerId,'pump');
+  assert.equal(s.opened[0].host.moduleUrl,'file:///synthetic-host.mjs');assert.equal(p.getStatus().error,null);
+  await p.close();assert.equal((await p.completion).state,'stopped');
+});

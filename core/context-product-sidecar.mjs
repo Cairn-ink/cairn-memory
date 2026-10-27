@@ -83,34 +83,83 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   now = () => performance.now(), rendezvous = () => {} }) {
   features={...features,reviews:features.cards,receipts:features.cards};
   const sidePath = path + PRODUCT_SIDECAR_SUFFIX;
-  let side, sideWritable, openedIdentity, closed = false, metadata;
+  let side, sideWritable, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0;
+  const lockPath=sidePath+'.lifecycle-lock.sqlite';
+  const stamp=()=>{const s=sqliteFileStat(sidePath);return [s.dev,s.ino,s.size,s.mtimeNs,s.ctimeNs].join(':');};
+  function acquire(createLock=false) {
+    if (!lifecycle) {
+      if (!productFile(lockPath,true)) {
+        if (!createLock) unavailable('storage_unavailable');
+        try { createExclusiveSqliteFile(lockPath); } catch(e) { if(e.code!=='EEXIST')throw e; }
+      }
+      lockIdentity=productFile(lockPath);
+      const open=()=>new DatabaseSync(lockPath,{readOnly:true});
+      lifecycle=observer ? observer.invoke('open','connection',open) : open();
+      if(observer)lifecycle=observer.database(lifecycle);
+    }
+    lifecycle.exec('BEGIN');
+    // A deferred BEGIN alone has no OS lock. This query pins the shared lock.
+    lifecycle.prepare('PRAGMA schema_version').get();
+    if(!same(lockIdentity,productFile(lockPath,true))){release();lifecycle.close();lifecycle=null;unavailable('storage_unavailable');}
+  }
+  function release() { if(lifecycle?.isTransaction)lifecycle.exec('ROLLBACK'); }
+  function guarded(work,createLock=false) {
+    if (closed) fail('store_closed');
+    if(guardDepth)return work();
+    if(!createLock && !productFile(sidePath,true)){
+      // Linearize absence here; do not open a concurrently published cache
+      // without first taking its lifecycle lock.
+      observedMissing=true;try{return work();}finally{observedMissing=false;}
+    }
+    try { acquire(createLock);guardDepth++;return work(); }
+    finally {guardDepth=0;release();}
+  }
+  function publish(replacement,init) {
+    const work=()=>createExclusiveSqliteFile(sidePath,replacement,init);
+    return observer ? observer.invoke('execute','transaction',work) : work();
+  }
+  function verifyOpened() {
+    if(!same(openedIdentity,productFile(sidePath,true)))unavailable('storage_unavailable');
+  }
+  function read(work) {
+    try { return readTransaction(side,()=>{
+      side.prepare('PRAGMA schema_version').get();
+      verifyOpened();rendezvous('snapshot');return work();
+    }); } catch(e) { if(e.reason==='storage_unavailable')close();throw e; }
+  }
   const openNative = (write = false) => observer ? observer.invoke('open','connection', () => new DatabaseSync(sidePath, { readOnly: !write }))
     : new DatabaseSync(sidePath, { readOnly: !write });
   function close() { if (side?.isOpen) side.close(); side = null; metadata = null; }
   function write(work) {
     side.exec('BEGIN IMMEDIATE');
-    try { const result = work(); side.exec('COMMIT'); return result; }
-    catch (e) { if (side.isTransaction) side.exec('ROLLBACK'); throw e; }
+    try { verifyOpened();const result = work();rendezvous('batch');side.exec('COMMIT'); return result; }
+    catch (e) { if (side.isTransaction) side.exec('ROLLBACK'); if(e.reason==='storage_unavailable')close();throw e; }
   }
   function connection(create = false) {
     if (closed) fail('store_closed');
+    if(observedMissing && !create)return false;
     const physical = productFile(sidePath, true), wantsWrite=writable&&create;
     if (!physical && !create) return false;
     if (side && physical && same(physical, openedIdentity) && sideWritable===wantsWrite) {
       auxiliaries(sidePath, wantsWrite);
-      if (create) {
+      if (create) read(() => {
         metadata=side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
         if (!metadata || metadata.store_id!==identity.storeId) unavailable('wrong_store');
         attest(side);
         if (metadata.profile!==PRODUCT_PROFILE) unavailable('incompatible');
-      }
+      });
       return true;
     }
     close();
     auxiliaries(sidePath, wantsWrite);
     if (!physical) {
       if (!writable) unavailable('missing');
-      createExclusiveSqliteFile(sidePath);
+      // The child publishes the complete format before any connection opens it.
+      // It owns the exclusive lifecycle lock, so release our shared lock first.
+      release();
+      try { publish(null,initialization()); }
+      catch(e) { if(e.code!=='EEXIST')throw e; }
+      finally { acquire(); }
     } else {
       const mode = probeRollbackJournal(sidePath, observer ? { observe: observer.journalProbe } : {});
       if (mode.code === 14 || mode.mode && mode.mode !== 'delete') unavailable('incompatible');
@@ -119,19 +168,20 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     side = openNative(wantsWrite);sideWritable=wantsWrite; if (observer) side = observer.database(side);
     side.exec('PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=0;');
     if (!same(openedIdentity, productFile(sidePath))) unavailable('storage_unavailable');
-    if (!physical) write(() => {
-      side.exec(`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=1; ${ddl}`);
-      side.prepare('INSERT INTO product_metadata VALUES(1,?,?,?,?)').run(identity.storeId, PRODUCT_PROFILE, randomUUID(), 'initial');
+    read(() => {
+      metadata = side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
+      if (!metadata || metadata.store_id !== identity.storeId) unavailable('wrong_store');
+      attest(side);
+      if (metadata.profile !== PRODUCT_PROFILE) unavailable('incompatible');
+      if (wantsWrite) {
+        if (side.prepare('PRAGMA quick_check').get().quick_check !== 'ok' || side.prepare('PRAGMA foreign_key_check').get()) unavailable('corrupt');
+      }
     });
-    metadata = side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
-    if (!metadata || metadata.store_id !== identity.storeId) unavailable('wrong_store');
-    attest(side);
-    if (metadata.profile !== PRODUCT_PROFILE) unavailable('incompatible');
-    if (wantsWrite) {
-      if (side.prepare('PRAGMA quick_check').get().quick_check !== 'ok' || side.prepare('PRAGMA foreign_key_check').get()) unavailable('corrupt');
-    }
     return true;
   }
+  const initialization=()=>({sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=1; ${ddl}`,
+    storeId:identity.storeId,profile:PRODUCT_PROFILE,incarnation:randomUUID(),
+    attestation:{applicationId:APPLICATION_ID,schema:expectedSchema}});
   const sideIdentity = () => ({ ...productFile(sidePath), incarnation: metadata.incarnation,
     schemaVersion: side.prepare('PRAGMA schema_version').get().schema_version });
   function target(p, access) {
@@ -161,11 +211,11 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   function invalid(p, reason) { return { dto: status(p,'unavailable',reason), publication:null }; }
   // Caller supplies the canonical transaction. Pointer, generation and record
   // are read under one independent sidecar transaction, with no deep scans.
-  function observe(p, access, {forWrite=false,knownFailure=null}={}) {
+  function observe(p, access, {forWrite=false,knownFailure=null,workOnly=false}={}) {
     if(knownFailure)return invalid(p,knownFailure);
     try {
       if (!connection(forWrite)) return { dto:status(p,'absent','missing'), publication:null };
-      return readTransaction(side, () => {
+      return read(() => {
         metadata = side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
         if (!metadata || metadata.store_id !== identity.storeId) return invalid(p,'wrong_store');
         attest(side);
@@ -186,6 +236,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
           if (mismatch && !['access_changed','dependency_changed','fence_changed'].includes(mismatch)) return invalid(p,mismatch);
           checkpoint = { mismatch,baseSequence:g.base_sequence,kind:g.kind,progress:r.progress };
         }
+        if(workOnly)return {resumable:checkpoint && !checkpoint.mismatch ? work.generation : null};
         if (!pointer) return checkpoint ? checkpoint.mismatch ? { dto:status(p,'stale',checkpoint.mismatch),publication:null } : incomplete() : { dto:status(p,'absent','missing'),publication:null };
         const g = side.prepare('SELECT * FROM generations WHERE id=?').get(pointer.generation);
         const text = side.prepare('SELECT record FROM validation_records WHERE publication=?').get(pointer.publication)?.record;
@@ -286,7 +337,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     const started = now(), m = { transformed:0,canonicalRows:0,metadataBytes:0,textRows:0,textBytes:0,supportLookups:0,supportBytes:0,verifiedRows:0 };
     // Retain the identity whose validation failed. A different selection may
     // repair the cache before this maintainer reaches its own repair branch.
-    const repairIdentity=productFile(sidePath,true);
+    const repairIdentity=productFile(sidePath,true),repairStamp=repairIdentity && stamp();
     try { connection(true); }
     catch(e) {
       if (!['wrong_store','incompatible','corrupt'].includes(e.reason) && !(e.code==='ERR_SQLITE_ERROR' && [1,11,26].includes(e.errcode&255))) throw e;
@@ -297,24 +348,26 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       const old=productFile(sidePath);
       if(!repairIdentity || !same(old,repairIdentity))unavailable('storage_unavailable');
       try {
-        createExclusiveSqliteFile(sidePath,old.device+':'+old.inode,{
-          sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=1; ${ddl}`,
-          storeId:identity.storeId,profile:PRODUCT_PROFILE,incarnation:randomUUID(),
-        });
+        release();
+        try {publish(old.device+':'+old.inode,{...initialization(),expectedStamp:repairStamp});}
+        finally {acquire();}
       } catch(e) {
-        if(['ESTALE','EEXIST'].includes(e.code))unavailable('storage_unavailable');
+        if(['ESTALE','EEXIST','EBUSY'].includes(e.code))unavailable('storage_unavailable');
         throw e;
       }
       openedIdentity=productFile(sidePath);side=openNative(true);sideWritable=true;if(observer)side=observer.database(side);
       side.exec('PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=0;');
-      metadata=side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
+      read(()=>{metadata=side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();});
     }
     let t = readTransaction(canonical,() => target(p,access));
     const observed = readTransaction(canonical,() => observe(p,access,{forWrite:true}));
     if (observed.dto.lexical.state === 'ready') { rendezvous('noop'); return m; }
     const w = side.prepare('SELECT generation FROM work WHERE projection=?').get(t.projectionDigest);
     let g = w && side.prepare('SELECT * FROM generations WHERE id=?').get(w.generation);
-    if (!g || g.access !== access || !same(JSON.parse(g.fences), { canonicalFenceDigest:t.canonicalFenceDigest,dependencyFenceDigest:t.dependencyFenceDigest }) || observed.dto.lexical.state === 'unavailable') {
+    const resumable=readTransaction(canonical,()=>observe(p,access,{forWrite:true,workOnly:true})).resumable===g?.id;
+    // Invalid publication evidence still controls status. Independently signed
+    // rebuild work can resume; delta work must first abandon the invalid base.
+    if (!resumable || !g || g.access !== access || !same(JSON.parse(g.fences), { canonicalFenceDigest:t.canonicalFenceDigest,dependencyFenceDigest:t.dependencyFenceDigest }) || (observed.dto.lexical.state === 'unavailable' && g.base_sequence!==0)) {
       const pointer = side.prepare('SELECT generation FROM publications WHERE projection=?').get(t.projectionDigest);
       const base = observed.dto.lexical.state !== 'unavailable' && pointer && side.prepare('SELECT * FROM generations WHERE id=?').get(pointer.generation);
       const baseSequence = base?.sequence ?? 0;
@@ -325,6 +378,10 @@ export function productSidecar({ path, db: canonical, identity, features, observ
           counts:{ byType:Object.fromEntries(['memory','card'].filter(t => p.types.includes(t)).map(t => [t,{eligible:0,indexed:0}])),documents:0,terms:0,totalTokenLength:0 } } };
       g.id=generationId(g);g.incarnation=incarnationOf(g);
       write(() => {
+        if(w && side.prepare('SELECT 1 FROM generations WHERE id=? AND projection=? AND published=0 AND NOT EXISTS(SELECT 1 FROM publications WHERE generation=generations.id)').get(w.generation,t.projectionDigest)){
+          for(const table of ['postings','documents','statistics','progress_records'])side.prepare('DELETE FROM '+table+' WHERE generation=?').run(w.generation);
+          side.prepare('DELETE FROM generations WHERE id=? AND published=0').run(w.generation);
+        }
         side.prepare('INSERT INTO generations VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)').run(g.id,g.projection,g.incarnation,g.sequence,g.base_sequence,0,g.kind,g.fences,g.access,0,'',g.base_id,JSON.stringify(g.verify),null,g.seed);
         side.prepare("INSERT INTO statistics VALUES(?,'',0,0,0)").run(g.id); save(g,t);
       });
@@ -391,7 +448,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   }
   function lexical(p, publication, query, limit=24) {
     if (!publication || !connection()) unavailable('missing');
-    return readTransaction(side,() => {
+    return read(() => {
       const terms=[...new Set(tokenizeT1(query))], total=publication.counts, df=new Map(), ranked=[];
       if(!terms.length)return {rows:[],matched:0};
       const placeholders=terms.map(()=>'?').join(','),generation=publication.generation.id,ss=streams(p);
@@ -419,8 +476,15 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     });
   }
 
-  return { observe,refresh,lexical,prepareObservation() {
-    try { connection(false);return null; }
+  return {
+    observe(p,...args) {
+      try {return guarded(()=>observe(p,...args));}
+      catch(e) {if(e.code==='index_unavailable')return invalid(p,e.reason);throw e;}
+    },
+    refresh:(...args)=>guarded(()=>refresh(...args),true),
+    lexical:(...args)=>guarded(()=>lexical(...args)),
+    prepareObservation() {
+    try {return guarded(()=>{ connection(false);return null; }); }
     catch(e) {
       // Carry the observed failure into this operation's final observation;
       // never retry a failed native opening/statement behind the status DTO.
@@ -429,9 +493,9 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         return [11,26].includes(e.errcode&255)?'corrupt':(e.errcode&255)===1?'incompatible':'storage_unavailable';
       throw e;
     }
-  },close() { closed=true;close(); },
+  },close() { closed=true;close();lifecycle?.close(); },
     // Explicit restore gate; callers must have already drained all clients.
-    reset() {
+    reset() {return guarded(()=>{
       if (!writable) fail('invalid_input');
       if (!connection(true)) return;
       write(() => {
@@ -439,5 +503,5 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         side.prepare('UPDATE product_metadata SET incarnation=?,kind=? WHERE singleton=1').run(randomUUID(),'rebuild');
       });
       metadata = side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
-    } };
+    },true);} };
 }

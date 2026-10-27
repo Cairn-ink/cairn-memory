@@ -1253,5 +1253,10 @@
     "path": "core/isolated-file-read-child.mjs",
     "source": "fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK);",
     "reason": "Child-only bounded input reads; this script never opens SQLite connections."
+  },
+  {
+    "path": "core/sqlite-journal-probe.mjs",
+    "source": "try { const pin = openSync(lock, 'wx', 0o600); closeSync(pin); }",
+    "reason": "Child-only creation of the persistent SQLite lifecycle lock file before opening its SQLite connection."
   }
 ]
