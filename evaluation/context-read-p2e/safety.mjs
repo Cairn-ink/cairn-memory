@@ -31,10 +31,13 @@ export function checkSafety(observations) {
         && o.independentInventory === true && o.noPendingWriters === true && o.ownerId === 'synthetic-owner'
         && Array.isArray(o.rowsBefore) && o.rowsBefore.some(r => r.ownerId === o.ownerId)
         && isDeepStrictEqual(o.inventoryCoverage, ['all-identities','both-intents','all-types','staging','obsolete'])
-        && o.lexicalBefore !== undefined && o.lexicalAfter !== undefined;
+        && o.lexicalBefore?.ok === true && o.lexicalAfter?.ok === true
+        && Array.isArray(o.lexicalAfterInspection?.identities) && Array.isArray(o.lexicalAfterInspection?.scopeCanaries)
+        && isDeepStrictEqual(o.lexicalAfterInspection.envelope, o.lexicalAfter);
       violations = (o.rowsAfter ?? []).filter(row => row.ownerId === o.ownerId).length
         + Number(!isDeepStrictEqual(o.otherOwnerBefore, o.otherOwnerAfter))
-        + Number(!isDeepStrictEqual(lexicalEnvelope(o.lexicalBefore), lexicalEnvelope(o.lexicalAfter)));
+        + Number(!isDeepStrictEqual(lexicalEnvelope(o.lexicalBefore), lexicalEnvelope(o.lexicalAfter)))
+        + (o.lexicalAfterInspection?.scopeCanaries?.length ?? 0);
     } else {
       valid = Array.isArray(o.returns) && o.returns.length >= 4 && Array.isArray(o.forbidden) && o.forbidden.length > 0
         && ['candidates', 'assembly', 'evidence', 'private-metadata'].every(surface => o.returns.some(r => r.surface === surface));
@@ -53,6 +56,22 @@ export function checkSafety(observations) {
           if (comparisons.length === 1) violations += Number(!isDeepStrictEqual(lexicalEnvelope(comparisons[0].withCanary), lexicalEnvelope(comparisons[0].withoutCanary)));
         }
       } else {
+        // Score the complete post-mutation read ledger, not only the four
+        // boundary results. Frozen roles also prevent omission of a control or
+        // the extra semantic candidate read at the evidence boundary.
+        const expectedReads = ['candidates', 'assembly', 'evidence', 'private-metadata'].flatMap(surface =>
+          ['boundary', 'history-candidates', 'history-evidence', ...(surface === 'evidence' ? ['semantic-execution'] : [])].flatMap(role => ['capabilities', 'result'].map(kind => `${surface}/${role}/${kind}`))).sort();
+        valid &&= Array.isArray(o.postMutationReads) && isDeepStrictEqual(o.postMutationReads.map(r => `${r.surface}/${r.role}/${r.kind}`).sort(), expectedReads);
+        for (const returned of o.postMutationReads ?? []) {
+          if (!Array.isArray(returned.identities) || !Array.isArray(returned.scopeCanaries) || !returned.envelope) { valid = false; continue; }
+          violations += returned.identities.filter(key => forbidden.has(key)).length + returned.scopeCanaries.length;
+          if (returned.envelope.ok !== true && !(returned.kind === 'result' && returned.surface === 'evidence' && returned.role === 'boundary'
+            && ['evidence_unavailable','revision_conflict','snapshot_stale'].includes(returned.envelope.error?.code))) valid = false;
+          const parent = returned.role.startsWith('history-') ? o.historyControls?.find(r => r.surface === returned.surface) : o.returns?.find(r => r.surface === returned.surface);
+          const original = returned.role === 'history-evidence' ? parent?.evidence?.envelope
+            : returned.role === 'semantic-execution' ? parent?.semanticExecution : parent?.envelope;
+          if (returned.kind === 'result') valid &&= isDeepStrictEqual(returned.envelope, original);
+        }
         valid &&= Array.isArray(o.canonicalSnapshot) && o.canonicalSnapshot.length === 4 && o.canonicalSnapshot.every(s => s != null) && o.mutationAcknowledged === true;
         for (const surface of ['candidates', 'assembly', 'evidence', 'private-metadata']) {
           const initial = (o.initial ?? []).filter(r => r.surface === surface);

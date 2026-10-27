@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { semanticNouns, descriptionPredicates, semanticPlaces, satisfies } from './semantic-vocabulary.mjs';
+import { semanticCapacity } from '../../core/context-read-embedder.mjs';
 import { tokenizeT1 } from '../../core/context-read-tokenize.mjs';
 
 export const SEED = 0x50e2026;
@@ -29,7 +31,7 @@ const nouns = [
   ['towel','浴巾','手拭','looped terry bathing cloth'], ['broom','掃帚','箒木','sweeping brush'],
   ['scissors','剪刀','鋏刃','cutting shears'], ['wallet','皮夾','財布','money holder'],
   ['bracelet','手環','腕輪','wrist ornament'], ['necklace','項鍊','首飾','continuous neck chain ornament'],
-  ['glove','手套','手袋','finger covering'], ['boot','靴子','長靴','high shaft leather walking footwear'],
+  ['glove','手套','手袋','separate finger compartment handwear'], ['boot','靴子','長靴','high shaft leather walking footwear'],
   ['apron','圍裙','前掛','cooking garment'], ['drum','鼓面','太鼓','membrane percussion instrument'],
   ['flute','笛子','横笛','transverse breath blown tube'], ['violin','提琴','提琴','shoulder held bowed strings'],
   ['chisel','鑿子','鑿','mallet driven wood gouging blade'], ['saw','鋸子','鋸','reciprocating kerf cutting teeth'],
@@ -51,7 +53,7 @@ const nouns = [
   ['camera', '相機', '写真', 'photographic capture device'],
   ['candle', '蠟燭', '蝋燭', 'wicked wax illuminant'],
   ['cane', '拐杖', '杖棒', 'walking support stick'],
-  ['canoe', '獨木', '丸木', 'narrow paddled watercraft'],
+  ['canoe', '獨木', '丸木', 'open hull single blade paddled watercraft'],
   ['cello', '大提', '大琴', 'large upright bowed bass strings'],
   ['chessboard', '棋盤', '碁盤', 'checkered strategy playing surface'],
   ['clock', '時鐘', '時計', 'dial showing hours'],
@@ -222,10 +224,10 @@ const nouns = [
   ['cocoa', '可可', '加加', 'theobroma bitter beverage powder'],
   ['coffee', '咖啡', '珈琲', 'roasted coffea beverage beans'],
   ['tea', '茶葉', '茶葉', 'dried camellia sinensis leaves'],
-  ['noodle', '麵條', '麺条', 'long thin flour paste strands'],
+  ['noodle', '麵條', '麺条', 'alkaline wheat kansui strands'],
   ['pasta', '義麵', '伊麺', 'durum semolina shaped alimentary paste'],
   ['tofu', '豆腐', '豆腐', 'coagulated glycine milk curd'],
-  ['sausage', '香腸', '腸詰', 'seasoned ground meat casing'],
+  ['sausage', '香腸', '腸詰', 'fresh uncured ground meat casing'],
   ['bacon', '培根', '燻肉', 'cured streaky pork belly strips'],
   ['ham', '火腿', '薫腿', 'cured pork hind leg'],
   ['salami', '臘腸', '乾腸', 'dry fermented meat cylinder'],
@@ -248,7 +250,11 @@ const places = [
   ['gallery','畫廊','画廊','exhibition hall'], ['orchard','果園','果樹','fruit grove'],
   ['hut','木屋','小屋','rustic lodge'], ['workshop','工坊','工房','craft studio'],
 ];
-export const WORLDS = [6672, 20016];
+// Count every selected Memory AND Card; leave at least 1,000 vectors and
+// 12 MiB below E.4 at the declared 1,536-dimensional hosted projection.
+export const WORLDS = [6672, 18616];
+export const PROJECTION_DIMENSIONS = 1536;
+export const PROJECTION_MARGIN = 1000;
 export const FACTS = nouns.length * places.length;
 export const SCHEMAS = [18, 23, 33];
 export function cells() {
@@ -328,6 +334,10 @@ export function deriveLabels(fixture) {
 }
 export function validateFixtures(fixture, labels) {
   if (json(fixture) !== json(generate()) || json(labels) !== json(deriveLabels(fixture))) throw Error('fixture_recipe_or_gold_mismatch');
+  for (const cell of cells()) {
+    const count = fixture.documents.filter(d => eligible(d, cell)).length;
+    if (count > 20000 - PROJECTION_MARGIN || !semanticCapacity(count, { id: 'capacity-check', revision: '1', dimensions: PROJECTION_DIMENSIONS, normalization: 'l2' }).eligible) throw Error('projection_capacity_exceeded');
+  }
   const docs = new Map(fixture.documents.map(d => [d.id, d]));
   for (const q of fixture.queries) {
     if (q.masks.includes('short-cjk') && !/^[\p{Script=Han}]{2,4}$/u.test(q.text)) throw Error('short_cjk_membership');
@@ -352,57 +362,58 @@ export function loadFixtures() {
   validateFixtures(fixture, labels);
   return { fixture, labels };
 }
-// Authored entailment lexicon: broad legacy aliases explicitly expand to all
-// matching noun concepts. Full phrases, not bag-of-word similarity, identify
-// each concept. This audit never reads query.fact to select relevance.
-const broadAliases = {
-  'percussion instrument': ['drum', 'bell', 'cymbal'], 'brewing vessel': ['teapot', 'kettle'],
-  'portable light': ['lantern', 'candle'], 'warm covering': ['blanket', 'glove'],
-  'striking tool': ['hammer', 'gavel', 'axe'], 'distant viewer': ['telescope', 'binoculars'],
-  'absorbent pad': ['sponge', 'towel'], 'drying cloth': ['towel', 'mop'],
-  'throat jewelry': ['necklace', 'pendant'], 'tall footwear': ['boot', 'skate'],
-  'woodwind pipe': ['flute', 'bagpipe'], 'bowed strings': ['violin', 'cello'],
-  'carving blade': ['chisel', 'axe'], 'toothed cutter': ['saw', 'file'],
-  'smoothing implement': ['plane', 'file', 'iron'], 'gripping device': ['clamp', 'pliers'],
-  'flower container': ['vase', 'basket', 'bucket'], 'ringing metal': ['bell', 'cymbal'],
-};
+// Resolve document concepts from canonical prose, independently of fact IDs,
+// query IDs, generator noun order and query.fact. Identifiers are read from the
+// actual document bytes, rather than reconstructed from a query's numeric ID.
 export function auditGold(fixture, labels = deriveLabels(fixture), configurations = cells()) {
-  const failures = [];
+  const failures = [], concepts = new Map(), identifiers = new Map(), textConcepts = new Map();
   const labelMaps = new Map(labels.map(r => [r.cell, new Map(r.queries.map(q => [q.id, q.relevant]))]));
-  const byFact = new Map();
-  for (const d of fixture.documents) { const row = byFact.get(d.fact) ?? []; row.push(d); byFact.set(d.fact, row); }
-  const phrases = new Map();
-  const add = (text, fact) => { const set = phrases.get(text) ?? new Set(); set.add(fact); phrases.set(text, set); };
-  for (let ni = 0; ni < nouns.length; ni++) for (let pi = 0; pi < places.length; pi++) {
-    const n = nouns[ni], p = places[pi], fact = `stored-${ni * places.length + pi}`;
-    for (const text of [`Find the ${n[3]} beside the ${p[3]}.`, `${p[1]}的${n[1]}應該存放在哪裡？`, n[1] + p[1], n[2] + p[2],
-      `請找 ${p[0]} 的${n[1]} storage assignment`, `${n[0]} ${p[0]}`, `${n[1]} ${p[1]}`, `${p[2]}の${n[2]}はどこに保管されますか`, `${n[1]} ${p[0]}`]) add(text, fact);
+  const add = (map, key, value) => { const set = map.get(key) ?? new Set(); set.add(value); map.set(key, set); };
+  const pair = (noun, place) => `${noun.name}/${place[0]}`;
+  const controls = [];
+  for (const d of fixture.documents) {
+    if (d.text === '中文手冊保持乾燥。') controls.push(d);
+    const en = /^Store the (.+) at the (.+)\. /.exec(d.text), zh = /^將(.+)存放於(.+)，/.exec(d.text);
+    if (!en && !zh) continue;
+    const language = en ? 0 : 1, match = en ?? zh;
+    const objects = semanticNouns.filter(n => n.lexemes[language] === match[1]);
+    const locations = semanticPlaces.filter(p => p[language] === match[2]);
+    if (objects.length !== 1 || locations.length !== 1) throw Error('unmodelled_document_concept');
+    add(concepts, pair(objects[0], locations[0]), d);
+    for (const token of d.text.split('\n')[1].split(' ')) add(identifiers, token, d);
   }
-  let checked = 0;
+  for (const n of semanticNouns) for (const p of semanticPlaces) {
+    const [en, zh, ja] = n.lexemes;
+    for (const text of [`${p[1]}的${zh}應該存放在哪裡？`, zh + p[1], ja + p[2],
+      `請找 ${p[0]} 的${zh} storage assignment`, `${en} ${p[0]}`, `${zh} ${p[1]}`, `${p[2]}の${ja}はどこに保管されますか`, `${zh} ${p[0]}`]) add(textConcepts, text, pair(n, p));
+  }
+  // Exhaustively evaluate the independent predicates, never assign a phrase
+  // to its generator noun. Reuse only these computed matching sets per query.
+  const meanings = new Map([...descriptionPredicates].map(([description, predicate]) => [description, semanticNouns.filter(n => satisfies(n, predicate))]));
+  let checked = 0, comparisons = 0, ambiguousQueries = 0;
   for (const q of fixture.queries) {
     checked++;
-    let facts = [];
-    if (q.control) facts = ['han-control'];
-    else {
-      let objects, locations;
-      const identifier = Object.entries(ids(Number(q.id.split('-').at(-1)))).find(([, value]) => q.text.includes(value));
-      if (identifier) facts = [`stored-${Number(q.id.split('-').at(-1))}`];
-      else {
-        const alias = /^Find the (.+) beside the (.+)\.$/.exec(q.text);
-        if (alias && broadAliases[alias[1]]) {
-          objects = nouns.filter(n => broadAliases[alias[1]].includes(n[0]));
-          locations = places.filter(p => p[3] === alias[2]);
-          facts = objects.flatMap(n => locations.map(p => `stored-${nouns.indexOf(n) * places.length + places.indexOf(p)}`));
-        } else facts = [...(phrases.get(q.text) ?? [])];
-      }
-    }
+    let documents = [], modelled = true;
+    const description = /^Find the (.+) beside the (.+)\.$/.exec(q.text);
+    const identifier = /^(?:Locate|尋找|検索|請 locate) (.+)$/.exec(q.text);
+    if (q.text === '中') documents = controls;
+    else if (description) {
+      const objects = meanings.get(description[1]), locations = semanticPlaces.filter(p => p[3] === description[2]);
+      modelled = objects !== undefined && locations.length > 0;
+      if (objects?.length > 1) ambiguousQueries++;
+      documents = (objects ?? []).flatMap(n => locations.flatMap(p => [...(concepts.get(pair(n, p)) ?? [])]));
+    } else if (identifier) documents = [...(identifiers.get(identifier[1]) ?? [])];
+    else if (textConcepts.has(q.text)) documents = [...textConcepts.get(q.text)].flatMap(key => [...(concepts.get(key) ?? [])]);
+    else modelled = /^(?:Unassigned lunar sundial|未分配的月面日晷|未割当の月面日時計|未分配 lunar sundial|月面第[0-9]+號日晷在哪裡？)/u.test(q.text) || /^[月星日夜雲霧雨雪風虹]晷$/u.test(q.text);
     for (const cell of configurations.filter(c => c.language === q.language)) {
-      const expected = facts.flatMap(f => byFact.get(f) ?? []).filter(d => eligible(d, cell)).map(d => d.id).sort();
+      comparisons++;
+      const expected = [...new Set(documents.filter(d => eligible(d, cell)).map(d => d.id))].sort();
       const actual = labelMaps.get(cell.id)?.get(q.id);
-      if (json(expected) !== json(actual)) failures.push({ query: q.id, cell: cell.id, expected, actual });
+      if (!modelled || json(expected) !== json(actual)) failures.push({ query: q.id, cell: cell.id, expected, actual, ...(!modelled ? { error: 'unmodelled_query' } : {}) });
     }
   }
-  return { checked, comparisons: checked * 12, failures };
+  return { nouns: semanticNouns.length, descriptions: meanings.size, nounComparisons: meanings.size * semanticNouns.length,
+    checked, comparisons, ambiguousQueries, failures };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

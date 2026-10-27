@@ -345,3 +345,138 @@ Against `8f674480`, Git diff plus untracked enumeration and an independent HEAD-
 - `tools/testing/p2e-eval.test.mjs`
 - `tools/testing/p2e-fix1.test.mjs`
 - `tools/testing/p2e-safety.mjs`
+
+## Fix round 2
+
+This revision addresses the two distinct P1 findings and the P2 capacity finding in both re-reviews of `e18e1d84`. The round-2 sizes, audit counts, seal and cost below supersede round 1. All implementation and verification used offline fixtures and fake public readers/providers. No core runtime file changed, no real provider was constructed, and no commit was made.
+
+### Findings, fixes and regressions
+
+| Finding | Fix | Regression against `e18e1d84` |
+| --- | --- | --- |
+| P1: expanded-vocabulary gold ambiguity | Replace the generator's description-to-noun lookup and hand-selected compatibility lists with an independently authored attribute table and description predicates. Evaluate each predicate against every noun, resolve canonical document prose to noun/location concepts, and compare all eligible typed identities with gold. Narrow glove, canoe, sausage and noodle descriptions. | `fix2 gold` restores each broad description at all 20 locations. Each of the four cases must expose 20 query IDs / 240 incorrect label comparisons; adding every compatible identity to gold must pass. It also destroys document/query fact assignments and replaces numeric query IDs while retaining canonical bytes; the independent audit must still pass. |
+| P1: unscored post-mutation responses | Route all post-mutation public calls through one collector. Retain and score history candidates, history evidence, the evidence-boundary semantic candidate read, and every capability response as well as the four main surfaces. Require the complete read ledger and compare its result envelopes with the retained observations. Inspect both sides of scope controls and the post-purge lexical response against the frozen scope inventory. | Three separate tests inject the forgotten target through the actual collector in history candidates, history evidence and the auxiliary semantic candidate response; each must fail with positive violations. Further tests cover capability responses; forbidden bytes, foreign refs, private scope text and unknown refs in every auxiliary role; missing ledger entries; and a post-purge scope leak identical before and after purge. Owned canonical lexical targets remain allowed after vector purge. |
+| P2: large-world semantic capacity | Remove 1,400 unrelated distractor Memories from the large world. Count Memories and Cards together during fixture validation and enforce a 1,000-vector margin. Use the engine's E.4 `semanticCapacity` check at the declared 1,536 dimensions. Retain every query-bearing fact. | `fix2 capacity` checks every one of the 48 registered cells with the actual E.4 capacity function, including Cards, vector margin and at least 12 MiB cache headroom. It also checks that every queried fact remains present and that actual query counts retain the declared dependence-aware power. |
+
+The eight tests in `tools/testing/p2e-fix2.test.mjs` all pass on the revised sources and all fail on the unchanged reviewed sources. The baseline failures are assertions exposing missing gold, accepted forbidden returns or exceeded capacity; they do not depend on importing a newly added API. Existing round-1 tests retain their behavioral checks; their expected population/audit counts and direct synthetic observation ledger were updated.
+
+### Independent gold audit
+
+`semantic-vocabulary.mjs` is a separate semantic model with no imports from the generator. Every noun has explicit category, function, material/composition or biological source, and form/features. Shared properties are intentional: canoe and kayak both have paddle propulsion and narrow hulls; glove and mitten both cover fingers; sausage and salami both have seasoned ground meat in casings; noodle and pasta both include flour-paste strands. Description predicates contain attribute constraints, without noun IDs, fact indices, document IDs or assigned matching-noun lists. Each predicate is tested against all 240 noun records.
+
+The audit reads noun/location concepts and exact identifiers from canonical document bytes. It does not use generator noun order, `document.fact`, `query.fact`, or the numeric portion of query IDs to infer meaning. Other language surfaces use the independent multilingual lexemes and location vocabulary. Unmodelled descriptive queries refuse the audit. Each independently resolved concept joins every eligible Memory/Card at that location; omitted compatible targets and extraneous gold both fail. This is an exhaustive finite model of the authored inventory exemplars, not general natural-language entailment.
+
+| Audit measure | Count |
+| --- | ---: |
+| Nouns / locations | 240 / 20 |
+| Description predicates, including retained broad descriptions | 262 |
+| Description × noun compatibility checks | 62,880 |
+| All query IDs checked | 43,701 |
+| Query × applicable-cell label comparisons | 524,412 |
+| Ambiguous query IDs on `e18e1d84` under this model | 80 |
+| Incorrect baseline label comparisons | 960 |
+| Revised ambiguous query IDs / label mismatches | 0 / 0 |
+
+The baseline comparison used its original 48 cell definitions and frozen labels, so changed world IDs do not inflate the failure count. The four narrowed descriptions are:
+
+- Glove: `finger covering` → `separate finger compartment handwear`.
+- Canoe: `narrow paddled watercraft` → `open hull single blade paddled watercraft`.
+- Sausage: `seasoned ground meat casing` → `fresh uncured ground meat casing`.
+- Noodle: `long thin flour paste strands` → `alkaline wheat kansui strands`.
+
+The full attribute audit exposed the noodle/pasta case in addition to the three reviewer examples. All 80 affected English descriptions remain scheduled with disambiguated wording. The T1 no-overlap and all existing stratum-membership checks pass. No query or noun was removed.
+
+### Complete safety accounting
+
+Each of the 96 mutation cells now retains 13 public result envelopes: four boundary results, eight history-control results, and the extra semantic candidate result at the evidence boundary. Their 13 capability envelopes are retained too: **26 inspected/scored envelopes per mutation cell**. The scorer requires each frozen surface/role/kind exactly once. Missing/duplicate records, failed required responses or mismatched retained result envelopes prevent a pass. Every record is inspected with that scenario's frozen forbidden identities and the frozen selected namespaces; nested typed refs, complete forbidden body text, known foreign identities, private scope markers and unknown refs are checked.
+
+Each scope cell also inspects all 16 envelopes from its four paired reads and their capability responses, including the without-canary side. Owner vector purge separately inspects its post-mutation lexical result for scope violations while preserving the intended readability of owned canonical records. Existing semantic-false complete-envelope comparisons and independent purge catalog/vector inventories remain required. The fake dependency report still has all 101 safety cells pending; regression observations do not supply a product safety qualification.
+
+### Revised projection sizes and retained power
+
+| World / schema | Memories | Cards | Total vectors | Free vector slots |
+| --- | ---: | ---: | ---: | ---: |
+| Small / v18 | 6,672 | 0 | 6,672 | 13,328 |
+| Small / v23 or v33 | 6,672 | 128 | 6,800 | 13,200 |
+| Large / v18 | 18,616 | 0 | 18,616 | 1,384 |
+| Large / v23 or v33 | 18,616 | 384 | 19,000 | 1,000 |
+
+Each row applies to both intents and all four languages; **48/48 registered cells fit E.4**. The largest projection uses **116,736,000 bytes** at 1,536 float32 dimensions, leaving **17,481,728 bytes** below the 128 MiB limit. The small/large namespace counts are 1,668/4,654 Memories and 32/96 Cards. There are 19,000 frozen document records and 62,080 unique token-count inputs. Labels, inventory, token counts and both reports were regenerated offline.
+
+Only unqueried distractors were removed. All 240 nouns × 20 locations, 4,800 positive facts, 2,400 facts in each cross-language direction, 43,701 query IDs, 48 primary cells and 192 metric strata remain. Reducing distractors revises the large-world workload before observation; it does not claim unchanged retrieval difficulty. Additional independent queries are unnecessary because the power-bearing population is unchanged.
+
+Retain round 1's additive dependence effect `D = 1 + (m_noun-1)*rho_noun + (m_view-1)*rho_view`, with `n_eff = n/D`, +5 pp true gain, and discordance `.10` or `.20`. Configuration reuse contributes no independent observations. At the conservative declared endpoint `rho_noun=rho_view=.30` and discordance `.20`:
+
+| Set | n | Noun size / view size | D | Effective n | Detection power |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Each cross-language direction | 2,400 | 10 / 1 | 3.7 | 648.649 | 81.410% |
+| Semantic fact set, charging four repeated views | 4,800 | 20 / 4 | 7.6 | 631.579 | 80.377% |
+
+Every tested combination in the original declared range `rho_noun,rho_view ∈ [0,.30]`, discordance `.10`–`.20`, remains above 80%. The `.40` / `.20` sensitivity still falls below 80% (72.493% direction; 69.765% semantic set). The conditional detection-power interpretation and bootstrap limitations from round 1 remain unchanged. Twenty independent Python `erf` calculations agreed with the implementation within `6.904e-8`; that comparison exited 0.
+
+The new seal is `6f4da1cfc830ba2acbed123dfbfd5c167f07f4766ecae323d8999aed95e5ae99`, covering **23 input files**, including the independent semantic model. The revised quality schedule has **153,776 refresh inputs / 7,202,104 tokens** and **524,412 query inputs / 7,950,612 tokens**: **678,188 inputs / 15,152,716 tokens** total. At the arithmetic example rate R=1, expected cost is **$15.152716**, with a **49,517,012 token-bound / $49.517012** conservative reservation. Hosted safety remains outside this fake-only task.
+
+### Commands and actual exit codes
+
+The final complete check includes the original 11 tests, ten round-1 tests, eight round-2 tests and five existing raw-fd guard tests:
+
+```sh
+env -u OPENAI_API_KEY "$NVM_DIR/versions/node/v22.16.0/bin/node" tools/testing/run.mjs \
+  tools/testing/p2e-eval.test.mjs tools/testing/p2e-fix1.test.mjs \
+  tools/testing/p2e-fix2.test.mjs core/test/no-raw-db-fd.test.mjs
+env -u OPENAI_API_KEY "$NVM_DIR/versions/node/v24.15.0/bin/node" tools/testing/run.mjs \
+  tools/testing/p2e-eval.test.mjs tools/testing/p2e-fix1.test.mjs \
+  tools/testing/p2e-fix2.test.mjs core/test/no-raw-db-fd.test.mjs
+```
+
+- Node **22.16.0: 34 passed / 0 failed, exit 0**.
+- Node **24.15.0: 34 passed / 0 failed, exit 0**.
+
+The command's actual status was captured immediately after execution and before displaying any log tail. The same eight round-2 tests were copied, unmodified, into a pristine temporary `git archive e18e1d84` extraction and run using `tools/testing/run.mjs tools/testing/p2e-fix2.test.mjs`:
+
+- Node **22.16.0 baseline: 0 passed / 8 failed, exit 1**.
+- Node **24.15.0 baseline: 0 passed / 8 failed, exit 1**.
+
+The differential verification script checked both expected failure counts and exited **0**. Round-2 tests install the existing network and real-provider-import denial before importing the evaluated modules. The full wrapper's process concurrency and disk checks also completed on both versions; no scratch restriction prevented them.
+
+```sh
+"$NVM_DIR/versions/node/v24.15.0/bin/node" evaluation/context-read-p2e/fixtures.mjs --write
+python3 tools/testing/p2e-token-count.py --write
+python3 tools/testing/p2e-token-count.py --verify
+"$NVM_DIR/versions/node/v24.15.0/bin/node" tools/testing/p2e-seal.mjs --write
+```
+
+Fixture authoring, offline cached-token writing, token verification and sealing each exited **0**. The direct baseline/current gold audit and projection-count report exited **0** and produced the counts above.
+
+```sh
+env -u OPENAI_API_KEY "$NVM_DIR/versions/node/v24.15.0/bin/node" tools/testing/run.mjs --script \
+  evaluation/context-read-p2e/runner.mjs --estimate --price-usd-per-million 1 --max-usd 100 \
+  --report evaluation/context-read-p2e/reports/cost-example.json
+env -u OPENAI_API_KEY "$NVM_DIR/versions/node/v24.15.0/bin/node" tools/testing/run.mjs --script \
+  evaluation/context-read-p2e/runner.mjs --provider fake \
+  --report evaluation/context-read-p2e/reports/fake-blocked.json
+python3 tools/testing/p2e-manifest.py
+git diff --check
+```
+
+Estimate: **exit 0**. Fake public dependency probe: **expected `blocked_dependency`, exit 2**, with no provider construction, quality result or fabricated safety pass. Changed-file cross-check: **exit 0**. Whitespace check: **exit 0**. All verification processes completed; no unattended task remains.
+
+### Round 2 changed-file cross-check
+
+Against `e18e1d84` (unchanged HEAD), Git diff plus untracked enumeration and an independent HEAD-tree versus disk blob/mode walk agree on **15 changed files**. The two complete sets were compared, including tools, fixtures, reports and documentation. The documentation list below was generated from that checked set and compared back to it. No file under `core/` changed.
+
+- `docs/plans/context-read-p2e-eval.md`
+- `evaluation/context-read-p2e/fixtures.mjs`
+- `evaluation/context-read-p2e/fixtures/corpus-queries.json`
+- `evaluation/context-read-p2e/fixtures/inventory.json`
+- `evaluation/context-read-p2e/fixtures/labels.json`
+- `evaluation/context-read-p2e/fixtures/tokens.json`
+- `evaluation/context-read-p2e/registration.json`
+- `evaluation/context-read-p2e/reports/cost-example.json`
+- `evaluation/context-read-p2e/reports/fake-blocked.json`
+- `evaluation/context-read-p2e/safety.mjs`
+- `evaluation/context-read-p2e/semantic-vocabulary.mjs`
+- `tools/testing/p2e-eval.test.mjs`
+- `tools/testing/p2e-fix1.test.mjs`
+- `tools/testing/p2e-fix2.test.mjs`
+- `tools/testing/p2e-safety.mjs`

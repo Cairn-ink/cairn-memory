@@ -1,21 +1,28 @@
+import { isDeepStrictEqual } from 'node:util';
+import { readSet } from '../../evaluation/context-read-p2e/fixtures.mjs';
 import { SAFETY_CELLS } from '../../evaluation/context-read-p2e/safety.mjs';
 import { safetyFixtures } from '../../evaluation/context-read-p2e/inventory.mjs';
 import { withProductReader } from './p2e-product.mjs';
 
 const surfaces = ['candidates','assembly','evidence','private-metadata'];
-export async function publicRead(setup, surface, options, semantic = true, withReader = withProductReader) {
+export async function publicRead(setup, surface, options, semantic = true, withReader = withProductReader, observe) {
   return withReader(options, setup.credential, async (reader, token) => {
+    const capture = async (kind, response) => {
+      const envelope = await response;
+      observe?.(kind, envelope);
+      return envelope;
+    };
     if (semantic) {
-      const caps = await reader.getContextReadCapabilities({}, token);
+      const caps = await capture('capabilities', reader.getContextReadCapabilities({}, token));
       if (!caps.ok || caps.value.channels?.semantic?.configured !== true) throw Error('safety_semantic_capability_missing');
     }
     const input = { ...setup.input, query: safetyFixtures().query, semantic };
     if (surface === 'evidence') {
       if (!Array.isArray(setup.evidenceInput?.refs) || !setup.evidenceInput.refs.length) throw Error('safety_evidence_refs_required');
-      return reader.fetchCandidateEvidence(setup.evidenceInput, token);
+      return capture('result', reader.fetchCandidateEvidence(setup.evidenceInput, token));
     }
-    if (surface === 'assembly') return reader.contextRead({ ...input, budget: { maxTokens: 4000, maxItems: 12 } }, token);
-    return reader.findCandidates(input, token);
+    if (surface === 'assembly') return capture('result', reader.contextRead({ ...input, budget: { maxTokens: 4000, maxItems: 12 } }, token));
+    return capture('result', reader.findCandidates(input, token));
   });
 }
 export function inspect(envelope, setup, forbidden) {
@@ -25,11 +32,17 @@ export function inspect(envelope, setup, forbidden) {
     if (['memory', 'card'].includes(value.type) && (value.memoryId !== undefined || value.cardId !== undefined)) {
       const identity = setup.fixtureIdentity(value);
       if (identity) identities.push(identity); else scopeCanaries.push('unknown-ref');
+      const namespaces = readSet;
+      if (value.namespace && !namespaces.some(ns => isDeepStrictEqual(ns, value.namespace))) scopeCanaries.push('out-of-scope-ref');
     }
     for (const v of Object.values(value)) if (v !== value) walk(v);
   }
   walk(envelope);
   for (const word of ['PRIVATE_OWNER_CANARY','PRIVATE_NAMESPACE_CANARY']) if (text.includes(word)) scopeCanaries.push(word);
+  for (const canary of fixture.canaries.filter(c => c.namespace.ownerId !== fixture.ownerId || c.namespace.projectId === 'unselected')) {
+    const key = `${canary.id}@${canary.revision}${canary.type === 'card' ? `:${canary.bodyRevision}` : ''}`;
+    if (identities.includes(key) || text.includes(canary.text)) scopeCanaries.push(key);
+  }
   for (const key of forbidden) {
     const canary = fixture.canaries.find(c => `${c.id}@${c.revision}${c.type === 'card' ? `:${c.bodyRevision}` : ''}` === key);
     if (canary && text.includes(canary.text)) identities.push(key);
@@ -69,20 +82,30 @@ export async function executeSafety(prepared, { withReader = withProductReader, 
         observations[id] = { completed, ownerId: 'synthetic-owner', catalogBefore: before.catalog, catalogAfter: after.catalog,
           rowsBefore: before.rows, rowsAfter: after.rows, otherOwnerBefore: before.otherOwner, otherOwnerAfter: after.otherOwner,
           independentInventory: before.independent === true && after.independent === true, inventoryCoverage: after.coverage,
-          noPendingWriters: after.noPendingWriters, lexicalBefore, lexicalAfter };
+          noPendingWriters: after.noPendingWriters, lexicalBefore, lexicalAfter,
+          // Owner vector purge deliberately preserves canonical lexical data;
+          // its auxiliary read still must respect the frozen scope inventory.
+          lexicalAfterInspection: inspect(lexicalAfter, setup, []) };
       } else if (id.startsWith('scope/')) {
         const forbidden = scenarios.find(s => s.id === id).forbidden;
         const returns = [], scopeComparisons = [];
         for (const surface of surfaces) {
-          const withCanary = await read(setup, surface, await setup.withCanaryOptions(surface));
-          const withoutCanary = await read(setup, surface, await setup.withoutCanaryOptions(surface));
-          returns.push({ surface, ...inspect(withCanary, setup, forbidden) });
+          const observe = (kind, envelope) => returns.push({ surface, kind, ...inspect(envelope, setup, forbidden) });
+          const withCanary = await publicRead(setup, surface, await setup.withCanaryOptions(surface), true, withReader, observe);
+          const withoutCanary = await publicRead(setup, surface, await setup.withoutCanaryOptions(surface), true, withReader, observe);
           scopeComparisons.push({ surface, withCanary, withoutCanary });
         }
         observations[id] = { returns, forbidden, scopeComparisons };
       } else {
         const forbidden = scenarios.find(s => s.id === id).forbidden, returns = [];
-        const receipts = [], initial = [], historyControls = [];
+        const receipts = [], initial = [], historyControls = [], postMutationReads = [];
+        // Every post-mutation public read goes through this collector, including
+        // controls and auxiliary reads. Keep the full envelope and inspection.
+        const readAfter = async (readSetup, surface, options, raceSurface, role) => {
+          return publicRead(readSetup, surface, options, true, withReader, (kind, envelope) => {
+            postMutationReads.push({ surface: raceSurface, role, kind, ...inspect(envelope, setup, forbidden) });
+          });
+        };
         if (typeof semanticCallCount !== 'function') throw Error('independent_semantic_observer_required');
         for (const surface of surfaces) {
           // Reset before each independent race, then prove the target can be
@@ -99,21 +122,21 @@ export async function executeSafety(prepared, { withReader = withProductReader, 
           const boundaryStart = semanticCallCount();
           const receipt = await setup.atMutationBoundary(surface, async () => {
             if (++entered !== 1) throw Error('duplicate_safety_read');
-            if (surface === 'evidence') semanticExecution = await read(setup, 'candidates', await setup.readerOptions(surface));
+            if (surface === 'evidence') semanticExecution = await readAfter(setup, 'candidates', await setup.readerOptions(surface), surface, 'semantic-execution');
             const boundarySetup = surface === 'evidence' ? { ...setup, evidenceInput: { readSet: setup.input.readSet, intent: setup.input.intent, refs: targetRefs } } : setup;
-            envelope = await read(boundarySetup, surface, await setup.readerOptions(surface));
+            envelope = await readAfter(boundarySetup, surface, await setup.readerOptions(surface), surface, 'boundary');
             semanticExecution ??= envelope;
           });
           if (entered !== 1 || envelope === undefined) throw Error('missing_public_safety_read');
           receipts.push(receipt);
           returns.push({ surface, ...inspect(envelope, setup, forbidden), semanticExecution, semanticCalls: semanticCallCount() - boundaryStart });
           const historySetup = { ...setup, input: { ...setup.input, intent: 'history' }, evidenceInput: undefined };
-          const history = await read(historySetup, 'candidates', await setup.historyReaderOptions(surface));
+          const history = await readAfter(historySetup, 'candidates', await setup.historyReaderOptions(surface), surface, 'history-candidates');
           const historyRefs = (history.value?.items ?? []).map(i => i.ref).filter(ref => setup.fixtureIdentity(ref) === 'history-eligible@1');
-          const historyEvidence = await read({ ...historySetup, evidenceInput: { readSet: setup.input.readSet, intent: 'history', refs: historyRefs } }, 'evidence', await setup.historyReaderOptions(surface));
-          historyControls.push({ surface, ...inspect(history, setup, []), evidence: inspect(historyEvidence, setup, []) });
+          const historyEvidence = await readAfter({ ...historySetup, evidenceInput: { readSet: setup.input.readSet, intent: 'history', refs: historyRefs } }, 'evidence', await setup.historyReaderOptions(surface), surface, 'history-evidence');
+          historyControls.push({ surface, ...inspect(history, setup, forbidden), evidence: inspect(historyEvidence, setup, forbidden) });
         }
-        const o = { returns, initial, historyControls, forbidden, canonicalSnapshot: receipts.map(r => r.canonicalSnapshot),
+        const o = { returns, initial, historyControls, postMutationReads, forbidden, canonicalSnapshot: receipts.map(r => r.canonicalSnapshot),
           mutationAcknowledged: receipts.every(r => r.mutationAcknowledged === true && r.stoppedAndDrained === true),
           qualifiedHistoryControl: receipts.every(r => r.qualifiedHistoryControl === 'history-eligible@1') ? 'history-eligible@1' : null };
         observations[id] = o;

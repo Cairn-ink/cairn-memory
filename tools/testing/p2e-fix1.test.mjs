@@ -40,7 +40,7 @@ test('fix1 gold: audit every query independently and reject the ambiguous legacy
   const { fixture, labels } = fixtures.loadFixtures();
   assert.equal(fixture.queries.find(q => q.id === 'en-paraphrase-620').text, 'Find the membrane percussion instrument beside the seaport.');
   const audit = fixtures.auditGold(fixture, labels);
-  assert.deepEqual(audit, { checked: 43701, comparisons: 524412, failures: [] });
+  assert.deepEqual(audit, { nouns: 240, descriptions: 262, nounComparisons: 62880, checked: 43701, comparisons: 524412, ambiguousQueries: 0, failures: [] });
   const legacy = structuredClone(fixture);
   legacy.queries.find(q => q.id === 'en-paraphrase-620').text = 'Find the percussion instrument beside the seaport.';
   const failures = fixtures.auditGold(legacy, labels).failures;
@@ -96,6 +96,14 @@ test('fix1 mutation: empty fallback receipts cannot pass; observed target, seman
     initial: surfaces.map(surface => ({ surface, envelope: { ...semantic(), value: { ...semantic().value, items: [{ ref: target.ref }] } }, semanticCalls: 1, identities: ['safety-target@1'], evidence: evidence(target) })),
     returns: surfaces.map(surface => ({ surface, envelope: safe(), semanticCalls: 1, semanticExecution: semantic(), identities: [], scopeCanaries: [] })),
     historyControls: surfaces.map(surface => ({ surface, envelope: { ok: true, value: { items: [{ ref: history.ref }] } }, identities: ['history-eligible@1'], evidence: evidence(history) })) };
+  observed.postMutationReads = observed.returns.flatMap(r => {
+    const h = observed.historyControls.find(h => h.surface === r.surface);
+    return [['boundary', r.envelope], ['history-candidates', h.envelope], ['history-evidence', h.evidence.envelope],
+      ...(r.surface === 'evidence' ? [['semantic-execution', r.semanticExecution]] : [])].flatMap(([role, envelope]) => [
+      { surface: r.surface, role, kind: 'result', envelope, identities: [], scopeCanaries: [] },
+      { surface: r.surface, role, kind: 'capabilities', envelope: safe(), identities: [], scopeCanaries: [] },
+    ]);
+  });
   assert.equal(checkSafety({ [id]: observed })[id].status, 'passed');
   for (const damage of [o => o.initial[0].envelope.value.items = [], o => o.initial[0].identities = [], o => o.initial[0].semanticCalls = 0,
     o => o.initial[0].evidence.envelope.value.items[0].content = 'wrong bytes', o => o.returns[0].semanticCalls = 0,

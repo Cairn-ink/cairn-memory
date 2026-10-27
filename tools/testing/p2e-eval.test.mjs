@@ -90,6 +90,7 @@ test('every safety cell is mandatory; a single violation defeats recall gains', 
     rowsBefore: [{ ownerId: 'synthetic-owner' }], rowsAfter: [], otherOwnerBefore: [{ ownerId: 'other', vectorHash: 'canary' }],
     otherOwnerAfter: [{ ownerId: 'other', vectorHash: 'canary' }], independentInventory: true, noPendingWriters: true,
     inventoryCoverage: ['all-identities','both-intents','all-types','staging','obsolete'], lexicalBefore: { ok: true }, lexicalAfter: { ok: true } };
+  purge.lexicalAfterInspection = { envelope: purge.lexicalAfter, identities: [], scopeCanaries: [] };
   assert.equal(checkSafety({ [purgeId]: purge })[purgeId].status, 'passed');
   purge.rowsAfter.push({ ownerId: 'synthetic-owner' });
   assert.equal(checkSafety({ [purgeId]: purge })[purgeId].status, 'failed');
@@ -114,7 +115,7 @@ test('registration sealing, byte mismatch, threshold mutation and missing bindin
 const loaded = loadFixtures();
 const tokens = JSON.parse(readFileSync(new URL('tokens.json', ROOT)));
 test('frozen recipe, T1 oracle, independent gold derivation and complete stratum minima', () => {
-  assert.deepEqual(validateFixtures(loaded.fixture, loaded.labels), { documents: 20400, queries: 43701, cells: 48 });
+  assert.deepEqual(validateFixtures(loaded.fixture, loaded.labels), { documents: 19000, queries: 43701, cells: 48 });
   assert.equal(json(deriveLabels(loaded.fixture)), json(loaded.labels));
   const inv = inventory(loaded.fixture);
   assert.equal(inv.primaryCount, 48);
@@ -122,7 +123,7 @@ test('frozen recipe, T1 oracle, independent gold derivation and complete stratum
   assert.equal(inv.strata.find(s => s.id === 'cross-zh-en').positive.length, 2400);
   assert.equal(inv.strata.find(s => s.id === 'cross-en-zh').positive.length, 2400);
   assert.equal(inv.strata.find(s => s.id === 'paraphrase').positive.length, 4800);
-  for (const world of [6672,20016]) assert.equal(loaded.fixture.documents.filter(d => d.type === 'memory' && d.minWorld <= world).length, world);
+  for (const world of [6672,18616]) assert.equal(loaded.fixture.documents.filter(d => d.type === 'memory' && d.minWorld <= world).length, world);
   for (const q of loaded.fixture.queries) assert.ok(Object.hasOwn(tokens.counts, hash(q.text)));
   for (const d of loaded.fixture.documents) assert.ok(Object.hasOwn(tokens.counts, hash(d.text)));
   for (const d of safetyFixtures().canaries) assert.ok(Object.hasOwn(tokens.counts, hash(d.text)));
