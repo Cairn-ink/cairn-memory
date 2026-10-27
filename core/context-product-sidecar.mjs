@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { types } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { createExclusiveSqliteFile, probeRollbackJournal, sqliteFileStat } from './sqlite-journal-probe.mjs';
@@ -8,6 +9,7 @@ import { cardDependencyFence } from './card-current-storage.mjs';
 import { termFrequencies, tokenizeT1, TOKENIZER_VERSION, REPRESENTATION_VERSION } from './context-read-tokenize.mjs';
 import { scoreBM25, rankScores } from './context-read-bm25.mjs';
 import { PRODUCT_PROFILE } from './context-product-control.mjs';
+import { contextReadSet } from './context-read-input.mjs';
 import { canonicalJson, digest, projectionDigest, signedRecord, verifiedRecord } from './context-product-validation.mjs';
 import { ManifestHash } from './context-product-manifest.mjs';
 import { fail } from './validation.mjs';
@@ -18,6 +20,18 @@ const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const unavailable = reason => { throw Object.assign(Error('index_unavailable'), { code: 'index_unavailable', reason }); };
 const same = (a,b) => canonicalJson(a) === canonicalJson(b);
+// The independent storage seam validates and normalizes before any file work.
+// The frozen v1 sidecar keeps its separate one/two-namespace grammar.
+function projection(p) {
+  let readSet;
+  try {
+    if (types.isProxy(p)) fail('invalid_read_set');
+    const selected = Object.getOwnPropertyDescriptor(p, 'readSet');
+    if (!selected || !Object.hasOwn(selected, 'value')) fail('invalid_read_set');
+    readSet = contextReadSet(selected.value, PRODUCT_PROFILE);
+  } catch { fail('invalid_read_set'); }
+  return { ...p, readSet };
+}
 const ddl = `
 CREATE TABLE product_metadata(singleton INTEGER PRIMARY KEY CHECK(singleton=1),store_id TEXT NOT NULL,profile TEXT NOT NULL,incarnation TEXT NOT NULL,kind TEXT NOT NULL) STRICT;
 CREATE TABLE generations(id TEXT PRIMARY KEY,projection TEXT NOT NULL,incarnation TEXT NOT NULL,sequence INTEGER NOT NULL,base_sequence INTEGER NOT NULL,checkpoint INTEGER NOT NULL,kind TEXT NOT NULL,fences TEXT NOT NULL,access TEXT NOT NULL,phase INTEGER NOT NULL,last_key TEXT NOT NULL,base_id TEXT,verify TEXT NOT NULL,manifest TEXT,published INTEGER NOT NULL,seed TEXT NOT NULL) STRICT;
@@ -478,11 +492,12 @@ export function productSidecar({ path, db: canonical, identity, features, observ
 
   return {
     observe(p,...args) {
+      p=projection(p);
       try {return guarded(()=>observe(p,...args));}
       catch(e) {if(e.code==='index_unavailable')return invalid(p,e.reason);throw e;}
     },
-    refresh:(...args)=>guarded(()=>refresh(...args),true),
-    lexical:(...args)=>guarded(()=>lexical(...args)),
+    refresh:(p,...args)=>{p=projection(p);return guarded(()=>refresh(p,...args),true);},
+    lexical:(p,...args)=>{p=projection(p);return guarded(()=>lexical(p,...args));},
     prepareObservation() {
     try {return guarded(()=>{ connection(false);return null; }); }
     catch(e) {

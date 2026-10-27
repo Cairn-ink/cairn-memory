@@ -107,7 +107,8 @@ export function coverage(value, readSet) {
   if (Object.keys(c).length !== 5 || c.policy !== 'recent-projects-v1' || typeof c.selectionRevision !== 'string' ||
       !c.selectionRevision.length || c.selectionRevision.length > 200 || !c.selectionRevision.isWellFormed() ||
       ['requestedNamespaces', 'selectedNamespaces', 'omittedNamespaces'].some(k => !Number.isSafeInteger(c[k]) || c[k] < 0) ||
-      c.selectedNamespaces !== readSet.length || c.requestedNamespaces !== c.selectedNamespaces + c.omittedNamespaces || c.omittedNamespaces !== 0) fail('invalid_input');
+      c.selectedNamespaces !== readSet.length || c.requestedNamespaces !== c.selectedNamespaces + c.omittedNamespaces ||
+      c.requestedNamespaces < 1 || c.omittedNamespaces > 0 && readSet.filter(ns => ns.scope === 'project').length !== 31) fail('invalid_input');
   return deepFreeze(c);
 }
 export function issuance(value, control, readSet, ownerCoverage) {
@@ -121,7 +122,7 @@ export function issuance(value, control, readSet, ownerCoverage) {
   if (typeof binding.credentialDigest !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(binding.credentialDigest)) fail('invalid_input');
   const namespaces = ownData(binding.namespaces, ['readSet', 'ownerCoverage']);
   if (['requestId', 'handleId', 'credentialBindingId', 'credentialExpiresUtcMs'].some(k => binding[k] !== control[k]) ||
-      binding.ownerId !== readSet[0].ownerId || JSON.stringify(contextReadSet(namespaces.readSet)) !== JSON.stringify(readSet) ||
+      binding.ownerId !== readSet[0].ownerId || JSON.stringify(contextReadSet(namespaces.readSet, PRODUCT_PROFILE)) !== JSON.stringify(readSet) ||
       JSON.stringify(boundedData(namespaces.ownerCoverage)) !== JSON.stringify(boundedData(ownerCoverage))) fail('authority_required');
   return binding;
 }
