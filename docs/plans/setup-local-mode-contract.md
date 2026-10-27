@@ -15,8 +15,8 @@ carries the holder pid for stale recovery (§7.2), and `--cloud` with local
 ownership plus unknown is `mode_unknown` (§6.3). v0.10 adds the L06
 version-normalization rule S3 needs when the package version becomes 0.6.0.
 v0.11 (2026-10-26, for installer 0.6.1) adds §15 on Codex inspection
-environment refusals. v0.12 answers its audit (`setup_21`: one P0, three
-P1, two P2): the local inspection falls back to `/tmp` instead of assuming
+environment refusals. v0.12 answers its audit (one P0, three P1, two P2):
+the local inspection falls back to `/tmp` instead of assuming
 absence, managed configuration stays refused, and refusals are named.
 v0.13 answers the re-check (four P1, one P2): candidates are re-evaluated
 per inspection, dry-run planning and uninstall completion are explicit,
@@ -812,7 +812,7 @@ Registration and detach verification both swallow the cause
 (`local-codex.mjs` registration and `detachCodex`). Unsafe or unreadable
 `config.toml` fails earlier, in the snapshot, and is not part of this defect.
 
-### 15.2 Rules (v0.12, after audit `setup_21`)
+### 15.2 Rules (v0.12, after audit)
 
 The audit found that letting the cloud flow proceed on an environment
 refusal would treat "no observed local ownership" as "no local ownership":
