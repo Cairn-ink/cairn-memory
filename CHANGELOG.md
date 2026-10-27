@@ -6,6 +6,9 @@
   `/tmp` when the first location is unsafe.
 - Update embedded engine dependencies; see the
   [MCP SDK 2.3.1 and Zod 4.6.7 security update](#unreleased--mcp-sdk-231-and-zod-467-security-update).
+  Existing local-mode users get the updated engine by rerunning
+  `npx @cairn-ink/memory setup` after 0.6.1 is published; saved memories are
+  kept.
 - Fix a same-process SQLite lock hazard in the store-fence and context-read
   paths by removing raw database file descriptors. Default local mode was not
   affected.
