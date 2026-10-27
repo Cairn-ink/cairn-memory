@@ -293,7 +293,7 @@ Successful pages and validation/deadline/close errors gain no fields.
 
 `stage` is one of `open`, `configure`, `prepare`, `execute`, `begin`, `commit`,
 `rollback`, `close`. `statement` is one of `connection`,
-`reader_configuration`, `application_id`, `user_version`, `schema_version`,
+`reader_configuration`, `journal_mode`, `application_id`, `user_version`, `schema_version`,
 `encoding`, `schema_metadata`, `snapshot_metadata`, `topic_metadata`,
 `transaction`. Codes are numeric: `code` is SQLite's primary byte and
 `extendedCode` is its original extended result code. No SQL text, native
