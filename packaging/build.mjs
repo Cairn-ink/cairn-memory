@@ -62,8 +62,8 @@ function productionLock(manifest) {
   const openai = readJSON(join(root, 'adapters/openai/package-lock.json'));
   const packages = { '': { name: manifest.name, version: manifest.version, license: manifest.license,
     dependencies: manifest.dependencies, bin: manifest.bin, engines: manifest.engines } };
-  const expected = { '@modelcontextprotocol/server': '2.0.0', '@modelcontextprotocol/core': '2.0.0',
-    zod: '4.5.4', tiktoken: '1.0.22' };
+  const expected = { '@modelcontextprotocol/server': '2.3.1', '@modelcontextprotocol/core': '2.3.1',
+    zod: '4.6.7', tiktoken: '1.0.22' };
   for (const [name, version] of Object.entries(expected)) {
     const key = `node_modules/${name}`;
     const entry = (name === 'tiktoken' ? openai : mcp).packages[key];
@@ -104,7 +104,7 @@ export function buildArtifact({ version = packageVersion, runCommand = command, 
     description: 'Local install preview of the shared Cairn memory core and stdio host.',
     license: 'Apache-2.0', engines: { node: '>=22.16.0' },
     bin: { 'cairn-memory': 'bin/cairn-memory.mjs' }, files,
-    dependencies: { '@modelcontextprotocol/server': '2.0.0', zod: '4.5.4', tiktoken: '1.0.22' } };
+    dependencies: { '@modelcontextprotocol/server': '2.3.1', zod: '4.6.7', tiktoken: '1.0.22' } };
   writeFileSync(join(stagingPath, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
   writeFileSync(join(stagingPath, 'npm-shrinkwrap.json'), JSON.stringify(productionLock(manifest), null, 2) + '\n');
   const packed = JSON.parse(runCommand('npm', ['pack', '--offline', '--ignore-scripts', '--json',

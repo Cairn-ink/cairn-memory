@@ -30,8 +30,9 @@ try {
 The constructor validates own-data options synchronously and opens no file or
 Worker. The first asynchronous read opens an existing permission-safe regular
 file with native `readOnly`, `query_only` and `trusted_schema=OFF`. DELETE
-keeps a zero busy timeout. WAL uses one Worker-owned native lock-wait budget of
-at most 100ms per request, capped by the remaining request deadline; each
+keeps a zero busy timeout. WAL uses one Worker-owned native lock-wait budget:
+the remaining request deadline capped at 1000ms, minus a 20ms reply reserve
+(at most 980ms configured native waiting, floored at zero); each
 prepare/execution refreshes the remaining budget, including opening and fences. It rejects symlinks, missing files, unsupported application/layouts and
 missing or malformed required indexes. Supported existing schemas are exactly
 18, 20, 21, 22, 23, 29, 30, 31, 32 and 33; intermediate Raw layouts 24–28 are not accepted.
@@ -137,9 +138,12 @@ Only one read may be in flight per reader; another returns `read_in_progress`
 without a queue. This does not gate other readers or writers. A request has a
 five-second deadline (`read_timeout`). After sixty idle seconds the unref'ed
 expiry timer terminates the Worker and invalidates its continuation. `close()`
-cancels pending work, waits for termination, and makes future reads return
-`store_closed`. Worker failures return `reader_failed`, without source text,
-paths, SQL or native error details. There is no hidden retry.
+settles pending work immediately with `store_closed`, makes future reads return
+`store_closed`, and itself waits for native resources to be released. A native
+SQLite call cannot be pre-empted, so this cleanup can lag public cancellation.
+Worker failures return `reader_failed`, without source text,
+paths, SQL or native error details. There is no transaction or traversal retry.
+The bounded opening mode-query fallback is described in E1-C2 v1.0.1 below.
 
 This is Memory MOC metadata, not Card MOCs, episode headers, a complete member
 export, semantic relevance or truth validation. Product adoption and production
@@ -289,7 +293,7 @@ Successful pages and validation/deadline/close errors gain no fields.
 
 `stage` is one of `open`, `configure`, `prepare`, `execute`, `begin`, `commit`,
 `rollback`, `close`. `statement` is one of `connection`,
-`reader_configuration`, `application_id`, `user_version`, `schema_version`,
+`reader_configuration`, `journal_mode`, `application_id`, `user_version`, `schema_version`,
 `encoding`, `schema_metadata`, `snapshot_metadata`, `topic_metadata`,
 `transaction`. Codes are numeric: `code` is SQLite's primary byte and
 `extendedCode` is its original extended result code. No SQL text, native
@@ -299,19 +303,31 @@ Existing legacy statement-construction classification stays unchanged.
 The WAL budget is shared across the request, never restarted per statement or
 transaction. Native SQLite BUSY remains `storage_busy` when the permitted wait
 runs out; the existing host watchdog/Worker termination still returns
-`read_timeout` if cancellation wins. `close()` also terminates a waiting Worker.
-There is no application retry or sleep and no host-thread SQLite wait.
+`read_timeout` if cancellation wins. Public cancellation does not await
+termination; `close()` itself waits for native resource cleanup.
+There is no transaction/traversal retry, sleep or host-thread SQLite wait.
 DELETE gains no wait. Context reads and candidate evidence are unaffected.
 
-Before native SQLite access, the reader requires the complete 100-byte main-file header:
-SQLite format-3 signature and read/write version bytes 18/19 equal to 2/2 select
-WAL; every other header keeps zero wait and normal SQLite validation. The file
-is opened read-only without following a final symlink and checked against the
-safe-file device/inode. This avoids a journal-mode PRAGMA requiring the very
-lock being diagnosed. No mode is changed, no `immutable` connection is used,
-and schema18 needs no migration. Concurrent external journal-mode switching
-is not supported by this per-connection detection; normal writers keep the
-mode fixed.
+E1-C2 v1.0.1 lock-safety: query `PRAGMA journal_mode` on the read-only SQLite
+connection before storage metadata statements. Never open raw filesystem
+handles on databases or their companions: a raw close releases the process's
+SQLite POSIX locks, including locks belonging to other Workers/connections.
+Safe-file device/inode checks use `lstat`, including after the SQLite probe.
+
+Companion `lstat` evidence (`-wal`/`-shm` present and `-journal` absent) enables
+the shared WAL wait for that first query. Otherwise it starts with zero wait.
+If the zero-wait query returns BUSY and no `-journal` exists, retry that query
+once with the remaining WAL budget: a closing writer can remove both WAL
+companions before the first reader statement. A present `-journal` keeps zero
+wait. After detection, DELETE statements always have zero timeout. Diagnostics
+can now report `prepare/journal_mode` or `execute/journal_mode`.
+
+Absent journals are ambiguous: a DELETE exclusive transaction before its first
+write, journal_mode=OFF/MEMORY, or a concurrent mode switch can take the same
+bounded opening fallback. Persistent/stale rollback journals can instead cause
+WAL refusal with no wait. The evidence is a hint, not an atomic mode assertion;
+concurrent external mode switching remains unsupported. No mode is changed,
+no immutable live read is used, and schema18 needs no migration.
 
 `npm run measure:topic-reader-wal -- --smoke --report PATH` exercises fresh
 public readers against a separate-process retained or fresh writer, including
@@ -342,8 +358,55 @@ Every reader-load cell reports public-write-call latency p95/max separately
 from the full writer open/write/close lifecycle latency. Public-write p95 keeps
 the 250ms gate; max is reported without inventing a new threshold. The original
 0.90 throughput ratio remains a reported engine reference and is excluded from
-product acceptance. The WAL wait stays 100ms. The script header and saved
-protocol v2 pre-register these criteria before measurement.
+product acceptance. The current wait policy is v1.1 below. The script header
+and saved protocol v2 pre-register these criteria before measurement.
+
+
+### E1-C2 v1.1: deadline-bounded WAL waiting
+
+This builds on v1.0.1's SQLite-based detection and replaces v1's fixed 100ms
+WAL budget. The hinted-WAL opening query and the one BUSY fallback consume the
+same budget as later WAL statements. At Worker request start, set one
+absolute cutoff to min(request deadline, now + 1000ms) - 20ms. Before native
+prepare/execution, cached statements, iterator steps and rollback, install the
+floored nonnegative time left until that cutoff. Worker startup and SQL work
+consume the request deadline; statements never restart the budget.
+
+Members use their deadlineMs deadline; legacy and opt-in overview use the
+existing 5000ms watchdog deadline. The 20ms reserve provides four normal 5ms
+quanta for cleanup, the small failure result and delivery, leaving at most
+980ms of configured native lock waiting. If only the reserve remains, there is
+no wait. These bounds apply to timeout parameters, not synchronous completion.
+The reserve is headroom; the host watchdog settles read_timeout when it fires
+without waiting for SQLite or thread termination.
+
+The wait stays in the reader Worker. DELETE keeps zero wait;
+v1.0.1 SQLite-based WAL detection, diagnostics and existing error classification
+stay unchanged. Busy exhaustion remains storage_busy; watchdog cancellation is
+read_timeout. Measurement thresholds, exposure minima, latency reporting and
+throughput's reported-only role remain unchanged.
+
+
+#### v1.1 public cancellation and native cleanup
+
+The host watchdog settles the pending result with read_timeout in its timer
+callback, with no await of native completion. close() settles pending work with
+store_closed before awaiting cleanup. Normal host timer scheduling applies;
+waiting in SQLite never blocks the host event loop.
+
+Cancellation detaches the Worker before requesting termination. Late replies,
+errors and exit events from that Worker cannot reach any pending or replacement
+request. Termination runs in the background on a tracked cleanup promise.
+A synchronous SQLite wait or step cannot be pre-empted: native release can lag
+until that call returns and the Worker exits. close() itself resolves only after
+resources are released and can take the remaining active native wait or step
+plus termination; the cancelled request result does not wait for it.
+
+A new request on the same handle waits for the previous cleanup before launching
+a replacement, inside its own existing deadline. There is at most one live
+Worker per handle. Timeout or close while waiting settles promptly and prevents
+a later launch. Another concurrent read still returns read_in_progress. This
+avoids accumulating live Workers after repeated deadlines and adds no read retry.
 
 ## Opt-in bounded member previews (P1)
 

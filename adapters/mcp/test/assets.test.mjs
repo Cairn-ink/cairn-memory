@@ -141,7 +141,7 @@ for(const channel of ['text','timecodes'])test('L02 '+channel+' replacement afte
   const target=channel==='text'?text:timecodes;renameSync(target,target+'.old');writeFileSync(target,channel==='text'?'replacement':'[]');terminal.answer(phrase(prompt.output));const done=await terminal.done;
   assert.equal(done.code,1,done.output);assert.equal(f.db.prepare('SELECT count(*) n FROM asset_derivatives').get().n,0);
 });
-for(const operation of ['import','derive'])for(const index of operation==='import'?[1,2,3]:[1,2,3,4,5,6])test(`L02 ${operation} input close ${index} still closes all and reports sanitized failure`,{timeout:30000},async t=>{
+for(const operation of ['import','derive'])for(const index of operation==='import'?[1,2]:[1,2,3,4])test(`L02 ${operation} input close ${index} still closes all and reports sanitized failure`,{timeout:30000},async t=>{
   const f=fixture(t),parent=join(f.workspace.path,'input');mkdirSync(parent);
   const file=join(parent,'private.pdf'),text=join(parent,'private.txt'),timecodes=join(parent,'private.json');
   writeFileSync(file,pdf());writeFileSync(text,'Private supplied derivative prose');writeFileSync(timecodes,'[]');
@@ -156,6 +156,6 @@ for(const operation of ['import','derive'])for(const index of operation==='impor
   terminal.answer(phrase(prompt.output));const done=await terminal.done,result=receipt(done.output);assert.equal(done.code,1,done.output);
   assert.deepEqual(result,{ok:false,error:{code:'storage_error',retryable:false}});
   const observed=JSON.parse(readFileSync(audit,'utf8'));
-  assert.equal(observed.opened.length,operation==='import'?3:6);assert.deepEqual(observed.closeAttempts,[...observed.opened].reverse());
+  assert.equal(observed.opened.length,operation==='import'?2:4);assert.deepEqual(observed.closeAttempts,[...observed.opened].reverse());
   assert.equal(readFileSync(trace,'utf8').trim().split('\n').length,1);
 });

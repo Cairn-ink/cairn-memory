@@ -382,3 +382,32 @@ test('R12 checkpointed WAL header without auxiliaries refuses before SQLite can 
     if (location === 'sidecar') assert.equal(drain(f.index()).reason, 'incompatible');
   }
 });
+
+test('probe open failure is unsafe_file and never deletes or rebuilds an existing sidecar', async t => {
+  const childProcess = await import('node:child_process');
+  const { syncBuiltinESMExports } = await import('node:module');
+  const f = fixture(t); f.admit('unreadable sidecar');
+  const index = f.index(); drain(index); index.close();
+  const path = f.path + '.context-read-v1.sqlite', before = lstatSync(path), bytes = readFileSync(path);
+  const original = childProcess.default.spawnSync;
+  let probes = 0;
+  childProcess.default.spawnSync = (command, args, options) => {
+    if (args[2]?.includes("new DatabaseSync(process.argv[1], { readOnly: true })")) {
+      probes++;
+      args = args.map((arg, i) => i === 2 ? arg.replace(
+        'new DatabaseSync(process.argv[1], { readOnly: true })',
+        "(() => { throw Object.assign(new Error('unreadable'), { errcode: 14 }); })()") : arg);
+    }
+    return original(command, args, options);
+  };
+  syncBuiltinESMExports();
+  try {
+    const observed = await observeDatabaseFiles(f, () => {
+      for (const readOnly of [false, true]) assert.throws(() => f.index({ readOnly }), {
+        code: 'index_unavailable', reason: 'unsafe_file',
+      });
+    });
+    assert.equal(probes, 2); assert.deepEqual(observed.events, []);
+    assert.equal(lstatSync(path).ino, before.ino); assert.deepEqual(readFileSync(path), bytes);
+  } finally { childProcess.default.spawnSync = original; syncBuiltinESMExports(); }
+});

@@ -894,13 +894,10 @@ Native busy exhaustion retains `storage_busy`; watchdog cancellation retains
 `read_timeout`. DELETE retains zero wait and existing outcomes. Context reads
 and candidate evidence are outside this delta.
 
-Detect WAL without a SQLite lock-taking PRAGMA: read the safe main-file format-3
-header's read/write version bytes at offsets 18/19; only 2/2 enables WAL waiting.
-Validate descriptor device/inode against the existing safe-file check. Unknown
-or truncated headers keep zero wait and normal validation/refusal. Never change
-journal mode, open a write handle, migrate schema18, or use immutable live reads.
-The mode is fixed during a reader connection; concurrent external mode switching
-is outside this policy.
+Detection is specified by E1-C2 v1.0.1 below: use SQLite's read-only
+`PRAGMA journal_mode` and companion `lstat` hints. No raw database or companion
+file descriptor may be opened. Keep the mode fixed during a reader connection;
+concurrent external mode switching is outside this policy.
 
 The opt-in `measure:topic-reader-wal` protocol pre-registers the required WAL
 cells, >=5 x 30s, zero busy, reader/writer p95 <=250ms, writer throughput >=90%
@@ -912,10 +909,9 @@ race; it does not establish production performance acceptance.
 ## E1-C2 review correction v2 (2026-10-26)
 
 The preceding diagnostics DTO and legacy error classification are unchanged.
-WAL detection requires a complete **100-byte** main-file header before testing
-the signature and 2/2 version bytes. All shorter files, including valid-looking
-20–99 byte prefixes, retain zero wait and normal validation. Native rollback
-refreshes the request's remaining timeout, including zero after expiry.
+The original header requirement is superseded by v1.0.1's SQLite-based
+detection below. Native rollback refreshes the request's remaining timeout,
+including zero after expiry.
 Timeout-installation errors have `configure/reader_configuration` provenance.
 Native statement constructors and absent iterator methods are preserved.
 
@@ -939,3 +935,125 @@ sleeps and retained shutdown close do not satisfy these requirements. Cells
 below any minimum are **invalid**, never passing. Smoke does not assert these
 full-window minima; DELETE latency/contention remains report-only. Existing
 five-repetition, zero-busy, reader p95 and host-loop thresholds remain unchanged.
+
+
+## E1-C2 v1.0.1 lock-safety (2026-10-27)
+
+This delta supersedes all preceding raw-header detection requirements, including
+v2's 100-byte rule. Closing any raw descriptor for a database inode releases
+all process-owned POSIX record locks on it, including SQLite locks belonging
+to other connections and Workers. Cached Worker descriptors are also unsafe
+because Worker shutdown closes them. Runtime must not open/read database or
+`-wal`/`-shm`/`-journal` files outside SQLite. `stat`/`lstat` remain permitted.
+Exclusive creation uses a child process. `O_EXCL` refuses preexisting inodes
+without obtaining a descriptor, but another Worker could open a newly created
+inode before its creation fd closes. Isolating even that close prevents a
+process-owned-lock collision. Host code never opens a raw database fd.
+
+Open the read-only SQLite connection, configure its zero default timeout, then
+query `PRAGMA journal_mode` before any schema/storage metadata statement.
+Use companion `lstat` evidence only as a wait hint: `-wal` or `-shm` exists and
+`-journal` does not exist enables the shared Worker-only budget (originally
+100ms; superseded by v1.1 below) for the
+first query. Otherwise query with zero wait. On BUSY from that zero-wait query,
+stat `-journal` again; if absent, retry the opening mode query exactly once
+with the remaining original request budget. This covers a closing WAL writer
+whose companions have disappeared. Never retry a transaction or traversal.
+Always clear the provisional timeout after probing; DELETE metadata and page
+reads retain zero timeout. WAL retains the same request-wide deadline, native
+wait, cancellation and iterator/fence coverage. Recheck safe-file identity after
+probing. Do not change journal mode or use immutable live data reads.
+
+Add `journal_mode` to the closed statement diagnostics enum. Opening failures
+can now carry `prepare/journal_mode` or `execute/journal_mode`, rather than the
+later application_id/user_version label. All DTO fields, primary/extended
+codes, privacy rules and default envelopes are unchanged.
+
+Residual ambiguity: an exclusive DELETE connection before its first journaled
+write, OFF/MEMORY journaling, or external mode switching can produce BUSY with
+no rollback journal and receive the bounded opening fallback. A stale/persistent
+rollback journal can suppress a WAL opening wait. Companion checks are not
+atomic; external concurrent journal-mode switching remains unsupported. Ordinary
+journaled DELETE writers never gain a wait; detected DELETE statements always
+have zero wait. Corruption is left to normal SQLite validation.
+
+Context-read and store-fence also lose raw header descriptors. Their existing
+refusal of checkpointed WAL without transient companions is preserved through
+an isolated, read-only SQLite `nolock=1` journal-mode probe. This mode query can parse schema metadata but performs no application-table
+reads, recovery or mode changes; SQLite refuses WAL before
+creating companions. The no-lock connection MUST live in a separate process:
+its close must never share the process holding live database locks. Cache only
+successful DELETE probes against device/inode/size/nanosecond mtime/ctime,
+verified before and after, with bounded cache size. Probe failure, replacement
+or timeout fails closed. A hot rollback journal can return SQLITE_READONLY;
+the writable sidecar opener then delegates recovery to its normal SQLite
+connection, while read-only preflight already refused the journal. This adds child-start latency on cache misses; it is
+not part of the topic reader's Worker wait budget. Store fences now retain a
+checked filesystem identity, not an fd, and recheck it at existing boundaries.
+
+CI scans runtime source and generated setup code/archive against exact raw-fs
+call-site allowlists with per-site justifications. Public same-process reader
+regressions use separate child lock contenders in DELETE and WAL, verify host
+snapshot/checkpoint protection and WAL main-file SHARED locking, and cover
+context probes and fence close. The primary regenerated the round-1 bundle in
+1e68d801. Round 2 additionally isolates asset, method-package and review-card
+input data reads in a fixed bounded child; O_PATH pins and identity validation
+remain in the host. The static guard is an accidental-reintroduction tripwire,
+with eval/Function/vm, native addons and deliberate obfuscation out of scope.
+The unchanged round-1 bundle is now stale against round-2 source; the primary
+must refresh it separately before the archived-engine guard can pass. See
+[round-2 verification](topic-reader-wal-fix.md#round-2-verification).
+
+
+## E1-C2 additive contract v1.1 (2026-10-27)
+
+This delta builds on v1.0.1's SQLite-based detection and replaces the fixed
+100ms WAL wait rule in v1 and its review corrections. Both the hinted-WAL
+opening query and its one BUSY fallback consume this same cutoff. Other
+diagnostics, DTO, classification, SQLite-based detection and
+read-only guarantees remain unchanged. Measurement protocol v2's pre-registered
+thresholds and exposure requirements remain unchanged.
+
+At Worker request start t, let D be the host's absolute monotonic request
+deadline. Set one request-wide lock cutoff to min(D, t + 1000ms) - 20ms.
+Before each native prepare/execution or iterator step, including rollback,
+install max(0, floor(cutoff - now)) milliseconds of native busy timeout. Opening,
+queries and fence checks consume the same budget; statements never reset it.
+Equivalently the initial budget is max(0, min(remaining deadline, 1000ms) - 20ms),
+so the configured native wait is at most 980ms. This bounds timeout parameters,
+not synchronous call completion. An exhausted or reserve-only budget means zero
+wait.
+
+Members use the deadline derived from their deadlineMs at host dispatch.
+Overview, including legacy overview with no deadline input, uses its existing
+5000ms watchdog deadline. Worker startup consumes that deadline before the
+wait budget is computed.
+
+The 20ms reserve leaves four normal 5ms quanta of headroom for rollback,
+constructing the small failure envelope, posting it and host delivery. It does
+not extend the deadline; the host watchdog settles the public result without
+waiting for Worker termination when scheduling or processing exhausts it.
+
+Waiting remains entirely inside the reader Worker. Watchdog cancellation
+settles the pending public request with read_timeout in the host timer callback,
+without awaiting native completion or Worker termination. Calling close()
+settles a pending request immediately with store_closed. The host loop performs
+no native SQLite wait; normal host timer scheduling still applies.
+
+On cancellation the Worker is detached immediately, its late replies/errors/
+exit events are ignored, and termination continues on a tracked cleanup promise.
+A synchronous native SQLite wait or step cannot be pre-empted: resource release
+can lag until that active call returns and Worker termination completes. close()
+itself is a resource-release promise and resolves only after that cleanup; it
+can therefore take the remaining active native wait or step plus termination.
+
+A new request on the same open handle uses its own deadline while waiting for
+the old Worker's cleanup before launching a replacement. There is at most one
+live Worker per handle, and one admitted pending request across both methods;
+concurrent reads still return read_in_progress. A queued request that times out
+or is closed settles immediately and cannot later launch a Worker. Failed
+cleanup never starts a replacement.
+
+Busy exhaustion retains storage_busy under existing error classification.
+DELETE retains zero wait. No journal-mode change, migration, write opener,
+additional application retry or native-interruption mechanism is introduced.

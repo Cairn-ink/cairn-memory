@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { runFile } from './asset-support.mjs';
 
-for(let position=1;position<=6;position++)test(`L02 input close ${position}: retain first error, close all once`,{timeout:30000},t=>{
+for(let position=1;position<=4;position++)test(`L02 input close ${position}: retain first error, close all once`,{timeout:30000},t=>{
   const workspace=createTestWorkspace(t,{prefix:'asset-input-close-'}),a=join(workspace.path,'a.txt'),b=join(workspace.path,'b.txt');
   writeFileSync(a,'supplied a');writeFileSync(b,'supplied b');
   const child=join(workspace.path,'close-child.mjs');
@@ -18,14 +18,14 @@ for(let position=1;position<=6;position++)test(`L02 input close ${position}: ret
     syncBuiltinESMExports();let failure;
     try{files.close();}catch(error){failure=error;}
     finally{fs.closeSync=original;syncBuiltinESMExports();}
-    assert.equal(failure,first);assert.equal(attempts.length,6);assert.equal(new Set(attempts).size,6);
+    assert.equal(failure,first);assert.equal(attempts.length,4);assert.equal(new Set(attempts).size,4);
     // Tracking was consumed on the first attempt, even for a failed close.
     fs.closeSync=()=>{throw Error('must not retry');};syncBuiltinESMExports();
     try{files.close();}finally{fs.closeSync=original;syncBuiltinESMExports();}
     console.log(JSON.stringify({attempts:attempts.length,firstErrorRetained:true,retries:0}));
   `);
   const result=runFile(workspace,[],{command:child});assert.equal(result.code,0,result.stderr);
-  assert.deepEqual(JSON.parse(result.output),{attempts:6,firstErrorRetained:true,retries:0});
+  assert.deepEqual(JSON.parse(result.output),{attempts:4,firstErrorRetained:true,retries:0});
 });
 
 for(let position=1;position<=3;position++)test(`L04 pre-publication export close ${position}: first close error survives later errors`,{timeout:30000},t=>{

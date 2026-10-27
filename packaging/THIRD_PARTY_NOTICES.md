@@ -5,14 +5,16 @@ vendored dependency code. Local npm installation retrieves these exact packages:
 
 | Package | Version | License | Source |
 | --- | --- | --- | --- |
-| @modelcontextprotocol/server | 2.0.0 | MIT | https://github.com/modelcontextprotocol/typescript-sdk |
-| @modelcontextprotocol/core | 2.0.0 | MIT | https://github.com/modelcontextprotocol/typescript-sdk |
-| zod | 4.5.4 | MIT | https://github.com/colinhacks/zod |
+| @modelcontextprotocol/server | 2.3.1 | Apache-2.0 | https://github.com/modelcontextprotocol/typescript-sdk |
+| @modelcontextprotocol/core | 2.3.1 | Apache-2.0 | https://github.com/modelcontextprotocol/typescript-sdk |
+| zod | 4.6.7 | MIT | https://github.com/colinhacks/zod |
 | tiktoken | 1.0.22 | MIT | https://github.com/dqbd/tiktoken |
 
 The generated npm-shrinkwrap.json pins the production closure's registry URLs
 and integrity values from this repository's reviewed adapter lockfiles. The SDK
-and Zod dependency directories retain their upstream license notices. The
+and Zod dependency directories retain their upstream license notices. The MCP
+SDK is moving from MIT to Apache-2.0; its 2.3.1 package metadata declares
+Apache-2.0 and its LICENSE file describes the transition. The
 tiktoken 1.0.22 npm archive has MIT package metadata but omits a standalone
 license file, so this artifact includes `licenses/tiktoken-LICENSE`, copied
 from its registry-reported gitHead:

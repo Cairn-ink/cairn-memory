@@ -1,4 +1,5 @@
-import { open,lstat } from 'node:fs/promises';
+import { lstat } from 'node:fs/promises';
+import { createExclusiveSqliteFile } from '../../../core/sqlite-journal-probe.mjs';
 import { dirname } from 'node:path';
 import { syncDirectory } from '../private-state.mjs';
 import { directory } from './local-setup-files.mjs';
@@ -10,11 +11,9 @@ export async function initLocalRawStore(value) {
   try {
     runtime(); const { databasePath } = exact(value,['databasePath']); if (!absolute(databasePath)) fail('invalid_input');
     await directory(dirname(databasePath),true);
-    let file,identity;
-    try {
-      file = await open(databasePath,'wx',0o600); identity = await file.stat(); await file.sync();
-    } catch (error) { if (error.code === 'EEXIST') fail('store_invalid'); throw error; }
-    finally { await file?.close(); }
+    let identity;
+    try { identity = createExclusiveSqliteFile(databasePath); }
+    catch (error) { if (error.code === 'EEXIST') fail('store_invalid'); throw error; }
     await syncDirectory(dirname(databasePath));
     const before = await lstat(databasePath);
     if (before.dev !== identity.dev || before.ino !== identity.ino || before.size !== 0 || !before.isFile() || before.isSymbolicLink()) fail('store_invalid');

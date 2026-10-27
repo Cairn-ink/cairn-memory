@@ -703,8 +703,8 @@ test('installed adaptive qualifier selects a repeated-source catalog and retains
 
 test('production shrinkwrap installs only the exact reviewed closure with upstream notices', () => {
   const shrinkwrap = readJSON(join(installation.packagePath, 'npm-shrinkwrap.json'));
-  const expected = { '@modelcontextprotocol/server': '2.0.0', '@modelcontextprotocol/core': '2.0.0',
-    zod: '4.5.4', tiktoken: '1.0.22' };
+  const expected = { '@modelcontextprotocol/server': '2.3.1', '@modelcontextprotocol/core': '2.3.1',
+    zod: '4.6.7', tiktoken: '1.0.22' };
   assert.deepEqual(Object.keys(shrinkwrap.packages).filter(Boolean).sort(),
     Object.keys(expected).map((name) => `node_modules/${name}`).sort());
   const resolveInstalled = createRequire(join(installation.packagePath, 'package.json'));
