@@ -302,9 +302,11 @@
   "core/context-product-manifest.mjs",
   "core/context-product-service.mjs",
   "core/context-product-sidecar.mjs",
+  "core/context-product-sqlite.mjs",
   "core/context-product-index.mjs",
   "core/context-product-pump.mjs",
   "docs/plans/context-read-p2b-impl.md",
+  "docs/plans/context-read-p2d-impl.md",
   "core/context-product-selection.mjs",
   "docs/plans/context-read-p2c-impl.md"
 ]

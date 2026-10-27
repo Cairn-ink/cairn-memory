@@ -23,17 +23,26 @@ function identity(path) {
 export function contextProductFileIdentity(path) {
   const stat = identity(path); return `${stat.dev}:${stat.ino}`;
 }
-export function openReadDatabase(path, { contextRead = false, topicMembers = false, deferTopicValidation = false, topicPolicy, nativeObserver, preflight, validateProduct } = {}) {
+export function openReadDatabase(path, { contextRead = false, topicMembers = false, deferTopicValidation = false, topicPolicy, nativeObserver, preflight, validateProduct, productSqlite } = {}) {
   const initial = identity(path);
   nativeObserver?.identity?.(`${initial.dev}:${initial.ino}`);
   preflight?.();
+  const productFiles = productSqlite?.files(path);
   let native;
   try { native = nativeObserver ? nativeObserver.invoke('open', 'connection', () => new DatabaseSync(path, { readOnly: true })) : new DatabaseSync(path, { readOnly: true }); }
-  catch (error) { throw recordSqliteFailure(error, 'open', 'connection'); }
+  catch (error) {
+    recordSqliteFailure(error, 'open', 'connection');
+    if (productSqlite) productSqlite.openingFailure(error);
+    throw error;
+  }
   let db = native;
   try {
-    if (nativeObserver) db = nativeObserver.database(native);
-    try { (nativeObserver ? db : native).exec(`PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=${contextRead && !nativeObserver ? 5000 : 0};`); }
+    if (productSqlite) {
+      db = productSqlite.open(native, path).db;
+      productFiles({ afterProbe: true });
+    }
+    else if (nativeObserver) db = nativeObserver.database(native);
+    try { (nativeObserver || productSqlite ? db : native).exec(productSqlite ? 'PRAGMA query_only=ON; PRAGMA trusted_schema=OFF;' : `PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=${contextRead && !nativeObserver ? 5000 : 0};`); }
     catch (error) { throw recordSqliteFailure(error, 'configure', 'reader_configuration'); }
     let wal = false;
     if (topicPolicy) {
@@ -104,5 +113,5 @@ export function openReadDatabase(path, { contextRead = false, topicMembers = fal
       const stat = identity(path);
       if (stat.dev !== initial.dev || stat.ino !== initial.ino) fail('cursor_stale');
     } };
-  } catch (error) { db.close(); throw error; }
+  } catch (error) { if(!productSqlite || db.isOpen)db.close(); throw error; }
 }

@@ -8,7 +8,7 @@ import { fixture, ok } from '../testing/context-read-fixture.mjs';
 import { four, personal, project, configured, descriptor } from '../testing/context-product-owner-fixture.mjs';
 
 function setup(t,patch={},faults={}) {
-  let now=0,serial=0;const timers=new Map(),calls=[],opened=[],closed=[];
+  let now=0,serial=0;const timers=new Map(),calls=[],opened=[],closed=[],live=new Set();
   const supervisor=createContextReadSupervisor();t.after(()=>supervisor.close().catch(e=>{if(!faults.close)throw e;}));
   const credential={service:randomUUID()},readSet=[{ownerId:'pump',scope:'personal',projectId:null}];
   const ownerCoverage={policy:'recent-projects-v1',selectionRevision:'fixture',requestedNamespaces:1,selectedNamespaces:1,omittedNamespaces:0};
@@ -20,19 +20,19 @@ function setup(t,patch={},faults={}) {
     projections:[{options,types:['memory']},{options:{...options,readSet:[{ownerId:'pump',scope:'project',projectId:'p'}],ownerCoverage,
       host:{...options.host,configuration:{serviceBinding:{...serviceBinding,namespaces:{readSet:[{ownerId:'pump',scope:'project',projectId:'p'}],ownerCoverage}}}}},types:['memory']}],...patch};
   const renew=createMaintenancePumpRuntime({now:()=>now,setTimer:(f,ms)=>{const id=++serial;timers.set(id,{f,at:now+ms});return id;},clearTimer:id=>timers.delete(id),
-    open:async opts=>{opened.push(opts);return {async refreshContextIndex(input,token){calls.push([input,token]);if(faults.refresh)throw Error('refresh failed');return {ok:true,value:{status:'complete'}};},async close(){closed.push(opts);if(faults.close)throw Error('close failed');}};}});
+    open:async opts=>{const writer=JSON.stringify([opts.path,opts.readSet]);if(faults.exclusive)assert.equal(live.has(writer),false,'drain the previous writer before opening');live.add(writer);opened.push(opts);return {async refreshContextIndex(input,token){calls.push([input,token]);if(faults.refresh)throw Error('refresh failed');return {ok:true,value:{status:'complete'}};},async close(){closed.push(opts);live.delete(writer);if(faults.close)throw Error('close failed');}};}});
   return {renew,c,calls,opened,closed,timers,setTime:n=>{now=n;},async next(){const [id,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];timers.delete(id);now=timer.at;await timer.f();}};
 }
 
-test('pump round-robins both intents and active projections, renewal reuses one supervised writer, restart preserves exhaustion',async t=>{
+test('pump round-robins both intents and active projections, renewal retains pump identity, restart preserves exhaustion',async t=>{
   const s=setup(t),pump=s.renew(s.c);assert.equal(s.renew(s.c),pump);
   for(let i=0;i<8;i++)await s.next();
   assert.deepEqual(s.calls.map(([i])=>[i.readSet[0].scope,i.intent]),[
     ['personal','current'],['personal','history'],['project','current'],['project','history'],
     ['personal','current'],['personal','history'],['project','current'],['project','history']]);
-  assert.equal(s.opened.length,2);assert.equal(pump.getStatus().state,'budget_exhausted');assert.equal(s.timers.size,0);
+  assert.equal(s.opened.length,8);assert.equal(pump.getStatus().state,'budget_exhausted');assert.equal(s.timers.size,0);
   assert.equal((await pump.completion).usedItems,8);
-  await pump.close();assert.equal(s.closed.length,2);
+  await pump.close();assert.equal(s.closed.length,s.opened.length);
   const restarted=s.renew({...s.c,id:randomUUID()});assert.equal(restarted.getStatus().state,'budget_exhausted');assert.equal(s.timers.size,0);await restarted.close();
   assert.throws(()=>s.renew({...s.c,window:{...s.c.window,id:'reset-budget'}}),{code:'invalid_input'});
 });
@@ -153,6 +153,29 @@ for(const exhausted of [true,false])test(`Fix3 settled renewal expiry gets a fre
   await p.close();
 });
 
+// P2d: the pump forwards the same explicit deployment permission as direct
+// maintenance. Renewal cannot silently change live sidecar configuration.
+test('P2d pump forwards WAL opt-in and refuses journal-policy changes during renewal',async t=>{
+  const s=setup(t);
+  for(const p of s.c.projections)Object.assign(p.options,{wal:true,sidecarJournalMode:'WAL'});
+  const pump=s.renew(s.c);await s.next();assert.equal(s.opened[0].wal,true);assert.equal(s.opened[0].sidecarJournalMode,'WAL');
+  const changed={...s.c,projections:s.c.projections.map(p=>({...p,options:{...p.options,sidecarJournalMode:'DELETE'}}))};
+  assert.throws(()=>s.renew(changed),{code:'read_in_progress'});
+  await pump.close();
+  for(const p of s.c.projections)p.options.wal='WAL';
+  assert.throws(()=>s.renew({...s.c,id:randomUUID()}),{code:'invalid_input'});
+});
+
+test('P2d fix round 1 pump uses opted-out constructor for an otherwise identical projection',async t=>{
+  const s=setup(t),base=s.c.projections[0];
+  s.c.projections=[{...base,options:{...base.options,wal:true,sidecarJournalMode:'WAL'}},
+    {...base,options:{...base.options,wal:false,sidecarJournalMode:'DELETE'}}];
+  const pump=s.renew(s.c);for(let i=0;i<4;i++)await s.next();
+  assert.deepEqual(s.opened.map(o=>[o.wal,o.sidecarJournalMode]),[[true,'WAL'],[true,'WAL'],[false,'DELETE'],[false,'DELETE']]);
+  assert.deepEqual(s.calls.map(([i])=>i.intent),['current','history','current','history']);
+  await pump.close();assert.equal(s.closed.length,s.opened.length);
+});
+
 test('P2-06/09/18 active four/32 selections prebuild both intents through the pump with mock scheduling',async t=>{
   const f=fixture(t),readSet=[personal,...Array.from({length:31},(_,i)=>project('p'+i))];
   for(const ns of [...four,readSet[1]])f.admit('pump cache '+(ns.projectId??'personal'),ns);
@@ -213,4 +236,38 @@ test('P2c fix1 pump renewal canonicalizes coverage key order and rejects a diffe
     serviceBinding:{...binding,namespaces:{...binding.namespaces,readSet}}}}}};
   assert.throws(()=>s.renew({...s.c,projections:[projections[0],selection]}),{code:'read_in_progress'});
   await pump.close();
+});
+
+// The merged identity is shared by renewal and native-handle lookup. Property
+// order is irrelevant; every journal policy, type selection and intent is bound.
+for(const difference of ['wal','sidecarJournalMode','ownerCoverage order','types'])
+test(`P2c/P2d pump identity combines canonical coverage with ${difference}`,async t=>{
+  const s=setup(t,{}, {exclusive:true}),base=s.c.projections[0];
+  const first={...base,options:{...base.options,wal:true,sidecarJournalMode:'DELETE'}};
+  const reordered=Object.fromEntries(Object.entries(base.options.ownerCoverage).reverse());
+  const second={...first,options:{...first.options,ownerCoverage:reordered,
+    ...(difference==='wal'?{wal:false}:difference==='sidecarJournalMode'?{sidecarJournalMode:'WAL'}:{})},
+    types:difference==='types'?['memory','card']:first.types};
+  s.c.projections=[first,second];
+  const pump=s.renew(s.c);
+  for(let i=0;i<4;i++)await s.next();
+  const canonicalRenewal={...s.c,projections:s.c.projections.map(p=>({...p,options:{...p.options,
+    ownerCoverage:Object.fromEntries(Object.entries(p.options.ownerCoverage).reverse())}}))};
+  const openedBeforeRenewal=s.opened.length;
+  assert.equal(s.renew(canonicalRenewal),pump);
+  assert.equal(s.opened.length,openedBeforeRenewal);
+  for(let i=0;i<4;i++)await s.next();
+  // Eight dispatches alternate intent under one admitted native writer slot.
+  // Every incompatible handle drains before its successor opens.
+  assert.equal(s.opened.length,8);assert.equal(s.closed.length,7);
+  assert.deepEqual(s.calls.map(([i])=>i.intent),['current','history','current','history','current','history','current','history']);
+  for(const patch of [{wal:false},{sidecarJournalMode:'WAL'}]){
+    const changed={...canonicalRenewal,projections:canonicalRenewal.projections.map((p,i)=>i?p:{...p,options:{...p.options,...patch}})};
+    assert.throws(()=>s.renew(changed),{code:'read_in_progress'});
+  }
+  // A renewal that changes only one projection's types must not reuse the window.
+  const typesOnly={...canonicalRenewal,projections:canonicalRenewal.projections.map((p,i)=>i?p:
+    {...p,types:p.types.includes('card')?['memory']:['memory','card']})};
+  assert.throws(()=>s.renew(typesOnly),{code:'read_in_progress'});
+  await pump.close();assert.equal(s.closed.length,8);
 });

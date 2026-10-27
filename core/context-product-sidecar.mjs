@@ -20,6 +20,13 @@ const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const unavailable = reason => { throw Object.assign(Error('index_unavailable'), { code: 'index_unavailable', reason }); };
 const same = (a,b) => canonicalJson(a) === canonicalJson(b);
+// Cleanup must not replace a native failure already committed to telemetry.
+function cleaned(work, cleanup) {
+  let result;
+  try { result = work(); }
+  catch (error) { try { cleanup(); } catch { /* Preserve the original failure. */ } throw error; }
+  cleanup(); return result;
+}
 // The independent storage seam validates and normalizes before any file work.
 // The frozen v1 sidecar keeps its separate one/two-namespace grammar.
 function projection(p) {
@@ -93,11 +100,11 @@ export function canonicalProductIdentity(path, db) {
 
 // Construction acquires no sidecar. Only a separately authorized operation
 // invokes observe/refresh, including when the file is missing or malformed.
-export function productSidecar({ path, db: canonical, identity, features, observer, writable = false,
+export function productSidecar({ path, db: canonical, identity, features, observer, sqlite, sidecarJournalMode = 'DELETE', writable = false,
   now = () => performance.now(), rendezvous = () => {} }) {
   features={...features,reviews:features.cards,receipts:features.cards};
   const sidePath = path + PRODUCT_SIDECAR_SUFFIX;
-  let side, sideWritable, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0;
+  let side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0;
   const lockPath=sidePath+'.lifecycle-lock.sqlite';
   const stamp=()=>{const s=sqliteFileStat(sidePath);return [s.dev,s.ino,s.size,s.mtimeNs,s.ctimeNs].join(':');};
   function acquire(createLock=false) {
@@ -108,8 +115,9 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       }
       lockIdentity=productFile(lockPath);
       const open=()=>new DatabaseSync(lockPath,{readOnly:true});
-      lifecycle=observer ? observer.invoke('open','connection',open) : open();
-      if(observer)lifecycle=observer.database(lifecycle);
+      const native=observer ? observer.invoke('open','connection',open) : open();
+      // sqlite.open owns disposal on refusal; publish only an admitted handle.
+      lifecycle=sqlite ? sqlite.open(native,lockPath).db : observer ? observer.database(native) : native;
     }
     lifecycle.exec('BEGIN');
     // A deferred BEGIN alone has no OS lock. This query pins the shared lock.
@@ -125,26 +133,31 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       // without first taking its lifecycle lock.
       observedMissing=true;try{return work();}finally{observedMissing=false;}
     }
-    try { acquire(createLock);guardDepth++;return work(); }
-    finally {guardDepth=0;release();}
+    return cleaned(()=>{acquire(createLock);guardDepth++;return work();},()=>{guardDepth=0;release();});
   }
   function publish(replacement,init) {
-    const work=()=>createExclusiveSqliteFile(sidePath,replacement,init);
-    return observer ? observer.invoke('execute','transaction',work) : work();
+    const work=()=>createExclusiveSqliteFile(sidePath,replacement,init,sqlite && observer ? {observe:observer.creation} : {});
+    try { return observer && !sqlite ? observer.invoke('execute','transaction',work) : work(); }
+    catch(error) { if(sqlite)sqlite.initializationFailure(error);throw error; }
   }
   function verifyOpened() {
+    sideFiles?.();
     if(!same(openedIdentity,productFile(sidePath,true)))unavailable('storage_unavailable');
   }
   function read(work) {
-    try { return readTransaction(side,()=>{
+    try { sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});return readTransaction(side,()=>{
       side.prepare('PRAGMA schema_version').get();
       verifyOpened();rendezvous('snapshot');return work();
-    }); } catch(e) { if(e.reason==='storage_unavailable')close();throw e; }
+    }); } catch(e) { if(e.reason==='storage_unavailable')try{close();}catch{}throw e; }
   }
-  const openNative = (write = false) => observer ? observer.invoke('open','connection', () => new DatabaseSync(sidePath, { readOnly: !write }))
-    : new DatabaseSync(sidePath, { readOnly: !write });
-  function close() { if (side?.isOpen) side.close(); side = null; metadata = null; }
+  const openNative = (write = false) => {
+    try { return observer ? observer.invoke('open','connection', () => new DatabaseSync(sidePath, { readOnly: !write }))
+      : new DatabaseSync(sidePath, { readOnly: !write }); }
+    catch (error) { if(sqlite)sqlite.openingFailure(error);throw error; }
+  };
+  function close() { if (side?.isOpen) side.close(); side = null; metadata = null; sideFiles = null; }
   function write(work) {
+    sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});
     side.exec('BEGIN IMMEDIATE');
     try { verifyOpened();const result = work();rendezvous('batch');side.exec('COMMIT'); return result; }
     catch (e) { if (side.isTransaction) side.exec('ROLLBACK'); if(e.reason==='storage_unavailable')close();throw e; }
@@ -155,7 +168,12 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     const physical = productFile(sidePath, true), wantsWrite=writable&&create;
     if (!physical && !create) return false;
     if (side && physical && same(physical, openedIdentity) && sideWritable===wantsWrite) {
-      auxiliaries(sidePath, wantsWrite);
+      if(sqlite){
+        try {
+          sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});
+          if(wantsWrite && sideMode!==sidecarJournalMode)unavailable('storage_unavailable');
+        } catch(error) {try{close();}catch{}throw error;}
+      } else auxiliaries(sidePath, wantsWrite);
       if (create) read(() => {
         metadata=side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
         if (!metadata || metadata.store_id!==identity.storeId) unavailable('wrong_store');
@@ -165,35 +183,45 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       return true;
     }
     close();
-    auxiliaries(sidePath, wantsWrite);
+    if(!sqlite)auxiliaries(sidePath, wantsWrite);
     if (!physical) {
       if (!writable) unavailable('missing');
       // The child publishes the complete format before any connection opens it.
       // It owns the exclusive lifecycle lock, so release our shared lock first.
       release();
-      try { publish(null,initialization()); }
-      catch(e) { if(e.code!=='EEXIST')throw e; }
-      finally { acquire(); }
-    } else {
+      cleaned(()=>{try { publish(null,initialization()); }
+        catch(e) { if(e.code!=='EEXIST')throw e; }},()=>acquire());
+    } else if (!sqlite) {
       const mode = probeRollbackJournal(sidePath, observer ? { observe: observer.journalProbe } : {});
       if (mode.code === 14 || mode.mode && mode.mode !== 'delete') unavailable('incompatible');
     }
-    openedIdentity = productFile(sidePath);
-    side = openNative(wantsWrite);sideWritable=wantsWrite; if (observer) side = observer.database(side);
-    side.exec('PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=0;');
-    if (!same(openedIdentity, productFile(sidePath))) unavailable('storage_unavailable');
-    read(() => {
-      metadata = side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
-      if (!metadata || metadata.store_id !== identity.storeId) unavailable('wrong_store');
-      attest(side);
-      if (metadata.profile !== PRODUCT_PROFILE) unavailable('incompatible');
-      if (wantsWrite) {
-        if (side.prepare('PRAGMA quick_check').get().quick_check !== 'ok' || side.prepare('PRAGMA foreign_key_check').get()) unavailable('corrupt');
-      }
-    });
+    const admittedIdentity=productFile(sidePath), files=sqlite?.files(sidePath);
+    let candidate=openNative(wantsWrite), admittedMetadata;
+    sideMode=undefined;
+    try {
+      if(sqlite){
+        const native=candidate;candidate=null; // open() disposes a refused native handle.
+        const opened=sqlite.open(native,sidePath);candidate=opened.db;sideMode=opened.mode;
+        files({afterProbe:true});
+        if(wantsWrite && sideMode!==sidecarJournalMode)unavailable('storage_unavailable');
+      }else if(observer)candidate=observer.database(candidate);
+      candidate.exec(sqlite ? 'PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF;' : 'PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=0;');
+      files?.({betweenSnapshots:sideMode==='DELETE'});
+      readTransaction(candidate,()=>{
+        candidate.prepare('PRAGMA schema_version').get();files?.();
+        if(!same(admittedIdentity,productFile(sidePath)))unavailable('storage_unavailable');
+        rendezvous('snapshot');
+        admittedMetadata=candidate.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
+        if(!admittedMetadata || admittedMetadata.store_id!==identity.storeId)unavailable('wrong_store');
+        attest(candidate);
+        if(admittedMetadata.profile!==PRODUCT_PROFILE)unavailable('incompatible');
+        if(wantsWrite && (candidate.prepare('PRAGMA quick_check').get().quick_check!=='ok' || candidate.prepare('PRAGMA foreign_key_check').get()))unavailable('corrupt');
+      });
+    } catch(error) {try{if(candidate?.isOpen)candidate.close();}catch{}throw error;}
+    side=candidate;sideWritable=wantsWrite;sideFiles=files;openedIdentity=admittedIdentity;metadata=admittedMetadata;
     return true;
   }
-  const initialization=()=>({sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=1; ${ddl}`,
+  const initialization=()=>({...(sqlite ? {journalMode:sidecarJournalMode} : {}),sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=1; ${ddl}`,
     storeId:identity.storeId,profile:PRODUCT_PROFILE,incarnation:randomUUID(),
     attestation:{applicationId:APPLICATION_ID,schema:expectedSchema}});
   const sideIdentity = () => ({ ...productFile(sidePath), incarnation: metadata.incarnation,
@@ -356,6 +384,9 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     catch(e) {
       if (!['wrong_store','incompatible','corrupt'].includes(e.reason) && !(e.code==='ERR_SQLITE_ERROR' && [1,11,26].includes(e.errcode&255))) throw e;
       close();
+      // A WAL cache (or an indeterminate mode) cannot enter the legacy nolock
+      // replacement protocol. Quiesce and rebuild it explicitly at the host.
+      if(sqlite && sideMode!=='DELETE')unavailable('storage_unavailable');
       // Repair is explicit maintenance, never a read fallback. Refuse live or
       // unsafe companions; SQLite alone performs journal recovery on opening.
       auxiliaries(sidePath,false);
@@ -363,15 +394,12 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       if(!repairIdentity || !same(old,repairIdentity))unavailable('storage_unavailable');
       try {
         release();
-        try {publish(old.device+':'+old.inode,{...initialization(),expectedStamp:repairStamp});}
-        finally {acquire();}
+        cleaned(()=>publish(old.device+':'+old.inode,{...initialization(),expectedStamp:repairStamp}),()=>acquire());
       } catch(e) {
         if(['ESTALE','EEXIST','EBUSY'].includes(e.code))unavailable('storage_unavailable');
         throw e;
       }
-      openedIdentity=productFile(sidePath);side=openNative(true);sideWritable=true;if(observer)side=observer.database(side);
-      side.exec('PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=0;');
-      read(()=>{metadata=side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();});
+      connection(true);
     }
     let t = readTransaction(canonical,() => target(p,access));
     const observed = readTransaction(canonical,() => observe(p,access,{forWrite:true}));
@@ -516,7 +544,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         return [11,26].includes(e.errcode&255)?'corrupt':(e.errcode&255)===1?'incompatible':'storage_unavailable';
       throw e;
     }
-  },close() { closed=true;close();lifecycle?.close(); },
+  },close() { closed=true;const lock=lifecycle;lifecycle=null;cleaned(()=>close(),()=>lock?.close()); },
     // Explicit restore gate; callers must have already drained all clients.
     reset() {return guarded(()=>{
       if (!writable) fail('invalid_input');
