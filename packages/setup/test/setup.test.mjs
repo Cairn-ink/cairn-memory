@@ -33,7 +33,7 @@ import { supportedNode, validEndpoint, browserCommand, ask } from '../lib/setup.
 import { requestJSON, proxyFor } from '../lib/transport.mjs';
 import { fakeAuthServer, secret } from './fake-auth-server.mjs';
 import { safeHostname, browserAuthorize } from '../lib/auth.mjs';
-import { wireChild, localWireRequest } from './http-wire.mjs';
+import { wireChild, localWireRequest, socket } from './http-wire.mjs';
 
 const testedVersion = JSON.parse(readFileSync(process.env.CAIRN_SETUP_TEST_PACKAGE ? join(process.env.CAIRN_SETUP_TEST_PACKAGE, 'package.json') : new URL('../package.json', import.meta.url))).version;
 const moduleURL = process.env.CAIRN_SETUP_TEST_MODULE || (process.env.CAIRN_SETUP_TEST_PACKAGE ? pathToFileURL(join(process.env.CAIRN_SETUP_TEST_PACKAGE, 'lib/setup.mjs')).href : new URL('../lib/setup.mjs', import.meta.url).href);
@@ -175,6 +175,32 @@ test('Node minimum, endpoint origins, browser launch commands and hostname sanit
   assert.equal(browserCommand('https://cairn.ink/device', 'linux', false)[0], 'xdg-open');
   assert.equal(safeHostname('<host>\u202e\n\"'), 'host');
   assert.equal(Array.from(safeHostname('😀'.repeat(80))).length, 64);
+});
+
+test('fake auth ignores an aborted request body without changing state', { timeout: 5000 }, async t => {
+  const rejections = [];
+  const onRejection = error => rejections.push(error);
+  process.on('unhandledRejection', onRejection);
+  t.after(() => process.off('unhandledRejection', onRejection));
+  const auth = await fakeAuthServer(t);
+  const client = socket(chunk => peer.push(chunk));
+  const peer = socket(chunk => client.push(chunk));
+  client.on('close', () => peer.destroy());
+  peer.on('error', () => {});
+  t.after(() => { client.destroy(); peer.destroy(); });
+  const received = new Promise(resolve => auth.server.once('request', resolve));
+  auth.server.emit('connection', peer);
+  client.write('POST /api/cli-auth/v1/device-authorizations HTTP/1.1\r\nHost: localhost\r\nContent-Length: 100\r\n\r\n{');
+  const req = await received;
+  const closed = new Promise(resolve => req.once('close', resolve));
+  client.destroy();
+  await closed;
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(req.aborted, true);
+  assert.deepEqual(rejections, []);
+  assert.deepEqual(auth.requests, []);
+  assert.deepEqual(auth.violations, []);
+  assert.equal(auth.grant, undefined);
 });
 
 test('browser happy path uses S256, safe stdin, credential check then ACK and reports both versions', async t => {
