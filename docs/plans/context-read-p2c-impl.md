@@ -337,3 +337,293 @@ product maximum from 2 to 32; legacy capability/wire assertions are untouched.
 - `docs/context-read-product.md`
 - `docs/plans/context-read-p2c-impl.md`
 - `packaging/artifact-files.json`
+
+## Fix round 1
+
+Changes are relative to `d23649a6` on `feat/context-read-p2c`; nothing is
+committed. Both review documents were read in full. The two runtime findings
+are fixed, and the two acceptance gaps now have deterministic product coverage.
+
+### Findings, fixes and regressions
+
+1. **Pump renewal identity.** `context-product-pump.mjs` now passes the validated
+   `ownerCoverage` descriptor through the established `canonicalJson` helper
+   before incorporating it into the renewal fingerprint. No new canonicalizer
+   or SQLite import was added. The new pump regression reverses every descriptor
+   property's insertion order and requires the same pump object, one timer and
+   no opened handle. A changed revision and a different active selection still
+   refuse `read_in_progress`.
+2. **Unbounded multi-term enumeration.** The product sidecar now enumerates each
+   query term through `INDEXED BY product_term`, with equality on generation and
+   term, an identity keyset cursor, and `LIMIT 128`. Each native enumeration
+   visits at most 128 matching postings, with no join, grouping or sorting scan.
+   Missing terms perform one index probe each, independent of the total posting
+   population. Eligibility and document reads follow the bounded page. A document
+   is scored only on its first matching query term, retaining the original query
+   term order, pooled statistics, BM25 arithmetic, canonical ties and global
+   top-24 horizon. Memory holds one posting page and the winning identities.
+   The one/two-namespace P2b product path used the same defective statement and
+   receives the same fix. The frozen v1 sidecar already checks keyed term df
+   before its per-term enumeration, skipping absent terms; it is unchanged. New one-, two-
+   and 32-namespace regressions inspect `EXPLAIN QUERY PLAN` for the actual
+   production statements: exact generation/term/identity index constraints,
+   no scan or temporary B-tree, two probes for two absent terms, bounded pages,
+   pagination beyond 128 matches, unique winners and exact matched counts.
+3. **P2-18 overflow lifecycle acceptance.** The new
+   `context-read-product-overflow-status.test.mjs` supplies full status goldens
+   for selected/omitted counts 32/0 and 32/1, including 33/32/1 requested/selected/
+   omitted on overflow. It covers every enabled lexical state and reason:
+   absent/missing; building/initial_build and rebuild; ready; stale/access_changed,
+   dependency_changed and fence_changed; catching_up/resume_pending; and all six
+   unavailable reasons. Every golden pins disabled/not_enabled semantics,
+   freshness, coverage, nullability and namespace counts. Reason precedence
+   includes simultaneous access/dependency/canonical mismatches, format/store/
+   validation failures ahead of stale scope, and a missing publication certificate
+   ahead of otherwise valid rebuild progress. Native corruption and I/O failures
+   use deterministic statement faults rather than raw database file access.
+   Initial and delta builds crash the actual product Worker immediately after
+   checkpoint 1 commits. The delta contains exactly one newly transformed
+   selected document. Two fresh reader reopenings require the same authenticated
+   `catching_up/resume_pending` progress, unavailable/stale coverage, null counts
+   and unchanged namespace descriptor. Closed handles return only `store_closed`.
+4. **P2-11 assembly mutation acceptance.** The test host now optionally supplies
+   a SharedArrayBuffer rendezvous in its counter inside the actual product
+   Worker. The parent waits for that counter, commits an independent SQLite
+   mutation, then releases counting. No production test hook or legacy facade
+   path was added. Six fourth-namespace races cover Memory receipt deletion,
+   revision change, eligibility loss and a parent-only move, plus Card revision
+   and support loss. Same-epoch mutations reach the final evidence refetch;
+   every in-flight mismatch refuses exactly `snapshot_stale` with no prepared
+   text. Subsequent compact fetches retain their separate frozen error classes;
+   parent-only moves preserve compact evidence and invalidate snapshots.
+   Instrumentation verifies counting outside transactions, no authority/counter
+   callback after final evidence reading, and a queued microtask running only
+   after synchronous final revalidation. A successful four-namespace case pins
+   four final evidence reads and exact counter-call accounting, then checks that
+   a later mutation leaves delivered text intact while invalidating refetch.
+
+The Worker SQL fixture adds a checkpoint-number crash trigger, preserving its
+existing first-checkpoint and precommit crash modes. Test host SQLite access is
+still a dynamic import, enabled only for the assembly rendezvous. There are no
+new runtime modules, file-touching paths, raw descriptors, allowlist entries,
+provider calls, schema changes or dependency installs. Existing installed
+closure checks continue to cover the same runtime module set.
+
+### Baseline evidence
+
+Before changing either runtime module, the new pump and term-plan regressions
+ran against `d23649a6` on both required runtimes:
+
+```sh
+"$p2c_node" --test --test-name-pattern='P2c fix1' \
+  core/test/context-read-product-pump.test.mjs \
+  core/test/context-read-product-owner.test.mjs
+```
+
+**Node 22.16.0: exit 1, four failures. Node 24.15.0: exit 1, four failures.**
+The pump fails with `read_in_progress`. All three query-plan cases show
+`sqlite_autoindex_postings_1 (generation=? AND identity>?)`, without a term
+constraint. The later page-count assertion strengthens the same regression.
+
+The two spec findings are missing acceptance tests, not demonstrated runtime
+failures. For those, a separate coverage check extracted the original owner and
+evidence test files with `git show d23649a6:<path>` into an owned temporary
+fixture, preserving their imports against the source tree. It selected the new
+P2-18/P2-11 case families and required respectively 16 and seven named TAP
+subtests. Both original files contain **zero** such cases: the Node subprocess
+exits 0, while the explicit nonempty/completeness audit exits **1** for each
+family on each runtime. This is a failing coverage check, not a claim that the
+previous runtime returned incorrect status or assembly bytes. Its predicate is:
+
+```python
+count = len(re.findall(r'^# Subtest: ' + pattern, stdout, re.M))
+coverage_exit = int(node_exit != 0 or count < required)
+```
+
+Patterns are `P2c fix1 P2-18` and `P2c fix1 P2-11`; required counts are 16 and 7.
+The final full-file invocations below execute those previously absent cases.
+
+Development invocations also exited 1 while fixing test fixtures: required MCP
+intent fields were initially omitted, a deletion fixture violated the canonical
+content/null constraint, and initial checkpoint/rebuild/Card-stream expectations
+were incorrect. These were fixture/expectation failures. The final goldens use
+independently specified checkpoint values and actual committed rendezvous;
+Card-only canonical invalidation advances the existing Card epoch. Local
+prebuild helpers explicitly finish publication before testing its invalidation,
+so a maintenance quantum's wall-clock cutoff cannot fabricate a test failure.
+
+### Fix-round verification
+
+The explicit path inventory was independently derived by filesystem glob and
+`rg --files` predicates: **54 paths, zero differences**. Each path is invoked
+separately and sequentially on exact nvm binaries for Node 22.16.0 and 24.15.0,
+with that binary's directory first in PATH:
+
+```sh
+p2c_node="$NVM_DIR/versions/node/v$version/bin/node"
+PATH="$(dirname "$p2c_node"):$PATH" "$p2c_node" --test --test-reporter=tap "$test_path"
+```
+
+The raw29 installed-artifact invocation additionally uses a temporary npm cache
+preload, extended with the notifier/network controls described below. Four exact production tarballs were
+copied from the existing cache into an owned temporary cache; npm remains
+`--offline`. Temporary/cache/artifact writes stay in owned directories. Every
+subprocess exit code is captured directly and TAP totals are checked separately.
+
+The first matrix attempt stopped with **exit 1** at the owner file: 13/14 tests
+passed, and the inherited 32-namespace service prebuild returned `read_timeout`
+at the existing 5,000-ms cutoff before lookup. The three new term-plan cases
+and both physical-version P2-07 oracle cases passed in that invocation. An
+isolated unchanged 32-namespace rerun exited **0** (1/1); no deadline, budget or
+assertion was relaxed. Only the failed owner file and remaining paths were
+resumed; already passing files were retained.
+
+
+The first installed raw29 invocation also exited **1** (0/3), before runtime
+execution: copying tarballs alone omitted npm's cached package metadata, so the
+offline install returned `ENOTCACHED`. Four existing metadata cache indexes and
+seven referenced content entries were then copied into the owned temporary
+cache; no dependency version or test assertion changed.
+
+**Network exception:** the initial `npm pack --offline` unexpectedly ran npm's
+separate update notifier. Its debug log records one successful registry GET for
+npm's public version metadata and an update banner. This violated the task's
+no-network instruction; it was not a product/provider call, and the sanitized
+npm environment contained no keys or user npm configuration. Subsequent npm
+subprocesses explicitly set `npm_config_update_notifier=false` and load a
+temporary guard that throws before socket connection, TLS connection, datagram
+creation or DNS lookup. The preload still forwards only temporary cache and
+verification controls into npm; product source, test assertions and runtime
+children are unchanged. The passing installed runs below use this guard.
+
+The final npm preload's complete mutation is limited to this subprocess:
+
+```js
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
+const spawnSync = childProcess.spawnSync;
+childProcess.spawnSync = function(command, args, options) {
+  if (command === 'npm') options = { ...options, env: {
+    ...options.env,
+    npm_config_cache: new URL('./npm-cache', import.meta.url).pathname,
+    npm_config_update_notifier: 'false',
+    NODE_OPTIONS: '--import=' + new URL('./no-network.mjs', import.meta.url).href
+  } };
+  return Reflect.apply(spawnSync, this, [command, args, options]);
+};
+syncBuiltinESMExports();
+```
+
+The temporary `no-network.mjs` is:
+
+```js
+import net from 'node:net';
+import tls from 'node:tls';
+import dgram from 'node:dgram';
+import dns from 'node:dns';
+import { syncBuiltinESMExports } from 'node:module';
+const blocked = () => { throw Error('network_disabled_for_offline_verification'); };
+net.Socket.prototype.connect = blocked;
+tls.connect = blocked;
+dgram.createSocket = blocked;
+dns.lookup = blocked;
+syncBuiltinESMExports();
+```
+
+Final results: **54/54 paths per runtime, every final process exit 0; 871 passed tests per runtime**. Both exact binary version checks exited 0. The resumed matrix runner exited 0. The earlier timeout remains recorded above; no passing result replaces that history.
+
+| Explicit path (`--test --test-reporter=tap`) | Node 22.16.0 exit / passed | Node 24.15.0 exit / passed |
+| --- | --- | --- |
+| `adapters/mcp/test/context-read-default-entropy.test.mjs` | 0 / 1 | 0 / 1 |
+| `adapters/mcp/test/context-read-sources.test.mjs` | 0 / 4 | 0 / 4 |
+| `core/test/context-read-assembly-races.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/context-read-assembly-readonly.test.mjs` | 0 / 28 | 0 / 28 |
+| `core/test/context-read-assembly.test.mjs` | 0 / 20 | 0 / 20 |
+| `core/test/context-read-bm25.test.mjs` | 0 / 3 | 0 / 3 |
+| `core/test/context-read-budget.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-core.test.mjs` | 0 / 26 | 0 / 26 |
+| `core/test/context-read-default-entropy.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-embedder.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-fusion.test.mjs` | 0 / 4 | 0 / 4 |
+| `core/test/context-read-local-embedder.test.mjs` | 0 / 38 | 0 / 38 |
+| `core/test/context-read-local-status.test.mjs` | 0 / 3 | 0 / 3 |
+| `core/test/context-read-moc-source.test.mjs` | 0 / 15 | 0 / 15 |
+| `core/test/context-read-process.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-product-artifact.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/context-read-product-control.test.mjs` | 0 / 83 | 0 / 83 |
+| `core/test/context-read-product-import.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/context-read-product-index.test.mjs` | 0 / 65 | 0 / 65 |
+| `core/test/context-read-product-overflow-status.test.mjs` | 0 / 16 | 0 / 16 |
+| `core/test/context-read-product-owner-evidence.test.mjs` | 0 / 34 | 0 / 34 |
+| `core/test/context-read-product-owner.test.mjs` | 0 / 14 | 0 / 14 |
+| `core/test/context-read-product-pump.test.mjs` | 0 / 18 | 0 / 18 |
+| `core/test/context-read-product-service.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/context-read-product.test.mjs` | 0 / 126 | 0 / 126 |
+| `core/test/context-read-recovery.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/context-read-review.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/context-read-sidecar.test.mjs` | 0 / 17 | 0 / 17 |
+| `core/test/context-read-source-work.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/context-read-sources-authority.test.mjs` | 0 / 6 | 0 / 6 |
+| `core/test/context-read-sources-bounds.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/context-read-sources-races.test.mjs` | 0 / 16 | 0 / 16 |
+| `core/test/context-read-sources.test.mjs` | 0 / 14 | 0 / 14 |
+| `core/test/context-read-tokenize.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 / 16 | 0 / 16 |
+| `core/test/topic-members-bounds.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/topic-members-compatibility.test.mjs` | 0 / 32 | 0 / 32 |
+| `core/test/topic-members-integration.test.mjs` | 0 / 1 | 0 / 1 |
+| `core/test/topic-members-mutations.test.mjs` | 0 / 20 | 0 / 20 |
+| `core/test/topic-members-primary.test.mjs` | 0 / 26 | 0 / 26 |
+| `core/test/topic-members-recheck-findings.test.mjs` | 0 / 33 | 0 / 33 |
+| `core/test/topic-members-review-findings.test.mjs` | 0 / 7 | 0 / 7 |
+| `core/test/topic-members-round3-findings.test.mjs` | 0 / 18 | 0 / 18 |
+| `core/test/topic-members-scale.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/topic-members-visibility.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/topic-members.test.mjs` | 0 / 10 | 0 / 10 |
+| `core/test/topic-overview-lifecycle.test.mjs` | 0 / 11 | 0 / 11 |
+| `core/test/topic-overview-raw29.test.mjs` | 0 / 22 | 0 / 22 |
+| `core/test/topic-overview-visibility.test.mjs` | 0 / 8 | 0 / 8 |
+| `core/test/topic-overview.test.mjs` | 0 / 4 | 0 / 4 |
+| `core/test/topic-reader-cancellation.test.mjs` | 0 / 6 | 0 / 6 |
+| `core/test/topic-reader-sqlite.test.mjs` | 0 / 21 | 0 / 21 |
+| `packaging/test/topic-overview-raw29.test.mjs` | 0 / 3 | 0 / 3 |
+
+Additional final checks:
+
+- A temporary comparison loads the exact `d23649a6` product-sidecar source with
+  only its relative imports retargeted, alongside the fixed sidecar. Against the
+  same certified fixtures, it compares serialized rankings, exact scores and
+  matched counts for eight queries, both intents, and one/two/four/32 namespaces:
+  **64 byte-identical comparisons per runtime**. The explicit
+  `"$p2c_node" --test --test-reporter=tap "$P2C_FIX1/rank-parity.test.mjs"`
+  commands each exit **0** (one test, 64 comparisons). The fixture includes
+  bilingual terms, query permutations, missing terms, mixed types, ties and more
+  than 128 matches. This supplements the permanent independent P2-07 oracle.
+- The Node 22 owner file was rerun after its final prebuild-resumption edit:
+  **exit 0, 14/14**. The Node 22 installed product-artifact file was rerun after the final test-host
+  microtask notification edit: **exit 0, 1/1**. Node 24's matrix run already used
+  that final fixture. Both installed closure derivations still agree at
+  **87 runtime/Worker modules**, with no manifest additions required.
+- `git diff --check` and an independent whitespace scan including the untracked
+  new test both exit **0**. An added-content scan finds no machine-local home or
+  temporary-directory paths. No keys, broad suites, setup-runtime
+  regeneration, staging or commit was used.
+
+### Fix-round changed files
+
+The inventory was derived from `git diff --name-only -z d23649a6` plus
+`git ls-files --others --exclude-standard -z`, then independently re-derived
+from `git status --porcelain=v1 -z`: **9 files, zero differences**. Both routes
+include the new test and this report. No scripts, public assets, configuration
+or packaging-manifest changes are omitted.
+
+- `core/context-product-pump.mjs`
+- `core/context-product-sidecar.mjs`
+- `core/test/context-read-product-overflow-status.test.mjs`
+- `core/test/context-read-product-owner-evidence.test.mjs`
+- `core/test/context-read-product-owner.test.mjs`
+- `core/test/context-read-product-pump.test.mjs`
+- `core/test/fixtures/context-product-index-worker.mjs`
+- `core/testing/context-product-index-host.mjs`
+- `docs/plans/context-read-p2c-impl.md`

@@ -468,23 +468,31 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       const placeholders=terms.map(()=>'?').join(','),generation=publication.generation.id,ss=streams(p);
       const N=Object.values(total.byType).reduce((n,c)=>n+c.eligible,0);
       for(const term of terms)df.set(term,side.prepare('SELECT df FROM statistics WHERE generation=? AND term=?').get(generation,term)?.df??0);
-      let after='',matched=0;
-      while(true){
-        if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
-        // Stream matching identities from the generation/identity/term primary
-        // key. Retain at most one 128-row page and the winning 24 identities.
-        const rows=side.prepare(`SELECT p.identity,p.stream,p.id,d.revision,d.body_revision,d.token_length FROM postings p
-          JOIN documents d ON d.generation=p.generation AND d.stream=p.stream AND d.id=p.id
-          WHERE p.generation=? AND p.identity>? AND p.term IN (${placeholders}) AND d.eligible=1
-          GROUP BY p.identity ORDER BY p.identity LIMIT 128`).all(generation,after,...terms);
-        for(const row of rows){
-          const frequencies=new Map(side.prepare(`SELECT term,frequency FROM postings WHERE generation=? AND identity=? AND term IN (${placeholders})`).all(generation,row.identity,...terms).map(r=>[r.term,r.frequency]));
-          const score=scoreBM25(terms,{frequencies,length:row.token_length},{N,totalLength:total.totalTokenLength,df});
-          ranked.push({score,ref:{type:ss[row.stream].type,namespace:ss[row.stream].ns,
-            [ss[row.stream].type==='memory'?'memoryId':'cardId']:row.id,revision:row.revision,...(ss[row.stream].type==='card'?{bodyRevision:row.body_revision}:{})}});
-          rankScores(ranked);if(ranked.length>limit)ranked.pop();matched++;
+      let matched=0;
+      for(const term of terms) {
+        let after='';
+        while(true){
+          if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
+          // A native statement visits at most 128 postings from one term's
+          // index range. Missing terms never walk the generation's postings;
+          // eligibility and scoring happen after the bounded enumeration.
+          const rows=side.prepare(`SELECT p.identity,p.stream,p.id FROM postings p INDEXED BY product_term
+            WHERE p.generation=? AND p.term=? AND p.identity>? ORDER BY p.identity LIMIT 128`).all(generation,term,after);
+          for(const row of rows){
+            if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
+            const frequencies=new Map(side.prepare(`SELECT term,frequency FROM postings WHERE generation=? AND identity=? AND term IN (${placeholders})`).all(generation,row.identity,...terms).map(r=>[r.term,r.frequency]));
+            // Score an identity exactly once, on its first matching query term.
+            // Keep the original term order for byte-identical BM25 arithmetic.
+            if(terms.find(t=>frequencies.has(t))!==term)continue;
+            const document=side.prepare('SELECT revision,body_revision,token_length,eligible FROM documents WHERE generation=? AND stream=? AND id=?').get(generation,row.stream,row.id);
+            if(!document?.eligible)continue;
+            const score=scoreBM25(terms,{frequencies,length:document.token_length},{N,totalLength:total.totalTokenLength,df});
+            ranked.push({score,ref:{type:ss[row.stream].type,namespace:ss[row.stream].ns,
+              [ss[row.stream].type==='memory'?'memoryId':'cardId']:row.id,revision:document.revision,...(ss[row.stream].type==='card'?{bodyRevision:document.body_revision}:{})}});
+            rankScores(ranked);if(ranked.length>limit)ranked.pop();matched++;
+          }
+          if(rows.length<128)break;after=rows.at(-1).identity;
         }
-        if(rows.length<128)break;after=rows.at(-1).identity;
       }
       return {rows:ranked,matched};
     });

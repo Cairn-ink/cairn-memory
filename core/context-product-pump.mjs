@@ -7,6 +7,7 @@ import { fail } from './validation.mjs';
 import { resolve } from 'node:path';
 import { serviceIssuance } from './context-product-service.mjs';
 import { credentialDigest } from './context-product-control.mjs';
+import { canonicalJson } from './context-product-validation.mjs';
 
 const processKey=Symbol.for('context-read-product-v1.1/pumps');
 const state=()=>globalThis[processKey]??={entries:new Map(),ledgers:new Map()};
@@ -48,7 +49,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     // A configuration whose nominal round-robin sweep exceeds the required
     // five-second observation interval is invalid before any service work.
     if(projections.length*Math.max(c.pollMs,quantum.maxMs)>5000)fail('invalid_input');
-    const fingerprint=JSON.stringify(projections.map(p=>[p.options.path,p.options.readSet,p.options.ownerCoverage,p.types,p.intent,p.options.host.moduleUrl]));
+    const fingerprint=JSON.stringify(projections.map(p=>[p.options.path,p.options.readSet,canonicalJson(p.options.ownerCoverage),p.types,p.intent,p.options.host.moduleUrl]));
     const domainOf=p=>JSON.stringify([resolve(p.options.path),p.options.readSet[0].ownerId,p.options.host.moduleUrl]);
     const domains=[...new Set(projections.map(domainOf))];
     const all=state(), old=all.entries.get(c.id);

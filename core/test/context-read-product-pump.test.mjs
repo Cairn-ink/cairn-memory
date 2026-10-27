@@ -191,3 +191,26 @@ test('P2-06/09/18 active four/32 selections prebuild both intents through the pu
   }
   assert.equal(a.view[5],0);assert.equal(b.view[5],0);
 });
+
+
+test('P2c fix1 pump renewal canonicalizes coverage key order and rejects a different selection',async t=>{
+  const s=setup(t),pump=s.renew(s.c);
+  const projections=s.c.projections.map(p=>({...p,options:{...p.options,
+    ownerCoverage:Object.fromEntries(Object.entries(p.options.ownerCoverage).reverse())}}));
+  assert.equal(s.renew({...s.c,projections}),pump);
+  assert.equal(s.timers.size,1);assert.equal(s.opened.length,0);
+  const changed=projections.map(p=>{
+    const ownerCoverage={...p.options.ownerCoverage,selectionRevision:'changed'};
+    const host=p.options.host,binding=host.configuration.serviceBinding;
+    return {...p,options:{...p.options,ownerCoverage,host:{...host,configuration:{...host.configuration,
+      serviceBinding:{...binding,namespaces:{...binding.namespaces,ownerCoverage}}}}}};
+  });
+  assert.throws(()=>s.renew({...s.c,projections:changed}),{code:'read_in_progress'});
+  assert.throws(()=>s.renew({...s.c,projections:[projections[0]]}),{code:'read_in_progress'});
+  const other=projections[1],readSet=[{ownerId:'pump',scope:'project',projectId:'different-project'}];
+  const host=other.options.host,binding=host.configuration.serviceBinding;
+  const selection={...other,options:{...other.options,readSet,host:{...host,configuration:{...host.configuration,
+    serviceBinding:{...binding,namespaces:{...binding.namespaces,readSet}}}}}};
+  assert.throws(()=>s.renew({...s.c,projections:[projections[0],selection]}),{code:'read_in_progress'});
+  await pump.close();
+});

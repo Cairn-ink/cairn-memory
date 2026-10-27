@@ -156,3 +156,75 @@ for(const [change,type,generationChanged,currentCode,historyCode] of cases)for(c
   }
   assert.equal(r.view[5],0);
 });
+
+
+for(const [change,type] of [['receipt','memory'],['revision','memory'],['eligibility','memory'],['parent-move','memory'],['revision','card'],['eligibility','card']])test(`P2c fix1 P2-11 in-flight Worker assembly ${change}/${type} in namespace four`,async t=>{
+  const f=fixture(t,{cards:type==='card'}),seeded=four.map(namespace=>{
+    const memory=f.admit('assembly secret prepared '+(namespace.projectId??'personal'),namespace);
+    if(change==='parent-move')place(f,namespace,memory.id,'Original parent');
+    return {namespace,memory,c:type==='card'?card(f,namespace,'assembly Card','secret prepared Card',memory):null};
+  });
+  await prebuild(configured(t,f.path,four,{service:true}),[type]);
+  const r=configured(t,f.path,four),gate=new Int32Array(new SharedArrayBuffer(32));gate[0]=-1;
+  r.options.host.configuration.assemblyRendezvous=gate.buffer;
+  const h=await r.open(),fetch=tools(h,r).get('fetch_memory_candidate_evidence');
+  const admitted=ok(await h.contextRead(assembly(four,'current',[type]),r.token));
+  const target=seeded[3],compact=admitted.metered.items.find(i=>i.ref.id===(target.c?.id??target.memory.id)).ref;
+  assert.equal(compact.ns,3);assert.equal(admitted.metered.items.length,4);
+  const before=ok(await fetch.action(fetch.schema.parse({refs:[compact],intent:'current'})));
+  gate.fill(0);
+  const entered=Atomics.waitAsync(gate,0,0).value;
+  const operation=h.contextRead(assembly([...four].reverse(),'current',[type]),r.token);
+  let result;
+  try{
+    await Promise.race([Promise.resolve(entered),operation.then(value=>assert.fail('assembly escaped rendezvous: '+JSON.stringify(value)))]);
+    assert.equal(Atomics.load(gate,0),1);assert.ok(Atomics.load(gate,2)>0);
+    assert.equal(Atomics.load(gate,3),0,'mutation precedes final evidence read');
+    assert.equal(Atomics.load(gate,5),0,'no await has yielded inside assembly');
+    assert.equal(Atomics.load(gate,6),0,'counting holds no SQLite read transaction');
+    const epochs=f.db.prepare('SELECT * FROM namespace_epochs ORDER BY owner_id,scope,project_id').all();
+    if(change==='receipt')sqlMutation(f,'receipt',target.memory);
+    if(type==='card')sqlMutation(f,change==='revision'?'edit-current':'support',target.memory,target.c);
+    if(type==='memory'&&(change==='revision'||change==='eligibility')){
+      const child=spawnSync(process.execPath,['--input-type=module','-e',`
+        import {DatabaseSync} from 'node:sqlite';
+        const d=new DatabaseSync(process.argv[1]);d.exec('PRAGMA busy_timeout=5000');
+        d.prepare(process.argv[2]==='revision'?'UPDATE memories SET revision=revision+1 WHERE id=?':"UPDATE memories SET currentness='historical' WHERE id=?").run(process.argv[3]);d.close();
+      `,f.path,change,target.memory.id],{encoding:'utf8',env:{},timeout:30000});
+      assert.equal(child.error,undefined);assert.equal(child.signal,null);assert.equal(child.status,0,child.stderr);
+    }
+    if(change==='parent-move')place(f,target.namespace,target.memory.id,'Moved parent');
+    assert.equal(JSON.stringify(epochs)!==JSON.stringify(f.db.prepare('SELECT * FROM namespace_epochs ORDER BY owner_id,scope,project_id').all()),change==='parent-move');
+  }finally{Atomics.store(gate,1,1);Atomics.notify(gate,1);result=await operation;}
+  assert.deepEqual(result,{ok:false,error:{code:'snapshot_stale',retryable:false}});
+  assert.equal(JSON.stringify(result).includes('secret prepared'),false);
+  assert.equal(Atomics.load(gate,4),0,'no host/counter callback follows final reading');
+  await Atomics.waitAsync(gate,5,0).value;
+  assert.equal(Atomics.load(gate,5),1,'queued microtask runs only after synchronous revalidation');
+  if(change!=='parent-move')assert.ok(Atomics.load(gate,3)>0,'same-epoch mutation reaches canonical final refetch');
+  // Preserve the separate model-refetch distinctions after the assembly refusal.
+  const code={receipt:'snapshot_stale',revision:'revision_conflict',eligibility:'evidence_unavailable','parent-move':null}[change];
+  const current=await fetch.action(fetch.schema.parse({refs:[compact],intent:'current'}));
+  if(code)denied(current,code);else assert.deepEqual(ok(current).items,before.items);
+  denied(await h.fetchCandidateEvidence({readSet:four,snapshot:admitted.snapshot},r.token),code??'snapshot_stale');
+  assert.equal(r.view[5],0);
+});
+
+test('P2c fix1 P2-11 Worker final read precedes microtasks and all later host callbacks',async t=>{
+  const f=fixture(t);for(const ns of four)f.admit('assembly intact '+(ns.projectId??'personal'),ns);
+  await prebuild(configured(t,f.path,four,{service:true}),['memory']);
+  const r=configured(t,f.path,four),gate=new Int32Array(new SharedArrayBuffer(32));
+  r.options.host.configuration.assemblyRendezvous=gate.buffer;
+  const h=await r.open(),entered=Atomics.waitAsync(gate,0,0).value;
+  const operation=h.contextRead(assembly(four,'current',['memory']),r.token);
+  try{await Promise.race([Promise.resolve(entered),operation.then(()=>assert.fail('missing Worker rendezvous'))]);}
+  finally{Atomics.store(gate,1,1);Atomics.notify(gate,1);}
+  const admitted=ok(await operation);await Atomics.waitAsync(gate,5,0).value;
+  assert.equal(admitted.metered.items.length,4);assert.equal(gate[3],4);
+  assert.equal(gate[4],0);assert.equal(gate[5],1);assert.equal(gate[6],0);
+  assert.equal(gate[2],admitted.diagnostics.trace.counterCalls);
+  const ref=admitted.diagnostics.items.find(i=>i.ref.namespace.projectId===four[3].projectId).ref;
+  ok(f.core.forget({namespace:ref.namespace,memoryId:ref.memoryId,expectedRevision:ref.revision}));
+  assert.ok(admitted.metered.items.every(i=>i.body.startsWith('assembly intact')));
+  denied(await h.fetchCandidateEvidence({readSet:four,snapshot:admitted.snapshot},r.token),'snapshot_stale');
+});

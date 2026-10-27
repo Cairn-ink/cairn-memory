@@ -304,3 +304,41 @@ test('P2-09/15/18 changed selection needs matching prebuild; revision/issuance d
   await prebuild(configured(t, f.path, changed, { service: true }), ['memory']);
   assert.equal(ok(await h.findCandidates(query(changed, { types: ['memory'] }), c.token)).coverage.status, 'complete');
 });
+
+
+for(const size of [1,2,32])test(`P2c fix1 ${size}-namespace multi-term lookup uses bounded term-index pages`,t=>{
+  const f=fixture(t),readSet=selected32.slice(0,size);
+  for(let i=0;i<133;i++)f.admit('cache 東京 repeated '+i,personal);
+  for(const ns of readSet.slice(1))f.admit('cache 東京 elsewhere',ns);
+  const facade=openContextProductFacade(f.path,{}),storage=productSidecar({path:f.path,db:facade.port.db,
+    identity:facade.port.identity,features:facade.port.features,writable:true});
+  t.after(()=>{storage.close();facade.close();});
+  const p={...query(readSet,{types:['memory']}),ownerCoverage:descriptor(readSet)},access=accessDigest({ownerId:personal.ownerId,namespaces:{readSet}});
+  let publication;
+  for(let i=0;i<100;i++){
+    storage.refresh(p,access,{maxItems:1024,maxMs:5000});
+    publication=storage.observe(p,access).publication;if(publication)break;
+  }
+  assert.ok(publication,'finish the explicit prebuild before inspecting lookup plans');
+  const prepare=DatabaseSync.prototype.prepare,plans=[];
+  t.mock.method(DatabaseSync.prototype,'prepare',function(sql){
+    const stmt=prepare.call(this,sql);
+    if(!/FROM postings p\b/.test(sql))return stmt;
+    return new Proxy(stmt,{get:(target,key)=>key==='all'?((...args)=>{
+      plans.push(prepare.call(this,'EXPLAIN QUERY PLAN '+sql).all(...args).map(r=>r.detail).join('\n'));
+      assert.match(sql,/ORDER BY p.identity LIMIT 128$/);
+      const rows=target.all(...args);assert.ok(rows.length<=128);return rows;
+    }):Reflect.get(target,key,target)});
+  });
+  assert.deepEqual(storage.lexical(p,publication,'missingalpha missingbeta'),{rows:[],matched:0});
+  assert.equal(plans.length,2,'one indexed probe per missing term');
+  for(const plan of plans){
+    assert.match(plan,/USING (?:COVERING )?INDEX product_term .*generation=\? AND term=\? AND identity>\?/);
+    assert.doesNotMatch(plan,/SCAN|TEMP B-TREE/);
+  }
+  plans.length=0;
+  const both=storage.lexical(p,publication,'cache 東京'),single=storage.lexical(p,publication,'cache');
+  assert.equal(both.matched,133+size-1);assert.equal(single.matched,both.matched);
+  assert.equal(both.rows.length,24);assert.equal(new Set(both.rows.map(r=>r.ref.memoryId)).size,24);
+  for(const plan of plans)assert.match(plan,/INDEX product_term .*generation=\? AND term=\? AND identity>\?/);
+});
