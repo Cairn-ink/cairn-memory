@@ -265,3 +265,342 @@ docs/topic-overview.md
 tools/testing/fixtures/topic-member-previews-metrics.mjs
 tools/testing/measure-topic-member-previews.mjs
 ```
+
+
+## Launch measurement r3 diagnosis
+
+r3 at `4a434564` used Node 24.22.1: 144 cells, 432 warmup,
+37,282 main and 7,599 cold attempts. Its 576 decisions (including retained)
+were 259 pass / 246 inconclusive / 71 fail. This diagnosis parses the raw JSON
+with Node and runs both supplied summary scripts; it does not load the report
+into a terminal. No full measurement, setup regeneration, network access or
+commit was performed. The preregistered header, thresholds, populations and
+`topic-member-previews-v1` contract remain unchanged. Measurements below are
+observations from r3, not acceptance claims for this patch.
+
+### A. Stale seed metadata, correctly rejected by the reader
+
+The defect is in the measurement world's metadata ledger, not preview extraction
+or the physical-18 read path. `memberFixture.place()` assumed the public mutation's
+`refs` enumerated every affected MOC. In fact those refs describe the resulting
+placements. Removed parents and MOCs whose title-source memory changes filing
+revision can be bumped without appearing in `refs`. The edge-case seeding moves
+four low-ID memories into the chosen L1 and unfiles another four; unfiling can
+therefore leave the selected L1's cached revision behind its stored revision.
+`createTopicMembersStorage.target()` correctly raises `revision_conflict`.
+
+Evidence: the 3336/18/L1 slice accounts for all 4,871 recorded
+`revision_conflict` refusals (main/cold/warmup), plus 12 retained refusals. Both
+idle DELETE L1 main series have 500/500 conflicts; their cold series have
+100/100 and warmups 3/3. WAL idle main has 495 and 499 conflicts, with the
+remaining attempts timing out. Busy and timeout refusals mask the bad selection
+in concurrent DELETE records. This explains the all-load/all-limit pattern
+without a writer race. The four count/schema seeds are built independently
+with random IDs, then reused across their cells: the r3 slice is deterministic
+for that seed, not a guarantee that a new `seed(3336,18)` has the same fault.
+A fresh unmodified 3336/18 repro here happened to have cached/stored revision
+111/111 and returned 24 refs; absence on that fresh random world is not a fix.
+
+A two-memory deterministic regression unfiles an L1/root title source while leaving
+another member reachable, then reads using the fixture-derived selection.
+Before the fix its root ledger revision was 1 versus stored 2 (test exit **1**).
+After the fix the same regression exits **0**, including public preview reads
+on both physical schemas 18 and 33 and intentional stale-ref refusals.
+The fixture now refreshes its MOC revision ledger through its SQLite connection
+after placement, covering removed parents and title-source changes. The world
+builder also consumes the revision returned by `linkMocs`; the old comment
+incorrectly claimed that link did not increment endpoints (it increments the
+parent). No engine validation was weakened and no raw SQLite file descriptor
+was introduced.
+
+### B. Loop gaps: what r3 proves and what it cannot attribute
+
+The 21 main/warmup series with loop violations contain **33 affected records
+and 58 gaps**. There are another **19 gaps in five retained series**.
+There is also a harness gate omission: **30 launcher gaps across 15 cold
+records in eight cells** were recorded in `launcherLoop` but ignored by
+`summarize()`/`decide()`. The corrected gate takes the maximum and sums counts
+across both host processes. It still tests the same absolute 100 ms ceiling;
+there is no baseline subtraction or exclusion of engine-caused gaps.
+
+The table inventories every affected main/warmup record (zero-based cell and
+attempt indexes into the raw report). Times are local UTC+8 on the run date;
+all durations are ms, rounded to one decimal. `read`, `close` and `wait` are
+respectively `readFinishedAt-readStartedAt`, `finishedAt-readFinishedAt` and
+`max(writes.finishedAt,finishedAt)-finishedAt`. The latter excludes unrecorded
+IPC delivery/drain time. `n` counts gaps, not independently timestamped events.
+Sampler columns use the immediately preceding/following samples around that
+recorded interval; a long sampler interval is corroboration of disruption,
+not proof that a particular host gap has the same cause.
+
+| Cell / series / attempt | Shape: count/schema/journal/selection/limit/load | Start | max / n | read / close / writer wait | Sampler load range / longest interval s |
+| --- | --- | --- | --- | --- | --- |
+| 13/main/295 | 1112/18/DELETE/unfiled/24/same-owner | 15:35:49.266 | 867.8 / 4 | 999.1 / 2322.9 / 212.8 | 2.00–3.20 / 5 |
+| 22/main/57 | 1112/18/WAL/L1/100/same-owner | 15:42:41.379 | 430.8 / 1 | 887.3 / 0.9 / 0 | 2.44–2.56 / 5 |
+| 23/main/33 | 1112/18/WAL/L1/100/other-owner | 15:44:16.597 | 485.5 / 1 | 62 / 1.1 / 7482 | 2.11–2.26 / 5 |
+| 47/main/270 | 1112/33/DELETE/L2/100/other-owner | 16:11:38.891 | 203.2 / 1 | 203.6 / 1 / 1025.4 | 1.92–2.00 / 5 |
+| 64/main/470 | 1112/33/WAL/L2/100/same-owner | 16:29:18.130 | 196.2 / 1 | 70.1 / 1.2 / 2921.5 | 2.40–2.74 / 5 |
+| 86/main/329 | 3336/18/DELETE/unfiled/24/other-owner | 17:09:17.659 | 187.3 / 4 | 33.4 / 1.7 / 3197 | 1.96–2.04 / 7 |
+| 88/main/459 | 3336/18/DELETE/unfiled/100/same-owner | 17:14:16.914 | 198.1 / 4 | 33.7 / 1.7 / 4273.9 | 1.94–2.11 / 5 |
+| 90/main/425 | 3336/18/WAL/L1/24/idle | 17:20:48.990 | 481.7 / 1 | 1054.4 / 1.2 / 0 | 2.07–2.17 / 6 |
+| 90/main/426 | 3336/18/WAL/L1/24/idle | 17:20:50.786 | 1283.7 / 1 | 1283.7 / 0.9 / 0 | 2.07–2.08 / 5 |
+| 90/main/428 | 3336/18/WAL/L1/24/idle | 17:20:53.422 | 777.5 / 1 | 934.7 / 8.9 / 0 | 2.07–2.08 / 5 |
+| 90/main/430 | 3336/18/WAL/L1/24/idle | 17:20:55.501 | 941.6 / 1 | 998.8 / 11.6 / 0 | 2.07–2.07 / 5 |
+| 93/main/309 | 3336/18/WAL/L1/100/idle | 17:30:25.199 | 1103.7 / 1 | 1096.6 / 69 / 0 | 1.43–4.83 / 9 |
+| 93/main/310 | 3336/18/WAL/L1/100/idle | 17:30:26.610 | 165.4 / 1 | 445.9 / 2 / 0 | 4.60–4.83 / 5 |
+| 93/main/315 | 3336/18/WAL/L1/100/idle | 17:30:28.199 | 106.5 / 1 | 106.3 / 1.4 / 0 | 4.60–4.83 / 5 |
+| 94/main/94 | 3336/18/WAL/L1/100/same-owner | 17:32:17.056 | 279.9 / 2 | 35.8 / 3.7 / 2164.5 | 2.33–2.36 / 5 |
+| 94/main/95 | 3336/18/WAL/L1/100/same-owner | 17:32:20.881 | 1337.3 / 1 | 999.3 / 18.9 / 52.1 | 2.33–2.39 / 5 |
+| 95/main/29 | 3336/18/WAL/L1/100/other-owner | 17:35:16.963 | 387.6 / 4 | 262.4 / 81.6 / 2435.8 | 2.08–2.09 / 5 |
+| 95/main/387 | 3336/18/WAL/L1/100/other-owner | 17:37:47.210 | 1389.1 / 1 | 171.9 / 1.8 / 2636.9 | 2.05–2.51 / 5 |
+| 106/main/44 | 3336/18/WAL/unfiled/100/same-owner | 17:49:15.715 | 7751.4 / 2 | 189.8 / 1.1 / 15139.9 | 2.16–5.90 / 10 |
+| 106/main/45 | 3336/18/WAL/unfiled/100/same-owner | 17:49:32.538 | 202.7 / 2 | 301.8 / 1.1 / 9021.1 | 3.71–5.90 / 10 |
+| 106/main/46 | 3336/18/WAL/unfiled/100/same-owner | 17:49:47.601 | 1003.6 / 1 | 998.7 / 15769.9 / 1916 | 5.10–8.94 / 11 |
+| 106/main/47 | 3336/18/WAL/unfiled/100/same-owner | 17:50:07.590 | 6046.6 / 2 | 6044.4 / 2556.5 / 19.1 | 8.94–10.31 / 6 |
+| 106/main/48 | 3336/18/WAL/unfiled/100/same-owner | 17:50:16.523 | 1606.6 / 4 | 2411.7 / 3700.6 / 174.9 | 9.88–10.31 / 6 |
+| 112/main/385 | 3336/33/DELETE/L1/100/same-owner | 18:11:19.266 | 106.2 / 1 | 193.2 / 1.6 / 187.6 | 4.31–4.42 / 5 |
+| 115/main/432 | 3336/33/DELETE/L2/24/same-owner | 18:20:59.874 | 258.3 / 1 | 435.2 / 1.7 / 27435.5 | 4.20–8.27 / 9 |
+| 118/main/470 | 3336/33/DELETE/L2/100/same-owner | 18:32:35.489 | 134.4 / 1 | 291.7 / 1.8 / 194.7 | 3.08–3.40 / 6 |
+| 121/main/31 | 3336/33/DELETE/unfiled/24/same-owner | 18:39:18.346 | 357.7 / 4 | 287 / 2 / 3653.5 | 3.32–3.37 / 6 |
+| 121/main/174 | 3336/33/DELETE/unfiled/24/same-owner | 18:40:50.546 | 921 / 1 | 999.7 / 30.5 / 192 | 3.75–3.81 / 6 |
+| 122/main/273 | 3336/33/DELETE/unfiled/24/other-owner | 18:46:17.584 | 505.2 / 4 | 34.6 / 1.6 / 4304.3 | 2.15–2.25 / 5 |
+| 124/main/142 | 3336/33/DELETE/unfiled/100/same-owner | 18:50:35.897 | 117.3 / 1 | 50.2 / 5.5 / 2895.8 | 4.51–4.67 / 5 |
+| 130/main/72 | 3336/33/WAL/L1/100/same-owner | 19:01:34.998 | 474.5 / 1 | 1472.2 / 4 / 1566.5 | 3.58–4.02 / 6 |
+| 142/main/34 | 3336/33/WAL/unfiled/100/same-owner | 19:11:34.471 | 1232.3 / 1 | 2229.8 / 4 / 507.7 | 2.58–2.69 / 5 |
+| 143/warmups/0 | 3336/33/WAL/unfiled/100/other-owner | 19:12:15.512 | 184.8 / 1 | 277.3 / 7.5 / 78.4 | 3.60–3.63 / 5 |
+
+**Phase attribution bounds:** in 12 of these 33 records the largest gap exceeds
+the entire read-plus-close duration, so it cannot be contained in page reading,
+decoding or close. For example cell 23/main/33 reads/closes in 63.1 ms but has
+a 485.5 ms gap while waiting 7,482 ms for its writer; cell 64/main/470 reads/closes
+in 71.3 ms but has a 196.2 ms gap and a 2,921.5 ms writer wait. Cell
+106/main/44 finishes its read in 189.8 ms and closes in 1.1 ms; its 7,751.4 ms
+maximum belongs outside that completed lifecycle, within the observation that
+continues through a 15,139.9 ms writer wait/IPC drain. It is not a seven-second
+preview conversion. The succeeding records show multi-second read/close delays
+as well; their individual gaps cannot be assigned to one phase from aggregates.
+
+**Machine evidence:** the 2,702 load samples include 17 intervals longer than
+six seconds (maximum 11 s), not a uniformly quiet sampler. Around cell 106's
+worst records the sampler skips 17:49:25 -> 17:49:35 and 17:49:50 -> 17:50:01;
+the one-minute load rises from 2.16 at 17:49:15 to 10.31 at 17:50:12.
+A separate process's skipped samples support a machine disruption, but do not
+prove a specific scheduler, disk or GC cause. Cell 93/main/309 also coincides
+with the 17:30:17 -> 17:30:26 sampler gap and load rising 1.43 -> 4.83.
+For the L1 failure cluster at 17:20:48–56, the sampler continues at 5–6 s with
+load about 2.07–2.17; there is no corresponding multi-second sampler outage.
+For cells 94 and 95 it likewise remains near 2.1–2.5. Those gaps remain
+unattributed; low aggregate load does not establish host-thread health.
+The low loads and regular samples in many smaller cases are recorded alongside
+their bounds above, not treated as proof of an engine cause.
+
+Retained inventory below includes conservative wall-clock bounds between the
+last cold record's `finishedAt` and the next cell's first warmup `startedAt`.
+Those bounds also include cold writer completion/child exit, setup and report
+work. r3 did not timestamp retained pages, replay or validation.
+
+| Cell / shape | Window UTC+8 | maximum / gaps | total traversal / slowest timed read |
+| --- | --- | --- | --- |
+| 100 / 3336/18/WAL/L2/100/same-owner | 17:44:31.619–17:44:33.560 | 113.9 / 1 | 544.7 / 97.3 |
+| 106 / 3336/18/WAL/unfiled/100/same-owner | 17:53:43.784–17:53:49.785 | 768.2 / 7 | 3713.1 / 182.8 |
+| 115 / 3336/33/DELETE/L2/24/same-owner | 18:23:29.939–18:23:33.941 | 141.0 / 7 | 1386.8 / 68.5 |
+| 116 / 3336/33/DELETE/L2/24/other-owner | 18:28:20.441–18:28:23.201 | 112.1 / 2 | 813.1 / 63.0 |
+| 119 / 3336/33/DELETE/L2/100/other-owner | 18:38:41.410–18:38:43.901 | 149.4 / 2 | 910.3 / 155.0 |
+
+The retained maxima in the first four rows exceed every timed page read, so
+validation, replay, observation drain or a gap crossing phase boundaries must
+also be considered. The sampler has no >6 s gap in these retained windows;
+nearby one-minute load is roughly 2.6, 3.5, 6.8, 3.3 and 3.5 respectively. It cannot resolve
+100–768 ms pauses. Cold launcher inventory (cell/attempt: maximum, gap count):
+47/64:179.8,1; 49/65:302.4,1; 75/23:5348.6,1; 79/14:789.2,1;
+86/0:139.4,1; 86/5:2278.5,7; 86/6:6097.6,1; 86/7:1273.8,2;
+86/8:296.1,5; 86/9:1451.4,5; 86/32:105.7,1; 86/33:1697.2,1;
+92/25:1342.0,1; 95/48:854.1,1; 119/63:138.0,1. All of those cold child
+`hostLoop` maxima are below 4 ms. These gaps belong to the measuring launcher,
+not the child's page decoding; the old report has no launcher event timestamps.
+
+**Harness defect and fix:** the old `save()` synchronously stringified and
+rewrote the entire growing report after every attempt, while retaining all
+45,313 raw attempts and writer histories. Direct save time is outside the
+attempt heartbeat, so it cannot honestly be assigned as any particular r3 gap;
+its allocation/GC and disk pressure are credible confounders. The tool now
+appends each attempt once to a numeric `.records.jsonl` journal, asynchronously
+streams completed cells into `.partial`, releases their raw records and atomically
+renames the completed JSON. Only the current cell and compact decisions remain
+in memory. The final JSON retains its existing fields, so the supplied parsers
+still work. While running, the registered report is static; the journal and
+partial stream carry progress. The journal is intentionally retained after
+completion and may be removed with the report. An interrupted partial JSON is
+not an acceptance result. Journal data is sanitized numeric metadata, never
+preview text or IDs from pages. Reusing one host Segmenter and counting segments
+without allocating arrays also removes avoidable validation allocations.
+
+The heartbeat still starts before public handle construction and drains after
+awaited close and writer IPC; retained validation/replay remains observed.
+Instrumentation now records every >100 ms gap's start/end and phase boundaries,
+retained timestamps, host Worker-message handling spans, and bounded per-request
+SQLite call totals/longest-call diagnostics (fixed stage/category plus numbers,
+no SQL/parameters). No failed or slow engine attempt is discarded. Tests use an
+injected clock to verify exact absolute gaps and cold-launcher failure precedence;
+a sink roundtrip verifies raw journal records and final report schema. The
+public instrumentation test checks message spans and SQLite metrics.
+
+**Attribution limit:** r3 has only `hostLoop.maxMs` and `blocksOver100`, not
+per-gap timestamps, CPU profiles, GC events or native wait durations. It is
+impossible to attribute each of its individual 107 recorded gaps (58 + 19 + 30)
+to a specific function or machine event retrospectively. The inventory above
+accounts for every affected record and states the phase bounds the data allows.
+No engine host-thread defect was demonstrated: preview decoding is bounded by
+the 65,536-byte envelope, and several large L1 gaps happen on text-free
+`revision_conflict`/timeout responses. That does not prove the engine free of
+pauses. The added diagnostics are needed on the primary's next quiet run to
+resolve the remaining cases; no launch pass is inferred here.
+
+### C. WAL same-owner latency and the gated population
+
+| 1112 main cell | Successful overlapping pages / attempts | stale refusals | p95 / max ms |
+| --- | --- | --- | --- |
+| s18 L1/24 (19) | 21/500 | 479 | 404.4 / 425.7 |
+| s18 unfiled/24 (31) | 20/500 | 480 | 289.5 / 361.3 |
+| s33 unfiled/24 (67) | 50/51 | 1 | 504.2 / 586.8 |
+| s33 L2/100 (64), report-only latency | 14/500 | 486 | 851.6 / 851.6 |
+
+The first two populations fall below the required 50 successes; their observed
+p95/max violations nevertheless have failure precedence. The 851.6 ms value
+is limit100 **report only**, not a 150 ms latency-gate failure. For cell 25
+(s18 L2/24), just 4/500 pages succeed and p95 is 67.2 ms; a small population
+does not automatically fail latency. Nearest-rank p95 uses the 20th of 21,
+19th of 20 and maximum of 14 respectively, so a few slow successes matter.
+Fast stale refusals must not dilute that population. Repeated fresh-handle
+requests can still become stale across a request's yielded snapshot fences;
+committed same-owner actual-call overlap explains them. The protocol is
+behaving as registered: record all attempts, replace missed overlaps, stop
+at the ceiling, and leave a sample shortage inconclusive unless a hard check
+already fails. It does not guarantee 50 successes under continuous mutation.
+
+The tails are in the awaited read, not host decoding/close or the subsequent
+writer stop: at cell 19's p95, read is 403.4 ms and close 1.0 ms, with loop
+maximum 2.0 ms; cell 31's p95 is 288.5 ms read / 1.0 ms close / 2.4 ms loop;
+cell 64's maximum is 850.3 ms read / 1.3 ms close / 2.0 ms loop. At those
+points the writer's actual call ends 564.6, 982.8 and 1214.0 ms after the
+request starts, respectively, **after the page was returned**. Thus these
+particular tails cannot be explained by waiting for that writer's final
+`core.close()`. They also cannot be explained by post-read writer IPC, which
+is not in `elapsedMs`. Cell 67's max spans seven actual writer calls and
+several closes; a bounded closing-writer wait remains possible there.
+
+The existing E1-C2 v1.1 policy is a request-wide absolute cutoff of
+`min(deadlineAt, workerNow+1000)-20` ms, not 100 ms and not a retry/reset per
+statement. Worker startup already consumes the request deadline. The harness's
+old `PROTOCOL.lockPolicy` string incorrectly said 100 ms; only that description
+is corrected, with no runtime policy or latency/loop threshold change. A
+289–851 ms read is compatible with the actual bound, but compatibility is
+not evidence of a native wait. Successful reads also include Worker startup,
+schema validation, synchronous SQLite execution/I/O and all preview quanta.
+r3 records none of their timings, so a definitive split between native wait,
+Worker scheduling, filesystem delays and compute is unavailable. The new
+numeric SQLite longest-call/totals and host spans make that distinction
+reviewable in the next run. Do not label every tail a closing-writer wait or
+claim the harness fix has made latency pass.
+
+### D. What makes the inconclusive checks conclusive
+
+* `reviewDeadline` is null in **288/288 checks where present**; idle and retained
+  series do not have that check. The supplied writer profile has `reviewMs:null`.
+  The check needs a real, unchanged product profile with an actual finite review
+  deadline and observed review calls. A number invented for the benchmark, or
+  the informational 5,000 ms comparison, would not supply that evidence. If the
+  product intentionally has no review deadline, this launch check remains
+  inconclusive by design; removing it requires a separately reviewed protocol,
+  not a threshold edit in this patch.
+* “DELETE cells have no gated population” is false universally. Of 72 DELETE
+  cells, **37 main and 42 cold** have zero gated pages; **35 and 30** have some.
+  The 24 idle cells have no busy refusals, and only two have no population (the
+  bad L1 seed). Concurrent DELETE main has 23,839 busy refusals / 24,000 attempts
+  (99.33%); cold has 4,776 / 4,800 (99.50%). DELETE busy has no rate gate, but
+  missing successes remain missing evidence. Each main/cold series needs
+  >=50/>=10 successful progressing pages within its fixed 500/100 ceiling;
+  concurrent pages must overlap actual writer calls. It also needs all the
+  other checks, writer commits and real deadlines. Busy-only output cannot be
+  made conclusive by counting refusals as fast pages or by increasing ceilings.
+* `edgeCaseCoverage` is null in **128 series**: 32 main, 35 cold and 61 warmup.
+  It is true only when all four numeric extraction counters are positive in
+  that series. That requires the four reachable seeded content cases, matching
+  `sourceCases` instrumentation, valid selection revisions and reads that get
+  far enough to extract each case. Busy/conflict-only attempts cannot prove
+  coverage. The seed fix removes one obstruction; unchanged three warmups can
+  still all be busy. A zero mismatch count alone does not prove coverage.
+  This check has no boolean-false case: missing extraction evidence is null;
+  nonzero `edgeCaseMismatches` separately fails `edgeCaseConsistency`.
+
+### Verification and delivery
+
+Verification results and mechanically cross-checked delivery list follow below.
+
+| Verification | Actual exit code / result |
+| --- | --- |
+| Both supplied r3 summary scripts | 0 each; 144 cells, 576 decisions |
+| Final two-memory regression with the original fixture helper temporarily restored, Node 24.22.1 | 1 as expected; root ledger 1 != stored 2; fixed helper restored in `finally` |
+| Initial corrected regression, Node 24.22.1 | 0 |
+| Instrumentation/measurement tests, Node 24.22.1, intermediate run | 0; 15/15 |
+| 28 explicit target files below, Node 22.16.0 | 0; 357/357 |
+| Same 28 explicit target files, Node 24.22.1 | 0; 357/357 |
+| One `--smoke`, Node 24.22.1, exact supplied writer profile | 0; six cells, 35 attempts, 35 journal records; all six retained traversals pass; observed attempt loop maximum 2.70 ms; observational only |
+| Both supplied summary parsers on the new smoke JSON | 0 each; streaming output remains readable |
+| Final measurement + installed tests after the two-schema regression and diagnostics, Node 22.16.0 | 0; 16/16 |
+| Same final two files, Node 24.22.1 | 0; 16/16 |
+| Harness and preload syntax checks, both runtimes | 0 each |
+| Whitespace/newline/added-path scan, header/threshold byte comparison, two-route file inventory, `git diff --check` | 0 each; six changed files |
+
+The 28-file commands invoke `tools/testing/run.mjs --test-concurrency=1` using
+the actual nvm binary for each version and these explicit arguments. Scratch
+for the matrix and smoke was an owned temporary directory on memory-backed
+storage, removed after each command. This is functional verification, not a
+replacement for the primary's quiet-machine launch measurement.
+
+```text
+core/test/topic-member-previews-bounds.test.mjs
+core/test/topic-member-previews-compatibility.test.mjs
+core/test/topic-member-previews-installed.test.mjs
+core/test/topic-member-previews-measurement.test.mjs
+core/test/topic-member-previews-mutations.test.mjs
+core/test/topic-member-previews-scale.test.mjs
+core/test/topic-member-previews-text.test.mjs
+core/test/topic-member-previews-visibility.test.mjs
+core/test/topic-member-previews.test.mjs
+core/test/topic-members-bounds.test.mjs
+core/test/topic-members-compatibility.test.mjs
+core/test/topic-members-integration.test.mjs
+core/test/topic-members-mutations.test.mjs
+core/test/topic-members-primary.test.mjs
+core/test/topic-members-recheck-findings.test.mjs
+core/test/topic-members-review-findings.test.mjs
+core/test/topic-members-round3-findings.test.mjs
+core/test/topic-members-scale.test.mjs
+core/test/topic-members-visibility.test.mjs
+core/test/topic-members.test.mjs
+core/test/topic-overview-lifecycle.test.mjs
+core/test/topic-overview-raw29.test.mjs
+core/test/topic-overview-visibility.test.mjs
+core/test/topic-overview.test.mjs
+core/test/topic-reader-cancellation.test.mjs
+core/test/topic-reader-sqlite.test.mjs
+core/test/no-raw-db-fd.test.mjs
+core/test/sqlite-lock-safety.test.mjs
+```
+
+The final delivery list is **6 files**, derived from `git diff --name-only`
+and independently from HEAD blob IDs versus hashes of every tracked working
+file (`git ls-files --stage` + `git hash-object --stdin-paths`); the two sorted
+lists are identical. The untracked-file inventory was also checked after
+removing owned diagnostic scratch. No new runtime module or shipped document
+was added, so the artifact manifest needs no change.
+
+```text
+core/test/topic-member-previews-measurement.test.mjs
+core/testing/topic-members-fixture.mjs
+core/testing/topic-members-world.mjs
+docs/plans/topic-member-previews-impl.md
+tools/testing/fixtures/topic-member-previews-metrics.mjs
+tools/testing/measure-topic-member-previews.mjs
+```

@@ -32,8 +32,9 @@
  */
 import assert from 'node:assert/strict';
 import { fork } from 'node:child_process';
-import { copyFileSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { join, resolve, dirname } from 'node:path';
+import { copyFileSync, readFileSync } from 'node:fs';
+import { open, rename, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -49,7 +50,7 @@ export const PROTOCOL = Object.freeze({ version: 'topic-member-previews-v1', run
   writerCadenceMs: 20, reviewInformation: { comparisonMs: 5000, label: 'not a deadline', acceptanceGate: false }, thresholds: { 1112: { p95Ms: 150, maxMs: 400, coldP95Ms: 600 },
     3336: { p95Ms: 250, maxMs: 600 }, loopMaximumMs: 100, walBusy: 0 },
   defaultCaps: { workLimit: 5000, maxBytes: 65536, deadlineMs: 1000 },
-  lockPolicy: 'E1-C2 request-wide WAL native wait100ms capped by deadline; DELETE0; no retries',
+  lockPolicy: 'E1-C2 v1.1 request-wide WAL cutoff1000ms capped by deadline with20ms reply reserve; DELETE0; no traversal retries',
   cloneAccounting: 'P1 transfers a UTF-8 ArrayBuffer, so observed transfer payload bytes equal JSON envelope bytes; v8.serialize DTO bytes are separately informational; native framing is excluded',
   loopObservation: '1ms heartbeat bracketed by setImmediate before construction and after awaited close, plus final timer drain; idle baseline100ms; no noise subtraction',
   coldTopology: 'fresh Node subprocess -> public host handle -> actual reader Worker; target DB never opened/primed before sample; outer process launch reported separately',
@@ -63,6 +64,15 @@ export function buildPlan(smoke) {
 }
 const previewReasons = ['empty','trimmed_prefix_empty','content_limit','invalid_text','grapheme_too_large','segmenter_unavailable'];
 const timestamp = () => performance.timeOrigin + performance.now();
+let boundSegmenter;
+function previewFits(row) {
+  if (row.preview.status !== 'available') return true;
+  if (Buffer.byteLength(row.preview.text) > 1024) return false;
+  boundSegmenter ??= new Intl.Segmenter('und', { granularity: 'grapheme' });
+  let count = 0;
+  for (const part of boundSegmenter.segment(row.preview.text)) if (++count > 72) return false;
+  return true;
+}
 const failureCodes = new Set(['measurement_failed','replay_mismatch','membership_mismatch','fixture_invalid',
   'invalid_writer_profile','child_failed','writer_failed','invalid_input','invalid_cursor','cursor_stale',
   'storage_busy','read_timeout','reader_failed','store_closed','read_in_progress','unsupported_database',
@@ -106,21 +116,30 @@ export function writerProfileInput(value) {
   return { captureMs: value.captureMs, reviewMs: value.reviewMs, provenance: value.provenance };
 }
 const unwrap = result => { if (!result.ok) throw measurementError(safeFailure(result.error).code); return result.value; };
-function observeLoop() {
-  let last = performance.now(), maxMs = 0, blocksOver100 = 0;
-  const sample = () => { const time = performance.now(), gap = time - last; maxMs = Math.max(maxMs, gap); if (gap > 100) blocksOver100++; last = time; };
+export function observeLoop({ now = () => performance.now(), epoch = performance.timeOrigin } = {}) {
+  let last = now(), maxMs = 0, blocksOver100 = 0, phase = 'construction', lastPhase = phase;
+  const blocks = [], phases = [{ phase, at: epoch + last }];
+  const sample = () => { const time = now(), gap = time - last; maxMs = Math.max(maxMs, gap);
+    if (gap > 100) { blocksOver100++; blocks.push({ startedAt: epoch + last, finishedAt: epoch + time, gapMs: gap, phaseStart: lastPhase, phaseEnd: phase }); }
+    last = time; lastPhase = phase; };
   const timer = setInterval(sample, 1);
   let completion;
-  return { finish() { return completion ??= (async () => {
+  return { sample, phase(value) { phase = value; phases.push({ phase, at: epoch + now() }); }, finish() { return completion ??= (async () => {
     try {
       await new Promise(r => setImmediate(r)); await delay(2); sample();
-      return { maxMs, blocksOver100 };
+      return { maxMs, blocksOver100, blocks, phases, startedAt: phases[0].at, finishedAt: epoch + last };
     } finally { clearInterval(timer); }
   })(); } };
 }
 function instrumentWorkers(sourceCases = {}) {
-  const Native = threads.Worker, ports = [], metrics = [], transportBytes = [];
+  const Native = threads.Worker, ports = [], metrics = [], transportBytes = [], hostMessages = [];
   threads.Worker = class extends Native {
+    emit(event, ...args) {
+      if (event !== 'message') return super.emit(event, ...args);
+      const startedAt = timestamp(), started = performance.now();
+      try { return super.emit(event, ...args); }
+      finally { hostMessages.push({ startedAt, finishedAt: timestamp(), elapsedMs: performance.now() - started }); }
+    }
     constructor(url, options) {
       const { port1, port2 } = new MessageChannel(); ports.push(port1); port1.on('message', m => metrics.push(m));
       super(url, { ...options, workerData: { ...options.workerData, previewMetricsPort: port2, previewSourceCases: sourceCases }, transferList: [port2],
@@ -129,7 +148,7 @@ function instrumentWorkers(sourceCases = {}) {
     }
   };
   syncBuiltinESMExports();
-  return { metrics, transportBytes, close() { ports.forEach(p => p.close()); threads.Worker = Native; syncBuiltinESMExports(); } };
+  return { metrics, transportBytes, hostMessages, close() { ports.forEach(p => p.close()); threads.Worker = Native; syncBuiltinESMExports(); } };
 }
 export async function attempt(config, writer) {
   const { openMemoryReader } = await import('../../core/memory-reader.mjs');
@@ -140,25 +159,27 @@ export async function attempt(config, writer) {
     const startedAt = timestamp(), started = performance.now();
     try {
       reader = openMemoryReader({ path: config.path, ownerId: config.namespace.ownerId, diagnostics: true });
+      loop.phase('read');
       readStartedAt = timestamp();
       const pending = reader.readTopicMembers(config.input);
       if (writer) writer.send({ type: 'start' });
       result = await pending; readFinishedAt = timestamp();
-    } finally { await reader?.close(); reader = undefined; }
+    } finally { loop.phase('close'); await reader?.close(); reader = undefined; }
     const finishedAt = timestamp(), elapsedMs = performance.now() - started;
-    if (writer) { writer.send({ type: 'stop' }); writerResult = await writer.wait('stopped'); }
+    if (writer) { loop.phase('writer-stop-ipc'); writer.send({ type: 'stop' }); writerResult = await writer.wait('stopped'); }
+    loop.phase('drain');
     const hostLoop = await loop.finish();
     const bytes = Buffer.byteLength(JSON.stringify(result)), cloneRepresentationBytes = serialize(result).byteLength;
     const page = result.ok ? result.value : null;
     const reasons = Object.fromEntries(previewReasons.map(reason => [reason, 0])); let previewBounds = true;
     if (page) for (const row of page.items) {
       if (row.preview.status === 'unavailable') reasons[row.preview.reason] = (reasons[row.preview.reason] ?? 0) + 1;
-      else previewBounds &&= Buffer.byteLength(row.preview.text) <= 1024 && Array.from(new Intl.Segmenter('und', { granularity: 'grapheme' }).segment(row.preview.text)).length <= 72;
+      else previewBounds &&= previewFits(row);
     }
     const writes = writerResult?.calls ?? [];
     const overlap = !writer || writes.some(w => w.writeStartedAt < readFinishedAt && readStartedAt < w.writeFinishedAt);
     const counters = observation.metrics.at(-1) ?? null;
-    return { startedAt, finishedAt, readStartedAt, readFinishedAt, elapsedMs, hostLoop, bytes, cloneRepresentationBytes,
+    return { startedAt, finishedAt, readStartedAt, readFinishedAt, elapsedMs, hostLoop, hostMessages: observation.hostMessages, bytes, cloneRepresentationBytes,
       actualTransportPayloadBytes: observation.transportBytes.at(-1) ?? 0, transportFramingBytes: null, refs: page?.items.length ?? 0, status: page?.status ?? null,
       coverage: page?.coverage ?? null, failure: result.ok ? null : safeFailure(result.error), reasons, counters, writes,
       overlap, successfulPage: Boolean(page && (page.status === 'page' || page.items.length || page.nextCursor)),
@@ -205,7 +226,7 @@ export async function coldAttempt(config, { spawn = actor } = {}) {
   const outer = performance.now(), processLoop = observeLoop();
   let child, record;
   try {
-    child = spawn(['--cold', JSON.stringify(config)]);
+    processLoop.phase('child-launch-and-ipc'); child = spawn(['--cold', JSON.stringify(config)]);
     const message = await child.wait('result'), exit = await child.exited;
     assert.equal(exit.code, 0); assert.equal(exit.signal, null);
     record = { ...message.record, processExit: exit, outerProcessLaunchAndSampleMs: performance.now() - outer };
@@ -291,8 +312,8 @@ function summarize(records, cell) {
     sqliteBusy: records.filter(r => [5,6].includes(r.failure?.diagnostics?.sqlite?.code)).length,
     allAttempts: latency(records.map(r => r.elapsedMs)), successfulPopulation: latency(successes.map(r => r.elapsedMs)), gatedPopulation: latency(gated.map(r => r.elapsedMs)),
     envelopeBytes: latency(records.map(r => r.bytes)), actualTransportPayloadBytes: latency(records.map(r => r.actualTransportPayloadBytes)), cloneRepresentationBytes: latency(records.map(r => r.cloneRepresentationBytes)),
-    hostLoopMaximumMs: Math.max(0, ...records.map(r => r.hostLoop.maxMs)),
-    blocksOver100: records.reduce((n, r) => n + r.hostLoop.blocksOver100, 0), missedOverlaps: records.filter(r => !r.overlap).length,
+    hostLoopMaximumMs: Math.max(0, ...records.flatMap(r => [r.hostLoop.maxMs, r.launcherLoop?.maxMs ?? 0])),
+    blocksOver100: records.reduce((n, r) => n + r.hostLoop.blocksOver100 + (r.launcherLoop?.blocksOver100 ?? 0), 0), missedOverlaps: records.filter(r => !r.overlap).length,
     writers: Object.fromEntries(['capture','review'].map(op => {
       const calls = records.flatMap(r => r.writes).filter(w => w.operation === op);
       return [op, { attempts: calls.length, commits: calls.reduce((n,c) => n+c.commits, 0),
@@ -399,17 +420,18 @@ async function retainedTraversal(config, fixture) {
   } finally { db.close(); }
   expected.sort((a,b) => Buffer.compare(Buffer.from(a),Buffer.from(b)));
   const observation = instrumentWorkers(config.sourceCases);
-  const reader = openMemoryReader({ path: config.path, ownerId: config.namespace.ownerId }), loop = observeLoop();
-  const records = [], ids = [], start = performance.now(); let cursor, previousInput, previousOutput;
+  const loop = observeLoop(), reader = openMemoryReader({ path: config.path, ownerId: config.namespace.ownerId });
+  const records = [], ids = [], startedAt = timestamp(), start = performance.now(); let cursor, previousInput, previousOutput;
   try {
     do {
+      loop.phase('retained-read');
       const input = { ...config.input, ...(cursor ? { cursor } : {}) }, before = performance.now();
       const output = await reader.readTopicMembers(input), elapsedMs = performance.now() - before;
-      if (!output.ok) return { informational: true, complete: false, failure: safeFailure(output.error), records, elapsedMs: performance.now() - start };
+      if (!output.ok) return { informational: true, complete: false, failure: safeFailure(output.error), records, elapsedMs: performance.now() - start, startedAt, finishedAt: timestamp() };
       await new Promise(r => setImmediate(r));
+      loop.phase('retained-validation');
       const counters = observation.metrics.at(-1) ?? null;
-      const previewBounds = output.value.items.every(r => r.preview.status !== 'available' ||
-        (Buffer.byteLength(r.preview.text) <= 1024 && Array.from(new Intl.Segmenter('und', { granularity: 'grapheme' }).segment(r.preview.text)).length <= 72));
+      const previewBounds = output.value.items.every(previewFits);
       records.push({ elapsedMs, bytes: Buffer.byteLength(JSON.stringify(output)),
         actualTransportPayloadBytes: observation.transportBytes.at(-1), counters,
         resourceBounds: previewBounds && counters !== null && counters.extractions <= config.cell.limit &&
@@ -419,14 +441,53 @@ async function retainedTraversal(config, fixture) {
       ids.push(...output.value.items.map(r => r.id)); cursor = output.value.nextCursor;
       previousInput = input; previousOutput = output;
     } while (cursor);
+    loop.phase('retained-membership');
     if (JSON.stringify(ids) !== JSON.stringify(expected)) throw measurementError('membership_mismatch', { actualCount: ids.length, expectedCount: expected.length });
+    loop.phase('retained-replay');
     if (previousInput.cursor) assertReplay(await reader.readTopicMembers(previousInput), previousOutput);
     return { informational: true, complete: true, exactEof: true, expectedRefs: expected.length, emittedRefs: ids.length,
+      startedAt, finishedAt: timestamp(), hostMessages: observation.hostMessages,
       lifecycleLatency: { ...latency(records.map(r => r.elapsedMs)), totalMs: performance.now() - start }, records };
   } finally {
+    loop.phase('retained-close');
     try { await reader.close(); }
     finally { try { config.retainedLoop = await loop.finish(); } finally { observation.close(); } }
   }
+}
+// Append each raw attempt once. Only the current cell remains in memory; the
+// numeric journal survives interruption, and the final JSON keeps its schema.
+// Report serialization/I/O runs between observations, never pauses a live gate.
+export async function createReportSink(path) {
+  const output = await open(path + '.partial', 'w', 0o600);
+  let journal;
+  try {
+    journal = await open(path + '.records.jsonl', 'w', 0o600);
+    await output.writeFile('{"cells":[');
+  } catch (error) { try { await output.close(); } finally { await journal?.close(); } throw error; }
+  let cells = 0;
+  return {
+    async record(cell, series, record) { await journal.writeFile(JSON.stringify({ cell, series, record }) + '\n'); },
+    async cell(entry) {
+      // Serialize attempt records separately, rather than a growing report.
+      await output.writeFile(cells++ ? ',{' : '{');
+      let fields = 0;
+      for (const [key, value] of Object.entries(entry)) {
+        await output.writeFile((fields++ ? ',' : '') + JSON.stringify(key) + ':');
+        if (['warmups','main','cold'].includes(key)) {
+          await output.writeFile('[');
+          for (const [i, record] of value.entries()) await output.writeFile((i ? ',' : '') + JSON.stringify(record));
+          await output.writeFile(']');
+        } else await output.writeFile(JSON.stringify(value));
+      }
+      await output.writeFile('}');
+    },
+    async finish(report) {
+      const { cells: ignored, ...metadata } = report;
+      try { await output.writeFile('],' + JSON.stringify(metadata).slice(1) + '\n'); }
+      finally { try { await output.close(); } finally { await journal.close(); } }
+      await rename(path + '.partial', path);
+    },
+  };
 }
 async function run(args) {
   let smoke = false, plan = false, reportPath = resolve('topic-member-previews-report.json'), writerProfile;
@@ -440,10 +501,12 @@ async function run(args) {
   }
   const report = { protocol: PROTOCOL, registeredAt: new Date().toISOString(), node: process.version, smoke, writerProfile: writerProfile ?? null,
     plan: buildPlan(smoke), cells: [], status: 'registered' };
-  const save = () => { writeFileSync(reportPath + '.partial', JSON.stringify(report, null, 2) + '\n', { mode: 0o600 }); renameSync(reportPath + '.partial', reportPath); };
-  save(); if (plan) return report;
+  await writeFile(reportPath, JSON.stringify(report) + '\n', { mode: 0o600 });
+  if (plan) return report;
   const workspace = createTestWorkspace(null, { prefix: 'cairn-preview-measure-' }), seeds = new Map();
+  let sink;
   try {
+    sink = await createReportSink(reportPath);
     const idleLoop = observeLoop();
     try { await delay(100); }
     finally { report.idleBaseline = await idleLoop.finish(); }
@@ -459,15 +522,19 @@ async function run(args) {
       const config = { cell, path, namespace: fixture.namespace, input, writerProfile, sourceCases: fixture.sourceCases };
       let writer;
       const entry = { cell, fixture: { ...fixture.physical, ledgerShape: fixture.ledgerShape }, warmups: [], main: [], cold: [] };
-      report.cells.push(entry); save();
+      report.cells.push(entry);
+      const sample = async (series, read) => {
+        const record = await read();
+        entry[series].push(record); await sink.record(i, series, record);
+      };
       try {
         if (cell.load !== 'idle') { writer = actor(['--writer', JSON.stringify(config)]); await writer.wait('ready'); }
-        for (let n = 0; n < 3; n++) { entry.warmups.push(await attempt(config, writer)); save(); }
+        for (let n = 0; n < 3; n++) await sample('warmups', () => attempt(config, writer));
         const target = smoke ? 1 : 50, ceiling = smoke ? 3 : 500;
-        while (entry.main.filter(r => r.successfulPage && r.overlap).length < target && entry.main.length < ceiling) { entry.main.push(await attempt(config, writer)); save(); }
+        while (entry.main.filter(r => r.successfulPage && r.overlap).length < target && entry.main.length < ceiling) await sample('main', () => attempt(config, writer));
         const coldTarget = smoke ? 1 : 10, coldCeiling = smoke ? 3 : 100;
         while (entry.cold.filter(r => r.successfulPage && r.overlap).length < coldTarget && entry.cold.length < coldCeiling) {
-          entry.cold.push(await coldAttempt(config)); save();
+          await sample('cold', () => coldAttempt(config));
         }
         const production = process.version === PROTOCOL.runtime && !smoke;
         entry.retained = await retainedTraversal(config, fixture);
@@ -482,7 +549,11 @@ async function run(args) {
             try { writer.send({ type: 'close' }); entry.writerExit = await writer.exited; assert.equal(entry.writerExit.code, 0); }
             finally { await terminateActor(writer); }
           }
-        } finally { save(); }
+        } finally {
+          await sink.cell(entry);
+          // Keep decisions for final acceptance, release all raw observations.
+          report.cells[i] = { cell, decisions: entry.decisions ?? [], retained: { decision: entry.retained?.decision } };
+        }
       }
     }
     report.status = smoke ? 'smoke-observation' : report.cells.some(c => (c.decisions.some(d => d.decision === 'fail') || c.retained?.decision === 'fail')) ? 'failed' :
@@ -491,7 +562,7 @@ async function run(args) {
   finally {
     try { await workspace.cleanup(); }
     catch (e) { recordFailure(report, e); }
-    finally { save(); }
+    finally { if (sink) await sink.finish(report); }
   }
   console.log(JSON.stringify({ report: reportPath, status: report.status, cells: report.cells.length }));
   if (['failed','inconclusive'].includes(report.status) && !smoke) process.exitCode = 1;

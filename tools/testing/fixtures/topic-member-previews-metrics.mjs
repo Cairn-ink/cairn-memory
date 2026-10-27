@@ -2,11 +2,32 @@
 import { channel } from 'node:diagnostics_channel';
 import { workerData } from 'node:worker_threads';
 import { DatabaseSync } from 'node:sqlite';
+import { performance } from 'node:perf_hooks';
 import { PREVIEW_SOURCE_SQL } from '../../../core/topic-member-previews-storage.mjs';
-const prepare = DatabaseSync.prototype.prepare;
+const prepare = DatabaseSync.prototype.prepare, exec = DatabaseSync.prototype.exec;
 let extractions = [0,0,0,0], bytes = [0,0,0,0], mismatches = 0;
+let sqlite = { calls: 0, totalMs: 0, longest: null };
+const category = sql => /journal_mode/i.test(sql) ? 'journal_mode' :
+  /sqlite_master|pragma_|EXPLAIN/i.test(sql) ? 'schema_metadata' :
+    /namespace_epochs|namespace_index_state|store_metadata|index_generations/i.test(sql) ? 'snapshot_metadata' : 'topic_metadata';
+function timed(stage, statement, call) {
+  const started = performance.now(), startedAt = performance.timeOrigin + started;
+  try { return call(); }
+  finally {
+    const elapsedMs = performance.now() - started;
+    sqlite.calls++; sqlite.totalMs += elapsedMs;
+    if (!sqlite.longest || elapsedMs > sqlite.longest.elapsedMs) sqlite.longest = { stage, statement, startedAt, elapsedMs };
+  }
+}
+DatabaseSync.prototype.exec = function(sql) {
+  return timed('exec', /^\s*(BEGIN|COMMIT|ROLLBACK)\b/i.test(sql) ? 'transaction' : 'configuration', () => Reflect.apply(exec, this, [sql]));
+};
 DatabaseSync.prototype.prepare = function(sql) {
-  const statement = Reflect.apply(prepare, this, [sql]);
+  const label = category(sql), statement = timed('prepare', label, () => Reflect.apply(prepare, this, [sql]));
+  for (const method of ['get','all','run']) {
+    const native = statement[method];
+    statement[method] = function(...args) { return timed(method, label, () => Reflect.apply(native, this, args)); };
+  }
   if (sql !== PREVIEW_SOURCE_SQL) return statement;
   const get = statement.get;
   statement.get = function(...args) {
@@ -23,6 +44,7 @@ DatabaseSync.prototype.prepare = function(sql) {
 };
 channel('cairn.topic-member-previews.metrics').subscribe(value => {
   workerData.previewMetricsPort.postMessage({ ...value, edgeCaseExtractions: extractions,
-    edgeCaseSourceBytes: bytes, edgeCaseMismatches: mismatches });
+    edgeCaseSourceBytes: bytes, edgeCaseMismatches: mismatches, sqlite });
   extractions = [0,0,0,0]; bytes = [0,0,0,0]; mismatches = 0;
+  sqlite = { calls: 0, totalMs: 0, longest: null };
 });

@@ -65,10 +65,11 @@ export function memberFixture(t, { mode = 'DELETE', coreOptions = {} } = {}) {
       mocs.set(node.id, { ...node, namespace: ns });
       if (node.level === 'L2') edges.set(node.id, new Set());
     }
-    // Public applyPlacement returns the final affected revisions.
-    for (const ref of result.refs) {
-      if (mocs.has(ref.parentId)) mocs.get(ref.parentId).revision = ref.parentRevision;
-      if (ref.childType === 'moc' && mocs.has(ref.childId)) mocs.get(ref.childId).revision = ref.childRevision;
+    // refs contains the resulting placements, not removed parents or every
+    // title-source MOC invalidated by a filing revision. Refresh the metadata
+    // ledger through SQLite before deriving selections and expected attribution.
+    for (const node of db.prepare('SELECT id,revision FROM mocs').all()) {
+      if (mocs.has(node.id)) mocs.get(node.id).revision = node.revision;
     }
     for (const row of result.memories) {
       const stored = ledger.find(item => item.id === row.id); Object.assign(stored, row, { namespace: ns });

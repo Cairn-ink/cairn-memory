@@ -18,7 +18,9 @@ export function buildMemberWorld(t, count, options = {}) {
       parentId, expectedParentRevision: f.mocs.get(parentId).revision,
       childId, expectedChildRevision: f.mocs.get(childId).revision }));
     f.edges.get(parentId).add(childId);
-    // link does not increment endpoint revisions; place reads current epoch below.
+    f.mocs.get(parentId).revision = linked.ref.parentRevision;
+    f.mocs.get(childId).revision = linked.ref.childRevision;
+    // Link increments the parent revision; place reads the current epoch below.
     for (let start = 15; start < memories.length; start += 5) {
       const batch = memories.slice(start, start + 5).filter((row, i) => (start + i) % 9 !== 0);
       if (!batch.length) continue;

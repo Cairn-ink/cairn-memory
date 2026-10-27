@@ -157,6 +157,10 @@ test('P1 every measured selection extracts all four content cases in its first p
     assert.equal(result.counters.edgeCaseSourceBytes[3],12000); assert.equal(result.counters.edgeCaseMismatches,0);
     assert.ok(result.counters.normalizationUnits >= 7000);
     assert.ok(Object.values(result.counters).every(value => typeof value !== 'string'));
+    assert.ok(result.counters.sqlite.calls > 0);
+    assert.ok(result.counters.sqlite.totalMs >= result.counters.sqlite.longest.elapsedMs);
+    assert.equal(result.hostMessages.length, 1);
+    assert.ok(result.hostMessages[0].finishedAt >= result.hostMessages[0].startedAt);
   }
 });
 
@@ -233,4 +237,70 @@ test('P1 failed cold children always release heartbeats and allow natural proces
     const result = JSON.parse(child.stdout);
     assert.equal(result.failed, true); assert.equal(result.liveIntervals, 0);
   }
+});
+
+test('P1 seed ledger tracks removed parent/title-source revisions on both physical schemas', async t => {
+  const { memberFixture, namespace, ok } = await import('../testing/topic-members-fixture.mjs');
+  const { openDatabase } = await import('../database.mjs');
+  const f = memberFixture(t), a = f.admit('title-source'), b = f.admit('survivor');
+  const created = f.place(namespace, [{ memoryId: a.id, parentIds: [], newL1: {
+    title: 'Topic', parentL2Ids: [], newL2Title: 'Root' } }]).createdMocs;
+  const l1 = created.find(n => n.level === 'L1');
+  f.place(namespace, [{ memoryId: b.id, parentIds: [l1.id] }]);
+  const removed = f.place(namespace, [{ memoryId: a.id, parentIds: [] }]);
+  assert.deepEqual(removed.refs, []);
+  for (const schema of [18,33]) {
+    if (schema === 33) { f.core.close(); const db = openDatabase(f.path, { currentDependencies: true }); db.close(); }
+    assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, schema);
+    // Unfiling the title source bumps both MOCs; neither is in resulting refs.
+    for (const node of created) {
+      const current = f.db.prepare('SELECT revision FROM mocs WHERE id=?').get(node.id).revision;
+      assert.equal(f.mocs.get(node.id).revision, current);
+      const reader = f.reader(), input = { namespace,
+        selection: { type: 'moc', mocId: node.id, level: node.level, revision: f.mocs.get(node.id).revision },
+        accessRevision: 'removed-parent', limit: 24, previews: { version: 'topic-member-previews-v1' } };
+      try {
+        assert.equal((await reader.readTopicMembers({ ...input,
+          selection: { ...input.selection, revision: current - 1 } })).error.code, 'revision_conflict');
+        const page = ok(await reader.readTopicMembers(input));
+        assert.deepEqual(page.items.map(row => row.id), [b.id]);
+      } finally { await reader.close(); }
+    }
+  }
+});
+
+test('P1 loop diagnostics retain absolute gaps and phase boundaries, including cold launcher blocks', async () => {
+  const { observeLoop } = await import('../../tools/testing/measure-topic-member-previews.mjs');
+  let time = 0;
+  const loop = observeLoop({ now: () => time, epoch: 1000 });
+  loop.phase('read'); time = 120; loop.sample();
+  loop.phase('close'); time = 250; loop.sample();
+  const result = await loop.finish();
+  assert.equal(result.maxMs, 130); assert.equal(result.blocksOver100, 2);
+  assert.deepEqual(result.blocks.map(b => [b.startedAt,b.finishedAt,b.gapMs,b.phaseEnd]),
+    [[1000,1120,120,'read'],[1120,1250,130,'close']]);
+  const cold = decide(cell, 'cold', [record(1, { launcherLoop: result })], 1, true, true);
+  assert.equal(cold.checks.loop, false); assert.equal(cold.decision, 'fail');
+  assert.equal(cold.summary.blocksOver100, 2); assert.equal(cold.summary.hostLoopMaximumMs, 130);
+});
+
+test('P1 report sink appends raw attempts once and assembles the existing JSON schema', async t => {
+  const { createReportSink } = await import('../../tools/testing/measure-topic-member-previews.mjs');
+  const { createTestWorkspace } = await import('../../tools/testing/workspace.mjs');
+  const { readFile } = await import('node:fs/promises');
+  const { join } = await import('node:path');
+  const workspace = createTestWorkspace(t), path = join(workspace.path, 'report.json');
+  const sink = await createReportSink(path);
+  const entries = [0,1].map(i => ({ cell: { ...cell, limit: i ? 100 : 24 },
+    warmups: [record(2)], main: [record(3)], cold: [], retained: { records: [record(4)], complete: true } }));
+  for (const [i, entry] of entries.entries()) {
+    for (const series of ['warmups','main','cold']) for (const attempt of entry[series]) await sink.record(i, series, attempt);
+    await sink.cell(entry);
+  }
+  const journal = (await readFile(path + '.records.jsonl','utf8')).trim().split('\n').map(JSON.parse);
+  assert.deepEqual(journal.map(r => [r.cell,r.series,r.record.elapsedMs]), [[0,'warmups',2],[0,'main',3],[1,'warmups',2],[1,'main',3]]);
+  await sink.finish({ cells: [], protocol: PROTOCOL, status: 'failed', failure: { code: 'measurement_failed' } });
+  const report = JSON.parse(await readFile(path,'utf8'));
+  assert.deepEqual(report.cells, entries); assert.deepEqual(report.protocol, PROTOCOL);
+  assert.equal(report.status, 'failed'); assert.equal(report.failure.code, 'measurement_failed');
 });
