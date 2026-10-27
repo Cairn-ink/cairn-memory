@@ -176,7 +176,7 @@ test('P2d fix round 1 pump uses opted-out constructor for an otherwise identical
   await pump.close();assert.equal(s.closed.length,s.opened.length);
 });
 
-test('P2-06/09/18 active four/32 selections prebuild both intents through the pump with mock scheduling',async t=>{
+test('P2-06/09/18 four/32 selection cutover prebuilds both intents and retires the closed selection',async t=>{
   const f=fixture(t),readSet=[personal,...Array.from({length:31},(_,i)=>project('p'+i))];
   for(const ns of [...four,readSet[1]])f.admit('pump cache '+(ns.projectId??'personal'),ns);
   const supervisor=createContextReadSupervisor();t.after(()=>supervisor.close());
@@ -206,7 +206,14 @@ test('P2-06/09/18 active four/32 selections prebuild both intents through the pu
     const r=configured(t,f.path,set,{ownerCoverage:coverage}),h=await r.open();
     for(const intent of ['current','history']){
       const input={readSet:set,types:['memory'],intent,deadlineMs:5000};
-      const status=ok(await h.getContextIndexStatus(input,r.token));assert.equal(status.lexical.state,'ready');
+      const status=ok(await h.getContextIndexStatus(input,r.token));
+      if(set.length===4){
+        assert.equal(status.lexical.state,'absent');assert.equal(status.lexical.reason,'missing');
+        assert.equal(status.coverage.status,'unavailable');
+        assert.equal((await h.findCandidates({...input,query:'cache'},r.token)).error.code,'index_unavailable');
+        continue;
+      }
+      assert.equal(status.lexical.state,'ready');
       assert.equal(status.coverage.status,set.length===32?'partial':'complete');assert.deepEqual(status.coverage.namespaces,coverage);
       assert.ok(ok(await h.findCandidates({...input,query:'cache'},r.token)).items.length>0);
     }

@@ -18,9 +18,9 @@ const channels = ready => ({lexical:{state:ready?'ready':'unavailable',causes:re
 const trace = semantic => ({requested:semantic?'hybrid':'lexical',effective:'lexical',family:'local',preset:'rrf-k60-d12',embedder:null,
   tokenizer:TOKENIZER_VERSION,representation:REPRESENTATION_VERSION,
   timings:{maintenanceMs:0,lexicalMs:0,semanticPreflightMs:0,embeddingMs:0,fusionMs:0}});
-export function openProductIndex({ path, facade, authorize, ownerCoverage, observer, sqlite, sidecarJournalMode, maintenance, counter }) {
+export function openProductIndex({ path, facade, authorize, ownerCoverage, observer, sqlite, sidecarJournalMode, maintenance, counter, now = () => performance.now(), storageOptions = {} }) {
   const { db,read,evidence,bind,encode,identity,features,canonicalFence } = facade.port;
-  const storage = productSidecar({path,db,identity,features,observer,sqlite,sidecarJournalMode,writable:maintenance}), rankings=new Map();
+  const storage = productSidecar({path,db,identity,features,observer,sqlite,sidecarJournalMode,writable:maintenance,now,...storageOptions}), rankings=new Map();
   const types=facade.capabilities.types;
   // Selection provenance is request coverage, never part of lexical identity.
   const selectionTrace = semantic => ({ ...trace(semantic), ...(ownerCoverage.omittedNamespaces > 0
@@ -124,13 +124,13 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       return result;
     },'snapshot_stale');
   }
-  function run(method,original,credential) {
+  function run(method,original,credential,cutoff=Infinity) {
     let access;
     try {
       facade.port.ready();
       const {payload,input}=validate(method,original);
       access=authorize(method,payload,credential);
-      const p={...input,ownerCoverage,deadlineAt:performance.now()+ (input.deadlineMs??input.budget?.maxMs??1000)};
+      const p={...input,ownerCoverage,deadlineAt:Math.min(cutoff,now()+ (input.deadlineMs??input.budget?.maxMs??1000))};
       if(method==='getContextIndexStatus') {
         const knownFailure=storage.prepareObservation();access.check(); return read(()=>{
           db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();

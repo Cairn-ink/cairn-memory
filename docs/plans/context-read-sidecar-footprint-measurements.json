@@ -1,0 +1,2675 @@
+{
+  "baseline": "b40124f3",
+  "runtime": "Node 24.15.0",
+  "format1": {
+    "memories": 1642,
+    "cards": 164,
+    "namespaces": 4,
+    "builds": [
+      {
+        "intent": "current",
+        "quanta": 27,
+        "counts": {
+          "byType": {
+            "card": {
+              "eligible": 164,
+              "indexed": 164
+            },
+            "memory": {
+              "eligible": 1642,
+              "indexed": 1642
+            }
+          },
+          "documents": 1806,
+          "terms": 1712,
+          "totalTokenLength": 127863
+        }
+      },
+      {
+        "intent": "history",
+        "quanta": 35,
+        "counts": {
+          "byType": {
+            "card": {
+              "eligible": 164,
+              "indexed": 164
+            },
+            "memory": {
+              "eligible": 1642,
+              "indexed": 1642
+            }
+          },
+          "documents": 1806,
+          "terms": 1712,
+          "totalTokenLength": 127863
+        }
+      }
+    ],
+    "canonical": {
+      "bytes": 5189632,
+      "freeBytes": 0,
+      "structures": [
+        {
+          "name": "active_identity",
+          "type": "index",
+          "bytes": 212992,
+          "payload": 166124,
+          "bytesPerMemory": 129.71498172959804
+        },
+        {
+          "name": "admission_claims",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "capture_current_memories",
+          "type": "index",
+          "bytes": 143360,
+          "payload": 118506,
+          "bytesPerMemory": 87.30816077953715
+        },
+        {
+          "name": "capture_events",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "capture_initial_classification",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "capture_memory_receipts",
+          "type": "index",
+          "bytes": 151552,
+          "payload": 127948,
+          "bytesPerMemory": 92.29719853836784
+        },
+        {
+          "name": "capture_streams",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_applicability_reviews",
+          "type": "table",
+          "bytes": 16384,
+          "payload": 7872,
+          "bytesPerMemory": 9.978075517661388
+        },
+        {
+          "name": "card_bindings",
+          "type": "table",
+          "bytes": 65536,
+          "payload": 56252,
+          "bytesPerMemory": 39.91230207064555
+        },
+        {
+          "name": "card_effect_scope",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_effects",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_epochs",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 70,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_memory_bindings",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_memory_dependents",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_moc_card_refs",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_moc_edges",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_moc_epochs",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 70,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_moc_refs",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_moc_title_sources",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_mocs",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_note_scope",
+          "type": "index",
+          "bytes": 16384,
+          "payload": 11680,
+          "bytesPerMemory": 9.978075517661388
+        },
+        {
+          "name": "card_note_usage",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 25,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_notes",
+          "type": "table",
+          "bytes": 28672,
+          "payload": 20664,
+          "bytesPerMemory": 17.46163215590743
+        },
+        {
+          "name": "card_operations",
+          "type": "table",
+          "bytes": 110592,
+          "payload": 99712,
+          "bytesPerMemory": 67.35200974421437
+        },
+        {
+          "name": "card_receipt_dependents",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_source_dependents",
+          "type": "index",
+          "bytes": 20480,
+          "payload": 12664,
+          "bytesPerMemory": 12.472594397076735
+        },
+        {
+          "name": "child_moc_edges",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "confirmation_actions",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "confirmation_conflicts",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "confirmation_supersessions",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_attempts",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_controls",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_event_read",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_events",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_identity",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 68,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_keep_actions",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_lineage_page",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_memory_consumers",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_memory_links",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_messages",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_open_step_read",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_pending",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_policy_page",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_receipt_read",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_source_consumers",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_source_page",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_sources",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "evidence_mapping_card",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "evidence_mapping_memory",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "evidence_mappings",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "index_edges",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "index_generations",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "index_memories",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "index_memory_keyset",
+          "type": "index",
+          "bytes": 143360,
+          "payload": 118506,
+          "bytesPerMemory": 87.30816077953715
+        },
+        {
+          "name": "index_memory_refs",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "index_moc_keyset",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "index_mocs",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "index_title_sources",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "memories",
+          "type": "table",
+          "bytes": 1126400,
+          "payload": 1020624,
+          "bytesPerMemory": 685.9926918392205
+        },
+        {
+          "name": "memory_conflicts",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "memory_moc_refs",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "memory_qualifications",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "memory_receipts",
+          "type": "index",
+          "bytes": 208896,
+          "payload": 168998,
+          "bytesPerMemory": 127.2204628501827
+        },
+        {
+          "name": "memory_supersessions",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "memory_title_sources",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "moc_edges",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "moc_memory_refs",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "moc_title_sources",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "mocs",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "namespace_epochs",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 141,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "namespace_index_state",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "namespace_memories",
+          "type": "index",
+          "bytes": 290816,
+          "payload": 161198,
+          "bytesPerMemory": 177.11084043848965
+        },
+        {
+          "name": "namespace_moc_titles",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "namespace_mocs",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "private_card_scope",
+          "type": "index",
+          "bytes": 20480,
+          "payload": 13320,
+          "bytesPerMemory": 12.472594397076735
+        },
+        {
+          "name": "private_cards",
+          "type": "table",
+          "bytes": 61440,
+          "payload": 51783,
+          "bytesPerMemory": 37.41778319123021
+        },
+        {
+          "name": "procedural_tags",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "qualification_anchors",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "qualification_receipts",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "qualified_claim_bindings",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "qualified_slot_members",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "qualified_slots",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "rationale_edges",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "rationale_incoming",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "receipt_causality",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "receipt_time_read",
+          "type": "index",
+          "bytes": 344064,
+          "payload": 168998,
+          "bytesPerMemory": 209.53958587088917
+        },
+        {
+          "name": "receipts",
+          "type": "table",
+          "bytes": 1126400,
+          "payload": 1066190,
+          "bytesPerMemory": 685.9926918392205
+        },
+        {
+          "name": "replacement_supersessions",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "right_memory_conflicts",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "session_episodes",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_admission_claims_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_capture_events_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_capture_events_2",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_capture_initial_classification_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_capture_streams_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_applicability_reviews_1",
+          "type": "index",
+          "bytes": 12288,
+          "payload": 6596,
+          "bytesPerMemory": 7.483556638246041
+        },
+        {
+          "name": "sqlite_autoindex_card_bindings_1",
+          "type": "index",
+          "bytes": 20480,
+          "payload": 12664,
+          "bytesPerMemory": 12.472594397076735
+        },
+        {
+          "name": "sqlite_autoindex_card_effects_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_effects_2",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_epochs_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 67,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_memory_bindings_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_moc_edges_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_moc_epochs_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 67,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_moc_refs_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_moc_title_sources_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_mocs_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_mocs_2",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_note_usage_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 23,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_notes_1",
+          "type": "index",
+          "bytes": 12288,
+          "payload": 6596,
+          "bytesPerMemory": 7.483556638246041
+        },
+        {
+          "name": "sqlite_autoindex_card_operations_1",
+          "type": "index",
+          "bytes": 32768,
+          "payload": 23488,
+          "bytesPerMemory": 19.956151035322776
+        },
+        {
+          "name": "sqlite_autoindex_confirmation_actions_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_confirmation_conflicts_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_confirmation_supersessions_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_attempts_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_controls_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_events_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_events_2",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_keep_actions_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_keep_actions_2",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_keep_actions_3",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_memory_links_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_memory_links_2",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_messages_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_sources_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_evidence_mappings_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_index_edges_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_index_generations_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_index_memories_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_index_memory_refs_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_index_mocs_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_index_title_sources_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_memories_1",
+          "type": "index",
+          "bytes": 81920,
+          "payload": 67194,
+          "bytesPerMemory": 49.89037758830694
+        },
+        {
+          "name": "sqlite_autoindex_memory_conflicts_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_memory_qualifications_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_memory_supersessions_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_moc_edges_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_moc_memory_refs_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_moc_title_sources_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_mocs_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_namespace_epochs_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 136,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_namespace_index_state_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_private_cards_1",
+          "type": "index",
+          "bytes": 12288,
+          "payload": 6596,
+          "bytesPerMemory": 7.483556638246041
+        },
+        {
+          "name": "sqlite_autoindex_procedural_tags_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_qualification_anchors_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_qualified_claim_bindings_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_qualified_slots_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_rationale_edges_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_receipt_causality_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_receipts_1",
+          "type": "index",
+          "bytes": 81920,
+          "payload": 67194,
+          "bytesPerMemory": 49.89037758830694
+        },
+        {
+          "name": "sqlite_autoindex_receipts_2",
+          "type": "index",
+          "bytes": 212992,
+          "payload": 175566,
+          "bytesPerMemory": 129.71498172959804
+        },
+        {
+          "name": "sqlite_autoindex_session_episodes_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_session_episodes_2",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_staged_capture_clocks_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_staged_capture_evidence_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_store_metadata_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 39,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_suppressed_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_schema",
+          "type": "internal",
+          "bytes": 81920,
+          "payload": 64680,
+          "bytesPerMemory": 49.89037758830694
+        },
+        {
+          "name": "staged_capture_clocks",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "staged_capture_evidence",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "store_metadata",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 105,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "suppressed",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        }
+      ]
+    },
+    "sidecar": {
+      "bytes": 129839104,
+      "freeBytes": 0,
+      "structures": [
+        {
+          "name": "documents",
+          "type": "table",
+          "bytes": 745472,
+          "payload": 704668,
+          "bytesPerMemory": 454.00243605359316
+        },
+        {
+          "name": "generations",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 1574,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "postings",
+          "type": "table",
+          "bytes": 47239168,
+          "payload": 43686788,
+          "bytesPerMemory": 28769.286236297197
+        },
+        {
+          "name": "product_metadata",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 110,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "product_term",
+          "type": "index",
+          "bytes": 40407040,
+          "payload": 34934949,
+          "bytesPerMemory": 24608.4287454324
+        },
+        {
+          "name": "progress_records",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 1694,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "publications",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 252,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_documents_1",
+          "type": "index",
+          "bytes": 380928,
+          "payload": 313952,
+          "bytesPerMemory": 231.99025578562728
+        },
+        {
+          "name": "sqlite_autoindex_documents_2",
+          "type": "index",
+          "bytes": 589824,
+          "payload": 491268,
+          "bytesPerMemory": 359.21071863581
+        },
+        {
+          "name": "sqlite_autoindex_generations_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 93,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_postings_1",
+          "type": "index",
+          "bytes": 39993344,
+          "payload": 34934949,
+          "bytesPerMemory": 24356.48233861145
+        },
+        {
+          "name": "sqlite_autoindex_progress_records_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 96,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_publications_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 93,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_statistics_1",
+          "type": "index",
+          "bytes": 221184,
+          "payload": 179560,
+          "bytesPerMemory": 134.70401948842874
+        },
+        {
+          "name": "sqlite_autoindex_validation_records_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 79,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_work_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_schema",
+          "type": "internal",
+          "bytes": 4096,
+          "payload": 2665,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "statistics",
+          "type": "table",
+          "bytes": 212992,
+          "payload": 180306,
+          "bytesPerMemory": 129.71498172959804
+        },
+        {
+          "name": "validation_records",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 2444,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "work",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        }
+      ]
+    },
+    "ratio": 25.01894238358327
+  },
+  "format2": {
+    "memories": 1642,
+    "cards": 164,
+    "namespaces": 4,
+    "builds": [
+      {
+        "intent": "current",
+        "quanta": 47,
+        "counts": {
+          "byType": {
+            "card": {
+              "eligible": 164,
+              "indexed": 164
+            },
+            "memory": {
+              "eligible": 1642,
+              "indexed": 1642
+            }
+          },
+          "documents": 1806,
+          "terms": 1712,
+          "totalTokenLength": 127863
+        }
+      },
+      {
+        "intent": "history",
+        "quanta": 50,
+        "counts": {
+          "byType": {
+            "card": {
+              "eligible": 164,
+              "indexed": 164
+            },
+            "memory": {
+              "eligible": 1642,
+              "indexed": 1642
+            }
+          },
+          "documents": 1806,
+          "terms": 1712,
+          "totalTokenLength": 127863
+        }
+      }
+    ],
+    "canonical": {
+      "bytes": 5197824,
+      "freeBytes": 0,
+      "structures": [
+        {
+          "name": "active_identity",
+          "type": "index",
+          "bytes": 212992,
+          "payload": 166124,
+          "bytesPerMemory": 129.71498172959804
+        },
+        {
+          "name": "admission_claims",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "capture_current_memories",
+          "type": "index",
+          "bytes": 143360,
+          "payload": 118506,
+          "bytesPerMemory": 87.30816077953715
+        },
+        {
+          "name": "capture_events",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "capture_initial_classification",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "capture_memory_receipts",
+          "type": "index",
+          "bytes": 155648,
+          "payload": 127948,
+          "bytesPerMemory": 94.79171741778319
+        },
+        {
+          "name": "capture_streams",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_applicability_reviews",
+          "type": "table",
+          "bytes": 16384,
+          "payload": 7872,
+          "bytesPerMemory": 9.978075517661388
+        },
+        {
+          "name": "card_bindings",
+          "type": "table",
+          "bytes": 65536,
+          "payload": 56252,
+          "bytesPerMemory": 39.91230207064555
+        },
+        {
+          "name": "card_effect_scope",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_effects",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_epochs",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 70,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_memory_bindings",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_memory_dependents",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_moc_card_refs",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_moc_edges",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_moc_epochs",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 70,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_moc_refs",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_moc_title_sources",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_mocs",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_note_scope",
+          "type": "index",
+          "bytes": 16384,
+          "payload": 11680,
+          "bytesPerMemory": 9.978075517661388
+        },
+        {
+          "name": "card_note_usage",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 25,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_notes",
+          "type": "table",
+          "bytes": 28672,
+          "payload": 20664,
+          "bytesPerMemory": 17.46163215590743
+        },
+        {
+          "name": "card_operations",
+          "type": "table",
+          "bytes": 110592,
+          "payload": 99712,
+          "bytesPerMemory": 67.35200974421437
+        },
+        {
+          "name": "card_receipt_dependents",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "card_source_dependents",
+          "type": "index",
+          "bytes": 20480,
+          "payload": 12664,
+          "bytesPerMemory": 12.472594397076735
+        },
+        {
+          "name": "child_moc_edges",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "confirmation_actions",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "confirmation_conflicts",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "confirmation_supersessions",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_attempts",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_controls",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_event_read",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_events",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_identity",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 68,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_keep_actions",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_lineage_page",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_memory_consumers",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_memory_links",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_messages",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_open_step_read",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_pending",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_policy_page",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_receipt_read",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_source_consumers",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_source_page",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "episode_sources",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "evidence_mapping_card",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "evidence_mapping_memory",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "evidence_mappings",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "index_edges",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "index_generations",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "index_memories",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "index_memory_keyset",
+          "type": "index",
+          "bytes": 143360,
+          "payload": 118506,
+          "bytesPerMemory": 87.30816077953715
+        },
+        {
+          "name": "index_memory_refs",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "index_moc_keyset",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "index_mocs",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "index_title_sources",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "memories",
+          "type": "table",
+          "bytes": 1126400,
+          "payload": 1020624,
+          "bytesPerMemory": 685.9926918392205
+        },
+        {
+          "name": "memory_conflicts",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "memory_moc_refs",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "memory_qualifications",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "memory_receipts",
+          "type": "index",
+          "bytes": 208896,
+          "payload": 168998,
+          "bytesPerMemory": 127.2204628501827
+        },
+        {
+          "name": "memory_supersessions",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "memory_title_sources",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "moc_edges",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "moc_memory_refs",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "moc_title_sources",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "mocs",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "namespace_epochs",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 141,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "namespace_index_state",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "namespace_memories",
+          "type": "index",
+          "bytes": 290816,
+          "payload": 161198,
+          "bytesPerMemory": 177.11084043848965
+        },
+        {
+          "name": "namespace_moc_titles",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "namespace_mocs",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "private_card_scope",
+          "type": "index",
+          "bytes": 20480,
+          "payload": 13320,
+          "bytesPerMemory": 12.472594397076735
+        },
+        {
+          "name": "private_cards",
+          "type": "table",
+          "bytes": 61440,
+          "payload": 51783,
+          "bytesPerMemory": 37.41778319123021
+        },
+        {
+          "name": "procedural_tags",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "qualification_anchors",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "qualification_receipts",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "qualified_claim_bindings",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "qualified_slot_members",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "qualified_slots",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "rationale_edges",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "rationale_incoming",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "receipt_causality",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "receipt_time_read",
+          "type": "index",
+          "bytes": 344064,
+          "payload": 168998,
+          "bytesPerMemory": 209.53958587088917
+        },
+        {
+          "name": "receipts",
+          "type": "table",
+          "bytes": 1126400,
+          "payload": 1066190,
+          "bytesPerMemory": 685.9926918392205
+        },
+        {
+          "name": "replacement_supersessions",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "right_memory_conflicts",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "session_episodes",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_admission_claims_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_capture_events_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_capture_events_2",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_capture_initial_classification_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_capture_streams_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_applicability_reviews_1",
+          "type": "index",
+          "bytes": 12288,
+          "payload": 6596,
+          "bytesPerMemory": 7.483556638246041
+        },
+        {
+          "name": "sqlite_autoindex_card_bindings_1",
+          "type": "index",
+          "bytes": 20480,
+          "payload": 12664,
+          "bytesPerMemory": 12.472594397076735
+        },
+        {
+          "name": "sqlite_autoindex_card_effects_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_effects_2",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_epochs_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 67,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_memory_bindings_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_moc_edges_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_moc_epochs_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 67,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_moc_refs_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_moc_title_sources_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_mocs_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_mocs_2",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_note_usage_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 23,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_card_notes_1",
+          "type": "index",
+          "bytes": 12288,
+          "payload": 6596,
+          "bytesPerMemory": 7.483556638246041
+        },
+        {
+          "name": "sqlite_autoindex_card_operations_1",
+          "type": "index",
+          "bytes": 32768,
+          "payload": 23488,
+          "bytesPerMemory": 19.956151035322776
+        },
+        {
+          "name": "sqlite_autoindex_confirmation_actions_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_confirmation_conflicts_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_confirmation_supersessions_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_attempts_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_controls_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_events_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_events_2",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_keep_actions_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_keep_actions_2",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_keep_actions_3",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_memory_links_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_memory_links_2",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_messages_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_episode_sources_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_evidence_mappings_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_index_edges_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_index_generations_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_index_memories_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_index_memory_refs_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_index_mocs_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_index_title_sources_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_memories_1",
+          "type": "index",
+          "bytes": 86016,
+          "payload": 67194,
+          "bytesPerMemory": 52.38489646772229
+        },
+        {
+          "name": "sqlite_autoindex_memory_conflicts_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_memory_qualifications_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_memory_supersessions_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_moc_edges_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_moc_memory_refs_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_moc_title_sources_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_mocs_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_namespace_epochs_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 136,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_namespace_index_state_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_private_cards_1",
+          "type": "index",
+          "bytes": 12288,
+          "payload": 6596,
+          "bytesPerMemory": 7.483556638246041
+        },
+        {
+          "name": "sqlite_autoindex_procedural_tags_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_qualification_anchors_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_qualified_claim_bindings_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_qualified_slots_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_rationale_edges_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_receipt_causality_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_receipts_1",
+          "type": "index",
+          "bytes": 86016,
+          "payload": 67194,
+          "bytesPerMemory": 52.38489646772229
+        },
+        {
+          "name": "sqlite_autoindex_receipts_2",
+          "type": "index",
+          "bytes": 208896,
+          "payload": 175566,
+          "bytesPerMemory": 127.2204628501827
+        },
+        {
+          "name": "sqlite_autoindex_session_episodes_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_session_episodes_2",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_staged_capture_clocks_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_staged_capture_evidence_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_store_metadata_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 39,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_suppressed_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_schema",
+          "type": "internal",
+          "bytes": 81920,
+          "payload": 64680,
+          "bytesPerMemory": 49.89037758830694
+        },
+        {
+          "name": "staged_capture_clocks",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "staged_capture_evidence",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "store_metadata",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 105,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "suppressed",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        }
+      ]
+    },
+    "sidecar": {
+      "bytes": 7528448,
+      "freeBytes": 0,
+      "structures": [
+        {
+          "name": "documents",
+          "type": "table",
+          "bytes": 589824,
+          "payload": 496722,
+          "bytesPerMemory": 359.21071863581
+        },
+        {
+          "name": "generations",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 1622,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "postings",
+          "type": "table",
+          "bytes": 3190784,
+          "payload": 2059318,
+          "bytesPerMemory": 1943.2302070645553
+        },
+        {
+          "name": "product_metadata",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 110,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "product_term",
+          "type": "index",
+          "bytes": 2953216,
+          "payload": 1803592,
+          "bytesPerMemory": 1798.5481120584652
+        },
+        {
+          "name": "progress_records",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 1694,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "publications",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 252,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "selections",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 184,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_documents_2",
+          "type": "index",
+          "bytes": 196608,
+          "payload": 160314,
+          "bytesPerMemory": 119.73690621193666
+        },
+        {
+          "name": "sqlite_autoindex_documents_3",
+          "type": "index",
+          "bytes": 405504,
+          "payload": 337630,
+          "bytesPerMemory": 246.95736906211937
+        },
+        {
+          "name": "sqlite_autoindex_generations_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 93,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_progress_records_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 96,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_publications_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 93,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_selections_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 93,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_statistics_2",
+          "type": "index",
+          "bytes": 53248,
+          "payload": 33907,
+          "bytesPerMemory": 32.42874543239951
+        },
+        {
+          "name": "sqlite_autoindex_validation_records_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 79,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_validation_records_2",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 93,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_autoindex_work_1",
+          "type": "index",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "sqlite_schema",
+          "type": "internal",
+          "bytes": 4096,
+          "payload": 3035,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "statistics",
+          "type": "table",
+          "bytes": 65536,
+          "payload": 44803,
+          "bytesPerMemory": 39.91230207064555
+        },
+        {
+          "name": "validation_records",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 2532,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "work",
+          "type": "table",
+          "bytes": 4096,
+          "payload": 0,
+          "bytesPerMemory": 2.494518879415347
+        },
+        {
+          "name": "pointer_map",
+          "type": "internal",
+          "bytes": 12288,
+          "payload": 0,
+          "bytesPerMemory": 7.483556638246041
+        }
+      ]
+    },
+    "ratio": 1.4483845547675336
+  }
+}

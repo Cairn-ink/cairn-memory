@@ -290,6 +290,41 @@ optional ownerGeneration reuse certificates. Issuance IDs and coverage selection
 revision do not enter lexical statistics identity. A changed ownerGeneration
 makes an old certificate access-stale for a newly valid credential.
 
+### Product cache format 2 and sizing
+
+The product cache now uses physical **format 2** (`PRAGMA user_version=2`),
+under the same product profile and cache suffix. Validation certificates bind
+`format:2`; signed progress binds the format in its sidecar identity digest.
+Format 1 is refused as `unavailable/incompatible`, including during refresh.
+There is no in-place conversion. To rebuild, close admissions, stop clients and
+maintenance, await all supervisor drains, and use the host's explicit cache
+discard procedure on the quiescent product sidecar and its companions. Keep
+canonical storage and the lifecycle lock intact. Reopen independently
+authorized maintenance and complete both intents before exposing search.
+Never unlink a live cache or its WAL/SHM to resolve this refusal.
+
+Use **one owner-wide selection per intent**, with the exact physical type set:
+personal plus the selected authorized projects, pooled in one projection.
+Do not prebuild personal-plus-each-project combinations for owner-wide search.
+Format 2 retains the most recently maintained selection for each owner/type
+set/intent; maintaining a changed selection retires the previous selection for
+that slot. Old handles may consequently report unavailable and require the
+host's selection cutover. The other intent remains independent. Superseded
+generations, abandoned work and retired selections are deleted in resumable
+bounded maintenance slices; published generations and active staging bases
+remain protected. Continue explicit maintenance after publication to finish
+cleanup. Free pages are reused, with incremental vacuum returning tail pages.
+
+The synthetic 1,642-Memory plus 164-Card measurement covers both owner-wide
+intents and mixed Chinese/Japanese/English text. Its before/after table and
+index page counts are in
+[the footprint handoff](plans/context-read-sidecar-footprint.md). Treat the
+measured ratio as sizing evidence for that corpus, rather than a universal
+capacity guarantee. Budget additional room for staging, pending GC, pinned
+reader snapshots and SQLite journals/WAL/SHM. Vector storage is separate future
+work. Measure the host's own representative text and namespace selection before
+setting volume limits.
+
 `maxItems` is 1–1,024 transformation attempts and `maxMs` is 1–5,000 including
 call overhead, scans, validation and publication. Batches contain at most 128
 rows and 2,000,000 text units. Unchanged text is reused without tokenization;
@@ -302,6 +337,28 @@ nor an earlier complete response authorizes a later search. `mode:'embeddings'`
 performs no lexical build or inference and reports disabled semantic coverage.
 `semantic:true` keeps the validated lexical result with a disabled semantic
 channel; it cannot enable a provider. All these calls make zero provider calls.
+
+A successful `rebuilding` or `partial` response is durable progress: schedule
+another explicit quantum with the same service binding and projection. Stop
+the initial prebuild loop only at `complete` for each intent. Time admission
+uses the parent cutoff, including opening and dispatch overhead. It reserves
+50–250 ms (15% of the quantum, clamped to that range) for checkpoint commit,
+publication and final delivery, and stops admitting items when the remainder
+cannot cover that reserve plus the conservative observed item cost. The
+estimate for each kind of work starts at 10 ms and retains twice its largest
+observed cost in that quantum; item work includes tokenization and posting
+writes. Metadata batches have their own estimate so an expensive scan cannot
+block a cheap first item forever. Verification and GC yield too. This is cooperative admission, so an unexpectedly expensive
+indivisible operation can still reach the hard cutoff.
+
+On `read_timeout`, retain the cutoff outcome, await supervised cleanup and
+inspect durable status on a later authorized call before resuming. Do not
+assume rollback or completion, and do not let a timeout stop all future cron
+renewals indefinitely. The host's bounded retry/reschedule policy should
+distinguish a successful yield from an actual error; do not spin immediately on
+storage/authority failures or extend an existing call's deadline. The owned
+pump still stops and reports an error through its completion promise so the
+host can apply that policy.
 
 Without `wal:true`, `sidecarJournalMode:'WAL'` still refuses `index_unavailable`
 before opening. Default capabilities retain `journals:['DELETE']`,
