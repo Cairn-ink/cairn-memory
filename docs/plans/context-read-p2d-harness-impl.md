@@ -1046,3 +1046,215 @@ in by the pending merge; implementation files were not staged or committed.
 HEAD remains `0cf0e3d3`, MERGE_HEAD is `3b6b57f6`. The primary commits.
 Owned verification logs are removed after recording the results above; no
 process, measurement or monitor is left running.
+
+## v4 encoding fix round 1
+
+Base `06743bd8`; both non-author reviews were read in full. This round fixes
+all nine distinct P1 findings without changing engine runtime sources, frozen
+protocol definitions, populations, counts or estimates. There was no timing
+run, smoke, network/key access or commit.
+
+### Findings, implementation and regressions
+
+1. **Stopped profiles could pass.** `v4-runner.mjs` now makes any supervision
+   stop inconclusive unless a failure is already known. Both profile and segment
+   completeness are false after a stop, including when all cells finished.
+   The new `measure-context-read-product-v4fix1.test.mjs` executes the real runner
+   with manual supervision callbacks during its final cell, separately covering
+   projected overrun, stalled activity and missing progress, plus a retained
+   prior failure control.
+2. **Interrupted latency failures disappeared.** The checkpoint failure latch
+   now checks the maximum for each registered method and population, using
+   lifecycle elapsed time for main/cold/restored reads and read-call time for
+   idle references and WM. It resolves rotating method labels and the implicit
+   candidate method of backup verification. Existing loop, overshoot, late data,
+   WAL busy, bounds and oracle failures remain latched; writer deadline and
+   error gates are retained too. The new tests journal each maximum violation,
+   interrupt, then merge a faster completed segment: the decision remains failed.
+   Separate controls check the selected clocks, require actual writer overlap
+   for loaded successes (including final overlap reconciliation), and preserve
+   W's lack of a latency claim. The prior failure evidence is never pooled into new samples.
+3. **Exceptions manufactured complete cells.** The runner writes exception
+   cells/checkpoints with `complete:false`, preserving the failure record and
+   excluding the cell from completed counts. A mid-T exception regression checks
+   the missing cell, checkpoint admission and execution again on resume with
+   the earlier failure retained. Only genuine completion records enter a merge.
+4. **Shared sessions missed the parent's loop.** `v4-session.mjs` observes the
+   measuring process from lane startup through pump renewal, pending reads,
+   pump drain and final lane shutdown, journals the parent loop, and includes it
+   in every session cell's participating-process union. Harness synchronous
+   preparation, validation and serialization pause that observation. The new
+   manual-loop tests inject a 150 ms parent gap in renewal, pump shutdown and
+   lane shutdown while child loops remain clean; every cell fails its loop gate.
+   Healthy and slow-harness-validation controls pass.
+5. **Lane failures hung pending work.** `actors.mjs` supports one waiter with
+   alternative message types; sessions await either the matching read result or
+   lane failure. Rejections stop admission, settle the pending ledger, journal
+   failure evidence, drain the writer/pump and stop all lanes before propagating
+   failure. `v4-lane.mjs` preserves a sanitized failure code. Regressions cover
+   explicit lane failure, rejected waits and the real actor waiter's alternative
+   delivery; they assert resource drain and retained evidence.
+6. **Checkpoint paths reached database descriptors.** The measuring process's
+   `v4-checkpoints.mjs` now delegates all operator report/journal reads to
+   `v4-checkpoint-child.mjs`, a short SQLite-free child with explicit status,
+   signal/error checks and a bounded output transfer. The child uses `lstat`
+   before opening each path, rejects symlinks/non-regular files and opens with
+   `O_NOFOLLOW`. Journals are streamed; raw attempt populations are not retained.
+   The raw-fd allowlist has no checkpoint-reader allowance in the measuring
+   process; its new exact entries are child-only. Regressions cover a database
+   named `canonical.sqlite.jsonl`, a link to that database, a link to a valid
+   report, a linked journal and a directory. An instrumented parent verifies zero
+   raw opens even when parsing the database-named path refuses it.
+7. **The spread regression had an unrelated failure.** The corrected fixture in
+   `measure-context-read-product-v4.test.mjs` recomputes each duplicated slot's
+   method/language/intent with the registered rotating schedule. Its only
+   remaining errors are method spread minima. The new mutation regression
+   confirms that removing both spread checks makes this otherwise valid fixture
+   pass validation; the original rejection assertion therefore fails. Separate
+   isolated mutation runs compare the original and corrected test itself.
+8. **WM initialization bypassed validation.** `engine.mjs` retains the
+   initialization result, validates its closed shape, bounds/functional checks,
+   selected-projection oracle and partial-coverage rule before the measured
+   read, and combines that outcome with the measured result. Failed or thrown
+   initialization cannot become an accepted sample. Initialization and final
+   cleanup loop intervals are combined; harness validation remains outside
+   observation. Regressions put oracle, bounds/functional and public-failure
+   defects in initialization followed, where applicable, by a correct read.
+9. **Crash quarantine was assumed.** `v4-state.mjs` now observes the existing
+   supervisor ownership seam, starting at public settlement and recording every
+   quarantine-latch transition through verified Worker/native disposal. It
+   derives `supervisedUntilDisposal` from that evidence, requiring actual owned
+   resources and disposal proof. The mock crash regression releases quarantine
+   at `reader_failed` settlement but eventually disposes everything: all four
+   crash subprobes become invalid instead of passing. Its held-quarantine control
+   passes. No engine module or ordinary reply-delivery path changes.
+
+Counts remain **728 / 488 cells**, **432 / 224 fixed windows**, **252 / 172
+references**, and **46,627.4 s / 26,284 s** estimates. The existing v4 arithmetic
+and CLI-estimate tests check both profiles, declarative appendix and claims.
+
+### Changed files
+
+The inventory was derived from `git diff --name-only 06743bd8` plus Git
+untracked enumeration, then independently from index blob hashes compared with
+worktree bytes plus an `rg --files --hidden` walk for untracked files. The
+worktree Git metadata file is excluded from the filesystem walk. The sorted
+inventories agree at **12 changed files**, including this report and both
+new files; scripts, docs, assets and configuration were included in the walk.
+
+- `core/test/fixtures/no-raw-db-fd-allowlist.json`
+- `docs/plans/context-read-p2d-harness-impl.md`
+- `tools/testing/fixtures/context-product/actors.mjs`
+- `tools/testing/fixtures/context-product/engine.mjs`
+- `tools/testing/fixtures/context-product/v4-checkpoint-child.mjs`
+- `tools/testing/fixtures/context-product/v4-checkpoints.mjs`
+- `tools/testing/fixtures/context-product/v4-lane.mjs`
+- `tools/testing/fixtures/context-product/v4-runner.mjs`
+- `tools/testing/fixtures/context-product/v4-session.mjs`
+- `tools/testing/fixtures/context-product/v4-state.mjs`
+- `tools/testing/measure-context-read-product-v4.test.mjs`
+- `tools/testing/measure-context-read-product-v4fix1.test.mjs`
+
+### Verification commands and actual exit codes
+
+Each command used the exact nvm Node **22.16.0** or **24.15.0** executable,
+with that runtime first in PATH. Both `node --version` commands exited **0**.
+Tests ran sequentially by explicit path, through
+`node tools/testing/run.mjs --test-reporter=tap <path>`; process return codes
+were captured directly, independently of reporter output. All **74 file
+invocations exited 0**, including the v4 suite, prior harness regressions, all
+29 required context-read files, both lock guards and E1-C2.
+
+The 37-path test inventory was independently checked against an `rg --files`
+walk; the required context-read subset was also cross-checked using a filesystem
+glob. Both routes agree: **37 total files / 32 required files**.
+
+| Explicit test path | Node 22.16.0 exit | Node 24.15.0 exit |
+| --- | --- | --- |
+| `tools/testing/measure-context-read-product-v4fix1.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-fix1.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-fix2.test.mjs` | 0 | 0 |
+| `core/test/context-read-assembly-races.test.mjs` | 0 | 0 |
+| `core/test/context-read-assembly-readonly.test.mjs` | 0 | 0 |
+| `core/test/context-read-assembly.test.mjs` | 0 | 0 |
+| `core/test/context-read-bm25.test.mjs` | 0 | 0 |
+| `core/test/context-read-budget.test.mjs` | 0 | 0 |
+| `core/test/context-read-core.test.mjs` | 0 | 0 |
+| `core/test/context-read-default-entropy.test.mjs` | 0 | 0 |
+| `core/test/context-read-embedder.test.mjs` | 0 | 0 |
+| `core/test/context-read-fusion.test.mjs` | 0 | 0 |
+| `core/test/context-read-local-embedder.test.mjs` | 0 | 0 |
+| `core/test/context-read-local-status.test.mjs` | 0 | 0 |
+| `core/test/context-read-moc-source.test.mjs` | 0 | 0 |
+| `core/test/context-read-process.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-artifact.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-control.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-import.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-index.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-pump.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-service.test.mjs` | 0 | 0 |
+| `core/test/context-read-product.test.mjs` | 0 | 0 |
+| `core/test/context-read-recovery.test.mjs` | 0 | 0 |
+| `core/test/context-read-review.test.mjs` | 0 | 0 |
+| `core/test/context-read-sidecar.test.mjs` | 0 | 0 |
+| `core/test/context-read-source-work.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources-authority.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources-bounds.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources-races.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources.test.mjs` | 0 | 0 |
+| `core/test/context-read-tokenize.test.mjs` | 0 | 0 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 | 0 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 | 0 |
+| `tools/testing/measure-topic-reader-wal.test.mjs` | 0 | 0 |
+
+Both assembly-suite runs report the existing A13 skip: the optional
+`tiktoken` package is unavailable. Each still exits **0**, with 19 passes and
+one skip; no dependency installation was attempted. Other required file runs
+have no skipped, cancelled or failed tests.
+
+
+After the final overlap-latch and observer guards, the five harness files and
+raw-fd guard above were rerun by the same explicit-path command on both patches:
+**12 final file invocations, every exit 0**. The new regression file also ran
+directly with
+`node --experimental-vm-modules --test --test-reporter=tap tools/testing/measure-context-read-product-v4fix1.test.mjs`:
+**33/33 passed, exit 0 on each patch**, with no skips or cancellations.
+
+For before/after evidence, the same direct command with
+`P2D_V4FIX1_BASE=06743bd8` loads the reviewed implementation sources from
+`git show` through VM dependency doubles. Both patch runs exit **1**, with
+**28 failed / 5 passed**. The failures reproduce stopped passes, erased latency
+failures (including final overlap reconciliation and restored verification),
+false completion, raw parent opens, omitted parent loop gates, hung lane work,
+unvalidated initialization and early quarantine release. The five passing cases
+are controls, including the explicit spread-mutation comparison; this is not a
+claim that every newly added assertion fails on the base.
+
+The spread check was additionally mutation-tested against the original v4 test
+itself, using an isolated temporary VM loader and
+`node --experimental-vm-modules --test --test-reporter=tap --test-name-pattern='method write and close successes must each span three windows' <loader>`.
+The loader removes both production window-spread checks and runs the original
+or corrected test source without editing the worktree:
+
+| Node patch | Original fixture + removed spread checks | Corrected fixture + removed spread checks |
+| --- | --- | --- |
+| 22.16.0 | exit 0 (missed mutant) | exit 1 (caught mutant) |
+| 24.15.0 | exit 0 (missed mutant) | exit 1 (caught mutant) |
+
+Development runs of the new file initially exited **1** while correcting its
+VM JSON dependency handling, manual-clock stop precedence, observation assertions
+and crash method double. Those fixture failures were corrected before the final
+runs above. They are not counted as passing verification. Initial inventory
+comparison also exited **1** because the independent walk included the worktree's
+Git metadata file; excluding that metadata yields the matching 12-file inventory.
+
+All **10 changed JavaScript files** passed `node --check` on both patches:
+**20 invocations, each exit 0**. Final `git diff --check`, the independent
+trailing-whitespace/final-newline scan over all 12 files, the added-local-path
+check and the inventory `diff -u` each exited **0**. `git diff --cached
+--exit-code` exited **0**; the core JavaScript, frozen contract and generated
+setup runtime comparison against `06743bd8` also exited **0**. The branch remains
+at `06743bd8`, with 12 unstaged changed files. Verification processes finished;
+owned temporary loaders/logs were removed after recording these results.

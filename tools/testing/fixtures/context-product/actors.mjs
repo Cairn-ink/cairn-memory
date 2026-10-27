@@ -10,7 +10,7 @@ export function actor(kind,config, {url=childUrl,stallMs=15000,forkChild=fork,qu
   const registry=typeof config==='object'&&config?.protocol==='P2-product-v4'?globalThis[Symbol.for('product-qualification-actors')]:null;registry?.add(child);
   const messages=[],waiters=[];let lastProgress=Date.now(),closed=false;
   child.stderr.on('data',()=>{});
-  const deliver=m=>{lastProgress=Date.now();const i=waiters.findIndex(w=>w.type===m.type);
+  const deliver=m=>{lastProgress=Date.now();const i=waiters.findIndex(w=>(Array.isArray(w.type)?w.type.includes(m.type):w.type===m.type));
     if(i<0)messages.push(m);else waiters.splice(i,1)[0].resolve(m);};
   child.on('message',deliver);
   let resolveExit;
@@ -27,7 +27,7 @@ export function actor(kind,config, {url=childUrl,stallMs=15000,forkChild=fork,qu
   const monitor=setInterval(()=>{if((!quietWhenIdle||waiters.length||child.ipcError)&&Date.now()-lastProgress>stallMs){
     if(typeof config==='object'&&config?.protocol==='P2-product-v4'){child.stalled=true;child.emit('qualification-stalled',{kind,lastProgress});}
     else child.kill('SIGKILL');}},1000);
-  child.wait=type=>{const i=messages.findIndex(m=>m.type===type);return i>=0?Promise.resolve(messages.splice(i,1)[0]):
+  child.wait=type=>{const i=messages.findIndex(m=>(Array.isArray(type)?type.includes(m.type):m.type===type));return i>=0?Promise.resolve(messages.splice(i,1)[0]):
     closed?Promise.reject(Error('child_closed')):child.ipcError?Promise.reject(child.ipcError):new Promise((resolve,reject)=>{
       if(quietWhenIdle&&!waiters.length)lastProgress=Date.now();waiters.push({type,resolve,reject});});};
   child.take=type=>{const found=messages.filter(m=>m.type===type);for(let i=messages.length-1;i>=0;i--)if(messages[i].type===type)messages.splice(i,1);return found;};

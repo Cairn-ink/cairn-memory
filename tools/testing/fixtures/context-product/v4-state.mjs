@@ -7,6 +7,7 @@ import { configure, drain, timestamp, observeLoop, validateResponse, instrumentG
 import { startWriter, recordedWriter } from './controller.mjs';
 import { stat } from 'node:fs/promises';
 import { actor, terminate, fileChild, startSampler, attributeBlocks } from './actors.mjs';
+import { supervisorOwner } from '../../../../core/context-read-supervisor.mjs';
 import { V4, methodProfile } from './v4-plan.mjs';
 import { validateSubprobes } from './v4-validation.mjs';
 const storageUrl=new URL('./storage-child.mjs',import.meta.url);
@@ -37,7 +38,27 @@ export function postCatchupHasRef(result,row) {
   const namespace={ownerId:row.owner_id,scope:row.scope,projectId:row.project_id};
   return items.some(i=>i.ref?.type==='memory'&&i.ref.memoryId===row.id&&i.ref.revision===row.revision&&isDeepStrictEqual(i.ref.namespace,namespace));
 }
-export async function stateCell(cell,{prepare,prepareInput,build,sink,input},{configure:setup=configure,readValidate=validateResponse,writer:start=startWriter,startSampler:makeSampler=startSampler,instrumentGc:makeGc=instrumentGc,observeLoop:makeLoop=observeLoop,nativeFactory=injectionWorker,makeLock=(config)=>actor('lock',{path:config.path,protocol:'P2-product-v4',supervision:config.supervision,exclusive:true},{url:storageUrl,stallMs:config.supervision.stallMs})}={}) {
+// Observe the existing supervisor ownership seam, including every safety-latch
+// transition. A final disposal flag alone cannot prove earlier quarantine.
+export function observeQuarantine(supervisor,ownerOf=supervisorOwner) {
+  const resources=[...ownerOf(supervisor).owner.records].filter(r=>!r.parent&&r.resources);
+  const events=[];let active=false,held=true;
+  const sample=()=>{
+    for(const r of resources){
+      const disposed=r.state==='complete'&&r.workerStopped===true&&r.nativeDisposed===true;
+      events.push({state:r.state,quarantined:r.safety===true,workerStopped:r.workerStopped,nativeDisposed:r.nativeDisposed});
+      if(active&&!disposed&&r.safety!==true)held=false;
+    }
+  };
+  const restores=resources.map(r=>{
+    const descriptor=Object.getOwnPropertyDescriptor(r,'safety');let value=r.safety;
+    Object.defineProperty(r,'safety',{configurable:true,enumerable:true,get:()=>value,set:v=>{value=v;sample();}});
+    return ()=>Object.defineProperty(r,'safety',{...descriptor,value});
+  });
+  return {begin(){active=true;sample();},finish(){sample();const disposed=resources.length>0&&resources.every(r=>r.state==='complete'&&r.workerStopped===true&&r.nativeDisposed===true);
+    return {heldUntilDisposal:held&&disposed,events};},close(){restores.forEach(restore=>restore());}};
+}
+export async function stateCell(cell,{prepare,prepareInput,build,sink,input},{configure:setup=configure,readValidate=validateResponse,writer:start=startWriter,startSampler:makeSampler=startSampler,instrumentGc:makeGc=instrumentGc,observeLoop:makeLoop=observeLoop,nativeFactory=injectionWorker,observeQuarantine:watchQuarantine=observeQuarantine,makeLock=(config)=>actor('lock',{path:config.path,protocol:'P2-product-v4',supervision:config.supervision,exclusive:true},{url:storageUrl,stallMs:config.supervision.stallMs})}={}) {
   const records=[];
   for(const probe of V4.stateSubprobes[cell.injection]) {
     const path=probe.path??probe.id,resetId=randomUUID(),method=profile(path),subcell={...cell,...method,intent:'current',language:'mixed'};
@@ -57,12 +78,13 @@ export async function stateCell(cell,{prepare,prepareInput,build,sink,input},{co
     const deadlineMs=input.stateDeadlines[path];
     config={...config,deadlines:{...config.deadlines,openMs:deadlineMs,requestMs:config.deadlines.requestMs},input:{...config.input,deadlineMs}};
     const gate=new SharedArrayBuffer(48),native=nativeFactory({gate,opening:path==='opening'&&['abort','crash'].includes(cell.injection),crash:cell.injection==='crash'});
-    const abort=new AbortController();let c,h,result,code=null,cleanupId,settledAt,writer,writerResult,lock,lockResult,record,gc,sampler,loop,cleanupLoop,loopFinished=false,cleanupFinished=false;
+    const abort=new AbortController();let c,h,result,code=null,cleanupId,settledAt,writer,writerResult,lock,lockResult,record,gc,sampler,loop,cleanupLoop,loopFinished=false,cleanupFinished=false,quarantine;
     const loops=[];let offset;
     try {
       c=await setup(config);gc=makeGc();sampler=await makeSampler([process.pid]);loop=makeLoop();offset=timestamp()-Number(process.hrtime.bigint())/1e6;
       if(cell.injection==='exhaustion'&&path==='opening'){lock=makeLock(config);await lock.wait('ready');}
       const opening=c.open({signal:abort.signal});
+      if(cell.injection==='crash')quarantine=watchQuarantine(c.supervisor);
       let pending;
       if(path==='opening')pending=opening;
       else {h=await opening;
@@ -72,7 +94,7 @@ export async function stateCell(cell,{prepare,prepareInput,build,sink,input},{co
       }
       // Observe rejection immediately, even while waiting for native entry.
       let settled=false;
-      const publicResult=pending.then(r=>{result=r;code=r?.ok===false?r.error.code:null;settledAt=timestamp();settled=true;},e=>{code=e.code;cleanupId=e.cleanupId;settledAt=timestamp();settled=true;});
+      const publicResult=pending.then(r=>{result=r;code=r?.ok===false?r.error.code:null;settledAt=timestamp();quarantine?.begin();settled=true;},e=>{code=e.code;cleanupId=e.cleanupId;settledAt=timestamp();quarantine?.begin();settled=true;});
       let abortObservedAt=null;
       if(['abort','crash'].includes(cell.injection)){
         while(!Atomics.load(native.flags,1)&&!settled)await delay(1);
@@ -97,7 +119,7 @@ export async function stateCell(cell,{prepare,prepareInput,build,sink,input},{co
       const status=cleanupId?c.supervisor.getCleanupStatus(cleanupId):null;
       const supervised=!disposalSettled;cleanupLoop=makeLoop();native.release();await disposal;
       if(lock){lock.send({type:'release'});lockResult=await lock.wait('result');lockResult.exit=await lock.exited;await sink.record(cell.id,'locker-exit',lockResult);lock=null;}
-      await h?.close();h=null;await c.supervisor.close();const diagnostics=await drain(c.supervisor);
+      await h?.close();h=null;await c.supervisor.close();const quarantineEvidence=quarantine?.finish();const diagnostics=await drain(c.supervisor);
       loops.push(await cleanupLoop.finish());cleanupFinished=true;if(lockResult?.hostLoop)loops.push(lockResult.hostLoop);
       const loopRecord={maxMs:Math.max(...loops.map(l=>l.maxMs)),over100:loops.reduce((n,l)=>n+l.over100,0),blocks:loops.flatMap(l=>l.blocks)};
       const checked=result?await readValidate(result,config):{bounds:true,validated:true};
@@ -108,7 +130,8 @@ export async function stateCell(cell,{prepare,prepareInput,build,sink,input},{co
       record={id:probe.id,path,trigger:probe.trigger??null,resetId,code,noLateData:!result?.ok||code===null,
         expected:checked.bounds&&checked.validated&&catchupExpected&&(result?.ok===true?(config.oracle?await config.oracle(result,{...config,code}):true):code!==null),
         loop:loopRecord,cutoffAt,settledAt,nativeEnteredAt:nativeEnteredAt??(cell.injection==='exhaustion'&&nativeFailures.length?settledAt:null),abortObservedAt,nativePendingAtSettlement:pendingAtSettlement,
-        writerCommitWhileCleanupPending,writerDeadlineOverrun,supervisedUntilDisposal:cell.injection!=='abort'||supervised&&(path!=='opening'||status?.state==='pending'),
+        writerCommitWhileCleanupPending,writerDeadlineOverrun,supervisedUntilDisposal:cell.injection==='crash'?quarantineEvidence?.heldUntilDisposal===true:cell.injection!=='abort'||supervised&&(path!=='opening'||status?.state==='pending'),
+        ...(quarantineEvidence?{quarantineEvidence}:{}),
         nativeDisposed:diagnostics.length>0&&diagnostics.every(r=>r.nativeDisposed===true&&r.workerStopped===true),ownershipDrained:true,
         actualExitConfirmed:diagnostics.length>0&&diagnostics.every(r=>r.workerStopped===true),workerExitConfirmed:diagnostics.length>0&&diagnostics.every(r=>r.workerStopped===true),
         cleanupId:cleanupId??null,handleEscaped:path==='opening'&&result!=null,nativePrimary:nativeFailures[0]?.sqlite.code??null,
@@ -121,7 +144,7 @@ export async function stateCell(cell,{prepare,prepareInput,build,sink,input},{co
       const final=await config.inspectLedger();await sink.record(cell.id,'population',{subprobe:probe.id,resetId,initial:config.initialCounts,final:{memories:final.memories,cards:final.cardCount,schema:final.schema}});
       await sink.record(cell.id,'subprobe',record);records.push(record);
     }finally{
-      native.release();gc?.close();native.close();
+      quarantine?.close();native.release();gc?.close();native.close();
       try {if(writer)await writer.stop();}
       finally {try {
         if(lock){if(lock.connected)lock.send({type:'release'});const exit=await lock.exited;await sink.record(cell.id,'locker-exit',{exit});await terminate(lock);}

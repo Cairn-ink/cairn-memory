@@ -84,8 +84,8 @@ export async function runV4(input,{profile,segmentId,reportPath,registrationPath
   };
   const monitor=setInterval(supervise,Math.min(1000,input.supervision.stallMs,input.supervision.progressMs));
   const estimate=estimateV4(profile),initialRate=estimate.estimateSeconds*1000/plan.length,observedCosts=new Map();
-  const complete=async(cell,decision)=>{if(decision.observedFailure)decision={...decision,decision:'failed'};decisions.push(decision.decision);completed.add(cell.key);tally[decision.decision]=(tally[decision.decision]??0)+1;
-    const value={...decision,complete:true,key:cell.key};await sink.cell(cell,value);await sink.record(cell.id,'checkpoint',{segmentId,registrationHash,complete:true,cellKey:cell.key,decision:value});};
+  const complete=async(cell,decision,genuine=true)=>{if(decision.observedFailure)decision={...decision,decision:'failed'};decisions.push(decision.decision);if(genuine)completed.add(cell.key);tally[decision.decision]=(tally[decision.decision]??0)+1;
+    const value={...decision,complete:genuine,key:cell.key};await sink.cell(cell,value);await sink.record(cell.id,'checkpoint',{segmentId,registrationHash,complete:genuine,cellKey:cell.key,decision:value});};
   try {
     input.registeredFixtureHashes=Object.fromEntries(header.corpus.map(f=>[f.id,f.hash]));
     if(previous.cells.length)await sink.record(-1,'resumed-checkpoints',{cellKeys:previous.cells.map(c=>c.key),retainedDecisions:previous.cells.map(c=>c.decision)});
@@ -133,13 +133,13 @@ export async function runV4(input,{profile,segmentId,reportPath,registrationPath
         }
         if(!['injection','exposure'].includes(cell.kind)){const final=await config.inspectLedger();await sink.record(cell.id,'population',{initial:config.initialCounts,final:{memories:final.memories,cards:final.cardCount,schema:final.schema}});}
         await complete(cell,decision);
-      }catch(e){await sink.record(cell.id,'failure',{code:e.code??e.message,exitCode:e.exitCode??null,signal:e.signal??null,...(e.cleanup?{cleanup:e.cleanup}:{}),...(e.diagnostics?{diagnostics:e.diagnostics}:{})});await complete(cell,{decision:'failed',reason:'harness_failed'});stopped='harness_failed';}
+      }catch(e){await sink.record(cell.id,'failure',{code:e.code??e.message,exitCode:e.exitCode??null,signal:e.signal??null,...(e.cleanup?{cleanup:e.cleanup}:{}),...(e.diagnostics?{diagnostics:e.diagnostics}:{})});await complete(cell,{decision:'failed',reason:'harness_failed'},false);stopped='harness_failed';}
       finally{await cellWorkspace.cleanup();observedCosts.set(cell.kind,Math.max(observedCosts.get(cell.kind)??0,Date.now()-began));}
     }
-    status=aggregate([...decisions,...(completed.size===plan.length?[]:['inconclusive'])]);
+    status=stopped?(decisions.includes('failed')?'failed':'inconclusive'):aggregate([...decisions,...(completed.size===plan.length?[]:['inconclusive'])]);
   }finally{
     clearInterval(monitor);delete globalThis[Symbol.for('product-qualification-actors')];process.off('SIGINT',stop);process.off('SIGTERM',stop);await workspace.cleanup();
-    await sink.finish(status,{tally,complete:completed.size===plan.length,segmentComplete:completed.size===segment.cellKeys.length,completedCells:completed.size,requiredCells:plan.length,stopReason:stopped});
+    await sink.finish(status,{tally,complete:!stopped&&completed.size===plan.length,segmentComplete:!stopped&&completed.size===segment.cellKeys.length,completedCells:completed.size,requiredCells:plan.length,stopReason:stopped});
   }
   console.log(status);return {status,tally};
 }

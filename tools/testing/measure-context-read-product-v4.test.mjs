@@ -60,8 +60,9 @@ test('fresh-close credits are a subset of successful public-write overlaps',()=>
 });
 test('method write and close successes must each span three windows',()=>{
   const f=exposureFixture();for(const w of f.windows.slice(2))for(const r of w.attempts)r.ok=false;
-  for(const w of f.windows.slice(0,2)){const original=[...w.attempts];for(let n=0;n<4;n++)for(const r of original)w.attempts.push({...r,slot:w.attempts.length});}
-  assert.equal(validateExposure(f.cell,f.windows).decision,'invalid');
+  for(const w of f.windows.slice(0,2)){const original=[...w.attempts];for(let n=0;n<4;n++)for(const r of original)w.attempts.push({...r,...windowSlot(f.cell,w.repetition,w.attempts.length),slot:w.attempts.length});}
+  const result=validateExposure(f.cell,f.windows);
+  assert.equal(result.decision,'invalid');assert.deepEqual([...new Set(result.errors.map(e=>e.split(':')[0]))],['method_minima']);
 });
 test('W3 independently gates both retained targets and never demands fresh closes',()=>{
   const f=exposureFixture(true);for(const w of f.windows)for(const c of w.writer.calls){delete c.closeStartedAt;delete c.closeFinishedAt;}

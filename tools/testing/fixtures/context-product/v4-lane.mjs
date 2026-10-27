@@ -12,7 +12,7 @@ export async function laneProcess(config) {
     running=(async()=>{
       const value=await attempt(m.config,{oracle});attributeBlocks(value.record,await sampler.collect());
       await send({type:'read-result',id:m.id,value});
-    })().catch(async()=>{await send({type:'lane-failure',id:m.id});}).finally(()=>{running=null;});
+    })().catch(async error=>{await send({type:'lane-failure',id:m.id,code:error.code??'lane_attempt_failed'});}).finally(()=>{running=null;});
   });
   await send({type:'ready',startupLoop});
   while(!stopping)await new Promise(r=>setTimeout(r,10));

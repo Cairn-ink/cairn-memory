@@ -1360,23 +1360,23 @@
     "reason": "Reads only operator registration JSON for estimate-only plan arithmetic, before any engine or SQLite handle invocation."
   },
   {
-    "path": "tools/testing/fixtures/context-product/v4-checkpoints.mjs",
-    "source": "import { createReadStream } from 'node:fs'",
-    "reason": "Streams only operator-supplied JSONL qualification reports for complete-cell checkpoints; never a database or companion."
-  },
-  {
-    "path": "tools/testing/fixtures/context-product/v4-checkpoints.mjs",
-    "source": "for await(const line of createInterface({input:createReadStream(path),crlfDelay:Infinity})){",
-    "reason": "Streams only suffix-validated JSONL qualification reports, incrementally retaining complete cell decisions; never a database or companion."
-  },
-  {
     "path": "tools/testing/fixtures/context-product/v4-state.mjs",
     "source": "import { stat } from 'node:fs/promises'",
     "reason": "Metadata-only absent-sidecar existence checks; database hash bytes are read exclusively in the SQLite-free child."
   },
   {
-    "path": "tools/testing/fixtures/context-product/v4-checkpoints.mjs",
-    "source": "import { stat } from 'node:fs/promises'",
-    "reason": "Metadata-only existence check for the numeric journal paired with a suffix-validated checkpoint report; no database descriptor is opened."
+    "path": "tools/testing/fixtures/context-product/v4-checkpoint-child.mjs",
+    "source": "import { createReadStream,constants } from 'node:fs'",
+    "reason": "SQLite-free child only; refuses symlinks and non-regular files before opening operator report/journal paths. No measuring-process database descriptor."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/v4-checkpoint-child.mjs",
+    "source": "import { lstat } from 'node:fs/promises'",
+    "reason": "SQLite-free child only; refuses symlinks and non-regular files before opening operator report/journal paths. No measuring-process database descriptor."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/v4-checkpoint-child.mjs",
+    "source": "for await(const line of createInterface({input:createReadStream(path,{flags:constants.O_RDONLY|constants.O_NOFOLLOW}),crlfDelay:Infinity})){",
+    "reason": "SQLite-free child only; refuses symlinks and non-regular files before opening operator report/journal paths. No measuring-process database descriptor."
   }
 ]

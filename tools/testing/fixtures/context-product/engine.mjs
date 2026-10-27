@@ -8,15 +8,15 @@ import { isDeepStrictEqual } from 'node:util';
 export const timestamp=()=>performance.timeOrigin+performance.now();
 const immediate=()=>new Promise(r=>setImmediate(r));
 export function observeLoop({now=()=>performance.now(), timers=true}={}) {
-  let last=now(),maxMs=0,over100=0,finished=false,previousUsage=process.resourceUsage();
+  let last=now(),maxMs=0,over100=0,finished=false,paused=false,previousUsage=process.resourceUsage();
   const gcEntries=[],gcObserver=timers?new PerformanceObserver(list=>{for(const e of list.getEntries())gcEntries.push({threadId:0,startAt:performance.timeOrigin+e.startTime,durationMs:e.duration,kind:e.detail.kind});}):null;
   gcObserver?.observe({entryTypes:['gc']});
   const blocks=[],hist=timers?monitorEventLoopDelay({resolution:1}):null;
   hist?.enable();
-  const sample=()=>{if(finished)return;const at=now(),gap=at-last,currentUsage=process.resourceUsage();maxMs=Math.max(maxMs,gap);
+  const sample=()=>{if(finished||paused)return;const at=now(),gap=at-last,currentUsage=process.resourceUsage();maxMs=Math.max(maxMs,gap);
     if(gap>100){over100++;blocks.push({startedAt:performance.timeOrigin+last,finishedAt:performance.timeOrigin+at,gapMs:gap,resources:resourceDelta(previousUsage,currentUsage)});}last=at;previousUsage=currentUsage;};
   const timer=timers?setInterval(sample,1):null;
-  return {sample,async finish(){if(timers){await immediate();await delay(2);}sample();finished=true;clearInterval(timer);hist?.disable();gcObserver?.disconnect();
+  return {sample,pause(){if(finished)return;sample();paused=true;hist?.disable();},resume(){if(finished)return;last=now();previousUsage=process.resourceUsage();paused=false;hist?.enable();},async finish(){if(timers){await immediate();await delay(2);}sample();finished=true;clearInterval(timer);hist?.disable();gcObserver?.disconnect();
     for(const block of blocks)block.gc=gcEntries.filter(g=>g.startAt<block.finishedAt&&g.startAt+g.durationMs>block.startedAt);
     return {maxMs:Math.max(maxMs,(hist?.max??0)/1e6),over100,blocks};}};
 }
@@ -136,16 +136,29 @@ export async function attempt(config,{open,validate=validateResponse,oracle,loop
   // All configuration, input construction and harness instrumentation is outside observation.
   const c=await configure(config),gc=instrumentGc(),usage=process.resourceUsage();
   const input=config.input;let h,result,readStartedAt=null,readFinishedAt=null,readMs=0,rejectedAt=null,code=null,cleanupId,cancelObservedAt=null;
-  let startedAt,finishedAt,publicMs,elapsedMs,exports;
+  let startedAt,finishedAt,publicMs,elapsedMs,exports,initialization;const loops=[];
 
   await onWindowStart?.();
-  const loop=loopFactory();
+  let loop=loopFactory();
   try {
     await immediate();startedAt=clock();const start=performance.now();
     try {
       h??=await (open?open(c):c.open({signal}));loop.sample();
       let initialized=true;
-      if(initialize){const initial=await h[config.method](input,c.token,{signal});if(!initial.ok){result=initial;initialized=false;}}
+      if(initialize){
+        initialization={ok:false,bounds:false,validated:false,expected:false};
+        const initial=await h[config.method](input,c.token,{signal});
+        // Initialization is a separate engine interval. Its validation/oracle work
+        // stays outside observation and its failures survive the measured read.
+        loops.push(await loop.finish());
+        let checked,expected=false;
+        try{checked=await validate(initial,config);}catch{checked={bounds:false,validated:false};}
+        try{expected=oracle?await oracle(initial,{...config,code:initial.ok?null:initial.error.code}):initial.ok===true;}catch{}
+        const partial=(initial?.value?.coverage??initial?.value?.diagnostics?.candidates?.coverage)?.status==='partial';
+        initialization={ok:initial.ok===true,...checked,expected:expected===true&&(!partial||config.cell?.scope==='overflow')};
+        loop=loopFactory();
+        if(!initial.ok){result=initial;initialized=false;}
+      }
       readStartedAt=clock();const read=performance.now();
       if(config.injection==='crash')void gc.workers.at(-1)?.terminate();
       const abort=config.injection==='abort'?new AbortController():null;if(abort){cancelObservedAt=clock();abort.abort();}
@@ -161,7 +174,8 @@ export async function attempt(config,{open,validate=validateResponse,oracle,loop
   }finally {
     // Final host-loop drain includes engine shutdown. Serialization, oracle and
     // ack record processing start only after the observed window is stopped.
-    var hostLoop=await loop.finish();await immediate();gc.close();
+    loops.push(await loop.finish());
+    var hostLoop={maxMs:Math.max(...loops.map(l=>l.maxMs)),over100:loops.reduce((n,l)=>n+l.over100,0),blocks:loops.flatMap(l=>l.blocks)};await immediate();gc.close();
   }
   await onWindowEnd?.();
   const resources=resourceDelta(usage,process.resourceUsage());
@@ -169,13 +183,13 @@ export async function attempt(config,{open,validate=validateResponse,oracle,loop
   catch{checked={bytes:0,bounds:false,validated:false,validationCode:'harness_validation_failed'};}
   const scopePartial=(result?.value?.coverage??result?.value?.diagnostics?.candidates?.coverage)?.status==='partial';
   let oracleExpected=false;try{oracleExpected=oracle?await oracle(result,{...config,code}):result?.ok===true;}catch{}
-  const expected=oracleExpected===true&&(!scopePartial||config.cell?.scope==='overflow');
+  const expected=oracleExpected===true&&(!scopePartial||config.cell?.scope==='overflow')&&(!initialization||initialization.ok===true&&initialization.expected===true&&initialization.bounds===true&&initialization.validated===true);
   const diagnostics=exports.map(r=>r.diagnostics);
   for(const r of exports)c.supervisor.ackCleanup(r.cleanupId);
   const gcBlocks=hostLoop.blocks.map(b=>({...b,gc:gc.entries.filter(g=>g.startAt<b.finishedAt&&g.startAt+g.durationMs>b.startedAt)}));
   const cutoff=Math.min(startedAt+config.deadlines.requestMs,readStartedAt===null?startedAt+config.deadlines.openMs:readStartedAt+(config.input.deadlineMs??5000));
   return {record:{hostPid:process.pid,startedAt,finishedAt,readStartedAt,readFinishedAt,elapsedMs,readMs,publicMs,openMs:(readStartedAt??rejectedAt)-startedAt,cleanupLagMs:elapsedMs-publicMs,rejectedAt,code,ok:result?.ok===true,
-    ...checked,expected,quality:retrievalQuality(result,config),scopePartial,overlap:config.load==='idle',hostLoop:{...hostLoop,blocks:gcBlocks},resources,gc:gc.entries,
+    ...checked,expected,...(initialization?{initialization}:{}),quality:retrievalQuality(result,config),scopePartial,overlap:config.load==='idle',hostLoop:{...hostLoop,blocks:gcBlocks},resources,gc:gc.entries,
     nativeBusy:diagnostics.reduce((n,d)=>n+(d.busy??0),0),publicBusy:code==='storage_busy'?1:0,
     telemetry:diagnostics.length&&diagnostics.every(d=>d.coverage==='complete')?'complete':'incomplete',diagnostics,
     overshootMs:Math.max(0,(rejectedAt??readFinishedAt)-cutoff,code==='read_cancelled'&&cancelObservedAt!==null?(rejectedAt??readFinishedAt)-cancelObservedAt:0),lateSuccess:result?.ok===true&&readFinishedAt>=cutoff},result};
