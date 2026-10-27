@@ -1,4 +1,6 @@
 import { types } from 'node:util';
+import { randomUUID } from 'node:crypto';
+import { serviceIssuance, claimMaintenanceWriter } from './context-product-service.mjs';
 import { addAbortListener } from 'node:events';
 import { Worker } from 'node:worker_threads';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -43,11 +45,11 @@ const nativeWorker = data => new Worker(new URL('./context-product-worker.mjs', 
   resourceLimits: { maxOldGenerationSizeMb: 192 },
 });
 export function createProductReaderRuntime({ now = () => process.hrtime.bigint(), utc = () => Date.now(),
-  setTimer = setTimeout, clearTimer = clearTimeout, spawnWorker = nativeWorker } = {}) {
+  setTimer = setTimeout, clearTimer = clearTimeout, spawnWorker = nativeWorker, maintenance = false } = {}) {
   return async function openContextProductReader(original, controls = {}) {
     // These samples precede even option reflection/validation.
     const admitted = now(), admissionUtc = utc();
-    const options = ownData(original, ['supervisor', 'path', 'version', 'profile', 'readSet', 'ownerCoverage', 'requestControl', 'host', 'diagnostics', 'deadlineMs']);
+    const options = ownData(original, ['supervisor', 'path', 'version', 'profile', 'readSet', 'ownerCoverage', 'requestControl', 'host', 'diagnostics', 'deadlineMs', ...(maintenance ? ['sidecarJournalMode'] : [])]);
     const { signal } = ownData(controls, ['signal']);
     signalAborted(signal);
     if (options.version !== 'context-read-v1' || options.profile !== PRODUCT_PROFILE ||
@@ -65,28 +67,35 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       host.moduleUrl = pathToFileURL(resolve(modulePath)).href;
     } catch { fail('invalid_input'); }
     const configuration = hostConfiguration(host.configuration);
-    const request = requestRecord(options.requestControl, admitted, admissionUtc);
-    const binding = issuance(configuration.requestBinding, request, readSet, ownerCoverage);
+    if (maintenance && options.sidecarJournalMode !== 'DELETE') {
+      if (options.sidecarJournalMode === 'WAL') fail('index_unavailable');
+      fail('invalid_input');
+    }
+    const binding = maintenance ? serviceIssuance(configuration.serviceBinding, readSet, ownerCoverage) : null;
+    const serviceControl = () => ({ requestId: randomUUID(), handleId: randomUUID(), credentialBindingId: binding.credentialBindingId,
+      credentialExpiresUtcMs: binding.credentialExpiresUtcMs, requestMaxMs: 5000 });
+    const request = requestRecord(maintenance ? serviceControl() : options.requestControl, admitted, admissionUtc);
+    const issuedBinding = maintenance ? binding : issuance(configuration.requestBinding, request, readSet, ownerCoverage);
     const openDeadline = deadline(options.deadlineMs ?? 5000);
     // Bound complete bootstrap/control transport before reserving or dispatching.
-    const bootstrap = { path: options.path, readSet, ownerCoverage, request, host: { moduleUrl: host.moduleUrl, configuration }, binding };
+    const bootstrap = { path: options.path, readSet, ownerCoverage, request, host: { moduleUrl: host.moduleUrl, configuration }, binding: issuedBinding };
     hostConfiguration(bootstrap);
     const first = operationRecord(request, admitted, openDeadline, 1);
     const frame = options.diagnostics ? nativeTelemetry(first.operationId, 1) : null;
     const resources = new SharedArrayBuffer(16);
-    const openingData = { path: options.path, readSet, ownerCoverage, request, binding,
+    const openingData = { path: options.path, readSet, ownerCoverage, request, binding: issuedBinding, maintenance,
       host: { moduleUrl: host.moduleUrl, configuration }, operation: first, frame, resources, deadlineMs: openDeadline };
     hostConfiguration(openingData);
     const reservation = configuration.requestReservation;
-    if (!types.isSharedArrayBuffer(reservation) || Reflect.apply(sharedLength, reservation, []) !== 4 ||
-        Atomics.compareExchange(new Int32Array(reservation), 0, 0, 1) !== 0) fail('authority_required');
-    const resource = registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, request, frame, resources });
-    let closed = false, terminal, idle, closePromise, ready = false;
+    if (!maintenance && (!types.isSharedArrayBuffer(reservation) || Reflect.apply(sharedLength, reservation, []) !== 4 ||
+        Atomics.compareExchange(new Int32Array(reservation), 0, 0, 1) !== 0)) fail('authority_required');
+    const resource = registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, request: maintenance ? undefined : request, frame, resources });
+    let closed = false, terminal, idle, closePromise, ready = false, releaseWriter;
     const epoch = 1;
     const lifecycle = createReaderWorkerLifecycle({ clearTimer, onStop(termination) {
       registry.cleanup(resource);
       termination.then(() => {
-        registry.finish(resource);
+        registry.finish(resource); if (resource.state === 'complete') releaseWriter?.();
         const slot = lifecycle.pending;
         if (slot?.record && slot.record !== resource) registry.finish(slot.record);
       }, () => registry.finish(resource, false));
@@ -117,6 +126,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         try {
           if (typeof message.fileIdentity !== 'string' || !/^[0-9]+:[0-9]+$/.test(message.fileIdentity)) fail('reader_failed');
           registry.bind(resource, message.fileIdentity);
+          if (maintenance) releaseWriter = claimMaintenanceWriter(message.fileIdentity,readSet);
           instance.postMessage({ kind: 'identity-ack', operation: slot.operation });
         } catch (error) { shutdown(error.code ?? 'reader_failed'); }
         return;
@@ -150,18 +160,19 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         if (!opening) {
           if (method !== 'getContextReadCapabilities' && (credential === undefined || credential === null)) fail('authority_required');
           input = boundedData(payload); token = method === 'getContextReadCapabilities' ? null : boundedData(credential, 16384);
-          if (method !== 'getContextReadCapabilities' && credentialDigest(token) !== binding.credentialDigest) fail('authority_required');
+          if (method !== 'getContextReadCapabilities' && credentialDigest(token) !== issuedBinding.credentialDigest) fail('authority_required');
           if (JSON.stringify(contextReadSet(input.readSet)) !== JSON.stringify(readSet)) fail('invalid_read_set');
-          duration = deadline(input.deadlineMs);
+          duration = deadline(method === 'refreshContextIndex' ? input.budget?.maxMs : input.deadlineMs);
         } else duration = openDeadline;
       } catch (error) {
         if (opening) shutdown(error.code ?? 'reader_failed');
         return Promise.resolve(productFailure(error.code));
       }
       if (lifecycle.pending) return Promise.resolve(productFailure('read_in_progress'));
-      const operation = opening ? first : operationRecord(request, entered, duration, epoch);
+      const callRequest = !opening && maintenance ? requestRecord(serviceControl(), entered, utc()) : request;
+      const operation = opening ? first : operationRecord(callRequest, entered, duration, epoch);
       const callFrame = opening ? frame : options.diagnostics ? nativeTelemetry(operation.operationId, epoch) : null;
-      const outbound = opening ? openingData : { method, input, credential: token, request, operation, frame: callFrame };
+      const outbound = opening ? openingData : { method, input, credential: token, request: callRequest, operation, frame: callFrame };
       operationMessage(outbound);
       const record = opening ? resource : registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, parent: resource, frame: callFrame });
       let subscription;
@@ -214,11 +225,11 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         // Public configuration only, no credential/private projection observation.
         return call('getContextReadCapabilities', { readSet, deadlineMs: 1000 }, null, control);
       },
-      fetchCandidateEvidence: (input, credential, control) => call('fetchCandidateEvidence', input, credential, control),
-      // P2a deliberately supplies no search, status or assembly implementation.
+      ...(!maintenance ? { fetchCandidateEvidence: (input, credential, control) => call('fetchCandidateEvidence', input, credential, control),
       findCandidates: (input, credential, control) => call('findCandidates', input, credential, control),
-      contextRead: (input, credential, control) => call('contextRead', input, credential, control),
+      contextRead: (input, credential, control) => call('contextRead', input, credential, control) } : {}),
       getContextIndexStatus: (input, credential, control) => call('getContextIndexStatus', input, credential, control),
+      ...(maintenance ? { refreshContextIndex: (input, credential, control) => call('refreshContextIndex', input, credential, control) } : {}),
       close() {
         return closePromise ??= (async () => {
           if (!closed && !lifecycle.pending && lifecycle.worker) {
@@ -230,7 +241,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
               instance.once('exit', code => code === 0 ? resolve() : reject(coded('reader_failed')));
               instance.once('error', reject);
               instance.postMessage({ method: 'close' });
-            }).then(() => registry.finish(resource), () => registry.finish(resource, false));
+            }).then(() => { registry.finish(resource); if (resource.state === 'complete') releaseWriter?.(); }, () => registry.finish(resource, false));
             lifecycle.worker = undefined;
           } else await shutdown('store_closed');
           await resource.delivery;
@@ -240,3 +251,5 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
   };
 }
 export const openContextProductReader = createProductReaderRuntime();
+
+export const openContextIndexMaintainer = createProductReaderRuntime({ maintenance: true });
