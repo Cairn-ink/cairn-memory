@@ -52,6 +52,9 @@ pilot. Do not claim its expected state behavior has been implemented.
   provenance to re-hash the archive and installed sources with the same path/file
   checks; request guards never decompress the archive while the installed
   model-call timer is running.
+  Missing declared archive members or `package/package.json` fail explicitly
+  with `invalid_cairn_artifact`. Corrupt gzip may surface native zlib errors;
+  exact parity with the legacy tar subprocess error is impossible.
 - E4: exclusive durable `qualification-pilot-v1-intent.json` in the existing
   ledger directory prevents this fixed pilot being rerun via another output
   directory. Use existing safe exclusive/fsynced evidence helpers. Provision

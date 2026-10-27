@@ -54,6 +54,7 @@ function headerOctal(header, offset, length) {
 function archiveMembers(bytes) {
   // npm pack uses pacote's portable headers and fixed integer mtime. The
   // artifact's ASCII paths/sizes fit ustar; no PAX extensions are needed.
+  // Corrupt gzip keeps native zlib errors; exact parity with legacy tar subprocess errors is impossible.
   const tar = gunzipSync(bytes);
   if (tar.length % 512 !== 0) fail('invalid_cairn_artifact');
   const files = new Map(), seen = new Set();
@@ -97,12 +98,14 @@ export function inspectArtifact(executable, archive, expectedHash) {
   const bytes = pinnedArtifact(archive, expectedHash);
   const packageRoot = path.dirname(path.dirname(realpathSync(executable)));
   const members = archiveMembers(bytes);
+  if (!members.has('package.json')) fail('invalid_cairn_artifact');
   const manifest = JSON.parse(members.get('package.json'));
   if (manifest.name !== 'cairn-memory-local-preview' || !Array.isArray(manifest.files)
     || !manifest.files.includes('core/contract.mjs') || !manifest.files.includes('adapters/openai/index.mjs')) fail('invalid_cairn_artifact');
   const sourceHashes = new Map();
   for (const relative of new Set([...manifest.files, 'package.json'])) {
     validateRelative(relative);
+    if (!members.has(relative)) fail('invalid_cairn_artifact');
     const installed = hash(sourceBytes(packageRoot, relative));
     if (installed !== hash(members.get(relative))) fail('cairn_install_source_mismatch');
     sourceHashes.set(relative, installed);

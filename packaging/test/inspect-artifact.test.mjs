@@ -196,6 +196,20 @@ for (const kind of ['name', 'files', 'required', 'path', 'source']) {
   });
 }
 
+for (const relative of ['core/contract.mjs', 'package.json']) {
+  test(`missing archive member package/${relative} fails explicitly with invalid_cairn_artifact`, t => {
+    const f = fixture(t);
+    const index = f.members.findIndex(member => member.name === `package/${relative}`);
+    assert.ok(index >= 0);
+    f.members.splice(index, 1);
+    f.pack();
+    assert.ok(readFileSync(path.join(f.packageRoot, relative)).length, 'installed file remains present');
+    const children = forbidChildProcesses(t);
+    assert.throws(() => inspect(f), { message: 'invalid_cairn_artifact' });
+    assertNoChildren(children);
+  });
+}
+
 test('ustar prefix, NUL file flags and restrictive unlisted directories need no extraction', t => {
   const f = fixture(t);
   const member = f.members[0];
