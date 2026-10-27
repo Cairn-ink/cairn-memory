@@ -665,3 +665,104 @@ C06 and default entropy checks pass on both runtimes. The branch remains
 `feat/context-read-p2b` at `eb304e74`; nothing is staged or committed. Temporary
 verification scripts and logs are removed after these results are recorded;
 no test or repair process is left running.
+
+## Fix round 3
+
+Base: `bebc85da`, `context-read-product-v1.1`, production index lifecycle.
+The frozen specification, both re-review reports and dispatch traps were read.
+
+The remaining P1 in requirement D occurred after a completion had already
+settled as `renewal_expired`: same-window renewal with host usage at the item
+limit updated status to `budget_exhausted`, but retained the old resolved
+promise and its zero usage. In `renew()`, a settled observer now always gets a
+fresh completion, including renewal into an exhausted window. The existing
+exhaustion branch immediately settles that new promise with the current
+terminal observation and cumulative usage, without scheduling a timer. A
+still-pending same-window completion retains its identity and settles through
+the existing round-2 path; that identity is now asserted explicitly.
+
+Two in-memory `Fix3` cases first expire renewal with zero work, then renew the
+same window. The exhausted case checks a fresh promise, terminal status,
+`usedItems:8`, `usedMs:200`, matching status/completion and zero timers. The
+budget-left case imports `usedItems:3`/`usedMs:200`, resumes five normal quanta,
+and completes at `usedItems:8`/`usedMs:700` with zero timers. Both preserve the
+previous promise's expired observation.
+
+### Before/after evidence and round-2 qualification
+
+Each new case ran separately by explicit pump-test path with
+`--test --test-reporter=tap --test-name-pattern='Fix3 .*<case>'` on both nvm
+runtimes before editing the runtime. At that point,
+`git diff --exit-code bebc85da -- core/context-product-pump.mjs` exited **0**,
+confirming the pump implementation was the base version. The same cases then
+passed in each complete fixed pump-suite run.
+
+| New case | Node 22.16.0 base → fixed exit | Node 24.15.0 base → fixed exit |
+| --- | --- | --- |
+| Settled expiry → exhausted same window | 1 → 0 | 1 → 0 |
+| Settled expiry → same window with budget left | 0 → 0 | 0 → 0 |
+
+The first case fails on the base because the renewed promise is still the old
+resolved `renewal_expired` observer with zero usage. The budget-left case is a
+preservation control: the base already creates a fresh observer and completes
+normally. Thus the requested claim that **each** new case fails on `bebc85da`
+cannot accurately be made; only the exhausted case is a new behavioral
+before/after regression.
+
+For the earlier round-2 A/B evidence against `eb304e74`, distinguish behavioral
+regressions from instrumentation-dependent tests, as the reviewers requested:
+
+- The late-companion refusal, post-BEGIN reader/writer inode checks and repair
+  timeout cases distinguish the relevant behaviors before and after round 2.
+- Several A/B rendezvous tests depend on new hooks: `creationBoundary` matches
+  a new child-source marker; ordinary batch/snapshot rendezvous, handoff
+  injection and the seven repair-kill steps also require their source hooks.
+  Failures caused by an absent marker or an unreached rendezvous on the older
+  base do not independently demonstrate the race or crash-recovery defect.
+  Their passing instrumented runs exercise the intended interleavings and
+  recovery checks at the fixed implementation.
+- The idle-reader successor case passes on both sides and is a preservation
+  check. No new round-2-base A/B runs are claimed in this round.
+
+### Verification and actual exit codes
+
+Only the six requested test paths ran, each separately via
+`node --test --test-reporter=tap <explicit-path>`, using the exact nvm Node
+**22.16.0** and **24.15.0** executables with the selected runtime first in PATH.
+Both `--version` checks exited **0**. Each test process's actual return code
+was captured directly, and its TAP test/pass/fail/cancelled/skipped/todo totals
+were checked independently. No broad suite was run.
+
+| Explicit path | Node 22.16.0 exit / passed | Node 24.15.0 exit / passed |
+| --- | --- | --- |
+| `core/test/context-read-product-pump.test.mjs` | 0 / 16 | 0 / 16 |
+| `core/test/context-read-product-service.test.mjs` | 0 / 2 | 0 / 2 |
+| `core/test/context-read-product-index.test.mjs` | 0 / 65 | 0 / 65 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 / 5 | 0 / 5 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 / 16 | 0 / 16 |
+| `core/test/context-read-default-entropy.test.mjs` | 0 / 1 | 0 / 1 |
+
+All **12 full-file invocations exited 0**, **105/105 tests per runtime**, with
+zero failed, cancelled, skipped or todo tests. Both SQLite lock guards pass;
+this change adds no database or companion access. The four filtered base runs
+and their individual exit codes are recorded separately above.
+
+### Changed files and handoff
+
+The changed-file list was derived from `git diff --name-only HEAD` plus
+untracked-file enumeration, then independently re-derived with
+`git ls-files --modified --others --exclude-standard`. The sorted lists match
+at **3 changed files**, including this report. `git diff --cached --exit-code`
+exited **0**, confirming an unchanged index for the independent comparison.
+
+- `core/context-product-pump.mjs`
+- `core/test/context-read-product-pump.test.mjs`
+- `docs/plans/context-read-p2b-impl.md`
+
+Final `git diff --check` and an independent trailing-whitespace/final-newline
+scan covering all three files each exited **0**. Added lines contain no local
+absolute paths. The frozen specification and setup bundle are unchanged.
+No network or key access was used. Branch `feat/context-read-p2b` remains at
+`bebc85da`; nothing is staged or committed. Verification processes have exited,
+and the owned temporary verification directory and logs were removed after
+recording the results.

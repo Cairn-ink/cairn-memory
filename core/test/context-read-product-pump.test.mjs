@@ -113,6 +113,7 @@ for(const nextWindow of [true,false])test(`Fix2 ${nextWindow?'new window':'same 
   const result=await Promise.race([p.completion,new Promise(resolve=>setImmediate(()=>resolve('pending')))]);
   assert.notEqual(result,'pending');assert.equal(result.state,'budget_exhausted');assert.equal(s.timers.size,0);
   if(nextWindow){assert.notEqual(p.completion,first);assert.equal((await first).state,'budget_exhausted');}
+  else assert.equal(p.completion,first);
   await p.close();
 });
 
@@ -123,4 +124,29 @@ test('Fix2 admitted options are detached from caller mutations before timer disp
   assert.equal(s.opened[0].path,path);assert.equal(s.opened[0].readSet[0].ownerId,'pump');
   assert.equal(s.opened[0].host.moduleUrl,'file:///synthetic-host.mjs');assert.equal(p.getStatus().error,null);
   await p.close();assert.equal((await p.completion).state,'stopped');
+});
+
+for(const exhausted of [true,false])test(`Fix3 settled renewal expiry gets a fresh same-window completion with ${exhausted?'exhausted budget':'budget left'}`,async t=>{
+  const s=setup(t,{renewalMs:100}),p=s.renew(s.c),first=p.completion;
+  await s.next();
+  const expired=await first;
+  assert.equal(expired.state,'renewal_expired');assert.equal(expired.usedItems,0);assert.equal(expired.usedMs,0);
+  assert.equal(s.calls.length,0);assert.equal(s.timers.size,0);
+
+  assert.equal(s.renew({...s.c,renewalMs:60000,window:{...s.c.window,usedItems:exhausted?8:3,usedMs:200}}),p);
+  const renewed=p.completion;
+  assert.notEqual(renewed,first);
+  assert.equal(p.getStatus().state,exhausted?'budget_exhausted':'active');
+  assert.equal(s.timers.size,exhausted?0:1);
+  if(!exhausted){
+    for(let i=0;i<5;i++)await s.next();
+    assert.equal(s.calls.length,5);
+  }
+  const result=await Promise.race([renewed,new Promise(resolve=>setImmediate(()=>resolve('pending')))]);
+  assert.notEqual(result,'pending');assert.deepEqual(result,p.getStatus());
+  assert.equal(result.state,'budget_exhausted');assert.equal(result.windowId,s.c.window.id);
+  assert.equal(result.usedItems,8);assert.equal(result.usedMs,exhausted?200:700);
+  assert.equal(p.completion,renewed);assert.equal(s.timers.size,0);
+  assert.equal(await first,expired);assert.equal(expired.state,'renewal_expired');assert.equal(expired.usedItems,0);
+  await p.close();
 });

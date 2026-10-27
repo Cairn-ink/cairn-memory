@@ -125,7 +125,8 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
         // Retire the old observer before exposing the new window's promise.
         report(observation());ledgers=nextLedgers;window=w;budgets=b;cycle();
       } else ledgers=admit(w,b);
-      if(settled&&!exhausted())cycle();
+      // A settled observer cannot report renewed usage, even at exhaustion.
+      if(settled)cycle();
       renewedUntil=now()+next.renewalMs;grant=g;clearTimer(timer);if(exhausted())report(observation());else if(!running)schedule();
     }};
     all.entries.set(c.id,entry);if(exhausted())report(observation());schedule();return api;
