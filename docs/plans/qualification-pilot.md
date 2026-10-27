@@ -46,11 +46,12 @@ pilot. Do not claim its expected state behavior has been implemented.
   verify before first and every subsequent request. New helper modules, if
   needed, must join the pin set. Recheck installed archive/runtime correspondence
   before first request. Never silently accept missing or updated pins.
-  Full artifact inspection hashes the archive and extracts it once into a
-  private 0700 temporary directory, removed on success or failure, before server
-  startup. Subsequent checks use the retained provenance to re-hash the archive
-  and installed sources with the same path/file checks; request guards never
-  extract the archive while the installed model-call timer is running.
+  Full artifact inspection reads and hashes the archive once, then decompresses
+  and validates its tar members in memory before server startup, without child
+  processes or filesystem extraction. Subsequent checks use the retained
+  provenance to re-hash the archive and installed sources with the same path/file
+  checks; request guards never decompress the archive while the installed
+  model-call timer is running.
 - E4: exclusive durable `qualification-pilot-v1-intent.json` in the existing
   ledger directory prevents this fixed pilot being rerun via another output
   directory. Use existing safe exclusive/fsynced evidence helpers. Provision
