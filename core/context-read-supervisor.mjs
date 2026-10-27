@@ -7,8 +7,7 @@ import { fail } from './validation.mjs';
 export const SUPERVISOR_LIMITS = Object.freeze({ live: 256, completed: 1024, metadataBytes: 1048576,
   diagnosticBytes: 16777216, historyMs: 300000 });
 const processKey = Symbol.for('context-read-product-v1.1/supervision');
-const processState = globalThis[processKey] ??= { owners: new WeakMap(), registry: null };
-const owners = processState.owners;
+const processState = () => globalThis[processKey] ??= { owners: new WeakMap(), registry: null };
 const statusKeys = ['cleanupId', 'state', 'workerStopped', 'nativeDisposed', 'leasesReleased', 'providersSettled', 'telemetry', 'expiresAt'];
 
 // A factory is internal to permit deterministic clocks. Public supervisors all
@@ -126,7 +125,7 @@ export function createSupervisorRegistry({ now = () => Number(process.hrtime.big
         return Promise.all(active.map(r => r.delivery));
       },
     });
-    owners.set(api, { registry: instance, owner }); return api;
+    processState().owners.set(api, { registry: instance, owner }); return api;
   }
   const instance = {
     supervisor, register,
@@ -159,10 +158,12 @@ export function createSupervisorRegistry({ now = () => Number(process.hrtime.big
   };
   return instance;
 }
-const registry = processState.registry ??= createSupervisorRegistry();
-export const createContextReadSupervisor = () => registry.supervisor();
+export function createContextReadSupervisor() {
+  const state = processState();
+  return (state.registry ??= createSupervisorRegistry()).supervisor();
+}
 export function supervisorOwner(supervisor) {
-  const owner = owners.get(supervisor);
+  const owner = processState().owners.get(supervisor);
   if (!owner) fail('invalid_input');
   return owner;
 }

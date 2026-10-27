@@ -737,3 +737,28 @@ final-newline checks include the untracked fixture; `git diff --check` exits
 **0**. All seven changed shipped runtime/document files already belong to
 `packaging/artifact-files.json`; the new fixture is test-only. The frozen
 contract is unchanged, the bundle is unchanged, and no commit was created.
+
+## Fix round 5
+
+Scope: three failures from the local CI matrix against `3d9d206e`, on Node 22.16.0 and
+24.15.0. Every other matrix job passed on both versions. The frozen contract,
+the pinned legacy wire fixture and the generated bundle are unchanged.
+
+| Failure | Root cause | Fix | Proof |
+|---|---|---|---|
+| C06 legacy wire byte-identity (`adapters/mcp/test/context-read-sources.test.mjs`) | `core/context-product-control.mjs` allocated the clock-domain UUID at import, so the default path consumed one extra `randomUUID` and shifted legacy ids and cursors | the clock domain and the process-wide supervisor registry are created lazily, on first product use | C06 matches the pinned bytes again; the new `core/test/context-read-default-entropy.test.mjs` fails before the fix (exit 1) and passes after it (exit 0) |
+| R29 installed Worker closure (`packaging/test/topic-overview-raw29.test.mjs`) | the expectation predates the product Worker, which is correctly shipped and registered | the expectation lists both Worker entries and asserts that the product Worker is lazy | all three installed cases pass with `workersClosed: true` |
+| Measurement candidate anchors (`tools/testing/measure-topic-overview-contention.test.mjs`) | P2a reworded the two `core/read-database.mjs` lines the candidate patch anchors on | the anchors are updated; the candidate still wraps `native` after the journal probe and before the topic policy, and drops the opening `busy_timeout` | the test asserts that order and the removed PRAGMA; its WAL-size check uses `statSync` |
+
+Exit codes, by explicit path on Node 22.16.0 and 24.15.0: C06, R29, the
+contention test, `core/test/no-raw-db-fd.test.mjs`, `core/test/context-read*.test.mjs`
+(25 files), `core/test/topic-*.test.mjs` (17 files) and the new entropy test
+all exit **0**. Changed files, cross-checked between `git diff` with untracked
+files and `git status`: the six listed below plus this document.
+
+- `core/context-product-control.mjs`
+- `core/context-read-supervisor.mjs`
+- `core/test/context-read-default-entropy.test.mjs`
+- `packaging/test/topic-overview-raw29.test.mjs`
+- `tools/testing/measure-topic-overview-contention.mjs`
+- `tools/testing/measure-topic-overview-contention.test.mjs`

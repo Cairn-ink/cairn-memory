@@ -7,7 +7,8 @@ import { fail } from './validation.mjs';
 
 export const PRODUCT_PROFILE = 'context-read-product-v1.1';
 const domainKey = Symbol.for('context-read-product-v1.1/clock-domain');
-export const clockDomainId = globalThis[domainKey] ??= randomUUID();
+// Importing the product surface must not consume legacy-path entropy.
+function clockDomainId() { return globalThis[domainKey] ??= randomUUID(); }
 const sharedPrototype = SharedArrayBuffer.prototype;
 const sharedLength = Object.getOwnPropertyDescriptor(sharedPrototype, 'byteLength').get;
 const sharedGrowable = Object.getOwnPropertyDescriptor(sharedPrototype, 'growable').get;
@@ -124,7 +125,7 @@ export function issuance(value, control, readSet, ownerCoverage) {
       JSON.stringify(boundedData(namespaces.ownerCoverage)) !== JSON.stringify(boundedData(ownerCoverage))) fail('authority_required');
   return binding;
 }
-export function requestRecord(value, admitted, utc, domain = clockDomainId) {
+export function requestRecord(value, admitted, utc, domain = clockDomainId()) {
   const c = ownData(value, ['requestId', 'handleId', 'credentialBindingId', 'credentialExpiresUtcMs', 'requestMaxMs']);
   if (Object.keys(c).length !== 5) fail('invalid_input');
   for (const k of ['requestId', 'handleId', 'credentialBindingId']) id(c[k]);
