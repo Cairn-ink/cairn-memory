@@ -1311,7 +1311,7 @@
   },
   {
     "path": "tools/testing/fixtures/context-product/io-child.mjs",
-    "source": "import { copyFileSync, readFileSync, statSync, readdirSync, chmodSync, constants } from 'node:fs'",
+    "source": "import { copyFileSync, readFileSync, statSync, readdirSync, chmodSync, constants, createReadStream } from 'node:fs'",
     "reason": "SQLite-free child only: exclusive database copy/hash with owner mode and procfs sampling cannot release host SQLite locks."
   },
   {
@@ -1383,5 +1383,15 @@
     "path": "tools/testing/fixtures/context-product/report.mjs",
     "source": "const journal=await open(path+'.records.jsonl','a',0o600);",
     "reason": "Session child appends only the leased harness-owned numeric journal; the observed parent never opens a database descriptor."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/io-child.mjs",
+    "source": "let text;try{text=readFileSync(`/proc/${pid}/stat`,'utf8');}catch(e){if(['ENOENT','ESRCH'].includes(e.code))continue;throw e;}",
+    "reason": "SQLite-free IO child only: reads kernel procfs metadata to confirm owned process-group exit, without opening any database or companion descriptor in the measuring parent."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/io-child.mjs",
+    "source": "const input=createReadStream(process.argv[3]+'.records.jsonl');",
+    "reason": "SQLite-free IO child only: streams the leased harness journal after confirmed descendant exit to recover its durable numeric sequence; never reads SQLite files."
   }
 ]

@@ -68,7 +68,7 @@ export async function runV4(input,{profile,segmentId,reportPath,registrationPath
     sessionSchedules:input.sessions,claimsTable:claims.claimsTable,coverageTable:claims.coverageTable,unclaimed:claims.unclaimed});
   const previous=resume.length?checkedSegments(header,await readSegments(resume)):{cells:[]};
   const adapter=await import(input.adapterModule),tally={},completed=new Set(),decisions=[];
-  const workspace=createTestWorkspace(null,{parent:resolve(input.volumeRoot),prefix:'product-v4-'});let sink;
+  const workspace=createTestWorkspace(null,{parent:resolve(input.volumeRoot),prefix:'product-v4-'});let sink,descendantsConfirmed=true;
   try{sink=await createReportSink(reportPath,header);}catch(error){await workspace.cleanup();throw error;}
   if(previous.decision==='failed')decisions.push('failed');
   for(const c of previous.cells){completed.add(c.key);decisions.push(c.decision);}
@@ -118,11 +118,19 @@ export async function runV4(input,{profile,segmentId,reportPath,registrationPath
           const key=JSON.stringify([cell.count,cell.schema,cell.canonical,cell.sidecar]),session=input.sessions.find(s=>s.key===key),group=plan.filter(c=>['freshness','availability'].includes(c.kind)&&JSON.stringify([c.count,c.schema,c.canonical,c.sidecar])===key);
           if(typeof adapter.validateProbe!=='function')throw Error('v4_batching_adapter_required');
           config=await buildCell(config);
+          config.sessionDeadlineAt=startedAt+Math.min(input.reservation.seconds*1000,input.observationBudgetMs)-input.supervision.drainAllowanceMs;
           // Session child owns harness supervision and journal writes. Suspend
           // this variable-size admission/record callback in the engine window.
           clearInterval(monitor);let ds;
           try{ds=await sharedSession(group,session,{sink,config});}
-          finally{lastActivityAt=lastProgressAt=Date.now();monitor=setInterval(supervise,monitorEvery);}
+          finally{
+            // Do not erase elapsed time or manufacture activity at the boundary.
+            // Session supervision is delegated while the journal is leased; the
+            // parent's independent deadline stays armed through child shutdown.
+            if(Date.now()+input.supervision.drainAllowanceMs>startedAt+Math.min(input.reservation.seconds*1000,input.observationBudgetMs))stopped??='projected_overrun';
+            monitor=setInterval(supervise,monitorEvery);
+          }
+          if(stopped){await sink.record(-1,'admission-stopped',{reason:stopped,remaining:plan.length-completed.size});break;}
           for(const c of group)if(!completed.has(c.key))await complete(c,ds.get(c.key));continue;
         }else if(cell.kind==='injection')decision=await stateCell(cell,{sink,input,prepare:(c,s)=>prepare(c,s),prepareInput,build:buildCell});
         else {
@@ -139,13 +147,14 @@ export async function runV4(input,{profile,segmentId,reportPath,registrationPath
         }
         if(!['injection','exposure'].includes(cell.kind)){const final=await config.inspectLedger();await sink.record(cell.id,'population',{initial:config.initialCounts,final:{memories:final.memories,cards:final.cardCount,schema:final.schema}});}
         await complete(cell,decision);
-      }catch(e){await sink.record(cell.id,'failure',{code:e.code??e.message,exitCode:e.exitCode??null,signal:e.signal??null,...(e.cleanup?{cleanup:e.cleanup}:{}),...(e.diagnostics?{diagnostics:e.diagnostics}:{})});await complete(cell,{decision:'failed',reason:'harness_failed'},false);stopped='harness_failed';}
-      finally{await cellWorkspace.cleanup();observedCosts.set(cell.kind,Math.max(observedCosts.get(cell.kind)??0,Date.now()-began));}
+      }catch(e){if(e.cleanup?.descendantsUnconfirmed){descendantsConfirmed=false;throw e;}await sink.record(cell.id,'failure',{code:e.code??e.message,exitCode:e.exitCode??null,signal:e.signal??null,...(e.cleanup?{cleanup:e.cleanup}:{}),...(e.diagnostics?{diagnostics:e.diagnostics}:{})});await complete(cell,{decision:'failed',reason:'harness_failed'},false);stopped='harness_failed';}
+      finally{if(descendantsConfirmed)await cellWorkspace.cleanup();observedCosts.set(cell.kind,Math.max(observedCosts.get(cell.kind)??0,Date.now()-began));}
     }
     status=stopped?(decisions.includes('failed')?'failed':'inconclusive'):aggregate([...decisions,...(completed.size===plan.length?[]:['inconclusive'])]);
   }finally{
-    clearInterval(monitor);delete globalThis[Symbol.for('product-qualification-actors')];process.off('SIGINT',stop);process.off('SIGTERM',stop);await workspace.cleanup();
-    await sink.finish(status,{tally,complete:!stopped&&completed.size===plan.length,segmentComplete:!stopped&&completed.size===segment.cellKeys.length,completedCells:completed.size,requiredCells:plan.length,stopReason:stopped});
+    clearInterval(monitor);delete globalThis[Symbol.for('product-qualification-actors')];process.off('SIGINT',stop);process.off('SIGTERM',stop);if(descendantsConfirmed)await workspace.cleanup();
+    if(!descendantsConfirmed)await sink.interrupt();
+    else await sink.finish(status,{tally,complete:!stopped&&completed.size===plan.length,segmentComplete:!stopped&&completed.size===segment.cellKeys.length,completedCells:completed.size,requiredCells:plan.length,stopReason:stopped});
   }
   console.log(status);return {status,tally};
 }

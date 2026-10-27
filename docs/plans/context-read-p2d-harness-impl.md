@@ -1692,3 +1692,204 @@ The inventories were re-derived after this appendix: **13 changed files /
 all changes are unstaged, and the primary commits. Verification wrappers drained
 their owned process groups; all verification drivers finished, and owned scratch
 was removed. No measurement, smoke, process or monitor is left running.
+
+## v4 encoding fix round 4
+
+Base `de2bf544`. Both third re-reviews were read in full, together with the
+original nine lessons and four additional lessons. This round fixes the five
+supervision findings while retaining round three's structural process boundary.
+No engine runtime, frozen protocol, counts, estimates or generated runtime
+changes. No measurement, smoke, network/key operation or commit.
+
+### Findings, fixes and regressions
+
+| Finding | Fix | Regression |
+| --- | --- | --- |
+| Spec P1: one stalled actor kills healthy in-flight reads and the writer | The coordinator journals an explicit supervision reason that survives a subsequent child-exit error, stops admission and requests ordinary stop on healthy actors. Only the stalled actor receives immediate SIGTERM, followed by SIGKILL if necessary. Healthy operations settle, validate and journal their records, including writer telemetry. Any actor still unresponsive at the registered drain allowance is then escalated. Startup and post-preparation dispatch both check the stop reason. | `round4 stall preserves healthy lane settlement and writer telemetry until bounded drain` checks the production coordinator with a stalled lane, a healthy pending lane and writer; the latter two keep their ordinary records and receive no kill. `round4 stop during input preparation prevents further lane admission` exercises the production worker. A separate allowance-boundary case keeps an unresponsive actor alive until the boundary, then requires escalation. A manual-timer check requires TERM, KILL and confirmed exit. |
+| Spec P1: watchdog disconnects IPC but leaves preparation/session waits alive | The coordinator races preparation and work against terminal cancellation, rejects pending control waits, drains within the allowance, closes the journal and sends fixed `done` before export. Its monitors are cleared. The parent independently arms a deadline, detects IPC loss, rejects pending/future waits without confusing disconnect with confirmed exit, and owns cleanup. | An unresolved preparation Promise must still produce `done`, export the timeout failure and clear all monitors. A separately connected child that never sends `done` must fail under the independent parent deadline. A disconnected live actor must reject waits before its subsequent confirmed exit. |
+| Spec P2: lost export repeats journal sequences and undercounts totals | After confirmed descendant shutdown, reclaim without an exported sequence streams the durable journal in the existing SQLite-free IO child. It validates contiguous sequence numbers and complete frames before parent writes resume. A leased or unrecoverable journal cannot produce a final count. | `round4 lost export recovers durable journal sequence and exact total` writes parent/child/parent records with the export omitted, then requires `[1,2,3]` and final totals equal to actual records. |
+| Standards P1: a final session can exceed the reservation and pass | Supervision transfers to the child plus the independent parent deadline while the variable-size runner callback is suspended. Startup and active-session deadlines are bounded by the same absolute reservation. After the session returns, the runner rechecks elapsed time before accepting any group checkpoint. It no longer resets activity/progress timestamps at this boundary. | `round4 final session rechecks reservation with every other cell complete` uses the reviewer's fabricated-clock case: all other cells are resumed, the session advances beyond the reservation and even writes fresh activity, but completion remains false with `projected_overrun` and `inconclusive`. |
+| Standards P1: coordinator crash orphans lanes, samplers and writer | The parent creates a detached coordinator process group inherited by every descendant. Cleanup uses a bounded SQLite-free helper to signal and confirm the entire group, even after the coordinator exits. Linux kernel zombie/exited states count as confirmed exit; a live PID alone never proves health. Lanes stop on IPC disconnect and await sampler shutdown. The separately owned parent sampler also supports cancellation during startup. Unconfirmed shutdown retains both workspace levels and the journal lease, interrupts the partial report and clears parent monitors. | Deterministic cases require detached group ownership, confirmed descendant exit before parent return/reclaim, lane disconnect cleanup, aborted sampler startup, retained workspaces and fail-closed report handling. A subprocess-only tree with a lane, its sampler and a writer kills the coordinator, runs production actor cleanup and verifies every descendant has exited. No engine workload or timing gate runs in this test. |
+
+The parent receives only fixed ready/done controls during observation. Variable
+lane input, validation, serialization, writer bookkeeping, process inventories
+and journal recovery stay in children or after observation. Process-group
+polling runs in the SQLite-free IO child; its parent receives only terminal
+exit. Engine callbacks, renewals, drain, pump/supervisor close and normal lane
+shutdown retain full unfiltered observation. Sampler transfer remains after
+`loop.finish()`. Both T7b and the missing-main-thread attribution control are
+retained. The existing v4 CLI import check guards lazy SQLite linkage, and the
+exact raw-fd allowances add only procfs metadata and the harness-owned journal
+inside the established SQLite-free child.
+
+Counts remain **728 / 488 cells**, **432 / 224 fixed windows**, **252 / 172
+references**, and **46,627.4 s / 26,284 s** estimates.
+
+### Counterfactual commands and actual exit codes
+
+Each command used the exact Node executable named by its column, with that
+runtime first in PATH. The base switches read reviewed source blobs through
+the VM loader without changing the worktree. `F4` denotes
+`tools/testing/measure-context-read-product-v4fix4.test.mjs`; `F1` denotes
+`tools/testing/measure-context-read-product-v4fix1.test.mjs`.
+
+| Command | Node 22.16.0 | Node 24.15.0 |
+| --- | --- | --- |
+| `node --experimental-vm-modules --test --test-reporter=tap --test-name-pattern=round4 F4` | exit 0; 14 passed | exit 0; 14 passed |
+| `P2D_V4FIX4_BASE=de2bf544 node --experimental-vm-modules --test --test-reporter=tap --test-name-pattern=round4 F4` | exit 1; 13 failed / 1 control passed | exit 1; 13 failed / 1 control passed |
+| `node --experimental-vm-modules --test --test-reporter=tap --test-name-pattern=round4 F1` | exit 0; 2 passed | exit 0; 2 passed |
+| `P2D_V4FIX1_BASE=de2bf544 node --experimental-vm-modules --test --test-reporter=tap --test-name-pattern=round4 F1` | exit 1; 2 failed | exit 1; 2 failed |
+
+The base reproduces every finding. It kills the healthy lane/writer, admits a
+read after cancellation, never sends `done` from unresolved preparation,
+repeats sequence 2, accepts the final over-budget session, returns without
+confirmed descendant cleanup and leaves native descendants alive. The explicit
+TERM/KILL case checks the new helper directly and remains a passing control
+when the other modules are loaded from the reviewed commit. These base failures
+have zero test cancellations; they are expected assertion failures.
+
+### Changed files, cross-checked two ways
+
+The first inventory uses `git diff --name-only HEAD` plus
+`git ls-files --others --exclude-standard`. The independent inventory hashes
+every HEAD tree blob and compares executable/symlink modes with worktree bytes,
+then walks the filesystem for new files and applies Git ignore rules. It
+excludes repository metadata and ignored dependencies, covers scripts, docs,
+public assets and configuration, and does not use the first inventory as its
+search boundary. The sorted manifests agree: **13 changed files**
+(`diff -u`: **exit 0**).
+
+- `core/test/fixtures/no-raw-db-fd-allowlist.json`
+- `docs/plans/context-read-p2d-harness-impl.md`
+- `tools/testing/fixtures/context-product/actors.mjs`
+- `tools/testing/fixtures/context-product/io-child.mjs`
+- `tools/testing/fixtures/context-product/report.mjs`
+- `tools/testing/fixtures/context-product/session-supervision.mjs`
+- `tools/testing/fixtures/context-product/v4-lane.mjs`
+- `tools/testing/fixtures/context-product/v4-runner.mjs`
+- `tools/testing/fixtures/context-product/v4-session-child.mjs`
+- `tools/testing/fixtures/context-product/v4-session-work.mjs`
+- `tools/testing/fixtures/context-product/v4-session.mjs`
+- `tools/testing/measure-context-read-product-v4fix1.test.mjs`
+- `tools/testing/measure-context-read-product-v4fix4.test.mjs`
+
+The test inventory was also derived twice: a filesystem glob plus explicit
+harness/guard/E1-C2 additions, and an independent `rg --files` walk with the
+same selection rules. They agree at **39 explicit paths / 32 required paths**.
+
+### Syntax and estimate checks
+
+Every command below ran separately on both patches. Actual return codes were
+captured from the processes, rather than inferred from the end of output.
+
+| Command | Node 22.16.0 exit | Node 24.15.0 exit |
+| --- | --- | --- |
+| `node --version` | 0 | 0 |
+| `node --check tools/testing/fixtures/context-product/actors.mjs` | 0 | 0 |
+| `node --check tools/testing/fixtures/context-product/io-child.mjs` | 0 | 0 |
+| `node --check tools/testing/fixtures/context-product/report.mjs` | 0 | 0 |
+| `node --check tools/testing/fixtures/context-product/session-supervision.mjs` | 0 | 0 |
+| `node --check tools/testing/fixtures/context-product/v4-lane.mjs` | 0 | 0 |
+| `node --check tools/testing/fixtures/context-product/v4-runner.mjs` | 0 | 0 |
+| `node --check tools/testing/fixtures/context-product/v4-session-child.mjs` | 0 | 0 |
+| `node --check tools/testing/fixtures/context-product/v4-session-work.mjs` | 0 | 0 |
+| `node --check tools/testing/fixtures/context-product/v4-session.mjs` | 0 | 0 |
+| `node --check tools/testing/measure-context-read-product-v4fix1.test.mjs` | 0 | 0 |
+| `node --check tools/testing/measure-context-read-product-v4fix4.test.mjs` | 0 | 0 |
+| `node tools/testing/measure-context-read-product.mjs --protocol v4 --profile engine --estimate` | 0 | 0 |
+| `node tools/testing/measure-context-read-product.mjs --protocol v4 --profile production --estimate` | 0 | 0 |
+
+All **22 syntax invocations exited 0**, as did both runtime-version checks and
+all four estimate-only invocations. The estimate outputs retain the exact
+inventories, hashes and arithmetic checked by the v4 suite.
+
+### Explicit test commands and actual exit codes
+
+Every path below ran separately with its exact nvm Node executable first in
+PATH, as `node tools/testing/run.mjs --test-reporter=tap <test-path>`. The
+supervised matrix captures each actual process return code. All **78 matrix
+file invocations exited 0**; the matrix driver also exited **0**.
+
+| Explicit test path | Node 22.16.0 exit | Node 24.15.0 exit |
+| --- | --- | --- |
+| `core/test/context-read-assembly-races.test.mjs` | 0 | 0 |
+| `core/test/context-read-assembly-readonly.test.mjs` | 0 | 0 |
+| `core/test/context-read-assembly.test.mjs` | 0 | 0 |
+| `core/test/context-read-bm25.test.mjs` | 0 | 0 |
+| `core/test/context-read-budget.test.mjs` | 0 | 0 |
+| `core/test/context-read-core.test.mjs` | 0 | 0 |
+| `core/test/context-read-default-entropy.test.mjs` | 0 | 0 |
+| `core/test/context-read-embedder.test.mjs` | 0 | 0 |
+| `core/test/context-read-fusion.test.mjs` | 0 | 0 |
+| `core/test/context-read-local-embedder.test.mjs` | 0 | 0 |
+| `core/test/context-read-local-status.test.mjs` | 0 | 0 |
+| `core/test/context-read-moc-source.test.mjs` | 0 | 0 |
+| `core/test/context-read-process.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-artifact.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-control.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-import.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-index.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-pump.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-service.test.mjs` | 0 | 0 |
+| `core/test/context-read-product.test.mjs` | 0 | 0 |
+| `core/test/context-read-recovery.test.mjs` | 0 | 0 |
+| `core/test/context-read-review.test.mjs` | 0 | 0 |
+| `core/test/context-read-sidecar.test.mjs` | 0 | 0 |
+| `core/test/context-read-source-work.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources-authority.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources-bounds.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources-races.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources.test.mjs` | 0 | 0 |
+| `core/test/context-read-tokenize.test.mjs` | 0 | 0 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 | 0 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-fix1.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-fix2.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4fix1.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4fix3.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4fix4.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product.test.mjs` | 0 | 0 |
+| `tools/testing/measure-topic-reader-wal.test.mjs` | 0 | 0 |
+
+The v4 suite passes **47/47** on each runtime; the retained round-three boundary
+suite passes **16/16**. The v4fix1 and v4fix4 discovery wrappers assert their
+isolated VM-enabled child's actual exit status. The direct round-four checks
+above additionally expose all **14 new supervision cases** plus both runner
+cases. T7b, the missing-main-thread control, synchronous and asynchronous engine
+blocks, excluded post-await validation/serialization, renewal, drain and shutdown
+are retained.
+
+Both assembly runs retain the existing optional-`tiktoken` A13 skip:
+**19 passed / one skipped / exit 0** each. No dependency was installed. No other
+matrix file reports a skip, cancellation or failure.
+
+Development verification exposed two issues before the final checks: the
+parent timeout initially omitted defaults for older partial supervision
+fixtures (combined affected run exit **1**), and an over-broad edit of exact
+allowlist import strings was rejected by the raw-fd guard (combined run exit
+**1**). Both were corrected; the guard rerun exited **0**. An initial independent
+inventory included the worktree's Git metadata pointer (inventory comparison
+exit **1**); excluding repository metadata makes both complete inventories agree
+at 13 paths. These development results are not passing verification results.
+
+After the final stall-journal and allowance-boundary assertions, all seven
+harness test files, both lock guards and E1-C2 ran again, separately and serially
+on both runtimes, using the same explicit commands as the table above:
+**20 final affected file invocations, every exit 0**. Their driver also exited
+**0**. These are the latest results for the affected paths in the table.
+
+Final `git diff --check`, the independent whitespace/final-newline and added
+local-path scans, the changed-file and test-inventory `diff -u` comparisons,
+the tested-JavaScript hash comparison and the unchanged engine/runtime,
+frozen protocol/plan/claims and generated-setup comparison against HEAD all
+exited **0**. `git diff --cached --exit-code` exited **0**. The inventories were
+re-derived after the appendix: **13 changed files / 39 explicit test paths /
+32 required paths**.
+
+The branch remains `feat/context-read-p2d-harness` at `de2bf544`; changes are
+unstaged and the primary commits. The verification runners confirmed their owned
+process groups drained, both matrix drivers exited **0**, and the owned-process
+check found **zero** remaining verification processes. Owned verification scratch
+was removed after recording the results. No measurement, smoke, process or
+monitor is left running for unattended supervision.

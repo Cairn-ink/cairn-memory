@@ -1,5 +1,6 @@
 import { open, rename } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { fileChild } from './actors.mjs';
 export const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export function immutable(value) {
   for(const child of Object.values(value))if(child&&typeof child==='object')immutable(child);
@@ -15,10 +16,10 @@ export async function createReportSink(path,header) {
   let sequence=0,finished=false,delegated=false;
   return {
     async delegate(){if(delegated)throw Error('journal_delegated');delegated=true;return {path,sequence};},
-    async reclaim(next){if(Number.isSafeInteger(next)&&next>=sequence)sequence=next;delegated=false;},
+    async reclaim(next){if(!Number.isSafeInteger(next))next=fileChild('journal-sequence',path).value.sequence;if(next<sequence)throw Error('journal_sequence');sequence=next;delegated=false;},
     async record(cell,series,record){if(delegated)throw Error('journal_delegated');await journal.writeFile(JSON.stringify({type:'record',sequence:++sequence,cell,series,record})+'\n');await journal.sync();},
     async cell(cell,decision,summary={}){await partial.writeFile(JSON.stringify({type:'cell',cell,decision,summary})+'\n');await partial.sync();},
-    async finish(status,extra={}){if(finished)return;finished=true;
+    async finish(status,extra={}){if(delegated)throw Error('journal_delegated');if(finished)return;finished=true;
       try{await partial.writeFile(JSON.stringify({type:'final',status,records:sequence,headerHash,...extra})+'\n');await partial.sync();}
       finally{await journal.close();await partial.close();}await rename(path+'.partial',path);},
     async interrupt(){if(finished)return;finished=true;await journal.close();await partial.close();},

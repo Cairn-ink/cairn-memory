@@ -1,8 +1,10 @@
 // SQLite-free process: every raw database copy/hash descriptor lives here.
-import { copyFileSync, readFileSync, statSync, readdirSync, chmodSync, constants } from 'node:fs';
+import { copyFileSync, readFileSync, statSync, readdirSync, chmodSync, constants, createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { PROTOCOL } from './protocol.mjs';
 import { join } from 'node:path';
+import { createInterface } from 'node:readline';
+import { setTimeout as delay } from 'node:timers/promises';
 export function sizes(directory) {
   return readdirSync(directory).map(name=>{const path=join(directory,name),s=statSync(path);return {name,bytes:s.isFile()?s.size:0};});
 }
@@ -16,7 +18,34 @@ export function sample(pid) {
   const vm=Object.fromEntries(readFileSync('/proc/vmstat','utf8').split('\n').map(l=>l.split(/\s+/)).filter(([k])=>['pswpin','pswpout','pgmajfault'].includes(k)).map(([k,v])=>[k,Number(v)]));
   return {at:Date.now(),pid,threads,vm};
 }
-if(process.argv[2]==='copy') {
+function groupAlive(group) {
+  if(process.platform!=='linux'){
+    try{process.kill(-group,0);return true;}catch(e){if(e.code!=='ESRCH')throw e;return false;}
+  }
+  for(const pid of readdirSync('/proc')){
+    if(!/^\d+$/.test(pid))continue;
+    let text;try{text=readFileSync(`/proc/${pid}/stat`,'utf8');}catch(e){if(['ENOENT','ESRCH'].includes(e.code))continue;throw e;}
+    const fields=text.slice(text.lastIndexOf(')')+2).split(' ');
+    // Zombies have confirmed kernel exit; a shared host's reaper owns removal.
+    if(Number(fields[2])===group&&!['Z','X'].includes(fields[0]))return true;
+  }
+  return false;
+}
+if(process.argv[2]==='group-stop') {
+  const group=Number(process.argv[3]);
+  const signal=s=>{try{process.kill(-group,s);}catch(e){if(e.code!=='ESRCH')throw e;}};
+  if(groupAlive(group)){
+    signal('SIGTERM');
+    for(let n=0;n<100&&groupAlive(group);n++){if(n===20)signal('SIGKILL');await delay(50);}
+    if(groupAlive(group))throw Error('session_descendants_alive_workspace_retained');
+  }
+} else if(process.argv[2]==='journal-sequence') {
+  const input=createReadStream(process.argv[3]+'.records.jsonl');
+  let sequence=0,lastByte;input.on('data',chunk=>{lastByte=chunk.at(-1);});
+  for await(const line of createInterface({input,crlfDelay:Infinity})){const row=JSON.parse(line);if(row.type==='record'&&row.sequence!==++sequence)throw Error('journal_sequence');}
+  if(lastByte!==10)throw Error('journal_incomplete_frame');
+  console.log(JSON.stringify({sequence}));
+} else if(process.argv[2]==='copy') {
   copyFileSync(process.argv[3],process.argv[4],constants.COPYFILE_EXCL);chmodSync(process.argv[4],0o600);
   console.log(JSON.stringify({hash:hash(process.argv[4]),bytes:statSync(process.argv[4]).size}));
 } else if(process.argv[2]==='hash') {

@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
-import { actor,terminate } from './actors.mjs';
+import { actor } from './actors.mjs';
 import { startWriter,recordedWriter } from './controller.mjs';
 import { methodProfile,INTENTS } from './v4-plan.mjs';
 import { validateSessionRegistration,validateSessionEvidence } from './v4-validation.mjs';
@@ -17,7 +17,7 @@ export function sessionPopulation(cell,records,targets) {
   if(population.length<PROTOCOL.freshnessMinimum)metric.decision='inconclusive';return {freshness:metric};
 }
 // Runs only in the session child. Parent observation never executes these callbacks.
-export async function sessionWork(cells,session,{config,prepareInput,sink,validateProbe},{makeLane=c=>actor('lane',c,{quietWhenIdle:true,stallMs:c.supervision.stallMs}),makeWriter=startWriter,now=Date.now,wait=delay,ready=async()=>{},start=async()=>{}}={}) {
+export async function sessionWork(cells,session,{config,prepareInput,sink,validateProbe},{makeLane=c=>actor('lane',c,{quietWhenIdle:true,stallMs:c.supervision.stallMs}),makeWriter=startWriter,now=Date.now,wait=delay,ready=async()=>{},start=async()=>{},stopped=()=>null}={}) {
   const prereg=validateSessionRegistration(session,config.cell.schema);if(prereg.decision!=='passed')throw Error('v4_session_registration');
   const lanes=[],records=[],targets=[],availabilityRecords=[],attempted=new Set(),lastProbe=new Map(),pending=[],extraLoops=[];
   let sessionError;
@@ -28,6 +28,7 @@ export async function sessionWork(cells,session,{config,prepareInput,sink,valida
     for(const {target} of writer.child.take('target'))if(!targets.some(t=>t.type===target.type&&t.targetId===target.targetId&&t.intent===target.intent))targets.push({...target,observedAt:null});
   };
   const dispatch=async(lane,id,prepared,metadata)=>{
+    if(stopped())return;
     if(lane.pending){if(metadata.kind==='availability')omittedReleases=true;else probeCadenceMissed=true;await write('schedule-omission',{id,...metadata});return;}
     lane.pending=true;const message={type:'read',id,config:serializable(prepared)};lane.send(message);
     const p=lane.wait(['read-result','lane-failure']).then(async m=>{
@@ -47,13 +48,14 @@ export async function sessionWork(cells,session,{config,prepareInput,sink,valida
     p.catch(error=>{sessionError??=error;probeCadenceMissed=true;});
   };
   try {
-    for(let n=0;n<21;n++){const lane=makeLane({protocol:'P2-product-v4',supervision:config.supervision,oracleModule:config.oracleModule});lanes.push(lane);const ready=await lane.wait('ready');if(ready.startupLoop){extraLoops.push(ready.startupLoop);await write('lane-startup',{pid:lane.pid,startupLoop:ready.startupLoop});}}
+    for(let n=0;n<21;n++){if(stopped())throw Error(stopped());const lane=makeLane({protocol:'P2-product-v4',supervision:config.supervision,oracleModule:config.oracleModule});lanes.push(lane);const ready=await lane.wait('ready');if(ready.startupLoop){extraLoops.push(ready.startupLoop);await write('lane-startup',{pid:lane.pid,startupLoop:ready.startupLoop});}}
+    if(stopped())throw Error(stopped());
     writer=await recordedWriter(()=>makeWriter({...config,session},'fresh'),write,'session-writer');
     await ready();await start();
     const startAt=now()+50,endAt=startAt+180000;observationEndAt=endAt;writer.start(startAt,endAt);await wait(Math.max(0,startAt-now()));
-    while(now()<endAt&&!sessionError){
+    while(now()<endAt&&!sessionError&&!stopped()){
       ingest();const relative=now()-startAt;
-      for(const scheduled of session.availability)if(relative>=scheduled.releaseMs&&!attempted.has(scheduled.id)){
+      for(const scheduled of session.availability)if(!stopped()&&relative>=scheduled.releaseMs&&!attempted.has(scheduled.id)){
         attempted.add(scheduled.id);
         const cell={...config.cell,kind:'availability',...methodProfile(scheduled.methodLabel),language:scheduled.language,intent:scheduled.intent};
         const prepared=await prepareInput({...config,cell,method:cell.method},cell);
@@ -61,7 +63,7 @@ export async function sessionWork(cells,session,{config,prepareInput,sink,valida
       }
       for(const batch of session.batches)for(const [i,intent] of INTENTS.entries()){
         const active=targets.filter(t=>t.batch===batch.ordinal&&t.intent===intent&&t.observedAt===null);
-        if(!active.length)continue;
+        if(stopped()||!active.length)continue;
         const key=batch.ordinal+':'+intent,last=lastProbe.get(key)??Math.min(...active.map(t=>t.committedAt));
         if(now()-last<session.probeEveryMs)continue;
         if(now()-last>1000)probeCadenceMissed=true;
@@ -77,16 +79,20 @@ export async function sessionWork(cells,session,{config,prepareInput,sink,valida
     const settled=await Promise.allSettled(pending);
     for(const result of settled)if(result.status==='rejected'){sessionError??=result.reason;await write('lane-failure',{code:result.reason.code??result.reason.message,id:result.reason.id,lane:result.reason.lane});}
     await write('freshness-targets',targets);
-    for(const lane of lanes){lane.send({type:'stop'});const r=await lane.wait('result'),exit=await lane.exited;await write('lane-exit',{pid:lane.pid,exit,attribution:r.attribution});if(exit.code!==0||exit.signal)probeCadenceMissed=true;}
+    for(const lane of lanes){if(lane.stalled){await lane.exited;continue;}lane.send({type:'stop'});const r=await lane.wait('result'),exit=await lane.exited;await write('lane-exit',{pid:lane.pid,exit,attribution:r.attribution});if(exit.code!==0||exit.signal)probeCadenceMissed=true;}
     if(sessionError)throw sessionError;
+    if(stopped())throw Error(stopped());
     for(const t of targets){const probes=records.filter(r=>r.kind==='probe'&&r.batch===t.batch&&r.intent===t.intent&&r.startedAt>=t.committedAt).sort((a,b)=>a.startedAt-b.startedAt);let last=t.committedAt;
       for(const p of probes){if(t.observedAt!==null&&last>=t.observedAt)break;if(p.startedAt-last>1000)probeCadenceMissed=true;last=p.startedAt;}if((t.observedAt??endAt)-last>1000)probeCadenceMissed=true;}
     const evidence={startAt,durationMs:180000,writer:writerResult,writerEndAt:writerResult.writerEndAt,scheduleHash:digest(session),availability:availabilityRecords,targets,probeCadenceMissed,omittedReleases:omittedReleases||attempted.size!==session.availability.length};
     const validation=validateSessionEvidence(session,evidence);await write('session-validation',{...validation,scheduleHash:evidence.scheduleHash,startAt,endAt});
     return {records,targets,availabilityRecords,writerResult,extraLoops,validation};
   }finally{
-    try{if(writer)await writer.stop();}finally{
-      for(const lane of lanes)if(lane.connected){lane.send({type:'stop'});await terminate(lane);}
+    try{
+      if(writer)await writer.stop();
+      await Promise.allSettled(pending);
+    }finally{
+      for(const lane of lanes){if(lane.connected)lane.send({type:'stop'});await lane.exited;}
     }
   }
 }

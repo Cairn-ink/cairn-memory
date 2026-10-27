@@ -2,10 +2,11 @@ import { fork, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import { observeLoop } from './engine.mjs';
+import { stopSessionGroup } from './session-supervision.mjs';
 const childUrl=new URL('./runner-child.mjs',import.meta.url);
 export function actor(kind,config, {url=childUrl,stallMs=15000,forkChild=fork,quietWhenIdle=false,monitor:monitorEnabled=true,encoded:alreadyEncoded=false}={}) {
   const encoded=typeof config==='string'?config:JSON.stringify(config);
-  const child=forkChild(fileURLToPath(url),[kind],{execArgv:['cold','writer-v4','lane'].includes(kind)?['--import',new URL('./startup-loop.mjs',import.meta.url).href]:[],env:{},stdio:['pipe','ignore','pipe','ipc']});
+  const child=forkChild(fileURLToPath(url),[kind],{execArgv:['cold','writer-v4','lane'].includes(kind)?['--import',new URL('./startup-loop.mjs',import.meta.url).href]:[],env:{},detached:kind==='session',stdio:['pipe','ignore','pipe','ipc']});
   child.stdin.on('error',()=>{});child.stdin.end(encoded);
   const registry=(alreadyEncoded||typeof config==='object'&&config?.protocol==='P2-product-v4')?globalThis[Symbol.for('product-qualification-actors')]:null;registry?.add(child);
   const messages=[],waiters=[];let lastProgress=Date.now(),closed=false;
@@ -28,19 +29,23 @@ export function actor(kind,config, {url=childUrl,stallMs=15000,forkChild=fork,qu
   // both known, preserving final IPC delivery and the watchdog until real exit.
   let confirmedExit;
   child.on('exit',(code,signal)=>{confirmedExit={code,signal};if(!child.connected)finish(code,signal);});
-  child.on('disconnect',()=>{if(confirmedExit)finish(confirmedExit.code,confirmedExit.signal);});
+  child.on('disconnect',()=>{
+    for(const w of waiters.splice(0))w.reject(Error('child_disconnected'));
+    if(confirmedExit)finish(confirmedExit.code,confirmedExit.signal);});
   child.on('close',finish);
   const monitor=monitorEnabled?setInterval(()=>{if((!quietWhenIdle||waiters.length||child.ipcError)&&Date.now()-lastProgress>stallMs){
     if(typeof config==='object'&&config?.protocol==='P2-product-v4'){child.stalled=true;child.emit('qualification-stalled',{kind,lastProgress});}
     else child.kill('SIGKILL');}},1000):null;
   child.wait=type=>{const i=messages.findIndex(m=>(Array.isArray(type)?type.includes(m.type):m.type===type));return i>=0?Promise.resolve(messages.splice(i,1)[0]):
-    closed?Promise.reject(Error('child_closed')):child.ipcError?Promise.reject(child.ipcError):new Promise((resolve,reject)=>{
+    closed?Promise.reject(Error('child_closed')):!child.connected?Promise.reject(Error('child_disconnected')):child.ipcError?Promise.reject(child.ipcError):new Promise((resolve,reject)=>{
       if(quietWhenIdle&&!waiters.length)lastProgress=Date.now();waiters.push({type,resolve,reject});});};
   child.take=type=>{const found=messages.filter(m=>m.type===type);for(let i=messages.length-1;i>=0;i--)if(messages[i].type===type)messages.splice(i,1);return found;};
+  if(kind==='session'){let stoppingTree;child.stopTree=()=>stoppingTree??=stopSessionGroup(child);}
   return child;
 }
 export async function terminate(child) {
   if(!child)return;
+  if(child.stopTree){await child.stopTree();await child.exited;return;}
   if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');
   await child.exited;
 }
@@ -77,11 +82,13 @@ export function attributeBlocks(record,samples,pid=process.pid) {
   }
   return record;
 }
-export async function startSampler(pids,directory=null,{monitor=true}={}) {
+export async function startSampler(pids,directory=null,{monitor=true,signal}={}) {
   if(process.platform!=='linux')return {supported:false,async collect(){return [];},async stop(){return {supported:false,samples:[]};}};
   const child=actor('sample',null,{url:new URL('./io-child.mjs',import.meta.url),quietWhenIdle:true,monitor});
+  const abort=()=>{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');};
+  signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
   try{await child.wait('ready');child.send({type:'start',pids,directory});await child.wait('started');}
-  catch(e){await terminate(child);throw e;}
+  catch(e){signal?.removeEventListener('abort',abort);await terminate(child);throw e;}
   let previous=[],missing=0,dropped=0;
   const flush=()=>{const samples=child.take('samples').flatMap(m=>m.samples);
     for(const c of child.take('sample_coverage')){missing+=c.missing;dropped+=c.dropped;}
@@ -89,5 +96,5 @@ export async function startSampler(pids,directory=null,{monitor=true}={}) {
   return {supported:true,async collect(){child.send({type:'collect'});await child.wait('collected');return flush();},
     async stop(){const watchdog=monitor?null:setTimeout(()=>child.kill('SIGKILL'),15000);try{child.send({type:'stop'});await child.wait('stopped');const exit=await child.exited;
       return {supported:true,exit,samples:flush(),missing,dropped,coverage:missing||dropped?'incomplete':'complete'};
-    }finally{clearTimeout(watchdog);await terminate(child);}}};
+    }finally{signal?.removeEventListener('abort',abort);clearTimeout(watchdog);await terminate(child);}}};
 }
