@@ -740,3 +740,281 @@ The original latency, namespace capacity, fallback copy and default semantic dec
 5. **Owner rollout decisions:** the owner decides later semantic enablement/hosted consent/privacy copy and production WAL switch after the baseline re-run/qualification. Both remain off/unchanged by default. The primary owns document shipping/manifest registration and the non-author re-check; the author does not commit or implement.
 
 Authoring validation: prior private seam review, repository source inspection and document consistency/whitespace checks only. No tests, builds, measurements, provider/key access or network calls were run. Only this existing plan is revised; frozen runtime/reference contracts and package manifests remain unchanged. Status remains **revision 4 (`context-read-product-v1.1` draft) for re-check, base `99e4391a`**, not frozen or implemented.
+
+## §10 protocol revision P2-product-v4 (delta, 2026-10-28)
+
+Status: **proposed additive measurement revision**, based on `9a8f6fb7`; the primary reviews and commits. The frozen API/profile remains `context-read-product-v1.1`. This delta replaces **only** §10's `P2-product-v3` inventory, cross-product/population registration, attachment of cold/reference series and fixed windows, and platform acceptance/report scope with `P2-product-v4` below. It does not edit or supersede any runtime requirement in §§1–9, any §10.3/§10.4 threshold number or gate meaning, or the integration dependencies in §11. Historical authoring/review statuses above remain historical. No implementation, measurement or acceptance is claimed.
+
+The v3 harness handoff, inspected read-only on `feat/context-read-p2d-harness` at `docs/plans/context-read-p2d-harness-impl.md`, “Inventory”, mechanically registers 7,520 cells: 7,200 requests, 80 freshness, 48 availability, 48 overflow, 24 storage and 120 state/injection cells. Its 57,600 fixed windows alone require `57,600 × 30 = 1,728,000 s = 480 h = 20 days`, excluding requests, setup and drain. V4 registers quantities at the dimensions that exercise them; it makes no claim for an omitted interaction.
+
+### V4.1 Preserved gates and population rules
+
+All §10.3/§10.4 gates remain normative, including on controls where applicable:
+
+| Quantity | Unchanged acceptance |
+| --- | --- |
+| Warm candidate read call | Successful p95 ≤300 ms; maximum ≤1,500 ms. |
+| Fresh candidate main/cold lifecycle | Successful p95 ≤700 ms at 1,112, ≤1,000 ms at 3,336; maximum ≤1,500 ms. |
+| Fresh fetch main/cold lifecycle, every registered adapter/ref count | Successful p95 ≤150 ms; maximum ≤500 ms. |
+| Fresh assembly main/cold lifecycle | Successful p95 ≤800 ms; maximum ≤2,000 ms. |
+| Host loop | Absolute maximum ≤100 ms; zero gaps strictly >100 ms, over **every attempt and observed process**, including warm-ups, failures, startup/launcher, writer, maintenance, delivery, close and final drain. Retain 1 ms heartbeat/event-loop/synchronous-section observations and raw attribution; never subtract an idle baseline. |
+| Timeout/cancel | Public timeout, including opening, ≤50 ms after the immutable cutoff; cancellation ≤50 ms after host-observed abort; reject all late data. Cleanup remains separately owned/observed. |
+| Normal cells involving WAL on either database | Zero public busy and zero native primary 5/6 across reader, maintainer, independent writer and paired baseline, including open/rollback/close/final drain; complete telemetry on **all** those paths. Missing coverage invalidates; observed failures survive invalidation. |
+| DELETE busy and writer coexistence | Report all busy outcomes; they cannot supply successes. No reader-induced capture/review public-write deadline overrun or timeout; retain separate operation/close/lifecycle statistics and production deadlines. Throughput ratio remains report-only. |
+| Functional/bytes | Exact selected-projection oracle, authority/currentness, refs/snapshot fences, exact counter and every frozen byte/item bound. Unexpected errors fail. No fallback success enters a gated success population. |
+| Availability | ≥100 scheduled normal index-dependent attempts per fixed owner/readSet/types/intent population; not-ready ≤1%, with every dirty/pump/cron interval and error retained. Evidence calls cannot dilute it. |
+| Freshness | ≥100 eligible committed targets per type/intent population; nearest-rank p95 ≤30 s, fresh authorized probes at ≤1 s intervals, exact ref/revision, writers continue ≥30 s after the last target commit. Unseen targets remain +infinity at the pre-registered observation ceiling. |
+
+Each **main** request/overflow cell has exactly 3 separately reported fresh-handle warm-ups, then ≥50 validated successes within ≤500 measured attempts. Each registered **cold** series has ≥10 successes within ≤100 attempts, a fresh Node process per attempt, and no cold warm-ups. Every registered **warm reference** has its own ≥50 successes/≤500 attempts; it measures only the initialized candidate read call, with initialization/open/close still observed for loop/functional/telemetry purposes. It is distinct from main and cold. Use nearest-rank p50/p95 and maximum, successful-only gated statistics, and separate full all-attempt statistics. Do not stop normal requests early to improve survivors; ordinary production deadlines must permit observing the unchanged maxima. A count/observation ceiling below the minimum is inconclusive, never accepted.
+
+Fresh lifecycle remains constructor entry → one public read → awaited close, or failed-open supervisor drain (§10.1). Every concurrent request success needs actual read-call/public-write-call overlap; missed overlaps remain in the ledger and consume the same ceiling. Windows cannot supply request successes. No post-result tuning, sample removal or automatic retry/restart is authorized. A new run after a failure retains the failed report.
+
+### V4.2 Profiles, inputs and claim boundaries
+
+These are **measurement platform profiles**, not new engine API profiles. Each has its own immutable registration, raw report, actual exits and decision. No observations, successful counts or percentiles transfer between platforms.
+
+| Profile | Required environment and set | Claims supported by a complete pass |
+| --- | --- | --- |
+| `engine-platform-v4` | Engine maintainers' own quiet host/volume; exact Node 24 patch recorded. Run the engine column below. WSL2 ext4 is an example **should** qualification; macOS APFS needs its own complete, separately labeled execution if sought. Reserve **12 h**. | Engine behavior and the registered latency/contention/freshness/availability populations on that exact platform, hardware, volume, runtime, counter and workload. It can satisfy that platform's “should” report; it grants **no production launch acceptance**. A non-production platform is not itself an engine-profile failure. |
+| `production-launch-v4` | The product's production-class **Linux ext4 production volume**, non-WSL host, exact deployed Node 24 patch, 0700 directory/0600 DB/sidecar/companions; run the production column. Reserve **7 h**. | Production launch evidence for lexical v1.1, four-namespace v18 Memory-only and v23/v33 Memory+Card, current/history, within the explicitly registered populations. Together with §9 deterministic acceptance, all package dependencies and product adapter sign-off, this supports the scoped C-1–C-4 launch claim. It neither switches production DELETE to WAL nor authorizes a schema rollout. |
+
+Before registration, the product supplies: the concrete host/CPU/RAM/OS and run owner; the actual production volume/mount and ext4 attestation; the deployed **Node patch**, engine/profile/protocol commits; synthetic physical snapshots and Card distributions at both sizes; selection metadata, labels/queries/unique probes and known misses; exact production counter/module/configuration; normal open/request/read deadlines and **capture and review deadlines with provenance**; writer recipe/rate/busy policy; supervised pump service, minute budgets/renewal and capacity; diagnostic capacities and drain/ack schedule; and an exclusive quiet reservation. The review deadline is being added: register the product-supplied value (including 5,000 ms **only if actually supplied**), never invent it. A missing capture/review deadline leaves coexistence inconclusive and prevents a production pass. The engine run needs the same workload inputs or a separately hashed, explicitly labeled engine fixture/profile; synthetic engine inputs cannot certify the product's adapter or deadlines.
+
+No blanket performance claim covers missing APFS/WSL reports, other hosts/filesystems/patches, unregistered load/language interactions, optional semantics/providers, real-corpus quality or HTTP/model synthesis latency. P2-07 exact ranking/tokenization remains mandatory for zh/ja/mixed; no 92% Japanese/mixed quality target is introduced. Intermediate physical schemas retain §9 functional smoke coverage, not an inferred performance qualification. A failed/invalid/inconclusive/missing cell prevents a pass for the profile requiring it. Optional qualifications do not become launch prerequisites; their absence must be disclosed separately.
+
+### V4.3 Complete request plan
+
+Notation: **B** = both worlds `{1112,3336}`; **L** = `{3336}`; **S** = physical `{18,23,33}`; **C** = `{23,33}`; **P** = `{18,33}`; **J** = ordered canonical/sidecar pairs `{DELETE/DELETE,WAL/WAL}`; **X** = `{DELETE/WAL,WAL/DELETE}`; **I** = `{current,history}`; **Q** = three **separate** language populations `{zh,ja,mixed}`. All schema-18 requests are Memory-only; schemas 23/33 use the registered Memory+Card union. Every normal request uses the full personal+three-project selection. Worlds, schemas, journal pairs, intents, methods/adapters/ref counts and named loads remain separate except the explicitly registered rotations below.
+
+**`language-rotation-v4`** is one labeled population, not three language percentiles: attempt ordinal `k` chooses `[zh,ja,mixed][k mod 3]`, independently restarting at zero in warm-up/main/cold/reference series. Keep the language on every record; failures advance the schedule, never the success count. Every complete three-attempt cycle contains all languages; successful coverage must include all three or the cell is inconclusive. This is authorized only where the table says “rotation”. Query-bearing per-language gates remain where tokenization/ranking or exact counting is directly being compared. Rotation does not pool methods or intents. Evidence rotations use separately frozen language-bearing bodies/refs with large admitted byte cases, not identical English evidence relabeled three ways.
+
+| ID / method profiles | Engine cells | Production cells | Language / loads / series | Why this registration |
+| --- | ---: | ---: | --- | --- |
+| R1: candidates limit12 | `B×S×J×I×Q = 72` | Same **72** | Idle; separate Q; main+cold+warm reference. | Query tokenization/postings/ranking can change cost by language; keep both sizes and all physical schema branches (§5, P2-07). |
+| R2: assembly 1500 tokens/max12 | `B×S×J×I×Q = 72` | `B×{33}×J×I×Q = 24`, plus `B×{18,23}×J×I×rotation = 16`: **40** | Idle; main+cold. | Exact counting is language-sensitive, qualified per language on v33; v18/v23 rotations check their schema paths without claiming per-language assembly percentiles there (§4.1, §8.3). The engine retains those comparisons. |
+| R3: fetch24 × full/compact/snapshot | `B×S×J×I×3 = 72` | Same **72** | Idle; language rotation; main+cold. | Fetch does canonical refetch/serialization, not query tokenization/ranking; keep each adapter, intent and schema, and check bytes on every result (§8.2; `core/context-read-input.mjs:121`). |
+| R4: fetch1 × full/compact/snapshot | `B×S×J×I×3 = 72` | `L×S×J×I×3 = 36` | Idle; language rotation; main+cold. | Single-ref adapter overhead needs a measurement; production measures it at the larger world, while fetch24 still covers both sizes. This is a sentinel, not a monotonic-cost proof (§10.3 fetch bound). |
+| R5: candidates12, assembly1500/12, fetch24 full/compact/snapshot (5 distinct profiles) | `L×S×J×I×5×{fresh-same,fresh-other} = 120` | `L×P×J×I×5×{fresh-same} = 40` | Language rotation; main only. | Idle separates language cost; these separately labeled populations measure the extra write/pump interference at the larger world. Production selects actual v18 and current v33 paths; windows still exercise every primary schema/size. No omitted per-language/load percentile is inferred (§10.1/§10.2). |
+| R6: candidates24 and assembly4000/max24 (2 distinct stress profiles) | Idle `L×C×J×I×2×Q = 48`; fresh-same `L×C×J×I×2×rotation = 16`: **64** | Idle `L×{33}×J×I×2×Q = 24` | Idle main+cold; concurrent main only; candidate warm reference idle only. | Larger-world stress exercises ranking horizon/counter/IPC bounds; engine also checks the Card floor and same-projection interference. Every fixed-window read mix includes both stress methods, even on v18 (§4.2, §5, §10.1). |
+| R7: mixed-journal idle controls | `L×S×X×I×{candidates12,assembly1500/12,fetch24-full,fetch24-compact,fetch24-snapshot}×rotation = 60` | `L×P×X×I×{candidates12,assembly1500/12,fetch24-compact}×rotation = 24` | Main+cold; candidate warm reference; ordinary applicable latency/loop/functional/zero-busy gates. | Mixed pairs are registered controls (§10.1), with deterministic all-pair WAL coverage (P2-10). These controls check setup/read paths; no mixed-pair contention/freshness claim. Engine samples all three schema/adapter branches. |
+| **Request total** | **532** | **308** | Each has a main series and 3 warm-ups. | Rows are disjoint; no implicit expansion beyond the displayed products. |
+
+Cold is **idle only**: engine **396**, production **268** additional series, each 10/100. This preserves genuine unprimed bootstrap/counter/schema observations without multiplying them by writer schedules; loaded startup/cleanup loop and cancellation remain observed in every loaded attempt. It grants no cold-under-writer latency claim. Warm references attach only to idle candidate cells: engine **108**, production **92** additional 50/500 series. The v3 harness's `series.mjs`, `requestSeries`, stops its writer before the warm-reference block; removing duplicate loaded references registers the idle reference once rather than calling it writer-load evidence.
+
+No main/cold/reference data share a percentile. Stress and default never pool. A failure or incomplete telemetry in a warm-up, initialization, unused-language attempt or final drain still affects its required gate; “successful-only” applies solely to latency quantiles, not loop/busy/settlement/functional acceptance.
+
+### V4.4 Fixed-window contention plan
+
+Windows are independently registered **exposure cells**, not children of request cells. Each cell owns **five pairs**, each a fixed **30 s reader window plus its own fixed 30 s no-reader baseline**; baseline→reader on even zero-based repetitions, reader→baseline on odd. No baseline is reused. No duration extension or post-result replacement makes an invalid window pass.
+
+| ID / writer class | Engine exposure cells | Production exposure cells | Fixed windows, including baselines |
+| --- | ---: | ---: | ---: |
+| W1 fresh same-projection | `B×S×J = 12` | Same **12** | 120 / 120 |
+| W2 fresh other-owner | `B×S×J = 12` | `L×P×J = 4` | 120 / 40 |
+| W3 retained control, two separately evaluated target sub-populations below | `B×S×J = 12` | `L×P×J = 4` | 120 / 40 |
+| **Total** | **36** | **20** | **360 / 200** = **3 h / 1 h 40 min** fixed duration |
+
+The **`window-read-mix-v4`** is a pre-registered interleaving, explicitly replacing per-method × language × intent exposure windows. For zero-based repetition `r` and attempted read slot `k`, use the ten method profiles in appendix order at `k mod 10`, language `Q[(k+r) mod 3]`, intent `I[(floor(k/10)+r) mod 2]`. Calls remain fresh open/read/await-close, with independent expected-result/byte checks. Require every method profile, each language and each intent to be attempted in each reader window, and both intents/all languages for each method across the five repetitions; missing mix coverage invalidates the exposure cell. Do not claim individual method/language/intent latency quantiles from these windows. The gate is exposure plus the union of all loop/busy/deadline/functional failures, so a fast mix member cannot cancel a failure in another. Latency remains in R1–R7.
+
+W1/W2 retain **per reader window ≥20 actual read-call/write-call overlaps, ≥100 native in-call/in-window commits, ≥10 fresh per-write-close overlaps**. Every paired baseline needs ≥100 native public-write commits. Both capture and review operations alternate at the unchanged approximately 20 ms nonsaturating writer cadence; include all ordinary open/write/finally-close intervals and complete telemetry. Close overlap uses the read call, not handle opening/closing or PID lifetime. Different owner does not replace same-projection mutation.
+
+W3 explicitly re-registers retained-same and retained-other as **two labeled sub-populations in one window**, using one independent retained writer process with two retained connections and a frozen cycle `(same,capture),(other,capture),(same,review),(other,review)`, approximately 20 ms between ordinary operations, no backlog. **Each target sub-population independently needs ≥20 reader/write overlaps and ≥100 native commits in every reader window; each needs ≥100 commits in its paired baseline.** Report per-target/per-operation writer statistics and gate every deadline/native outcome separately; never combine their counts to meet a minimum. No fresh-close minimum applies; both retained shutdown closes remain fully observed outside exposure. This shares a scheduled window, not a gated population, and claims only this alternating retained control, not isolated retained-load latency. Deterministic P2-19 must encode both independent minima.
+
+These reductions preserve E1-C2's detector: `topic-reader-wal-fix.md`, “Cause and evidence”, reports all 34 fresh-writer smoke busy responses during close; “Round 1” registers the 20/100/10 minima; “E1-C2 v1.1” records the product's later 200-trial run with fresh-writer WAL failures. Its documented smoke was **40 × 2 s = 80 s fixed duration**, not acceptance. The later full run was **200 × 30 s = 6,000 s = 100 min fixed duration**; total elapsed time including setup/drain is not supplied. Those are fixed-duration arithmetic, not invented wall-clock measurements, and E1-C2's later wait-policy change does **not** amend this contract's §7 policy. V4 keeps all five repetitions and all close minima.
+
+### V4.5 Other cells and shared scheduling
+
+These required cells are identical in both profiles. Sharing a session saves repeated build/writer startup; it never merges type/intent/size/schema/journal denominators or quantiles.
+
+| ID / kind | Registration and count | Population, outputs and rationale |
+| --- | --- | --- |
+| F freshness | `B×J×I×[(18,memory),(23,memory),(23,card),(33,memory),(33,card)]` = **40** | ≥100 targets **each**, separate p95 including +infinity, exact eligible commit/ref/revision, ≤1 s fresh-handle probe cadence and ≥30 s final continuous-write tail (§10.4). No world/schema/intent/type/journal reduction. |
+| A availability | `B×S×J×I` = **24** | ≥100 index-dependent scheduled attempts each after both intent builds; fixed union types by schema, alternating candidates12/assembly1500, language rotation. Preserve the §10.4 combined-method denominator, all errors and dirty periods. |
+| O overflow partial | `B×S×J×I` = **24** | Candidates24, mixed query, idle; 3 warm-ups + 50/500 main + 10/100 cold; no warm reference. Selected 32 namespaces from personal+32 authorized projects, selection oracle and explicit partial scope; separate from full four-namespace launch. Apply same size-specific candidate/loop/bytes gates to successful selected-scope results (§5, P2-06). |
+| B storage | `B×S×J` = **12** | Canonical consistent backup/restore/verify, invalidation/quiescence, explicit rebuild and fresh ready verification for **both intents**, all five §8.4 times, main/WAL/SHM/total/peak bytes, counts and peak-sampling resolution. v18 old-pin preservation/read-mark controls remain required (P2-04). Times/sizes remain report-only; no copied certificate is restored as ready. |
+| T state/injection | `B×S×J×{absent,exhaustion,abort,crash,post-catch-up}` = **60** | Separate expected-outcome records, no latency percentile or successful-count claim. Exercise absent refusal/no repair, truthful native busy exhaustion, opening/read abort and timeout settlement, crash cleanup/quarantine and successful post-catch-up known answers. The abort family includes cutoff probes for opening/candidates/fetch/assembly, short injected deadlines and native cleanup while writers progress. Both intents/method branches remain in §9 deterministic acceptance; these opt-in cases observe real settlement/loop/drain. Deliberate failure records never enter a normal zero-busy comparison. |
+| **Other-cell total** | **160** | F/A share sessions below; O/B/T remain separate cells. |
+
+F and A run in **12 sessions `B×S×J`**, each with the explicit supervised pump servicing current/history and fresh same-projection continuous writers. Freeze a **180 s** observation interval per session: commit every registered target by second 120, continue ordinary writes through second 180 (≥60 s after the latest permitted target), and retain every committed target, not just the first 100. A session below any target/availability minimum is inconclusive; a missed cadence or writer-tail requirement is invalid; neither extends its duration. This is an observation budget, not a new freshness threshold.
+
+Register 100 Memory identities and, on v23/v33, 100 Card identities, each providing a separately attested target for **each** intent. Record each intent's **first eligible commit and exact revision**, not a later convenient review commit: Memory history can be eligible while review is awaiting, whereas current requires currentness/non-awaiting; Cards require confirmation even for history (`core/context-read-sidecar.mjs:323`, `:668`–`:675`). Share a commit timestamp only when those first-eligibility events actually coincide. Freeze target creation releases in seconds 0–85 and review/confirmation releases 35 s after creation, all by second 120, interleaved with the unchanged continuous ordinary writer stream. That pre-registered hold leaves the first history revision observable before review; it is never extended in response to observations. A history revision missed before mutation remains an unobserved/+infinity target, not replaced by its newly reviewed revision. Never count an ineligible Card draft as current/history. Retain independent intent-specific first-observation times, errors and denominators.
+
+Freeze release schedules/eligibility recipes, unique query terms, batches and expected top-24 membership before collection; record actual eligible native commit times during collection. A probe may query a batch of at most **20** uniquely tagged identities, using the ordinary lexical query union (`core/context-read-sidecar.mjs:492`–`:517`), within input bounds; require the independent oracle to establish expected membership without competition from other fixture items. Extract each target's own exact ref/revision and first successful observation; a batch success is not twenty successes unless all twenty were returned. Never truncate or retire an unseen target to free a batch. This changes probe scheduling, not a target population or the 30 s gate.
+
+Use **20 bounded probe lanes plus one separate availability lane** to attempt **every active batch/intent at ≤1 s intervals**, with a fresh request/credential/handle for each probe; freeze Worker/resource caps, launch offsets and per-process loop observation. Batch ordinal `b` and intent ordinal `i` use probe lane `2*b+i`; a lane never has two in-flight requests. At most ten 20-target batches and two intents require at most twenty probe calls per second. The host must supply capacity for these lanes alongside maintenance/writing; the budget assumes enough CPU/RAM for that fixed schedule, not a serial probe loop. The ordinary input grammar and frozen ranking oracle must validate batching; an unsupported batching adapter, insufficient capacity or missed probe cadence cannot pass. These probes have no request-latency percentile and do not supply R/O successes. A has its own at least 100 scheduled attempts **per intent**, disjoint from probe traffic; pre-register their release times throughout the session. Record missing scheduled A calls explicitly; any scheduling omission invalidates the session rather than fabricating a fast/error denominator entry. All probe/A loop, normal WAL busy, byte, writer and telemetry gates still apply. Probes and A never trigger maintenance. Session gates include the union of all participating processes, with capacities/drain schedules fixed before collection.
+
+### V4.6 Counts and wall-clock budget
+
+Count a request/overflow **cell** once; its warm-up/main/cold/reference series are descriptors, not extra cells. Count a fixed reader/baseline **window** separately from its W exposure cell. Count each F/A gated population once despite shared sessions.
+
+| Inventory unit | Engine platform | Production launch |
+| --- | ---: | ---: |
+| R request cells / main series | 532 | 308 |
+| W exposure cells | 36 | 20 |
+| F / A / O / B / T cells | 40 / 24 / 24 / 12 / 60 | 40 / 24 / 24 / 12 / 60 |
+| **Total qualification cells** | **728** | **488** |
+| Main series including O | 556 | 332 |
+| Warm-up groups (three attempts each) | 556 | 332 |
+| Cold series including O | 420 | 292 |
+| Warm candidate reference series | 108 | 92 |
+| Fixed windows (reader + baseline) | 360 | 200 |
+| Shared F/A sessions | 12 | 12 |
+| Minimum main successes / cold successes / reference successes | 27,800 / 4,200 / 5,400 | 16,600 / 2,920 / 4,600 |
+| Minimum warm-up attempts | 1,668 | 996 |
+
+These are **design estimates, not measured timings or guaranteed upper bounds**. The inspected v3 harness has a 100 ms **run-level** idle baseline (`measure-context-read-product.mjs`, before its inventory loop), not a 100 ms floor per request; `engine.mjs:observeLoop.finish` adds a 2 ms drain and cold adds a real child handshake/exit. Do not mistake those small floors for total costs. Instead budget these conservative planning allowances per complete attempt, **including** preparation outside latency, bootstrap/read/await-close, oracle/report/drain overhead, and outer launch for cold: engine main/warm-up **0.55 s**, cold **1.00 s**, reference **0.30 s**; production **0.50/0.90/0.25 s**. These assume a quiet production-class machine and a normally passing implementation; some individual requests can take the unchanged gated maximum. They are not per-attempt timeouts, and must never censor slower samples. Actual hardware/counter/build cost is an input uncertainty, not evidence of acceptance.
+
+| Serial wall-clock component | Engine estimate | Production estimate |
+| --- | ---: | ---: |
+| Main plus warm-ups, initially 50 successes without failures | `556×53×0.55 = 16,207.4 s` | `332×53×0.50 = 8,798 s` |
+| Idle cold, initially 10 successes | `420×10×1.00 = 4,200 s` | `292×10×0.90 = 2,628 s` |
+| Warm references, initially 50 successes | `108×50×0.30 = 1,620 s` | `92×50×0.25 = 1,150 s` |
+| Fixed windows, immutable duration | `36×5×2×30 = 10,800 s` | `20×5×2×30 = 6,000 s` |
+| F/A sessions, with internal bounded probe lanes | `12×180 = 2,160 s` | Same `2,160 s` |
+| Storage procedures, including restored rebuild | `12×90 = 1,080 s` | `12×60 = 720 s` |
+| State/injection cases | `60×8 = 480 s` | `60×5 = 300 s` |
+| Fixture placement, initial and window-pair builds, between-cell reset, sealing/drain | `1,800 s` | `900 s` |
+| Additional failed/missed-overlap attempts and slow-operation allowance | `3,600 s` | `1,800 s` |
+| **Total estimated / reserved** | **41,947.4 s = 11.65 h / 12 h** | **24,456 s = 6.79 h / 7 h** |
+
+Setup allowance includes **360/200 separate window-member placements and explicit current/history builds** (about 5/4.5 s per placement on average), not reuse of writer-mutated baselines or copied ready certificates. R/O/T blocks can reuse an unchanged certified store only after quiescent identity/currentness checks; a changed/restored/copy-placed store requires its own explicit build (§6.1.1/§8.4). All clone/hash I/O remains SQLite-safe child work. If those build/placement allowances do not hold on the registered hardware, the estimate must increase; neither skipping builds nor accepting stale certificates is an option. Storage and injection allowances likewise are planning costs, not new gates.
+
+**A six-hour production reservation is not supported by this conservative ledger:** it is short by 2,856 s (47.6 min), including the stated failure allowance. The smallest whole-hour reservation supported here is **seven hours**. Twelve hours for the engine is feasible as a planning budget with the listed assumptions, not proof that every failing workload finishes within it. It would be misleading to promise a bounded passing run while also allowing 500/100 attempts, slow native cleanup, and unknown build/counter costs. For example, production main alone at its 500-attempt ceiling would cost `332×503×0.50 = 83,498 s = 23.19 h` at the same planning rate. V4 does not shorten those ceilings or raise any gate to manufacture a budget fit.
+
+The immutable registration declares a **12 h / 7 h reservation and observation budget**. On projected overrun, stalled activity or missing progress, the supervised runner stops admitting new cells, observes/drains owned resources, preserves all records/actual exits, and reports the profile incomplete/inconclusive (known failures still fail). It must not kill an ordinary slow sample just to fit a latency gate, extend a 30 s window, or mark missing cells accepted. No automatic expensive rerun. The primary can reserve another window on the **same host/volume/patch and unchanged registration**, using pre-registered segment IDs/checkpoints between complete cells; retain all prior failures and merge only complete cell records, never substitute faster repeats or pool different populations. A changed configuration needs a new registration/revision under §10. Quiet-window scheduling and live supervision are required; a background PID/log is not supervision. This document creates no running task or monitor.
+
+### V4.7 V3 → v4 coverage map and deliberate limits
+
+| Dropped/merged v3 product | V4 gate coverage that remains | Rationale and limit |
+| --- | --- | --- |
+| Request method × language × intent attached to every 30 s contention window | W1/W2/W3 `window-read-mix-v4`; R1–R7 remain distinct latency populations. | Contention detects actual overlap, close/checkpoint races and raw failures, not a method percentile (§10.2). Explicit mix marginals replace the Cartesian exposure population; no per-combination window claim. |
+| Mixed pairs × writer loads/windows, freshness, availability, overflow and storage | R7 idle main/cold/reference; P2-10 all-pair deterministic correctness; primary J retains W/F/A/O/B/T. | §7/§10.1 designate mixed pairs controls. Mixed contention/freshness/coexistence, overflow timing and rebuild timing remain unclaimed, including omitted production v23 mixed latency. |
+| All request profiles × all loads | R1–R4 idle baselines; R5 larger-world defaults; R6 selected larger-world stress; W includes all ten profiles. | Independent request percentiles focus on registered interference sentinels; omitted size/schema/method/load interactions are not performance-qualified (§10.1). |
+| Max24/4000 × small world/all schemas/all loads | R6 larger Card-capable worlds on engine, v33 idle production; all W mixes still execute stress with byte/functional/loop/busy gates. | Horizon/counter/serialization pressure is exercised directly, not inferred from default limits (§4.2/§5); no omitted stress latency/cold-load claim. |
+| Language × fetch latency | R3/R4/R5/R7 explicitly labeled language rotations; frozen evidence bytes/known answers every success. | Fetch has no query scoring/tokenization (`core/context-read-input.mjs:121`–`:136`); language-specific fetch percentiles remain unclaimed. |
+| Language × loaded search/assembly, mixed-journal controls and production v18/v23 idle assembly | Explicit R2/R5/R6/R7 rotations; R1 and v33 idle assembly/stress retain Q; P2-07 gates exact all-language ranks. | Separate query/counter baseline cost from sampled interference/schema paths, with unchanged maxima on every successful member. Correctness is not a proof of omitted per-language latency. |
+| v18 × every method/language/load stress | R1–R5 Memory-only, W1 all sizes, selected W2/W3, F/A/O/B/T, P2-04 old-pin/no-migration preservation. | Actual production v18 has first-class baseline/default latency and contention evidence; Card/stress Cartesian qualification adds no compatibility capability (§8.3). Engine has broader controls; no v18 per-language stress latency claim. |
+| Fetch1 × all worlds/loads | R4 idle both worlds engine/larger world production; R3/R5 fetch24 adapters; W mix includes 1/24. | Single-ref overhead and 24-ref work are measured separately; no assumption that 24 proves smaller-world fetch1 latency. |
+| Retained writer × every request profile/language/intent | W3 per selected world/schema/J, independent same/other sub-populations/minima in each window; P2-19/P2-23 telemetry/drain. | Retention controls the connection-close distinction (§10.2); no retained-request latency percentile. Sharing cannot hide a deficient target's exposure or failure. |
+| Fresh-other and retained controls on every production world/schema | W2/W3 production L×P×J sentinels; W1/F/A still both worlds/all schemas; engine W2/W3 retain B×S×J. | Same-projection mutation is the principal readiness load (§6.1.2); other-owner/retention effects get explicit sentinels, not an assertion that smaller/v23 interactions cannot regress. |
+| Cold × every load | All idle R/O cold series; loaded main and all W startup/loop/settlement/cleanup. | Cold qualifies unprimed execution; write interference is separately sampled. No cold-under-writer latency acceptance (§10.1). |
+| Warm reference × every loaded candidate cell | Idle R1/R6/R7 references only. | V3 `series.requestSeries` stops its writer before reference collection; register that actual idle quantity once. No warm-under-writer claim. |
+| Freshness/availability as separate physical runs | F40/A24 retain their individual populations in 12 B×S×J sessions. | Same pump/writer can supply distinct type/intent observations (§10.4); sharing time is not pooling targets/denominators. Probe batching preserves exact per-target first observation and cadence. |
+| Storage × mixed sidecar mode | B12 covers both sizes/primary pairs/all schemas, explicitly retaining rebuild/verification of both intents. | Canonical consistent backup does not consume sidecar (§8.4); primary-mode rebuild outputs suffice for these launch populations, with mixed rebuild cost unclaimed. |
+| State/injection × mixed pairs | T60 primary pairs plus unchanged §9 all-pair deterministic tests. | Deliberate faults qualify truthfulness/cutoff/cleanup; they cannot supply a normal latency/zero-busy pass (P2-03/P2-10/P2-17/P2-23). |
+| All platforms treated as one acceptance status | Two independently registered profiles and explicit should reports. | Production Linux ext4 is still launch-required (§7); no WSL/APFS result substitutes for it. |
+
+There is no claim of a complete v3 Cartesian pass. There is no proof that a larger-world sentinel dominates a smaller world, a v33 path dominates v23, or a mixed-language percentile dominates its individual languages. Those omitted interactions remain unclaimed and can be added only by a new pre-registration/revision, without changing existing results. Functional §9 coverage is not reduced, including authority, selection/overflow, schema preservation, cutoff and writer provenance tests. A v4 report must list its exact required cell inventory and all omissions, rather than call a small smoke or an engine-platform pass production qualification.
+
+### Appendix V4-A: declarative inventory definition
+
+The following JSON is the inventory source to encode, **not an implementation change**. A row is the Cartesian product of its named sets and explicit fields. `language` is one dimension: `Q` expands to three distinct cells, `rotation` to one explicitly labeled population. `scope` is `launch` except O. Pair order, read mix, retained sub-populations and session scheduling are normative in V4.4–V4.5; their parameters are encoded below. Stable cell keys include protocol, platform profile, row ID and every expanded dimension; sort numeric worlds/schemas, then appendix array order. Do not fall back to v3's universal product. Expand all rows, reject duplicates, freeze inventory/hash/counts and independently recompute table totals **before** collection (P2-19); P2-23 retains its native provenance/drain prerequisites.
+
+```json
+{
+  "protocol": "P2-product-v4",
+  "engineProfile": "context-read-product-v1.1",
+  "thresholds": "unchanged frozen sections 10.3 and 10.4",
+  "sets": {
+    "B": [1112, 3336], "L": [3336],
+    "S": [18, 23, 33], "C": [23, 33], "P": [18, 33],
+    "J": [["DELETE", "DELETE"], ["WAL", "WAL"]],
+    "X": [["DELETE", "WAL"], ["WAL", "DELETE"]],
+    "I": ["current", "history"], "Q": ["zh", "ja", "mixed"],
+    "rotation": ["language-rotation-v4"],
+    "D": ["c12", "a1500", "f24-full", "f24-compact", "f24-snapshot"],
+    "stress": ["c24", "a4000"],
+    "adapters": ["full", "compact", "snapshot"],
+    "faults": ["absent", "exhaustion", "abort", "crash", "post-catch-up"]
+  },
+  "methods": {
+    "c12": {"method": "findCandidates", "limit": 12},
+    "c24": {"method": "findCandidates", "limit": 24},
+    "a1500": {"method": "contextRead", "maxTokens": 1500, "maxItems": 12},
+    "a4000": {"method": "contextRead", "maxTokens": 4000, "maxItems": 24},
+    "fetch": {"method": "fetchCandidateEvidence", "refs": [1, 24], "adapterSet": "adapters"}
+  },
+  "requestRows": [
+    {"id": "R1", "profiles": "both", "world": "B", "schema": "S", "journal": "J", "intent": "I", "method": ["c12"], "language": "Q", "load": ["idle"]},
+    {"id": "R2e", "profiles": ["engine"], "world": "B", "schema": "S", "journal": "J", "intent": "I", "method": ["a1500"], "language": "Q", "load": ["idle"]},
+    {"id": "R2p33", "profiles": ["production"], "world": "B", "schema": [33], "journal": "J", "intent": "I", "method": ["a1500"], "language": "Q", "load": ["idle"]},
+    {"id": "R2p18-23", "profiles": ["production"], "world": "B", "schema": [18, 23], "journal": "J", "intent": "I", "method": ["a1500"], "language": "rotation", "load": ["idle"]},
+    {"id": "R3", "profiles": "both", "world": "B", "schema": "S", "journal": "J", "intent": "I", "method": ["fetch"], "refs": [24], "adapter": "adapters", "language": "rotation", "load": ["idle"]},
+    {"id": "R4e", "profiles": ["engine"], "world": "B", "schema": "S", "journal": "J", "intent": "I", "method": ["fetch"], "refs": [1], "adapter": "adapters", "language": "rotation", "load": ["idle"]},
+    {"id": "R4p", "profiles": ["production"], "world": "L", "schema": "S", "journal": "J", "intent": "I", "method": ["fetch"], "refs": [1], "adapter": "adapters", "language": "rotation", "load": ["idle"]},
+    {"id": "R5e", "profiles": ["engine"], "world": "L", "schema": "S", "journal": "J", "intent": "I", "method": "D", "language": "rotation", "load": ["fresh-same", "fresh-other"]},
+    {"id": "R5p", "profiles": ["production"], "world": "L", "schema": "P", "journal": "J", "intent": "I", "method": "D", "language": "rotation", "load": ["fresh-same"]},
+    {"id": "R6e-idle", "profiles": ["engine"], "world": "L", "schema": "C", "journal": "J", "intent": "I", "method": "stress", "language": "Q", "load": ["idle"]},
+    {"id": "R6e-loaded", "profiles": ["engine"], "world": "L", "schema": "C", "journal": "J", "intent": "I", "method": "stress", "language": "rotation", "load": ["fresh-same"]},
+    {"id": "R6p", "profiles": ["production"], "world": "L", "schema": [33], "journal": "J", "intent": "I", "method": "stress", "language": "Q", "load": ["idle"]},
+    {"id": "R7e", "profiles": ["engine"], "world": "L", "schema": "S", "journal": "X", "intent": "I", "method": "D", "language": "rotation", "load": ["idle"]},
+    {"id": "R7p", "profiles": ["production"], "world": "L", "schema": "P", "journal": "X", "intent": "I", "method": ["c12", "a1500", "f24-compact"], "language": "rotation", "load": ["idle"]}
+  ],
+  "series": {
+    "allRequestRows": {"warmups": 3, "main": {"minimumSuccesses": 50, "maximumAttempts": 500}},
+    "cold": {"where": {"load": "idle"}, "minimumSuccesses": 10, "maximumAttempts": 100, "freshProcess": true, "warmups": 0},
+    "reference": {"where": {"load": "idle", "method": "findCandidates"}, "minimumSuccesses": 50, "maximumAttempts": 500, "interval": "initialized read call"},
+    "quantiles": "nearest-rank successful-only; all-attempt statistics separate",
+    "languageRotation": {"by": "attempt ordinal", "order": ["zh", "ja", "mixed"], "reset": "each series", "requireAllLanguagesSuccessful": true},
+    "concurrentSuccess": "actual public read-call/write-call overlap"
+  },
+  "windowRows": [
+    {"id": "W1", "profiles": "both", "world": "B", "schema": "S", "journal": "J", "load": ["fresh-same"]},
+    {"id": "W2e", "profiles": ["engine"], "world": "B", "schema": "S", "journal": "J", "load": ["fresh-other"]},
+    {"id": "W2p", "profiles": ["production"], "world": "L", "schema": "P", "journal": "J", "load": ["fresh-other"]},
+    {"id": "W3e", "profiles": ["engine"], "world": "B", "schema": "S", "journal": "J", "load": ["retained-target-rotation"]},
+    {"id": "W3p", "profiles": ["production"], "world": "L", "schema": "P", "journal": "J", "load": ["retained-target-rotation"]}
+  ],
+  "windows": {
+    "repetitions": 5, "durationMs": 30000, "pairedBaseline": "unique for each reader window",
+    "evenOrder": ["baseline", "reader"], "oddOrder": ["reader", "baseline"],
+    "readMix": {
+      "id": "window-read-mix-v4",
+      "methods": ["c12", "c24", "a1500", "a4000", "f1-full", "f1-compact", "f1-snapshot", "f24-full", "f24-compact", "f24-snapshot"],
+      "methodIndex": "k % 10", "languageIndex": "(k+r) % 3", "intentIndex": "(floor(k/10)+r) % 2",
+      "perWindowCoverage": "every method, every language, both intents",
+      "acrossRepetitionsCoverage": "each method with every language and both intents",
+      "perMethodLatencyGate": false
+    },
+    "writerCadenceMs": 20,
+    "freshOperations": ["capture", "review"],
+    "freshReaderMinima": {"writeOverlaps": 20, "commits": 100, "closeOverlaps": 10},
+    "baselineMinima": {"commits": 100},
+    "retainedCycle": [["same", "capture"], ["other", "capture"], ["same", "review"], ["other", "review"]],
+    "retainedPerTargetReaderMinima": {"writeOverlaps": 20, "commits": 100},
+    "retainedPerTargetBaselineMinima": {"commits": 100},
+    "retainedShutdownClose": "observed outside exposure; no fresh-close minimum"
+  },
+  "otherRows": [
+    {"id": "F", "profiles": "both", "world": "B", "schemaType": [[18, "memory"], [23, "memory"], [23, "card"], [33, "memory"], [33, "card"]], "journal": "J", "intent": "I", "minimumTargets": 100},
+    {"id": "A", "profiles": "both", "world": "B", "schema": "S", "journal": "J", "intent": "I", "minimumAttempts": 100, "methods": ["c12", "a1500"], "language": "language-rotation-v4"},
+    {"id": "O", "profiles": "both", "world": "B", "schema": "S", "journal": "J", "intent": "I", "method": ["c24"], "language": ["mixed"], "load": ["idle"], "scope": "overflow", "requestedNamespaces": 33, "selectedNamespaces": 32, "series": ["warmups", "main", "cold"]},
+    {"id": "B", "profiles": "both", "world": "B", "schema": "S", "journal": "J", "verifyIntents": ["current", "history"]},
+    {"id": "T", "profiles": "both", "world": "B", "schema": "S", "journal": "J", "case": "faults", "population": "expected outcome only"}
+  ],
+  "sessions": {
+    "rows": ["F", "A"], "key": ["world", "schema", "journal"], "count": 12,
+    "durationMs": 180000, "lastTargetCommitByMs": 120000,
+    "continuousWriterUntilMs": 180000, "probeIntervalMaximumMs": 1000,
+    "targetIdentitiesPerType": 100, "targetsPerTypePerIntent": 100,
+    "targetCreationReleaseIntervalMs": [0, 85000], "targetReviewReleaseAfterCreationMs": 35000,
+    "targetEligibility": "separate first eligible native commit and exact revision per intent; share only if actually coincident",
+    "probeBatchMaximumTargets": 20, "probeResultLimit": 24,
+    "probeLanes": 20, "availabilityLanes": 1, "probeLaneIndex": "2*batchOrdinal+intentOrdinal",
+    "availabilitySchedule": "required immutable input; at least 100 attempts per intent throughout session, separate from probes",
+    "censorUnseenAs": "+infinity", "poolTargetsOrAvailabilityPopulations": false
+  },
+  "profiles": {
+    "engine": {"id": "engine-platform-v4", "reservationSeconds": 43200, "requiredRole": "engine platform", "productionClaim": false},
+    "production": {"id": "production-launch-v4", "reservationSeconds": 25200, "requiredRole": "production Linux ext4 on production volume", "runtime": "exact deployed Node 24 patch"}
+  },
+  "expectedCounts": {
+    "engine": {"request": 532, "exposure": 36, "freshness": 40, "availability": 24, "overflow": 24, "storage": 12, "state": 60, "cells": 728, "main": 556, "warmupGroups": 556, "cold": 420, "reference": 108, "fixedWindows": 360},
+    "production": {"request": 308, "exposure": 20, "freshness": 40, "availability": 24, "overflow": 24, "storage": 12, "state": 60, "cells": 488, "main": 332, "warmupGroups": 332, "cold": 292, "reference": 92, "fixedWindows": 200}
+  }
+}
+```
+
+`f1-*`/`f24-*` are scalar aliases for the corresponding `fetch` ref-count/adapter pair, not an additional expansion. `schemaType` is a tuple dimension, not schema×type. Fields `methods` in A, `verifyIntents` in B and `series` in O describe work **inside** a cell; only singular dimension fields expand rows. `profiles` selects a platform column and is never multiplied into that column's cell count. Default `types` is Memory-only for 18 and Memory+Card for 23/33. All rows inherit full telemetry, exact counter where needed, normal cutoff/loop/bytes/functional gates and unchanged successful-population qualification. Expected-outcome T cases carry their injection labels instead of normal zero-busy/latency acceptance. All unspecified run inputs listed in V4.2 must be supplied and hashed before expansion/collection; this appendix supplies no operator readiness override.
+
+Authoring validation: appendix JSON parsed and expanded mechanically, then cross-checked against independently computed table factors: **728 engine / 488 production cells**, zero differences; cold/reference/window counts and both wall-clock sums also agree (exit 0). The frozen **179,674-byte** prefix is byte-identical to HEAD (exit 0). Changed-file inventories from diff plus untracked enumeration and independent porcelain status agree at **one file**, this plan. Whitespace/newline/local-path checks and `git diff --check` exit 0. No code, test/build, measurement, network, commit or unattended process is part of this delta.
