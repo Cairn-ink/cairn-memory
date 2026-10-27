@@ -7,7 +7,7 @@ import { reopenExperimentBudget } from '../experiment-budget/index.mjs';
 import { createQualificationLiveSession } from './qualification-session.mjs';
 import { createQualificationPilotAttempt } from './qualification-pilot-attempt.mjs';
 import { getQualificationPilotPins } from './qualification-pilot.mjs';
-import { inspectArtifact, privateDirectory } from './installed-capture-support.mjs';
+import { inspectArtifact, verifyInspectedArtifact, privateDirectory } from './installed-capture-support.mjs';
 import { writeQualifiedEvidence } from './qualified-attempt.mjs';
 import { startExperimentProxy } from './proxy.mjs';
 import { readDiagnostics } from './diagnostics.mjs';
@@ -79,7 +79,7 @@ async function execute(options) {
     session = createQualificationLiveSession({ ledger: ledgerOptions, qualificationExtension, apiKey, fetchImpl });
     report.budgetBefore = budget(ledger.getState());
     attempt = createQualificationPilotAttempt({ readState: () => ledger.getState(), expectedCheckpoint,
-      checkPins: () => { verifyPins(); if (!firstSent) inspectArtifact(executable, archive, artifactSha256); },
+      checkPins: () => { verifyPins(); if (!firstSent) verifyInspectedArtifact(executable, archive, provenance); },
       persist: evidence,
       send: async (route, body, requestOptions) => {
         if (report.traces.length >= 6) fail('diagnostic_request_cap');
@@ -89,7 +89,7 @@ async function execute(options) {
         report.traces.push(trace);
         evidence(`trace-${trace.sequence}-request`, trace);
         verifyPins();
-        if (!firstSent) inspectArtifact(executable, archive, artifactSha256);
+        if (!firstSent) verifyInspectedArtifact(executable, archive, provenance);
         firstSent = true;
         const response = await session.request(route, body, requestOptions);
         const bytes = new Uint8Array(await response.clone().arrayBuffer());
