@@ -1346,12 +1346,12 @@
   },
   {
     "path": "tools/testing/fixtures/context-product/report.mjs",
-    "source": "const journal=await open(path+'.records.jsonl','wx',0o600),partial=await open(path+'.partial','wx',0o600);",
+    "source": "const journal=await open(path+'.records.jsonl','ax',0o600),partial=await open(path+'.partial','wx',0o600);",
     "reason": "Harness-owned exclusive numeric report/header/journal files only; never database files or companions."
   },
   {
     "path": "tools/testing/fixtures/context-product/report.mjs",
-    "source": "const journal=await open(path+'.records.jsonl','wx',0o600),partial=await open(path+'.partial','wx',0o600);",
+    "source": "const journal=await open(path+'.records.jsonl','ax',0o600),partial=await open(path+'.partial','wx',0o600);",
     "reason": "Harness-owned exclusive numeric report/header/journal files only; never database files or companions."
   },
   {
@@ -1378,5 +1378,10 @@
     "path": "tools/testing/fixtures/context-product/v4-checkpoint-child.mjs",
     "source": "for await(const line of createInterface({input:createReadStream(path,{flags:constants.O_RDONLY|constants.O_NOFOLLOW}),crlfDelay:Infinity})){",
     "reason": "SQLite-free child only; refuses symlinks and non-regular files before opening operator report/journal paths. No measuring-process database descriptor."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/report.mjs",
+    "source": "const journal=await open(path+'.records.jsonl','a',0o600);",
+    "reason": "Session child appends only the leased harness-owned numeric journal; the observed parent never opens a database descriptor."
   }
 ]

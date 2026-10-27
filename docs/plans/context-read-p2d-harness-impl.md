@@ -1457,3 +1457,238 @@ Both verification runners finished with actual exit **0**. Per-file test
 wrappers verified their process groups drained; the owned-runner process check
 also exited **0**. Owned temporary verification logs/scripts were removed after
 recording the results. No measurement, smoke, process or monitor is left running.
+
+## v4 encoding fix round 3
+
+Base `fc58e9f8`, including the standards T7b thread-attribution correction on
+`46669802`. Both second re-reviews were read in full, together with the nine
+original lessons and four additional lessons. This round replaces async-context
+ownership classification with a process boundary. No engine runtime, frozen
+protocol, population thresholds, counts, estimates or generated runtime changes.
+No timing run, smoke, network/key operation or commit.
+
+### Structural observation boundary
+
+- `v4-session-work.mjs` owns the unchanged schedule, all 21 lanes, independent
+  writer control/ledger processing, live-target input preparation, oracle/probe
+  validation, records, variable-size lane IPC and byte accounting. It runs in
+  `v4-session-child.mjs`, never in the observed parent. The child refreshes its
+  fixture ledger through the existing isolated storage child before starting
+  the writer. Large ledger data therefore does not cross parent IPC.
+- The child leases the existing numeric journal and streams/syncs raw evidence
+  while the session runs. Parent and child writes are mutually exclusive; both
+  handles append, and the lease returns the sequence number. Journal regression
+  checks records before, during and after the lease, including durable evidence
+  before export. No raw database descriptor or new database allowance is added.
+- Parent preparation, configuration encoding and byte limits finish before
+  `loopFactory()`. `v4-session-pump.mjs` separates pump configuration from engine
+  renewal, public drain/ack, pump close and supervisor close. During observation
+  it buffers raw engine outputs; diagnostic and trace records are constructed
+  after `loop.finish()`. The observer counts every parent callback, including
+  synchronous engine callbacks and Promise continuations. There are no scopes,
+  async hooks, pause calls or resume calls in the session observer.
+- In-window parent IPC sends only the fixed literal `start` string (7 bytes
+  when JSON encoded); failure cancellation uses the fixed `cancel` string
+  (8 bytes). Node IPC still JSON-serializes those tiny constant strings. It
+  never receives a variable lane input or writer diagnostic payload to serialize
+  in the observed parent. The child sends fixed `ready`/`done` controls and holds
+  its variable-size export until the parent sends `export` after observation.
+- Parent observation continues through writer/lane shutdown, pump drain/close,
+  supervisor close and observer final drain. Sampler transfer, parent validation,
+  population inspection, result decisions, diagnostics and serialization follow
+  `loop.finish()`. Existing scheduling attribution, including T7b, is retained.
+- The runner's admission/report timer is suspended for this unit. Actor stall
+  checks, the session deadline and child cleanup run in the session child.
+  Parent actor/sampler polling is disabled in-window; the sampler's stop watchdog
+  starts after observation. Child export, IPC-error cleanup and actual child exit
+  remain distinct. Startup cancellation drains the child and returns the journal
+  lease. Actor completion accepts confirmed `exit` plus IPC `disconnect` as
+  well as stdio `close`, so delayed stdio closure cannot hang export cleanup.
+  Final IPC stays deliverable, and disconnect alone never proves exit. A
+  disconnected sampler cancels its timer when its lane parent is terminated.
+  No asynchronous work is left running by the verification commands.
+
+### Regressions and counterfactuals
+
+The existing VM/manual-clock suite now exercises the production session worker
+with distinct parent and child clocks. Three explicit round-three cases cover
+150 ms in a synchronous `AsyncResource` callback body, its asynchronous `.then`
+continuation, and variable-size lane serialization. The serialization case also
+asserts that the fabricated child clock advanced, so omission cannot pass it.
+Existing async preparation, probe validation, record and writer-bookkeeping
+cases remain, along with renewal, drain, pump shutdown, supervisor shutdown,
+lane shutdown, failure cleanup and scheduling-attribution controls.
+
+The new `measure-context-read-product-v4fix3.test.mjs` additionally checks the
+journal lease (including concurrent frames), child success/failure export order,
+startup cancellation, parent startup failure, sampler disconnect cleanup and
+confirmed-exit/final-IPC ordering. Its unfiltered-observer checks make pause/resume throw:
+synchronous callbacks, async engine continuations, drain, pump close, supervisor
+close and lane-shutdown delivery each retain a fabricated 150 ms parent block.
+A fabricated 150 ms validation block after an await validates a buffered loop record
+after observation; parent configuration serialization runs before observation.
+Both retain 0 ms in the parent-loop record. These use fabricated clocks, never
+wall-clock blocking or timing qualification.
+
+Counts remain **728 / 488 cells**, **432 / 224 fixed windows**, **252 / 172
+references**, and **46,627.4 s / 26,284 s** estimates.
+
+### Counterfactual commands and actual exit codes
+
+Each command below used the exact Node executable for the column and a PATH
+headed by that runtime. `F` denotes
+`tools/testing/measure-context-read-product-v4fix1.test.mjs`; the environment
+switches load reviewed sources through the existing VM loader or apply the
+explicit observer mutation without editing the worktree.
+
+| Command | Node 22.16.0 | Node 24.15.0 |
+| --- | --- | --- |
+| `node --experimental-vm-modules --test --test-reporter=tap --test-name-pattern=round3 F` | exit 0; 4 passed | exit 0; 4 passed |
+| `P2D_V4FIX1_BASE=46669802 node --experimental-vm-modules --test --test-reporter=tap --test-name-pattern=round3 F` | exit 1; 2 failed / 2 controls passed | exit 1; 3 failed / 1 control passed |
+| `P2D_V4FIX1_BASE=55ad96fb node --experimental-vm-modules --test --test-reporter=tap --test-name-pattern='round3 async engine continuation\|round2 async harness-validation' F` | exit 1; 1 failed / 1 control passed | exit 1; 1 failed / 1 control passed |
+| `P2D_V4FIX3_MUTANT=async-blind node --experimental-vm-modules --test --test-reporter=tap --test-name-pattern=round3 F` | exit 1; 1 failed / 3 controls passed | exit 1; 1 failed / 3 controls passed |
+
+At `46669802`, both patches fail variable-size lane serialization and the
+runner-supervision exclusion; Node 24 additionally loses the synchronous
+engine callback body. Node 22 retains that callback as a passing control.
+The async engine continuation already works at that base. The `async-blind`
+mutation reproduces omission of that continuation by pausing across the await
+for the fixed done control: only the async continuation regression fails on
+both patches. The earlier `55ad96fb` sources reproduce async harness validation
+entering observation; its engine continuation remains a passing control.
+
+### Changed files, cross-checked two ways
+
+One inventory uses `git diff --name-only HEAD` plus Git's untracked enumeration.
+The independent inventory compares every HEAD tree blob and executable/symlink
+mode with worktree bytes, then walks the filesystem for new paths, honoring
+ignore rules. Both cover scripts, docs, public assets and configuration; owned
+verification scratch is excluded and removed at handoff. Their sorted manifests
+agree at **13 changed files** (`diff -u`: **exit 0**):
+
+- `core/test/fixtures/no-raw-db-fd-allowlist.json`
+- `docs/plans/context-read-p2d-harness-impl.md`
+- `tools/testing/fixtures/context-product/actors.mjs`
+- `tools/testing/fixtures/context-product/io-child.mjs`
+- `tools/testing/fixtures/context-product/report.mjs`
+- `tools/testing/fixtures/context-product/runner-child.mjs`
+- `tools/testing/fixtures/context-product/v4-runner.mjs`
+- `tools/testing/fixtures/context-product/v4-session-child.mjs`
+- `tools/testing/fixtures/context-product/v4-session-pump.mjs`
+- `tools/testing/fixtures/context-product/v4-session-work.mjs`
+- `tools/testing/fixtures/context-product/v4-session.mjs`
+- `tools/testing/measure-context-read-product-v4fix1.test.mjs`
+- `tools/testing/measure-context-read-product-v4fix3.test.mjs`
+
+The test inventory was independently derived using a filesystem glob and an
+`rg --files` walk plus exact harness/guard/E1-C2 additions. The manifests agree
+at **38 explicit test paths / 32 required paths** (`diff -u`: **exit 0**).
+
+### Syntax, estimates and final checks
+
+Both exact-runtime `node --version` commands exited **0**. Syntax checks ran
+as `node --check <path>` on each patch, with the actual process status captured:
+
+| Explicit JavaScript path | Node 22.16.0 exit | Node 24.15.0 exit |
+| --- | --- | --- |
+| `tools/testing/fixtures/context-product/actors.mjs` | 0 | 0 |
+| `tools/testing/fixtures/context-product/io-child.mjs` | 0 | 0 |
+| `tools/testing/fixtures/context-product/report.mjs` | 0 | 0 |
+| `tools/testing/fixtures/context-product/runner-child.mjs` | 0 | 0 |
+| `tools/testing/fixtures/context-product/v4-runner.mjs` | 0 | 0 |
+| `tools/testing/fixtures/context-product/v4-session-child.mjs` | 0 | 0 |
+| `tools/testing/fixtures/context-product/v4-session-pump.mjs` | 0 | 0 |
+| `tools/testing/fixtures/context-product/v4-session-work.mjs` | 0 | 0 |
+| `tools/testing/fixtures/context-product/v4-session.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4fix1.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4fix3.test.mjs` | 0 | 0 |
+
+All **22 syntax invocations exited 0**. Estimate-only commands do not start
+measurement or engine work:
+
+| Command | Node 22.16.0 exit | Node 24.15.0 exit |
+| --- | --- | --- |
+| `node tools/testing/measure-context-read-product.mjs --protocol v4 --profile engine --estimate` | 0 | 0 |
+| `node tools/testing/measure-context-read-product.mjs --protocol v4 --profile production --estimate` | 0 | 0 |
+
+The outputs retain the exact inventories, hashes and counts checked by the v4
+suite: 728 / 488 cells, 432 / 224 fixed windows, 252 / 172 references and
+46,627.4 / 26,284 estimated seconds.
+
+Two development attempts at the new sampler cleanup test were explicitly
+stopped after confirmed child exit while its fixture still awaited a separate
+stdio-close event: wrapper exit **143** on each attempt. The fixture now asserts
+the confirmed exit directly. The final actor checks separately require both
+actual exit and IPC disconnection, preserve the final result message, and reject
+disconnection alone as exit proof. Final affected reruns pass on both patches.
+These interrupted development attempts are not passing verification results.
+
+### Explicit test commands and actual exit codes
+
+Each path below ran separately with its exact nvm Node executable first in
+PATH, using `node tools/testing/run.mjs --test-reporter=tap <test-path>`.
+Actual process return codes were captured directly; no pipeline or reporter
+tail supplied the verdict. All **76 matrix file invocations exited 0** and the
+matrix driver exited **0**. After the last cleanup/actor checks, the six harness
+files, both lock guards and E1-C2 ran again on both patches: **18 final affected
+file invocations, every exit 0**; that driver also exited **0**. The table uses
+the latest result for each path.
+
+| Explicit test path | Node 22.16.0 exit | Node 24.15.0 exit |
+| --- | --- | --- |
+| `core/test/context-read-assembly-races.test.mjs` | 0 | 0 |
+| `core/test/context-read-assembly-readonly.test.mjs` | 0 | 0 |
+| `core/test/context-read-assembly.test.mjs` | 0 | 0 |
+| `core/test/context-read-bm25.test.mjs` | 0 | 0 |
+| `core/test/context-read-budget.test.mjs` | 0 | 0 |
+| `core/test/context-read-core.test.mjs` | 0 | 0 |
+| `core/test/context-read-default-entropy.test.mjs` | 0 | 0 |
+| `core/test/context-read-embedder.test.mjs` | 0 | 0 |
+| `core/test/context-read-fusion.test.mjs` | 0 | 0 |
+| `core/test/context-read-local-embedder.test.mjs` | 0 | 0 |
+| `core/test/context-read-local-status.test.mjs` | 0 | 0 |
+| `core/test/context-read-moc-source.test.mjs` | 0 | 0 |
+| `core/test/context-read-process.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-artifact.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-control.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-import.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-index.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-pump.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-service.test.mjs` | 0 | 0 |
+| `core/test/context-read-product.test.mjs` | 0 | 0 |
+| `core/test/context-read-recovery.test.mjs` | 0 | 0 |
+| `core/test/context-read-review.test.mjs` | 0 | 0 |
+| `core/test/context-read-sidecar.test.mjs` | 0 | 0 |
+| `core/test/context-read-source-work.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources-authority.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources-bounds.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources-races.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources.test.mjs` | 0 | 0 |
+| `core/test/context-read-tokenize.test.mjs` | 0 | 0 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 | 0 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-fix1.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-fix2.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4fix1.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4fix3.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product.test.mjs` | 0 | 0 |
+| `tools/testing/measure-topic-reader-wal.test.mjs` | 0 | 0 |
+
+The v4 suite passes all **47** cases on each patch. The new boundary suite
+passes all **16** cases in the final affected reruns. The v4fix1 wrapper checks
+its isolated VM-enabled child's actual exit status, including the retained
+round-one/round-two checks and four explicit round-three regressions.
+Both assembly-suite runs retain only the existing optional-`tiktoken` A13 skip:
+19 passes / one skip / exit **0**. No package installation was attempted.
+No other matrix or final affected file reports a skip, cancellation or failure.
+
+Final `git diff --check`, the independent whitespace/final-newline and added
+local-path scans, both inventory `diff -u` commands and the unchanged
+engine/runtime, frozen contract/protocol/counts and generated-setup comparison
+against HEAD exited **0**. `git diff --cached --exit-code` exited **0**.
+The inventories were re-derived after this appendix: **13 changed files /
+38 test paths**, with **32 required paths**. The branch remains at `fc58e9f8`;
+all changes are unstaged, and the primary commits. Verification wrappers drained
+their owned process groups; all verification drivers finished, and owned scratch
+was removed. No measurement, smoke, process or monitor is left running.

@@ -24,6 +24,7 @@ if(process.argv[2]==='copy') {
 } else if(process.argv[2]==='sample') {
   const send=message=>new Promise((resolve,reject)=>process.send(message,error=>error?reject(error):resolve()));
   const session=createSamplerSession({send,captureSample:(pid,directory)=>({...sample(pid),sizes:directory?sizes(directory):[]})});
+  process.once('disconnect',()=>session.close());
   process.on('message',m=>{void session.message(m).then(()=>{if(m.type==='stop')process.disconnect();})
     .catch(()=>{session.close();process.exitCode=1;if(process.connected)process.disconnect();});});
   process.send({type:'ready'});

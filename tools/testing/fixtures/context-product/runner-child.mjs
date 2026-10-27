@@ -5,7 +5,8 @@ const startup=globalThis[Symbol.for('product-cold-startup-loop')];startup?.pause
 const kind=process.argv[2];let encoded='';for await(const chunk of process.stdin){encoded+=chunk;if(encoded.length>1048576)throw Error('child_configuration_size');}
 const config=JSON.parse(encoded);startup?.resume();
 try {
-  if(kind==='lane')await (await import('./v4-lane.mjs')).laneProcess(config);
+  if(kind==='session')await (await import('./v4-session-child.mjs')).sessionChild(config);
+  else if(kind==='lane')await (await import('./v4-lane.mjs')).laneProcess(config);
   else if(kind==='writer-v4')await (await import('./v4-writer.mjs')).writerV4(config);
   else if(kind==='writer')await writerProcess(config);
   else if(kind==='cold') {

@@ -82,7 +82,8 @@ export async function runV4(input,{profile,segmentId,reportPath,registrationPath
       stallMs:input.supervision.stallMs,progressMs:input.supervision.progressMs,projectedCellMs:0,drainMs:input.supervision.drainAllowanceMs});
     if(!b.admit&&!stopped){stopped=b.reason;console.error(JSON.stringify({status:'incomplete',reason:stopped,cell:currentCell}));}
   };
-  const monitor=setInterval(supervise,Math.min(1000,input.supervision.stallMs,input.supervision.progressMs));
+  const monitorEvery=Math.min(1000,input.supervision.stallMs,input.supervision.progressMs);
+  let monitor=setInterval(supervise,monitorEvery);
   const estimate=estimateV4(profile),initialRate=estimate.estimateSeconds*1000/plan.length,observedCosts=new Map();
   const complete=async(cell,decision,genuine=true)=>{if(decision.observedFailure)decision={...decision,decision:'failed'};decisions.push(decision.decision);if(genuine)completed.add(cell.key);tally[decision.decision]=(tally[decision.decision]??0)+1;
     const value={...decision,complete:genuine,key:cell.key};await sink.cell(cell,value);await sink.record(cell.id,'checkpoint',{segmentId,registrationHash,complete:genuine,cellKey:cell.key,decision:value});};
@@ -116,7 +117,12 @@ export async function runV4(input,{profile,segmentId,reportPath,registrationPath
         else if(['freshness','availability'].includes(cell.kind)){
           const key=JSON.stringify([cell.count,cell.schema,cell.canonical,cell.sidecar]),session=input.sessions.find(s=>s.key===key),group=plan.filter(c=>['freshness','availability'].includes(c.kind)&&JSON.stringify([c.count,c.schema,c.canonical,c.sidecar])===key);
           if(typeof adapter.validateProbe!=='function')throw Error('v4_batching_adapter_required');
-          const ds=await sharedSession(group,session,{sink,config:await buildCell(config),prepareInput,validateProbe:adapter.validateProbe});
+          config=await buildCell(config);
+          // Session child owns harness supervision and journal writes. Suspend
+          // this variable-size admission/record callback in the engine window.
+          clearInterval(monitor);let ds;
+          try{ds=await sharedSession(group,session,{sink,config});}
+          finally{lastActivityAt=lastProgressAt=Date.now();monitor=setInterval(supervise,monitorEvery);}
           for(const c of group)if(!completed.has(c.key))await complete(c,ds.get(c.key));continue;
         }else if(cell.kind==='injection')decision=await stateCell(cell,{sink,input,prepare:(c,s)=>prepare(c,s),prepareInput,build:buildCell});
         else {

@@ -25,6 +25,7 @@ async function load(name,overrides={},transform=s=>s,context) {
   let source;
   if(base){const r=spawnSync('git',['show',base+':'+path.slice(process.cwd().length+1)],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);source=r.stdout;}
   else source=await readFile(url,'utf8');
+  if(name==='v4-session.mjs'&&process.env.P2D_V4FIX3_MUTANT==='async-blind')source=source.replace("child.send(START);await child.wait('done');","parentLoop.pause();child.send(START);await child.wait('done');parentLoop.resume();");
   async function dependency(specifier){
     const ns=overrides[specifier]??(specifier.endsWith('.json')?{default:JSON.parse(await readFile(new URL(specifier,url),'utf8'))}:await import(specifier.startsWith('.')?new URL(specifier,url).href:specifier));
     const m=new vm.SyntheticModule(Object.keys(ns),function(){for(const [k,v] of Object.entries(ns))this.setExport(k,v);},{context});
@@ -61,15 +62,16 @@ function registration(plan){
     segments:[{id:'first',cellKeys:plan.map(c=>c.key)}],stateProbes:Object.fromEntries(plan.filter(c=>c.kind==='injection'&&c.injection==='post-catch-up').flatMap(c=>c.subprobes.map(p=>[c.key+':'+p.id,'unique'+c.id+p.id]))),
     adapterModule:'data:text/javascript,export const validate=()=>true;'};
 }
-async function runner(t,{reason,exception=false,priorFailure=false,resumed=[]}={}){
-  const plan=buildV4Plan('engine'),cell=exception?plan.find(c=>c.kind==='injection'&&c.injection==='post-catch-up'):plan.find(c=>c.kind==='requests');
-  const report=output(),w=createTestWorkspace(t);let clock=0,supervise,runs=0;
-  const context=vm.createContext({process:{version:'v24.15.0',once(){},off(){}},console:{log(){},error(){}},Date:{now:()=>clock},setInterval:fn=>{supervise=fn;return 1;},clearInterval(){}});
+async function runner(t,{reason,exception=false,priorFailure=false,resumed=[],sessionCell=false}={}){
+  const plan=buildV4Plan('engine'),cell=sessionCell?plan.find(c=>c.kind==='availability'):exception?plan.find(c=>c.kind==='injection'&&c.injection==='post-catch-up'):plan.find(c=>c.kind==='requests');
+  const report=output(),w=createTestWorkspace(t);let clock=0,supervise,runs=0,monitorActive=false;
+  const context=vm.createContext({process:{version:'v24.15.0',once(){},off(){}},console:{log(){},error(){}},Date:{now:()=>clock},setInterval:fn=>{supervise=fn;monitorActive=true;return 1;},clearInterval(){monitorActive=false;}});
   const prior=plan.filter(c=>c!==cell).map(c=>({key:c.key,cell:c,complete:true,decision:'passed'}));
   const actualReport=await import('./fixtures/context-product/report.mjs');
   const mod=await load('v4-runner.mjs',{
     './report.mjs':{...actualReport,createReportSink:async()=>report},
     './v4-checkpoints.mjs':{readSegments:async()=>resumed,checkedSegments:()=>({cells:[...prior,...resumed.flatMap(s=>s.cells)],decision:priorFailure||resumed.some(s=>s.knownFailure)?'failed':'inconclusive'})},
+    './v4-session.mjs':{sharedSession:async(group,session,{sink})=>{runs++;assert.equal(monitorActive,false);await sink.record(cell.id,'session-test',{});return new Map(group.map(c=>[c.key,{decision:'passed'}]));}},
     './v4-state.mjs':{stateCell:async()=>{runs++;await report.record(cell.id,'subprobe',{id:'status',code:null,expected:true});throw Error('interrupted');}},
     './series.mjs':{build:async()=>({coverage:'complete',diagnostics:[]}),requestSeries:async()=>{
       runs++;if(reason){clock=reason==='projected_overrun'?47700001:reason==='stalled_activity'?101:201;
@@ -78,10 +80,12 @@ async function runner(t,{reason,exception=false,priorFailure=false,resumed=[]}={
         supervise();}return {decision:{decision:'passed'},languageCoverage:true};}},
   },s=>s,context);
   const input={...registration(plan),volumeRoot:w.path};
+  if(sessionCell)input.adapterModule='data:text/javascript,export const validate=()=>true;export const validateProbe=()=>true;';
   await mod.runV4(input,{profile:'engine',segmentId:'first',reportPath:'unused',resume:['checkpoint.jsonl']},{validateRegistration(){},preregister:async()=>({node:'v24.15.0',hardware:{cpus:[]},filesystem:{},corpus:[]}),idleBaseline:async()=>({}),
     prepareCell:async()=>({readSet:[namespace],inspectLedger:async()=>({})}),probeDependencies:async()=>({ready:true}),prepareInput:async c=>c,storage:async()=>({value:{}})});
   return {report,cell,runs,plan};
 }
+test('round3 runner suspends parent harness supervision while the session owns the journal',async t=>{const {report,runs}=await runner(t,{sessionCell:true});assert.equal(runs,1);assert.equal(report.final.status,'passed');assert.equal(report.final.complete,true);});
 for(const reason of ['projected_overrun','stalled_activity','missing_progress'])test(`final-cell supervision ${reason} cannot pass despite all cells finishing`,async t=>{
   const {report,plan}=await runner(t,{reason});assert.equal(report.final.completedCells,plan.length);assert.equal(report.final.stopReason,reason);assert.equal(report.final.status,'inconclusive');assert.equal(report.final.complete,false);
 });
@@ -196,18 +200,21 @@ test('checkpoint database names never open a descriptor in the measuring process
   // A valid report copied with a linked journal is also refused.
   const copy=join(w.path,'copy.jsonl');await writeFile(copy,await readFile(p));await symlink(p+'.records.jsonl',copy+'.records.jsonl');await assert.rejects(readSegments([copy]),/regular_file_required/);
 });
-async function runSession({blockAt,failure,afterAwait=false,attribution='complete',probe=false,concurrentEngine=false,realPump=false}={}){
-  const {sharedSession}=await load('v4-session.mjs'),{observeLoop}=await import('./fixtures/context-product/engine.mjs');
+async function runSession({blockAt,failure,afterAwait=false,attribution='complete',probe=false,concurrentEngine=false,synchronousEngine=false,realPump=false}={}){
+  const {sharedSession}=await load('v4-session.mjs'),{sessionWork}=await import('./fixtures/context-product/v4-session-work.mjs'),{observeLoop}=await import('./fixtures/context-product/engine.mjs');
   const session=sessionFixture(),report=output(),lanes=[];let clock=0,parentClock=0,pumpStopped=false,writerStopped=false,finished=false,sampled=false,samplerStopped=false,validateCalls=0,engineCallback;
   if(probe)session.batches=[{ordinal:0,query:'frozen'}];
   const target={targetId:'m0',type:'memory',id:'m0',revision:1,namespace,batch:0,intent:'history',committedAt:50};
+  const structural=!base;let childClock=0;
+  report.delegate=async()=>({path:'unused',sequence:0});report.reclaim=async()=>{};
   let targetSent=false;
   const originalRecord=report.record;
   report.record=async function(...args){if(afterAwait)await Promise.resolve();if(blockAt==='harness-record')parentClock+=150;return originalRecord.apply(this,args);};
-  const block=phase=>{if(blockAt===phase)parentClock+=150;};
+  const block=phase=>{if(blockAt===phase){if(structural&&phase.startsWith('harness-')&&phase!=='harness-pump-setup')childClock+=150;else parentClock+=150;}};
   const cells=['current','history'].map(intent=>({id:0,key:intent,kind:'availability',intent,canonical:'WAL',sidecar:'WAL',schema:18}));
   const config={protocol:'P2-product-v4',pump:{cronMs:1000,budgets:{},quantum:{}},cell:cells[0],supervision:{stallMs:1000},maintainerCoverage:'complete',maintainerDiagnostics:[{coverage:'complete',busy:0}]};
-  const promise=sharedSession(cells,session,{config,sink:report,prepareInput:async c=>{if(afterAwait)await Promise.resolve();block('harness-validation');if(concurrentEngine)await engineCallback();return {...c,input:c.cell.kind==='freshness'?{query:'frozen'}:{}};},validateProbe:async()=>{validateCalls++;if(afterAwait)await Promise.resolve();block('harness-probe');return true;}},{
+  const harnessCallbacks={config,sink:report,prepareInput:async c=>{if(afterAwait)await Promise.resolve();block('harness-validation');if(concurrentEngine&&!structural)await engineCallback();return {...c,input:c.cell.kind==='freshness'?{query:'frozen'}:{}};},validateProbe:async()=>{validateCalls++;if(afterAwait)await Promise.resolve();block('harness-probe');return true;}};
+  const dependencies={
     now:()=>clock,wait:async ms=>{
       if(realPump&&ms===1){const next=session.availability.find(s=>s.releaseMs>clock-50)?.releaseMs??180000;clock+=Math.min(100,Math.max(1,next-(clock-50)-5));}
       else clock+=ms;
@@ -226,6 +233,7 @@ async function runSession({blockAt,failure,afterAwait=false,attribution='complet
       const send=m=>{const i=waiters.findIndex(w=>Array.isArray(w.type)?w.type.includes(m.type):w.type===m.type);if(i>=0)waiters.splice(i,1)[0].resolve(m);else queue.push(m);};
       const lane={pid:lanes.length+1,connected:true,exited,stopped:false,send(m){
         if(m.type==='read'){
+          JSON.stringify(m);block('harness-serialization');
           if(failure==='rejected-wait'){for(const w of waiters.splice(0))w.reject(Error('attempt_rejected'));lane.reject=true;}
           else if(failure==='lane-failure')send({type:'lane-failure',id:m.id,code:'sampler_failed'});
           else send({type:'read-result',id:m.id,value:{record:good({startedAt:clock,readStartedAt:clock,readFinishedAt:clock+1}),result:{value:{items:[{ref:{type:'memory',memoryId:'m0',revision:1,namespace}}]}}}});
@@ -249,16 +257,61 @@ async function runSession({blockAt,failure,afterAwait=false,attribution='complet
       // Created in the engine scope. Delivery while preparation is awaiting must
       // remain observed, independently of that harness Promise's lifetime.
       const resource=new AsyncResource('fixture-engine');
-      engineCallback=()=>resource.runInAsyncScope(()=>Promise.resolve().then(()=>{parentClock+=150;}));
+      engineCallback=()=>resource.runInAsyncScope(()=>{if(synchronousEngine){parentClock+=150;return Promise.resolve();}return Promise.resolve().then(()=>{parentClock+=150;});});
       return {async flush(){if(afterAwait)await Promise.resolve();block('pump-renewal');},async stop(){if(afterAwait)await Promise.resolve();block('pump-stop');pumpStopped=true;resource.emitDestroy();return [{diagnostics:{protocol:'context-native-v1',coverage:'complete',busy:0}}];}};
     },
     makeWriter:async()=>{let startAt,endAt;return {child:{take:()=>{if(!probe||targetSent)return [];targetSent=true;return [{target}];}},flush(){},start(s,e){startAt=s;endAt=e;},async stop(){writerStopped=true;await Promise.resolve();block('harness-writer-bookkeeping');
       const calls=[0,179990].map((offset,k)=>({id:k,ordinaryOrdinal:k,streamKind:'ordinary',operation:k?'review':'capture',lifecycle:'fresh',writerTarget:'same',nativeCommit:true,startedAt:startAt+offset,
         cycleStartedMono:offset,openStartedAt:startAt+offset+1,openFinishedAt:startAt+offset+2,writeStartedAt:startAt+offset+3,writeFinishedAt:startAt+offset+4,closeStartedAt:startAt+offset+5,closeFinishedAt:startAt+offset+6,finishedAt:startAt+offset+6,deadlineMs:5000,writeElapsedMs:1}));
       return {writerEndAt:endAt,calls,hostLoop:loop(),exit:{code:0,signal:null},diagnostics:{coverage:'complete',busy:0,records:[]},pacing:[0,179990].map((offset,ordinal)=>({ordinal,startedMono:offset,workFinishedMono:offset+6,delayMs:14,resumedMono:offset+20}))};}};},
-  });
-  return {promise,report,lanes,coverage:()=>({sampled,samplerStopped,validateCalls}),drained:()=>pumpStopped&&writerStopped&&lanes.every(l=>l.stopped)};
+  };
+  // The coordinator double has its own harness clock and represents a separate
+  // process. Parent engine callbacks use parentClock even while that child waits.
+  dependencies.preparePump=async()=>{
+    const prepared=structural&&realPump?await (async()=>{
+      const engineModule=await import('./fixtures/context-product/engine.mjs');
+      const {prepareSessionPump}=await load('v4-session-pump.mjs',{
+        './engine.mjs':{...engineModule,configure:async()=>{await Promise.resolve();block('harness-pump-setup');return {token:{},options:{},supervisor:{async drain(){await Promise.resolve();block('pump-drain');return [];},ackCleanup(){},async close(){await Promise.resolve();block('pump-supervisor-stop');}}};}},
+        '../../../../core/index.mjs':{renewContextMaintenancePump:()=>{block('pump-renewal');return {completion:new Promise(()=>{}),getStatus:()=>({}),async close(){await Promise.resolve();block('pump-stop');}};}},
+      },s=>s,vm.createContext({process,Date,setInterval:()=>1,clearInterval(){}}));
+      return prepareSessionPump(config);
+    })():null;
+    const pump=prepared?null:await dependencies.makePump(config,async()=>{});
+    return {start(){
+      const active=prepared?prepared.start():pump;
+      if(concurrentEngine)void engineCallback();
+      else if(!realPump)void active.flush();
+      return {async stop(){const r=await active.stop();pumpStopped=true;return r;}};
+    },report:async()=>[]};
+  };
+  dependencies.makeSession=encoded=>{
+    const payload=JSON.parse(encoded),queue=[],waiters=[];let resolveStart,resolveExit;
+    const start=new Promise(r=>{resolveStart=r;}),exited=new Promise(r=>{resolveExit=r;});
+    let value,error;
+    const deliver=m=>{const i=waiters.findIndex(w=>Array.isArray(w.type)?w.type.includes(m.type):w.type===m.type);if(i<0)queue.push(m);else waiters.splice(i,1)[0].resolve(m);};
+    const child={connected:true,exited,send(m){assert.ok(['start','export'].includes(m));assert.ok(Buffer.byteLength(JSON.stringify(m))<=8);
+      if(m==='start')resolveStart();
+      else {assert.equal(finished,true);deliver({type:'result',value,error});child.connected=false;resolveExit({code:0,signal:null});}
+    },wait(type){const i=queue.findIndex(m=>Array.isArray(type)?type.includes(m.type):m.type===type);return i<0?new Promise(resolve=>waiters.push({type,resolve})):Promise.resolve(queue.splice(i,1)[0]);}};
+    const childReport={async record(...args){if(afterAwait)await Promise.resolve();block('harness-record');return originalRecord.apply(report,args);}};
+    void sessionWork(payload.cells,payload.session,{...harnessCallbacks,sink:childReport},{...dependencies,ready:async()=>deliver({type:'ready'}),start:()=>start})
+      .then(r=>{value=r;},e=>{error=e.code??e.message;}).finally(()=>deliver({type:'done'}));
+    return child;
+  };
+  const promise=sharedSession(cells,session,harnessCallbacks,dependencies);
+  return {promise,report,lanes,clocks:()=>({parentClock,childClock}),coverage:()=>({sampled,samplerStopped,validateCalls}),drained:()=>pumpStopped&&writerStopped&&lanes.every(l=>l.stopped)};
 }
+for(const synchronousEngine of [true,false])test(`round3 ${synchronousEngine?'synchronous callback body':'async engine continuation'} records 150 ms`,async()=>{
+  const r=await runSession({afterAwait:true,concurrentEngine:true,synchronousEngine});const ds=await r.promise;
+  const observed=r.report.rows.find(r=>r.series==='session-parent-loop').record.hostLoop;
+  assert.ok(observed.maxMs>=150);assert.ok(observed.over100>0);
+  for(const d of ds.values())assert.equal(d.decision,'failed');assert.equal(r.drained(),true);
+});
+test('round3 variable lane serialization occurs in child outside parent observation',async()=>{
+  const r=await runSession({blockAt:'harness-serialization',afterAwait:true});const ds=await r.promise;
+  const observed=r.report.rows.find(r=>r.series==='session-parent-loop').record.hostLoop;
+  assert.equal(observed.maxMs,0);assert.ok(r.clocks().childClock>=150);for(const d of ds.values())assert.equal(d.decision,'passed');assert.equal(r.drained(),true);
+});
 for(const blockAt of [undefined,'harness-validation','pump-renewal','pump-stop','lane-stop'])test(`shared-session parent loop includes ${blockAt??'healthy control'} through final drain`,async()=>{
   const r=await runSession({blockAt}),ds=await r.promise;assert.equal(r.drained(),true);const engineBlock=blockAt&&blockAt!=='harness-validation';
   for(const d of ds.values())assert.equal(d.decision,engineBlock?'failed':'passed',JSON.stringify(d));
