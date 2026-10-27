@@ -1,3 +1,7 @@
+import { DatabaseSync } from 'node:sqlite';
+import { mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { hash, eligible, cells } from './fixtures.mjs';
 
 // Exact integer trillionths, matching P2e's conservative reservation unit.
@@ -46,15 +50,46 @@ export function estimateCost(fixture, tokenTable, rate, maxUsd, safetyFixture) {
   return result;
 }
 
-// Used by a hosted runtime binding in its supervised provider Worker. Unknown
-// texts fail closed; failed/unknown sends retain their full reservation.
-export function transmissionGuard({ tokenTable, rate, maxUsd, maxRequests }) {
-  const cap = money(maxUsd); let reserved = 0n, requests = 0;
-  return texts => {
-    if (!Array.isArray(texts) || !texts.length || texts.some(text => !Object.hasOwn(tokenTable.counts, hash(text)))) throw Error('unregistered_embedding_input');
+// Timestamps are required integers; the upper endpoint is exclusive.
+export function validateAuthorizationWindow(authorization, now = Date.now()) {
+  const { fromUtcMs, untilUtcMs } = authorization ?? {};
+  if (!Number.isSafeInteger(fromUtcMs) || !Number.isSafeInteger(untilUtcMs)
+    || fromUtcMs < 0 || untilUtcMs <= fromUtcMs || now < fromUtcMs || now >= untilUtcMs) throw Error('authorization_window_invalid_or_closed');
+}
+
+// Durable, fail-closed admission. SQLite serializes independent processes;
+// COMMIT precedes dispatch. A crash/unknown send never releases exposure.
+export function transmissionGuard({ tokenTable, rate, maxUsd, maxRequests, authorization,
+  stateDirectory = join(homedir(), '.local', 'state', 'p2e-admission'), now = Date.now }) {
+  const cap = money(maxUsd);
+  authorization = structuredClone(authorization);
+  validateAuthorizationWindow(authorization, now());
+  if (typeof authorization.id !== 'string' || !authorization.id || !Number.isSafeInteger(maxRequests) || maxRequests < 1) throw Error('invalid_admission_identity');
+  const policy = hash(JSON.stringify({ rate, maxUsd, maxRequests, authorization, counts: tokenTable.counts }));
+  mkdirSync(stateDirectory, { recursive: true, mode: 0o700 });
+  const path = join(stateDirectory, 'admission.sqlite');
+  return (texts, reservationId) => {
+    if (!Array.isArray(texts) || !texts.length || texts.some(text => typeof text !== 'string' || !Object.hasOwn(tokenTable.counts, hash(text)))) throw Error('unregistered_embedding_input');
+    if (typeof reservationId !== 'string' || !reservationId) throw Error('reservation_id_required');
+    validateAuthorizationWindow(authorization, now());
     const next = texts.reduce((sum, text) => sum + charge(Buffer.byteLength(text) + 16, rate), 0n);
-    if (requests >= maxRequests || reserved + next > cap) throw Error('run_cap_exhausted');
-    requests++; reserved += next;
-    return { requests, reservedUsd: usd(reserved) };
+    const db = new DatabaseSync(path);
+    try {
+      db.exec('PRAGMA busy_timeout=10000; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS allowances (id TEXT PRIMARY KEY, policy TEXT NOT NULL, requests INTEGER NOT NULL, reserved TEXT NOT NULL); CREATE TABLE IF NOT EXISTS reservations (id TEXT NOT NULL, nonce TEXT NOT NULL, PRIMARY KEY(id,nonce)); BEGIN IMMEDIATE');
+      let row = db.prepare('SELECT * FROM allowances WHERE id=?').get(authorization.id);
+      if (!row) {
+        db.prepare('INSERT INTO allowances VALUES (?,?,0,?)').run(authorization.id, policy, '0');
+        row = { policy, requests: 0, reserved: '0' };
+      }
+      if (row.policy !== policy) throw Error('authorization_identity_rebound');
+      if (db.prepare('SELECT 1 FROM reservations WHERE id=? AND nonce=?').get(authorization.id, reservationId)) throw Error('reservation_replay');
+      const reserved = BigInt(row.reserved) + next, requests = row.requests + 1;
+      if (requests > maxRequests || reserved > cap) throw Error('run_cap_exhausted');
+      db.prepare('INSERT INTO reservations VALUES (?,?)').run(authorization.id, reservationId);
+      db.prepare('UPDATE allowances SET requests=?,reserved=? WHERE id=?').run(requests, String(reserved), authorization.id);
+      validateAuthorizationWindow(authorization, now());
+      db.exec('COMMIT');
+      return { requests, reservedUsd: usd(reserved) };
+    } finally { db.close(); }
   };
 }

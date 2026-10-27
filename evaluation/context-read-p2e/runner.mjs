@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { loadFixtures, cells, hash, ROOT, json } from './fixtures.mjs';
 import { verifyRegistration, requireHostedRegistration, digest } from './registration.mjs';
-import { estimateCost } from './cost.mjs';
+import { estimateCost, validateAuthorizationWindow } from './cost.mjs';
 import { fakeEmbedder, hostedEmbedder, validateProviderSelection } from './providers.mjs';
 import { pendingSafety, checkSafety } from './safety.mjs';
 import { analyze } from './analysis.mjs';
@@ -46,9 +46,9 @@ function identityMap(fixture, identities, cell) {
   if (map.size !== eligible.length || eligible.some(d => !seen.has(d.id))) throw Error('incomplete_typed_identity_mapping');
   return map;
 }
-async function readArm(environment, cell, query, semantic, fixture, providerIdentity) {
-  return withProductReader(await environment.readerOptions(cell, semantic), environment.credential, async (reader, credential) => {
-    const caps = await reader.getContextReadCapabilities();
+export async function readArm(environment, cell, query, semantic, fixture, providerIdentity, withReader = withProductReader) {
+  return withReader(await environment.readerOptions(cell, semantic), environment.credential, async (reader, credential) => {
+    const caps = await reader.getContextReadCapabilities({}, credential);
     if (!caps.ok || caps.value.channels?.semantic?.configured !== true) throw Error('selected_semantic_capability_missing');
     const input = { readSet: cell.readSet, types: cell.types, intent: cell.intent, query: query.text, semantic, limit: 12, deadlineMs: 5000 };
     const raw = await reader.findCandidates(input, credential);
@@ -109,8 +109,9 @@ export async function run(options, env = process.env) {
   if (provider === 'hosted') {
     requireHostedRegistration(registration, { engineCommit, providerIdentity: binding.providerIdentity, bindingHash: hash(bindingBytes), authorization: registration.authorization });
     const a = registration.authorization;
+    validateAuthorizationWindow(a);
     if (options.authorizationId !== a.id || a.maxUsd !== options.maxUsd || a.priceUsdPerMillion !== options.price
-      || !Number.isSafeInteger(a.maxRequests) || a.maxRequests < 1 || Date.now() < a.fromUtcMs || Date.now() >= a.untilUtcMs
+      || !Number.isSafeInteger(a.maxRequests) || a.maxRequests < 1
       || a.syntheticInputsDigest !== digest(registration.files) || typeof a.privacySurface !== 'string' || !a.privacySurface) throw Error('hosted_authorization_mismatch');
     if (!options.safetyReport || !registration.safetyEvidenceHash) throw Error('sealed_fake_safety_evidence_required');
     const safetyBytes = readFileSync(options.safetyReport);
@@ -120,7 +121,7 @@ export async function run(options, env = process.env) {
     for (const [id, cell] of Object.entries(previous.safety ?? {})) safetyObservations[id] = cell.evidence;
     if (Object.values(checkSafety(safetyObservations)).some(s => s.status !== 'passed')) throw Error('fake_safety_evidence_incomplete_or_failed');
   }
-  const providerPort = provider === 'fake' ? fakeEmbedder() : await hostedEmbedder({ ...options, maxRequests: registration.authorization.maxRequests }, env, tokenTable);
+  const providerPort = provider === 'fake' ? fakeEmbedder() : await hostedEmbedder({ ...options, maxRequests: registration.authorization.maxRequests, authorization: registration.authorization }, env, tokenTable);
   if (digest(binding.providerIdentity) !== digest(Object.fromEntries(['id','revision','dimensions','normalization'].map(k => [k, providerPort[k]])))) throw Error('provider_identity_mismatch');
   const observations = [];
   let prepared, ordinal = 0;
@@ -143,7 +144,7 @@ export async function run(options, env = process.env) {
     }
     // Safety is fake-only here. A hosted request cannot silently add mutation
     // or purge transmissions to the frozen normal-query cost schedule.
-    if (provider === 'fake') Object.assign(safetyObservations, await executeSafety(prepared));
+    if (provider === 'fake') Object.assign(safetyObservations, await executeSafety(prepared, { semanticCallCount: providerPort.semanticCallCount }));
   } catch (error) {
     observations.push({ cell: 'execution', query: 'failure', error: code(error) });
   } finally { await prepared?.close(); }

@@ -1,4 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { inventory } from './inventory.mjs';
+import { validateFixtures } from './fixtures.mjs';
+import { isDeepStrictEqual } from 'node:util';
 import { hash, json } from './fixtures.mjs';
 
 export const PROTOCOL = Object.freeze({
@@ -21,18 +24,37 @@ function canonical(value) {
   return value;
 }
 export const digest = value => hash(JSON.stringify(canonical(value)));
-export function sealRegistration(registration) {
+// Discover the complete executable/authoring and fixture surface independently
+// of the draft. Neither the sealer nor the runner trusts supplied manifest keys.
+export function requiredInputFiles() {
+  const root = new URL('../../', import.meta.url);
+  return [
+    ...readdirSync(new URL('evaluation/context-read-p2e/', root)).filter(n => n.endsWith('.mjs')).map(n => `evaluation/context-read-p2e/${n}`),
+    ...readdirSync(new URL('tools/testing/', root)).filter(n => n.startsWith('p2e-') && !n.endsWith('.test.mjs')).map(n => `tools/testing/${n}`),
+    ...['corpus-queries', 'inventory', 'labels', 'safety', 'tokens'].map(n => `evaluation/context-read-p2e/fixtures/${n}.json`),
+  ].sort();
+}
+const defaultRead = name => readFileSync(new URL(`../../${name}`, import.meta.url));
+function validateInputs(body, read) {
+  if (!body.files || !isDeepStrictEqual(Object.keys(body.files).sort(), requiredInputFiles())) throw Error('complete_input_manifest_required');
+  for (const [name, expected] of Object.entries(body.files)) if (hash(read(name)) !== expected) throw Error('registered_input_mismatch');
+  const fixture = JSON.parse(read('evaluation/context-read-p2e/fixtures/corpus-queries.json'));
+  const labels = JSON.parse(read('evaluation/context-read-p2e/fixtures/labels.json'));
+  validateFixtures(fixture, labels);
+  const actual = JSON.parse(read('evaluation/context-read-p2e/fixtures/inventory.json'));
+  if (!isDeepStrictEqual(actual, inventory(fixture))) throw Error('inventory_incomplete_or_changed');
+}
+export function sealRegistration(registration, read = defaultRead) {
   const { seal: ignored, ...body } = structuredClone(registration);
   if (json(body.protocol) !== json(PROTOCOL) || !body.files || !Object.keys(body.files).length) throw Error('invalid_registration');
+  validateInputs(body, read);
   return { ...body, seal: { algorithm: 'sha256-canonical-json-v1', digest: digest(body) } };
 }
-export function verifyRegistration(registration, read = name => readFileSync(new URL(`../../${name}`, import.meta.url))) {
+export function verifyRegistration(registration, read = defaultRead) {
   const { seal, ...body } = registration;
   if (!seal || seal.algorithm !== 'sha256-canonical-json-v1' || seal.digest !== digest(body)) throw Error('registration_not_sealed_or_changed');
   if (json(body.protocol) !== json(PROTOCOL)) throw Error('protocol_mismatch');
-  for (const [name, expected] of Object.entries(body.files)) {
-    if (!/^(?:evaluation\/context-read-p2e\/|tools\/testing\/p2e-)[a-zA-Z0-9_./-]+$/.test(name) || name.includes('..') || hash(read(name)) !== expected) throw Error('registered_input_mismatch');
-  }
+  validateInputs(body, read);
   return registration;
 }
 export function requireHostedRegistration(registration, { engineCommit, providerIdentity, bindingHash, authorization } = {}) {

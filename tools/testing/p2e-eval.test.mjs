@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { metrics, bootstrap, decide } from '../../evaluation/context-read-p2e/statistics.mjs';
 import { PROTOCOL, sealRegistration, verifyRegistration, requireHostedRegistration } from '../../evaluation/context-read-p2e/registration.mjs';
 import { hash, json, loadFixtures, deriveLabels, validateFixtures, cells, ROOT } from '../../evaluation/context-read-p2e/fixtures.mjs';
@@ -79,9 +81,9 @@ test('every safety cell is mandatory; a single violation defeats recall gains', 
   const id = SAFETY_CELLS[0];
   const o = { forbidden: ['safety-target@1'], canonicalSnapshot: 'after-mutation', mutationAcknowledged: true, qualifiedHistoryControl: 'history-eligible@1',
     returns: ['candidates','assembly','evidence','private-metadata'].map(surface => ({ surface, identities: [], scopeCanaries: [], envelope: { ok: true } })) };
-  assert.equal(checkSafety({ [id]: o })[id].status, 'passed');
+  assert.equal(checkSafety({ [id]: o })[id].status, 'incomplete');
   o.returns[0].identities.push('safety-target@1');
-  assert.equal(checkSafety({ [id]: o })[id].status, 'failed');
+  assert.notEqual(checkSafety({ [id]: o })[id].status, 'passed');
   o.forbidden = ['convenient-substitute@1']; assert.equal(checkSafety({ [id]: o })[id].status, 'incomplete');
   const purgeId = 'owner-purge/all-catalogs';
   const purge = { completed: true, ownerId: 'synthetic-owner', catalogBefore: ['current','history'], catalogAfter: ['current','history'],
@@ -96,31 +98,31 @@ test('every safety cell is mandatory; a single violation defeats recall gains', 
   purge.catalogAfter = ['current']; assert.equal(checkSafety({ [purgeId]: purge })[purgeId].status, 'incomplete');
 });
 test('registration sealing, byte mismatch, threshold mutation and missing bindings refuse', () => {
-  const files = { 'evaluation/context-read-p2e/fixtures/corpus-queries.json': hash('fixture') };
-  const sealed = sealRegistration({ protocol: PROTOCOL, files });
-  assert.equal(verifyRegistration(sealed, () => 'fixture').seal.digest, sealed.seal.digest);
+  const registered = JSON.parse(readFileSync(new URL('../../evaluation/context-read-p2e/registration.json', import.meta.url)));
+  const files = registered.files;
+  const sealed = sealRegistration(registered);
+  assert.equal(verifyRegistration(sealed).seal.digest, sealed.seal.digest);
   assert.throws(() => verifyRegistration({ ...sealed, seal: null }, () => 'fixture'), /not_sealed/);
   assert.throws(() => verifyRegistration(sealed, () => 'changed'), /input_mismatch/);
   assert.throws(() => verifyRegistration({ ...sealed, engineCommit: 'changed' }, () => 'fixture'), /not_sealed/);
   const altered = structuredClone(PROTOCOL); altered.decision.macroRecallGain = .019;
   assert.throws(() => sealRegistration({ protocol: altered, files }), /invalid_registration/);
   assert.throws(() => requireHostedRegistration(sealed), /unresolved/);
-  const registered = JSON.parse(readFileSync(new URL('../../evaluation/context-read-p2e/registration.json', import.meta.url)));
   assert.equal(verifyRegistration(registered).seal.digest.length, 64);
 });
 
 const loaded = loadFixtures();
 const tokens = JSON.parse(readFileSync(new URL('tokens.json', ROOT)));
 test('frozen recipe, T1 oracle, independent gold derivation and complete stratum minima', () => {
-  assert.deepEqual(validateFixtures(loaded.fixture, loaded.labels), { documents: 3720, queries: 7701, cells: 48 });
+  assert.deepEqual(validateFixtures(loaded.fixture, loaded.labels), { documents: 20400, queries: 43701, cells: 48 });
   assert.equal(json(deriveLabels(loaded.fixture)), json(loaded.labels));
   const inv = inventory(loaded.fixture);
   assert.equal(inv.primaryCount, 48);
   for (const stratum of inv.strata) { assert.ok(stratum.positive.length >= 50); assert.ok(stratum.negative.length >= 10); }
-  assert.equal(inv.strata.find(s => s.id === 'cross-zh-en').positive.length, 400);
-  assert.equal(inv.strata.find(s => s.id === 'cross-en-zh').positive.length, 400);
-  assert.equal(inv.strata.find(s => s.id === 'paraphrase').positive.length, 800);
-  for (const world of [1112,3336]) assert.equal(loaded.fixture.documents.filter(d => d.type === 'memory' && d.minWorld <= world).length, world);
+  assert.equal(inv.strata.find(s => s.id === 'cross-zh-en').positive.length, 2400);
+  assert.equal(inv.strata.find(s => s.id === 'cross-en-zh').positive.length, 2400);
+  assert.equal(inv.strata.find(s => s.id === 'paraphrase').positive.length, 4800);
+  for (const world of [6672,20016]) assert.equal(loaded.fixture.documents.filter(d => d.type === 'memory' && d.minWorld <= world).length, world);
   for (const q of loaded.fixture.queries) assert.ok(Object.hasOwn(tokens.counts, hash(q.text)));
   for (const d of loaded.fixture.documents) assert.ok(Object.hasOwn(tokens.counts, hash(d.text)));
   for (const d of safetyFixtures().canaries) assert.ok(Object.hasOwn(tokens.counts, hash(d.text)));
@@ -134,7 +136,7 @@ test('cost arithmetic: exact decimal USD, ceil reservations, known hand-counted 
   for (const value of ['-1','1e-2',' 1','01','0.0000000000001']) assert.throws(() => money(value), /invalid_usd/);
   // One document and one zh query, both one ASCII byte: known 1 token each,
   // 17 reservation tokens each. Twelve refreshes + twelve query transmissions.
-  const fixture = { documents: [{ text: 'a', type: 'memory', minWorld: 1112, intents: ['current','history'] }], queries: [{ text: 'b', language: 'zh' }] };
+  const fixture = { documents: [{ text: 'a', type: 'memory', minWorld: 6672, intents: ['current','history'] }], queries: [{ text: 'b', language: 'zh' }] };
   const table = { counter: 'known-test-counter', counts: { [hash('a')]: 1, [hash('b')]: 1 } };
   // There are 12 distinct schema/world/intent refresh projections, not 6.
   const cost = estimateCost(fixture, table, '1', '1');
@@ -143,10 +145,14 @@ test('cost arithmetic: exact decimal USD, ceil reservations, known hand-counted 
   assert.doesNotThrow(() => estimateCost(fixture, table, '1', '0.000408'));
   assert.throws(() => estimateCost(fixture, table, '1', '0.000407999999'), /max_usd/);
   assert.throws(() => estimateCost(fixture, { counts: {} }, '1'), /unregistered/);
-  const guard = transmissionGuard({ tokenTable: table, rate: '1', maxUsd: '0.000034', maxRequests: 2 });
-  assert.equal(guard(['a']).reservedUsd, '0.000017'); assert.equal(guard(['b']).reservedUsd, '0.000034');
-  assert.throws(() => guard(['a']), /run_cap/);
-  assert.throws(() => guard(['unregistered']), /unregistered/);
+  const stateDirectory = mkdtempSync(join(tmpdir(), 'p2e-cap-'));
+  try {
+    const guard = transmissionGuard({ tokenTable: table, rate: '1', maxUsd: '0.000034', maxRequests: 2,
+      stateDirectory, authorization: { id: 'cost-test', fromUtcMs: 0, untilUtcMs: 1000 }, now: () => 500 });
+    assert.equal(guard(['a'], 'one').reservedUsd, '0.000017'); assert.equal(guard(['b'], 'two').reservedUsd, '0.000034');
+    assert.throws(() => guard(['a'], 'three'), /run_cap/);
+    assert.throws(() => guard(['unregistered'], 'four'), /unregistered/);
+  } finally { rmSync(stateDirectory, { recursive: true, force: true }); }
 });
 test('hosted flag, key, test context, price, and cap are explicit gates; fake ignores environment', async () => {
   assert.throws(() => validateProviderSelection({ requestHosted: true }, {}), /explicit_provider/);
@@ -163,13 +169,13 @@ test('hosted flag, key, test context, price, and cap are explicit gates; fake ig
 test('analysis refuses missing observations, keeps every attempted pair and every safety cell', () => {
   const report = analyze({ ...loaded, inventory: inventory(loaded.fixture), observations: [], resamples: 10 });
   assert.equal(report.status, 'incomplete'); assert.equal(report.decision.quality, 'failed');
-  assert.equal(report.problems.filter(p => p.code === 'missing_pair').length, 92412);
+  assert.equal(report.problems.filter(p => p.code === 'missing_pair').length, 524412);
   assert.equal(Object.keys(report.safety).length, SAFETY_CELLS.length);
 });
 test('analysis macro weights primary strata equally, independent of their query counts', () => {
-  const fixture = { documents: [{ id: 'relevant', type: 'memory', minWorld: 1112, intents: ['current','history'] }],
+  const fixture = { documents: [{ id: 'relevant', type: 'memory', minWorld: 6672, intents: ['current','history'] }],
     queries: ['one','two','three'].map((id, i) => ({ id, language: i === 2 ? 'zh' : 'en', negative: false, control: false })) };
-  const en = '1112-v18-current-en', zh = '1112-v18-current-zh';
+  const en = '6672-v18-current-en', zh = '6672-v18-current-zh';
   const labels = [{ cell: en, queries: ['one','two'].map(id => ({ id, relevant: ['relevant'] })) }, { cell: zh, queries: [{ id: 'three', relevant: ['relevant'] }] }];
   const arm = hit => ({ ok: true, ranking: hit ? ['relevant'] : [], coverage: 'complete', evidenceVerified: true });
   const observations = ['one','two','three'].map((query, i) => ({ query, cell: i === 2 ? zh : en,

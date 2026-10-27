@@ -203,3 +203,145 @@ Final inventory and whitespace checks: **exit 0**. The additional whitespace che
 - `tools/testing/p2e-seal.mjs`
 - `tools/testing/p2e-token-count.py`
 
+## Fix round 1
+
+This revision addresses all seven P1 and three P2 findings against `8f674480`. The counts, seal, cost example and admission/safety contracts below supersede the initial packet above. No provider network call, real credential, hosted adapter construction, core runtime edit or commit was made.
+
+### Findings, fixes and regressions
+
+The ten `fix1` tests in `tools/testing/p2e-fix1.test.mjs` each fail on the original revision. They cover both acceptance and refusal where applicable; the original offline suite remains in place.
+
+| Finding | Fix | Regression |
+| --- | --- | --- |
+| Method P1: ambiguous gold | Review the entire authored noun/place vocabulary for compatible meanings, narrow 18 broad English aliases, and resolve every query surface independently of `query.fact`. Expand shared surface meanings to every compatible concept before joining eligible typed identities. Run this audit during fixture validation. | `fix1 gold`: all-query audit, original percussion and brewing aliases, and a negative query changed to a valid positive surface. |
+| Method P1: scope surfaces | Capture with/without-canary complete envelopes separately for candidates, assembly, exact evidence and private metadata. Preserve `diagnostics.omitted` and normalize only the existing timing fields. Evidence requires an actual nonempty refetch input. | `fix1 scope`: independently change omitted counts on each surface; missing comparisons refuse; fake public handles verify two actual evidence reads and an assembly-only leak. |
+| Method P1: mutation setup/boundary | Reset each surface; capture a semantic initial candidate hit and exact matching evidence bytes. Require configured capability, complete hybrid traces, one query embedding attempt and independently counted fake-provider calls before and at the boundary. Refetch the original target refs at the evidence boundary. Read and refetch the qualified history control separately. Missing observations are incomplete. | `fix1 mutation`: empty lexical-fallback receipts, missing target/bytes/calls/history all refuse. A fake public reader exercises collection, nested assembly trace and stale-ref evidence; incomplete setup remains incomplete. |
+| Method P2: dependent power | Expand from 40 to 240 authored nouns while retaining 20 locations; report within-noun and repeated-view design effects and power at two discordances. | `fix1 power`: old effective power below 50%, new vocabulary count, all declared correlation/discordance combinations at least 80%, and the sensitivity failure beyond that range. |
+| Standards P1: persistent run cap | Use one durable SQLite allowance keyed by authorization ID. `BEGIN IMMEDIATE` serializes reservations across processes; synchronous commit precedes dispatch. Bind the identity to its immutable policy and input counts. Unique reservation nonces reject replay; there is no refund for failed/unknown transmissions. | `fix1 cap`: two guards, restart, replay, policy rebinding and eight concurrent processes competing for exactly three admissions. |
+| Standards P1: authorization window | Require finite safe integer start/end timestamps and an ordered interval. Check the inclusive start/exclusive end at construction and on every reservation, including after lock acquisition before commit. The guard runs in the adapter's actual pre-dispatch callback. | `fix1 window`: missing fields, NaN, reversed/future windows, expiry after construction exact endpoints, and caller mutation of the grant. |
+| Standards P1: incomplete registration | Independently enumerate all evaluation/authoring modules and require all five fixture resources, including corpus, labels and inventory. Metrics, bootstrap and decision rules must exactly match the protocol. Recompute the inventory from the validated recipe and compare full membership before sealing and on every run. | `fix1 seal`: corpus-only registration, omission of every manifest entry, and a freshly hashed/resealed inventory with the losing short-CJK strata removed, at both seal and verification. |
+| Standards P1: nested refs | Inspect each typed-reference object itself recursively; its property name does not determine whether it is checked. Unknown refs also refuse a safety pass. | `fix1 inspector`: diagnostics, arrays, `memoryRef`, nested `ref` and unknown references. |
+| Standards P2: capability credential | Selected quality and safety handles call `getContextReadCapabilities({}, credential)`. The unconfigured public dependency probe retains its existing call contract. | `fix1 capability`: strict fake capability implementation checks the options and exact credential. |
+| Standards P2: raw-fd coverage | Include every evaluation module and all `p2e-*.mjs` tools outside test files in the existing raw-fd tripwire, with exact justified filesystem sites. Canonical and admission database operations use SQLite. | `fix1 raw-fd`: execute the guard's actual path selection, assert evaluation/tool coverage, then inject a raw open into every selected source and require rejection. The complete existing guard suite also runs. |
+
+The report's trailing blank line was removed. `git diff --check` now exits 0.
+
+### Gold audit and revised population
+
+The audit uses the complete finite authored vocabulary: full language-specific noun/location surfaces, English descriptions, the explicit compatibility lists for broad legacy descriptions, and exact identifiers. It constructs possible concept pairs without consulting the query's fact label, then compares all eligible Memory/Card identities against every frozen label row. Negative queries are resolved by the same text procedure. This is an exhaustive audit of this authored vocabulary, not a general natural-language entailment engine.
+
+Applied to the original 7,701 queries and their original configurations, the audit found **100 query IDs / 1,200 label comparisons** needing broader gold or disambiguation. The broad descriptions were conservatively narrowed. During expansion it also caught a shared CJK bonnet/turban surface (**10 query IDs / 120 comparisons**); that surface was disambiguated before writing fixtures. The final audit checks **43,701 queries / 524,412 comparisons**, with **zero mismatches**. No semantic query or stratum was removed to resolve an ambiguity; identifier category membership was revised before observation as described below. Both the existing drum and bell IDs remain stable.
+
+| Population | Revised count |
+| --- | ---: |
+| Authored nouns × locations | 240 × 20 |
+| Distinct positive facts | 4,800 |
+| Small/large Memory worlds | 6,672 / 20,016 |
+| Small/large Cards | 128 / 384 |
+| Frozen document records | 20,400 |
+| zh / en / ja / mixed positive queries | 14,450 / 9,650 / 9,650 / 9,650 |
+| Positive / negative / control query IDs | 43,400 / 300 / 1 |
+| Primary / metric strata | 48 / 192 |
+| Scheduled positive / negative / control pairs | 520,800 / 3,600 / 12 |
+| Each cross-language direction | 2,400 facts |
+| Paraphrase | 4,800 facts |
+| Short CJK | 9,600 query IDs over 4,800 facts |
+| Code-switch | 4,800 query IDs |
+| Exact identifiers | 19,200 query IDs; 4,800 per category over 1,200 facts |
+| Baseline | 2,600 query IDs over 2,425 facts |
+| Safety cells | 101 |
+
+Each world remains evenly distributed over four namespaces (1,668/5,004 Memories and 32/96 Cards per namespace). The original 800 facts retain their noun/location identities; identifier categories are repartitioned before observation. Every registered stratum retains its positive/negative minima. The frozen token table now has **63,480 unique inputs**.
+
+### Dependence sensitivity and sample-size conclusion
+
+Use the same paired binary normal approximation with true gain `.05`, discordance `q`, variance `(q-.05²)/n_eff`, and a two-sided critical value `1.959963984540054*sqrt(q/n_eff)`. Use the conservative additive design effect
+
+`D = 1 + (m_noun-1)*rho_noun + (m_view-1)*rho_view`, and `n_eff = n/D`.
+
+A direction has ten locations per noun and one query view (`m_noun=10`, `m_view=1`). For the 4,800-fact semantic set, use twenty locations per noun and additionally allow four repeated language views (`m_noun=20`, `m_view=4`), without counting those extra views as new independent cases. This intentionally charges overlapping noun/view dependence twice. Configuration reuse contributes no independent n. The table varies both correlations together; unequal combinations within the stated range have no larger design effect.
+
+| Correlation rho | Direction n_eff | Direction power q=.10 / .20 | Semantic set n_eff | Semantic set power q=.10 / .20 |
+| ---: | ---: | ---: | ---: | ---: |
+| 0 | 2,400.0 | 100.0% / 100.0% | 4,800.0 | 100.0% / 100.0% |
+| .10 | 1,263.2 | 100.0% / 97.9% | 1,500.0 | 100.0% / 99.1% |
+| .20 | 857.1 | 99.7% / 90.7% | 888.9 | 99.7% / 91.7% |
+| .30 | 648.6 | 98.2% / 81.4% | 631.6 | 97.9% / 80.4% |
+| .40 | 521.7 | 95.3% / 72.5% | 489.8 | 94.0% / 69.8% |
+
+The original direction count, 400 with ten locations per noun and rho=.20, gives **n_eff=142.9 and power=47.2%** at q=.10. It did not support the original independent-case conclusion. Adding locations alone cannot solve that problem: with 40 nouns, the effective count approaches only `40/rho` per direction. Increasing independent noun concepts is necessary.
+
+The new counts meet 80% illustrative detection power for +5 pp throughout the declared plausible sensitivity range `rho_noun,rho_view ∈ [0,.30]` and `q ∈ [.10,.20]`. The .30 endpoint deliberately exceeds the review's .20 example. This remains a conditional design calculation, not an estimated correlation or a guarantee: .40 with q=.20 falls below 80%; stronger cross-noun or domain dependence can also reduce power. It does not claim an 80% probability of meeting the observed ≥5-pp gate at an exactly 5-pp true effect, nor real-corpus generalization. Query-paired bootstrap intervals retain their preregistered interpretation; this sensitivity analysis does not silently turn them into cluster-robust intervals. Independent Python `erf` calculations agree with the implementation's power values to better than `1e-7`.
+
+### Seal, cost and binding contract
+
+The revised seal is `89e384bcee492e4108f0906a7346e3ad8897c2ee7a5b388a21f6252e40ef119b`, covering **22 input files**, including the scorer, inventory, metrics, bootstrap implementation, decision protocol, authoring tools and five frozen resources. Old quality registrations and fake safety evidence require new review; missing setup remains incomplete.
+
+The expanded quality schedule has **162,176 refresh inputs / 7,395,568 tokens** and **524,412 query inputs / 7,948,452 tokens**: **686,588 inputs / 15,344,020 tokens** altogether. Its conservative reservation is **50,355,332 byte+16 token bounds**. At the arithmetic example R=1, expected cost is **$15.344020**, reservation **$50.355332**. Quality document/query tables contain **787,562 / 662,371 tokens**; the separate fake-only safety inventory remains 62 document tokens and 5 query tokens. No extra hosted safety schedule is authorized.
+
+All launches under an authorization identity use the same operator state directory outside the checkout. The durable admission database is shared across restarts and concurrent launches on that host. A test-only state-directory/clock injection isolates fake guard tests; the hosted runner exposes no reset or alternate-state-directory flag. Reservation IDs are unique per embedding invocation. Unknown outcomes retain their entire committed count and amount. The authorization window is checked immediately before reservation commit in the actual pre-dispatch path.
+
+A reviewed fake safety binding must now implement `prepareSurface(surface)` to reset each race, `historyReaderOptions(surface)` for a history-qualified reader, and nonempty authorized `evidenceInput.refs` for scope controls. The runner constructs mutation evidence inputs from its observed initial target refs. Actual fake-provider invocation counts come from the runner's provider object; receipt strings alone cannot supply them. The binding still coordinates acknowledged canonical mutation/rendezvous and drain, while all candidate/assembly/evidence/history calls are made and retained by the runner. Missing semantic capability, target, exact bytes, invocation count, original-ref fetch or history read prevents a pass.
+
+### Commands and actual exit codes
+
+The following command runs all 26 tests: the original 11, ten finding-specific regressions and five existing raw-fd guard tests. For each explicit Node executable, its child exit status is captured before printing any log tail.
+
+```sh
+env -u OPENAI_API_KEY "$NVM_DIR/versions/node/v22.16.0/bin/node" tools/testing/run.mjs \
+  tools/testing/p2e-eval.test.mjs tools/testing/p2e-fix1.test.mjs core/test/no-raw-db-fd.test.mjs
+env -u OPENAI_API_KEY "$NVM_DIR/versions/node/v24.15.0/bin/node" tools/testing/run.mjs \
+  tools/testing/p2e-eval.test.mjs tools/testing/p2e-fix1.test.mjs core/test/no-raw-db-fd.test.mjs
+```
+
+- Node 22.16.0: **26 passed, exit 0**.
+- Node 24.15.0: **26 passed, exit 0**.
+
+A separate pristine `git archive 8f674480` extraction received only the new regression test file. Running `tools/testing/run.mjs tools/testing/p2e-fix1.test.mjs` there on each Node version produced **0 passed / 10 failed, exit 1 on each**, as required. The old private inspector is exported by a test loader without changing its body; the capability regression checks the old call expression before exercising the strict fake implementation on the fixed revision. The raw-fd regression executes the existing test's actual path selection. Tests install network and hosted-adapter import denial; their public handles and providers are fake.
+
+```sh
+"$NVM_DIR/versions/node/v24.15.0/bin/node" evaluation/context-read-p2e/fixtures.mjs --write
+TIKTOKEN_CACHE_DIR="$P2E_TOKEN_CACHE" python3 tools/testing/p2e-token-count.py --write
+TIKTOKEN_CACHE_DIR="$P2E_TOKEN_CACHE" python3 tools/testing/p2e-token-count.py --verify
+"$NVM_DIR/versions/node/v24.15.0/bin/node" tools/testing/p2e-seal.mjs --write
+```
+
+Final authoring/seal/token verification: **exit 0 each**. The offline token vocabulary was recovered from an existing cached package and checked against the same official vocabulary SHA-256 documented above; no download occurred. The initial missing-cache attempt exited 1. An initial new-noun placement changed existing IDs and a full-suite run exited 1; the original noun order was restored. The exhaustive gold audit refused the shared CJK surface (authoring exit 1) before it was disambiguated. Additional collector tests exposed an incomplete-observation exception (both suites exit 1); incomplete cells now remain incomplete, and the complete suites were rerun successfully.
+
+```sh
+env -u OPENAI_API_KEY "$NVM_DIR/versions/node/v24.15.0/bin/node" tools/testing/run.mjs --script \
+  evaluation/context-read-p2e/runner.mjs --estimate --price-usd-per-million 1 --max-usd 100 \
+  --report evaluation/context-read-p2e/reports/cost-example.json
+env -u OPENAI_API_KEY "$NVM_DIR/versions/node/v24.15.0/bin/node" tools/testing/run.mjs --script \
+  evaluation/context-read-p2e/runner.mjs --provider fake \
+  --report evaluation/context-read-p2e/reports/fake-blocked.json
+python3 tools/testing/p2e-manifest.py
+git diff --check
+```
+
+Estimate **exit 0**; actual public dependency probe **blocked_dependency, exit 2**; file cross-check **exit 0**; whitespace check **exit 0**. The dependency block remains expected: no quality score or fake mutation pass was invented. No task is left running.
+
+### Round 1 changed-file cross-check
+
+Against `8f674480`, Git diff plus untracked enumeration and an independent HEAD-tree versus disk blob/mode walk agree on **20 changed files**. The script compares the complete sets, including tests, tools, docs and configuration directories. Only `core/test/` changed under `core/`; no runtime file changed. The mechanically derived list is:
+
+- `core/test/fixtures/no-raw-db-fd-allowlist.json`
+- `core/test/no-raw-db-fd.test.mjs`
+- `docs/plans/context-read-p2e-eval.md`
+- `evaluation/context-read-p2e/cost.mjs`
+- `evaluation/context-read-p2e/fixtures.mjs`
+- `evaluation/context-read-p2e/fixtures/corpus-queries.json`
+- `evaluation/context-read-p2e/fixtures/inventory.json`
+- `evaluation/context-read-p2e/fixtures/labels.json`
+- `evaluation/context-read-p2e/fixtures/tokens.json`
+- `evaluation/context-read-p2e/providers.mjs`
+- `evaluation/context-read-p2e/registration.json`
+- `evaluation/context-read-p2e/registration.mjs`
+- `evaluation/context-read-p2e/reports/cost-example.json`
+- `evaluation/context-read-p2e/reports/fake-blocked.json`
+- `evaluation/context-read-p2e/runner.mjs`
+- `evaluation/context-read-p2e/safety.mjs`
+- `evaluation/context-read-p2e/statistics.mjs`
+- `tools/testing/p2e-eval.test.mjs`
+- `tools/testing/p2e-fix1.test.mjs`
+- `tools/testing/p2e-safety.mjs`

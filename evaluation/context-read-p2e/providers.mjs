@@ -1,10 +1,13 @@
+import { randomUUID } from 'node:crypto';
 import { hash } from './fixtures.mjs';
 import { transmissionGuard } from './cost.mjs';
 
 export const FAKE_IDENTITY = Object.freeze({ id: 'p2e-deterministic-fake', revision: 'sha256-v1', dimensions: 1536, normalization: 'l2' });
 export function fakeEmbedder() {
-  return { ...FAKE_IDENTITY, async embed(texts, { signal } = {}) {
+  let calls = 0;
+  return { ...FAKE_IDENTITY, semanticCallCount: () => calls, async embed(texts, { signal } = {}) {
     signal?.throwIfAborted();
+    calls++;
     return texts.map(text => {
       // Text hashing intentionally makes no semantic-quality claim.
       const vector = new Float32Array(1536), bytes = Buffer.from(hash(text), 'hex');
@@ -28,7 +31,7 @@ export function validateProviderSelection(options, env = {}) {
 // Dynamic import keeps the real adapter entirely absent from fake/test paths.
 export async function hostedEmbedder(options, env, tokenTable) {
   if (validateProviderSelection(options, env) !== 'hosted') throw Error('explicit_provider_hosted_required');
-  const guard = transmissionGuard({ tokenTable, rate: options.price, maxUsd: options.maxUsd, maxRequests: options.maxRequests });
+  const guard = transmissionGuard({ tokenTable, rate: options.price, maxUsd: options.maxUsd, maxRequests: options.maxRequests, authorization: options.authorization });
   const { createOpenAIEmbedder } = await import('../../adapters/openai/embedding.mjs');
   const adapter = createOpenAIEmbedder({ apiKey: env.OPENAI_API_KEY, usdPerMillionTokens: Number(options.price) });
   return { ...adapter, async embed(texts, controls) {
@@ -38,7 +41,7 @@ export async function hostedEmbedder(options, env, tokenTable) {
       controls.beforeDispatch();
       // The legacy adapter invokes beforeDispatch for receive validation too;
       // charge exactly once, before its only possible transmission.
-      if (!guarded) { guard(texts); guarded = true; }
+      if (!guarded) { guard(texts, randomUUID()); guarded = true; }
     } });
   } };
 }

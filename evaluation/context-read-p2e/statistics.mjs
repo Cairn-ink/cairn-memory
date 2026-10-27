@@ -53,3 +53,19 @@ export function decide({ macroRecallDelta, macroNdcgDelta, strata, safety, compl
   const enablement = quality === 'passed' && ['E.8', 'E.9'].every(k => externalGates[k] === 'passed') ? 'necessary_gate_only' : 'pending';
   return { quality, enablement, failures };
 }
+
+// Additive crossed-cluster design effect. Views are deliberately included even
+// where they overlap noun clusters, giving a conservative sensitivity bound.
+export function dependencePower({ n, nounSize, viewSize = 1, nounCorrelation = 0, viewCorrelation = 0, discordance = .1, difference = .05 }) {
+  const designEffect = 1 + (nounSize - 1) * nounCorrelation + (viewSize - 1) * viewCorrelation;
+  const effectiveN = n / designEffect;
+  const cdf = x => {
+    const z = Math.abs(x), t = 1 / (1 + .2316419 * z);
+    const tail = Math.exp(-z * z / 2) / Math.sqrt(2 * Math.PI) * t *
+      (.319381530 + t * (-.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+    return x >= 0 ? 1 - tail : tail;
+  };
+  const cutoff = 1.959963984540054 * Math.sqrt(discordance / effectiveN);
+  const sd = Math.sqrt((discordance - difference * difference) / effectiveN);
+  return { designEffect, effectiveN, power: cdf((-cutoff - difference) / sd) + 1 - cdf((cutoff - difference) / sd) };
+}

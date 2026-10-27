@@ -1,3 +1,4 @@
+import { safetyFixtures } from './inventory.mjs';
 import { isDeepStrictEqual } from 'node:util';
 
 export const SAFETY_CELLS = [
@@ -36,10 +37,9 @@ export function checkSafety(observations) {
         + Number(!isDeepStrictEqual(lexicalEnvelope(o.lexicalBefore), lexicalEnvelope(o.lexicalAfter)));
     } else {
       valid = Array.isArray(o.returns) && o.returns.length >= 4 && Array.isArray(o.forbidden) && o.forbidden.length > 0
-        && o.canonicalSnapshot !== undefined && o.mutationAcknowledged === true
         && ['candidates', 'assembly', 'evidence', 'private-metadata'].every(surface => o.returns.some(r => r.surface === surface));
       const expectedForbidden = id.startsWith('scope/') ? [id === 'scope/cross-owner' ? 'foreign-owner@1' : 'foreign-project@2:1'] : [id.includes('/card/') ? 'safety-card-target@2:1' : 'safety-target@1'];
-      valid &&= isDeepStrictEqual(o.forbidden, expectedForbidden) && o.qualifiedHistoryControl === 'history-eligible@1';
+      valid &&= isDeepStrictEqual(o.forbidden, expectedForbidden);
       const forbidden = new Set(o.forbidden);
       for (const returned of o.returns ?? []) {
         if (!Array.isArray(returned.identities) || !Array.isArray(returned.scopeCanaries)) { valid = false; continue; }
@@ -47,11 +47,46 @@ export function checkSafety(observations) {
         violations += returned.identities.filter(key => forbidden.has(key)).length + returned.scopeCanaries.length;
       }
       if (id.startsWith('scope/')) {
-        valid &&= o.withCanary !== undefined && o.withoutCanary !== undefined;
-        violations += Number(!isDeepStrictEqual(lexicalEnvelope(o.withCanary), lexicalEnvelope(o.withoutCanary)));
+        for (const surface of ['candidates', 'assembly', 'evidence', 'private-metadata']) {
+          const comparisons = (o.scopeComparisons ?? []).filter(c => c.surface === surface);
+          valid &&= comparisons.length === 1 && comparisons[0].withCanary?.ok === true && comparisons[0].withoutCanary?.ok === true;
+          if (comparisons.length === 1) violations += Number(!isDeepStrictEqual(lexicalEnvelope(comparisons[0].withCanary), lexicalEnvelope(comparisons[0].withoutCanary)));
+        }
+      } else {
+        valid &&= Array.isArray(o.canonicalSnapshot) && o.canonicalSnapshot.length === 4 && o.canonicalSnapshot.every(s => s != null) && o.mutationAcknowledged === true;
+        for (const surface of ['candidates', 'assembly', 'evidence', 'private-metadata']) {
+          const initial = (o.initial ?? []).filter(r => r.surface === surface);
+          const history = (o.historyControls ?? []).filter(r => r.surface === surface);
+          const boundary = (o.returns ?? []).filter(r => r.surface === surface);
+          valid &&= initial.length === 1 && history.length === 1 && boundary.length === 1;
+          if (initial.length !== 1 || history.length !== 1 || boundary.length !== 1) continue;
+          valid &&= semanticExecuted(initial[0].envelope) && initial[0].semanticCalls > 0
+            && initial[0].identities?.some(key => forbidden.has(key))
+            && initial[0].evidence?.identities?.includes(expectedForbidden[0]) && verifiedTargetEvidence(initial[0].evidence?.envelope, expectedForbidden[0], initial[0].envelope)
+            && boundary[0].semanticCalls > 0 && semanticExecuted(boundary[0].semanticExecution)
+            && history[0].envelope?.ok === true && history[0].identities?.includes('history-eligible@1')
+            && history[0].evidence?.identities?.includes('history-eligible@1') && verifiedTargetEvidence(history[0].evidence?.envelope, 'history-eligible@1', history[0].envelope);
+        }
       }
     }
     result[id] = { status: !valid ? 'incomplete' : violations ? 'failed' : 'passed', violations, evidence: o };
   }
   return result;
+}
+
+function semanticExecuted(envelope) {
+  const trace = envelope?.value?.trace ?? envelope?.value?.diagnostics?.candidates?.trace;
+  return envelope?.ok === true && trace?.effective === 'hybrid' && trace.semantic?.coverage === 'complete'
+    && trace.semantic.queryEmbeddingAttempts === 1 && trace.semantic.degradedReason === null;
+}
+function verifiedTargetEvidence(envelope, key, candidates) {
+  const target = safetyFixtures().canaries.find(c => `${c.id}@${c.revision}${c.type === 'card' ? `:${c.bodyRevision}` : ''}` === key);
+  return envelope?.ok === true && envelope.value?.items?.some(item => {
+    const ref = item.ref;
+    return target && item.type === target.type && ref?.type === target.type
+      && candidates?.value?.items?.some(candidate => isDeepStrictEqual(candidate.ref, ref)) && ref.revision === target.revision
+      && (target.type !== 'card' || ref.bodyRevision === target.bodyRevision)
+      && isDeepStrictEqual(ref.namespace, target.namespace)
+      && (item.type === 'memory' ? item.content : `${item.title}\n${item.body}`) === target.text;
+  });
 }
