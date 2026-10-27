@@ -16,7 +16,7 @@ npx @cairn-ink/memory setup
 ```
 
 This checkout prepares installer **0.5.3**; publication is a separate step.
-Try it with `node packages/setup/bin/memory.mjs setup`. The plugin stays 0.3.2.
+Try it with `node packages/setup/bin/memory.mjs setup`. The plugin is 0.3.3.
 Setup asks about new tools, updates connected tools, and uses one browser sign-in
 when connecting both. The default server is cairn.ink. Conflicting servers or
 memory IDs present a choice; non-interactive conflicts change nothing.

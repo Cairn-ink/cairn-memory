@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.3 — 2026-10-27: Claude plugin recall hook deadline
+
+Plugin and marketplace 0.3.3. Protocol stays 0.3.0; installer versions are
+unchanged.
+
+- Give recall one 2.5-second cooperative application budget across input, local
+  waits and HTTP, within the unchanged 3-second host timeout. Preserve the
+  narrower HTTP/fallback deadline and pause/identity checks. Omit optional
+  recall-success telemetry so it cannot delay hook exit after valid context.
+  Capture, SessionStart and status behavior are unchanged.
+
 ## Unreleased — MCP SDK 2.3.1 and Zod 4.6.7 security update
 
 - Update `@modelcontextprotocol/server` and `@modelcontextprotocol/core` (and the

@@ -32,7 +32,8 @@ import { withFileLock } from "./file-lock.mjs";
 
 import { setPaused, readControlState } from "./control-state.mjs";
 
-async function randomIdFile(dataDir, filename, { create = true, client = "claude", home } = {}) {
+async function randomIdFile(dataDir, filename, { create = true, client = "claude", home, signal } = {}) {
+  signal?.throwIfAborted();
   const path = join(dataDir, filename);
   async function readIdentity() {
     const entry = await probeEntry(path, {
@@ -48,7 +49,8 @@ async function randomIdFile(dataDir, filename, { create = true, client = "claude
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
       throw new Error(`invalid_identity: ${filename}`);
     }
-    if (filename === "project-key") await cleanupKeyPublication(resolve(dataDir));
+    signal?.throwIfAborted();
+    if (filename === "project-key") await cleanupKeyPublication(resolve(dataDir), signal);
     return value;
   }
   try {
@@ -57,7 +59,7 @@ async function randomIdFile(dataDir, filename, { create = true, client = "claude
     if (error.code !== "ENOENT") throw error;
   }
   if (filename === "project-key") {
-    await publishProjectKey(dataDir, { create, strict: false, client, home });
+    await publishProjectKey(dataDir, { create, strict: false, client, home, signal });
     return readIdentity();
   }
   if (!create) throw new Error("standalone_key_missing");
@@ -197,8 +199,10 @@ async function publishProjectKey(
     repairProfileRoot,
     home,
     client = "claude",
+    signal,
   } = {},
 ) {
+  signal?.throwIfAborted();
   // Preserve 0.1.1's empty plugin-data error rather than resolving it to cwd.
   if (dataDir === "" && !strict) await mkdir(dataDir, { recursive: true });
   dataDir = resolve(dataDir);
@@ -238,13 +242,14 @@ async function publishProjectKey(
   if (originalKey !== undefined && !validKey(originalKey))
     throw new Error("invalid_identity: project-key");
   const publish = async () => {
+    signal?.throwIfAborted();
     const keyPath = join(dataDir, "project-key");
     const existing = await probeEntry(keyPath, {
       read: () => readFile(keyPath, "utf8"),
     });
     if (existing.state === "unknown") failUnreadable(existing.code);
     if (existing.state === "present") {
-      await cleanupKeyPublication(dataDir);
+      await cleanupKeyPublication(dataDir, signal);
       return; // EEXIST reads the winner, never rewrites it.
     }
     const pendingPath = join(dataDir, ".project-key.pending");
@@ -272,6 +277,10 @@ async function publishProjectKey(
       client: prior.value?.client ?? client,
       key: originalKey ?? randomUUID(),
     };
+    signal?.throwIfAborted();
+    // Once staging starts, finish this fixed set of publication writes and unlink
+    // under the already-owned mint lock, even after cancellation. There are no
+    // further lock waits; stopping between intent and key would leave partial state.
     await writeIdentityFile(pendingPath, JSON.stringify(value), { strict });
     // Creator intent is durable before the key becomes visible. Both are published
     // under the mint lock; only the linked project-key establishes a winner.
@@ -312,6 +321,7 @@ async function publishProjectKey(
     const acquired = await withFileLock(join(dataDir, ".project-key.lock"), publish, {
       timeoutMs: 5000,
       pollMs: 10,
+      signal,
     });
     if (!acquired) {
       const winner = await probeEntry(join(dataDir, "project-key"));
@@ -323,23 +333,30 @@ async function publishProjectKey(
 // A successful key probe may remove interrupted publication artifacts. A live
 // publisher owns its staging file; only an absent or definitively dead lock permits
 // cleanup. No staging value is ever used to restore a deleted project-key.
-async function cleanupKeyPublication(root) {
+async function cleanupKeyPublication(root, signal) {
+  signal?.throwIfAborted();
   const pendingPath = join(root, ".project-key.pending");
   const lockPath = join(root, ".project-key.lock");
   const pending = await probeEntry(pendingPath);
+  signal?.throwIfAborted();
   const lock = await probeEntry(lockPath, {
     read: () => privateRead(lockPath, { missing: true, portable: true }),
   });
+  signal?.throwIfAborted();
   if (pending.state === "unknown") failUnreadable(pending.code);
   if (lock.state === "unknown") failUnreadable(lock.code);
   if (pending.state === "absent" && lock.state === "absent") return;
   const cleanup = async () => {
+    signal?.throwIfAborted();
     if ((await privateRead(pendingPath, { missing: true, portable: true })) !== undefined) {
+      signal?.throwIfAborted();
       await unlink(pendingPath).catch((error) => {
         if (error.code !== "ENOENT") throw error;
       });
+      // Unlink and its notification finish together; no lock wait follows.
       await notifyWrite(pendingPath, "unlink");
     }
+    signal?.throwIfAborted();
   };
   if (lock.state === "absent") return cleanup();
   let owner;
@@ -356,11 +373,14 @@ async function cleanupKeyPublication(root) {
   } catch (error) {
     if (error.code !== "ESRCH") return;
   }
-  await withFileLock(lockPath, cleanup, { timeoutMs: 250, pollMs: 10 });
+  await withFileLock(lockPath, cleanup, { timeoutMs: 250, pollMs: 10, signal });
 }
 
-async function writeIdentityFile(path, bytes, { strict, exclusive = false, checkpoint } = {}) {
-  if (strict) return privateWrite(path, bytes, { exclusive, checkpoint });
+async function writeIdentityFile(path, bytes, { strict, exclusive = false, checkpoint, signal } = {}) {
+  signal?.throwIfAborted();
+  if (strict) return privateWrite(path, bytes, { exclusive, checkpoint: signal ? async stage => {
+    signal.throwIfAborted(); await checkpoint?.(stage); signal.throwIfAborted();
+  } : checkpoint });
   await checkedPath(path, { missing: true, portable: true });
   const temporary = `${path}.tmp-${randomUUID()}`;
   const staged = await open(temporary, "wx", 0o600);
@@ -371,6 +391,7 @@ async function writeIdentityFile(path, bytes, { strict, exclusive = false, check
     await staged.close();
   }
   try {
+    signal?.throwIfAborted();
     if (exclusive) {
       try {
         await link(temporary, path);
@@ -478,8 +499,9 @@ function installIdImpl(dataDir) {
  */
 async function projectKeyImpl(
   dataDir,
-  { create = true, checkpoint, originalKey, home, client = "claude" } = {},
+  { create = true, checkpoint, originalKey, home, client = "claude", signal } = {},
 ) {
+  signal?.throwIfAborted();
   if (originalKey !== undefined) fail("invalid_original_key");
   await checkedPath(dataDir, { directory: true, missing: true });
   const path = join(dataDir, "project-key");
@@ -489,14 +511,14 @@ async function projectKeyImpl(
   if (entry.state === "unknown") failUnreadable(entry.code);
   let value = entry.value;
   if (value === undefined) {
-    await publishProjectKey(dataDir, { create, checkpoint, home, client });
+    await publishProjectKey(dataDir, { create, checkpoint, home, client, signal });
     value = await privateRead(path);
   }
   const key = value.trim();
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key)) {
     throw new Error("invalid_identity: project-key");
   }
-  await cleanupKeyPublication(dataDir);
+  await cleanupKeyPublication(dataDir, signal);
   return key;
 }
 
@@ -704,36 +726,46 @@ async function requireTemporarySource(root, locations) {
     fail("adopt_from_requires_temporary_root");
 }
 
-async function keyPresent(root, { strict = false } = {}) {
+async function keyPresent(root, { strict = false, signal } = {}) {
+  signal?.throwIfAborted();
   if (strict && !absolute(root)) fail("invalid_state_path");
   const entry = await probeEntry(join(root, "project-key"), {
     read: async () => {
       if (strict) {
         await checkedPath(root, { directory: true, missing: true });
+        signal?.throwIfAborted();
         return privateRead(join(root, "project-key"), { missing: true });
       }
       return readFile(join(root, "project-key"), "utf8");
     },
   });
+  signal?.throwIfAborted();
   if (entry.state === "unknown") failUnreadable(entry.code);
   if (entry.state === "absent" || entry.value === undefined) return false;
   if (!validKey(entry.value.trim())) fail("invalid_identity: project-key");
-  await cleanupKeyPublication(resolve(root));
+  await cleanupKeyPublication(resolve(root), signal);
+  signal?.throwIfAborted();
   return true;
 }
 
 /** Bounded metadata-only evidence in Cairn's root; never read a host transcript. */
-async function hasClaudeEvidenceImpl(root) {
+async function hasClaudeEvidenceImpl(root, { signal } = {}) {
+  signal?.throwIfAborted();
   const directory = join(root, "sessions");
-  if (!(await checkedPath(directory, { directory: true, missing: true }))) return false;
+  const present = await checkedPath(directory, { directory: true, missing: true });
+  signal?.throwIfAborted();
+  if (!present) return false;
   const entries = await opendir(directory);
   let count = 0;
   for await (const entry of entries) {
+    signal?.throwIfAborted();
     if (++count > 256) return false; // Absence/uncertainty requires confirmation.
     if (!/^[a-f0-9]{64}\.json$/.test(entry.name)) continue;
     const value = await jsonFile(join(directory, entry.name));
+    signal?.throwIfAborted();
     if (Number.isSafeInteger(value?.offset) && value.offset >= 0) return true;
   }
+  signal?.throwIfAborted();
   return false;
 }
 
@@ -1233,40 +1265,51 @@ async function writeBindingHistory(profileRoot, root, { reset = false, install, 
 }
 
 const owned = (info) => typeof process.getuid !== "function" || info.uid === process.getuid();
-const probe = async (read, missing) => {
+const probe = async (read, missing, signal) => {
+  signal?.throwIfAborted();
   try {
     return await read();
   } catch {
     return missing;
+  } finally {
+    signal?.throwIfAborted();
   }
 };
 
-async function rootFacts(root, { strict = false, evidence = false, metadataOnly = false } = {}) {
-  const info = await probe(() => stat(root), undefined);
+async function rootFacts(root, { strict = false, evidence = false, metadataOnly = false, signal } = {}) {
+  signal?.throwIfAborted();
+  const info = await probe(() => stat(root), undefined, signal);
   const usable = !!info?.isDirectory();
   const retiredEntry = await markerProbe(root, "retired");
+  signal?.throwIfAborted();
   const sharedEntry = await markerProbe(root, "paired-root");
+  signal?.throwIfAborted();
   const retired = retiredEntry.state === "present";
   const sharedMarker = sharedEntry.state === "present";
-  const validKey = evidence && (await probe(() => keyPresent(root), false));
+  const validKey = evidence && (await probe(() => keyPresent(root, { signal }), false, signal));
   // A present key is not freshness, even if its bytes are invalid. The ordinary
   // identity reader preserves released standalone errors without replacing it.
   const keyEntry = metadataOnly ? { state: "absent" } : await probeEntry(join(root, "project-key"));
   const key = keyEntry.state === "present";
+  signal?.throwIfAborted();
   const creator = await creatorRecord(root);
+  signal?.throwIfAborted();
   const keyRead = key
     ? await probeEntry(join(root, "project-key"), {
         read: () => readFile(join(root, "project-key"), "utf8"),
       })
     : keyEntry;
+  signal?.throwIfAborted();
   let error;
   if (strict && !retired) {
     try {
-      if (!(await keyPresent(root, { strict: true }))) error = "paired_key_missing";
+      if (!(await keyPresent(root, { strict: true, signal }))) error = "paired_key_missing";
     } catch (failure) {
+      signal?.throwIfAborted();
       error = failure.code ?? failure.message.split(":")[0];
     }
   }
+  signal?.throwIfAborted();
   return {
     root,
     creator: creator.value?.client,
@@ -1285,22 +1328,24 @@ async function rootFacts(root, { strict = false, evidence = false, metadataOnly 
     sharedMarker,
     validKey,
     error,
-    evidence: evidence && (await probe(() => hasClaudeEvidence(root), false)),
+    evidence: evidence && (await probe(() => hasClaudeEvidence(root, { signal }), false, signal)),
   };
 }
 
 /** Every filesystem failure becomes a fact, never another selection path. */
 async function probeClaudeFactsImpl(options = {}) {
+  const signal = options.signal;
+  signal?.throwIfAborted();
   const env = options.env ?? process.env;
   const locations = stateLocations(options);
   const base = locations.home || locations.temporary;
-  const homeInfo = await probe(() => stat(base), undefined);
+  const homeInfo = await probe(() => stat(base), undefined, signal);
   const homeUsable =
     !!homeInfo?.isDirectory() &&
     (await probe(async () => {
       await access(base, constants.X_OK);
       return true;
-    }, false));
+    }, false, signal));
   const facts = {
     locations,
     homeUsable,
@@ -1313,6 +1358,7 @@ async function probeClaudeFactsImpl(options = {}) {
     platform: options.liveness?.platform ?? process.platform,
   };
   if (homeUsable) Object.assign(facts, await probeCoordination(locations));
+  signal?.throwIfAborted();
   const registration = claudeRegistration(facts.install);
   if (registration) {
     facts.registration = !(await sameRoot(registration.profileRoot, locations.claudeRoot))
@@ -1321,20 +1367,26 @@ async function probeClaudeFactsImpl(options = {}) {
         ? "self-active"
         : "self-retired";
   }
-  facts.profile = await rootFacts(locations.claudeRoot);
+  signal?.throwIfAborted();
+  facts.profile = await rootFacts(locations.claudeRoot, { signal });
+  signal?.throwIfAborted();
   facts.profileIsRecordedPairRoot = await probe(
     () => containsRoot(recordedPairRoots(facts), locations.claudeRoot),
-    false,
+    false, signal,
   );
+  signal?.throwIfAborted();
   facts.bindingHistory = await readBindingHistory(locations.claudeRoot);
+  signal?.throwIfAborted();
   facts.localMarker = "absent";
   const markerPath = profileMarkerPath(locations.claudeRoot);
   const markerDirectory = join(locations.claudeRoot, ".cairn-memory-profile");
   const markerParent = await probeEntry(markerDirectory);
+  signal?.throwIfAborted();
   let markerEntry;
   if (markerParent.state === "unknown") facts.localMarker = "invalid";
   if (markerParent.state === "present") {
     const entry = await probeEntry(markerPath);
+    signal?.throwIfAborted();
     if (entry.state === "unknown") facts.localMarker = "invalid";
     if (entry.state === "present") markerEntry = entry.value;
   }
@@ -1345,39 +1397,47 @@ async function probeClaudeFactsImpl(options = {}) {
         directory: true,
       });
       return jsonFile(markerPath);
-    }, undefined);
+    }, undefined, signal);
+    signal?.throwIfAborted();
     if (
       marker?.version === 1 &&
       (await sameRoot(marker.profileRoot, locations.claudeRoot)) &&
       (await sameRoot(marker.root, locations.defaultRoot))
     )
       facts.localMarker = "valid";
+    signal?.throwIfAborted();
   }
   // Only an own active binding can authorize probing a non-default shared root.
   if (facts.registration === "self-active") {
     facts.bound = await rootFacts(facts.install.clients.claude.root, {
+      signal,
       strict: !!facts.record && !!facts.install.shared?.ready,
     });
+    signal?.throwIfAborted();
     if (
       (facts.bindingHistory.state === "valid" || facts.install.clients.claude.fingerprint) &&
       facts.bound.key
     ) {
       facts.bound.fingerprint = await probe(
-        async () => identityFingerprint(await projectKey(facts.bound.root, { create: false })),
-        undefined,
+        async () => identityFingerprint(await projectKey(facts.bound.root, { create: false, signal: options.signal })),
+        undefined, signal,
       );
     }
   }
+  signal?.throwIfAborted();
   if (facts.registration === "none") {
     facts.default = await rootFacts(locations.defaultRoot, {
+      signal,
       evidence:
         (!facts.profile.key && facts.coordination !== "degraded") ||
         (facts.profile.root === locations.defaultRoot && facts.coordination !== "degraded"),
       metadataOnly: facts.profile.key && facts.profile.root !== locations.defaultRoot,
     });
   }
+  signal?.throwIfAborted();
   for (const root of [facts.profile, facts.bound, facts.default].filter(Boolean))
-    root.recorded = await probe(() => containsRoot(recordedPairRoots(facts), root.root), false);
+    root.recorded = await probe(() => containsRoot(recordedPairRoots(facts), root.root), false, signal);
+  signal?.throwIfAborted();
   const option = env.CLAUDE_PLUGIN_OPTION_PAIRING_RECORD || undefined;
   const argument = options.pairingRecord || undefined;
   const delivered = argument ?? option;
@@ -1409,9 +1469,10 @@ async function probeClaudeFactsImpl(options = {}) {
   for (let i = 0; i < relevant.length; i++)
     for (let j = i + 1; j < relevant.length; j++) {
       // Unrelated unreadable roots do not gate the selected profile.
-      if (await probe(() => sameRoot(relevant[i], relevant[j], { cache: identityCache }), false))
+      if (await probe(() => sameRoot(relevant[i], relevant[j], { cache: identityCache }), false, signal))
         facts.sameRoots.push([relevant[i], relevant[j]]);
     }
+  signal?.throwIfAborted();
   return facts;
 }
 
@@ -1564,7 +1625,9 @@ function resolveClaudeBindingImpl(facts) {
 }
 
 async function resolveClaudeClient(options) {
+  options.signal?.throwIfAborted();
   const facts = await probeClaudeFacts(options);
+  options.signal?.throwIfAborted();
   const binding = resolveClaudeBinding(facts);
   if (binding.enabled) {
     binding.workerEnv = {
@@ -1572,7 +1635,7 @@ async function resolveClaudeClient(options) {
       CAIRN_MEMORY_STATE_DIR: binding.root,
     };
     if (options.initialize)
-      await identityForBinding(binding, "claude", undefined, stateLocations(options).home);
+      await identityForBinding(binding, "claude", undefined, stateLocations(options).home, options.signal);
   }
   return binding;
 }
@@ -1590,9 +1653,10 @@ async function resolveClientImpl(options = {}) {
   return binding;
 }
 
-async function identityForBinding(binding, client, cwd = "initialization", home) {
+async function identityForBinding(binding, client, cwd = "initialization", home, signal) {
+  signal?.throwIfAborted();
   if (binding.expectedFingerprint) {
-    const key = await projectKey(binding.root, { create: false });
+    const key = await projectKey(binding.root, { create: false, signal });
     if (identityFingerprint(key) !== binding.expectedFingerprint) fail("binding_identity_mismatch");
     return createHmac("sha256", key).update(String(cwd)).digest("hex");
   }
@@ -1600,10 +1664,10 @@ async function identityForBinding(binding, client, cwd = "initialization", home)
     binding.root,
     cwd,
     binding.paired || client !== "claude"
-      ? { strict: true, create: !binding.paired, client, home }
+      ? { strict: true, create: !binding.paired, client, home, signal }
       : binding.createKey === false
-        ? { create: false, home }
-        : { home },
+        ? { create: false, home, signal }
+        : { home, signal },
   );
   if (!binding.paired) {
     const creator = await creatorRecord(binding.root);
@@ -1612,7 +1676,7 @@ async function identityForBinding(binding, client, cwd = "initialization", home)
     if (
       otherCreator &&
       !(await rootMarker(binding.root, "paired-root")) &&
-      !(client === "claude" && (await hasClaudeEvidence(binding.root)))
+      !(client === "claude" && (await hasClaudeEvidence(binding.root, { signal })))
     )
       fail("pairing_needed");
   }
@@ -1620,10 +1684,13 @@ async function identityForBinding(binding, client, cwd = "initialization", home)
 }
 
 async function clientProjectIdImpl(options, cwd, binding) {
+  options.signal?.throwIfAborted();
   if (!cwd) return undefined;
   binding ??= await resolveClient(options);
   if (!binding.enabled) fail(binding.status);
-  return identityForBinding(binding, options.client ?? "claude", cwd, stateLocations(options).home);
+  const id = await identityForBinding(binding, options.client ?? "claude", cwd, stateLocations(options).home, options.signal);
+  options.signal?.throwIfAborted();
+  return id;
 }
 
 /** CX-7 API: no host execution. Caller obtains consent and stops hosts/workers. */
@@ -2095,15 +2162,19 @@ function refusal(error) {
 }
 function boundary(work) {
   return (...args) => {
+    const normalize = error => {
+      if (args.some(arg => arg?.signal?.aborted && arg.signal.reason === error)) return error;
+      return refusal(error);
+    };
     try {
       const result = work(...args);
       return result && typeof result.then === "function"
         ? result.catch((error) => {
-            throw refusal(error);
+            throw normalize(error);
           })
         : result;
     } catch (error) {
-      throw refusal(error);
+      throw normalize(error);
     }
   };
 }

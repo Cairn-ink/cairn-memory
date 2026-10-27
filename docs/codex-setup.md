@@ -1,6 +1,6 @@
 # Codex 安裝與自動記憶：CX-5
 
-2026-10-25 更新。Installer **0.6.0** 已於 2026-10-25 發布，加入本機模式（0.5.2 於 2026-10-13 發布）。配套 plugin 維持 0.3.2、protocol 維持 0.3.0。0.5.3 修正 setup、resume 之後新開的 Codex 對話，第一段內容被當成暫停邊界跳過的問題。0.5.2 只調整安裝畫面裡說明自動工作的兩句話，行為不變。0.5.1 修正互動 TUI 對話沒有被記下的問題，並只納入互動的 app-server 用戶端；0.5.0 更新了安裝流程、預設每日上限與 exec 自動工作的保存設定。A7 framing 與 certificate inputs 保持原樣。
+2026-10-25 更新。Installer **0.6.0** 已於 2026-10-25 發布，加入本機模式（0.5.2 於 2026-10-13 發布）。配套 plugin 現為 0.3.3、protocol 維持 0.3.0。0.5.3 修正 setup、resume 之後新開的 Codex 對話，第一段內容被當成暫停邊界跳過的問題。0.5.2 只調整安裝畫面裡說明自動工作的兩句話，行為不變。0.5.1 修正互動 TUI 對話沒有被記下的問題，並只納入互動的 app-server 用戶端；0.5.0 更新了安裝流程、預設每日上限與 exec 自動工作的保存設定。A7 framing 與 certificate inputs 保持原樣。
 
 本機是 **codex-cli 0.160.1**。CX-5 已接上 browser credential、私有 runtime、四個 user hooks、Stop／PreCompact capture，以及 SessionStart pause EOF boundary。UserPromptSubmit recall 注入已通過 [A7 pinned-host adversarial evaluation](../evaluation/codex-a7/RESULTS.md)，**在格式合格的 host 預設開啟**，可用 kill switch 關閉。MCP recall 仍可使用。
 

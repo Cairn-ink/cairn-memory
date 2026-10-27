@@ -1,5 +1,22 @@
 # Known limitations
 
+## Claude recall hook application deadline
+
+Recall shares a 2,500 ms cooperative application budget starting at hook-module
+entry, after Node startup and static imports, across asynchronous setup/input,
+local waits and HTTP. The unchanged 3 s host timeout leaves a nominal 500 ms
+margin for startup/imports, scheduling and cleanup; the narrower 2 s
+HTTP/fallback budget remains. Identity is checked during project-ID resolution;
+the final output barrier rechecks pause/generation and cancellation, without
+another identity lookup. Optional recall-success telemetry is omitted, with no
+detached queue. Startup/import time is outside the application budget. Synchronous
+CPU and uncooperative filesystem/kernel stalls are not hard-preemptible;
+synthetic child-process timings are not a universal SLA or native Claude
+verification.
+If the quota lock remains held through the 250 ms unused-permit restoration
+window after recall cancellation, cleanup gives up silently and leaves the
+permit in_flight for existing dead-owner recovery to restore quota_reached.
+
 ## Local role profiles (U5c-1)
 
 [Role profiles](role-profiles-local.md) require explicit matching method/context

@@ -81,13 +81,25 @@ const normalizeRuntime = (text, home) => text.replace(new RegExp(
   '(^|[\\s\'"=])(' + escapePattern(home + '/cairn/runtime/') + ')' + runtimeId + '(?=/|[\\s\'"\\\\]|$)', 'gu'),
 '$1$2<version>-<digest>');
 const generationPath = new RegExp('^\\.codex/cairn/runtime/(' + runtimeId + ')(/.*)?$', 'u');
+// PR #454 intentionally changes hosted cancellation and protocol R16 permit
+// restoration. Only these runtime sources may differ from immutable 0.5.3.
+const hostedRuntimeExceptions = [
+  'integrations/client/control-state.mjs',
+  'integrations/client/file-lock.mjs',
+  'integrations/client/pairing.mjs',
+  'integrations/client/transport-hosted.mjs',
+];
+const packagedHostedRuntime = new Map(await Promise.all(hostedRuntimeExceptions.map(async path =>
+  [path, await readFile(new URL('../runtime/' + path, import.meta.url))])));
+const packagedHostedManifest = await readFile(new URL('../runtime/manifest.json', import.meta.url));
 
 // Walk JSON token positions so only exact field paths change, retaining every
 // whitespace byte and string escape elsewhere. Hosted installation.json has no
 // installerVersion field; its schema version and every nested field stay raw.
 function normalizeFile(name, bytes, home) {
   const installation = name === '.codex/cairn/installation.json';
-  if (!installation && name !== '.codex/hooks.json') return bytes;
+  const runtimeManifest = generationPath.exec(name)?.[2] === '/manifest.json';
+  if (!installation && !runtimeManifest && name !== '.codex/hooks.json') return bytes;
   const text = bytes.toString();
   JSON.parse(text);
   const tokens = [...text.matchAll(/"(?:[^"\\]|\\.)*"|[{}\[\]:,]|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null/gu)];
@@ -109,6 +121,14 @@ function normalizeFile(name, bytes, home) {
         if (tokens[at++][0] === ']') return;
       }
     } else if (raw.startsWith('"')) {
+      if (runtimeManifest) {
+        // Preserve paths, order, formatting and every other manifest byte.
+        if (path.length === 2 && path[0] === 'files' && hostedRuntimeExceptions.includes(path[1])) {
+          assert.match(raw, /^"[a-f0-9]{64}"$/u);
+          edits.push([token.index, raw.length, '"<PR-454-runtime-hash>"']);
+        }
+        return;
+      }
       const managedField = installation ? path.length === 1 && path[0] === 'runtime' :
         path.length === 6 && path[0] === 'hooks' &&
         ['SessionStart', 'UserPromptSubmit', 'Stop', 'PreCompact'].includes(path[1]) &&
@@ -125,10 +145,17 @@ function normalizeFile(name, bytes, home) {
   return Buffer.from(result);
 }
 const normalizedCall = (call, home) => ({ ...call, args: call.args.map(arg => normalizeRuntime(arg, home)) });
-function fileInventory(entries, normalize, home) {
+function fileInventory(entries, normalize, home, { historical = false } = {}) {
   const result = {}, generations = new Map();
-  for (const [name, bytes] of entries) {
+  for (let [name, bytes] of entries) {
     const generation = generationPath.exec(name);
+    if (normalize && generation?.[2] === '/manifest.json' && !historical)
+      assert.deepEqual(bytes, packagedHostedManifest, 'Installed runtime manifest must match packaged manifest: ' + name);
+    const packaged = normalize && generation && packagedHostedRuntime.get(generation[2]?.slice(1));
+    if (packaged) {
+      if (!historical) assert.deepEqual(bytes, packaged, 'Installed runtime must match packaged source: ' + name);
+      bytes = packaged;
+    }
     const hash = bytes === null ? '<directory>' : createHash('sha256')
       .update(normalize ? normalizeFile(name, bytes, home) : bytes).digest('hex');
     if (normalize && generation) {
@@ -145,7 +172,7 @@ function fileInventory(entries, normalize, home) {
   for (const generation of complete.slice(1)) assert.deepEqual(generation, complete[0], 'Every hosted runtime generation must have the same complete inventory and bytes');
   return result;
 }
-async function inventory(root, normalize = false) {
+async function inventory(root, normalize = false, options) {
   async function entries(directory, prefix = '') {
     const result = [];
     try {
@@ -159,7 +186,7 @@ async function inventory(root, normalize = false) {
     } catch (error) { if (error.code !== 'ENOENT') throw error; }
     return result;
   }
-  return fileInventory(await entries(root), normalize, join(root, '.codex'));
+  return fileInventory(await entries(root), normalize, join(root, '.codex'), options);
 }
 const normalized = (text, home) => normalizeRuntime(text.replace(/(Cairn\.ink Memory(?: setup| status| 安裝程式)? )\d+\.\d+\.\d+(?:-[\w.]+)?/gu, '$1<version>'), home);
 test('L06 version normalization preserves unrelated bytes and complete runtime generations', () => {
@@ -206,6 +233,51 @@ test('L06 version normalization preserves unrelated bytes and complete runtime g
     { args: ['configure', normalizeRuntime(newRuntime + '/entry.mjs', home)], keys: ['0.5.3'] });
   assert.notEqual(normalized('Cairn.ink Memory setup 0.6.0\nunrelated 0.6.0', home),
     normalized('Cairn.ink Memory setup 0.5.3\nunrelated 0.5.3', home));
+});
+test('L06 hosted runtime exceptions require packaged bytes and preserve all other comparisons', async () => {
+  const home = '/synthetic/.codex';
+  const oldRuntime = '.codex/cairn/runtime/0.5.3-0123456789ab/';
+  const newRuntime = '.codex/cairn/runtime/0.6.0-abcdef012345/';
+  const files = (entries, historical = false) => fileInventory(entries, true, home, { historical });
+  const payload = Buffer.from('unchanged runtime bytes');
+  const manifest = JSON.parse(packagedHostedManifest);
+  for (const path of Object.keys(manifest.files).filter(path => !hostedRuntimeExceptions.includes(path))) {
+    assert.deepEqual(files([[newRuntime + path, payload]]), files([[oldRuntime + path, payload]], true));
+    assert.throws(() => assert.deepEqual(files([[newRuntime + path, Buffer.from('changed runtime bytes')]]),
+      files([[oldRuntime + path, payload]], true)), { code: 'ERR_ASSERTION' }, path);
+  }
+  for (const [path, packaged] of packagedHostedRuntime) {
+    const baseline = files([[oldRuntime + path, payload]], true);
+    assert.deepEqual(files([[newRuntime + path, packaged]]), baseline);
+    const damaged = Buffer.from(packaged); damaged[0] ^= 1;
+    assert.throws(() => files([[newRuntime + path, damaged]]), { code: 'ERR_ASSERTION' }, path);
+    assert.throws(() => files([[oldRuntime + path, packaged], [newRuntime + path, damaged]]), { code: 'ERR_ASSERTION' }, path);
+    assert.throws(() => assert.deepEqual(files([]), baseline), { code: 'ERR_ASSERTION' }, path);
+    assert.throws(() => files([[oldRuntime + path, packaged], [newRuntime, null]]), { code: 'ERR_ASSERTION' }, path);
+  }
+  const manifestName = newRuntime + 'manifest.json';
+  const oldManifest = Buffer.from(packagedHostedManifest.toString().replace(/"([^"\n]+)": "[a-f0-9]{64}"/gu,
+    (raw, path) => hostedRuntimeExceptions.includes(path) ? JSON.stringify(path) + ': "' + '0'.repeat(64) + '"' : raw));
+  const baselineManifest = files([[oldRuntime + 'manifest.json', oldManifest]], true);
+  assert.deepEqual(files([[manifestName, packagedHostedManifest]]), baselineManifest);
+  assert.deepEqual(files([[oldRuntime + 'manifest.json', oldManifest], [manifestName, packagedHostedManifest]], true), baselineManifest);
+  const equalManifest = bytes => assert.deepEqual(normalizeFile(manifestName, bytes, home),
+    normalizeFile(oldRuntime + 'manifest.json', oldManifest, home));
+  for (const path of Object.keys(manifest.files).filter(path => !hostedRuntimeExceptions.includes(path))) {
+    const changedHash = Buffer.from(packagedHostedManifest.toString().replace(manifest.files[path], '0'.repeat(64)));
+    assert.throws(() => equalManifest(changedHash), { code: 'ERR_ASSERTION' }, path);
+    assert.throws(() => files([[manifestName, changedHash]]), { code: 'ERR_ASSERTION' }, path);
+  }
+  for (const changed of [
+    packagedHostedManifest.toString().replace('"version": 1', '"version": 2'),
+    packagedHostedManifest.toString().replace('{\n', '{ \n'),
+    packagedHostedManifest.toString().replace('integrations/client/control-state.mjs', 'integrations/client/control-stale.mjs'),
+  ]) {
+    assert.throws(() => equalManifest(Buffer.from(changed)), { code: 'ERR_ASSERTION' });
+    assert.throws(() => files([[manifestName, Buffer.from(changed)]]), { code: 'ERR_ASSERTION' });
+  }
+  // Even an approved hash cannot hide a corrupt installed manifest copy.
+  assert.throws(() => files([[manifestName, oldManifest]]), { code: 'ERR_ASSERTION' });
 });
 for (const lang of ['zh', 'en']) test(`L02 fresh cloud choice preserves hosted flow (${lang})`, async t => {
   const baselineFixture = await fixture(t), routedFixture = await fixture(t);
@@ -299,7 +371,7 @@ for (const { scenario, args, label } of cells) test(`${label} hosted baseline: $
   const beforeCalls = await f.calls(), beforeOrdered = (await f.orderedCalls()).length;
   // --cloud selects the pre-existing hosted setup; 0.5.3 had no mode flag.
   const baseline = await run({ args: args.filter(arg => arg !== '--cloud'), choices, fixedNow, disableLocalMode: true, module: historical.module });
-  const baselineFiles = await inventory(f.home, true), baselineCalls = await f.calls();
+  const baselineFiles = await inventory(f.home, true, { historical: true }), baselineCalls = await f.calls();
   const mutating = (all, start) => Object.fromEntries(['claude', 'codex'].map(client => [client,
     all[client].slice(start[client].length).filter(callsThatMutate).map(call => ({ args: call.args.map(arg => normalizeRuntime(arg, f.codexHome)), keys: call.keys, endpoint: call.endpoint, pairingRecord: call.pairingRecord }))]));
   const mutations = mutating(baselineCalls, beforeCalls);
