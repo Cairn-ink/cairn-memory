@@ -502,6 +502,74 @@ for(const boundary of ['truncated','omitted','truncatedbusy'])test(`P2d fix roun
   assert.ok((await s.supervisor.drain()).some(r=>r.telemetry==='incomplete'));
 });
 
+for(const code of [5,14,13])test(`P2d fix round 2 repair terminal SQLite ${code} controls public refresh after handled corruption`,async t=>{
+  const f=setup(t,'DELETE'),side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX);
+  side.exec('CREATE TABLE damaged_cache(id)');side.close();chmodSync(f.path+PRODUCT_SIDECAR_SUFFIX,0o600);
+  const s=configured(t,f.path,{service:true,sideMode:'DELETE',spawnWorker:data=>new Worker(new URL('./fixtures/context-product-wal-worker.mjs',import.meta.url),{
+    workerData:{...data,walTestControl:{behavior:'init-repair-'+code}},env:{},execArgv:[]})});
+  const h=await s.open(),result=await h.refreshContextIndex(refresh,s.token);
+  assert.equal(result.error.code,code===5?'storage_busy':'index_unavailable');
+  assert.equal(result.error.retryable,code===5);
+  assert.equal(ok(await h.refreshContextIndex(refresh,s.token)).status,'complete');await h.close();
+  const records=await s.supervisor.drain(),record=records.find(r=>r.diagnostics?.records.some(d=>d.sqlite.code===11));
+  assert.ok(record);assert.equal(record.telemetry,'complete');
+  assert.deepEqual(record.diagnostics.records.map(d=>[d.stage,d.statement,d.sqlite.code]),[
+    ['prepare','context_evidence',1],
+    ['prepare','schema_metadata',11],['configure','journal_mode',code],
+  ]);
+  assert.doesNotMatch(JSON.stringify(records),/private incumbent|private initialization/);
+});
+
+for(const finish of ['next','other-iterator','helper','helper-observed','reentrant-statement','return','for-of','close','dispose'])
+test(`P2d fix round 2 DELETE journal replacement tracks native activity through ${finish}`,t=>{
+  const ws=createTestWorkspace(t),path=join(ws.path,'iterator.sqlite');
+  const setup=new DatabaseSync(path);setup.exec('CREATE TABLE probe(id); INSERT INTO probe VALUES(1),(2),(3)');setup.close();chmodSync(path,0o600);
+  // Synthetic protected companions never enter SQLite: journal metadata is
+  // supplied separately while all statement/iterator semantics are native.
+  let journal=1n;
+  const original=fs.lstatSync;
+  t.mock.method(fs,'lstatSync',(entry,options)=>{
+    if(entry!==path+'-journal')return original(entry,options);
+    const stat=original(path,options),ino=journal;
+    return new Proxy(stat,{get(object,key){
+      if(key==='ino')return ino;
+      const value=Reflect.get(object,key,object);return typeof value==='function'?value.bind(object):value;
+    }});
+  });syncBuiltinESMExports();t.after(()=>{t.mock.restoreAll();syncBuiltinESMExports();});
+  const policy=createProductSqlitePolicy({observer:finish==='helper-observed'?nativeObserver():undefined});policy.start(Infinity);
+  const native=new DatabaseSync(path,{readOnly:true}),{db}=policy.open(native,path);
+  t.after(()=>{if(native.isOpen)db.close();});
+  if(finish==='reentrant-statement'){
+    native.function('replace_journal',()=>{journal++;db.prepare('SELECT 1').get();return 1;});
+    assert.throws(()=>db.prepare('SELECT replace_journal()').get(),{code:'index_unavailable'});
+    db.close();return;
+  }
+  const statement=db.prepare('SELECT id FROM probe'),iterator=statement.iterate();
+  assert.equal(iterator.next().value.id,1);assert.equal(native.isTransaction,false);
+  if(['next','other-iterator','helper','helper-observed'].includes(finish)){
+    const pending=finish.startsWith('helper')?iterator.map(row=>row):finish==='next'?iterator:db.prepare('SELECT id FROM probe').iterate();
+    if(finish==='other-iterator'){assert.equal(pending.next().value.id,1);iterator.return();}
+    journal++;assert.throws(()=>pending.next(),{code:'index_unavailable'});
+    assert.throws(()=>db.prepare('SELECT 1'),{code:'index_unavailable'});
+    // Cancellation must still release native resources after guard refusal.
+    // A helper is already done after its source throws; close the source itself.
+    assert.throws(()=>(finish.startsWith('helper')?iterator:pending).return(),{code:'index_unavailable'});
+  }else if(finish==='return')iterator.return();
+  else if(finish==='for-of'){for(const row of iterator){assert.equal(row.id,2);break;}}
+  else if(finish==='close')db.close();
+  else db[Symbol.dispose]();
+  if(native.isOpen){
+    if(!['next','other-iterator','helper','helper-observed'].includes(finish))journal++;
+    assert.equal(statement.get().id,1,'completed/cancelled cursors allow legitimate recreation');
+    const completed=statement.iterate();assert.equal([...completed].length,3);
+    journal++;assert.equal(statement.get().id,1,'exhaustion releases iterator tracking');
+    const disposable=statement.iterate();disposable.next();
+    if(typeof disposable[Symbol.dispose]==='function')disposable[Symbol.dispose]();else disposable.return();
+    journal++;assert.equal(statement.get().id,1,'iterator disposal releases tracking when supported');
+    db.close();
+  }else assert.equal(native.isOpen,false);
+});
+
 
 test('P2d fix round 1 DELETE journal recreation between released snapshots preserves locks and availability',async t=>{
   const f=setup(t,'DELETE'),w=await writer(t,f.path,'DELETE');await w.call('journal');

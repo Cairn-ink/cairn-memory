@@ -580,3 +580,178 @@ actively supervised through logs, actual progress and exit codes. Managed
 runners verified child/process-group cleanup before returning. Temporary
 archives, logs and the private offline cache are removed at handoff; no task
 is left running or promised unattended supervision.
+
+## Fix round 2
+
+This round starts at `832e9977` and addresses both re-reviews' two distinct P1
+findings. The preceding report is retained byte-for-byte, including the
+accepted C-4 delta v1.1.1. The quiescence rule below supersedes round 1's
+assumption that `!isTransaction` alone identifies a released snapshot.
+
+### Findings, fixes and regressions
+
+| Finding | Fix | Regression |
+| --- | --- | --- |
+| Both reviews: handled repair-incumbent corruption overwrites the terminal initializer error | Creation replay records every native failure but uses only the child's acknowledged terminal result for public mapping, including when the transcript is incomplete. A handled failure cannot replace a later native or filesystem error. Missing terminal acknowledgement still refuses and marks coverage incomplete. | Three actual DELETE-sidecar repair tests inject incumbent SQLITE_CORRUPT (11), then initializer BUSY (5), CANTOPEN (14), or FULL (13). Public `refreshContextIndex` returns `storage_busy` (retryable) for BUSY and `index_unavailable` (not retryable) for CANTOPEN/FULL. Supervisor telemetry retains the preceding parent schema failure, incumbent corruption, and exact terminal journal-mode failure with complete coverage. Each case then repairs successfully on a distinct refresh and drains. |
+| Standards: an unfinished native iterator retains an implicit read snapshot while `isTransaction` is false | Each admitted connection counts synchronous native calls and retains every iterator until exhaustion, successful `return()`/disposal, or connection close/disposal. DELETE journal identity adoption requires no explicit transaction, no active call, and no active iterator. Inherited iterator helpers consume the guarded receiver. Iterator cancellation and connection disposal can release resources after a guard refusal; iterator cancellation still runs the strict post-check. All ordinary pre/post checks, main/directory protections, WAL/SHM identity continuity and native BUSY preservation remain enforced. | Native SQLite iterators yield their first row with `isTransaction === false`; replacing the protected journal inode then makes the next `next()` refuse. A second case closes one of two iterators and proves the remaining iterator still prevents adoption. A native UDF that attempts a nested statement after journal replacement proves an active synchronous call cannot adopt it. Helper traversal also checks the protected source on each step. Cancellation after refusal releases the cursor. Additional cases cover explicit return, for-of break, exhaustion, connection close and connection disposal, plus iterator disposal where supported; subsequent completed-statement boundaries accept legitimate recreation. The existing independent-writer recreation/lock regression remains in the required set. |
+
+Contract check: [product contract §8.1](context-read-product.md#81-error-
+contract) assigns unusable indexes to `index_unavailable`; it does not
+prescribe a separate numeric FULL mapping. FULL during required sidecar
+initialization leaves the index unusable, so its public result remains
+`index_unavailable`. BUSY remains `storage_busy`; only that outcome is
+retryable.
+
+The iterator regression uses native SQLite statements and metadata-only
+synthetic journal identities. It never replaces an actual SQLite journal or
+opens a raw descriptor while SQLite locks are held. No runtime allowlist,
+SQLite import boundary, default capability bytes, frozen contract, generated
+runtime or accepted delta is changed.
+
+### Regression proof and commands
+
+A task-owned `git archive 832e9977` received only the changed WAL test and
+Worker fixture. On **each** Node 22.16.0 and 24.15.0:
+
+```sh
+"$p2d_node" tools/testing/run.mjs --test-reporter=tap --test-concurrency=1 --test-name-pattern='P2d fix round 2' core/test/context-read-product-wal.test.mjs
+```
+
+The baseline command exited **1**: **12 tests, 8 failures, 4 passes, zero
+skips**. All three repair mappings, both unfinished-iterator cases, both
+plain/observed helper traversal cases and reentrant statement replacement fail
+at their public-result/refusal assertions. Iterator-helper traversal also
+refuses rather than bypassing the guarded source. The identical fixed-source
+command exited **0** on each runtime: **12/12 pass, zero skips**. The archive
+contains no implementation changes.
+
+The first development run of the same selected command on Node 22 exited **1**
+(4/8 pass): the new assertions omitted the parent schema failure from the
+expected telemetry ledger, and the mock's old inode getter incorrectly
+followed later inode changes. Correcting those test fixtures produced exit
+**0** (8/8); the additional two-iterator, iterator-helper (plain and observed)
+and reentrant-statement cases bring the final count to 12. An added iterator-
+helper development run exited **1** on each runtime (9/10 pass): after the
+source throws, the helper itself is already done, so cleanup must return the
+still-active source iterator. The corrected regression retains both the
+guarded-next refusal and the explicit source-cleanup assertion. No public-
+result assertion was weakened.
+
+Final verification expands the same required explicit-path inventory as round
+1. Its 53 paths were selected from that table and independently from `rg --files` using the required test families: **53 paths, zero differences**.
+Each path runs serially, with the selected Node directory first on PATH:
+
+```sh
+"$p2d_node" --version
+"$p2d_node" tools/testing/run.mjs --import "$p2d_verification/npm-cache-only.mjs" --test-reporter=tap --test-concurrency=1 "$p2d_test"
+```
+
+The version commands exited **0** and printed `v22.16.0` / `v24.15.0`. The
+temporary preload confines npm subprocesses to a task-owned offline cache
+seeded from 15 already-cached package bodies and four public packuments,
+retaining their cached Accept variants. Existing installed MCP/tokenizer
+dependencies were used unchanged. No network or key operation is involved.
+
+| Explicit path | Node 22.16.0 exit (pass) | Node 24.15.0 exit (pass) |
+| --- | ---: | ---: |
+| `adapters/mcp/test/context-read-default-entropy.test.mjs` | 0 (1) | 0 (1) |
+| `adapters/mcp/test/context-read-sources.test.mjs` | 0 (4) | 0 (4) |
+| `core/test/context-read-assembly-races.test.mjs` | 0 (7) | 0 (7) |
+| `core/test/context-read-assembly-readonly.test.mjs` | 0 (28) | 0 (28) |
+| `core/test/context-read-assembly.test.mjs` | 0 (20) | 0 (20) |
+| `core/test/context-read-bm25.test.mjs` | 0 (3) | 0 (3) |
+| `core/test/context-read-budget.test.mjs` | 0 (5) | 0 (5) |
+| `core/test/context-read-core.test.mjs` | 0 (26) | 0 (26) |
+| `core/test/context-read-default-entropy.test.mjs` | 0 (1) | 0 (1) |
+| `core/test/context-read-embedder.test.mjs` | 0 (5) | 0 (5) |
+| `core/test/context-read-fusion.test.mjs` | 0 (4) | 0 (4) |
+| `core/test/context-read-local-embedder.test.mjs` | 0 (38) | 0 (38) |
+| `core/test/context-read-local-status.test.mjs` | 0 (3) | 0 (3) |
+| `core/test/context-read-moc-source.test.mjs` | 0 (15) | 0 (15) |
+| `core/test/context-read-process.test.mjs` | 0 (1) | 0 (1) |
+| `core/test/context-read-product-artifact.test.mjs` | 0 (1) | 0 (1) |
+| `core/test/context-read-product-control.test.mjs` | 0 (83) | 0 (83) |
+| `core/test/context-read-product-import.test.mjs` | 0 (2) | 0 (2) |
+| `core/test/context-read-product-index.test.mjs` | 0 (65) | 0 (65) |
+| `core/test/context-read-product-pump.test.mjs` | 0 (18) | 0 (18) |
+| `core/test/context-read-product-service.test.mjs` | 0 (2) | 0 (2) |
+| `core/test/context-read-product-wal.test.mjs` | 0 (85) | 0 (85) |
+| `core/test/context-read-product.test.mjs` | 0 (126) | 0 (126) |
+| `core/test/context-read-recovery.test.mjs` | 0 (10) | 0 (10) |
+| `core/test/context-read-review.test.mjs` | 0 (10) | 0 (10) |
+| `core/test/context-read-sidecar.test.mjs` | 0 (17) | 0 (17) |
+| `core/test/context-read-source-work.test.mjs` | 0 (7) | 0 (7) |
+| `core/test/context-read-sources-authority.test.mjs` | 0 (6) | 0 (6) |
+| `core/test/context-read-sources-bounds.test.mjs` | 0 (5) | 0 (5) |
+| `core/test/context-read-sources-races.test.mjs` | 0 (16) | 0 (16) |
+| `core/test/context-read-sources.test.mjs` | 0 (14) | 0 (14) |
+| `core/test/context-read-tokenize.test.mjs` | 0 (2) | 0 (2) |
+| `core/test/no-raw-db-fd.test.mjs` | 0 (5) | 0 (5) |
+| `core/test/sqlite-journal-probe.test.mjs` | 0 (23) | 0 (23) |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 (16) | 0 (16) |
+| `core/test/topic-members-bounds.test.mjs` | 0 (7) | 0 (7) |
+| `core/test/topic-members-compatibility.test.mjs` | 0 (32) | 0 (32) |
+| `core/test/topic-members-integration.test.mjs` | 0 (1) | 0 (1) |
+| `core/test/topic-members-mutations.test.mjs` | 0 (20) | 0 (20) |
+| `core/test/topic-members-primary.test.mjs` | 0 (26) | 0 (26) |
+| `core/test/topic-members-recheck-findings.test.mjs` | 0 (33) | 0 (33) |
+| `core/test/topic-members-review-findings.test.mjs` | 0 (7) | 0 (7) |
+| `core/test/topic-members-round3-findings.test.mjs` | 0 (18) | 0 (18) |
+| `core/test/topic-members-scale.test.mjs` | 0 (2) | 0 (2) |
+| `core/test/topic-members-visibility.test.mjs` | 0 (10) | 0 (10) |
+| `core/test/topic-members.test.mjs` | 0 (10) | 0 (10) |
+| `core/test/topic-overview-lifecycle.test.mjs` | 0 (11) | 0 (11) |
+| `core/test/topic-overview-raw29.test.mjs` | 0 (22) | 0 (22) |
+| `core/test/topic-overview-visibility.test.mjs` | 0 (8) | 0 (8) |
+| `core/test/topic-overview.test.mjs` | 0 (4) | 0 (4) |
+| `core/test/topic-reader-cancellation.test.mjs` | 0 (6) | 0 (6) |
+| `core/test/topic-reader-sqlite.test.mjs` | 0 (21) | 0 (21) |
+| `packaging/test/topic-overview-raw29.test.mjs` | 0 (3) | 0 (3) |
+
+Node 22.16.0: **53 paths, 915 passing tests, all final exits 0, zero skips**.
+
+Node 24.15.0: **53 paths, 915 passing tests, all final exits 0, zero skips**.
+
+The 106-command matrix orchestrator exited **0**. Its original Node 22 WAL
+command exited **0** (84/84). After the final observed-helper regression and
+helper binding adjustment, the affected artifact and WAL paths were each rerun
+separately on Node 22 using the same command above: **two exits of 0**,
+respectively **1/1 artifact** and **85/85 WAL**, zero skips. Node 24 already
+ran both paths after that edit: **1/1 artifact**, **85/85 WAL**, exits **0**.
+The table uses the final per-path results. Installed closure verification
+therefore includes the final source on both runtimes.
+
+All four changed JavaScript files passed `"$p2d_node" --check "$p2d_file"` on
+both runtimes: **eight individual exits of 0**. The installed artifact still
+cross-checks its manifest/archive filesystem and independently derived Worker
+closure; lazy SQLite import, historical default bytes, entropy, raw-descriptor
+guards and actual lock-safety tests all pass in the explicit set.
+
+Final installed-artifact counts remain **308 manifest = 308 installed files**,
+**87 source = 87 installed = 87 independently derived closure files**, zero
+differences; the static SQLite-free closure is **23**. Tar pack and unpack
+each exited **0**.
+
+### Changed files and final checks
+
+The inventory was derived with `git diff --name-only -z HEAD` plus `git ls-files --others --exclude-standard -z`, then independently with `git status --porcelain=v1 -z`. Diffing the sorted lists exited **0**: **5 files, zero
+differences**, including runtime, tests, the Worker fixture and this report.
+
+```text
+core/context-product-sqlite.mjs
+core/context-product-telemetry.mjs
+core/test/context-read-product-wal.test.mjs
+core/test/fixtures/context-product-wal-worker.mjs
+docs/plans/context-read-p2d-impl.md
+```
+
+`git diff --check` and the added-text whitespace/final-newline/private-path
+scan exited **0**. Comparing the original report bytes with the complete
+prefix at `832e9977` exited **0**; the accepted C-4 delta v1.1.1 and frozen
+contract are unchanged. No runtime allowlist entries were added.
+
+No timing tests, network/key operations, generated runtime changes or commit
+were performed. Test commands were actively supervised through progress logs
+and actual exits; managed runners checked child/process-group cleanup. All
+task-owned temporary archives, logs and the private cache were removed after
+verification; no test or monitoring task is left running.

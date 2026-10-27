@@ -85,7 +85,7 @@ export function nativeObserver(initialFrame) {
       let received=false;
       try {
         const result=work(), opened=new Set();
-        let pending, count=0, firstFailure;
+        let pending, count=0;
         let valid=result?.complete===true && Array.isArray(result.events);
         for(const event of Array.isArray(result?.events)?result.events:[]) {
           if(event.begin){
@@ -100,7 +100,7 @@ export function nativeObserver(initialFrame) {
               !o.ok && (!Number.isInteger(o.extendedCode) || o.extendedCode<0))valid=false;
             if(!NATIVE_STAGES.includes(b.stage) || !NATIVE_STATEMENTS.includes(b.statement)){pending=undefined;continue;}
             const error=o.ok?null:Object.assign(Error('sqlite_file_creation_failed'),{code:'ERR_SQLITE_ERROR',errcode:o.extendedCode});
-            try{invoke(b.stage,b.statement,()=>{if(error)throw error;});}catch(failure){firstFailure??=failure;}
+            try{invoke(b.stage,b.statement,()=>{if(error)throw error;});}catch{/* Replay records handled failures as well as the terminal one. */}
             if(b.stage==='open' && o.ok)opened.add(b.database);
             if(b.stage==='close')opened.delete(b.database);
             count++;pending=undefined;
@@ -110,9 +110,9 @@ export function nativeObserver(initialFrame) {
         if(v && pending){increment(v,0);increment(v,5);}
         if(v && !valid)Atomics.store(v,6,1);
         received=true;
-        // Replay precedes public mapping. Preserve native primary/extended codes
-        // even when a transcript is incomplete or a later filesystem call fails.
-        if(firstFailure?.errcode && (!valid || result.value?.error))throw firstFailure;
+        // Only the acknowledged terminal result controls public mapping. Earlier
+        // failures may have been handled (for example, a corrupt repair incumbent).
+        // Keep them in telemetry even when the transcript is incomplete.
         const value=result?.value;
         if(value?.error)throw Object.assign(Error('sqlite_file_creation_failed'),{
           code:Number.isInteger(value.errcode)?'ERR_SQLITE_ERROR':value.error,

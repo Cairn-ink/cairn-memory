@@ -22,7 +22,8 @@ if(behavior.startsWith('init-')){
       const [_,boundary,code='14']=behavior.split('-');
       const failure=`Object.assign(Error('private initialization fault'),{code:'ERR_SQLITE_ERROR',errcode:${Number(code)}})`;
       if(boundary==='open')args[2]=args[2].replace('new DatabaseSync(path,options)',`(()=>{if(role==='initialize')throw ${failure};return new DatabaseSync(path,options);})()`);
-      if(['mode','execute','truncatedbusy'].includes(boundary))args[2]=args[2].replace('native.exec(sql)',`(()=>{if(role==='initialize' && ${boundary!=='execute'?"sql.startsWith('PRAGMA journal_mode=')":"stage==='begin'"})throw ${failure};return native.exec(sql);})()`);
+      if(['mode','execute','truncatedbusy','repair'].includes(boundary))args[2]=args[2].replace('native.exec(sql)',`(()=>{if(role==='initialize' && ${boundary!=='execute'?"sql.startsWith('PRAGMA journal_mode=')":"stage==='begin'"})throw ${failure};return native.exec(sql);})()`);
+      if(boundary==='repair')args[2]=args[2].replace('native.prepare(sql)',`(()=>{if(role==='incumbent')throw Object.assign(Error('private incumbent corruption'),{code:'ERR_SQLITE_ERROR',errcode:11});return native.prepare(sql);})()`);
       if(boundary==='close')args[2]=args[2].replace('()=>native.close()',`()=>{native.close();if(role==='initialize')throw ${failure};}`);
       // Also target the historical child so the same regression reproduces
       // the review defect at 1c769bdb, rather than relying on new syntax alone.

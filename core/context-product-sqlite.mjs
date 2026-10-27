@@ -78,20 +78,26 @@ export function createProductSqlitePolicy({ observer, now = () => Number(process
         openingFailure(error);
       }
       const db = policy.database(observed, mode === 'WAL');
+      let activeStatements = 0;
+      const activeIterators = new Set();
       // Check before and after prepare/step/transaction. Wrapping outside
       // the wait policy also covers cached statements and iterator disposal.
-      function call(object, key, args) {
+      function call(object, key, args, complete = value => value, disposing = false) {
         // Rollback and query_only restoration must release the pinned native
         // connection even after replacement/refusal. They read no storage.
         if (key === 'exec' && /^\s*(?:ROLLBACK\s*$|PRAGMA query_only=)/i.test(args[0])) return Reflect.apply(object[key], object, args);
-        check({betweenSnapshots: mode === 'DELETE' && !observed.isTransaction});
+        // isTransaction only reports explicit transactions. An unfinished
+        // iterator can retain an implicit read snapshot while it is false.
+        if (!disposing) check({betweenSnapshots: mode === 'DELETE' && !observed.isTransaction &&
+          activeStatements === 0 && activeIterators.size === 0});
         let result;
-        try { result = Reflect.apply(object[key], object, args); }
+        activeStatements++;
+        try { result = complete(Reflect.apply(object[key], object, args)); }
         catch (error) {
           // Companion races cannot overwrite a committed native BUSY outcome.
           try { check(); } catch { /* Retain the original native outcome. */ }
           openingFailure(error);
-        }
+        } finally { activeStatements--; }
         check();
         return result;
       }
@@ -101,16 +107,28 @@ export function createProductSqlitePolicy({ observer, now = () => Number(process
           const value = Reflect.get(object, key, object);
           if (typeof value !== 'function') return value;
           return (...args) => {
-            const result = call(object, key, args);
-            return key === 'iterate' ? iterator(result) : result;
+            return call(object, key, args, value => key === 'iterate' ? iterator(value) : value);
           };
         } });
       }
       function iterator(target) {
+        activeIterators.add(target);
         const wrapped = new Proxy(target, { get(object, key) {
           if (key === Symbol.iterator) return () => wrapped;
+          if (key === 'constructor') return object.constructor;
           const value = Reflect.get(object, key, object);
-          return typeof value === 'function' ? (...args) => call(object, key, args) : value;
+          if (typeof value !== 'function') return value;
+          const disposing = key === 'return' || key === Symbol.dispose;
+          // Iterator helpers must consume the guarded receiver, so their own
+          // next()/return() calls cannot bypass snapshot tracking or checks.
+          if (!['next', 'return', 'throw'].includes(key) && !disposing) {
+            const helper = Reflect.get(Object.getPrototypeOf(object), key, wrapped);
+            return (typeof helper === 'function' ? helper : value).bind(wrapped);
+          }
+          return (...args) => call(object, key, args, result => {
+            if (disposing || result?.done === true) activeIterators.delete(object);
+            return result;
+          }, disposing);
         } });
         return wrapped;
       }
@@ -119,7 +137,11 @@ export function createProductSqlitePolicy({ observer, now = () => Number(process
         const value = Reflect.get(object, key, object);
         if (typeof value !== 'function') return value;
         // Always dispose native connections even if a file was replaced.
-        if (key === 'close') return value.bind(object);
+        if (key === 'close' || key === Symbol.dispose) return (...args) => {
+          const result = Reflect.apply(value, object, args);
+          activeIterators.clear();
+          return result;
+        };
         return (...args) => {
           const result = call(object, key, args);
           return key === 'prepare' ? statement(result) : result;
