@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { openContextProductReader, createContextReadSupervisor } from '../index.mjs';
+import { credentialDigest, PRODUCT_PROFILE } from '../context-product-control.mjs';
 import { openMemoryReader } from '../memory-reader.mjs';
 import { memberFixture, namespace } from '../testing/topic-members-fixture.mjs';
 import { assertContextReadReadOnlyAuxiliaries, openContextReadSidecar } from '../context-read-sidecar.mjs';
@@ -100,6 +103,51 @@ test('context canonical preflight preserves an existing host read lock', t => {
     assert.deepEqual(child(f.path, 'exclusive-transaction'), { code: 5 });
     assert.deepEqual(f.db.prepare('SELECT store_id FROM store_metadata').get(), before);
   } finally { f.db.exec('ROLLBACK'); }
+});
+test('DELETE: product open, capabilities, fetch and Worker exit preserve host writer locks', async t => {
+  const f = memberFixture(t, { mode: 'DELETE' }), memory = f.admit('product lock safety');
+  const supervisor = createContextReadSupervisor(); t.after(() => supervisor.close());
+  const credential = { nonce: randomUUID() }, state = new SharedArrayBuffer(32);
+  new Int32Array(state)[0] = 1;
+  const requestControl = { requestId: randomUUID(), handleId: randomUUID(), credentialBindingId: randomUUID(),
+    credentialExpiresUtcMs: null, requestMaxMs: 5000 };
+  const readSet = [namespace], ownerCoverage = { policy: 'recent-projects-v1', selectionRevision: 'synthetic',
+    requestedNamespaces: 1, selectedNamespaces: 1, omittedNamespaces: 0 };
+  const binding = { kind: 'request', ...requestControl, ownerId: namespace.ownerId,
+    namespaces: { readSet, ownerCoverage }, issuedAt: 1, credentialDigest: credentialDigest(credential) };
+  delete binding.requestMaxMs;
+  const input = { readSet, intent: 'current', refs: [{ type: 'memory', namespace,
+    memoryId: memory.id, revision: memory.revision }] };
+  let reader;
+  // No journal yet: both opening and fetch must reach the SQLite mode probe.
+  // A raw header close here would silently release this RESERVED lock.
+  f.db.exec('BEGIN IMMEDIATE');
+  try {
+    locked(f.path);
+    reader = await openContextProductReader({ supervisor, path: f.path, version: 'context-read-v1',
+      profile: PRODUCT_PROFILE, readSet, ownerCoverage, requestControl,
+      host: { moduleUrl: new URL('../testing/context-product-host.mjs', import.meta.url).href,
+        configuration: { requestBinding: binding, state, requestReservation: new SharedArrayBuffer(4) } } });
+    locked(f.path);
+    const capabilities = await reader.getContextReadCapabilities();
+    assert.equal(capabilities.ok, true, JSON.stringify(capabilities));
+    locked(f.path);
+    const fetched = await reader.fetchCandidateEvidence(input, credential);
+    assert.equal(fetched.ok, true, JSON.stringify(fetched));
+    assert.equal(fetched.value.items[0].content, memory.content);
+    locked(f.path);
+    // Once an actual write creates a journal, ready() must refuse safely too.
+    f.db.exec('UPDATE store_metadata SET store_id=store_id WHERE singleton=1');
+    assert.deepEqual(await reader.fetchCandidateEvidence(input, credential),
+      { ok: false, error: { code: 'index_unavailable', retryable: false } });
+    locked(f.path);
+    await reader.close(); locked(f.path);
+    f.db.exec('COMMIT');
+    assert.deepEqual(child(f.path, 'BEGIN IMMEDIATE'), { rows: [] });
+  } finally {
+    await reader?.close();
+    if (f.db.isTransaction) f.db.exec('ROLLBACK');
+  }
 });
 test('store fence check and close preserve same-process SQLite locks', t => {
   const f = memberFixture(t); f.admit('fence');

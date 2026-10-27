@@ -19,24 +19,31 @@ function identity(path) {
   }
   return stat;
 }
-export function openReadDatabase(path, { contextRead = false, topicMembers = false, deferTopicValidation = false, topicPolicy, preflight } = {}) {
+// Worker preflight handoff: safe identity before any native connection opens.
+export function contextProductFileIdentity(path) {
+  const stat = identity(path); return `${stat.dev}:${stat.ino}`;
+}
+export function openReadDatabase(path, { contextRead = false, topicMembers = false, deferTopicValidation = false, topicPolicy, nativeObserver, preflight, validateProduct } = {}) {
   const initial = identity(path);
+  nativeObserver?.identity?.(`${initial.dev}:${initial.ino}`);
   preflight?.();
   let native;
-  try { native = new DatabaseSync(path, { readOnly: true }); }
+  try { native = nativeObserver ? nativeObserver.invoke('open', 'connection', () => new DatabaseSync(path, { readOnly: true })) : new DatabaseSync(path, { readOnly: true }); }
   catch (error) { throw recordSqliteFailure(error, 'open', 'connection'); }
   let db = native;
   try {
-    try { native.exec(`PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=${contextRead ? 5000 : 0};`); }
+    if (nativeObserver) db = nativeObserver.database(native);
+    try { (nativeObserver ? db : native).exec(`PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=${contextRead && !nativeObserver ? 5000 : 0};`); }
     catch (error) { throw recordSqliteFailure(error, 'configure', 'reader_configuration'); }
     let wal = false;
     if (topicPolicy) {
       wal = topicJournalMode(native, path, topicPolicy, { deferQueryErrors: true }) === 'WAL';
     }
-    db = topicPolicy ? topicPolicy.database(native, wal) : native;
+    if (!nativeObserver && topicPolicy) db = topicPolicy.database(native, wal);
     const current = identity(path);
     if (initial.dev !== current.dev || initial.ino !== current.ino) fail('unsafe_database_file');
     const validate = () => {
+    validateProduct?.(db);
     if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID ||
         !(contextRead ? CONTEXT_READ_SCHEMA_VERSIONS : READ_SCHEMA_VERSIONS).includes(db.prepare('PRAGMA user_version').get().user_version)) fail('unsupported_database');
     // Member reads validate only consumed Memory metadata and seek paths below;
@@ -44,7 +51,9 @@ export function openReadDatabase(path, { contextRead = false, topicMembers = fal
     if (!topicMembers && db.prepare('PRAGMA user_version').get().user_version < 33) assertNoCardCurrentDependencies(db);
     if (!topicMembers && db.prepare('PRAGMA user_version').get().user_version < 32) assertNoRoleProfiles(db);
     if (!topicMembers && db.prepare('PRAGMA user_version').get().user_version < 31) assertNoAssets(db);
-    if (!topicMembers && db.prepare('PRAGMA user_version').get().user_version >= 30) validateExistingStore(db, {
+    // Product attestation above is metadata-only; full-store content checks
+    // belong to legacy openers, never to unauthenticated product bootstrap.
+    if (!validateProduct && !topicMembers && db.prepare('PRAGMA user_version').get().user_version >= 30) validateExistingStore(db, {
       storeId: db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id });
     if (topicMembers) {
       // Attest version boundaries from schema metadata, never private data rows.
@@ -91,7 +100,7 @@ export function openReadDatabase(path, { contextRead = false, topicMembers = fal
     if (!(topicMembers && deferTopicValidation)) {
       if (contextRead) readTransaction(db, validate); else validate();
     }
-    return { db, assertFile() {
+    return { db, fileIdentity: `${initial.dev}:${initial.ino}`, assertFile() {
       const stat = identity(path);
       if (stat.dev !== initial.dev || stat.ino !== initial.ino) fail('cursor_stale');
     } };

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
@@ -84,7 +84,14 @@ for (const schema of [18, 29]) test(`physical schema${schema} fixture supports p
   const copiedGraph = installedImportClosure(dirname(dirname(fileURLToPath(candidate.readerUrl))), entries);
   assert.deepEqual(copiedGraph.required, [...originalGraph.required, 'core/measurement-database.mjs'].sort());
   const originalSource = readFileSync(new URL('../../core/read-database.mjs', import.meta.url), 'utf8');
-  assert.match(originalSource, /busy_timeout=\$\{contextRead \? 5000 : 0\}/);
+  assert.match(originalSource, /busy_timeout=\$\{contextRead && !nativeObserver \? 5000 : 0\}/);
+  const candidateSource = readFileSync(join(workspace.path, 'candidate/core/read-database.mjs'), 'utf8');
+  assert.doesNotMatch(candidateSource, /PRAGMA busy_timeout=/);
+  const journalAt = candidateSource.indexOf('wal = topicJournalMode(');
+  const measurementAt = candidateSource.indexOf('native = measurementDatabase(native, performance);');
+  const policyAt = candidateSource.indexOf('if (!nativeObserver) db = topicPolicy ? topicPolicy.database(native, wal) : native;');
+  assert.ok(journalAt >= 0 && journalAt < measurementAt && measurementAt < policyAt,
+    'measure native calls after journal probing and before topic policy wrapping');
   for (const variant of ['as-is', 'bounded']) {
     const { openMemoryReader } = await import(variant === 'bounded' ? candidate.readerUrl : new URL('../../core/memory-reader.mjs', import.meta.url).href);
     const reader = openMemoryReader({ path, ownerId: namespaces[0].ownerId });
@@ -108,7 +115,7 @@ for (const schema of [18, 29]) test(`physical schema${schema} fixture supports p
   const walWriter = await openWriter(path, 'same-owner');
   try {
     await publicWrite(walWriter, 'same-owner', 3);
-    assert.ok(readFileSync(path + '-wal').length >= 32);
+    assert.ok(statSync(path + '-wal').size >= 32);
     for (const url of [new URL('../../core/memory-reader.mjs', import.meta.url).href, candidate.readerUrl]) {
       const { openMemoryReader } = await import(url);
       const reader = openMemoryReader({ path, ownerId: namespaces[0].ownerId });

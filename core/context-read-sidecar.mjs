@@ -33,11 +33,11 @@ function protectedFile(path, required = true) {
     unavailable('unsafe_file');
   return value;
 }
-function walHeader(path) {
+function walHeader(path, observer) {
   protectedFile(path);
   let result;
-  try { result = probeRollbackJournal(path); }
-  catch { unavailable('unsafe_file'); }
+  try { result = probeRollbackJournal(path, observer ? { observe: observer.journalProbe } : {}); }
+  catch (error) { if (observer && error?.code === 'ERR_SQLITE_ERROR') throw error; unavailable('unsafe_file'); }
   if (result.stage === 'open') unavailable('unsafe_file');
   // nolock SQLite refuses WAL with CANTOPEN before it can create companions.
   // Other malformed/inaccessible files fail closed through ordinary validation.
@@ -46,18 +46,19 @@ function walHeader(path) {
   return result.code === 14 || result.mode !== 'delete';
 }
 
-function auxiliaries(path, readOnly) {
+function auxiliaries(path, readOnly, observer) {
   for (const suffix of ['-wal', '-shm', '-journal']) {
     const entry = protectedFile(path + suffix, false);
     if (entry && (readOnly || suffix !== '-journal')) unavailable('auxiliary_file');
   }
   // A checkpointed WAL database can have no auxiliary files. Inspect its
   // mode through isolated SQLite before a host connection can create WAL/SHM.
-  if (readOnly && protectedFile(path, false) && walHeader(path)) unavailable('auxiliary_file');
+  if (readOnly && protectedFile(path, false) && walHeader(path, observer)) unavailable('auxiliary_file');
 }
 /** Part-2 openers must call this after canonical path validation and BEFORE
  * constructing either SQLite connection. Missing files retain opener precedence;
  * this probe only refuses auxiliaries and non-rollback modes, without recovery. */
+export function assertContextReadCanonicalDelete(path, observer) { auxiliaries(path, true, observer); }
 export function assertContextReadReadOnlyAuxiliaries(path) {
   auxiliaries(path, true);
   auxiliaries(path + '.context-read-v1.sqlite', true);
