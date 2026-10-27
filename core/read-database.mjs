@@ -27,14 +27,19 @@ export function openReadDatabase(path, { contextRead = false, topicMembers = fal
   const initial = identity(path);
   nativeObserver?.identity?.(`${initial.dev}:${initial.ino}`);
   preflight?.();
-  const wal = topicPolicy ? topicJournalMode(path, initial) === 'WAL' : false;
   let native;
   try { native = nativeObserver ? nativeObserver.invoke('open', 'connection', () => new DatabaseSync(path, { readOnly: true })) : new DatabaseSync(path, { readOnly: true }); }
   catch (error) { throw recordSqliteFailure(error, 'open', 'connection'); }
-  const db = nativeObserver ? nativeObserver.database(native) : topicPolicy ? topicPolicy.database(native, wal) : native;
+  let db = native;
   try {
+    if (nativeObserver) db = nativeObserver.database(native);
     try { (nativeObserver ? db : native).exec(`PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=${contextRead && !nativeObserver ? 5000 : 0};`); }
     catch (error) { throw recordSqliteFailure(error, 'configure', 'reader_configuration'); }
+    let wal = false;
+    if (topicPolicy) {
+      wal = topicJournalMode(native, path, topicPolicy, { deferQueryErrors: true }) === 'WAL';
+    }
+    if (!nativeObserver && topicPolicy) db = topicPolicy.database(native, wal);
     const current = identity(path);
     if (initial.dev !== current.dev || initial.ino !== current.ino) fail('unsafe_database_file');
     const validate = () => {

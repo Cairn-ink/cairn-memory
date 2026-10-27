@@ -1,6 +1,6 @@
 import { lstat, mkdir, open, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { codexHome, inspectCodexServers, runCodex, snapshot } from './codex.mjs';
+import { codexHome, inspectCodexServers, runCodex, snapshot, codexEnvironmentCause } from './codex.mjs';
 import { sameVector, vectorArguments, boundedJSON, pidIsDead, localFilesystemError } from './local-descriptor.mjs';
 import { observedVector } from './local-claude.mjs';
 import { tomlString } from './output.mjs';
@@ -44,36 +44,40 @@ export async function codexCapabilities(env) {
   }
   return true;
 }
-export async function registerCodex({ root, checkpoint, env = process.env, write, t }) {
+export async function registerCodex({ root, checkpoint, env = process.env, write, t, inspection, capable }) {
   const home = dirname(checkpoint.destination), { desired } = checkpoint;
   try {
     const original = await lstat(codexHome(env));
     if (!original.isDirectory() || original.isSymbolicLink() || (process.getuid && original.uid !== process.getuid()) || (original.mode & 0o022)) throw new SetupError('codex_directory');
   } catch (error) { if (error.code !== 'ENOENT') throw localFilesystemError(error, 'codex_mcp_unverified'); }
   const manual = () => { write(t('local_manual_codex')); write.literal(codexSnippet(root, desired)); };
-  if (!await codexCapabilities(env)) { write(t('codex_mcp_required')); manual(); return 'manual'; }
+  if (!(capable ?? await codexCapabilities(env))) { write(t('codex_mcp_required')); manual(); return 'manual'; }
   return withCodexLock(home, async () => {
     await snapshot(join(home, 'config.toml'));
     const result = await runCodex(codexAddArguments(root, desired), { env: { ...env, CODEX_HOME: home } });
-    let verified = false;
+    let verified = false, environmentCause;
     if (!result.error && result.status === 0) {
       try {
-        const entries = await inspectCodexServers({ home, env });
+        const entries = await inspectCodexServers({ ...inspection, home, env });
         const local = entries.filter(entry => entry.name === 'cairn-local');
         verified = local.length === 1 && sameVector(observedVector(root, local[0]), desired);
-      } catch { /* Native inspection output stays private. */ }
+      } catch (error) { environmentCause = codexEnvironmentCause(error); }
     }
-    if (!verified) { manual(); throw new SetupError('codex_mcp_unverified'); }
+    if (!verified) { manual(); if (environmentCause) write(t(environmentCause)); throw new SetupError('codex_mcp_unverified'); }
     return 'done';
   });
 }
-export async function detachCodex({ env = process.env, home = codexHome(env) }) {
+export async function detachCodex({ env = process.env, home = codexHome(env), inspection, write, t }) {
   return withCodexLock(home, async () => {
     await snapshot(join(home, 'config.toml'));
     const result = await runCodex(['mcp', 'remove', 'cairn-local'], { env: { ...env, CODEX_HOME: home } });
     if (result.error || result.status !== 0) throw new SetupError('codex_mcp_unverified');
     let entries;
-    try { entries = await inspectCodexServers({ home, env }); } catch { throw new SetupError('codex_mcp_unverified'); }
+    try { entries = await inspectCodexServers({ ...inspection, home, env }); } catch (error) {
+      const cause = codexEnvironmentCause(error);
+      if (cause) write(t(cause));
+      throw new SetupError('codex_mcp_unverified');
+    }
     if (entries.some(entry => entry.name === 'cairn-local')) throw new SetupError('codex_mcp_unverified');
   });
 }
