@@ -28,7 +28,7 @@ globalThis.productTestDatabase=class extends Native {
     if(!this.side && sql==='COMMIT' && c.afterSnapshotRace && Atomics.load(state,7) && !Atomics.load(state,6)){
       mutate();Atomics.add(state,6,1);
     }
-    if(this.side && sql==='COMMIT' && this.checkpoint && c.crashAfterCheckpoint)process.exit(1);
+    if(this.side && sql==='COMMIT' && this.checkpoint && (c.crashAfterCheckpoint || (c.crashAtCheckpoint!==undefined && this.savedCheckpoint===c.crashAtCheckpoint)))process.exit(1);
     if(this.side && sql==='COMMIT' && this.publishing){this.publishing=false;Atomics.store(state,7,1);}
     return result;
   }
@@ -38,6 +38,7 @@ globalThis.productTestDatabase=class extends Native {
     const stmt=super.prepare(sql),native=this;
     return new Proxy(stmt,{get(target,key){const value=Reflect.get(target,key,target);if(typeof value!=='function')return value;
       return (...args)=>{if(/UPDATE generations SET published=1/.test(sql))native.publishing=true;if(/INSERT OR REPLACE INTO progress_records/.test(sql))native.checkpoint=true;const result=Reflect.apply(value,target,args);
+        if(/INSERT OR REPLACE INTO progress_records/.test(sql))native.savedCheckpoint=JSON.parse(args[1]).progress.checkpoint;
         if(native.side && /UPDATE statistics SET n=/.test(sql))native.batchMutated=true;
         return result;};}});
   }

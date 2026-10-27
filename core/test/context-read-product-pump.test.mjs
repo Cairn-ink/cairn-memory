@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { createMaintenancePumpRuntime } from '../context-product-pump.mjs';
 import { createContextReadSupervisor } from '../context-read-supervisor.mjs';
 import { credentialDigest } from '../context-product-control.mjs';
+import { fixture, ok } from '../testing/context-read-fixture.mjs';
+import { four, personal, project, configured, descriptor } from '../testing/context-product-owner-fixture.mjs';
 
 function setup(t,patch={},faults={}) {
   let now=0,serial=0;const timers=new Map(),calls=[],opened=[],closed=[];
@@ -149,4 +151,66 @@ for(const exhausted of [true,false])test(`Fix3 settled renewal expiry gets a fre
   assert.equal(p.completion,renewed);assert.equal(s.timers.size,0);
   assert.equal(await first,expired);assert.equal(expired.state,'renewal_expired');assert.equal(expired.usedItems,0);
   await p.close();
+});
+
+test('P2-06/09/18 active four/32 selections prebuild both intents through the pump with mock scheduling',async t=>{
+  const f=fixture(t),readSet=[personal,...Array.from({length:31},(_,i)=>project('p'+i))];
+  for(const ns of [...four,readSet[1]])f.admit('pump cache '+(ns.projectId??'personal'),ns);
+  const supervisor=createContextReadSupervisor();t.after(()=>supervisor.close());
+  const a=configured(t,f.path,four,{service:true,supervisor});
+  const ownerCoverage=descriptor(readSet,1),b=configured(t,f.path,[...readSet].reverse(),{service:true,supervisor,ownerCoverage});
+  b.binding.credentialDigest=a.binding.credentialDigest;
+  let now=0,serial=0;const timers=new Map();
+  const renew=createMaintenancePumpRuntime({now:()=>now,setTimer:(f,ms)=>{const id=++serial;timers.set(id,{f,at:now+ms});return id;},clearTimer:id=>timers.delete(id)});
+  const base={supervisor,window:{id:randomUUID(),endsAtMonoMs:60000,usedItems:0,usedMs:0},budgets:{maxItems:4096,maxMs:10000},
+    quantum:{maxItems:1024,maxMs:2500},pollMs:1,renewalMs:60000,serviceCredential:a.token};
+  // Activate each selection explicitly. Multi-selection round-robin is covered
+  // above with the same mock scheduler; native operation cutoffs are unchanged.
+  for(const options of [a.options,b.options]){
+    const c={...base,id:randomUUID(),projections:[{options,types:['memory']}]},pump=renew(c);
+    for(let i=0;i<2;i++){
+      assert.ok(timers.size,JSON.stringify(pump.getStatus()));
+      const [id,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];timers.delete(id);now=timer.at;await timer.f();
+      assert.equal(pump.getStatus().error,null);
+    }
+    const revision=structuredClone(options.host.configuration.serviceBinding);
+    const ownerCoverage={...options.ownerCoverage,selectionRevision:'next-revision'};revision.namespaces.ownerCoverage=ownerCoverage;
+    const changed={...c,projections:[{options:{...options,ownerCoverage,host:{...options.host,configuration:{...options.host.configuration,serviceBinding:revision}}},types:['memory']}]};
+    assert.throws(()=>renew(changed),{code:'read_in_progress'});
+    await pump.close();assert.equal(timers.size,0);await pump.completion;
+  }
+  for(const [set,coverage] of [[four,descriptor(four)],[readSet,ownerCoverage]]){
+    const r=configured(t,f.path,set,{ownerCoverage:coverage}),h=await r.open();
+    for(const intent of ['current','history']){
+      const input={readSet:set,types:['memory'],intent,deadlineMs:5000};
+      const status=ok(await h.getContextIndexStatus(input,r.token));assert.equal(status.lexical.state,'ready');
+      assert.equal(status.coverage.status,set.length===32?'partial':'complete');assert.deepEqual(status.coverage.namespaces,coverage);
+      assert.ok(ok(await h.findCandidates({...input,query:'cache'},r.token)).items.length>0);
+    }
+    assert.equal(r.view[5],0);await h.close();
+  }
+  assert.equal(a.view[5],0);assert.equal(b.view[5],0);
+});
+
+
+test('P2c fix1 pump renewal canonicalizes coverage key order and rejects a different selection',async t=>{
+  const s=setup(t),pump=s.renew(s.c);
+  const projections=s.c.projections.map(p=>({...p,options:{...p.options,
+    ownerCoverage:Object.fromEntries(Object.entries(p.options.ownerCoverage).reverse())}}));
+  assert.equal(s.renew({...s.c,projections}),pump);
+  assert.equal(s.timers.size,1);assert.equal(s.opened.length,0);
+  const changed=projections.map(p=>{
+    const ownerCoverage={...p.options.ownerCoverage,selectionRevision:'changed'};
+    const host=p.options.host,binding=host.configuration.serviceBinding;
+    return {...p,options:{...p.options,ownerCoverage,host:{...host,configuration:{...host.configuration,
+      serviceBinding:{...binding,namespaces:{...binding.namespaces,ownerCoverage}}}}}};
+  });
+  assert.throws(()=>s.renew({...s.c,projections:changed}),{code:'read_in_progress'});
+  assert.throws(()=>s.renew({...s.c,projections:[projections[0]]}),{code:'read_in_progress'});
+  const other=projections[1],readSet=[{ownerId:'pump',scope:'project',projectId:'different-project'}];
+  const host=other.options.host,binding=host.configuration.serviceBinding;
+  const selection={...other,options:{...other.options,readSet,host:{...host,configuration:{...host.configuration,
+    serviceBinding:{...binding,namespaces:{...binding.namespaces,readSet}}}}}};
+  assert.throws(()=>s.renew({...s.c,projections:[projections[0],selection]}),{code:'read_in_progress'});
+  await pump.close();
 });
