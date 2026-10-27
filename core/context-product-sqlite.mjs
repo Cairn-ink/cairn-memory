@@ -18,22 +18,26 @@ function protectedEntry(path, directory = false, optional = false) {
 }
 
 /** Metadata only: never acquire a raw database/companion descriptor. SQLite may
- * create/remove companions; a continuously present inode may not be replaced.
+ * create/remove companions. Journal identities span a snapshot or statement,
+ * not successive released snapshots; WAL/SHM identities span the connection.
  * The owner-only directory is the deployment's exclusion boundary. Concurrent
  * external mode changes and uncoordinated file replacement are unsupported. */
 export function productSqliteFiles(path) {
   const directory = protectedEntry(dirname(path), true), file = protectedEntry(path);
   const companions = new Map();
-  function check({ afterProbe = false } = {}) {
+  function check({ afterProbe = false, betweenSnapshots = false } = {}) {
     if (!same(directory, protectedEntry(dirname(path), true)) || !same(file, protectedEntry(path))) unavailable();
     for (const suffix of ['-wal', '-shm', '-journal']) {
       const current = protectedEntry(path + suffix, false, true), previous = companions.get(suffix);
+      // A protected DELETE journal may be recreated between snapshots even
+      // when no observation catches its absence. Never adopt within a native
+      // statement or pinned transaction; all protection checks still run.
       // Journal presence is only a detection hint. The caller's canonical
       // read-only connection cannot perform hot-journal recovery.
       // A last writer can remove companions during the opening probe;
       // SQLite may recreate them before our next lstat. Validate and adopt
       // those new identities only at this explicit opening boundary.
-      if (current && previous && !same(previous, current) && !afterProbe) unavailable();
+      if (current && previous && !same(previous, current) && !afterProbe && !(suffix === '-journal' && betweenSnapshots)) unavailable();
       if (current) companions.set(suffix, current); else companions.delete(suffix);
     }
   }
@@ -51,6 +55,13 @@ export function createProductSqlitePolicy({ observer, now = () => Number(process
     start: deadlineAt => policy.start(deadlineAt),
     files: productSqliteFiles,
     openingFailure,
+    initializationFailure(error) {
+      // The staged file is private to initialization. These outcomes mean the
+      // deployment cannot create/durably publish its required companions.
+      if(error?.code==='ERR_SQLITE_ERROR' && [3,8,10,13,14].includes(error.errcode & 255) ||
+        ['EACCES','EPERM','EROFS','ENOSPC','ENOTSUP','EOPNOTSUPP'].includes(error?.code))unavailable();
+      openingFailure(error);
+    },
     open(native, path) {
       const observed = observer ? observer.database(native) : native;
       // Configuration cannot take a storage lock. The mode query is the first
@@ -73,7 +84,7 @@ export function createProductSqlitePolicy({ observer, now = () => Number(process
         // Rollback and query_only restoration must release the pinned native
         // connection even after replacement/refusal. They read no storage.
         if (key === 'exec' && /^\s*(?:ROLLBACK\s*$|PRAGMA query_only=)/i.test(args[0])) return Reflect.apply(object[key], object, args);
-        check();
+        check({betweenSnapshots: mode === 'DELETE' && !observed.isTransaction});
         let result;
         try { result = Reflect.apply(object[key], object, args); }
         catch (error) {

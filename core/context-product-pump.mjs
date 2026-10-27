@@ -46,7 +46,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     // A configuration whose nominal round-robin sweep exceeds the required
     // five-second observation interval is invalid before any service work.
     if(projections.length*Math.max(c.pollMs,quantum.maxMs)>5000)fail('invalid_input');
-    const fingerprint=JSON.stringify(projections.map(p=>[p.options.path,p.options.readSet,p.types,p.intent,p.options.host.moduleUrl,...(p.options.wal===true?[true,p.options.sidecarJournalMode]:[])]));
+    const fingerprint=JSON.stringify(projections.map(p=>[p.options.path,p.options.readSet,p.types,p.intent,p.options.host.moduleUrl,p.options.wal===true,p.options.sidecarJournalMode]));
     const domainOf=p=>JSON.stringify([resolve(p.options.path),p.options.readSet[0].ownerId,p.options.host.moduleUrl]);
     const domains=[...new Set(projections.map(domainOf))];
     const all=state(), old=all.entries.get(c.id);
@@ -101,7 +101,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       lastTick=now();
       return running=(async()=>{
         try {
-          const p=projections[at++%projections.length],key=JSON.stringify([p.options.path,p.options.readSet,p.options.host]),ledger=ledgers.get(domainOf(p));
+          const p=projections[at++%projections.length],key=JSON.stringify([p.options.path,p.options.readSet,p.options.host,p.options.wal===true,p.options.sidecarJournalMode]),ledger=ledgers.get(domainOf(p));
           const maxItems=Math.min(quantum.maxItems,ledger.maxItems-ledger.items),maxMs=Math.min(quantum.maxMs,ledger.maxMs-ledger.ms,Math.floor(ledger.endsAt-now()),Math.floor(renewedUntil-now()));
           if(maxItems<1||maxMs<1)return;
           // Reserve the full quantum before dispatch. Unknown usage remains

@@ -163,3 +163,13 @@ test('P2d pump forwards WAL opt-in and refuses journal-policy changes during ren
   for(const p of s.c.projections)p.options.wal='WAL';
   assert.throws(()=>s.renew({...s.c,id:randomUUID()}),{code:'invalid_input'});
 });
+
+test('P2d fix round 1 pump uses opted-out constructor for an otherwise identical projection',async t=>{
+  const s=setup(t),base=s.c.projections[0];
+  s.c.projections=[{...base,options:{...base.options,wal:true,sidecarJournalMode:'WAL'}},
+    {...base,options:{...base.options,wal:false,sidecarJournalMode:'DELETE'}}];
+  const pump=s.renew(s.c);for(let i=0;i<4;i++)await s.next();
+  assert.deepEqual(s.opened.map(o=>[o.wal,o.sidecarJournalMode]),[[true,'WAL'],[false,'DELETE']]);
+  assert.deepEqual(s.calls.map(([i])=>i.intent),['current','history','current','history']);
+  await pump.close();assert.equal(s.closed.length,2);
+});

@@ -3,7 +3,13 @@
 import { readFileSync, existsSync, copyFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 const [role, path, mode = 'WAL'] = process.argv.slice(2);
-if (role === 'copy') {
+if(role === 'pin-journal') {
+  // Pin the old inode in an isolated process so the next legitimate DELETE
+  // transaction cannot reuse its inode. No SQLite connection exists here.
+  const {openSync,closeSync}=await import('node:fs'),fd=openSync(path+'-journal','r');
+  process.on('message',({id,command})=>{if(command==='close'){closeSync(fd);process.send({id,ok:true});process.disconnect();}});
+  process.send({ready:true});
+} else if (role === 'copy') {
   copyFileSync(path, mode);
 } else if (role === 'old-pin') {
   const {openDatabase}=await import('./topic-overview-b2513501/core/database.mjs');
@@ -38,7 +44,13 @@ if (role === 'copy') {
         if (command === 'exclusive') db.exec('PRAGMA locking_mode=EXCLUSIVE; BEGIN EXCLUSIVE; UPDATE namespace_epochs SET epoch=epoch+1');
         if (command === 'exclusiveEmpty') db.exec('PRAGMA locking_mode=EXCLUSIVE; BEGIN EXCLUSIVE');
         if (command === 'reserved') db.exec('BEGIN IMMEDIATE');
+        if (command === 'journal') db.exec('BEGIN IMMEDIATE; UPDATE namespace_epochs SET epoch=epoch+1');
+        if (command === 'commitBlocked') {
+          try {db.exec('COMMIT');throw Error('missing reader lock');}
+          catch(error){if((error.errcode&255)!==5)throw error;}
+        }
         if (command === 'release') db.exec('ROLLBACK');
+        if (command === 'commit') db.exec('COMMIT');
         if (command === 'close') db.close();
         process.send({id,ok:true});
         if (command === 'close') process.disconnect();

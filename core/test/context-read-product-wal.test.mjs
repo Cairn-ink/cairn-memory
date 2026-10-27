@@ -1,9 +1,11 @@
 import test from 'node:test';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { randomUUID, createHash } from 'node:crypto';
 import { fork, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, renameSync, symlinkSync, writeFileSync, unlinkSync, readFileSync } from 'node:fs';
+import { chmodSync, existsSync, renameSync, symlinkSync, mkdirSync, writeFileSync, unlinkSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { Worker } from 'node:worker_threads';
@@ -303,7 +305,12 @@ test(`P2-21 WAL actual maintainer ${flag} has correct completion and fresh-reade
 
 test('P2-01/10 WAL opt-in is strict, default refusal and capability bytes stay identical',async t=>{
   const f=setup(t,'DELETE'),a=configured(t,f.path,{wal:false}),b=configured(t,f.path,{wal:false});delete a.options.wal;
-  const first=await a.open(),second=await b.open();assert.equal(JSON.stringify(await first.getContextReadCapabilities()),JSON.stringify(await second.getContextReadCapabilities()));
+  const first=await a.open(),second=await b.open();
+  // Frozen from 9a8f6fb7's capability factory and assembly constants, independent
+  // of either current constructor. Both default spellings must match its bytes.
+  const golden=readFileSync(new URL('./fixtures/context-product-capabilities-p2b.json',import.meta.url),'utf8').trimEnd();
+  assert.equal(JSON.stringify(await first.getContextReadCapabilities()),golden);
+  assert.equal(JSON.stringify(await second.getContextReadCapabilities()),golden);
   assert.deepEqual(ok(await first.getContextReadCapabilities()).journals,['DELETE']);await first.close();await second.close();
   run('mode',f.path,'WAL');const refused=configured(t,f.path,{wal:false});await assert.rejects(refused.open(),{code:'index_unavailable'});
   const service=configured(t,f.path,{service:true,wal:false});await assert.rejects(service.open(),{code:'index_unavailable'});
@@ -430,4 +437,125 @@ test('P2-10 actual canonical opening retains the identity pinned before native c
   }};
   const sqlite=createProductSqlitePolicy({observer});sqlite.start(Infinity);
   assert.throws(()=>openContextProductFacade(f.path,{sqlite}),{code:'index_unavailable'});
+});
+
+
+for(const target of ['lifecycle','side'])for(const code of [5,14])
+test(`P2d fix round 1 failed ${target} admission SQLite ${code} recovers on a distinct operation and closes once`,t=>{
+  const f=setup(t),builder=local(t,f);builder.storage.refresh(builder.p,builder.access,refresh.budget);builder.storage.close();
+  let contended=true;const connections=[],fault=Object.assign(Error('private opening fault'),{code:'ERR_SQLITE_ERROR',errcode:code});
+  const policy=createProductSqlitePolicy({now:()=>0});policy.start(0);
+  const sqlite={...policy,open(native,path){
+    const record={path,closes:0};connections.push(record);
+    const wrapped=new Proxy(native,{get(object,key){
+      if(key==='close')return ()=>{record.closes++;return object.close();};
+      if(key==='prepare')return sql=>{
+        if(contended && sql==='PRAGMA journal_mode' && (target==='lifecycle'?path.endsWith('.lifecycle-lock.sqlite'):path.endsWith(PRODUCT_SIDECAR_SUFFIX)))throw fault;
+        return object.prepare(sql);
+      };
+      const value=Reflect.get(object,key,object);return typeof value==='function'?value.bind(object):value;
+    }});
+    return policy.open(wrapped,path);
+  }};
+  const a=local(t,f,{sqlite});
+  if(code===5)assert.throws(()=>a.storage.prepareObservation(),e=>e===fault);
+  else assert.equal(a.storage.prepareObservation(),'storage_unavailable');
+  assert.equal(connections.filter(c=>c.closes===1).length,1);
+  contended=false;sqlite.start(5000);
+  assert.doesNotThrow(()=>a.storage.refresh(a.p,a.access,refresh.budget));
+  assert.equal(a.storage.observe(a.p,a.access).dto.lexical.state,'ready');
+  a.storage.close();a.storage.close();assert.ok(connections.every(c=>c.closes===1),JSON.stringify(connections));
+});
+
+test('P2d fix round 1 repeated configured-mode refusal discards writable connections',t=>{
+  const f=setup(t),builder=local(t,f);builder.storage.refresh(builder.p,builder.access,refresh.budget);builder.storage.close();
+  const a=local(t,f,{sidecarJournalMode:'DELETE'});
+  for(let i=0;i<2;i++)assert.throws(()=>a.storage.refresh(a.p,a.access,refresh.budget),{code:'index_unavailable',reason:'storage_unavailable'});
+});
+
+for(const boundary of ['open','mode','execute','close'])
+test(`P2d fix round 1 initialization ${boundary} failure reaches the supervisor with its native boundary`,async t=>{
+  const f=setup(t),s=configured(t,f.path,{service:true,spawnWorker:data=>new Worker(new URL('./fixtures/context-product-wal-worker.mjs',import.meta.url),{
+    workerData:{...data,walTestControl:{behavior:'init-'+boundary+'-14'}},env:{},execArgv:[]})});
+  const h=await s.open();assert.equal((await h.refreshContextIndex(refresh,s.token)).error.code,'index_unavailable');
+  // Child failure did not poison lifecycle ownership: a distinct refresh works.
+  assert.equal(ok(await h.refreshContextIndex(refresh,s.token)).status,'complete');await h.close();
+  const records=await s.supervisor.drain(),record=records.find(r=>r.diagnostics?.records.some(d=>d.sqlite.code===14));assert.ok(record);
+  assert.equal(record.telemetry,'complete');
+  const native=record.diagnostics.records.find(d=>d.sqlite.code===14);
+  assert.equal(native.stage,{open:'open',mode:'configure',execute:'begin',close:'close'}[boundary]);
+  assert.equal(native.statement,boundary==='mode'?'journal_mode':boundary==='execute'?'transaction':'connection');
+  assert.doesNotMatch(JSON.stringify(records),/private initialization/);
+});
+
+for(const code of [8,10,13,5])test(`P2d fix round 1 staged companion initialization SQLite ${code} maps through refresh`,async t=>{
+  const f=setup(t),s=configured(t,f.path,{service:true,spawnWorker:data=>new Worker(new URL('./fixtures/context-product-wal-worker.mjs',import.meta.url),{
+    workerData:{...data,walTestControl:{behavior:'init-mode-'+code}},env:{},execArgv:[]})});
+  const h=await s.open();assert.equal((await h.refreshContextIndex(refresh,s.token)).error.code,code===5?'storage_busy':'index_unavailable');await h.close();
+  const records=await s.supervisor.drain();assert.ok(records.some(r=>r.telemetry==='complete' && r.diagnostics.records.some(d=>d.sqlite.code===code && d.statement==='journal_mode')));
+});
+
+for(const boundary of ['truncated','omitted','truncatedbusy'])test(`P2d fix round 1 ${boundary} initialization transcript cannot claim complete coverage`,async t=>{
+  const f=setup(t),s=configured(t,f.path,{service:true,spawnWorker:data=>new Worker(new URL('./fixtures/context-product-wal-worker.mjs',import.meta.url),{
+    workerData:{...data,walTestControl:{behavior:'init-'+boundary+(boundary==='truncatedbusy'?'-5':'')}},env:{},execArgv:[]})});
+  const h=await s.open();assert.equal((await h.refreshContextIndex(refresh,s.token)).error.code,boundary==='truncatedbusy'?'storage_busy':'index_unavailable');await h.close();
+  assert.ok((await s.supervisor.drain()).some(r=>r.telemetry==='incomplete'));
+});
+
+
+test('P2d fix round 1 DELETE journal recreation between released snapshots preserves locks and availability',async t=>{
+  const f=setup(t,'DELETE'),w=await writer(t,f.path,'DELETE');await w.call('journal');
+  const old=productSqliteFiles(f.path);old();
+  const pin=fork(processFixture,['pin-journal',f.path],{env:{},execArgv:[],stdio:['ignore','ignore','pipe','ipc']});
+  const exited=once(pin,'exit');let ended=false;pin.once('exit',()=>{ended=true;});
+  t.after(async()=>{if(!ended){pin.kill();await exited;}});
+  assert.equal((await once(pin,'message'))[0].ready,true);
+  const p=createProductSqlitePolicy();p.start(Infinity);const {db}=p.open(new DatabaseSync(f.path,{readOnly:true}),f.path);t.after(()=>{if(db.isOpen)db.close();});
+  readTransaction(db,()=>db.prepare('SELECT epoch FROM namespace_epochs').all());
+  await w.call('commit');await w.call('journal');
+  // The checker never observed absence: the next protected journal has a new
+  // pinned inode. A bare continuous-identity check confirms the test precondition.
+  assert.throws(()=>old(),{code:'index_unavailable'});
+  db.exec('BEGIN');db.prepare('SELECT epoch FROM namespace_epochs').all();
+  await w.call('commitBlocked'); // Guard stats and child raw close never release this snapshot's lock.
+  const ack=once(pin,'message');pin.send({id:1,command:'close'});assert.equal((await ack)[0].ok,true);assert.equal((await exited)[0],0);
+  await w.call('commitBlocked');db.exec('ROLLBACK');await w.call('release');
+  await w.call('write');await w.call('close');db.close();
+});
+
+for(const kind of ['mode','symlink','type','owner','during-statement'])
+test(`P2d fix round 1 journal lifecycle exception still refuses ${kind}`,t=>{
+  const ws=createTestWorkspace(t),path=join(ws.path,'journal.sqlite');writeFileSync(path,'fixture',{mode:0o600});
+  writeFileSync(path+'-journal','old',{mode:0o600});let transaction=false,replacing=false;
+  const native={get isTransaction(){return transaction;},exec(sql){if(sql==='BEGIN')transaction=true;if(sql==='ROLLBACK')transaction=false;},close(){},prepare(sql){return {get(){
+    if(sql==='PRAGMA journal_mode')return {journal_mode:'delete'};
+    if(sql==='PRAGMA query_only')return {query_only:0};
+    if(replacing){renameSync(path+'-journal',path+'-journal.old');writeFileSync(path+'-journal','replacement',{mode:0o600});}
+    return 1;
+  }};}};
+  const p=createProductSqlitePolicy();p.start(Infinity);const {db}=p.open(native,path);
+  if(kind==='during-statement'){
+    replacing=true;assert.throws(()=>db.prepare('SELECT metadata').get(),{code:'index_unavailable'});
+  }else{
+    renameSync(path+'-journal',path+'-journal.old');
+    if(kind==='symlink')symlinkSync(path,path+'-journal');
+    else if(kind==='type')mkdirSync(path+'-journal',{mode:0o700});
+    else writeFileSync(path+'-journal','new',{mode:kind==='mode'?0o644:0o600});
+    if(kind==='owner'){
+      // Owner-only permissions are insufficient: exercise metadata rejection
+      // without requiring root/chown on a shared machine.
+      const original=fs.lstatSync;
+      t.mock.method(fs,'lstatSync',(entry,options)=>{
+        const stat=original(entry,options);
+        if(entry!==path+'-journal')return stat;
+        return new Proxy(stat,{get(object,key){
+          if(key==='uid')return object.uid+1n;
+          const value=Reflect.get(object,key,object);return typeof value==='function'?value.bind(object):value;
+        }});
+      });syncBuiltinESMExports();
+      t.after(()=>{t.mock.restoreAll();syncBuiltinESMExports();});
+    }
+    assert.throws(()=>db.prepare('SELECT metadata'),{code:'index_unavailable'});
+  }
+  db.close();
 });

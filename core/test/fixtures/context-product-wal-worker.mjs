@@ -1,5 +1,6 @@
 // Test-only native and reply rendezvous; never linked by a runtime entry.
-import { registerHooks } from 'node:module';
+import { registerHooks, syncBuiltinESMExports } from 'node:module';
+import childProcess from 'node:child_process';
 import { parentPort, workerData } from 'node:worker_threads';
 const { port, gate, behavior }=workerData.walTestControl;
 const wait=new Int32Array(gate),Native=process.getBuiltinModule('node:sqlite').DatabaseSync;
@@ -12,6 +13,32 @@ parentPort.postMessage=function(message,...args){
   }
   return send(message,...args);
 };
+// Faults execute inside the real staged child, through the actual maintainer.
+if(behavior.startsWith('init-')){
+  const spawn=childProcess.spawnSync;let injected=false;
+  childProcess.spawnSync=(command,args,options)=>{
+    if(!injected && args[6] && args[2]?.includes('const init =')){
+      injected=true;args=[...args];
+      const [_,boundary,code='14']=behavior.split('-');
+      const failure=`Object.assign(Error('private initialization fault'),{code:'ERR_SQLITE_ERROR',errcode:${Number(code)}})`;
+      if(boundary==='open')args[2]=args[2].replace('new DatabaseSync(path,options)',`(()=>{if(role==='initialize')throw ${failure};return new DatabaseSync(path,options);})()`);
+      if(['mode','execute','truncatedbusy'].includes(boundary))args[2]=args[2].replace('native.exec(sql)',`(()=>{if(role==='initialize' && ${boundary!=='execute'?"sql.startsWith('PRAGMA journal_mode=')":"stage==='begin'"})throw ${failure};return native.exec(sql);})()`);
+      if(boundary==='close')args[2]=args[2].replace('()=>native.close()',`()=>{native.close();if(role==='initialize')throw ${failure};}`);
+      // Also target the historical child so the same regression reproduces
+      // the review defect at 1c769bdb, rather than relying on new syntax alone.
+      if(!args[2].includes('const call = (database') && boundary==='open')args[2]=args[2].replace('const db = new DatabaseSync(temporary);',`const db = (()=>{throw ${failure};})();`);
+      if(!args[2].includes('const call = (database') && ['mode','truncatedbusy'].includes(boundary))args[2]=args[2].replace("db.exec('PRAGMA journal_mode=' + init.journalMode);",`throw ${failure};`);
+      if(!args[2].includes('const call = (database') && boundary==='execute')args[2]=args[2].replace("db.exec('BEGIN IMMEDIATE;' + init.sql);",`throw ${failure};`);
+      if(!args[2].includes('const call = (database') && boundary==='close')args[2]=args[2].replace('db.close();',`db.close();throw ${failure};`);
+      const result=spawn(command,args,options);
+      if(['truncated','truncatedbusy'].includes(boundary))result.stdout=result.stdout.trim().split('\n').filter(line=>!line.includes('"outcome"') || !line.includes('"journal_mode"')).join('\n')+'\n';
+      if(boundary==='omitted')result.stdout=result.stdout.trim().split('\n').filter(line=>!line.includes('"close"')).join('\n')+'\n';
+      return result;
+    }
+    return spawn(command,args,options);
+  };
+  syncBuiltinESMExports();
+}
 globalThis.productWalTestDatabase=class extends Native {
   constructor(path,options){super(path,options);this.canonical=String(path)===workerData.path;this.side=String(path).endsWith('.context-read-product-v1.1.sqlite');}
   prepare(sql){

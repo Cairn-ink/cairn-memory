@@ -77,6 +77,54 @@ export function nativeObserver(initialFrame) {
   return {
     select(next) { frame = next; },
     invoke,
+    creation(work) {
+      const v=frame ? view(frame) : null;
+      // Reserve before synchronous child dispatch, as for the observed probe.
+      // A killed Worker cannot erase an unreturned child's native coverage.
+      if(v)increment(v,5);
+      let received=false;
+      try {
+        const result=work(), opened=new Set();
+        let pending, count=0, firstFailure;
+        let valid=result?.complete===true && Array.isArray(result.events);
+        for(const event of Array.isArray(result?.events)?result.events:[]) {
+          if(event.begin){
+            const b=event.begin;
+            if(pending || b.sequence!==count+1 || !['lifecycle','initialize','incumbent'].includes(b.database) ||
+              !NATIVE_STAGES.includes(b.stage) || !NATIVE_STATEMENTS.includes(b.statement) ||
+              (b.stage==='open' ? opened.has(b.database) : !opened.has(b.database)))valid=false;
+            pending=b;
+          } else if(event.outcome && pending){
+            const b=pending,o=event.outcome;
+            if(['sequence','database','stage','statement'].some(k=>o[k]!==b[k]) || typeof o.ok!=='boolean' ||
+              !o.ok && (!Number.isInteger(o.extendedCode) || o.extendedCode<0))valid=false;
+            if(!NATIVE_STAGES.includes(b.stage) || !NATIVE_STATEMENTS.includes(b.statement)){pending=undefined;continue;}
+            const error=o.ok?null:Object.assign(Error('sqlite_file_creation_failed'),{code:'ERR_SQLITE_ERROR',errcode:o.extendedCode});
+            try{invoke(b.stage,b.statement,()=>{if(error)throw error;});}catch(failure){firstFailure??=failure;}
+            if(b.stage==='open' && o.ok)opened.add(b.database);
+            if(b.stage==='close')opened.delete(b.database);
+            count++;pending=undefined;
+          } else valid=false;
+        }
+        valid &&= !pending && opened.size===0 && count>0 && result.calls===count && Boolean(result.value);
+        if(v && pending){increment(v,0);increment(v,5);}
+        if(v && !valid)Atomics.store(v,6,1);
+        received=true;
+        // Replay precedes public mapping. Preserve native primary/extended codes
+        // even when a transcript is incomplete or a later filesystem call fails.
+        if(firstFailure?.errcode && (!valid || result.value?.error))throw firstFailure;
+        const value=result?.value;
+        if(value?.error)throw Object.assign(Error('sqlite_file_creation_failed'),{
+          code:Number.isInteger(value.errcode)?'ERR_SQLITE_ERROR':value.error,
+          ...(Number.isInteger(value.errcode)?{errcode:value.errcode}:{}),published:value.published,
+        });
+        if(!valid)fail('index_unavailable');
+        return value;
+      } finally {
+        if(v && !received)Atomics.store(v,6,1);
+        if(v)Atomics.sub(v,5,1);
+      }
+    },
     journalProbe(work) {
       const v = frame ? view(frame) : null;
       // The child cannot share this buffer. Reserve coverage before dispatch;

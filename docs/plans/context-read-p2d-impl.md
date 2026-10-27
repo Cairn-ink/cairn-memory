@@ -371,3 +371,212 @@ docs/context-read-product.md
 docs/plans/context-read-p2d-impl.md
 packaging/artifact-files.json
 ```
+
+## Fix round 1
+
+This round starts at `1c769bdb`. Both non-author reviews accepted the
+**context-read-product C-4 delta v1.1.1 (detection and wait window)** above;
+that section remains byte-for-byte unchanged. The fixes address all seven P1
+review findings (the two failed-opening findings share one fix), plus the
+capability-oracle note. No performance or platform qualification is claimed.
+
+### Findings, fixes and regressions
+
+| Review finding | Fix | Regression |
+| --- | --- | --- |
+| Spec 1 / standards 1: refused opening caches a closed connection, overwrites BUSY and double-closes | Lifecycle and sidecar native handles remain local until admission succeeds. Policy opening owns refused-native disposal; successful sidecar admission includes configuration, identity and schema checks. Cleanup preserves the original failure. Close detaches the lifecycle handle before disposal and is idempotent. Repair uses the same admission path. | `context-read-product-wal.test.mjs`: four `failed lifecycle/side admission SQLite 5/14` cases retain BUSY or unavailable, clear contention, run a distinct refresh successfully, observe ready, and assert every native connection closes exactly once. |
+| Standards 2: pump key drops WAL opt-in and sidecar policy | Handle reuse and renewal include normalized `wal` and explicit `sidecarJournalMode` as well as the existing path/readSet/host identity. These are the journal configuration inputs; the shared wait constants are fixed runtime policy. | `context-read-product-pump.test.mjs`: otherwise identical WAL/true and DELETE/false projections dispatch all four current/history quanta, invoke both constructors and close both handles. |
+| Standards 3: ordinary DELETE journal recreation refuses | Before a native call with no pinned transaction, a detected DELETE connection may adopt a new protected rollback-journal identity. After that native call and throughout a pinned transaction, identity checks remain strict. Main-file and directory identities and WAL/SHM checks retain their existing rules. Sidecar metadata guards use the same snapshot boundary. | WAL test: independent DELETE writer, isolated old-inode pin, released reader snapshot, new active journal with a distinct inode, then successful reading. Two blocked writer commits prove the reader lock survives guard checks and the isolated descriptor close; the writer commits after release. Additional mode, symlink, type, wrong-companion-owner and during-statement replacement cases refuse. |
+| Standards 4: second refresh bypasses configured-mode refusal | A refused sidecar candidate is disposed before publication, including mode mismatch. Cached writable handles also check configured mode before reuse. | WAL test: existing WAL cache with configured DELETE refuses on both successive refresh calls. |
+| Spec 2: staged companion initialization maps CANTOPEN to storage_error | Opted-in publication maps required-companion initialization/persistence failures to index_unavailable, including native PERM/READONLY/IOERR/FULL/CANTOPEN and filesystem permission, read-only, space and unsupported errors. BUSY remains storage_busy. Legacy mapping is unchanged. | WAL tests: real maintainer child faults at open/mode/execution/close with CANTOPEN, and mode faults with READONLY/IOERR/FULL/BUSY; assert public refresh mapping, original numeric telemetry, later successful refresh and clean drain. |
+| Spec 3: staged initialization falsely claims complete aggregate telemetry | Opted-in publication uses the observed-probe transcript pattern: reserve supervisor coverage before dispatch; emit individual native begin/outcome records for lifecycle, initializer and repair-incumbent opens, configuration/journal-mode, prepare, execute, transaction and close calls; replay before mapping. Sequence numbers, final native-call count, pairing, fixed enums, connection ownership and terminal result detect incomplete transcripts. Lost dispatch/replay leaves incomplete coverage. No new diagnostic enums are needed. | WAL tests inject each initializer boundary through the actual child and assert the supervisor's exact stage/statement/code. Dropping a journal-mode outcome or all close event pairs yields incomplete coverage, never complete. A lost statement outcome with an acknowledged terminal BUSY retains storage_busy and incomplete coverage. |
+| Spec note: omitted/false capability self-comparison is not independent | Both default spellings now compare exact serialized bytes against `fixtures/context-product-capabilities-p2b.json`, frozen from base `9a8f6fb7`'s capability factory, actual index assembly and synthetic host counter. No current capability implementation contributes expected bytes. | Historical golden passes unchanged defaults. In an isolated base archive, changing hardResponseCutoff identically for both constructors makes the golden test fail on both runtimes; the former omitted/false comparison would still agree. |
+
+The DELETE rule distinguishes a new SQLite transaction after snapshot release
+from replacement during a native operation: only the pre-call boundary, while
+`isTransaction` is false and detected mode is DELETE, can adopt a journal inode.
+A journal inode has no continuity requirement across those released snapshots;
+SQLite may delete/recreate it while no observation sees its absence. Every new
+entry must still be a regular, non-symlink, single-link, current-owner 0600 file
+in the unchanged current-owner 0700 directory. Both sides of a statement remain
+checked, as do pinned snapshots. Safe uncoordinated journal replacement outside
+a snapshot is indistinguishable by metadata from legitimate recreation; the
+protected directory remains the deployment exclusion boundary. This does not
+authorize external replacement or mode changes. No raw descriptor is opened in
+a process holding SQLite connections; the test's inode pin is in its own process.
+
+### Regression proof and verification
+
+An isolated `git archive 1c769bdb` received only the new tests/fixtures. On both
+Node 22.16.0 and 24.15.0, the explicit WAL+pump command with
+`--test-name-pattern='P2d fix round 1'` exited **1**: **23 tests, 18 failures,
+5 safety checks passing**, reproducing every runtime finding. The isolated
+archive is removed. The historical-capability mutation command with
+`--test-name-pattern='P2-01/10 WAL opt-in'` exited **1 / 1** as intended.
+
+The golden was generated using a temporary archive of `9a8f6fb7`, extracting its
+capability factory and invoking it with that revision's `openProductIndex`
+assembly and `createContextReadHost` counter. The archive is removed. The
+fixture SHA-256 (including final newline) is
+`111ad0916fbbd9d2902c6a490be40b3b9887abf8391c49666b281855978bd454`.
+
+Development commands retained their actual failures: the first Node 22 WAL+pump
+run exited **1** (42 pass / 26 fail) because the new child wrapper passed an
+explicit undefined options argument to DatabaseSync; a default options object
+fixed it. The next WAL+pump run exited **0** (84/84), and the WAL+pump+journal-probe
+run exited **0** (113/113). A later selected new-test/golden run exited **1**
+(22/23) because golden generation omitted the historical synthetic host counter;
+regeneration now invokes the actual historical index and host. No assertion was
+weakened. Final full-file checks below supersede those development runs.
+
+Final verification uses the nvm-installed Node executables; `node --version`
+reported `v22.16.0` and `v24.15.0`, each exit **0**. The exact test inventory
+was expanded before dispatch using filesystem globs and independently selected
+from `rg --files`: **53 explicit paths, zero differences**. Each command ran
+one path, sequentially, through the managed process-group runner:
+
+```sh
+p2d_node="$(nvm which "$p2d_version")"
+"$p2d_node" tools/testing/run.mjs \
+  --import "$p2d_verification/npm-cache-only.mjs" \
+  --test-reporter=tap --test-concurrency=1 "$p2d_test"
+```
+
+The temporary preload only confines npm subprocesses to a task-owned offline
+cache. It was seeded with **15 already-cached pinned package bodies** and
+four cached public packuments (both npm Accept variants), with zero missing
+source entries; no download, key or shared-cache write occurred. MCP and
+OpenAI dependencies were already installed and were not changed. Every path
+below has **zero skips**. Each cell is the actual command exit and pass count.
+
+| Explicit path | Node 22.16.0 exit (pass) | Node 24.15.0 exit (pass) |
+| --- | ---: | ---: |
+| `adapters/mcp/test/context-read-default-entropy.test.mjs` | 0 (1) | 0 (1) |
+| `adapters/mcp/test/context-read-sources.test.mjs` | 0 (4) | 0 (4) |
+| `core/test/context-read-assembly-races.test.mjs` | 0 (7) | 0 (7) |
+| `core/test/context-read-assembly-readonly.test.mjs` | 0 (28) | 0 (28) |
+| `core/test/context-read-assembly.test.mjs` | 0 (20) | 0 (20) |
+| `core/test/context-read-bm25.test.mjs` | 0 (3) | 0 (3) |
+| `core/test/context-read-budget.test.mjs` | 0 (5) | 0 (5) |
+| `core/test/context-read-core.test.mjs` | 0 (26) | 0 (26) |
+| `core/test/context-read-default-entropy.test.mjs` | 0 (1) | 0 (1) |
+| `core/test/context-read-embedder.test.mjs` | 0 (5) | 0 (5) |
+| `core/test/context-read-fusion.test.mjs` | 0 (4) | 0 (4) |
+| `core/test/context-read-local-embedder.test.mjs` | 0 (38) | 0 (38) |
+| `core/test/context-read-local-status.test.mjs` | 0 (3) | 0 (3) |
+| `core/test/context-read-moc-source.test.mjs` | 0 (15) | 0 (15) |
+| `core/test/context-read-process.test.mjs` | 0 (1) | 0 (1) |
+| `core/test/context-read-product-artifact.test.mjs` | 0 (1) | 0 (1) |
+| `core/test/context-read-product-control.test.mjs` | 0 (83) | 0 (83) |
+| `core/test/context-read-product-import.test.mjs` | 0 (2) | 0 (2) |
+| `core/test/context-read-product-index.test.mjs` | 0 (65) | 0 (65) |
+| `core/test/context-read-product-pump.test.mjs` | 0 (18) | 0 (18) |
+| `core/test/context-read-product-service.test.mjs` | 0 (2) | 0 (2) |
+| `core/test/context-read-product-wal.test.mjs` | 0 (72) | 0 (72) |
+| `core/test/context-read-product.test.mjs` | 0 (126) | 0 (126) |
+| `core/test/context-read-recovery.test.mjs` | 0 (10) | 0 (10) |
+| `core/test/context-read-review.test.mjs` | 0 (10) | 0 (10) |
+| `core/test/context-read-sidecar.test.mjs` | 0 (17) | 0 (17) |
+| `core/test/context-read-source-work.test.mjs` | 0 (7) | 0 (7) |
+| `core/test/context-read-sources-authority.test.mjs` | 0 (6) | 0 (6) |
+| `core/test/context-read-sources-bounds.test.mjs` | 0 (5) | 0 (5) |
+| `core/test/context-read-sources-races.test.mjs` | 0 (16) | 0 (16) |
+| `core/test/context-read-sources.test.mjs` | 0 (14) | 0 (14) |
+| `core/test/context-read-tokenize.test.mjs` | 0 (2) | 0 (2) |
+| `core/test/no-raw-db-fd.test.mjs` | 0 (5) | 0 (5) |
+| `core/test/sqlite-journal-probe.test.mjs` | 0 (23) | 0 (23) |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 (16) | 0 (16) |
+| `core/test/topic-members-bounds.test.mjs` | 0 (7) | 0 (7) |
+| `core/test/topic-members-compatibility.test.mjs` | 0 (32) | 0 (32) |
+| `core/test/topic-members-integration.test.mjs` | 0 (1) | 0 (1) |
+| `core/test/topic-members-mutations.test.mjs` | 0 (20) | 0 (20) |
+| `core/test/topic-members-primary.test.mjs` | 0 (26) | 0 (26) |
+| `core/test/topic-members-recheck-findings.test.mjs` | 0 (33) | 0 (33) |
+| `core/test/topic-members-review-findings.test.mjs` | 0 (7) | 0 (7) |
+| `core/test/topic-members-round3-findings.test.mjs` | 0 (18) | 0 (18) |
+| `core/test/topic-members-scale.test.mjs` | 0 (2) | 0 (2) |
+| `core/test/topic-members-visibility.test.mjs` | 0 (10) | 0 (10) |
+| `core/test/topic-members.test.mjs` | 0 (10) | 0 (10) |
+| `core/test/topic-overview-lifecycle.test.mjs` | 0 (11) | 0 (11) |
+| `core/test/topic-overview-raw29.test.mjs` | 0 (22) | 0 (22) |
+| `core/test/topic-overview-visibility.test.mjs` | 0 (8) | 0 (8) |
+| `core/test/topic-overview.test.mjs` | 0 (4) | 0 (4) |
+| `core/test/topic-reader-cancellation.test.mjs` | 0 (6) | 0 (6) |
+| `core/test/topic-reader-sqlite.test.mjs` | 0 (21) | 0 (21) |
+| `packaging/test/topic-overview-raw29.test.mjs` | 0 (3) | 0 (3) |
+
+Node 22.16.0: **53 paths, 902 passing tests, all final exits 0, zero skips**.
+
+Node 24.15.0: **53 paths, 902 passing tests, all final exits 0, zero skips**.
+
+The matrix orchestrator's actual exit is **1**, retaining the initial Node 22
+R29 cache-setup failure. That original command and two diagnostic/cache-setup
+reruns each exited **1** (all three installed cases stopped before fixture
+execution): npm reported ENOTCACHED for missing matching registry metadata.
+Copying four already-cached public packuments with both required Accept
+variants fixed the private-cache prerequisite. The final identical Node 22
+R29 command exited **0**, **3/3**, and is the result in the table. Node 24's
+matrix used the repaired cache. No repository code or assertion changed for
+this correction; the other 105 matrix commands exited 0.
+
+The final source recheck on **each runtime** used:
+
+```sh
+"$p2d_node" tools/testing/run.mjs --test-reporter=tap --test-concurrency=1 core/test/context-read-product-artifact.test.mjs core/test/context-read-product-wal.test.mjs
+```
+
+Both commands exited **0**, **74/74**, zero skips. These rechecks include the
+last added truncated-BUSY regression, which was added after the original WAL
+matrix runs (72 tests each). A committed terminal BUSY remains storage_busy
+when its per-statement outcome is lost, while the ledger stays incomplete.
+The final WAL file now contains 73 tests, plus the one installed artifact test.
+
+All **9 changed JavaScript files** passed `node --check`
+on both runtimes: **18 individual exits of 0**. An extra early Node 22
+`no-raw-db-fd.test.mjs` command exited **0**; the full matrix repeats it on both
+runtimes without any runtime allowlist change.
+
+Installed-artifact evidence remains **308 manifest = 308 installed files**,
+**87 source = 87 installed = 87 independently derived closure files**, with
+zero differences; static SQLite-free closure is **23**. All five changed
+runtime modules and this existing report were already registered in the
+manifest. The new golden is a test fixture. The R29 installed checks cover
+all three existing modes/clients and retain actual child exit/cleanup checks.
+
+`git diff --check` finally exited **0**. An intermediate docs append left an
+extra EOF blank line (exit **2**); it was removed. A separate scan of all
+changed files, including the untracked golden, checks trailing whitespace,
+final newline and forbidden private absolute paths, exit **0**. The original
+report bytes, including the accepted C-4 delta, equal the complete original
+file prefix at `1c769bdb`.
+
+### Fix-round changed-file inventory
+
+Derived first with `git diff --name-only -z HEAD` plus
+`git ls-files --others --exclude-standard -z`, then independently with
+`git status --porcelain=v1 -z`: **11 files, zero differences**. The comparison
+covers runtime, tests, both fixtures, the new golden and the report; it is not
+limited to core runtime sources.
+
+```text
+core/context-product-pump.mjs
+core/context-product-sidecar.mjs
+core/context-product-sqlite.mjs
+core/context-product-telemetry.mjs
+core/sqlite-journal-probe.mjs
+core/test/context-read-product-pump.test.mjs
+core/test/context-read-product-wal.test.mjs
+core/test/fixtures/context-product-capabilities-p2b.json
+core/test/fixtures/context-product-wal-process.mjs
+core/test/fixtures/context-product-wal-worker.mjs
+docs/plans/context-read-p2d-impl.md
+```
+
+No new runtime module, generated runtime, frozen-contract change, commit,
+network/key operation, timing measurement or broad suite was introduced.
+Qualification and production-volume work remain with their existing owners;
+production stays DELETE until the owner authorizes a switch. Test work stayed
+actively supervised through logs, actual progress and exit codes. Managed
+runners verified child/process-group cleanup before returning. Temporary
+archives, logs and the private offline cache are removed at handoff; no task
+is left running or promised unattended supervision.
