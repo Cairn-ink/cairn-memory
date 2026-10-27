@@ -1358,5 +1358,50 @@
     "path": "core/testing/topic-overview-raw29-fixture.mjs",
     "source": "existsSync(path + suffix) ? createHash('sha256').update(readFileSync(path + suffix)).digest('hex') : null]))));",
     "reason": "Literal SQLite-free hash child reads database and companions with isolated descriptors; parent retains all SQLite POSIX locks."
+  },
+  {
+    "path": "tools/testing/fixtures/topic-member-previews-metrics.mjs",
+    "source": "import { readFileSync, readlinkSync } from 'node:fs'",
+    "reason": "Worker fallback reads only its own fixed procfs CPU counter; never a database or SQLite companion descriptor."
+  },
+  {
+    "path": "tools/testing/fixtures/topic-member-previews-metrics.mjs",
+    "source": "try { return { totalNs: Number(readFileSync('/proc/thread-self/schedstat', 'utf8').split(/\\s+/)[0]) }; }",
+    "reason": "Worker fallback reads only its own fixed procfs CPU counter; never a database or SQLite companion descriptor."
+  },
+  {
+    "path": "tools/testing/fixtures/topic-member-previews-sampler.mjs",
+    "source": "import { readFileSync, readdirSync } from 'node:fs'",
+    "reason": "Fixed procfs counter only; no database or companion path is accepted. Sampling child is SQLite-free."
+  },
+  {
+    "path": "tools/testing/fixtures/topic-member-previews-sampler.mjs",
+    "source": "const [runNs, waitNs, slices] = readFileSync(`/proc/${pid}/task/${name}/schedstat`, 'utf8').trim().split(/\\s+/).map(Number);",
+    "reason": "Fixed procfs counter only; no database or companion path is accepted. Sampling child is SQLite-free."
+  },
+  {
+    "path": "tools/testing/fixtures/topic-member-previews-sampler.mjs",
+    "source": "const text = readFileSync('/proc/vmstat', 'utf8');",
+    "reason": "Fixed procfs counter only; no database or companion path is accepted. Sampling child is SQLite-free."
+  },
+  {
+    "path": "tools/testing/summarize-topic-member-previews.mjs",
+    "source": "import { readFile } from 'node:fs/promises'",
+    "reason": "Standalone SQLite-free summary CLI reads only the explicitly supplied report JSON."
+  },
+  {
+    "path": "tools/testing/summarize-topic-member-previews.mjs",
+    "source": "const report = JSON.parse(await readFile(process.argv[2], 'utf8'));",
+    "reason": "Standalone SQLite-free summary CLI reads only the explicitly supplied report JSON."
+  },
+  {
+    "path": "tools/testing/verify-topic-member-previews-protocol.mjs",
+    "source": "import { readFileSync } from 'node:fs'",
+    "reason": "Standalone SQLite-free verifier reads only the fixed harness JavaScript source for a byte comparison."
+  },
+  {
+    "path": "tools/testing/verify-topic-member-previews-protocol.mjs",
+    "source": "const current = readFileSync(new URL('./measure-topic-member-previews.mjs', import.meta.url));",
+    "reason": "Standalone SQLite-free verifier reads only the fixed harness JavaScript source for a byte comparison."
   }
 ]

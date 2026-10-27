@@ -152,6 +152,10 @@ test('runtime raw filesystem access has an exact, justified allowlist', () => {
 const previewHarnessPaths = [
   'tools/testing/measure-topic-member-previews.mjs',
   'tools/testing/fixtures/topic-member-previews-metrics.mjs',
+  'tools/testing/fixtures/topic-member-previews-attribution.mjs',
+  'tools/testing/fixtures/topic-member-previews-sampler.mjs',
+  'tools/testing/summarize-topic-member-previews.mjs',
+  'tools/testing/verify-topic-member-previews-protocol.mjs',
   'tools/testing/workspace.mjs',
   'core/testing/topic-members-fixture.mjs',
   'core/testing/topic-members-world.mjs',
@@ -167,6 +171,10 @@ test('preview measurement harness and fixtures obey the raw descriptor guard', (
     'readFileSync(f.path);', 'fs.openSync(f.path + "-wal");', 'fs.cpSync(f.path, path);']) {
     assert.ok(violations(path, source + '\n' + call).length > 0, call);
   }
+  const preload = previewHarnessPaths[1];
+  const preloadSource = readFileSync(join(root, preload), 'utf8');
+  for (const call of ['readFileSync(workerData.path);', 'readFileSync(workerData.path + "-wal");'])
+    assert.ok(violations(preload, preloadSource + '\n' + call).length > 0);
 });
 test('generated setup runtime and archived engine obey the same guard', () => {
   const runtime = join(root, 'packages/setup/runtime');

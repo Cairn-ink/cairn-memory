@@ -46,6 +46,18 @@ test('P1 public measurement observation accounts exact transferred UTF-8 payload
   assert.equal(result.failure, null); assert.equal(result.actualTransportPayloadBytes, result.bytes);
   assert.equal(result.bounds, true); assert.ok(result.counters.workUnits > 0);
   assert.equal(result.counters.extractions, 1);
+  assert.equal(result.workerReads.length, 1);
+  assert.equal(result.workerThreads.length, 1);
+  assert.equal(result.workerThreads[0].tid, result.workerReads[0].tid);
+  assert.ok(Number.isInteger(result.workerReads[0].tid));
+  assert.ok(result.workerReads[0].threadCPUTime.totalMs >= 0);
+  assert.equal(result.workerReads[0].cpuSource, process.versions.node.startsWith('22.') ? 'schedstat' : 'threadCpuUsage');
+  assert.ok(result.workerReads[0].finishedAt >= result.workerReads[0].startedAt);
+  assert.ok(Array.isArray(result.workerReads[0].gc));
+  assert.equal(result.workerLifecycle.filter(e => e.operation === 'terminate').length, 1);
+  assert.ok(result.workerLifecycle.find(e => e.operation === 'terminate').finishedAt >= result.readFinishedAt);
+  assert.deepEqual(Object.keys(result.resources).sort(), ['majorPageFault','minorPageFault','voluntaryContextSwitches',
+    'involuntaryContextSwitches','userCPUTime','systemCPUTime'].sort());
 });
 
 const writers = (reviewMs = 25000) => ['capture','review'].map(operation => ({ operation,
@@ -410,9 +422,9 @@ test('P1 isolated database cloning preserves bytes/schema/journal and host POSIX
 test('P1 SQLite diagnostics count iterator execution, metadata and native finalization without SQL or row data', async () => {
   const { Worker, MessageChannel } = await import('node:worker_threads');
   const { port1, port2 } = new MessageChannel(), observations = [];
-  port1.on('message', value => observations.push(value.sqlite));
+  port1.on('message', value => { if (value.sqlite) observations.push(value.sqlite); });
   const worker = new Worker(`
-    const { workerData } = await import('node:worker_threads');
+    const { workerData, parentPort } = await import('node:worker_threads');
     const { performance } = await import('node:perf_hooks');
     let tick = 0; Object.defineProperty(performance, 'now', { value: () => ++tick });
     await import(workerData.preload);
@@ -430,7 +442,7 @@ test('P1 SQLite diagnostics count iterator execution, metadata and native finali
     if (typeof statement[Symbol.dispose] === 'function') {
       const other = db.prepare('SELECT 1'); report(); other[Symbol.dispose](); report();
     }
-    db.close(); report(); workerData.previewMetricsPort.close();
+    db.close(); report(); workerData.previewMetricsPort.close(); parentPort.close();
   `, { eval: true, type: 'module', workerData: { previewMetricsPort: port2,
     preload: new URL('../../tools/testing/fixtures/topic-member-previews-metrics.mjs', import.meta.url).href }, transferList: [port2] });
   try {
@@ -450,4 +462,144 @@ test('P1 SQLite diagnostics count iterator execution, metadata and native finali
     }
     assert.equal(JSON.stringify(observations).includes('PRIVATE_SQL_ROW_SENTINEL'), false);
   } finally { port1.close(); await worker.terminate(); }
+});
+
+test('P1 retained validation is outside the gate; engine, replay and close injections remain observed', async () => {
+  const { retainedEngineSeries, observeLoop } = await import('../../tools/testing/measure-topic-member-previews.mjs');
+  for (const injection of ['validation','read','replay','close']) {
+    let time = 0, reads = 0, closed = 0, validated = 0;
+    const loop = observeLoop({ now: () => time, epoch: 1000 });
+    const outputs = ['a','b'].map((id,i) => ({ ok: true, value: { items: [{ id,
+      preview: { status: 'available', text: id, truncated: false } }], nextCursor: i === 0 ? 'next' : null } }));
+    const observation = { metrics: [1,2].map(readIndex => ({ readIndex, extractions: 1, sourceBytes: 1, decodedUnits: 1, normalizationUnits: 1 })),
+      transportBytes: outputs.map(o => Buffer.byteLength(JSON.stringify(o))), hostMessages: [], workerReads: [], workerLifecycle: [], close() {} };
+    const config = { namespace: { ownerId: 'synthetic' }, input: {}, cell: { limit: 24 } };
+    const result = await retainedEngineSeries(config, ['a','b'], { loop, observation,
+      openReader: () => ({ async readTopicMembers(input) {
+        reads++;
+        if ((injection === 'read' && reads === 1) || (injection === 'replay' && reads === 3)) { time += 200; loop.sample(); }
+        assert.equal(input.cursor, reads === 1 ? undefined : 'next');
+        return outputs[reads === 1 ? 0 : 1];
+      }, async close() { closed++; if (injection === 'close') { time += 200; loop.sample(); } } }),
+      validate: () => { validated++; if (injection === 'validation') time += 200; return true; },
+    });
+    assert.equal(reads, 3); assert.equal(closed, 1); assert.equal(validated, 2);
+    assert.equal(result.complete, true); assert.equal(result.emittedRefs, 2);
+    assert.equal(config.retainedLoop.blocksOver100, injection === 'validation' ? 0 : 1);
+    assert.equal(config.retainedLoop.maxMs, injection === 'validation' ? 0 : 200);
+    assert.equal(config.retainedLoop.phases.some(p => /validation|membership/.test(p.phase)), false);
+    if (injection !== 'validation') assert.equal(config.retainedLoop.blocks[0].gapMs, 200);
+  }
+});
+
+test('P1 block attribution uses raw resource/heap endpoints, delayed GC and scheduler brackets without altering decisions', async () => {
+  const { observeLoop } = await import('../../tools/testing/measure-topic-member-previews.mjs');
+  const { attributeBlock, resourceKeys } = await import('../../tools/testing/fixtures/topic-member-previews-attribution.mjs');
+  let time = 0;
+  const loop = observeLoop({ now: () => time, epoch: 1000,
+    snapshot: () => ({ heapUsed: time + 100, resources: Object.fromEntries(resourceKeys.map(k => [k,time])) }),
+    gc: { drain: () => [{ kind: 4, startedAt: 1001, durationMs: 160 }], close() {} },
+  });
+  loop.phase('close'); time = 200; loop.sample();
+  const result = await loop.finish(), block = result.blocks[0];
+  assert.deepEqual(block.attribution.hostHeapUsed, { start: 100, end: 300 });
+  assert.deepEqual(block.attribution.resources, Object.fromEntries(resourceKeys.map(k => [k,200])));
+  assert.deepEqual(result.resources, block.attribution.resources);
+  const samples = [
+    { startedAt: 998, finishedAt: 999, tasks: [{ tid: 7, waitNs: 0, runNs: 0 }, { tid: 8, waitNs: 0, runNs: 0 }], vmstat: { pswpin: 10, pswpout: 20, pgmajfault: 30 } },
+    { startedAt: 1201, finishedAt: 1202, tasks: [{ tid: 7, waitNs: 150e6, runNs: 10e6 }, { tid: 8, waitNs: 100e6, runNs: 20e6 }], vmstat: { pswpin: 12, pswpout: 23, pgmajfault: 34 } },
+  ];
+  const read = { tid: 8, startedAt: 1000, finishedAt: 1190, gc: [] };
+  attributeBlock(block, { gc: result.hostGC, samples, hostTid: 7, workerReads: [read], phases: result.phases });
+  assert.equal(block.attribution.classification, 'host-gc');
+  assert.deepEqual(block.attribution.signals, ['host-gc','run-queue','page-fault','worker-join-or-close']);
+  assert.equal(block.attribution.scheduler.threads[0].runQueueMs, 150);
+  assert.equal(block.attribution.scheduler.threads[1].cpuMs, 20);
+  assert.deepEqual(block.attribution.scheduler.vmstatDelta, { pswpin: 2, pswpout: 3, pgmajfault: 4 });
+  assert.deepEqual(block.attribution.workerReads, [read]);
+  const records = Array.from({ length: 50 }, () => record(1));
+  const before = decide(cell,'main',records,50,true);
+  records.forEach(r => { r.attribution = block.attribution; r.hostLoop.attribution = block.attribution; });
+  assert.deepEqual(decide(cell,'main',records,50,true), before);
+  assert.equal(decide(cell,'main',[record(1,{hostLoop:result})],1,true).decision, 'fail');
+  attributeBlock(block, { samples: [], hostTid: 7 });
+  assert.equal(block.attribution.scheduler.threads[0].runQueueMs, null);
+  assert.equal(block.attribution.scheduler.threads[0].bracketed, false);
+  attributeBlock(block, { samples, hostTid: 7, workerThreads: [{ workerId: 2, tid: 8 }] });
+  assert.equal(block.attribution.workerReads.length, 0);
+  assert.equal(block.attribution.scheduler.threads[1].runQueueMs, 100);
+});
+
+test('P1 proc sampler uses an IPC rendezvous and exits with no SQLite dependency', async () => {
+  const { startSampler } = await import('../../tools/testing/fixtures/topic-member-previews-attribution.mjs');
+  const sampler = await startSampler();
+  let exit;
+  try {
+    sampler.begin();
+    const result = await sampler.finish();
+    assert.equal(result.unavailable, false);
+    assert.ok(result.samples.length >= 2);
+    assert.ok(result.samples.every(s => s.tasks.some(t => t.tid === process.pid)));
+    assert.ok(result.samples.every(s => ['pswpin','pswpout','pgmajfault'].every(k => Number.isFinite(s.vmstat[k]))));
+  } finally { exit = await sampler.close(); }
+  assert.deepEqual(exit, { code: 0, signal: null });
+});
+
+test('P1 summary preserves per-series tallies, launcher blocks and older maxima-only uncertainty', async () => {
+  const { analyzeReport, printSummary } = await import('../../tools/testing/summarize-topic-member-previews.mjs');
+  const sentinel = 'PRIVATE_PAGE_SENTINEL';
+  const report = { cells: [{ cell, main: [{ ...record(1), startedAt: 100, finishedAt: 200, page: sentinel,
+    hostLoop: { maxMs: 60 }, launcherLoop: { maxMs: 70, blocks: [{ startedAt: 120, finishedAt: 190, gapMs: 70, attribution: { classification: 'unattributed' } }] } }],
+    decisions: [{ series: 'main', decision: 'inconclusive', checks: { reviewDeadline: null } }],
+    retained: { decision: 'pass', hostLoop: { maxMs: 1 } } }] };
+  const result = analyzeReport(report);
+  assert.equal(result.blocks.length, 2);
+  assert.equal(result.blocks[0].precision, 'interval-maximum-only');
+  assert.equal(result.blocks[0].startedAt, null);
+  assert.equal(result.blocks[1].kind, 'launcherLoop');
+  assert.equal(result.seriesTally.main.inconclusive, 1);
+  assert.equal(result.seriesTally.retained.pass, 1);
+  const lines = []; printSummary(report, line => lines.push(line));
+  assert.equal(lines.join('\n').includes(sentinel), false);
+  assert.ok(lines.join('\n').includes('unattributed'));
+});
+
+test('P1 Worker GC delivered after synchronous collection is attached to the completed read', async () => {
+  const { Worker, MessageChannel } = await import('node:worker_threads');
+  const { port1, port2 } = new MessageChannel();
+  const timing = new Promise(resolve => port1.on('message', m => { if (m.type === 'worker-timing') resolve(m.read); }));
+  const worker = new Worker(`
+    const { parentPort, workerData } = await import('node:worker_threads');
+    await import(workerData.preload);
+    const v8 = await import('node:v8'), vm = await import('node:vm');
+    v8.setFlagsFromString('--expose-gc');
+    const collect = vm.runInNewContext('gc');
+    parentPort.on('message', () => { collect(); parentPort.postMessage('done'); });
+  `, { eval: true, workerData: { previewMetricsPort: port2,
+    preload: new URL('../../tools/testing/fixtures/topic-member-previews-metrics.mjs', import.meta.url).href }, transferList: [port2] });
+  try {
+    const response = new Promise((resolve,reject) => { worker.once('message',resolve); worker.once('error',reject); });
+    worker.postMessage('read');
+    await response;
+    const read = await timing;
+    assert.equal(read.readIndex, 1);
+    assert.ok(read.gc.length > 0);
+    assert.ok(read.gc.every(e => e.startedAt < read.finishedAt && e.startedAt + e.durationMs > read.startedAt));
+  } finally { port1.close(); assert.equal(await worker.terminate(), 1); }
+});
+
+test('P1 public retained buffering preserves page counters, byte accounting, membership and replay', async t => {
+  const { memberFixture, namespace } = await import('../testing/topic-members-fixture.mjs');
+  const { retainedEngineSeries } = await import('../../tools/testing/measure-topic-member-previews.mjs');
+  const f = memberFixture(t), rows = [f.admit('first'), f.admit('second')];
+  const expected = rows.map(r => r.id).sort((a,b) => Buffer.compare(Buffer.from(a),Buffer.from(b)));
+  const config = { path: f.path, namespace, cell: { limit: 1 }, input: {
+    namespace, selection: { type: 'unfiled' }, accessRevision: 'retained', limit: 1,
+    previews: { version: 'topic-member-previews-v1' },
+  } };
+  const result = await retainedEngineSeries(config, expected);
+  assert.equal(result.complete, true); assert.equal(result.emittedRefs, 2);
+  assert.equal(result.records.length, 2); assert.equal(result.workerReads.length, 3);
+  assert.deepEqual(result.records.map(r => r.counters.readIndex), [1,2]);
+  assert.ok(result.records.every(r => r.bytes === r.actualTransportPayloadBytes && r.resourceBounds));
 });

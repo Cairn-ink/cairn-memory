@@ -712,3 +712,371 @@ docs/plans/topic-member-previews-impl.md
 tools/testing/fixtures/topic-member-previews-metrics.mjs
 tools/testing/measure-topic-member-previews.mjs
 ```
+
+### Launch measurement r4 diagnosis and harness round 2
+
+This is a diagnostic correction against `87ced4d0`. The launch decision remains
+**286 pass, 285 inconclusive, 5 fail** across 144 cells and 576 series decisions.
+No launch rerun, smoke, timing gate, profile edit, runtime engine edit, setup
+runtime regeneration, network access or commit was performed. The supplied r4
+JSON and numeric journal were parsed with Node; neither was printed. The
+41,080 journal attempts independently reproduce all 18 main/warmup/cold records
+whose host maximum exceeds 50 ms. The report supplies the other two retained
+observations. Journal and report inventories match exactly.
+
+| Series | Pass | Inconclusive | Fail |
+| --- | ---: | ---: | ---: |
+| main | 48 | 94 | 2 |
+| cold | 48 | 96 | 0 |
+| warmup | 48 | 95 | 1 |
+| retained | 142 | 0 | 2 |
+
+All 285 inconclusives include `reviewDeadline=null`; some also lack population,
+percentile or extraction evidence. Three failing concurrent series also have
+that null deadline. The supplied product profile has `reviewMs:null`. A real
+product review deadline must arrive through the existing profile mechanism;
+no replacement value is supplied by this change.
+
+**Complete recoverable >50 ms inventory.** Times below are local UTC+8, on
+October 27 through October 28, 2026; cell and attempt indices are zero based.
+`I` means the entire observation interval is shown, with its maximum gap:
+r4 saved individual gap timestamps only above 100 ms. Thus the 15 `I` rows
+are at least one near miss each, not a reconstruction of every 50–100 ms gap.
+Additional near misses within those intervals, or within the five intervals
+with a larger gap, cannot be recovered. `B` means exact recorded block bounds.
+Future reports save every >50 ms block while retaining the absolute >100 ms
+gate and counter unchanged. Every row below is a host observation; there are
+**zero cold-child or launcher maxima >50 ms**.
+
+| Cell / shape | Series / attempt | Local start–end | Gap ms | Precision / phases |
+| --- | --- | --- | ---: | --- |
+| 9 / 1112/18/DELETE/L2/100/idle | main #32 | 23:10:24.062–24.192 | 54.283 | I |
+| 22 / 1112/18/WAL/L1/100/same-owner | main #48 | 23:19:07.036–07.451 | 72.181 | I |
+| 22 / same shape | retained | 23:19:11.771–12.061 | 290.023 | B; retained-read → retained-close |
+| 71 / 1112/33/WAL/unfiled/100/other-owner | main #49 | 23:41:22.513–22.800 | 286.589 | B; read → writer-stop-ipc |
+| 93 / 3336/18/WAL/L1/100/idle | retained | 23:55:28.616–28.918 | 301.735 | B; retained-read → retained-read |
+| 94 / 3336/18/WAL/L1/100/same-owner | warmup #0 | 23:55:29.435–30.136 | 700.627 | B; read → close |
+| 107 / 3336/18/WAL/unfiled/100/other-owner | main #17 | 23:59:54.907–55.150 | 84.348 | I |
+| 107 / same shape | main #18 | 23:59:55.322–55.590 | 86.555 | I |
+| 107 / same shape | main #19 | 23:59:55.679–55.997 | 88.326 | I |
+| 107 / same shape | main #20 | 23:59:56.168–56.388 | 82.202 | I |
+| 107 / same shape | main #21 | 23:59:56.559–56.841 | 66.532 | I |
+| 107 / same shape | main #22 | 23:59:57.033–57.332 | 89.082 | I |
+| 107 / same shape | main #23 | 23:59:57.513–57.749 | 81.514 | I |
+| 107 / same shape | main #24 | 23:59:57.924–58.241 | 68.575 | I |
+| 107 / same shape | main #25 | 23:59:58.433–58.648 | 63.241 | I |
+| 107 / same shape | main #26 | 23:59:58.819–59.080 | 92.488 | I |
+| 107 / same shape | main #27 | 23:59:59.250–59.463 | 74.204 | I |
+| 107 / same shape | main #28 | 23:59:59.702–59.809 | 107.199 | B; read → close |
+| 107 / same shape | main #30 | 00:00:00.340–00.566 | 70.551 | I |
+| 142 / 3336/33/WAL/unfiled/100/same-owner | main #249 | 00:17:32.217–32.320 | 61.591 | I |
+
+Distribution of the **20 recoverable rows** by cell is
+`9:1, 22:2, 71:1, 93:1, 94:1, 107:13, 142:1`; by series it is
+`main:17, warmup:1, retained:2, cold:0, launcher:0`. Nineteen are in WAL;
+the only DELETE near miss is cell 9. All are limit100. This association does
+not establish a WAL defect or a payload-size cause.
+
+There is no heap telemetry in r4, so a relationship to heap size or V8 GC is
+untestable retrospectively. Attempt index is only a record-accumulation proxy.
+For main indices 0–49, 50–99, 100–249 and 250+, respectively, records with
+maxima >50 ms are **16/7,200, 0/3,210, 1/9,095 and 0/14,109**. The two main
+failures are #49 and #28. Cell 94 fails on its first warmup, before cell record
+accumulation. Both retained failures occur after 63 preceding attempts in
+their cells. This does not show a monotonic growth of blocks with accumulated
+records; it does not rule out allocation pressure or a GC cycle carried across
+a cell boundary.
+
+Time clustering is clearer. Cell 107's main #0–#16 have maximum loop gap
+2.024 ms, #17–#30 peak at 107.199 ms, and #31–#49 peak at 4.696 ms even though
+more records have accumulated. Its thirteen near misses/failure cluster in
+about six seconds. Each has a host-message handler within about 1 ms of the
+reported maximum (handler range 62.760–106.966 ms); SQLite totals remain about
+9–11 ms. This locates wall time in response handling, but cannot separate
+JSON decoding, host GC, page faults and descheduling within the handler.
+Cells 93 and 94 have block starts only 819 ms apart across a cell boundary
+(517 ms from the first block's end to the next start). Cell 22's main near
+miss precedes its retained block by about five seconds.
+
+Cell 22's retained-validation → membership markers span 251.977 ms inside its
+290 ms block. Cell 93's first validation → next-read markers span 247.036 ms
+inside its 302 ms block. This establishes that harness work was observed; its
+wall time could itself include GC or scheduler stalls. Cell 71 finishes its
+read after 63.125 ms; almost the entire 286.589 ms block lies between the
+close and writer-stop markers, with only 6.870 ms of recorded SQLite calls.
+It is a close/termination candidate, without evidence distinguishing a native
+join from process scheduling or GC. Cell 94's read takes 770.235 ms with
+10.523 ms of SQLite calls and returns `cursor_stale`; both host and Worker
+were slow concurrently. Process-wide or VM scheduling, paging, Worker CPU and
+unmeasured waits remain possible. No individual r4 failure can be assigned a
+proven GC, page-fault or run-queue cause from these fields.
+
+**Correlation with coarse machine logs.** Each group below brackets the block
+start, or the maximum-only interval start, using the supplied samples. Swap
+values are page-count increases across the enclosing peer-log pair, not
+process-attributed faults. The last cell 107 interval crosses midnight.
+
+| Cells / rows | 5 s load samples (time: one-minute load) | Peer-log bracket | Δpswpin / Δpswpout pages |
+| --- | --- | --- | ---: |
+| 9 | 23:10:24: 4.86 → 23:10:29: 4.79 | 23:10:18–28 | 515 / 13,483 |
+| 22 main | 23:19:06: 8.43 → 23:19:11: 8.55 | 23:19:00–10 | 915 / 0 |
+| 22 retained | 23:19:11: 8.55 → 23:19:16: 8.83 | 23:19:10–27 | 913 / 40,085 |
+| 71 | 23:41:19: 2.62 → 23:41:24: 2.73 | 23:41:22–32 | 3,221 / 0 |
+| 93 and 94 | 23:55:27: 2.44 → 23:55:32: 2.48 | 23:55:23–33 | 5,059 / 0 |
+| 107 #17–#24 | 23:59:53: 2.43 → 23:59:58: 2.48 | 23:59:54–00:00:04 | 1,772 / 0 |
+| 107 #25–#28, #30 | 23:59:58: 2.48 → 00:00:03: 2.60 | same bracket | 1,772 / 0 |
+| 142 | 00:17:31: 1.85 → 00:17:36: 1.78 | 00:17:25–35 | 6,467 / 0 |
+
+Every enclosing peer sample reports `tests=[]`; the load samples report
+`codex=0`. These observations cannot exclude shorter-lived peer activity
+between samples. A nominal 10 s peer interval is actually 17 s at cell 22's
+retained block, so it cannot localize the swap or load surge to that 290 ms
+block. Across all 465 supplied peer rows (23:00:17–00:17:55), cumulative
+swap-in/out increase by 1,374,747 / 1,830,846 pages. Among the 452 exactly
+10 s intervals, swap-in p50/p90/max are 1,017 / 7,419 / 37,288 pages; using
+all consecutive intervals instead gives 1,023 / 7,306 / 37,288. These are
+recomputed from the raw log, with the denominator made explicit. Active
+system-wide swapping is a confounder even when aggregate free RAM is large;
+the logs do not identify this process's faults. Load averages cannot resolve
+100–700 ms pauses or establish available vCPU time. This kernel supplies no
+pressure data in the provided observations.
+
+**Retained observation correction.** The preregistered header and
+`PROTOCOL.loopObservation` specify heartbeat bracketing through awaited close
+and the final drain; neither requires preview validation to be observed.
+The historical round-1 description records that validation was observed;
+it is not a protocol requirement. Retained traversal now buffers successful
+engine outputs and elapsed-read metadata, reading only `ok` and `nextCursor`
+to advance. Construction, reads, the replay read, awaited close and the final
+heartbeat drain remain observed. Preview validation, JSON/byte accounting,
+records, membership comparison and the replay assertion all run after
+`loop.finish()`. A failed engine read still closes and drains, then validates
+the preceding successful outputs. No block or failure is excluded from the
+gate. This corrects measurement ownership with the same absolute ceiling;
+it does not redefine a threshold or subtract baseline noise.
+
+The deterministic test injects 200 ms through an artificial clock during
+validation and records zero retained blocks. The same injection during the
+engine read, replay read and close is recorded as a 200 ms block in each
+control. A public retained-reader test checks page-specific counters, transport
+bytes, membership and replay after buffering. There is no timing assertion on
+a real machine. The preload wraps engine listener registration rather than
+installing an early message listener, preserving requests queued during Worker
+bootstrap; the public tests exercise this ordering.
+
+**Attribution schema and rules.** All newly recorded >50 ms blocks, including
+warmup, main, cold, retained and launcher, have a diagnostic `attribution`.
+`decide()` never reads it. Raw loop maxima and >100 counters retain all samples.
+
+* `hostHeapUsed.start/end` are heap-used snapshots at the two heartbeat
+  endpoints. `resources` contains process-wide deltas for `majorPageFault`,
+  `minorPageFault`, `voluntaryContextSwitches`, `involuntaryContextSwitches`,
+  `userCPUTime` and `systemCPUTime`. Loop/attempt totals are recorded too. CPU
+  times are microseconds; faults/switches are counts. These counters cover all
+  process threads, not just the host. Endpoint sampling itself has overhead.
+* `hostGC` contains overlapping V8 performance entries with numeric kind,
+  epoch `startedAt` and `durationMs`. The observer drains pending entries before
+  disconnecting. Worker `workerReads` record request dispatch/reply timestamps,
+  OS TID, CPU source/delta, and V8 GC entries overlapping each read. Local
+  execution confirms `process.threadCpuUsage` is absent on 22.16.0 and present
+  on 24.22.1. Node 24 records user/system microseconds and total milliseconds;
+  Node 22 uses the first schedstat field (thread runtime ns) converted to ms.
+  Scheduler accounting can update late at a tick/context switch, so the Node
+  22 delta is approximate and may include CPU charged across a boundary. It
+  is preferable to mislabelling process-wide CPU as Worker CPU. Worker timing
+  begins when its engine message listener runs; it excludes bootstrap. A
+  separate Worker-online packet maps OS TID to Worker ID before a read can
+  finish, preserving scheduler attribution even if forced termination prevents
+  read timing publication. Such termination can leave no completed CPU/GC
+  read record; absence does not mean zero CPU or zero GC.
+* Worker GC entries are delivered asynchronously. The preload adds one
+  `setImmediate` delivery turn before forwarding each engine reply so pending
+  GC entries can be collected before termination. `finishedAt` and CPU end
+  precede this turn; `deliveredAt` follows it. The host's elapsed read and loop
+  measurements include its cost. No cost is subtracted, and no such yield is
+  added to engine runtime modules. An explicit-GC Worker regression verifies
+  attachment of a synchronous collection to the completed read.
+* `scheduler` retains raw timestamped procfs samples, per-thread points,
+  `runQueueMs`, `cpuMs`, `bracketed`, the largest observed sample spacing, and
+  enclosing `vmstatDelta` (`pswpin`, `pswpout`, `pgmajfault`). A separate
+  SQLite-free child samples all measuring-process tasks every 10 ms, using
+  schedstat's second field for run-queue ns and first for CPU ns. Ten samples
+  per 100 ms ceiling give useful resolution at moderate read/IPC volume.
+  Both ends of every sample are timestamped; sampler descheduling is visible
+  in sample spacing. All task samples allow mapping Worker TIDs without an
+  online-registration race. A short-lived or terminating Worker may lack
+  enclosing points; its delta then represents only the observed partial
+  interval, with `bracketed=false`, or is null. Nothing is extrapolated or
+  treated as a measured zero. Even enclosing deltas include up to the actual
+  boundary sample spacing on either side, so they are candidates, not exact
+  event attribution. No pressure metric or hypervisor steal measurement is
+  inferred from schedstat.
+* One sampler is reused per measuring process; a cold measuring child gets
+  its own sampler, and the launcher continues sampling itself. The parent
+  retains only the active window plus its preceding sample, then flushes by
+  IPC rendezvous after the gate has stopped. Sampler failure or a 5 s IPC
+  watchdog makes data unavailable, never silently zero; the sampler is
+  disconnected and its actual exit is awaited. Diagnostic assembly and flush
+  are outside the gate. Standalone helper tests without a sampler explicitly
+  mark `samplerUnavailable`; launch entry points install it automatically.
+* `workerLifecycle` timestamps `Worker.terminate()` invocation, synchronous
+  return, promise completion and the Worker exit event. Together with close
+  phase markers, these expose synchronous termination-call time versus the
+  remaining awaited interval. A native join, individual internal close steps,
+  forced-termination finalizers or kernel waits cannot be split without an
+  engine/native hook: that finer attribution is deferred. Existing bounded
+  SQLite call aggregates still include explicit database/statement close calls.
+
+Classification rules are deliberately simple and non-exclusive. `signals`
+keeps every matching label; `classification` selects the first in this order:
+`host-gc` when overlapping host-GC duration is at least half the gap;
+`harness-sync` when a validation/membership phase intersects it;
+`run-queue` when the host has enclosing scheduler points and their run-queue
+increase is at least half the gap; `page-fault` when the process major-fault
+delta is positive; `worker-join-or-close` when a terminate interval or close
+phase intersects it; otherwise `unattributed`. A close label is only temporal
+association, a major fault need not account for most of a gap, and a run-queue
+label includes boundary uncertainty. Worker CPU/GC and system swap remain raw
+supporting evidence rather than automatic proof. With validation markers
+removed, retained `harness-sync` should no longer occur. Raw fields permit
+reclassification. The synthetic attribution regression checks overlapping
+signals, missing scheduler evidence, process deltas, delayed GC and unchanged
+decision output.
+
+The raw-fd guard scans the sampler, attribution helper, summary and byte
+verifier as well as the existing closure. New allowances match exact imports
+and individual source sites: the Worker fallback opens only its fixed procfs
+counter, the child only procfs counters, and the two standalone SQLite-free
+CLIs only report/source input. None covers any database or companion path;
+injected parent/Worker database and WAL reads still fail the guard.
+
+**Rerun requirements.** The primary needs a quiet window with process activity
+and swap monitored, and the product's real review deadline when supplied via
+the unchanged `--writer-profile` mechanism. Preserve the 144-cell matrix,
+three warmups, 50/10 successful-page populations, ceilings, all refusals and
+all loop blocks. A null review deadline still makes the corresponding checks
+inconclusive. Do not carry a proposed deadline into this report or call r4 a
+pass. No new measurement has been authorized or run in this round.
+
+`node tools/testing/summarize-topic-member-previews.mjs "$REPORT"` parses the
+report without printing it, emits the ordered block table and attribution,
+series tallies, matrix groups and non-pass checks. Older maximum-only data
+is labelled explicitly. `node tools/testing/verify-topic-member-previews-protocol.mjs`
+compares seven byte slices against `87ced4d0`: header, PROTOCOL, Cartesian
+matrix, summary/populations, decide, collection targets/ceilings, and retained
+plus series decisions. It prints byte lengths and SHA-256 values. In particular,
+PROTOCOL is 1,186 identical bytes and decide is 2,569 identical bytes. The
+absolute 100 ms ceiling, population selection and failure precedence remain
+unchanged.
+
+Verification used the same 28 explicit paths as round 1. The selection was
+independently derived using a filesystem glob and `rg --files`, sorted and
+compared: **28 files, identical**. The actual runner received each path as a
+separate argument with concurrency one and owned scratch on memory-backed
+storage. The equivalent zsh command is:
+
+```sh
+tests=(
+  core/test/no-raw-db-fd.test.mjs
+  core/test/sqlite-lock-safety.test.mjs
+  core/test/topic-member-previews-bounds.test.mjs
+  core/test/topic-member-previews-compatibility.test.mjs
+  core/test/topic-member-previews-installed.test.mjs
+  core/test/topic-member-previews-measurement.test.mjs
+  core/test/topic-member-previews-mutations.test.mjs
+  core/test/topic-member-previews-scale.test.mjs
+  core/test/topic-member-previews-text.test.mjs
+  core/test/topic-member-previews-visibility.test.mjs
+  core/test/topic-member-previews.test.mjs
+  core/test/topic-members-bounds.test.mjs
+  core/test/topic-members-compatibility.test.mjs
+  core/test/topic-members-integration.test.mjs
+  core/test/topic-members-mutations.test.mjs
+  core/test/topic-members-primary.test.mjs
+  core/test/topic-members-recheck-findings.test.mjs
+  core/test/topic-members-review-findings.test.mjs
+  core/test/topic-members-round3-findings.test.mjs
+  core/test/topic-members-scale.test.mjs
+  core/test/topic-members-visibility.test.mjs
+  core/test/topic-members.test.mjs
+  core/test/topic-overview-lifecycle.test.mjs
+  core/test/topic-overview-raw29.test.mjs
+  core/test/topic-overview-visibility.test.mjs
+  core/test/topic-overview.test.mjs
+  core/test/topic-reader-cancellation.test.mjs
+  core/test/topic-reader-sqlite.test.mjs
+)
+round2_scratch="$(mktemp -d)"
+for version in 22.16.0 24.22.1; do
+  node_binary="$NVM_DIR/versions/node/v$version/bin/node"
+  TMPDIR="$round2_scratch" "$node_binary" tools/testing/run.mjs \
+    --test-concurrency=1 --test-reporter=tap "${tests[@]}"
+  rc=$?
+  printf 'Node %s test exit=%s\n' "$version" "$rc"
+  "$node_binary" tools/testing/verify-topic-member-previews-protocol.mjs
+  rc=$?
+  printf 'Node %s byte-proof exit=%s\n' "$version" "$rc"
+  "$node_binary" tools/testing/summarize-topic-member-previews.mjs "$REPORT"
+  rc=$?
+  printf 'Node %s summary exit=%s\n' "$version" "$rc"
+done
+rmdir "$round2_scratch"
+```
+
+The test set includes all new/touched tests, the previews measurement test,
+and both raw-fd and SQLite lock-safety guards. Tests cover six new cases:
+retained validation exclusion and engine/replay/close controls; raw attribution
+and decision independence; sampler rendezvous/exit; summary compatibility and
+redaction; asynchronous Worker GC delivery; and public retained-page buffering.
+The existing public instrumentation test also checks Worker CPU/identity,
+termination spans and process resources.
+
+Intermediate Node 22 focused runs exposed an unsupported MessagePort method,
+a probe retaining its port, the early-listener request race and an unsuitable
+child `close` event wait. Their actual test exit codes were 1, 143 (explicitly
+terminated during investigation), 1 and 1. A standalone sampler diagnosis
+exited 13 for unsettled top-level await. These defects were corrected; the
+subsequent focused eight-regression run exited 0 (8/8). A first byte-verifier
+run exited 1 for an incorrect source marker; the corrected verifier compares
+all seven regions. No failing timing measurement was rerun or discarded.
+
+| Final verification | Actual exit code / result |
+| --- | --- |
+| 28 explicit files, Node 22.16.0 | 0; 367/367 |
+| 28 explicit files, Node 24.22.1 | 0; 367/367 |
+| Same 28-file runs before the final early Worker-identity coverage addition | 0 on both versions; 367/367 each |
+| Byte comparison against `87ced4d0`, both versions | 0 each; seven byte-identical sections |
+| Summary CLI on supplied r4 JSON, both versions | 0 each; 20 recoverable rows, 576 decisions |
+| Six harness/diagnostic modules with `node --check`, both versions | 0 for each file |
+| Journal/report inventory cross-check with Node | 0; 41,080 attempts, 18 identical non-retained >50 ms records plus two retained rows |
+| Test-path and delivery-list cross-checks | 0; 28 test files, 10 changed files, four untracked additions |
+| Whitespace, newline and added machine-path checks | 0; tracked and untracked changes covered |
+
+Final test execution was supervised through completion. Both 28-file runs
+include the final Worker identity packet and its scheduler coverage assertion.
+Owned scratch, logs and temporary inventories were removed after reading the
+actual child exit codes. No background measurement or sampler remains running.
+
+The delivery inventory is **10 files**. Route one combines
+`git diff --name-only HEAD` with `git ls-files --others --exclude-standard`.
+Route two compares every `git ls-tree -rz HEAD` blob ID with
+`git hash-object --stdin-paths`, then independently walks the core/tools/docs
+filesystem for added files while honoring Git ignores. Sorted lists compare
+identically. The **4** untracked additions are also cross-checked against
+`git status --porcelain`. The final whitespace/newline/added-path check covers
+tracked changes and these additions. The existing document is already in the
+artifact manifest; these new tools are development diagnostics, not new shipped
+runtime modules. No manifest or generated runtime update is needed.
+
+```text
+core/test/fixtures/no-raw-db-fd-allowlist.json
+core/test/no-raw-db-fd.test.mjs
+core/test/topic-member-previews-measurement.test.mjs
+docs/plans/topic-member-previews-impl.md
+tools/testing/fixtures/topic-member-previews-attribution.mjs
+tools/testing/fixtures/topic-member-previews-metrics.mjs
+tools/testing/fixtures/topic-member-previews-sampler.mjs
+tools/testing/measure-topic-member-previews.mjs
+tools/testing/summarize-topic-member-previews.mjs
+tools/testing/verify-topic-member-previews-protocol.mjs
+```

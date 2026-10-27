@@ -41,6 +41,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import threads, { MessageChannel } from 'node:worker_threads';
 import { syncBuiltinESMExports } from 'node:module';
 import { serialize } from 'node:v8';
+import { observeGC, resourceSnapshot, resourceDelta, attributeBlock, startSampler } from './fixtures/topic-member-previews-attribution.mjs';
+let activeSampler;
 import { createTestWorkspace } from './workspace.mjs';
 import { latency } from './measure-topic-overview-contention.mjs';
 import { SQLITE_STAGES, SQLITE_STATEMENTS } from '../../core/topic-reader-sqlite.mjs';
@@ -122,23 +124,40 @@ export function writerProfileInput(value) {
   return { captureMs: value.captureMs, reviewMs: value.reviewMs, provenance: value.provenance };
 }
 const unwrap = result => { if (!result.ok) throw measurementError(safeFailure(result.error).code); return result.value; };
-export function observeLoop({ now = () => performance.now(), epoch = performance.timeOrigin } = {}) {
+export function observeLoop({ now = () => performance.now(), epoch = performance.timeOrigin,
+  snapshot = resourceSnapshot, gc = observeGC(), sampler = activeSampler } = {}) {
+  sampler?.begin();
   let last = now(), maxMs = 0, blocksOver100 = 0, phase = 'construction', lastPhase = phase;
+  let previous = snapshot();
+  const initial = previous;
   const blocks = [], phases = [{ phase, at: epoch + last }];
-  const sample = () => { const time = now(), gap = time - last; maxMs = Math.max(maxMs, gap);
-    if (gap > 100) { blocksOver100++; blocks.push({ startedAt: epoch + last, finishedAt: epoch + time, gapMs: gap, phaseStart: lastPhase, phaseEnd: phase }); }
-    last = time; lastPhase = phase; };
+  const sample = () => { const time = now(), gap = time - last, current = snapshot(); maxMs = Math.max(maxMs, gap);
+    if (gap > 100) blocksOver100++;
+    if (gap > 50) blocks.push({ startedAt: epoch + last, finishedAt: epoch + time, gapMs: gap, phaseStart: lastPhase, phaseEnd: phase,
+      attribution: { hostHeapUsed: { start: previous.heapUsed, end: current.heapUsed }, resources: resourceDelta(previous.resources, current.resources) } });
+    last = time; lastPhase = phase; previous = current; };
   const timer = setInterval(sample, 1);
   let completion;
   return { sample, phase(value) { phase = value; phases.push({ phase, at: epoch + now() }); }, finish() { return completion ??= (async () => {
     try {
       await new Promise(r => setImmediate(r)); await delay(2); sample();
-      return { maxMs, blocksOver100, blocks, phases, startedAt: phases[0].at, finishedAt: epoch + last };
-    } finally { clearInterval(timer); }
+      clearInterval(timer);
+      const resources = resourceDelta(initial.resources, previous.resources), hostGC = gc.drain();
+      const scheduler = await sampler?.finish();
+      for (const block of blocks) attributeBlock(block, { gc: hostGC, samples: scheduler?.samples, phases });
+      return { maxMs, blocksOver100, blocks, phases, startedAt: phases[0].at, finishedAt: epoch + last,
+        resources, hostHeapUsed: { start: initial.heapUsed, end: previous.heapUsed }, hostGC,
+        samplerUnavailable: !scheduler || scheduler.unavailable };
+    } finally { clearInterval(timer); gc.close(); }
   })(); } };
 }
+function addWorkerAttribution(loop, observation) {
+  for (const block of loop.blocks) attributeBlock(block, { gc: loop.hostGC,
+    samples: block.attribution.scheduler.samples, phases: loop.phases,
+    workerReads: observation.workerReads, workerThreads: observation.workerThreads, workerLifecycle: observation.workerLifecycle });
+}
 function instrumentWorkers(sourceCases = {}) {
-  const Native = threads.Worker, ports = [], metrics = [], transportBytes = [], hostMessages = [];
+  const Native = threads.Worker, ports = [], metrics = [], transportBytes = [], hostMessages = [], workerReads = [], workerThreads = [], workerLifecycle = [];
   threads.Worker = class extends Native {
     emit(event, ...args) {
       if (event !== 'message') return super.emit(event, ...args);
@@ -147,14 +166,25 @@ function instrumentWorkers(sourceCases = {}) {
       finally { hostMessages.push({ startedAt, finishedAt: timestamp(), elapsedMs: performance.now() - started }); }
     }
     constructor(url, options) {
-      const { port1, port2 } = new MessageChannel(); ports.push(port1); port1.on('message', m => metrics.push(m));
+      const { port1, port2 } = new MessageChannel(); ports.push(port1); port1.on('message', m => {
+        if (m.type === 'worker-timing') workerReads.push(m.read);
+        else if (m.type === 'worker-online') workerThreads.push(m);
+        else metrics.push(m);
+      });
       super(url, { ...options, workerData: { ...options.workerData, previewMetricsPort: port2, previewSourceCases: sourceCases }, transferList: [port2],
         execArgv: ['--import', new URL('./fixtures/topic-member-previews-metrics.mjs', import.meta.url).href] });
+      const workerId = this.threadId;
+      this.on('exit', () => workerLifecycle.push({ operation: 'exit', workerId, startedAt: timestamp(), finishedAt: timestamp() }));
       this.on('message', result => { if (result instanceof ArrayBuffer) transportBytes.push(result.byteLength); });
+    }
+    terminate(...args) {
+      const event = { operation: 'terminate', workerId: this.threadId, startedAt: timestamp() }; workerLifecycle.push(event);
+      const pending = super.terminate(...args); event.returnedAt = timestamp();
+      return Promise.resolve(pending).finally(() => { event.finishedAt = timestamp(); });
     }
   };
   syncBuiltinESMExports();
-  return { metrics, transportBytes, hostMessages, close() { ports.forEach(p => p.close()); threads.Worker = Native; syncBuiltinESMExports(); } };
+  return { metrics, transportBytes, hostMessages, workerReads, workerThreads, workerLifecycle, close() { ports.forEach(p => p.close()); threads.Worker = Native; syncBuiltinESMExports(); } };
 }
 export async function attempt(config, writer) {
   const { openMemoryReader } = await import('../../core/memory-reader.mjs');
@@ -175,6 +205,7 @@ export async function attempt(config, writer) {
     if (writer) { loop.phase('writer-stop-ipc'); writer.send({ type: 'stop' }); writerResult = await writer.wait('stopped'); }
     loop.phase('drain');
     const hostLoop = await loop.finish();
+    addWorkerAttribution(hostLoop, observation);
     const bytes = Buffer.byteLength(JSON.stringify(result)), cloneRepresentationBytes = serialize(result).byteLength;
     const page = result.ok ? result.value : null;
     const reasons = Object.fromEntries(previewReasons.map(reason => [reason, 0])); let previewBounds = true;
@@ -185,7 +216,7 @@ export async function attempt(config, writer) {
     const writes = writerResult?.calls ?? [];
     const overlap = !writer || writes.some(w => w.writeStartedAt < readFinishedAt && readStartedAt < w.writeFinishedAt);
     const counters = observation.metrics.at(-1) ?? null;
-    return { startedAt, finishedAt, readStartedAt, readFinishedAt, elapsedMs, hostLoop, hostMessages: observation.hostMessages, bytes, cloneRepresentationBytes,
+    return { startedAt, finishedAt, readStartedAt, readFinishedAt, elapsedMs, hostLoop, resources: hostLoop.resources, workerReads: observation.workerReads, workerThreads: observation.workerThreads, workerLifecycle: observation.workerLifecycle, hostMessages: observation.hostMessages, bytes, cloneRepresentationBytes,
       actualTransportPayloadBytes: observation.transportBytes.at(-1) ?? 0, transportFramingBytes: null, refs: page?.items.length ?? 0, status: page?.status ?? null,
       coverage: page?.coverage ?? null, failure: result.ok ? null : safeFailure(result.error), reasons, counters, writes,
       overlap, successfulPage: Boolean(page && (page.status === 'page' || page.items.length || page.nextCursor)),
@@ -422,7 +453,6 @@ export async function seed(count, schema, workspace) {
   } finally { await f.workspace.cleanup(); }
 }
 async function retainedTraversal(config, fixture) {
-  const { openMemoryReader } = await import('../../core/memory-reader.mjs');
   const { DatabaseSync } = await import('node:sqlite');
   const db = new DatabaseSync(config.path, { readOnly: true });
   let expected = [...fixture.expectedIds[config.cell.selection]];
@@ -435,40 +465,62 @@ async function retainedTraversal(config, fixture) {
     }
   } finally { db.close(); }
   expected.sort((a,b) => Buffer.compare(Buffer.from(a),Buffer.from(b)));
-  const observation = instrumentWorkers(config.sourceCases);
-  const loop = observeLoop(), reader = openMemoryReader({ path: config.path, ownerId: config.namespace.ownerId });
-  const records = [], ids = [], startedAt = timestamp(), start = performance.now(); let cursor, previousInput, previousOutput;
+  return retainedEngineSeries(config, expected);
+}
+// Test seam uses the same traversal as launch. Validation runs only after the
+// final heartbeat drain; replay's engine call remains inside the observation.
+export async function retainedEngineSeries(config, expected, {
+  openReader, observation, loop, validate = previewFits,
+} = {}) {
+  openReader ??= (await import('../../core/memory-reader.mjs')).openMemoryReader;
+  observation ??= instrumentWorkers(config.sourceCases);
+  loop ??= observeLoop();
+  const buffered = [], startedAt = timestamp(), start = performance.now();
+  let reader, cursor, previousInput, previousOutput, replay, failure, finishedAt;
   try {
+    await new Promise(r => setImmediate(r));
+    reader = openReader({ path: config.path, ownerId: config.namespace.ownerId });
     do {
       loop.phase('retained-read');
       const input = { ...config.input, ...(cursor ? { cursor } : {}) }, before = performance.now();
       const output = await reader.readTopicMembers(input), elapsedMs = performance.now() - before;
-      if (!output.ok) return { informational: true, complete: false, failure: safeFailure(output.error), records, elapsedMs: performance.now() - start, startedAt, finishedAt: timestamp() };
-      await new Promise(r => setImmediate(r));
-      loop.phase('retained-validation');
-      const counters = observation.metrics.at(-1) ?? null;
-      const previewBounds = output.value.items.every(previewFits);
-      records.push({ elapsedMs, bytes: Buffer.byteLength(JSON.stringify(output)),
-        actualTransportPayloadBytes: observation.transportBytes.at(-1), counters,
-        resourceBounds: previewBounds && counters !== null && counters.extractions <= config.cell.limit &&
-          counters.sourceBytes <= 12000 * config.cell.limit && counters.decodedUnits <= 12000 * config.cell.limit && counters.normalizationUnits <= 4000 * config.cell.limit,
-        refs: output.value.items.length,
-        status: output.value.status, coverage: output.value.coverage });
-      ids.push(...output.value.items.map(r => r.id)); cursor = output.value.nextCursor;
+      if (!output.ok) { failure = output.error; break; }
+      buffered.push({ output, elapsedMs });
+      cursor = output.value.nextCursor;
       previousInput = input; previousOutput = output;
     } while (cursor);
-    loop.phase('retained-membership');
-    if (JSON.stringify(ids) !== JSON.stringify(expected)) throw measurementError('membership_mismatch', { actualCount: ids.length, expectedCount: expected.length });
-    loop.phase('retained-replay');
-    if (previousInput.cursor) assertReplay(await reader.readTopicMembers(previousInput), previousOutput);
-    return { informational: true, complete: true, exactEof: true, expectedRefs: expected.length, emittedRefs: ids.length,
-      startedAt, finishedAt: timestamp(), hostMessages: observation.hostMessages,
-      lifecycleLatency: { ...latency(records.map(r => r.elapsedMs)), totalMs: performance.now() - start }, records };
+    if (!failure && previousInput.cursor) {
+      loop.phase('retained-replay');
+      replay = await reader.readTopicMembers(previousInput);
+    }
   } finally {
     loop.phase('retained-close');
-    try { await reader.close(); }
-    finally { try { config.retainedLoop = await loop.finish(); } finally { observation.close(); } }
+    try { await reader?.close(); }
+    finally {
+      try { config.retainedLoop = await loop.finish(); addWorkerAttribution(config.retainedLoop, observation); }
+      finally { observation.close(); }
+    }
+    finishedAt = timestamp();
   }
+  const totalMs = performance.now() - start;
+  const records = buffered.map(({ output, elapsedMs }, i) => {
+    const counters = observation.metrics.find(m => m.readIndex === i + 1) ?? observation.metrics[i] ?? null;
+    const previewBounds = output.value.items.every(validate);
+    return { elapsedMs, bytes: Buffer.byteLength(JSON.stringify(output)),
+      actualTransportPayloadBytes: observation.transportBytes[i], counters,
+      resourceBounds: previewBounds && counters !== null && counters.extractions <= config.cell.limit &&
+        counters.sourceBytes <= 12000 * config.cell.limit && counters.decodedUnits <= 12000 * config.cell.limit && counters.normalizationUnits <= 4000 * config.cell.limit,
+      refs: output.value.items.length, status: output.value.status, coverage: output.value.coverage };
+  });
+  if (failure) return { informational: true, complete: false, failure: safeFailure(failure), records,
+    elapsedMs: totalMs, startedAt, finishedAt };
+  const ids = buffered.flatMap(({ output }) => output.value.items.map(r => r.id));
+  if (JSON.stringify(ids) !== JSON.stringify(expected)) throw measurementError('membership_mismatch', { actualCount: ids.length, expectedCount: expected.length });
+  if (replay) assertReplay(replay, previousOutput);
+  return { informational: true, complete: true, exactEof: true, expectedRefs: expected.length, emittedRefs: ids.length,
+    startedAt, finishedAt, hostMessages: observation.hostMessages, resources: config.retainedLoop.resources,
+    workerReads: observation.workerReads, workerThreads: observation.workerThreads, workerLifecycle: observation.workerLifecycle,
+    lifecycleLatency: { ...latency(records.map(r => r.elapsedMs)), totalMs }, records };
 }
 // Append each raw attempt once. Only the current cell remains in memory; the
 // numeric journal survives interruption, and the final JSON keeps its schema.
@@ -522,6 +574,7 @@ async function run(args) {
   const workspace = createTestWorkspace(null, { prefix: 'cairn-preview-measure-' }), seeds = new Map();
   let sink;
   try {
+    activeSampler = await startSampler();
     sink = await createReportSink(reportPath);
     const idleLoop = observeLoop();
     try { await delay(100); }
@@ -576,7 +629,7 @@ async function run(args) {
       report.cells.some(c => c.decisions.some(d => d.decision === 'inconclusive')) ? 'inconclusive' : 'accepted';
   } catch (e) { recordFailure(report, e); }
   finally {
-    try { await workspace.cleanup(); }
+    try { await activeSampler?.close(); activeSampler = undefined; await workspace.cleanup(); }
     catch (e) { recordFailure(report, e); }
     finally { if (sink) await sink.finish(report); }
   }
@@ -592,12 +645,13 @@ async function commandLine() {
   if (process.argv[2] === '--writer') await writerProcess(JSON.parse(process.argv[3]));
   else if (process.argv[2] === '--cold') {
     const config = JSON.parse(process.argv[3]); let writer;
+    activeSampler = await startSampler();
     try {
       if (config.cell.load !== 'idle') { writer = actor(['--writer', JSON.stringify(config)]); await writer.wait('ready'); }
       const record = await attempt(config, writer);
       if (writer) { writer.send({ type: 'close' }); record.writerExit = await writer.exited; assert.equal(record.writerExit.code, 0); }
       await new Promise((resolveSend, reject) => process.send({ type: 'result', record }, error => error ? reject(error) : resolveSend()));
-    } finally { try { await terminateActor(writer); } finally { process.disconnect(); } }
+    } finally { try { await terminateActor(writer); } finally { await activeSampler?.close(); activeSampler = undefined; process.disconnect(); } }
   } else await main(process.argv.slice(2));
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
