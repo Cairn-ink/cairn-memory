@@ -17,6 +17,35 @@ const probe = `
   } catch (error) { console.log(JSON.stringify({ stage, code: error.errcode & 255 })); }
   finally { db?.close(); }
 `;
+// Product transcript: fixed labels and numeric outcomes only. Begin records
+// identify a child call whose outcome was lost to interruption or failure.
+const observedProbe = `
+  const { DatabaseSync } = await import('node:sqlite');
+  let db, stage = 'open', value, closeFailed = false;
+  const call = (stage, statement, work) => {
+    console.log(JSON.stringify({ begin: { stage, statement } }));
+    try {
+      const result = work();
+      console.log(JSON.stringify({ outcome: { stage, statement, ok: true } }));
+      return result;
+    } catch (error) {
+      console.log(JSON.stringify({ outcome: { stage, statement, ok: false,
+        extendedCode: Number.isInteger(error.errcode) ? error.errcode : 0 } }));
+      throw error;
+    }
+  };
+  try {
+    db = call('open', 'connection', () => new DatabaseSync(process.argv[1], { readOnly: true }));
+    stage = 'query';
+    const query = call('prepare', 'journal_mode', () => db.prepare('PRAGMA journal_mode'));
+    value = { mode: call('execute', 'journal_mode', () => query.get()).journal_mode };
+  } catch (error) { value = { stage, code: error.errcode & 255 }; }
+  finally {
+    if (db) try { call('close', 'connection', () => db.close()); }
+    catch (error) { closeFailed = true; value = { stage: 'close', code: error.errcode & 255 }; }
+  }
+  console.log(JSON.stringify({ value, closeFailed }));
+`;
 // The header cannot change without inode/size/mtime/ctime changing. Bound this
 // cache; compare nanosecond stats before AND after probing, never cache errors.
 const cache = new Map();
@@ -24,22 +53,43 @@ const fingerprint = path => {
   const s = lstatSync(path, { bigint: true });
   return [s.dev, s.ino, s.size, s.mtimeNs, s.ctimeNs].join(':');
 };
-export function probeRollbackJournal(path) {
+export function probeRollbackJournal(path, { observe } = {}) {
+  if (observe) return observe(() => runProbe(path, true));
+  return runProbe(path, false);
+}
+function runProbe(path, structured) {
   const before = fingerprint(path);
-  if (cache.get(path) === before) return { mode: 'delete' };
+  if (cache.get(path) === before) return structured ? { value: { mode: 'delete' }, events: [], complete: true, cached: true } : { mode: 'delete' };
   const uri = pathToFileURL(path);
   uri.searchParams.set('mode', 'ro'); uri.searchParams.set('nolock', '1');
-  const result = spawnSync(process.execPath, ['--input-type=module', '-e', probe, uri.href], {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', structured ? observedProbe : probe, uri.href], {
     encoding: 'utf8', timeout: 5000, maxBuffer: 4096, env: {},
   });
-  if (result.error || result.status !== 0 || result.signal) throw new Error('sqlite_journal_probe_failed');
-  const value = JSON.parse(result.stdout);
-  if (fingerprint(path) !== before) throw new Error('sqlite_journal_probe_changed');
-  if (value.mode === 'delete') {
+  if (!structured) {
+    if (result.error || result.status !== 0 || result.signal) throw new Error('sqlite_journal_probe_failed');
+    const value = JSON.parse(result.stdout);
+    if (fingerprint(path) !== before) throw new Error('sqlite_journal_probe_changed');
+    if (value.mode === 'delete') {
+      if (cache.size >= 64) cache.clear();
+      cache.set(path, before);
+    }
+    return value;
+  }
+  const events = [];
+  let value, closeFailed = false, complete = !result.error && result.status === 0 && !result.signal;
+  try {
+    for (const line of result.stdout.trim().split('\n')) {
+      const event = JSON.parse(line);
+      if (event.value) { value = event.value; closeFailed = event.closeFailed === true; }
+      else events.push(event);
+    }
+    complete &&= fingerprint(path) === before && Boolean(value);
+  } catch { complete = false; }
+  if (complete && !closeFailed && value.mode === 'delete') {
     if (cache.size >= 64) cache.clear();
     cache.set(path, before);
   }
-  return value;
+  return { value, events, complete };
 }
 
 // Stage and fsync before publication, then link atomically without replacing.
