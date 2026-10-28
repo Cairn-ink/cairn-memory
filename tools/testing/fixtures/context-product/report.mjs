@@ -1,3 +1,4 @@
+import { journalFailure } from './journal-failures.mjs';
 import { open, rename } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { fileChild } from './actors.mjs';
@@ -17,7 +18,7 @@ export async function createReportSink(path,header) {
   return {
     async delegate(){if(delegated)throw Error('journal_delegated');delegated=true;return {path,sequence};},
     async reclaim(next){if(!Number.isSafeInteger(next))next=fileChild('journal-sequence',path).value.sequence;if(next<sequence)throw Error('journal_sequence');sequence=next;delegated=false;},
-    async record(cell,series,record){if(delegated)throw Error('journal_delegated');await journal.writeFile(JSON.stringify({type:'record',sequence:++sequence,cell,series,record})+'\n');await journal.sync();},
+    async record(cell,series,record){if(delegated)throw Error('journal_delegated');await journal.writeFile(JSON.stringify({type:'record',sequence:++sequence,cell,series,record,...(journalFailure(series,record)?{failure:true}:{})})+'\n');await journal.sync();},
     async cell(cell,decision,summary={}){await partial.writeFile(JSON.stringify({type:'cell',cell,decision,summary})+'\n');await partial.sync();},
     async finish(status,extra={}){if(delegated)throw Error('journal_delegated');if(finished)return;finished=true;
       try{await partial.writeFile(JSON.stringify({type:'final',status,records:sequence,headerHash,...extra})+'\n');await partial.sync();}
@@ -33,7 +34,7 @@ export async function appendSessionRecords({path,sequence,rehearsal=false}) {
   const journal=await open(path+'.records.jsonl','a',0o600);
   let writing=Promise.resolve();
   return {get sequence(){return sequence;},record(cell,series,record){
-    const line=JSON.stringify({type:'record',sequence:++sequence,cell,series,record:filter(record)})+'\n';
+    const line=JSON.stringify({type:'record',sequence:++sequence,cell,series,record:filter(record),...(journalFailure(series,record)?{failure:true}:{})})+'\n';
     return writing=writing.then(async()=>{await journal.writeFile(line);await journal.sync();});
   },async close(){try{await writing;}finally{await journal.close();}}};
 }

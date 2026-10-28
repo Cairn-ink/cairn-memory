@@ -6,7 +6,7 @@ unobserved under same-projection capture/review writes. An earlier round-1 trial
 a T preparation `read_timeout`; the final rehearsal completes all four T probes
 and preserves that earlier evidence below. An earlier session with
 the adapter quantum also exported a failed pump with `index_unavailable`. Requests, O, W/WM, B and all four T probes complete their functional checks in
-the final round-1 rehearsal. The pinned test dependencies were installed offline. No engine runtime
+the final round-2 rehearsal. The pinned test dependencies were installed offline. No engine runtime
 change, qualification timing run, network access or commit was made.
 
 ## Remaining blocker and evidence
@@ -572,51 +572,135 @@ the earlier failure. Neither report records qualifying timing claims.
 All started round-1 generation, rehearsal and test processes have exited.
 There is no unattended task or promised background monitor.
 
+## Fix round 2
+
+The full spec re-review was read. These changes address its three findings
+against `62d6e871`; the standards-approved inputs, registration, counter, CI
+selection and F/A configuration are unchanged. The new `test/q2.test.mjs` is
+included automatically by both existing qualification test scripts.
+
+| Finding | Fix | Regression and baseline result |
+| --- | --- | --- |
+| 1 — durable pump/lane failures lost on replay | `journal-failures.mjs` is the SQLite-free failure classifier shared by the main and delegated journal writers and checkpoint replay. Both writers stamp a durable row-level failure bit; the delegated writer classifies before its rehearsal filtering. Replay also classifies legacy records without that bit. Failed pump states (including nested renewal status), renewal/close exceptions, unsuccessful maintenance initialization statuses, writer/sampler errors, nonzero or signaled lane/writer/child/locker/sampler exits, failed verdicts and the existing failure/supervision/capability records are retained. Existing contextual latency, overlap, percentile, freshness and registered T checks remain in force. Both pump wrappers now record renewal exceptions as failed completions. Cleanup journals lane exits once even on exceptional paths. | Two `Q2-01 durable …` tests use the actual **728-cell** engine inventory and both registered segment partitions. Each interrupts immediately after a durable pump/lane record, replays both marked and pre-marker records, then merges successful retries of all 728 cells: `knownFailure:true`, `complete:true`, `decision:"failed"`. Both writers, including rehearsal filtering, are covered. Two further `Q2-01` regressions cover the complete failure vocabulary (including the pre-throw maintenance status and explicit sampler failure), healthy/expected-error controls and actual renewal callbacks in both pump wrappers. Baseline exits **1** for each of the two primary record-kind tests. |
+| 2 — Card oracle shares engine DTO construction | The oracle no longer imports or calls `createPrivateCardStorage` or `cardDetailInside`. It projects support, applicability review, canonical note/receipt source refs, bindings, attribution and empty trigger refs from SQL and fixed field lists. Source availability and content identities are checked independently. Raw bindings/current-dependency recipes are absent from this frozen corpus and are explicitly refused if introduced without an independent projection. Fetch preparation and its closed schema continue to use this independent evidence. | `Q2-02` injects `support.unregistered:true` into the formerly shared helper, uses that defective helper in the real engine evidence-storage path, and requires preparation to reject it. Correct authored-note and retained-receipt Card DTOs match independently; added support/binding/source fields and trigger refs fail validation. Baseline exit **1** (missing expected rejection). |
+| 3 — initialization failure invents a measured read | Measured timestamps and the per-read cutoff result are produced only inside the branch that executes the measured call. Failed initialization retains null timestamps and a null cutoff result; its initialized error and failed expectation remain visible. The existing summarizer counts it as `noRead`. | `Q2-03` proves only the initialization call ran, asserts null measured timestamps/cutoff, and passes the real record to the summarizer: `reads:0`, `noRead:1`, `exceeded1000Ms:0`. A successful initialization still executes and accounts for a measured read. Baseline exit **1** (non-null measured-read start). |
+
+The final six-test regression file was also copied into an exclusively owned,
+detached `62d6e871` worktree and run on Node v24.15.0: **exit 1**, **six expected
+assertion failures**. Both creation and removal of that temporary worktree exited
+**0**. No runtime files in the baseline were changed. Individual primary-case
+baseline processes exited **1 / 1 / 1 / 1** (pump, lane, Card, initialization).
+
+### Round-2 verification
+
+Each table entry is **initial / final actual process exit code**, captured directly from
+`subprocess.run`, with the matching nvm Node binary and `PATH`. File commands
+used `node --experimental-vm-modules --test PATH`; the package command used
+`npm run test:qualification-inputs`. Counter resolution used the default pinned
+root, with no counter/volume reuse override and npm offline mode enabled.
+
+| Command / test file | Node 22.16.0 | Node 24.15.0 | Node 24.22.1 |
+| --- | --- | --- | --- |
+| `tools/testing/measure-context-read-product-fix1.test.mjs` | 0 / 0 | 0 / 0 | 0 / 0 |
+| `tools/testing/measure-context-read-product-fix2.test.mjs` | 0 / 0 | 0 / 0 | 0 / 0 |
+| `tools/testing/measure-context-read-product-v4.test.mjs` | 0 / 0 | 0 / 0 | 0 / 0 |
+| `tools/testing/measure-context-read-product-v4fix1.test.mjs` | 0 / 0 | 0 / 0 | 0 / 0 |
+| `tools/testing/measure-context-read-product-v4fix3.test.mjs` | 0 / 0 | 0 / 0 | 0 / 0 |
+| `tools/testing/measure-context-read-product-v4fix4.test.mjs` | 0 / 0 | 0 / 0 | 0 / 0 |
+| `tools/testing/measure-context-read-product.test.mjs` | 0 / 0 | 0 / 0 | 0 / 0 |
+| `tools/testing/fixtures/context-product/functional-check.mjs` | 0 / 0 | 0 / 0 | 0 / 0 |
+| `evaluation/context-read-qualification/test/q2.test.mjs` | 0 / 0 | 0 / 0 | 0 / 0 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 / 0 | 0 / 0 | 0 / 0 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 / 0 | 0 / 0 | 0 / 0 |
+| `npm run test:qualification-inputs` | 0 / 0 | 0 / 0 | 0 / 0 |
+
+The initial **36-command** matrix exited **0** throughout. The final **36-command**
+matrix repeated every command after the maintenance/sampler failure audit,
+again **0** throughout. All nine changed source modules stayed byte-identical
+through that final matrix (SHA-256 comparison **0**).
+
+All three reduced scripts report **43 tests, 39 passed, four skipped by design,
+zero failed**. Both smallest layouts and their deterministic repeats pass; all
+six catalogs/labels/refs and the template bytes are checked. All six Q2 tests
+pass on all three Nodes, giving **1 → 0** for each primary regression and the
+complete baseline file. Node 22's final strengthened standalone Q2 run was also
+repeated after the legacy-record assertions were added: **exit 0**, six passed.
+No ordinary test adds a timing gate.
+
+The reduced/full selection, six-manifest checks, mandatory full acceptance and
+preparation run, and exact preparation/segment commands in “Full rebuild, CI
+and registration” remain unchanged.
+
+`npm run test:qualification-inputs:full` ran **once** on Node **24.15.0** and
+exited **0**: **43 passed, zero skipped, zero failed**. Generation-start records
+independently confirm all six full-size layouts, plus a second v18/1,112 and
+v23/1,112 build for determinism; content/schema seals, canonical inventories and
+repeat file hashes agree with the frozen inputs.
+
+Development process exits (Node 24.15.0) are retained separately: the first
+four-case red run **1** included a JSON-loader test-fixture error; the corrected
+Card negative probe exited **1** for the expected missing rejection. The first
+four fixed cases exited **0**; the combined Q1/Q2/guards development run **0**;
+the added real receipt-Card positive probe **0**. The renewal mock's first trial
+exited **1** because its VM lacked `process`; after correcting that fixture,
+**0**. The final maintenance/sampler failure-vocabulary audit was **1 → 0**.
+The whole six-case baseline was run twice while extending the regressions:
+**1 / 1**, each with six expected assertion failures; the last copy's SHA-256
+matches the final regression file. Four individual primary
+baseline processes were **1 / 1 / 1 / 1**. Every temporary baseline worktree
+creation/removal exited **0**. These intentional red/development exits are not
+qualification results.
+
+### Round-2 rehearsal and remaining blocker
+
+After the final matrix, the full `--profile engine --rehearse` path ran **once**
+on Node **v24.22.1** with a fresh operator-filled registration and the supplied
+writer-profile input. Registration fill and validation each exited **0**. The
+rehearsal command exited **1**, with **229 real journal records** and final flags:
+
+```json
+{"status":"failed","functionalPassed":false,"cleanup":true,"qualifying":false,"timingClaims":false}
+```
+
+Requests, overflow/O, exposure/W plus WM, backup/B and all four post-catch-up T
+subprobes passed their functional checks. F/A alone failed with exactly these
+four errors:
+
+- `unobserved_target:tiny-memory:current`
+- `unobserved_target:tiny-memory:history`
+- `unobserved_target:tiny-card:current`
+- `unobserved_target:tiny-card:history`
+
+The delegated journal durably marks `session-validation` as `failure:true`.
+No target was fabricated or dropped. The F/A rehearsal and writer files match
+`62d6e871` byte for byte: no slower writer, pump restart or relaxed target. This
+remains the engine-owner blocker; neither long qualification segment was run.
+All started generation, baseline, matrix and rehearsal processes have exited.
+
 ## Changed files, cross-checked two ways
 
-Relative to `94edae6c`, Git diff plus untracked inventory was compared with an
-independent HEAD blob/mode comparison of **2478 files** and `rg --files --hidden`
-disk discovery. Both routes agree at **35 paths**, including this handoff, the new
-test-only snapshot coverage/catalog helper, and the two pre-supplied, unchanged
-dependency manifests. The cross-check exits **0**. The seven harness test paths
-were separately cross-checked by filesystem glob and `rg` (**7 paths**, exit **0**).
-There are **zero engine runtime changes** and **zero database files** in the
-delivery list. The raw-file guard source and both F/A configuration files match
-HEAD exactly. Operator-path/private-name scans and final whitespace checks
-exit **0**.
+Relative to `62d6e871`, Git diff plus untracked inventory was compared with an
+independent HEAD blob/mode comparison of **2488 files** and `rg --files --hidden`
+disk discovery. Both routes agree at **10 paths**, including this handoff and both
+new modules. The cross-check exits **0**. The seven harness test paths were also
+cross-checked by filesystem glob versus `rg` (**7 paths**, exit **0**).
+There are **zero engine runtime changes** and **zero database files** in this
+round's delivery list. The raw-file guard source, its exception list, the pinned
+dependency manifests, both registration templates and both F/A configuration
+files match `62d6e871` exactly. The earlier round-1/reduced-CI inventory is
+preserved in that commit. Final delivery, whitespace and operator-path/private-name
+scans exit **0**, including untracked files. Eight protected source/configuration
+files compare byte for byte (**0**); no owned log writers or baseline worktrees
+remain. No commit, network access, keys, engine runtime changes or long timing
+runs were used.
 
-- `.github/workflows/ci.yml`
-- `core/test/fixtures/no-raw-db-fd-allowlist.json`
 - `docs/plans/context-read-qualification-inputs.md`
-- `evaluation/context-read-qualification/adapter.mjs`
-- `evaluation/context-read-qualification/build-template.mjs`
 - `evaluation/context-read-qualification/canonical-evidence.mjs`
-- `evaluation/context-read-qualification/corpus.mjs`
-- `evaluation/context-read-qualification/counter-closure-child.mjs`
-- `evaluation/context-read-qualification/counter-deps/package-lock.json`
-- `evaluation/context-read-qualification/counter-deps/package.json`
-- `evaluation/context-read-qualification/counter.mjs`
-- `evaluation/context-read-qualification/freeze.mjs`
-- `evaluation/context-read-qualification/generate-child.mjs`
-- `evaluation/context-read-qualification/generate.mjs`
-- `evaluation/context-read-qualification/gold-rank.mjs`
-- `evaluation/context-read-qualification/labels.json`
-- `evaluation/context-read-qualification/manifest.json`
-- `evaluation/context-read-qualification/queries.json`
-- `evaluation/context-read-qualification/registration.constants.json`
-- `evaluation/context-read-qualification/registration.engine.template.json`
-- `evaluation/context-read-qualification/registration.mjs`
-- `evaluation/context-read-qualification/schemas.mjs`
-- `evaluation/context-read-qualification/test/harness-fixes.test.mjs`
-- `evaluation/context-read-qualification/test/inputs.test.mjs`
-- `evaluation/context-read-qualification/test/q1.test.mjs`
-- `evaluation/context-read-qualification/test/snapshot-checks.mjs`
-- `package.json`
+- `evaluation/context-read-qualification/test/q2.test.mjs`
 - `tools/testing/fixtures/context-product/engine.mjs`
-- `tools/testing/fixtures/context-product/rehearsal-checks.mjs`
+- `tools/testing/fixtures/context-product/journal-failures.mjs`
+- `tools/testing/fixtures/context-product/report.mjs`
 - `tools/testing/fixtures/context-product/series.mjs`
-- `tools/testing/fixtures/context-product/storage-child.mjs`
+- `tools/testing/fixtures/context-product/v4-checkpoint-child.mjs`
 - `tools/testing/fixtures/context-product/v4-session-pump.mjs`
 - `tools/testing/fixtures/context-product/v4-session-work.mjs`
-- `tools/testing/fixtures/context-product/v4-windows.mjs`
-- `tools/testing/summarize-context-read-product.mjs`

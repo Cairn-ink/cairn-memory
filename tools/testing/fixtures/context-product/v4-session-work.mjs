@@ -20,10 +20,11 @@ export function sessionPopulation(cell,records,targets) {
 // Runs only in the session child. Parent observation never executes these callbacks.
 export async function sessionWork(cells,session,{config,prepareInput,sink,validateProbe},{makeLane=c=>actor('lane',c,{quietWhenIdle:true,stallMs:c.supervision.stallMs}),makeWriter=startWriter,now=Date.now,wait=delay,ready=async()=>{},start=async()=>{},stopped=()=>null}={}) {
   const prereg=config.rehearsal===true?{decision:'passed'}:validateSessionRegistration(session,config.cell.schema);if(prereg.decision!=='passed')throw Error('v4_session_registration');
-  const lanes=[],records=[],targets=[],availabilityRecords=[],attempted=new Set(),lastProbe=new Map(),pending=[],extraLoops=[];
+  const recordedExits=new Set(),lanes=[],records=[],targets=[],availabilityRecords=[],attempted=new Set(),lastProbe=new Map(),pending=[],extraLoops=[];
   let sessionError;
   let observationEndAt;let writer,writerResult,probeCadenceMissed=false,omittedReleases=false;
   const write=(s,r)=>sink.record(config.cell.id,s,r);
+  const recordExit=async(lane,exit,extra={})=>{if(recordedExits.has(lane))return;await write('lane-exit',{pid:lane.pid,exit,...extra});recordedExits.add(lane);};
   const ingest=()=>{
     writer.flush();
     for(const {target} of writer.child.take('target'))if(!targets.some(t=>t.type===target.type&&t.targetId===target.targetId&&t.intent===target.intent))targets.push({...target,observedAt:null});
@@ -82,7 +83,7 @@ export async function sessionWork(cells,session,{config,prepareInput,sink,valida
     const settled=await Promise.allSettled(pending);
     for(const result of settled)if(result.status==='rejected'){sessionError??=result.reason;await write('lane-failure',{code:result.reason.code??result.reason.message,id:result.reason.id,lane:result.reason.lane});}
     await write('freshness-targets',targets);
-    for(const lane of lanes){if(lane.stalled){const exit=await lane.exited;await write('lane-exit',{pid:lane.pid,exit});sessionError??=Object.assign(Error('lane_exit_failed'),{code:'lane_exit_failed',exit});continue;}lane.send({type:'stop'});const r=await lane.wait('result'),exit=await lane.exited;await write('lane-exit',{pid:lane.pid,exit,attribution:r.attribution});if(exit.code!==0||exit.signal)sessionError??=Object.assign(Error('lane_exit_failed'),{code:'lane_exit_failed',exit});}
+    for(const lane of lanes){if(lane.stalled){const exit=await lane.exited;await recordExit(lane,exit);sessionError??=Object.assign(Error('lane_exit_failed'),{code:'lane_exit_failed',exit});continue;}lane.send({type:'stop'});const r=await lane.wait('result'),exit=await lane.exited;await recordExit(lane,exit,{attribution:r.attribution});if(exit.code!==0||exit.signal)sessionError??=Object.assign(Error('lane_exit_failed'),{code:'lane_exit_failed',exit});}
     if(sessionError)throw sessionError;
     if(stopped())throw Error(stopped());
     for(const t of targets){const probes=records.filter(r=>r.kind==='probe'&&r.batch===t.batch&&r.intent===t.intent&&r.startedAt>=t.committedAt).sort((a,b)=>a.startedAt-b.startedAt);let last=t.committedAt;
@@ -95,7 +96,7 @@ export async function sessionWork(cells,session,{config,prepareInput,sink,valida
       if(writer)await writer.stop();
       await Promise.allSettled(pending);
     }finally{
-      let exitFailure;for(const lane of lanes){if(lane.connected)lane.send({type:'stop'});const exit=await lane.exited;if(exit.code!==0||exit.signal)exitFailure??=Object.assign(Error('lane_exit_failed'),{code:'lane_exit_failed',exit});}if(exitFailure)throw exitFailure;
+      let exitFailure;for(const lane of lanes){if(lane.connected)lane.send({type:'stop'});const exit=await lane.exited;await recordExit(lane,exit);if(exit.code!==0||exit.signal)exitFailure??=Object.assign(Error('lane_exit_failed'),{code:'lane_exit_failed',exit});}if(exitFailure)throw exitFailure;
     }
   }
 }

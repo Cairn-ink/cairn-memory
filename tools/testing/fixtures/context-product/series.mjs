@@ -60,12 +60,12 @@ export async function startPump(config,write,{harness=fn=>fn()}={}) {
     pump.completion.then(r=>harness(()=>recordCompletion(r))).catch(error=>{drainIncomplete=true;harness(()=>recordCompletion({state:'failed',error:error.code??error.message}));});
   };
   try{renew();}catch(error){await c.supervisor.close();await drain(c.supervisor);throw error;}
-  renewal=setInterval(()=>{try{renew();}catch(error){renewFailure??=error;}},config.pump.cronMs);
+  renewal=setInterval(()=>{try{renew();}catch(error){harness(()=>recordCompletion({kind:'renewal-exception',state:'failed',error:error.code??error.message}));}},config.pump.cronMs);
   // Only public engine drain/ack and minimal queueing run on this timer. Record
   // validation and serialization are deferred until between reader observations.
   const drainTimer=setInterval(()=>{void exportNow();},PROTOCOL.pumpDrainMs);
   const flush=async()=>{if(config.protocol==='P2-product-v4')traceEvent('quantum');await exportNow();if(pending.length)await harness(()=>write('maintenance-drain',pending.splice(0)));for(const observation of observations.splice(0))await harness(()=>write('pump',observation));};
-  return {flush,trace,async stop(){if(config.protocol==='P2-product-v4')traceEvent('stopping');clearInterval(renewal);clearInterval(drainTimer);await draining;let closeError;try{try{await pump.close();}catch(error){closeError=error;}const finalStatus=pump.getStatus?.();if(finalStatus)harness(()=>recordCompletion({...finalStatus,final:true}));else if(config.protocol==='P2-product-v4')throw Error('pump_final_status_missing');}finally{try{await c.supervisor.close();}finally{await flush();}}if(closeError)throw closeError;if(config.protocol==='P2-product-v4')traceEvent('stop');
+  return {flush,trace,async stop(){if(config.protocol==='P2-product-v4')traceEvent('stopping');clearInterval(renewal);clearInterval(drainTimer);await draining;let closeError;try{try{await pump.close();}catch(error){closeError=error;harness(()=>recordCompletion({kind:'close-exception',state:'failed',error:error.code??error.message}));}const finalStatus=pump.getStatus?.();if(finalStatus)harness(()=>recordCompletion({...finalStatus,final:true}));else if(config.protocol==='P2-product-v4')throw Error('pump_final_status_missing');}finally{try{await c.supervisor.close();}finally{await flush();}}if(closeError)throw closeError;if(config.protocol==='P2-product-v4')traceEvent('stop');
     if(drainIncomplete)harness(()=>exported.push({diagnostics:{protocol:'context-native-v1',coverage:'incomplete',busy:0,records:[]}}));if(renewFailure)throw renewFailure;return exported;}};
 }
 export async function requestSeries(config,{cell,sink,oracle,smoke=false},{attempt:readAttempt=attempt,coldAttempt:readCold=coldAttempt,startPump:makePump=startPump,startWriter:makeWriter=startWriter,startSampler:makeSampler=startSampler,prepareAttempt=async c=>c}={}) {

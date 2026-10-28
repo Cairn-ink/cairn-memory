@@ -160,10 +160,12 @@ export async function attempt(config,{open,validate=validateResponse,oracle,loop
         loop=loopFactory();
         if(!initial.ok){result=initial;initialized=false;}
       }
-      readStartedAt=clock();const read=performance.now();
-      if(config.injection==='crash')void gc.workers.at(-1)?.terminate();
-      const abort=config.injection==='abort'?new AbortController():null;if(abort){cancelObservedAt=clock();abort.abort();}
-      if(initialized)result=await h[config.method](input,c.token,{signal:abort?.signal??signal});readMs=performance.now()-read;readFinishedAt=clock();
+      if(initialized){
+        readStartedAt=clock();const read=performance.now();
+        if(config.injection==='crash')void gc.workers.at(-1)?.terminate();
+        const abort=config.injection==='abort'?new AbortController():null;if(abort){cancelObservedAt=clock();abort.abort();}
+        result=await h[config.method](input,c.token,{signal:abort?.signal??signal});readMs=performance.now()-read;readFinishedAt=clock();
+      }
       code=result.ok?null:result.error.code;
     }catch(e){rejectedAt=clock();if(readStartedAt!==null)readMs=Math.max(0,rejectedAt-readStartedAt);code=e.code??'reader_failed';cleanupId=e.cleanupId;}
     finally {
@@ -189,7 +191,7 @@ export async function attempt(config,{open,validate=validateResponse,oracle,loop
   for(const r of exports)c.supervisor.ackCleanup(r.cleanupId);
   const gcBlocks=hostLoop.blocks.map(b=>({...b,gc:gc.entries.filter(g=>g.startAt<b.finishedAt&&g.startAt+g.durationMs>b.startedAt)}));
   const cutoff=Math.min(startedAt+config.deadlines.requestMs,readStartedAt===null?startedAt+config.deadlines.openMs:readStartedAt+(config.input.deadlineMs??5000));
-  return {record:{method:config.method,...(config.readCutoffReport?{readExceededAdapterDefault:readStartedAt===null?null:readMs>config.readCutoffReport.thresholdMs}:{}),hostPid:process.pid,startedAt,finishedAt,readStartedAt,readFinishedAt,elapsedMs,readMs,publicMs,openMs:(readStartedAt??rejectedAt)-startedAt,cleanupLagMs:elapsedMs-publicMs,rejectedAt,code,ok:result?.ok===true,
+  return {record:{method:config.method,...(config.readCutoffReport?{readExceededAdapterDefault:readStartedAt===null?null:readMs>config.readCutoffReport.thresholdMs}:{}),hostPid:process.pid,startedAt,finishedAt,readStartedAt,readFinishedAt,elapsedMs,readMs,publicMs,openMs:(readStartedAt??rejectedAt??finishedAt)-startedAt,cleanupLagMs:elapsedMs-publicMs,rejectedAt,code,ok:result?.ok===true,
     ...checked,expected,...(initialization?{initialization}:{}),quality:retrievalQuality(result,config),scopePartial,overlap:config.load==='idle',hostLoop:{...hostLoop,blocks:gcBlocks},resources,gc:gc.entries,
     nativeBusy:diagnostics.reduce((n,d)=>n+(d.busy??0),0),publicBusy:code==='storage_busy'?1:0,
     telemetry:diagnostics.length&&diagnostics.every(d=>d.coverage==='complete')?'complete':'incomplete',diagnostics,
