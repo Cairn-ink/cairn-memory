@@ -77,6 +77,7 @@
     "measure:local-embedder": "node tools/testing/run.mjs --script tools/testing/measure-local-embedder.mjs",
     "test:local-embedder": "node tools/testing/run.mjs adapters/local-embedder/test/*.test.mjs",
     "measure:topic-overview-contention": "node tools/testing/run.mjs --script tools/testing/measure-topic-overview-contention.mjs",
-    "measure:topic-reader-wal": "node tools/testing/run.mjs --script tools/testing/measure-topic-reader-wal.mjs"
+    "measure:topic-reader-wal": "node tools/testing/run.mjs --script tools/testing/measure-topic-reader-wal.mjs",
+    "measure:context-read-product": "node tools/testing/run.mjs --script tools/testing/measure-context-read-product.mjs"
   }
 }
