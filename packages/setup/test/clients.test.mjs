@@ -45,12 +45,17 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
   const server = await fakeAuthServer(t, auth);
   const targetModule = process.env.CAIRN_SETUP_TEST_MODULE || (process.env.CAIRN_SETUP_TEST_PACKAGE ? pathToFileURL(join(process.env.CAIRN_SETUP_TEST_PACKAGE, 'lib/setup.mjs')).href : new URL('../lib/setup.mjs', import.meta.url).href);
   const harness = join(ws.path, 'harness.mjs');
-  const makeHarness = async (targetModule, path) => writeFile(path, `import{writeSync,writeFileSync}from'node:fs';import fsPromises from'node:fs/promises';import{syncBuiltinESMExports}from'node:module';import{main}from${JSON.stringify(targetModule)};
+  const makeHarness = async (targetModule, path, historicalManagedPaths) => writeFile(path, `import{writeSync,writeFileSync}from'node:fs';import fsPromises from'node:fs/promises';import{syncBuiltinESMExports}from'node:module';import{main}from${JSON.stringify(targetModule)};
     import{SetupError}from${JSON.stringify(new URL('./errors.mjs', targetModule).href)};
     import{requestJSON}from${JSON.stringify(new URL('./transport.mjs', targetModule).href)};
     import{installChildWire}from${JSON.stringify(new URL('./http-wire.mjs', import.meta.url).href)};
     // Guard historical libraries that lack the internal fallback seam.
-    const mkdtemp=fsPromises.mkdtemp;fsPromises.mkdtemp=(path,...args)=>{if(String(path).startsWith('/tmp/cairn-codex-inspect-'))throw Object.assign(new Error('unowned inspection parent'),{code:'EACCES'});return mkdtemp(path,...args);};syncBuiltinESMExports();
+    const mkdtemp=fsPromises.mkdtemp;fsPromises.mkdtemp=(path,...args)=>{if(String(path).startsWith('/tmp/cairn-codex-inspect-'))throw Object.assign(new Error('unowned inspection parent'),{code:'EACCES'});return mkdtemp(path,...args);};
+    const historicalManagedPaths=${JSON.stringify(historicalManagedPaths) ?? 'undefined'};
+    if(historicalManagedPaths){const lstat=fsPromises.lstat;fsPromises.lstat=(path,...args)=>{
+      const index=['/etc/codex/config.toml','/etc/codex/managed_config.toml'].indexOf(path);
+      return lstat(index<0?path:historicalManagedPaths[index],...args);};}
+    syncBuiltinESMExports();
     const disconnect=installChildWire();let clock=0;const choices=JSON.parse(process.env.TEST_CHOICES);
     if(process.env.TEST_FIXED_NOW){const{default:crypto}=await import('node:crypto');const{syncBuiltinESMExports}=await import('node:module');const uuids=new Map();
       // New versioned runtime copies need extra temporary UUIDs. Keep each
@@ -85,12 +90,17 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
   await makeHarness(targetModule, harness);
   const installation = join(codexHome, 'cairn/installation.json');
   const lines = async path => (await readFile(path, 'utf8')).trim().split('\n').filter(Boolean).map(JSON.parse);
-  async function run({ args = ['setup'], choices = {}, interactive = true, tmpdir, disableLocalMode = true, fixedNow, module, inspection = defaultInspection } = {}) {
+  async function run({ args = ['setup'], choices = {}, interactive = true, tmpdir, disableLocalMode = true, fixedNow, module,
+    inspection = defaultInspection, mapHistoricalManagedPaths = false } = {}) {
     const configured=JSON.parse(await readFile(claudeState,'utf8')).configured;
     const installed=await readInstallation(installation).then(()=>true,()=>false);
     if(args[0]==='setup'&&!args.includes('--local')&&!configured&&!installed&&!args.includes('--endpoint'))args=[...args,'--endpoint',server.endpoint];
     const selectedHarness = module ? join(ws.path, 'historical-harness.mjs') : harness;
-    if (module) await makeHarness(module, selectedHarness);
+    if (mapHistoricalManagedPaths) {
+      assert.ok(module, 'Managed-file mapping is restricted to the historical harness');
+      assert.equal(inspection.managedPaths.length, 2);
+    }
+    if (module) await makeHarness(module, selectedHarness, mapHistoricalManagedPaths ? inspection.managedPaths : undefined);
     const child = spawn(process.execPath, [selectedHarness, ...args], { cwd: ws.path,
       env: { HOME: home, CODEX_HOME: codexHome, PATH: bin, LANG: 'en_US.UTF-8', TMPDIR: tmpdir ?? neutralParent,
         TEST_INSPECTION: JSON.stringify(inspection),

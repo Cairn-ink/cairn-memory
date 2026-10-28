@@ -8,10 +8,12 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { fixture } from './clients.test.mjs';
 
-// Extract the immutable 0.5.3 git object, never current source, with the same
+// Extract immutable historical git objects, never current source, with the same
 // fakes and private homes. No credentials or machine paths are recorded.
-let historicalPromise, historicalScratch;
-after(async () => { if (historicalScratch) await rm(historicalScratch, { recursive: true, force: true }); });
+const historicalPromises = new Map(), historicalScratch = new Set();
+after(async () => {
+  await Promise.all([...historicalScratch].map(path => rm(path, { recursive: true, force: true })));
+});
 function native(executable, args, { input, ...options } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, { ...options, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -22,17 +24,19 @@ function native(executable, args, { input, ...options } = {}) {
     child.stdin.on('error', () => {}); child.stdin.end(input);
   });
 }
-function historicalInstaller() {
-  return historicalPromise ??= (async () => {
-    historicalScratch = await mkdtemp(join(tmpdir(), 'cairn-053-baseline-'));
+function historicalInstaller(revision = 'b2513501', version = '0.5.3') {
+  if (!historicalPromises.has(revision)) historicalPromises.set(revision, (async () => {
+    const scratch = await mkdtemp(join(tmpdir(), 'cairn-' + version.replaceAll('.', '') + '-baseline-'));
+    historicalScratch.add(scratch);
     try {
-      const env = { PATH: process.env.PATH, HOME: historicalScratch };
-      const archive = await native('git', ['archive', 'b2513501', 'packages/setup'], {
+      const env = { PATH: process.env.PATH, HOME: scratch };
+      const archive = await native('git', ['archive', revision, 'packages/setup'], {
         cwd: fileURLToPath(new URL('../../../', import.meta.url)), env });
-      await native('tar', ['-xf', '-', '-C', historicalScratch], { input: archive, env });
-      return { module: pathToFileURL(join(historicalScratch, 'packages/setup/lib/setup.mjs')).href };
-    } catch { return { skip: 'Historical 0.5.3 comparison requires git object b2513501 and working git/tar child pipes.' }; }
-  })();
+      await native('tar', ['-xf', '-', '-C', scratch], { input: archive, env });
+      return { module: pathToFileURL(join(scratch, 'packages/setup/lib/setup.mjs')).href };
+    } catch { return { skip: `Historical ${version} comparison requires git object ${revision} and working git/tar child pipes.` }; }
+  })());
+  return historicalPromises.get(revision);
 }
 function acceptBaseline(t, historical, required = process.env.CAIRN_SETUP_REQUIRE_BASELINE === '1') {
   if (historical.module) return historical;
@@ -489,6 +493,7 @@ for (const args of [['status'], ['status', '--client', 'codex']]) test(`L35 clou
 });
 for (const cause of ['codex_tmpdir', 'codex_managed']) for (const args of [['setup', '--cloud'], ['setup', '--client', 'codex'], ['status']])
 test(`L36 hosted refusal: ${cause}; ${args.join(' ')}`, async t => {
+  const historical = acceptBaseline(t, await historicalInstaller('be2bc543', '0.6.1'), true);
   const f = await fixture(t, { claude: false });
   // Hosted-only preserves its historical refusal. Routed setup may refuse
   // earlier with mode_unknown, which remains covered by L27/L28.
@@ -499,11 +504,22 @@ test(`L36 hosted refusal: ${cause}; ${args.join(' ')}`, async t => {
     await mkdir(join(f.fallbackParent, '.codex')); await writeFile(join(f.fallbackParent, '.codex/config.toml'), '');
   } else {
     const managed = join(f.scratch, 'managed'); await writeFile(managed, '');
-    inspection = { ...inspection, managedPaths: [managed] };
+    inspection = { ...inspection, managedPaths: [join(f.scratch, 'absent-managed-config'), managed] };
   }
   const before = await inventory(f.home);
+  // 0.6.1 has no hosted inspection seam. Map only its two managed-file stat
+  // probes to the internal fixture paths, leaving its source, refusal, params
+  // and output path untouched. Both versions encounter the same cause before
+  // any native call, without accessing a real managed configuration.
+  const baseline = await f.run({ args, tmpdir: primary, inspection, module: historical.module,
+    mapHistoricalManagedPaths: cause === 'codex_managed' });
+  assert.equal(baseline.code, args.includes('--cloud') ? 0 : 1, baseline.stdout);
+  assert.deepEqual(await inventory(f.home), before); assert.deepEqual(await f.calls(), { claude: [], codex: [] });
+  await assertNoAttempts(f, primary);
   const result = await f.run({ args, tmpdir: primary, inspection });
   assert.equal(result.code, args.includes('--cloud') ? 0 : 1, result.stdout);
+  assert.equal(result.code, baseline.code);
+  assert.equal(normalized(result.stdout, f.codexHome), normalized(baseline.stdout, f.codexHome));
   const phrase = cause === 'codex_tmpdir' ? 'TMPDIR has ancestor' : 'system-managed Codex';
   assert.equal(result.stdout.split('\n').filter(line => line.includes(phrase)).length, 1, result.stdout);
   assert.deepEqual(await inventory(f.home), before); assert.deepEqual(await f.calls(), { claude: [], codex: [] });
