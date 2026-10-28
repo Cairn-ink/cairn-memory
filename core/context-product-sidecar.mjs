@@ -376,33 +376,35 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       if(!quantum.admit('verify-scan') || !quantum.admit('verification'))return;
     }
     const hash=new ManifestHash(v.hash), phase=v.statisticsDone ? 3 : v.phase, last=v.last;
-    let rows, nextDocument, exhausted=false;
-    const endedDocuments=[];
+    let rows, exhausted=false;
     quantum.measure(()=>{
-      if(phase===0) rows=side.prepare('SELECT * FROM documents WHERE generation=? AND identity>? ORDER BY identity LIMIT 128').all(g.storage_id,last[0] ?? '');
+      if(phase===0) rows=side.prepare(`SELECT * FROM documents WHERE generation=? ${last.length?'AND identity>?':''} ORDER BY identity LIMIT 128`).all(g.storage_id,...last);
       else if(phase===1) {
         // Fill the same 128 logical posting rows as the manifest stream,
         // using bounded covering integer ranges for each document. Empty
-        // documents count against a separate 128-document scan bound.
+        // documents count against a separate 128-document scan bound. Each
+        // completed document is an ordered verification item too: even an
+        // empty document must be checked before the durable cursor passes it.
         rows=[];
-        let document=side.prepare('SELECT * FROM documents WHERE generation=? AND identity>=? ORDER BY identity LIMIT 1').get(g.storage_id,last[0] ?? '');
-        let visited=0;
-        while(document && rows.length<128 && visited++<128) {
+        let document=side.prepare(`SELECT * FROM documents WHERE generation=? ${last.length?`AND identity${v.documentDone?'>':'>='}?`:''} ORDER BY identity LIMIT 1`).get(g.storage_id,...(last.length?[last[0]]:[]));
+        let visited=0,postings=0;
+        while(document && postings<128 && visited++<128) {
           const page=side.prepare(`SELECT p.term AS term_id,p.position,p.frequency,s.term FROM postings p INDEXED BY product_document_order
             LEFT JOIN statistics s ON s.generation=p.generation AND s.term_id=p.term
             WHERE p.generation=? AND p.doc=? AND p.position>? ORDER BY p.position LIMIT 128`).all(g.storage_id,document.doc,document.identity===last[0] ? last[1] ?? 0 : 0);
-          const selected=page.slice(0,128-rows.length);
+          const selected=page.slice(0,128-postings);
           rows.push(...selected.map(row=>({...row,document})));
-          if(rows.length===128)break;
-          endedDocuments.push({document,hadRows:page.length>0 || document.identity===last[0] && (last[1] ?? 0)>0});
+          postings+=selected.length;
+          if(postings===128)break;
+          rows.push({document,complete:true});
           document=side.prepare('SELECT * FROM documents WHERE generation=? AND identity>? ORDER BY identity LIMIT 1').get(g.storage_id,document.identity);
         }
-        nextDocument=document;exhausted=!document;
-      } else if(phase===2) rows=side.prepare('SELECT * FROM statistics WHERE generation=? AND term>=? ORDER BY term LIMIT 128 OFFSET ?').all(g.storage_id,last[0] ?? '',last.length ? 1 : 0);
+        exhausted=!document;
+      } else if(phase===2) rows=side.prepare(`SELECT * FROM statistics WHERE generation=? ${last.length?'AND term>?':''} ORDER BY term LIMIT 128`).all(g.storage_id,...last);
       else rows=side.prepare(`SELECT p.doc,p.term,d.eligible,s.term AS text FROM postings p
         LEFT JOIN documents d ON d.generation=p.generation AND d.doc=p.doc
         LEFT JOIN statistics s ON s.generation=p.generation AND s.term_id=p.term
-        WHERE p.generation=? AND (p.doc,p.term)>(?,?) ORDER BY p.doc,p.term LIMIT 128`).all(g.storage_id,last[0] ?? 0,last[1] ?? -1);
+        WHERE p.generation=? ${last.length?'AND (p.doc,p.term)>(?,?)':''} ORDER BY p.doc,p.term LIMIT 128`).all(g.storage_id,...last);
       rendezvous('verify-scan');
     },'verify-scan');
     let processed=0;
@@ -419,14 +421,22 @@ export function productSidecar({ path, db: canonical, identity, features, observ
           const type=g.streams[r.stream].type;v.counts.byType[type].eligible+=r.eligible;v.counts.byType[type].indexed+=r.eligible;
           v.last=[r.identity];
         } else if(phase===1) {
-          if(v.documentIdentity!==r.document.identity) {
-            if(v.documentIdentity && v.documentLength!==v.expectedLength)unavailable('corrupt');
-            v.documentIdentity=r.document.identity;v.documentLength=0;v.expectedLength=r.document.token_length;v.previousTerm='';
+          if(r.complete) {
+            if(v.documentIdentity!==undefined && v.documentIdentity!==r.document.identity)unavailable('corrupt');
+            const length=v.documentIdentity===r.document.identity ? v.documentLength : 0;
+            if(length!==r.document.token_length)unavailable('corrupt');
+            delete v.documentIdentity;delete v.documentLength;delete v.expectedLength;delete v.previousTerm;
+            v.last=[r.document.identity,0];v.documentDone=true;
+          } else {
+            if(v.documentIdentity!==r.document.identity) {
+              if(v.documentIdentity!==undefined)unavailable('corrupt');
+              v.documentIdentity=r.document.identity;v.documentLength=0;v.previousTerm='';
+            }
+            if(!r.term || !r.document.eligible || (v.previousTerm && Buffer.compare(Buffer.from(v.previousTerm),Buffer.from(r.term))>=0))unavailable('corrupt');
+            v.documentLength+=r.frequency;v.previousTerm=r.term;v.postings=(v.postings ?? 0)+1;
+            side.prepare('UPDATE statistics SET verified_df=verified_df+1 WHERE generation=? AND term_id=?').run(g.storage_id,r.term_id);
+            tuple=['posting',JSON.parse(r.document.identity),r.term,r.frequency];v.last=[r.document.identity,r.position];delete v.documentDone;
           }
-          if(!r.term || !r.document.eligible || (v.previousTerm && Buffer.compare(Buffer.from(v.previousTerm),Buffer.from(r.term))>=0))unavailable('corrupt');
-          v.documentLength=(v.documentLength ?? 0)+r.frequency;v.previousTerm=r.term;v.postings=(v.postings ?? 0)+1;
-          side.prepare('UPDATE statistics SET verified_df=verified_df+1 WHERE generation=? AND term_id=?').run(g.storage_id,r.term_id);
-          tuple=['posting',JSON.parse(r.document.identity),r.term,r.frequency];v.last=[r.document.identity,r.position];
         } else if(phase===2) {
           const n=Object.values(v.counts.byType).reduce((sum,c)=>sum+c.eligible,0);
           if(r.term==='' ? r.n!==n || r.total_length!==v.counts.totalTokenLength || r.df!==0 || r.verified_df!==0
@@ -441,17 +451,10 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       },'verification');
     }
     v.hash=hash.state();
-    if(processed===rows.length && rows.length<128) {
-      if(phase===1) {
-        for(const {document,hadRows} of endedDocuments) {
-          if(document.identity===v.documentIdentity) {
-            if(v.documentLength!==document.token_length)unavailable('corrupt');
-            delete v.documentIdentity;delete v.documentLength;delete v.expectedLength;delete v.previousTerm;
-          } else if(!hadRows && document.token_length!==0)unavailable('corrupt');
-        }
-        if(exhausted){v.phase++;v.last=[];}
-        else v.last=[nextDocument.identity,0];
-      } else if(phase===2) {
+    if(phase===1) {
+      if(processed===rows.length && exhausted){v.phase++;v.last=[];delete v.documentDone;}
+    } else if(processed===rows.length && rows.length<128) {
+      if(phase===2) {
         v.statisticsDone=true;v.last=[];
         // Fold the bounded referential audit into this checkpoint when it
         // fits. Its cursor resumes durably without adding a public phase.

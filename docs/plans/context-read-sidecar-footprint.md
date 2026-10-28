@@ -280,3 +280,90 @@ Cross-check exit **0**: `git diff --name-only -z HEAD` plus nonignored untracked
 - `core/test/fixtures/context-product-index-worker.mjs`
 - `docs/plans/context-read-sidecar-footprint-measurements.json`
 - `docs/plans/context-read-sidecar-footprint.md`
+
+## Fix round 2
+
+This round addresses both P1s in the spec and standards re-reviews of `b3a74eb5`. All earlier sections, including the accepted additive delta and Fix round 1, are retained verbatim. The physical format/schema, lock lifecycle, DELETE/WAL refusal and rebuild policy, allocation, GC protection, checkpoint fence checks and conservative quantum admission are unchanged.
+
+### Completed documents and the referential audit
+
+Posting verification now places a document-completion item immediately after that document's posting items, including documents with no postings. Completion checks the accumulated frequency sum against the document's token length before marking its cursor complete. Posting position, frequency sum, term-order state, dictionary counters and manifest hash remain transactional signed checkpoint state. A yield midway through a document resumes its posting position; a yield after completion resumes strictly after the checked identity. A full 128-posting page resumes the current document and checks completion before passing it. Phase advancement requires processing every returned item and exhausting the document scan. Completion items do not enter the manifest or alter its logical tuple order.
+
+Each scan admits at most 128 posting rows and processes at most 128 document ranges, with one successor lookahead. Completion items have their own ordinary measured verification admission, so empty documents cannot bypass either validation or the quantum budget. At most 128 completion items accompany the posting page; no whole-document sum or unbounded join was introduced.
+
+The independent referential audit's first page has no lower-bound predicate. It therefore includes physical keys such as `doc=-1`; resumed pages seek strictly after the last checked `(doc,term)` pair. Left document/dictionary probes and the final physical-versus-hashed posting count remain intact. No schema/domain change or new format identity is needed.
+
+### Audit of the other verification cursors
+
+| Loop | Initial page and resume rule | Validation before advancement |
+| --- | --- | --- |
+| Documents | No initial identity bound; subsequent pages use `identity > lastIdentity`, at most 128 rows. | Parse/hash the complete document tuple and update counts before assigning that row's cursor. Partial pages retain the last processed identity; phase advancement requires a fully processed short page. Removing the initial empty-string bound also prevents skipping an empty malformed identity. |
+| Dictionary counter reset | Already begins without a term-ID bound; subsequent updates use `term_id > resetLast`, at most 128 keyed rows. | Each returned row was reset in the same transaction; the maximum returned ID is saved because SQLite RETURNING order is unspecified. Full pages continue rather than concluding reset. Negative IDs are included. |
+| Statistics/dictionary validation | No initial term bound; subsequent pages use `term > lastTerm`, at most 128 rows. | Check sentinel N/total length and every nonempty term's positive matching df, then hash/count and assign that row's cursor. Removed the inclusive seek plus OFFSET in favor of an exclusive seek. Partial pages cannot skip unprocessed terms. |
+| Ordered postings and document completion | No initial document bound; resumptions distinguish a pending posting position from a checked completed identity. Position zero is safe because the attested schema requires positive positions. | Every completion is processed in order, including zero-posting documents, before a later document's posting can move the cursor. Pending document state cannot be discarded on transition. |
+| Physical posting references | No initial tuple bound; subsequent pages use `(doc,term) > lastTuple`, at most 128 rows. | Check eligibility and both references before incrementing the checked count and saving the cursor. Full and partial pages retain checked progress. |
+
+No other cursor-based verification loop exists in `verifyPage`. The source-to-staging metadata cursor was also inspected: transformation and target revalidation precede its signed checkpoint; it advances streams only after a fully processed short page. GC remains bounded transactional deletion rather than a verification cursor.
+
+### Regressions and byte compatibility
+
+Five corruption cases checkpoint the staged items before editing data: the spec's `badtoken` followed by 128 distinct terms, the standards case of 2 + 128 distinct terms with the first document's postings and dictionary rows removed, each under both full-page and injected partial-quantum processing, plus a copied posting with `doc=-1`. Missing-document-posting cases retain nonzero token length and a clean foreign-key check. Each requires recognized `index_unavailable/corrupt` and no publication.
+
+The same five corruption tests were overlaid on disposable snapshots, with no implementation changes. On **both Node 22.16.0 and 24.15.0**, `b3a74eb5` exits **1** with **five expected failures**; `fd4252ee` exits **0**, five passing. A sixth regression traverses 130 documents, 128 nonempty and two empty, under partial document/posting/statistics pages. It closes/reopens midway through a document, observes separate durable completion progress, then compares manifests, counts and lexical scores/order with an ordinary build. The existing independent SHA-256 tuple oracle and exact 128-posting-page regression remain intact.
+
+The VM regression now captures the production document and statistics scans and both initial/resumed referential-audit statements in addition to posting verification, reset and scoring. Independent in-memory databases contain 1,000 or 19,000 dictionary rows and documents; instruction callbacks count actual work without timing gates. Both sizes return 128 rows for every page operation and one row for scoring, with identical instruction counts:
+
+| Operation | VM steps at either size |
+| --- | ---: |
+| Ordered postings | 1,934 |
+| Query frequencies | 50 |
+| Counter reset, resumed range | 7,194 |
+| Document scan | 2,058 |
+| Statistics scan | 1,805 |
+| Referential audit, first page | 2,825 |
+| Referential audit, resumed page | 3,737 |
+
+An initial extension of this probe exited **1** because its three-digit fixture terms placed the small database's statistics cursor past its last row while the large database returned a page. Matching the five-digit probe key recipe made both return 128 rows; the corrected probe exits **0**. This was a test-fixture correction, not a runtime threshold change.
+
+A separate byte comparison uses the same canonical fixture and query order for the reviewed implementation and this fix. On **each Node patch**, initial and delta-corpus current/history manifests and counts, plus **480 query outputs** (120 queries per intent per corpus state), compare byte-for-byte, exit **0**. Those outputs include scores, ranks and ties across Memory/Card selections, Chinese/Japanese/English queries and equal bodies. All product runtime changes are confined to `verifyPage`; everything before and after that function remains byte-identical to `b3a74eb5`.
+
+### Updated footprint
+
+The unchanged sizing harness ran on **Node 24.15.0**, exit **0**, using the same 1,642 Memories, 164 Cards and four namespaces. Both intents retain 1,806 documents, 1,712 terms and 127,863 tokens. Current/history used 148/101 quanta; these counts are report-only observations, with no timing gate.
+
+| Both intents, one owner-wide selection | Fix round 2 |
+| --- | ---: |
+| Canonical main file | 5,177,344 B |
+| Sidecar main file | 11,862,016 B |
+| Sidecar / canonical | **2.2911×** |
+| Sidecar B/Memory, including Cards | 7,224.13 |
+| Sidecar free pages | 0 B |
+
+The **≤5× target remains satisfied**. Sidecar allocation is identical to Fix round 1; fixture UUIDs account for small canonical B-tree occupancy variation. Each database's table/index/internal structure bytes plus free bytes reconcile independently with its page-count allocation, and the recorded ratio is checked directly against both allocated byte totals. Complete structure/per-Memory figures are appended as `fixRound2` in [the measurements](context-read-sidecar-footprint-measurements.json); all preceding measurement entries are preserved.
+
+### Required verification and exit codes
+
+Each required group ran on the exact Node patches below, with explicit file arguments, TAP reporting and file concurrency 1. Glob expansion and independent directory enumeration agree on **60 required paths, 0 differences**. Every child return code was captured directly; no piped tail supplied a verdict. Table globs abbreviate those explicit argument arrays.
+
+| Command (after `node --test --test-reporter=tap --test-concurrency=1`) | Files | Node 22.16.0 exit | Node 24.15.0 exit | Passing tests, 22 / 24 |
+| --- | ---: | ---: | ---: | ---: |
+| `core/test/context-read*.test.mjs` | 34 | 0 | 0 | 693 / 693 |
+| `core/test/topic-*.test.mjs` | 17 | 0 | 0 | 238 / 238 |
+| `core/test/no-raw-db-fd.test.mjs core/test/sqlite-lock-safety.test.mjs core/test/sqlite-journal-probe.test.mjs` | 3 | 0 | 0 | 44 / 44 |
+| `adapters/mcp/test/context-read*.test.mjs` | 5 | 0 | 0 | 88 / 88 |
+| `packaging/test/topic-overview-raw29.test.mjs` | 1 | 0 | 0 | 3 / 3 |
+
+Every required group has **0 failures, 0 cancellations and 0 skips**. The full context prefix includes all **30 footprint cases**, including the six Fix round 2 regressions and the extended VM probe. The corruption-only baseline replays exit **1/1** on `b3a74eb5` (five expected failures each) and **0/0** on `fd4252ee` (five passing each). Independent healthy-output comparisons exit **0/0**. Footprint measurement on Node 24.15.0 exits **0**; structure/page/ratio reconciliation also exits **0**.
+
+The missing ignored test dependency was supplied as an independent copy of the already available pinned `tiktoken 1.0.22`. Tests used each named runtime’s normal npm toolchain and existing offline cache. No network install, package/lockfile edit, shared-install removal, setup-runtime regeneration or commit occurred.
+
+`git diff --check`: **0**. Runtime source outside `verifyPage`, every preceding plan section and every earlier measurement entry were independently compared to HEAD and remain unchanged. The frozen contract, frozen-v1 sidecar, setup runtime and raw-fd allowlist have no diff. All supervised runs completed; no running verification is handed off.
+
+### Changed files, independently cross-checked
+
+`git diff --name-only -z HEAD` plus nonignored untracked files was compared with independent Git tree/blob hashes of working files plus `rg --files --hidden` enumeration. Both inventories agree: **4 files, 0 differences**, cross-check exit **0**.
+
+- `core/context-product-sidecar.mjs`
+- `core/test/context-read-product-footprint.test.mjs`
+- `docs/plans/context-read-sidecar-footprint-measurements.json`
+- `docs/plans/context-read-sidecar-footprint.md`

@@ -176,6 +176,68 @@ test('a single uninterruptible item may cross cutoff; its admitted work still co
 
 // Exercise corruption after a signed item checkpoint, while its generation is
 // still staging. Each edit leaves the physical schema and signed cursor intact.
+for(const firstTerms of [1,2])for(const partial of [false,true])test(`Fix round 2 rejects missing ${firstTerms} + 128 terms (${partial?'partial':'full'} posting page)`,t=>{
+  const f=fixture(t),first=f.admit(firstTerms===1?'badtoken':'badtoken missingtoken',four[0]);
+  f.admit(Array.from({length:128},(_,i)=>'term'+String(i).padStart(3,'0')).join(' '),four[1]);
+  let clock=0;
+  const a=local(t,f,{now:()=>clock,rendezvous(point){if(partial && point==='verify-item')clock+=1500;}});
+  a.storage.refresh(a.p,a.access,{maxItems:2,maxMs:5000});
+  const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX);t.after(()=>side.close());
+  const documents=side.prepare('SELECT * FROM documents ORDER BY identity').all();
+  assert.equal(documents.length,2);assert.equal(documents[0].id,first.id);assert.equal(documents[0].token_length,firstTerms);
+  side.prepare('DELETE FROM statistics WHERE generation=? AND term_id IN (SELECT term FROM postings WHERE generation=? AND doc=?)')
+    .run(documents[0].generation,documents[0].generation,documents[0].doc);
+  side.prepare('DELETE FROM postings WHERE generation=? AND doc=?').run(documents[0].generation,documents[0].doc);
+  assert.equal(side.prepare('SELECT count(*) AS n FROM postings').get().n,128);
+  assert.deepEqual(side.prepare('PRAGMA foreign_key_check').all(),[]);
+  assert.throws(()=>build(a),{code:'index_unavailable',reason:'corrupt'});
+  assert.equal(side.prepare('SELECT count(*) AS n FROM publications').get().n,0);
+});
+
+test('Fix round 2 rejects a copied posting with negative document key',t=>{
+  const f=fixture(t);f.admit('badtoken',four[0]);const a=local(t,f);
+  a.storage.refresh(a.p,a.access,{maxItems:1,maxMs:5000});
+  const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX);t.after(()=>side.close());
+  side.exec('PRAGMA foreign_keys=OFF');
+  const row=side.prepare('SELECT * FROM postings LIMIT 1').get();
+  side.prepare(`INSERT INTO postings(${Object.keys(row).join(',')}) VALUES(${Object.keys(row).map(()=>'?').join(',')})`).run(...Object.values({...row,doc:-1}));
+  assert.equal(side.prepare('SELECT count(*) AS n FROM postings').get().n,2);
+  assert.equal(side.prepare('PRAGMA foreign_key_check').all().length,1);
+  assert.throws(()=>build(a),{code:'index_unavailable',reason:'corrupt'});
+  assert.equal(side.prepare('SELECT count(*) AS n FROM publications').get().n,0);
+});
+
+test('Fix round 2 document, posting and statistics cursors resume partial pages with identical results',t=>{
+  const f=fixture(t);
+  for(let i=0;i<130;i++)f.admit(i<128?'orchard term'+String(i).padStart(3,'0'):i===128?'!!!':'???',four[i%4]);
+  let clock=0,partial=false;
+  const options={now:()=>clock,rendezvous(point){if(partial && point==='verify-item')clock+=100;}};
+  let a=local(t,f,options);const current=build(a),expected=a.storage.lexical(a.p,current,'orchard term000');
+  const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX,{readOnly:true});t.after(()=>side.close());
+  const history={...a.p,intent:'history'},seen=new Set();let publication,reopened=false;
+  partial=true;
+  for(let i=0;i<1000;i++) {
+    a.storage.refresh(history,a.access,{maxItems:1024,maxMs:1000});
+    const g=side.prepare('SELECT verify FROM generations WHERE published=0').get();
+    if(g) {
+      const v=JSON.parse(g.verify);
+      if(v.phase===0 && v.counts.documents>0 && v.counts.documents<130)seen.add('documents');
+      if(v.phase===1 && v.documentLength>0)seen.add('mid-document');
+      if(v.phase===1 && v.documentDone)seen.add('completed-document');
+      if(v.phase===2 && !v.statisticsDone && v.last.length)seen.add('statistics');
+      if(!reopened && seen.has('mid-document')) {
+        a.storage.close();a.facade.close();a=local(t,f,options);reopened=true;
+      }
+    }
+    publication=a.storage.observe(history,a.access).publication;
+    if(publication)break;
+  }
+  assert.ok(publication,'partial checkpoints must finish');assert.equal(reopened,true);
+  assert.deepEqual([...seen].sort(),['completed-document','documents','mid-document','statistics']);
+  assert.equal(publication.manifestDigest,current.manifestDigest);assert.deepEqual(publication.counts,current.counts);
+  assert.deepEqual(a.storage.lexical(history,publication,'orchard term000'),expected);
+});
+
 for(const damage of ['badtoken','orphan-document','orphan-term','seeded-counter','df','N','total-length'])test(`Fix round 1 deep verification rejects ${damage}`,t=>{
   const f=fixture(t);f.admit('badtoken orchard',four[0]);const a=local(t,f);
   a.storage.refresh(a.p,a.access,{maxItems:1,maxMs:5000});
@@ -308,15 +370,18 @@ test('Fix round 1 cross-projection GC revalidates under its transaction and neve
 
 
 test('Fix round 1 verification and query-frequency pages have bounded SQLite VM work at 19000 terms',t=>{
-  const f=fixture(t);f.admit('needle orchard',four[0]);const sql={};
+  const f=fixture(t);f.admit('needle orchard '+Array.from({length:130},(_,i)=>'term'+String(i).padStart(5,'0')).join(' '),four[0]);const sql={};
   const observer=instrumentDatabase((statement,method,args)=>{
     if(method!=='all')return;
     if(/UPDATE statistics SET verified_df=0/.test(statement))sql.reset={statement,args};
     if(/FROM (documents d|postings p)/.test(statement) && /LIMIT 128/.test(statement) && /s.term/.test(statement) && /p.position|d.identity/.test(statement))sql.verify={statement,args};
     if(/SELECT s.term,p.frequency/.test(statement) && / IN \(/.test(statement))sql.score={statement,args};
+    if(/SELECT p.doc,p.term,d.eligible/.test(statement))sql[args.length===1?'auditStart':'auditResume']={statement,args};
+    if(/SELECT \* FROM documents.*ORDER BY identity LIMIT 128/.test(statement))sql.documents={statement,args};
+    if(/SELECT \* FROM statistics.*ORDER BY term LIMIT 128/.test(statement))sql.statistics={statement,args};
   });
   const a=local(t,f,{observer});const publication=build(a);a.storage.lexical(a.p,publication,'needle absent');
-  assert.ok(sql.verify);assert.ok(sql.score);
+  for(const name of ['verify','score','auditStart','auditResume','documents','statistics'])assert.ok(sql[name],name);
   const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX,{readOnly:true});
   const schema=side.prepare("SELECT sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' AND sql IS NOT NULL ORDER BY type DESC,name").all().map(r=>r.sql);side.close();
   // SQLite's instruction callback counts every executed VM instruction. Feed
@@ -331,13 +396,15 @@ for size in [1000,19000]:
  # Tables before indexes, matching sqlite_schema's descending type order.
  for sql in source['schema']: db.execute(sql)
  db.execute("INSERT INTO documents VALUES(1,1,0,'id','identity',1,0,1,?)",(size,))
+ for i in range(2,size+1):
+  db.execute("INSERT INTO documents VALUES(1,?,0,?,?,1,0,1,0)",(i,'id%05d'%i,'identity%05d'%i))
  position=any(r[1]=='position' for r in db.execute('PRAGMA table_info(postings)'))
  for i in range(1,size+1):
   term='needle' if i==1 else 'term%05d'%i
   db.execute('INSERT INTO statistics(generation,term_id,term,df,n,total_length) VALUES(1,?,?,1,0,0)',(i,term))
   db.execute('INSERT INTO postings VALUES('+','.join('?' for _ in range(5 if position else 4))+')',(1,1,i,1,i) if position else (1,1,i,1))
  counts={}
- for name in ['verify','score']+(['reset'] if 'reset' in source else []):
+ for name in ['verify','score','auditStart','auditResume','documents','statistics']+(['reset'] if 'reset' in source else []):
   calls=[0]
   def step(): calls[0]+=1;return 0
   db.set_progress_handler(step,1)
@@ -353,6 +420,9 @@ print(json.dumps(results))
   assert.ok(large.verify.steps<10000,JSON.stringify(large.verify));
   assert.ok(large.score.steps<1000,JSON.stringify(large.score));
   if(sql.reset){assert.equal(large.reset.rows,128);assert.ok(large.reset.steps<10000,JSON.stringify(large.reset));}
+  for(const name of ['auditStart','auditResume','documents','statistics']) {
+    assert.equal(large[name].rows,128,name);assert.ok(large[name].steps<10000,JSON.stringify(large[name]));
+  }
   for(const kind of Object.keys(large))assert.ok(large[kind].steps<=small[kind].steps+500);
 });
 
