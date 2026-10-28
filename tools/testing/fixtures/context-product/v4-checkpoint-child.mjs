@@ -14,6 +14,13 @@ async function* rows(path) {
     let row;try{row=JSON.parse(line);}catch{throw Error('v4_checkpoint_corrupt');}yield row;
   }
 }
+// Verdicts are durable evidence even when their cells must be rerun. Include
+// nested checkpoint/pair/WM decisions, without importing their sample data.
+function failedVerdict(value) {
+  if(!value||typeof value!=='object')return false;
+  if(value.decision==='failed'||value.observedFailure===true)return true;
+  return Object.values(value).some(v=>v&&typeof v==='object'&&failedVerdict(v));
+}
 function knownFailure(cell,record,series) {
   if(cell?.kind==='injection'){if(Array.isArray(record.calls))return knownFailure({...cell,kind:'requests'},record,series);return typeof record.id==='string'&&Object.hasOwn(record,'code')?validateSubprobes(cell,[record]).decision==='failed':false;}
   const wal=cell&&(cell.canonical==='WAL'||cell.sidecar==='WAL');
@@ -80,16 +87,19 @@ async function readSegments(paths) {
   const segments=[];
   for(const path of paths){
     if(!path.endsWith('.jsonl')&&!path.endsWith('.jsonl.partial'))throw Error('v4_checkpoint_report_required');
-    let header,headerHash,final;const cells=[];
+    let header,headerHash,failed=false;const cells=[];
     for await(const row of rows(path)){
       if(row.type==='registration'){header=row.header;headerHash=row.headerHash;if(digest(header)!==headerHash)throw Error('v4_checkpoint_header_hash');}
-      if(row.type==='cell'&&row.decision?.complete===true)cells.push({key:row.cell.key,complete:true,decision:row.decision.decision,cell:row.cell,record:row.decision,summary:row.summary});
-      if(row.type==='final')final=row;
+      if(row.type==='cell'){
+        failed||=failedVerdict(row.decision);
+        if(row.decision?.complete===true)cells.push({key:row.cell.key,complete:true,decision:row.decision.decision,cell:row.cell,record:row.decision,summary:row.summary});
+      }
+      if(row.type==='final'&&row.status==='failed')failed=true;
     }
     if(header?.protocol?.version!=='P2-product-v4')throw Error('v4_checkpoint_header');
     const base=path.endsWith('.partial')?path.slice(0,-8):path,journal=base+'.records.jsonl';
     if(!await lstat(journal).then(()=>true,e=>{if(e.code==='ENOENT')return false;throw e;}))throw Error('v4_checkpoint_missing_journal');
-    let failed=final?.status==='failed',currentCell;
+    let currentCell;
     let ordinals=new Map(),pendingLatency=new Set(),percentiles;
     for await(const row of rows(journal)){
       if(row.type==='header'&&row.headerHash!==headerHash)throw Error('v4_checkpoint_journal_identity');
@@ -104,7 +114,9 @@ async function readSegments(paths) {
           if(limit&&qualifies(row.record)&&row.record.elapsedMs>limit.maxMs)pendingLatency.add(row.series+':'+index);
         }
         if(row.series==='overlap-final'&&row.record.overlap===true&&pendingLatency.has(row.record.series+':'+row.record.index))failed=true;
-        if(row.series==='failure'||knownFailure(cell,row.record,row.series))failed=true;
+        if(failedVerdict(row.record)||['failure','lane-failure','session-supervision'].includes(row.series)||
+          row.series==='resumed-checkpoints'&&row.record.retainedDecisions?.includes('failed')||
+          row.series==='capability'&&row.record.ready===false&&!row.record.blocked||knownFailure(cell,row.record,row.series))failed=true;
       }
     }
     failed||=percentiles?.failed()??false;

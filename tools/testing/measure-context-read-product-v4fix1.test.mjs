@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { createTestWorkspace } from './workspace.mjs';
 import { buildV4Plan,windowSlot } from './fixtures/context-product/v4-plan.mjs';
-import { PROTOCOL } from './fixtures/context-product/protocol.mjs';
+import { PROTOCOL,availability } from './fixtures/context-product/protocol.mjs';
 import { createReportSink } from './fixtures/context-product/report.mjs';
 import { checkedSegments } from './fixtures/context-product/v4-checkpoints.mjs';
 import { normalDecision } from './fixtures/context-product/v4-windows.mjs';
@@ -119,6 +119,67 @@ test('mid-T exception remains incomplete and is rerun on resume',async t=>{
   const rerun=await runner(t,{exception:true,resumed:segments});assert.equal(rerun.runs,1);assert.equal(rerun.report.final.status,'failed');
 });
 function header(cell){return {protocol:{version:'P2-product-v4'},segmentId:'first',registrationHash:'registered',host:{id:'host'},volume:{id:'volume'},node:'v24.15.0',segments:[{id:'first',cellKeys:[cell.key]}],inventory:[cell],cellCount:1};}
+async function round6Recovery(paths){
+  // Current runs exercise the SQLite-free child; counterfactuals load that same
+  // reader from Git, leaving the worktree and report-writing code unchanged.
+  const {readSegments}=base?await load('v4-checkpoint-child.mjs',{},s=>s.slice(0,s.indexOf('\ntry{console.log'))+'\nexport {readSegments};'):await import('./fixtures/context-product/v4-checkpoints.mjs');
+  return readSegments(paths);
+}
+for(const boundary of ['cell','checkpoint'])test(`round6 availability budget-stop failure survives interruption after ${boundary} and a passing retry`,async t=>{
+  const cell=buildV4Plan('engine').find(c=>c.kind==='availability'),h=header(cell),w=createTestWorkspace(t);
+  const records=Array.from({length:100},(_,i)=>good({method:'findCandidates',scheduled:true,intent:cell.intent,...(i<2?{ok:false,notReady:true,code:'index_unavailable'}:{})}));
+  const metric=availability(records);assert.equal(metric.fraction,.02);assert.equal(metric.decision,'failed');
+  const verdict=normalDecision(cell,records,{availability:metric});assert.equal(verdict.decision,'failed');assert.equal(verdict.observedFailure,true);
+  const path=join(w.path,'stopped.jsonl'),sink=await createReportSink(path,h);
+  for(const r of records)await sink.record(cell.id,'availability',r);
+  const incomplete={...verdict,complete:false,key:cell.key};await sink.cell(cell,incomplete);
+  if(boundary==='checkpoint')await sink.record(cell.id,'checkpoint',{complete:false,cellKey:cell.key,decision:incomplete});
+  await sink.interrupt(); // No final marker; even the cell/journal gap is recoverable.
+  assert.equal((await readFile(path+'.partial','utf8')).includes('"type":"final"'),false);
+  const passingRecords=records.map(r=>({...r,ok:true,notReady:false,code:null}));
+  const passing=normalDecision(cell,passingRecords,{availability:availability(passingRecords)});assert.equal(passing.decision,'passed');
+  const retry=join(w.path,'retry.jsonl'),next=await createReportSink(retry,h);
+  for(const r of passingRecords)await next.record(cell.id,'availability',r);
+  await next.cell(cell,{...passing,complete:true});await next.finish('passed');
+  const segments=await round6Recovery([path+'.partial',retry]);
+  assert.equal(segments[0].knownFailure,true);assert.deepEqual(segments[0].cells,[]);
+  const merged=checkedSegments(h,segments);assert.equal(merged.decision,'failed');assert.equal(merged.complete,true);assert.deepEqual(merged.cells,segments[1].cells);
+  const resumed=await runner(t,{sessionCell:true,resumed:[segments[0]]});assert.equal(resumed.runs,1);assert.equal(resumed.report.final.status,'failed');
+});
+const round6Verdicts=[{decision:'failed'},{decision:'invalid',observedFailure:true},{decision:'inconclusive',observedFailure:true}];
+for(const kind of ['cell','checkpoint'])for(const verdict of round6Verdicts)test(`round6 ${kind} independently latches ${JSON.stringify(verdict)} without merging incomplete evidence`,async t=>{
+  const cell={id:0,key:'T',kind:'injection'},w=createTestWorkspace(t),path=join(w.path,'verdict.jsonl'),sink=await createReportSink(path,header(cell));
+  const decision={...verdict,complete:false};
+  if(kind==='cell')await sink.cell(cell,decision,{samples:['must-rerun']});else await sink.record(cell.id,'checkpoint',{complete:false,decision});
+  await sink.interrupt();const [segment]=await round6Recovery([path+'.partial']);assert.equal(segment.knownFailure,true);assert.deepEqual(segment.cells,[]);
+});
+const round6JournalFailures=[
+  ['pair',{decision:{decision:'failed'}}],['WM-evidence',{decisions:[{decision:'invalid',observedFailure:true}]}],
+  ['session-validation',{decision:'failed'}],['exposure-final',{decision:'failed'}],
+  ['resumed-checkpoints',{retainedDecisions:['passed','failed']}],['failure',{code:'harness_failed'}],
+  ['lane-failure',{code:'lane_failed'}],['session-supervision',{code:'session_progress_timeout'}],['capability',{ready:false,blocked:false,code:'dependency_failed'}],
+];
+for(const [series,record] of round6JournalFailures)test(`round6 audit retains interrupted ${series} failure`,async t=>{
+  const cell={id:0,key:'audit',kind:'requests'},w=createTestWorkspace(t),path=join(w.path,'journal.jsonl'),sink=await createReportSink(path,header(cell));
+  await sink.record(cell.id,series,record);await sink.interrupt();const [segment]=await round6Recovery([path+'.partial']);assert.equal(segment.knownFailure,true);assert.deepEqual(segment.cells,[]);
+});
+test('round6 audit retains final failure and observed failure in a complete cell',async t=>{
+  const cell={id:0,key:'complete',kind:'requests'},w=createTestWorkspace(t);
+  for(const complete of [false,true]){
+    const path=join(w.path,String(complete)+'.jsonl'),sink=await createReportSink(path,header(cell));
+    if(complete)await sink.cell(cell,{decision:'invalid',observedFailure:true,complete:true});
+    await sink.finish(complete?'invalid':'failed');const [segment]=await round6Recovery([path]);assert.equal(segment.knownFailure,true);assert.equal(segment.cells.length,Number(complete));
+  }
+});
+test('round6 nonfailure incomplete verdicts and blocked capabilities remain rerunnable without a failure latch',async t=>{
+  const cell={id:0,key:'control',kind:'requests'},w=createTestWorkspace(t),path=join(w.path,'control.jsonl'),sink=await createReportSink(path,header(cell));
+  for(const decision of ['passed','invalid','inconclusive']){
+    const value={decision,observedFailure:false,complete:false};await sink.cell(cell,value);await sink.record(cell.id,'checkpoint',{decision:value});
+  }
+  await sink.record(cell.id,'resumed-checkpoints',{retainedDecisions:['passed','invalid','inconclusive']});
+  await sink.record(cell.id,'capability',{ready:false,blocked:true});await sink.interrupt();
+  const [segment]=await round6Recovery([path+'.partial']);assert.equal(segment.knownFailure,false);assert.deepEqual(segment.cells,[]);
+});
 for(const [method,max] of Object.entries(PROTOCOL.latency))for(const series of method==='findCandidates'?['main','cold','warm-reference','WM']:['main','cold'])test(`interrupted ${method} ${series} maximum stays failed after a faster complete segment`,async t=>{
   const w=createTestWorkspace(t),cell={id:0,key:'cell',kind:series==='window'||series==='WM'?'exposure':'requests',method,canonical:'WAL',sidecar:'WAL'},h=header(cell);
   const path=join(w.path,'interrupted.jsonl'),s=await createReportSink(path,h);

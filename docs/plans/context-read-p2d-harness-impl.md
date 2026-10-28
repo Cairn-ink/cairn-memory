@@ -2055,3 +2055,155 @@ The process check found **zero** remaining verification processes. Both drivers
 finished and their test wrappers confirmed owned process-group shutdown. Owned
 verification scratch was removed after recording these results; no task or
 monitor remains running for unattended supervision.
+
+## v4 encoding fix round 6
+
+Base `beca3ab6`, branch `feat/context-read-p2d-harness`. The standards re-review
+was read in full, together with the original nine lessons and four additional
+lessons. The checkpoint reader now latches failed decisions and
+`observedFailure:true` from every cell verdict, including `complete:false`.
+Only complete cells enter the merge; incomplete cells and their samples remain
+excluded and must be rerun. The failure latch survives a passing retry.
+
+The regression uses 100 fabricated availability attempts with two not-ready
+results. The real availability metric and normal decision produce `failed`
+and `observedFailure:true`. Real report sinks persist the incomplete verdict,
+then interrupt before finalization, independently at the cell-write boundary
+and after the journal checkpoint. A passing 100-attempt retry cannot erase the
+recovered `knownFailure:true`: the merge stays failed, includes only the retry's
+complete cell, and the fabricated-clock runner reruns the incomplete cell while
+retaining final failure. No final failed marker supplies that result.
+
+### Checkpoint record audit
+
+| Record kind | Failure handling |
+| --- | --- |
+| Report registration; journal header | Identity metadata has no verdict. Existing header and journal hash validation remains. |
+| Report cell, complete or incomplete | Explicit failed decisions and observed failures latch independently of completion. Only complete cells retain their decision record and summary. |
+| Report final | A failed status latches independently of cell completion. |
+| Journal checkpoint | Recursive verdict inspection retains both nested failed decisions and observed failures, including injection cells. No journal checkpoint supplies mergeable cells or samples. |
+| Journal resumed-checkpoints | A failed retained decision latches even without a final marker. |
+| Journal pair, WM-evidence, session-validation, exposure-final | The same verdict scan retains nested decision objects, decision arrays and observed failures. Invalid or inconclusive coverage alone does not become a failure. |
+| Journal failure, lane-failure, session-supervision | Explicit harness/session error records latch before the parent can write its failed checkpoint. |
+| Journal capability | A failed dependency probe latches; an explicitly blocked dependency remains invalid without a failure latch. |
+| Raw attempts, overlap reconciliation, freshness targets, writer and loop evidence | Existing functional, bounds, busy, deadline, loop, maximum, completed-percentile and freshness checks remain intact. No incomplete population is merged into a retry. |
+| Admission, scheduling, attribution and population metadata | No additional explicit failed verdict is emitted here. Existing observation gates still inspect their evidence; admission stops and missing coverage do not manufacture failures. |
+
+Separate regressions isolate each verdict source, observed failures masked by
+invalid or inconclusive decisions, nested journal verdicts, retained decisions,
+explicit session errors and failed capabilities. Controls retain final failures
+and keep nonfailure incomplete verdicts and blocked dependencies rerunnable.
+The existing observation, T7b, cleanup, lock-safety and rounds 1–5 checks remain
+in the verification set. No engine, shared helper, frozen protocol, plan, claims
+or generated runtime changes. Counts remain **728 / 488 cells**, **432 / 224
+fixed windows**, **252 / 172 references**, with estimates **46,627.4 s /
+26,284 s**. No timing run or smoke ran on the shared machine; the primary commits.
+
+
+### Commands and actual exit codes
+
+Each command uses the named nvm patch with that runtime first in PATH. `F1`
+means `tools/testing/measure-context-read-product-v4fix1.test.mjs`. The base
+switch loads only the reader under test from Git through the existing VM seam;
+it does not change the worktree. Both base runs have assertion failures only,
+with zero cancellations.
+
+| Command | Node 22.16.0 | Node 24.15.0 |
+| --- | --- | --- |
+| `node --experimental-vm-modules --test --test-reporter=tap --test-name-pattern=round6 F1` | exit 0; 19 passed | exit 0; 19 passed |
+| `P2D_V4FIX1_BASE=beca3ab6 node --experimental-vm-modules --test --test-reporter=tap --test-name-pattern=round6 F1` | exit 1; 17 failed, 2 controls passed | exit 1; 17 failed, 2 controls passed |
+
+The two 100-attempt availability interruption cases fail on the base because
+recovery returns `knownFailure:false`. Both pass after the fix and additionally
+require the passing retry's merged and resumed runner results to stay failed.
+
+| Command | Node 22.16.0 exit | Node 24.15.0 exit |
+| --- | --- | --- |
+| `node --version` | 0 | 0 |
+| `node --check tools/testing/fixtures/context-product/v4-checkpoint-child.mjs` | 0 | 0 |
+| `node --check tools/testing/measure-context-read-product-v4fix1.test.mjs` | 0 | 0 |
+| `node tools/testing/measure-context-read-product.mjs --protocol v4 --profile engine --estimate` | 0 | 0 |
+| `node tools/testing/measure-context-read-product.mjs --protocol v4 --profile production --estimate` | 0 | 0 |
+
+The following serial commands each use
+`node tools/testing/run.mjs --test-reporter=tap <test-path>`. Actual subprocess
+return codes were recorded directly; reporter output supplies no exit verdict.
+The wrapper confirms owned process-group shutdown and removes its scratch.
+
+| Explicit test path | Node 22.16.0 exit | Node 24.15.0 exit |
+| --- | --- | --- |
+| `core/test/context-read-assembly-races.test.mjs` | 0 | 0 |
+| `core/test/context-read-assembly-readonly.test.mjs` | 0 | 0 |
+| `core/test/context-read-assembly.test.mjs` | 0 | 0 |
+| `core/test/context-read-bm25.test.mjs` | 0 | 0 |
+| `core/test/context-read-budget.test.mjs` | 0 | 0 |
+| `core/test/context-read-core.test.mjs` | 0 | 0 |
+| `core/test/context-read-default-entropy.test.mjs` | 0 | 0 |
+| `core/test/context-read-embedder.test.mjs` | 0 | 0 |
+| `core/test/context-read-fusion.test.mjs` | 0 | 0 |
+| `core/test/context-read-local-embedder.test.mjs` | 0 | 0 |
+| `core/test/context-read-local-status.test.mjs` | 0 | 0 |
+| `core/test/context-read-moc-source.test.mjs` | 0 | 0 |
+| `core/test/context-read-process.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-artifact.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-control.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-import.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-index.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-pump.test.mjs` | 0 | 0 |
+| `core/test/context-read-product-service.test.mjs` | 0 | 0 |
+| `core/test/context-read-product.test.mjs` | 0 | 0 |
+| `core/test/context-read-recovery.test.mjs` | 0 | 0 |
+| `core/test/context-read-review.test.mjs` | 0 | 0 |
+| `core/test/context-read-sidecar.test.mjs` | 0 | 0 |
+| `core/test/context-read-source-work.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources-authority.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources-bounds.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources-races.test.mjs` | 0 | 0 |
+| `core/test/context-read-sources.test.mjs` | 0 | 0 |
+| `core/test/context-read-tokenize.test.mjs` | 0 | 0 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 | 0 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-fix1.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-fix2.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4fix1.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4fix3.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4fix4.test.mjs` | 0 | 0 |
+| `tools/testing/measure-context-read-product.test.mjs` | 0 | 0 |
+| `tools/testing/measure-topic-reader-wal.test.mjs` | 0 | 0 |
+
+All **78 test-file invocations exited 0**, including the touched regression
+suite, the v4 suite, all prior harness regressions and the **32 required files**.
+The v4 suite retains **47/47** and the round-three boundary suite **16/16** on
+both patches. Both assembly runs retain the existing optional-`tiktoken` A13
+skip; no dependency installation was attempted. Both version checks, all four
+syntax checks and all four estimate-only commands exited **0**. The serial
+verification driver exited **0** after all **92 commands** returned their
+expected exit codes, including the two intentionally failing base commands.
+
+### Inventories and scope
+
+The test inventory was derived by filesystem globs plus explicit guard/E1-C2
+paths, then independently by `rg --files` selection. Both sorted lists agree:
+**39 test files / 32 required files**, inventory `diff -u` **exit 0**.
+
+The changed-file inventory uses `git diff --name-only HEAD` plus untracked
+files. Independently, every HEAD blob and executable/symlink mode was compared
+with the worktree, followed by a walk for non-ignored new files, excluding Git
+metadata. Both lists agree at **3 changed files**, inventory `diff -u` **exit 0**:
+
+- `docs/plans/context-read-p2d-harness-impl.md`
+- `tools/testing/fixtures/context-product/v4-checkpoint-child.mjs`
+- `tools/testing/measure-context-read-product-v4fix1.test.mjs`
+
+Final whitespace, staged-diff, final-newline, added-local-path, tested-JavaScript
+hash, documented-table and manifest comparisons all exited **0**. The independent
+changed-file and test inventories were re-derived after the appendix and again
+agreed, both `diff -u` **exit 0**. The unchanged engine/runtime/frozen-source
+comparison exited **0**. A separate check of all four estimate outputs against
+the frozen cell, window, reference and seconds values also exited **0**.
+
+The branch remains at `beca3ab6`; all **3 files are unstaged**, with no commit.
+The verification driver finished, the wrappers confirmed owned process-group
+shutdown, and the final process check found **zero** remaining verification Node
+processes. No task or monitor remains running for unattended supervision.
