@@ -27,6 +27,10 @@ export async function publicRead(setup, surface, options, semantic = true, withR
 }
 export function inspect(envelope, setup, forbidden) {
   const identities = [], scopeCanaries = [], text = JSON.stringify(envelope), fixture = safetyFixtures();
+  // Match JSON-escaped bytes too: canonical Card text contains a newline.
+  // Body-only diagnostics must not evade inspection by omitting the title.
+  const contains = canary => [canary.text, ...(canary.type === 'card' ? [canary.body] : [])]
+    .some(value => typeof value === 'string' && text.includes(JSON.stringify(value).slice(1, -1)));
   function walk(value) {
     if (!value || typeof value !== 'object') return;
     if (['memory', 'card'].includes(value.type) && (value.memoryId !== undefined || value.cardId !== undefined)) {
@@ -41,11 +45,11 @@ export function inspect(envelope, setup, forbidden) {
   for (const word of ['PRIVATE_OWNER_CANARY','PRIVATE_NAMESPACE_CANARY']) if (text.includes(word)) scopeCanaries.push(word);
   for (const canary of fixture.canaries.filter(c => c.namespace.ownerId !== fixture.ownerId || c.namespace.projectId === 'unselected')) {
     const key = `${canary.id}@${canary.revision}${canary.type === 'card' ? `:${canary.bodyRevision}` : ''}`;
-    if (identities.includes(key) || text.includes(canary.text)) scopeCanaries.push(key);
+    if (identities.includes(key) || contains(canary)) scopeCanaries.push(key);
   }
   for (const key of forbidden) {
     const canary = fixture.canaries.find(c => `${c.id}@${c.revision}${c.type === 'card' ? `:${c.bodyRevision}` : ''}` === key);
-    if (canary && text.includes(canary.text)) identities.push(key);
+    if (canary && contains(canary)) identities.push(key);
   }
   return { identities, scopeCanaries, envelope };
 }
@@ -90,10 +94,15 @@ export async function executeSafety(prepared, { withReader = withProductReader, 
         const forbidden = scenarios.find(s => s.id === id).forbidden;
         const returns = [], scopeComparisons = [];
         for (const surface of surfaces) {
-          const observe = (kind, envelope) => returns.push({ surface, kind, ...inspect(envelope, setup, forbidden) });
-          const withCanary = await publicRead(setup, surface, await setup.withCanaryOptions(surface), true, withReader, observe);
-          const withoutCanary = await publicRead(setup, surface, await setup.withoutCanaryOptions(surface), true, withReader, observe);
-          scopeComparisons.push({ surface, withCanary, withoutCanary });
+          const paired = {};
+          for (const side of ['withCanary', 'withoutCanary']) {
+            const options = await (side === 'withCanary' ? setup.withCanaryOptions(surface) : setup.withoutCanaryOptions(surface));
+            await publicRead(setup, surface, options, true, withReader, (kind, envelope) => {
+              returns.push({ surface, side, kind, ...inspect(envelope, setup, forbidden) });
+              (paired[kind] ??= { surface, kind })[side] = envelope;
+            });
+          }
+          scopeComparisons.push(...Object.values(paired));
         }
         observations[id] = { returns, forbidden, scopeComparisons };
       } else {

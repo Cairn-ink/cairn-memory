@@ -480,3 +480,70 @@ Against `e18e1d84` (unchanged HEAD), Git diff plus untracked enumeration and an 
 - `tools/testing/p2e-fix1.test.mjs`
 - `tools/testing/p2e-fix2.test.mjs`
 - `tools/testing/p2e-safety.mjs`
+
+## Fix round 3
+
+Reviewed both second re-reviews in full and fixed their two remaining P1 findings against `872f0ae2`. This round uses synthetic responses and fake providers only. No `core/` changes or commit were made.
+
+Scope cells now compare **eight pairs**: capability and method-result envelopes for each of the four surfaces, with and without the foreign canary. The collector tags every inspected envelope with its side. The scorer requires exactly **16 observations**, one per surface/kind/side, and exactly eight comparisons. Both responses must succeed, and each compared envelope must match its inspected observation. Missing sides, missing or duplicate records, failed responses and detached comparison data prevent a pass. Full-envelope equality retains count diagnostics and only normalizes the existing permitted timing fields. Both owner and namespace count leaks now fail on every surface, including capability-only leaks with identical retrieval results.
+
+The auxiliary-envelope audit covered every other read captured by the collector:
+
+- Mutation cells already require all 26 post-mutation capability/result envelopes, including history candidates, history evidence and the evidence boundary's semantic-execution read. Every role is inspected and scored; retained result copies must match. Initial candidate/evidence reads establish the positive target and history controls establish independently eligible evidence.
+- Semantic-false reads capture no capability envelope and compare both complete lexical result envelopes, with zero semantic calls required.
+- Owner purge captures no capability envelope for its lexical reads. It compares both complete lexical envelopes and inspects the post-purge copy for scope violations; independent storage inventories and coordinator completion remain mandatory. Mutation receipts and purge coordinator results supply completion evidence rather than additional public retrieval envelopes.
+
+All three Card canaries now declare canonical string `title` and `body` fields. Their embedding `text` is derived as `title + "\n" + body`. Evidence gold compares the two public Card fields independently, while retaining typed identity, revision, body revision, namespace and candidate-ref checks. The inspector recognizes JSON-escaped complete text and body-only diagnostics, preserving detection when the canonical representation includes a newline.
+
+Seven new regression tests use the actual collector and the existing offline network/provider-import denial. Public positive evidence is constructed independently of the fixture fields. Clean responses now yield **96/96 mutation passes: 48 Memory and 48 Card**, with no incomplete cells. Wrong Card titles, bodies, body revisions or namespaces still prevent a pass. Re-running all **26 slots × 96 cells = 2,496 forbidden-reference injections** produces failures throughout. A second sweep of **2,496 body-only injections** also fails throughout, including capability and auxiliary roles. Existing round-1 and round-2 injection controls remain passing. The older hand-authored scope regression was updated to the mandatory complete observation shape.
+
+### Round 3 commands and actual exit codes
+
+```sh
+env -u OPENAI_API_KEY "$NVM_DIR/versions/node/v22.16.0/bin/node" tools/testing/run.mjs --test-reporter=tap \
+  tools/testing/p2e-eval.test.mjs tools/testing/p2e-fix1.test.mjs \
+  tools/testing/p2e-fix2.test.mjs tools/testing/p2e-fix3.test.mjs core/test/no-raw-db-fd.test.mjs
+env -u OPENAI_API_KEY "$NVM_DIR/versions/node/v24.15.0/bin/node" tools/testing/run.mjs --test-reporter=tap \
+  tools/testing/p2e-eval.test.mjs tools/testing/p2e-fix1.test.mjs \
+  tools/testing/p2e-fix2.test.mjs tools/testing/p2e-fix3.test.mjs core/test/no-raw-db-fd.test.mjs
+```
+
+| Verification | Node 22.16.0 | Node 24.15.0 |
+| --- | --- | --- |
+| Full suite, including concurrency/disk checks and raw-fd guard | 41 passed, 0 failed, 0 skipped; **exit 0** | 41 passed, 0 failed, 0 skipped; **exit 0** |
+| Unmodified round-3 tests copied into pristine `git archive 872f0ae2` extraction | 0 passed, 7 assertion failures; **exit 1** | 0 passed, 7 assertion failures; **exit 1** |
+
+Baseline command in each extraction: `node tools/testing/run.mjs --test-reporter=tap tools/testing/p2e-fix3.test.mjs`. The differential verification script checked the actual return codes and all seven assertion-failure codes, and exited **0**. Failures exercise the defects rather than missing exports. All subprocess statuses were captured directly before logs were summarized.
+
+```sh
+"$NVM_DIR/versions/node/v24.15.0/bin/node" tools/testing/p2e-seal.mjs --write
+python3 tools/testing/p2e-token-count.py --write
+python3 tools/testing/p2e-token-count.py --verify
+"$NVM_DIR/versions/node/v24.15.0/bin/node" tools/testing/p2e-seal.mjs --write
+env -u OPENAI_API_KEY "$NVM_DIR/versions/node/v24.15.0/bin/node" tools/testing/run.mjs --script \
+  evaluation/context-read-p2e/runner.mjs --estimate --price-usd-per-million 1 --max-usd 100 \
+  --report evaluation/context-read-p2e/reports/cost-example.json
+env -u OPENAI_API_KEY "$NVM_DIR/versions/node/v24.15.0/bin/node" tools/testing/run.mjs --script \
+  evaluation/context-read-p2e/runner.mjs --provider fake \
+  --report evaluation/context-read-p2e/reports/fake-blocked.json
+python3 tools/testing/p2e-manifest.py
+git diff --check
+```
+
+Both sealing commands, offline token writing and token verification exited **0**; **62,080 unique inputs** verify. The final seal is `93a8d9dadaa2727d348213c9acda2e56225abcd69fed1a061c7f718eb0ef5fd7`, covering **23 input files**. Safety Card text changed; quality corpus, labels, power and capacity projections did not. The estimate and fake dependency reports were regenerated with that seal and their provenance checked. Estimate: **exit 0**. Fake probe: expected **`blocked_dependency`, exit 2**, with no provider construction, observations or fabricated safety qualification; all 101 product safety cells remain pending. Manifest and whitespace checks exited **0**. All verification processes completed; no unattended task remains.
+
+### Round 3 changed-file cross-check
+
+Git diff plus untracked enumeration and an independent HEAD-tree versus disk blob/mode walk agree on **11 changed files** against `872f0ae2`. The following list was generated mechanically and compared back to both inventories. No file under `core/` changed.
+
+- `docs/plans/context-read-p2e-eval.md`
+- `evaluation/context-read-p2e/fixtures/safety.json`
+- `evaluation/context-read-p2e/fixtures/tokens.json`
+- `evaluation/context-read-p2e/inventory.mjs`
+- `evaluation/context-read-p2e/registration.json`
+- `evaluation/context-read-p2e/reports/cost-example.json`
+- `evaluation/context-read-p2e/reports/fake-blocked.json`
+- `evaluation/context-read-p2e/safety.mjs`
+- `tools/testing/p2e-fix1.test.mjs`
+- `tools/testing/p2e-fix3.test.mjs`
+- `tools/testing/p2e-safety.mjs`

@@ -56,12 +56,14 @@ test('fix1 gold: audit every query independently and reject the ambiguous legacy
 test('fix1 scope: every complete surface envelope, including assembly omitted counts, is compared', async () => {
   const id = 'scope/cross-owner';
   const o = { forbidden: ['foreign-owner@1'], canonicalSnapshot: 'scope', mutationAcknowledged: true, qualifiedHistoryControl: 'history-eligible@1',
-    returns: surfaces.map(surface => ({ surface, identities: [], scopeCanaries: [], envelope: safe() })),
-    withCanary: safe(), withoutCanary: safe(), scopeComparisons: surfaces.map(surface => ({ surface, withCanary: safe(), withoutCanary: safe() })) };
+    returns: surfaces.flatMap(surface => ['capabilities', 'result'].flatMap(kind => ['withCanary', 'withoutCanary'].map(side =>
+      ({ surface, kind, side, identities: [], scopeCanaries: [], envelope: safe() })))),
+    scopeComparisons: surfaces.flatMap(surface => ['capabilities', 'result'].map(kind => ({ surface, kind, withCanary: safe(), withoutCanary: safe() }))) };
   assert.equal(checkSafety({ [id]: o })[id].status, 'passed');
   for (const surface of surfaces) {
     const leak = structuredClone(o);
-    leak.scopeComparisons.find(c => c.surface === surface).withCanary.value.diagnostics.omitted.unavailable++;
+    leak.scopeComparisons.find(c => c.surface === surface && c.kind === 'result').withCanary.value.diagnostics.omitted.unavailable++;
+    leak.returns.find(r => r.surface === surface && r.kind === 'result' && r.side === 'withCanary').envelope.value.diagnostics.omitted.unavailable++;
     assert.equal(checkSafety({ [id]: leak })[id].status, 'failed', surface);
   }
   o.scopeComparisons.pop(); assert.equal(checkSafety({ [id]: o })[id].status, 'incomplete');
@@ -78,7 +80,7 @@ test('fix1 scope: every complete surface envelope, including assembly omitted co
     }, credential),
   });
   assert.equal(evidenceReads, 2);
-  assert.deepEqual(observations[id].scopeComparisons.map(c => c.surface), surfaces);
+  assert.deepEqual(observations[id].scopeComparisons.map(c => `${c.surface}/${c.kind}`), surfaces.flatMap(s => ['capabilities', 'result'].map(k => `${s}/${k}`)));
   assert.equal(checkSafety(observations)[id].status, 'failed');
 
 });

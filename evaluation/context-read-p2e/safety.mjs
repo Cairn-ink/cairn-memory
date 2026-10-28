@@ -50,10 +50,17 @@ export function checkSafety(observations) {
         violations += returned.identities.filter(key => forbidden.has(key)).length + returned.scopeCanaries.length;
       }
       if (id.startsWith('scope/')) {
-        for (const surface of ['candidates', 'assembly', 'evidence', 'private-metadata']) {
-          const comparisons = (o.scopeComparisons ?? []).filter(c => c.surface === surface);
-          valid &&= comparisons.length === 1 && comparisons[0].withCanary?.ok === true && comparisons[0].withoutCanary?.ok === true;
-          if (comparisons.length === 1) violations += Number(!isDeepStrictEqual(lexicalEnvelope(comparisons[0].withCanary), lexicalEnvelope(comparisons[0].withoutCanary)));
+        const pairs = ['candidates', 'assembly', 'evidence', 'private-metadata'].flatMap(surface =>
+          ['capabilities', 'result'].map(kind => `${surface}/${kind}`)).sort();
+        const reads = pairs.flatMap(pair => ['withCanary', 'withoutCanary'].map(side => `${pair}/${side}`)).sort();
+        valid &&= Array.isArray(o.scopeComparisons) && isDeepStrictEqual(o.scopeComparisons.map(c => `${c.surface}/${c.kind}`).sort(), pairs)
+          && isDeepStrictEqual(o.returns.map(r => `${r.surface}/${r.kind}/${r.side}`).sort(), reads);
+        for (const comparison of o.scopeComparisons ?? []) {
+          for (const side of ['withCanary', 'withoutCanary']) {
+            const observed = (o.returns ?? []).filter(r => r.surface === comparison.surface && r.kind === comparison.kind && r.side === side);
+            valid &&= comparison[side]?.ok === true && observed.length === 1 && isDeepStrictEqual(comparison[side], observed[0].envelope);
+          }
+          violations += Number(!isDeepStrictEqual(lexicalEnvelope(comparison.withCanary), lexicalEnvelope(comparison.withoutCanary)));
         }
       } else {
         // Score the complete post-mutation read ledger, not only the four
@@ -106,6 +113,6 @@ function verifiedTargetEvidence(envelope, key, candidates) {
       && candidates?.value?.items?.some(candidate => isDeepStrictEqual(candidate.ref, ref)) && ref.revision === target.revision
       && (target.type !== 'card' || ref.bodyRevision === target.bodyRevision)
       && isDeepStrictEqual(ref.namespace, target.namespace)
-      && (item.type === 'memory' ? item.content : `${item.title}\n${item.body}`) === target.text;
+      && (item.type === 'memory' ? item.content === target.text : item.title === target.title && item.body === target.body);
   });
 }
