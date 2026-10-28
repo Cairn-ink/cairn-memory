@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { openContextIndexMaintainer } from '../context-product-reader.mjs';
 import { createMaintenancePumpRuntime } from '../context-product-pump.mjs';
 import { createContextReadSupervisor } from '../context-read-supervisor.mjs';
 import { credentialDigest } from '../context-product-control.mjs';
@@ -183,19 +184,32 @@ test('P2-06/09/18 four/32 selection cutover prebuilds both intents and retires t
   const a=configured(t,f.path,four,{service:true,supervisor});
   const ownerCoverage=descriptor(readSet,1),b=configured(t,f.path,[...readSet].reverse(),{service:true,supervisor,ownerCoverage});
   b.binding.credentialDigest=a.binding.credentialDigest;
-  let now=0,serial=0;const timers=new Map();
-  const renew=createMaintenancePumpRuntime({now:()=>now,setTimer:(f,ms)=>{const id=++serial;timers.set(id,{f,at:now+ms});return id;},clearTimer:id=>timers.delete(id)});
-  const base={supervisor,window:{id:randomUUID(),endsAtMonoMs:60000,usedItems:0,usedMs:0},budgets:{maxItems:4096,maxMs:10000},
+  let now=0,serial=0;const timers=new Map(),attempted=new Set(),completed=new Set(),partial=new Set();
+  const renew=createMaintenancePumpRuntime({now:()=>now,setTimer:(f,ms)=>{const id=++serial;timers.set(id,{f,at:now+ms});return id;},clearTimer:id=>timers.delete(id),
+    open:async options=>{
+      const h=await openContextIndexMaintainer(options);
+      return {close:()=>h.close(),async refreshContextIndex(input,token){
+        const key=input.readSet.length+':'+input.intent,first=!attempted.has(key);attempted.add(key);
+        // Force a durable partial first quantum for both intents/selections.
+        // The same native deadline applies; no machine-speed gate is needed.
+        const result=await h.refreshContextIndex(first?{...input,budget:{...input.budget,maxItems:1}}:input,token);
+        if(result.ok){if(first){assert.equal(result.value.status,'rebuilding');partial.add(key);}if(result.value.status==='complete')completed.add(key);}
+        return result;
+      }};
+    }});
+  const base={supervisor,window:{id:randomUUID(),endsAtMonoMs:60000,usedItems:0,usedMs:0},budgets:{maxItems:32*1024,maxMs:60000},
     quantum:{maxItems:1024,maxMs:2500},pollMs:1,renewalMs:60000,serviceCredential:a.token};
   // Activate each selection explicitly. Multi-selection round-robin is covered
   // above with the same mock scheduler; native operation cutoffs are unchanged.
   for(const options of [a.options,b.options]){
     const c={...base,id:randomUUID(),projections:[{options,types:['memory']}]},pump=renew(c);
-    for(let i=0;i<2;i++){
+    const ready=()=>['current','history'].every(intent=>completed.has(options.readSet.length+':'+intent));
+    for(let i=0;i<12 && !ready();i++){
       assert.ok(timers.size,JSON.stringify(pump.getStatus()));
       const [id,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];timers.delete(id);now=timer.at;await timer.f();
       assert.equal(pump.getStatus().error,null);
     }
+    assert.equal(ready(),true,'bounded successful quanta must complete both intents');
     const revision=structuredClone(options.host.configuration.serviceBinding);
     const ownerCoverage={...options.ownerCoverage,selectionRevision:'next-revision'};revision.namespaces.ownerCoverage=ownerCoverage;
     const changed={...c,projections:[{options:{...options,ownerCoverage,host:{...options.host,configuration:{...options.host.configuration,serviceBinding:revision}}},types:['memory']}]};
@@ -219,6 +233,7 @@ test('P2-06/09/18 four/32 selection cutover prebuilds both intents and retires t
     }
     assert.equal(r.view[5],0);await h.close();
   }
+  assert.equal(partial.size,4);
   assert.equal(a.view[5],0);assert.equal(b.view[5],0);
 });
 

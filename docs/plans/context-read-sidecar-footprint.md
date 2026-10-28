@@ -173,3 +173,110 @@ Cross-check exit **0**: route 1 combines `git diff --name-only -z` with nonignor
 - `docs/plans/context-read-sidecar-footprint-measurements.json`
 - `docs/plans/context-read-sidecar-footprint.md`
 - `packaging/artifact-files.json`
+
+## Fix round 1
+
+This round addresses both accepted-delta reviews of `fd4252ee`. The additive delta `context-read-product-v1.1/sidecar-format-2-yield-v1` above remains verbatim. Format 2 is still the unreleased compact format under review; its physical schema attestation now includes the corrected access paths and allocator. The frozen contract, v1 sidecar, default profile, manifest tuple encoding, certificate fields/HMAC domains and host rebuild procedure are unchanged.
+
+### Findings, fixes and deterministic regressions
+
+1. **Incomplete deep verification (spec P1).** Posting verification uses left dictionary probes, so a missing term cannot disappear behind an inner join. An independent keyset scan traverses the physical posting primary key and checks both document and dictionary references, eligibility and the total number of hashed postings. Per-document frequency sums must match token lengths. Staging dictionary `verified_df` counters are first reset in bounded primary-key ranges, then incremented transactionally with verified posting progress; every nonempty term requires positive matching df, and the empty-term sentinel must match eligible N and total length. Unposted dictionary terms are rejected. `Fix round 1 deep verification rejects badtoken` stages a unique term, removes its dictionary row while `foreign_key_check` remains clean, and requires corrupt refusal with no publication. Companion cases cover orphan documents/terms, pre-seeded verification counters and inconsistent df, N and total length.
+2. **Collected captured generation (both reviews, P1).** The shared `storageKey()` helper checks for an absent generation before binding any integer and throws the recognized `index_unavailable` outcome. All three callers are covered by that guard: lexical lookup, unchanged base-document lookup and copied base postings. Real Worker regressions rendezvous after both observation snapshots have committed and before lexical lookup; a separate maintenance process either changes selection or catches up the same projection and collects the captured generation. Both calls return `index_unavailable`; a status call and another lookup prove the reader remains alive. The tests also confirm the captured physical generation was actually deleted.
+3. **Wrong-store precedence (spec P2).** Refusal of an older physical format preserves an already established `wrong_store` reason instead of overwriting it with `incompatible`. Replacement remains prohibited for that format. The format-1/foreign-store regression compares metadata and validation records before and after refresh. Existing explicit repair behavior for the current format remains covered by its original tests.
+4. **Cross-projection GC race (standards P1).** A scalar read-only hint may skip an empty GC pass, but it never authorizes deletion. Candidate selection, owner matching, publication/work/base protection and deletion all occur under the same `BEGIN IMMEDIATE`. `generations.storage_id` uses `AUTOINCREMENT`, so a collected committed ID cannot name a later generation. The cross-projection regression lets another maintainer consume the hint, collect the highest old ID and publish its replacement before the delayed collector starts its transaction. It verifies increasing IDs, intact replacement postings, foreign keys and transaction state at actual candidate selection.
+5. **Inconsistent item checkpoints (standards P1).** The complete target is revalidated after metadata/text transformation and before saving any batch checkpoint. A mismatch rolls back document, posting and statistics writes and produces `index_unavailable`; no progress is signed against that mismatched fence. The regression corrects revision-1 text to revision 2 at the metadata-scan rendezvous, checks that checkpoint 0 and empty staging tables remain durable, then completes an ordinary revision-2 rebuild.
+6. **Verification livelock (standards P1).** An admitted metadata or verification scan and its first returned row form one admission unit: the first row is processed even if scanning consumed the normal admission margin; later rows use the conservative estimate. A scan that has already crossed cutoff returns `read_timeout` and rolls back. Thus scanning cannot repeatedly sign the same successful zero-row cursor. Cursor, hash, document-length and df progress commit together. No cross-quantum estimate is required for this guarantee: every successful nonempty scan advances durable row progress. The regression injects exactly 600 ms opening, 250 ms scanning and 1 ms verification work into repeated 1,000 ms quanta and requires strictly increasing durable document counts, positive verified rows and settlement before cutoff. A companion metadata case injects 250 ms scans and 1 ms items after the same opening cost, including empty-stream transitions. The original indivisible-overrun and Worker cutoff/cancellation tests remain applicable.
+7. **Unbounded compact joins (standards P2).** Each posting stores an integer position assigned in UTF-8 term order. `product_document_order(generation,doc,position,term,frequency)` covers ordered verification pages; dictionary lookups are keyed left probes. The page builder fills the original 128 logical posting rows across documents, with a separate 128-document bound for empty documents. Frequency sums accumulate across pages, and df validation uses keyed counters instead of document/term-wide aggregates. Scoring explicitly drives query terms through the existing covering dictionary unique index and probes the posting primary key `(generation,doc,term)`. The VM regression runs the actual captured production SQL in independent in-memory SQLite databases, using an instruction callback, at 1,000 and 19,000 terms. The additional exact-page-boundary/empty-document case compares the final ordered manifest to independent SHA-256.
+8. **Weak monotonic-estimate assertion (standards P2).** After observing a 70 ms item followed by a 1 ms item, the clock advances monotonically to a 280 ms remaining-budget boundary. Admission must refuse because the retained 140 ms estimate plus 150 ms reserve does not fit. Removing `Math.max` admits work and fails the assertion. The original conservative implementation passes this strengthened assertion on `fd4252ee`; the disposable mutation fails on both runtimes.
+
+All corruption, writer and collection interleavings use statement seams or explicit rendezvous points. The SQL work counter is deterministic; there is no wall-clock acceptance gate or network access. The independent healthy-data manifest oracle, pooled rank/score/tie tests and closed DTO goldens remain the compatibility checks.
+
+The instruction counter uses Python's SQLite progress callback at one callback per VM instruction, with the actual production SQL captured through the storage seam. These counts are identical at 1,000 and 19,000 terms for the fixed statements:
+
+| Operation | Rows returned | Baseline VM steps at 19,000 terms | Fixed VM steps at both sizes |
+| --- | ---: | ---: | ---: |
+| Ordered posting verification | 128 | 608,929 | 1,934 |
+| Two-term query frequencies | 1 | 190,015 | 50 |
+| Verification-counter initialization | 128 | — | 7,191 |
+
+The final baseline replay overlays only the regression tests/fixture on an isolated `fd4252ee` snapshot. It exits **1** on both Node patches, with the expected **10 failures** (including the additional metadata-scan case). The high-water control exits **0**; removing only `Math.max` exits **1** on both patches. Separate allocator-only, scoring-only and counter-reset-only mutations also exit **1** on both, proving those assertions observe their named failures.
+
+The existing pump selection-cutover test now forces the first quantum for each intent/selection to use `maxItems:1`, observes honest rebuilding, and drives bounded scheduled quanta until both certified intents report complete. It no longer assumes exactly two real-machine quanta suffice. Its explicit mock minute quota allows that work; the native 2,500 ms quantum and all response cutoffs remain unchanged.
+
+### Updated footprint
+
+The final unchanged sizing harness ran on **Node 24.15.0**, exit **0**, with the same 1,642 Memories, 164 Cards and four namespaces. Both current and history contain 1,806 documents, 1,712 terms and 127,863 tokens. Current/history used 91/169 explicit quanta; these are report-only shared-machine observations, not timing or timeout gates.
+
+| Both intents, one owner-wide selection | Reviewed format 2 | Fix round 1 |
+| --- | ---: | ---: |
+| Canonical main file | 5,197,824 B | 5,173,248 B |
+| Sidecar main file | 7,528,448 B | 11,862,016 B |
+| Sidecar / canonical | 1.4484× | **2.2930×** |
+| Sidecar bytes / Memory, including Cards | 4,584.93 | 7,224.13 |
+| Free pages | 0 B | 0 B |
+| WAL / SHM / rollback journal; lifecycle lock | 0 / 0 / 0 B; 0 B | 0 / 0 / 0 B; 0 B |
+
+The **≤5× target remains satisfied**. The added covering posting-order index, integer positions and verification counters account for the increase. No canonical padding or corpus reduction was used. UUID-driven canonical B-tree occupancy varies slightly between fixture runs. Allocated file bytes include pointer-map pages; SQLite `dbstat` accounts for each table and physical index, and page-count/freelist accounting independently checks the total. Complete canonical and sidecar structure/per-Memory figures are preserved under `fixRound1` in [the measurements](context-read-sidecar-footprint-measurements.json).
+
+| Sidecar structure | Kind | Reviewed bytes | Fix bytes | Fix B/Memory |
+| --- | --- | ---: | ---: | ---: |
+| `documents` | table | 589,824 | 589,824 | 359.21 |
+| `generations` | table | 4,096 | 4,096 | 2.49 |
+| `pointer_map` | internal | 12,288 | 16,384 | 9.98 |
+| `postings` | table | 3,190,784 | 3,751,936 | 2284.98 |
+| `product_document_order` | index | — | 3,747,840 | 2282.48 |
+| `product_metadata` | table | 4,096 | 4,096 | 2.49 |
+| `product_term` | index | 2,953,216 | 2,965,504 | 1806.03 |
+| `progress_records` | table | 4,096 | 4,096 | 2.49 |
+| `publications` | table | 4,096 | 4,096 | 2.49 |
+| `selections` | table | 4,096 | 4,096 | 2.49 |
+| `sqlite_autoindex_documents_2` | index | 196,608 | 196,608 | 119.74 |
+| `sqlite_autoindex_documents_3` | index | 405,504 | 405,504 | 246.96 |
+| `sqlite_autoindex_generations_1` | index | 4,096 | 4,096 | 2.49 |
+| `sqlite_autoindex_progress_records_1` | index | 4,096 | 4,096 | 2.49 |
+| `sqlite_autoindex_publications_1` | index | 4,096 | 4,096 | 2.49 |
+| `sqlite_autoindex_selections_1` | index | 4,096 | 4,096 | 2.49 |
+| `sqlite_autoindex_statistics_2` | index | 53,248 | 53,248 | 32.43 |
+| `sqlite_autoindex_validation_records_1` | index | 4,096 | 4,096 | 2.49 |
+| `sqlite_autoindex_validation_records_2` | index | 4,096 | 4,096 | 2.49 |
+| `sqlite_autoindex_work_1` | index | 4,096 | 4,096 | 2.49 |
+| `sqlite_schema` | internal | 4,096 | 4,096 | 2.49 |
+| `sqlite_sequence` | table | — | 4,096 | 2.49 |
+| `statistics` | table | 65,536 | 69,632 | 42.41 |
+| `validation_records` | table | 4,096 | 4,096 | 2.49 |
+| `work` | table | 4,096 | 4,096 | 2.49 |
+
+### Verification and exit codes
+
+The final required runs used the exact Node patches below, file concurrency 1 and explicit file arguments. Table globs are compact spellings of those expanded argument arrays. Glob expansion and independent directory enumeration agree on **60 required paths**. Each subprocess return code was captured directly; no pipeline tail supplied a test verdict.
+
+| Command | Explicit files | Node 22.16.0 exit | Node 24.15.0 exit |
+| --- | ---: | ---: | ---: |
+| `node --test --test-concurrency=1 core/test/context-read*.test.mjs` | 34 | 0 | 0 |
+| `node --test --test-concurrency=1 core/test/topic-*.test.mjs` | 17 | 0 | 0 |
+| `node --test --test-concurrency=1 core/test/no-raw-db-fd.test.mjs core/test/sqlite-lock-safety.test.mjs core/test/sqlite-journal-probe.test.mjs` | 3 | 0 | 0 |
+| `node --test --test-concurrency=1 adapters/mcp/test/context-read*.test.mjs` | 5 | 0 | 0 |
+| `node --test --test-concurrency=1 packaging/test/topic-overview-raw29.test.mjs` | 1 | 0 | 0 |
+| `node --test --test-concurrency=1 core/test/context-read-product-footprint.test.mjs core/test/context-read-product-pump.test.mjs` (final touched tests) | 2 | 0 | 0 |
+| `node core/testing/measure-context-product-footprint.mjs` | 1 harness | — | 0 |
+
+Final required-set results on each patch: context: **687 pass**; topic: **238 pass**; guards: **44 pass**; mcp: **88 pass**; packaging: **3 pass**. Every group has **0 failures and 0 skips**. The separately rerun touched pair has **48 pass**, including 24 footprint/yield cases and 24 pump cases. All final new statements use the existing native statement policy; the raw-fd guard needed no new runtime allowlist entries.
+
+Earlier verification failures are retained as failures: local integration attempts exited **1** while checkpoint compatibility and refusal precedence were corrected; a pre-final full context run exited **1 on both patches** because the pump test assumed two quanta implied readiness. The deterministic partial-quantum pump test now passes without increasing native deadlines. Its initial test-only minute quota was also insufficient for the forced extra quanta (exit **1 on both**); the bounded mock minute quota was corrected before the final runs.
+
+Initial installed-packaging runs exited **1 on both patches** because a pre-existing temporary npm wrapper forced an offline cache missing `@modelcontextprotocol/server@2.3.1`. Using each named runtime's normal npm toolchain and the already populated offline cache produced the final **0/0** above. A pinned local `tiktoken 1.0.22` copy supplied the ignored test dependency. No network install, dependency/lockfile edit, shared install removal, runtime regeneration or commit occurred.
+
+The baseline replay and mutation commands intentionally return failure: `node --test --test-name-pattern='Fix round 1|high-water|250ms scans' core/test/context-read-product-footprint.test.mjs` on `fd4252ee` is **1/1**; isolated high-water control is **0/0**, and high-water/allocator/scoring/counter-reset mutants are each **1/1**. These were executed in disposable snapshots, leaving the delivered implementation unchanged.
+
+`git diff --check`: **0**. Frozen contract/v1 sidecar/setup-runtime/raw-fd-allowlist diff: **0**. Accepted-delta byte comparison: **0**, unchanged. Measurement structure/page totals and ratio validation: **0**. Changed-file cross-check: **0**, six paths. No long-running verification is handed off without a result.
+
+### Changed files, independently cross-checked
+
+Cross-check exit **0**: `git diff --name-only -z HEAD` plus nonignored untracked paths was compared with independent Git blob hashes of every HEAD entry plus `rg --files --hidden` enumeration of nonignored files. The mechanically derived lists agree at **6 files, 0 differences**, including the fixture and measurement JSON. The required test union was independently derived with glob expansion and directory enumeration: **60 explicit paths, 0 differences**.
+
+- `core/context-product-sidecar.mjs`
+- `core/test/context-read-product-footprint.test.mjs`
+- `core/test/context-read-product-pump.test.mjs`
+- `core/test/fixtures/context-product-index-worker.mjs`
+- `docs/plans/context-read-sidecar-footprint-measurements.json`
+- `docs/plans/context-read-sidecar-footprint.md`

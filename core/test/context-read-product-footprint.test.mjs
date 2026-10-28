@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { unlinkSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { fixture } from '../testing/context-read-fixture.mjs';
 import { four, descriptor } from '../testing/context-product-owner-fixture.mjs';
 import { openContextProductFacade } from '../context-read-facade.mjs';
@@ -52,7 +53,7 @@ test('format 2 uses integer postings, reconstructs identical current/history man
   assert.equal(side.prepare('PRAGMA user_version').get().user_version,2);
   assert.equal(side.prepare('PRAGMA auto_vacuum').get().auto_vacuum,2);
   assert.deepEqual(side.prepare('PRAGMA table_info(postings)').all().map(r=>[r.name,r.type]),
-    [['generation','INTEGER'],['doc','INTEGER'],['term','INTEGER'],['frequency','INTEGER']]);
+    [['generation','INTEGER'],['doc','INTEGER'],['term','INTEGER'],['frequency','INTEGER'],['position','INTEGER']]);
   assert.match(side.prepare("SELECT sql FROM sqlite_schema WHERE name='postings'").get().sql,/WITHOUT ROWID/);
   assert.deepEqual(side.prepare('PRAGMA foreign_key_check').all(),[]);
   const {mac,...body}=current;
@@ -71,6 +72,7 @@ test('quantum admission keeps the conservative observed high-water item estimate
   assert.equal(q.admit(),true);
   q.measure(()=>{clock+=70;});assert.equal(q.admit(),true);
   q.measure(()=>{clock+=1;});assert.equal(q.admit(),true);
+  clock=720;assert.equal(q.admit(),false); // 280 remaining: 150 reserve + 140 retained estimate.
   q.measure(()=>{clock+=80;});assert.equal(q.admit(),false);
   assert.ok(clock<1000-q.reserve);
 });
@@ -119,13 +121,13 @@ test('superseded generations and old selections are collected, other intent and 
   assert.deepEqual(side.prepare('PRAGMA foreign_key_check').all(),[]);
 });
 
-test('expensive open and per-item costs yield ok durable partial progress, repeated quanta finish without timeout',t=>{
+for(const scanCost of [100,250])test(`expensive open and ${scanCost}ms scans yield ok durable partial progress, repeated quanta finish without timeout`,t=>{
   const f=fixture(t);for(let i=0;i<9;i++)f.admit('quantum 東京 '+i,four[0]);
   let clock=0,items=0;
   const facade=openContextProductFacade(f.path,{}),ownerCoverage=descriptor(four);
   const index=openProductIndex({path:f.path,facade,ownerCoverage,maintenance:true,now:()=>clock,
     authorize:()=>({accessGenerations:accessDigest({ownerId:four[0].ownerId,namespaces:{readSet:four}}),check(){},envelope:fn=>fn()}),
-    storageOptions:{rendezvous(point){if(point==='opened')clock+=600;if(point==='scan')clock+=100;if(point==='item'){clock+=70;items++;}if(point==='verify-item')clock+=10;if(point==='checkpoint')clock+=20;}}});
+    storageOptions:{rendezvous(point){if(point==='opened')clock+=600;if(point==='scan')clock+=scanCost;if(point==='item'){clock+=scanCost===250?1:70;items++;}if(point==='verify-item')clock+=10;if(point==='checkpoint')clock+=20;}}});
   t.after(()=>{index.close();facade.close();});
   const input={readSet:four,types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:1024,maxMs:1000}};
   const first=index.run('refreshContextIndex',input,{},1000);
@@ -170,4 +172,230 @@ test('a single uninterruptible item may cross cutoff; its admitted work still co
   assert.ok(a.storage.observe(a.p,a.access).dto.lexical.progress.checkpoint>0);
   // The existing parent/Worker cutoff regressions discard this late envelope,
   // settle read_timeout, and preserve the independently committed checkpoint.
+});
+
+// Exercise corruption after a signed item checkpoint, while its generation is
+// still staging. Each edit leaves the physical schema and signed cursor intact.
+for(const damage of ['badtoken','orphan-document','orphan-term','seeded-counter','df','N','total-length'])test(`Fix round 1 deep verification rejects ${damage}`,t=>{
+  const f=fixture(t);f.admit('badtoken orchard',four[0]);const a=local(t,f);
+  a.storage.refresh(a.p,a.access,{maxItems:1,maxMs:5000});
+  const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX);t.after(()=>side.close());
+  const generation=side.prepare('SELECT storage_id FROM generations').get().storage_id;
+  if(damage==='badtoken')side.prepare("DELETE FROM statistics WHERE generation=? AND term='badtoken'").run(generation);
+  if(damage==='orphan-document') {
+    // No document FK enforcement on this deliberately hostile editor.
+    side.exec('PRAGMA foreign_keys=OFF');
+    const row=side.prepare('SELECT * FROM postings LIMIT 1').get();
+    side.prepare(`INSERT INTO postings(${Object.keys(row).join(',')}) VALUES(${Object.keys(row).map(()=>'?').join(',')})`).run(...Object.values({...row,doc:99999}));
+  }
+  if(damage==='orphan-term')side.prepare("INSERT INTO statistics(generation,term_id,term,df,n,total_length) VALUES(?,99999,'unposted',0,0,0)").run(generation);
+  if(damage==='seeded-counter') {
+    const counter=side.prepare('PRAGMA table_info(statistics)').all().some(r=>r.name==='verified_df') ? ',verified_df=verified_df+1' : '';
+    side.prepare(`UPDATE statistics SET df=df+1${counter} WHERE term='badtoken'`).run();
+  }
+  if(damage==='df')side.prepare("UPDATE statistics SET df=df+1 WHERE term='badtoken'").run();
+  if(damage==='N')side.prepare("UPDATE statistics SET n=n+1 WHERE term=''").run();
+  if(damage==='total-length')side.prepare("UPDATE statistics SET total_length=total_length+1 WHERE term=''").run();
+  if(damage==='badtoken')assert.deepEqual(side.prepare('PRAGMA foreign_key_check').all(),[]);
+  assert.throws(()=>build(a),{code:'index_unavailable',reason:'corrupt'});
+  assert.equal(side.prepare('SELECT count(*) AS n FROM publications').get().n,0);
+});
+
+test('Fix round 1 format 1 wrong-store refusal survives maintenance without replacement',t=>{
+  const f=fixture(t);f.admit('cache',four[0]);const a=local(t,f);build(a);a.storage.close();a.facade.close();
+  const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX);t.after(()=>side.close());
+  side.exec("PRAGMA user_version=1; UPDATE product_metadata SET store_id='foreign-store'");
+  const before=side.prepare('SELECT * FROM product_metadata').get(),records=side.prepare('SELECT * FROM validation_records').all();
+  const b=local(t,f);assert.equal(b.storage.observe(b.p,b.access).dto.lexical.reason,'wrong_store');
+  assert.throws(()=>b.storage.refresh(b.p,b.access,budget),{code:'index_unavailable',reason:'wrong_store'});
+  assert.deepEqual(side.prepare('SELECT * FROM product_metadata').get(),before);
+  assert.deepEqual(side.prepare('SELECT * FROM validation_records').all(),records);
+});
+
+test('Fix round 1 changed canonical text between metadata and transformation rolls back the whole checkpoint',t=>{
+  const f=fixture(t),memory=f.admit('revisionone',four[0]);let armed=true;
+  const a=local(t,f,{rendezvous(point){if(armed && point==='scan') {
+    armed=false;
+    const result=f.core.correct({namespace:four[0],memoryId:memory.id,expectedRevision:1,content:'revisiontwo',kind:'fact',
+      receipt:{client:'synthetic',sessionId:'checkpoint',eventId:'revision-two',role:'user',excerpt:'revisiontwo'}});
+    assert.equal(result.ok,true,JSON.stringify(result));
+  }}});
+  assert.throws(()=>a.storage.refresh(a.p,a.access,budget),{code:'index_unavailable',reason:'fence_changed'});
+  const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX,{readOnly:true});t.after(()=>side.close());
+  assert.equal(side.prepare('SELECT count(*) AS n FROM documents').get().n,0);
+  assert.equal(side.prepare('SELECT count(*) AS n FROM postings').get().n,0);
+  const g=side.prepare('SELECT * FROM generations').get();assert.equal(g.checkpoint,0);
+  const progress=verifiedRecord(a.facade.port.identity.cursorSecret,'progress',side.prepare('SELECT record FROM progress_records').get().record);
+  assert.equal(progress.progress.checkpoint,0);
+  assert.equal(build(a).counts.documents,1);
+  assert.equal(side.prepare('SELECT revision FROM documents').get().revision,2);
+});
+
+test('Fix round 1 600ms open plus 250ms verification scan makes strictly increasing durable progress',t=>{
+  const f=fixture(t);for(let i=0;i<8;i++)f.admit('verification orchard '+i,four[0]);
+  let clock=0,slow=false;
+  const a=local(t,f,{now:()=>clock,observer:instrumentDatabase((sql,method)=>{
+    if(slow && method==='all' && /SELECT \* FROM documents.*ORDER BY identity LIMIT 128/.test(sql))clock+=250;
+  }),rendezvous(point){
+    if(slow && point==='opened')clock+=600;
+
+    if(slow && point==='verify-item')clock+=1;
+    // Stage the documents first, so every tested quantum starts in verification.
+    if(!slow && point==='checkpoint')clock=900;
+  }});
+  for(let i=0;i<4;i++){clock=0;a.storage.refresh(a.p,a.access,{maxItems:1024,maxMs:1000});}
+  const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX,{readOnly:true});t.after(()=>side.close());
+  assert.equal(JSON.parse(side.prepare('SELECT verify FROM generations').get().verify).phase,0);
+  slow=true;let previous=0;
+  for(let i=0;i<3;i++) {
+    clock=0;const m=a.storage.refresh(a.p,a.access,{maxItems:1024,maxMs:1000});
+    assert.ok(m.verifiedRows>0,'a successful scanning quantum must process a row');
+    const v=JSON.parse(side.prepare('SELECT verify FROM generations').get().verify);
+    assert.ok(v.counts.documents>previous);previous=v.counts.documents;
+    assert.ok(clock<1000);
+  }
+});
+
+function instrumentDatabase(onStatement) {
+  return {invoke(_stage,_kind,work){return work();},database(native){
+    return new Proxy(native,{get(target,key){
+      if(key==='prepare')return sql=>{
+        const stmt=target.prepare(sql);
+        return new Proxy(stmt,{get(statement,method){
+          const value=Reflect.get(statement,method,statement);
+          return typeof value==='function' ? (...args)=>{
+            const result=Reflect.apply(value,statement,args);onStatement(sql,method,args,result,target);return result;
+          } : value;
+        }});
+      };
+      const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
+    }});
+  }};
+}
+
+test('Fix round 1 cross-projection GC revalidates under its transaction and never reuses storage IDs',t=>{
+  const f=fixture(t);f.admit('gc needle',four[0]);let armed=false,raced=0;
+  const b=local(t,f),history={...b.p,intent:'history'};build(b,history);
+  const inTransaction=[];
+  function race(){
+    if(!armed)return;armed=false;raced++;
+    // While history is still ready, drain the highest retired generation
+    // completely. Only then force history to allocate its replacement.
+    for(let i=0;i<10 && side.prepare('SELECT 1 FROM generations WHERE id=?').get(old.generation.id);i++)b.storage.refresh(history,b.access,budget);
+    assert.equal(side.prepare('SELECT 1 FROM generations WHERE id=?').get(old.generation.id),undefined);
+    f.admit('replacement needle',four[0]);build(b,history);
+  }
+  const observer=instrumentDatabase((sql,method,args,result,native)=>{
+    if(method==='get' && /SELECT storage_id,id FROM generations g/.test(sql)) {
+      inTransaction.push(native.isTransaction);
+      if(!native.isTransaction)race();
+    }
+  });
+  const a=local(t,f,{observer,rendezvous(point){if(point==='gc-candidate')race();}});const old=build(a);
+  const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX);t.after(()=>side.close());
+  const oldId=side.prepare('SELECT storage_id FROM generations WHERE id=?').get(old.generation.id).storage_id;
+  side.prepare('DELETE FROM publications WHERE generation=?').run(old.generation.id);
+  armed=true;a.storage.refresh(a.p,a.access,budget);
+  assert.equal(raced,1);
+  const publication=b.storage.observe(history,b.access).publication;
+  const g=side.prepare('SELECT storage_id FROM generations WHERE id=?').get(publication.generation.id);
+  assert.ok(side.prepare('SELECT count(*) AS n FROM postings WHERE generation=?').get(g.storage_id).n>0,'the competing publication must retain its postings');
+  assert.ok(g.storage_id>oldId,'deleted high storage IDs must not be reused');
+  assert.deepEqual(side.prepare('PRAGMA foreign_key_check').all(),[]);
+  assert.ok(inTransaction.length>0);
+  assert.ok(inTransaction.every(Boolean),'candidate ownership/protection must be checked inside deletion transaction');
+});
+
+
+test('Fix round 1 verification and query-frequency pages have bounded SQLite VM work at 19000 terms',t=>{
+  const f=fixture(t);f.admit('needle orchard',four[0]);const sql={};
+  const observer=instrumentDatabase((statement,method,args)=>{
+    if(method!=='all')return;
+    if(/UPDATE statistics SET verified_df=0/.test(statement))sql.reset={statement,args};
+    if(/FROM (documents d|postings p)/.test(statement) && /LIMIT 128/.test(statement) && /s.term/.test(statement) && /p.position|d.identity/.test(statement))sql.verify={statement,args};
+    if(/SELECT s.term,p.frequency/.test(statement) && / IN \(/.test(statement))sql.score={statement,args};
+  });
+  const a=local(t,f,{observer});const publication=build(a);a.storage.lexical(a.p,publication,'needle absent');
+  assert.ok(sql.verify);assert.ok(sql.score);
+  const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX,{readOnly:true});
+  const schema=side.prepare("SELECT sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' AND sql IS NOT NULL ORDER BY type DESC,name").all().map(r=>r.sql);side.close();
+  // SQLite's instruction callback counts every executed VM instruction. Feed
+  // the actual production statements into independent in-memory databases;
+  // neither the counter nor the threshold depends on wall-clock scheduling.
+  const probe=spawnSync('python3',['-c',String.raw`
+import json,sqlite3,sys
+source=json.load(sys.stdin)
+results=[]
+for size in [1000,19000]:
+ db=sqlite3.connect(':memory:')
+ # Tables before indexes, matching sqlite_schema's descending type order.
+ for sql in source['schema']: db.execute(sql)
+ db.execute("INSERT INTO documents VALUES(1,1,0,'id','identity',1,0,1,?)",(size,))
+ position=any(r[1]=='position' for r in db.execute('PRAGMA table_info(postings)'))
+ for i in range(1,size+1):
+  term='needle' if i==1 else 'term%05d'%i
+  db.execute('INSERT INTO statistics(generation,term_id,term,df,n,total_length) VALUES(1,?,?,1,0,0)',(i,term))
+  db.execute('INSERT INTO postings VALUES('+','.join('?' for _ in range(5 if position else 4))+')',(1,1,i,1,i) if position else (1,1,i,1))
+ counts={}
+ for name in ['verify','score']+(['reset'] if 'reset' in source else []):
+  calls=[0]
+  def step(): calls[0]+=1;return 0
+  db.set_progress_handler(step,1)
+  rows=db.execute(source[name]['statement'],source[name]['args']).fetchall()
+  db.set_progress_handler(None,0)
+  counts[name]={'steps':calls[0],'rows':len(rows)}
+ results.append(counts)
+print(json.dumps(results))
+`],{input:JSON.stringify({...sql,schema}),encoding:'utf8',env:{}});
+  assert.equal(probe.status,0,probe.stderr);
+  const [small,large]=JSON.parse(probe.stdout);t.diagnostic(JSON.stringify({small,large}));
+  assert.equal(large.verify.rows,128);assert.equal(large.score.rows,1);
+  assert.ok(large.verify.steps<10000,JSON.stringify(large.verify));
+  assert.ok(large.score.steps<1000,JSON.stringify(large.score));
+  if(sql.reset){assert.equal(large.reset.rows,128);assert.ok(large.reset.steps<10000,JSON.stringify(large.reset));}
+  for(const kind of Object.keys(large))assert.ok(large[kind].steps<=small[kind].steps+500);
+});
+
+for(const scenario of ['selection','catchup'])test(`Fix round 1 collected captured generation returns index_unavailable and preserves reader (${scenario})`,async t=>{
+  const f=fixture(t);for(let i=0;i<4;i++)f.admit('reader needle '+i,four[i]);
+  const a=local(t,f);const publication=build(a);
+  const {configured}=await import('../testing/context-product-owner-fixture.mjs');
+  const {createProductReaderRuntime}=await import('../context-product-reader.mjs');
+  const {Worker}=await import('node:worker_threads');
+  const c=configured(t,f.path,four);c.options.host.configuration.collectCaptured=scenario;
+  const open=createProductReaderRuntime({spawnWorker:data=>new Worker(new URL('./fixtures/context-product-index-worker.mjs',import.meta.url),
+    {workerData:data,env:{},execArgv:[],stdout:true,stderr:true})});
+  const reader=await open(c.options);t.after(()=>reader.close());
+  c.view[6]=1;
+  const input={readSet:four,types:['memory'],intent:'current',query:'needle',deadlineMs:5000};
+  const result=await reader.findCandidates(input,c.token);
+  assert.equal(c.view[6],2,'rendezvous must collect after observation and before lexical snapshot');
+  assert.equal(result.ok,false,JSON.stringify(result));assert.equal(result.error.code,'index_unavailable');
+  const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX,{readOnly:true});
+  assert.equal(side.prepare('SELECT 1 FROM generations WHERE id=?').get(publication.generation.id),undefined);side.close();
+  const status=await reader.getContextIndexStatus({readSet:four,types:['memory'],intent:'current',deadlineMs:5000},c.token);
+  assert.equal(status.ok,true,JSON.stringify(status));
+  assert.equal(status.value.lexical.state,scenario==='selection'?'absent':'ready');
+  const next=await reader.findCandidates(input,c.token);
+  assert.equal(next.ok,scenario==='catchup',JSON.stringify(next));
+  if(scenario==='selection')assert.equal(next.error.code,'index_unavailable');
+});
+
+test('Fix round 1 ordered posting verification preserves the manifest across exact page boundaries and empty documents',t=>{
+  const f=fixture(t),terms=Array.from({length:130},(_,i)=>'term'+String(i).padStart(3,'0'));
+  f.admit(terms.slice(0,128).join(' '),four[0]);f.admit('!!!',four[1]);f.admit(terms.join(' ')+' term000',four[2]);
+  const a=local(t,f),publication=build(a),side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX,{readOnly:true});t.after(()=>side.close());
+  const generation=side.prepare('SELECT storage_id FROM generations WHERE id=?').get(publication.generation.id).storage_id;
+  const tuples=[];
+  for(const d of side.prepare('SELECT * FROM documents WHERE generation=? ORDER BY identity').all(generation)) {
+    tuples.push(['document',JSON.parse(d.identity),d.revision,d.body_revision,d.eligible,'candidate-text-v1',d.token_length]);
+  }
+  for(const r of side.prepare(`SELECT d.identity,s.term,p.frequency FROM postings p JOIN documents d ON d.generation=p.generation AND d.doc=p.doc
+    JOIN statistics s ON s.generation=p.generation AND s.term_id=p.term WHERE p.generation=? ORDER BY d.identity,s.term`).all(generation)) {
+    tuples.push(['posting',JSON.parse(r.identity),r.term,r.frequency]);
+  }
+  for(const r of side.prepare('SELECT * FROM statistics WHERE generation=? ORDER BY term').all(generation))tuples.push(['statistics',r.term,r.df,r.n,r.total_length]);
+  assert.equal(publication.manifestDigest,createHash('sha256').update(tuples.map(t=>JSON.stringify(t)+'\n').join('')).digest('base64url'));
+  assert.equal(publication.counts.documents,3);assert.equal(publication.counts.terms,130);assert.equal(publication.counts.totalTokenLength,259);
+  assert.equal(a.storage.lexical(a.p,publication,'term129').matched,1);
 });
