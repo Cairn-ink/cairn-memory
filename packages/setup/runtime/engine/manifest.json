@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "bc655b509bd39a0ce0bd4535706afd38b10e8ebd876df420277058c588330f28",
-  "bytes": 867365,
+  "sha256": "248921f9e3fbe228c7bd12de238d8614c1496fec876631fc3faccb3e11c756eb",
+  "bytes": 872237,
   "files": [
     "LICENSE",
     "README.md",
@@ -99,6 +99,7 @@
     "core/context-product-index.mjs",
     "core/context-product-manifest.mjs",
     "core/context-product-pump.mjs",
+    "core/context-product-quantum.mjs",
     "core/context-product-reader.mjs",
     "core/context-product-schema.mjs",
     "core/context-product-selection.mjs",
@@ -398,7 +399,7 @@
     "core/database.mjs": "1e8effd10c8edc68711022baa9c9c9fcf5975d8ba26f9ec31cff6aee285e621f",
     "core/existing-store.mjs": "d87497212279b13f835069839f2b5d9fafef3d02a282c8320fa23282f94b0f16",
     "core/store-fence.mjs": "a2f26c559d9e3b785d3b1e2661424f25ac034f647fc875d397116a7c2eed0d1c",
-    "core/sqlite-journal-probe.mjs": "853d1210895e0450a56affaca37a0457fd294045bcfa062f90d0908232d9a6a2",
+    "core/sqlite-journal-probe.mjs": "6eb46489f0af17c9b455aba0744b952fb5224094e3aaea0117d3ea3c6a0a1d06",
     "core/isolated-file-read.mjs": "fadda607309c7bc09ee553e09d251e71e73f3559c95ea7d2f36833cdf4defc55",
     "core/isolated-file-read-child.mjs": "fbcd00520f2a3c3eeb5a4b168708ea129c701e6fbf9fb62e46fbb5b65800b5b7",
     "core/raw-schema.mjs": "39976d38343bf9ef1f83e574f9d6a8889c9dd5ba083bc3bd2b8cb966b7399530",
@@ -619,17 +620,18 @@
     "core/context-product-reader.mjs": "cbe0ac05d9a720ec73bbbe2d0f1a9e7bdfe43a18cb905b02043390b1589a3667",
     "core/context-product-schema.mjs": "052048d1c8300ae349778428f7d430e6a70b16a96502ac89d7efe56de494e076",
     "core/context-product-telemetry.mjs": "4601cfc76379b7daf3d26a4f9690689469687685e7289d05ddf7773ee6959f85",
-    "core/context-product-worker.mjs": "ea763a0775ec465d58c9d06e29fc123aba10ecde9e947ad582792a71454fb121",
+    "core/context-product-worker.mjs": "93ce7a52a15a87dde79430b0a199a5c897d978db3b8d5cc482f04a20b3177444",
     "core/context-read-supervisor.mjs": "8e0d3ecd984ac5b916515b8be0438ca0c1f3479e9dfa4bdab2317aff4e0f7e75",
     "core/reader-worker-lifecycle.mjs": "48b3281db845fad58cd653639bbff5894d3c65c2aea14fb5d36530c0beaf42d5",
-    "docs/context-read-product.md": "a204ba7ca47baefd2e5bf495495b436338cff8821d982d9367a6a8ef6e86da54",
+    "docs/context-read-product.md": "291bef37b1cdcde92a7aea64eea3a54343752e80a75434a921a964f5c80c34ef",
     "docs/plans/context-read-p2a-impl.md": "257e2fb1f4db706b5a0d55df18a6a033613957fb6094e78fbc2cc248c348835a",
-    "core/context-product-validation.mjs": "fe6ac1036e03657f891a7de4fcb0752d2874539af61a8a9042d79a5de9d94902",
+    "core/context-product-validation.mjs": "b0def0a57a1678d104443ab04033fef7fa3d97639b5c35e1a8a5ff0aba6e1ecd",
     "core/context-product-manifest.mjs": "0c4f17c610ee79ad843180f85870d55e51bb0416d7819b85c1b68c31dd11c954",
     "core/context-product-service.mjs": "2dcb6741a5ed313717df83d6b784a09731366401f15c2956ffcd6bdb2d1f2a3e",
-    "core/context-product-sidecar.mjs": "9351b214ab2ba8d164a475e66d55077cf87a86ebee5c08c5740431124cb10530",
+    "core/context-product-sidecar.mjs": "f88b868b8106cfa5eb0f247a2c1fbb8f821ccf96ab0a9163619ccc27ddd76b3a",
+    "core/context-product-quantum.mjs": "086544bbd932828bd45606674609290d3f70a79b262d1e5be3c0f7be7133f3ff",
     "core/context-product-sqlite.mjs": "efebf25b55f292fcd4da5889e21c469d8c697016083daf940b6d8cae96cfe4bd",
-    "core/context-product-index.mjs": "d3b7394145aef9283f55971485afb7f9dae3f0fd2e1fc263ce4bcb47b992726d",
+    "core/context-product-index.mjs": "dfb7cf485b1510f40d35cea1cfd5056c324f6e860c26533fcd6dd238bad69f00",
     "core/context-product-pump.mjs": "d471a71028eddae9dc156bd1481fa89b1e67438eeb06dff15aecfdb3f68d0175",
     "docs/plans/context-read-p2b-impl.md": "aa8aa4820502d8b4002ae33ef8b734658a683ed0edd527ef3d183ddb39e9f737",
     "docs/plans/context-read-p2d-impl.md": "f4301c2126605bf2dd71c188e79dde7827741afed0cc196c294c29efc07feabd",
@@ -641,7 +643,7 @@
     "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b"
   },
   "generatedHashes": {
-    "package.json": "4a501429b466c15d37ba7f1c27b301b481900408ef9d03a9c6dfd21570c1285b",
+    "package.json": "d1f222cf8af9567b06e3552bbfa1b8b621c5e79ba4cc11b95a154e9b1963bc64",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8"
   }
 }
