@@ -125,9 +125,9 @@ npx @cairn-ink/memory setup
 A fresh interactive install asks once: local MCP memory tools on this computer,
 or cloud automatic memory with cairn.ink sign-in; choose directly with
 `setup --local` or `setup --cloud`. Fresh non-interactive runs need `--local`
-or `--cloud`; local mode has no automatic capture or recall in 0.6.0.
+or `--cloud`; local mode has no automatic capture or recall in 0.6.x.
 
-Installer **0.6.0** was published on 2026-10-25, so `npx @cairn-ink/memory setup`
+Installer **0.6.1** was published on 2026-10-28, so `npx @cairn-ink/memory setup`
 uses it; a checkout can also run `node packages/setup/bin/memory.mjs setup`. The plugin is 0.3.3.
 Requires Node ≥22.16 and at least one CLI on PATH. Cloud setup asks about new tools,
 updates connected tools, and uses one browser sign-in when connecting both.
@@ -249,7 +249,7 @@ Run the published installer from your terminal:
 npx @cairn-ink/memory setup
 ```
 
-Installer **0.6.0** (plugin **0.3.3**) is published, so these flows run through
+Installer **0.6.1** (plugin **0.3.3**) is published, so these flows run through
 npx. To run this checkout instead, use `node packages/setup/bin/memory.mjs setup`.
 
 Without `--client`, setup finds both tools and asks only about new connections.
