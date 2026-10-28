@@ -1,5 +1,9 @@
 # Context-read qualification inputs: preparation handoff
 
+**Round 3b:** the owner-approved four-change fixture patch is applied. Test-only
+preparation uses an isolated controlled clock; shortened verification is recorded
+in the round-3b section below. Qualification remains blocked by the engine F/A defect.
+
 **Qualification remains blocked. Do not start either long segment.** The authorized harness fixes and product registration are implemented.
 The tiny real session leaves all four first-eligible Memory/Card intent targets
 unobserved under same-projection capture/review writes. An earlier round-1 trial also retained
@@ -677,30 +681,261 @@ No target was fabricated or dropped. The F/A rehearsal and writer files match
 remains the engine-owner blocker; neither long qualification segment was run.
 All started generation, baseline, matrix and rehearsal processes have exited.
 
+## Fix round 3
+
+Both fresh review reports were read in full. The Card oracle, no-read accounting
+and exactly-once lane-exit implementation are unchanged from `4baefc3b`.
+No F/A settings, writer cadence, pump restart policy or target requirements change.
+
+| Finding | Fix | Regression |
+| --- | --- | --- |
+| 1 — pump exceptions bypass the real coordinator and runner journal paths | Reports now create an independent `.failures.jsonl` journal, bound to the registration header hash. Only the SQLite-free IO child creates/appends/fsyncs it. This owner is independent of the session child's main-journal lease. Before propagating the retained-workspace error, the real coordinator automatically exports buffered pump records and its own failure through this channel. The runner cleanup-error branch writes a separate durable failure too. `pumpClosed` is not fabricated, the lease is not reclaimed, workspaces remain retained and the report still interrupts. New main headers require the matching failure journal; missing/corrupt ownership evidence refuses replay. Rehearsal forwards the same failure sink without changing its settings. | Four `Q3-01 real caller and runner …` cases inject renewal and close exceptions into the real pump wrapper, coordinator and runner in both modes. They never call `driver.report()` by hand. The resulting interrupted reports retain pump, coordinator and runner records; replay plus successful retries across the real 728-cell inventory yields `complete:true, decision:"failed"`. Additional tests check missing-journal refusal and preservation of cleanup guards on journal IO errors. |
+| 2 — failures disappear across another interrupted resume | Every resume includes the inherited aggregate failure, complete cells, keys and decisions in its first durable registration frame, including zero-cell failures. A later `resumed-checkpoints` record mirrors it. Replay imports inherited cells idempotently, latches failure and still rejects duplicate new cell evidence. No ancestor report is needed after that durable copy. | Four `Q3-02` cases cover zero/one inherited complete cells and interruption immediately after header creation/before idle preparation. A failed A is resumed into interrupted B, then C, then D. Every link retains failure and complete cells; merging successful retries covers exactly 728 cells and stays failed. A separate case proves inherited mirrors are idempotent while duplicate new cells still refuse merge. |
+| 3 — malformed or unknown records default to healthy | The shared classifier has explicit healthy shapes for all **62** registered series, including dynamic method profiles and writer labels. Unknown series/kinds, missing or malformed status/exit fields and explicit failure-only series fail closed. Replay classifies before percentile/freshness dereferences, including legacy rows without a failure marker. Completed-cell verdicts use the same status classifier. Registered retryable timeouts, availability controls and fence-change rebuilding/progress remain nonfailures. | `Q3-03` covers healthy and malformed records for every series, unknown nested statuses/exits, timeout/availability/progress controls, independent source-site discovery (**43 literal writer series**), replay of null payloads in every series and malformed completed-cell verdicts. A real tiny functional report is also checked for false failure markers. |
+
+### Round-3 verification and fixture constraint
+
+**Historical round-3 verification:** at that point the older harness suite still
+needed four fixture/assertion updates, pending explicit permission under the
+standing rule against editing another session's tests or fixtures. Round 3b below
+records the subsequent owner approval and application. No classifier check was
+relaxed to accept malformed controls.
+
+Three exclusively owned detached `4baefc3b` baseline worktrees were created and
+removed while expanding the regressions: **creation 0 / 0 / 0**, **removal
+0 / 0 / 0**. Each pass ran the three primary regression groups separately on
+Node 24.15.0: **1 / 1 / 1** each time. The final pass copied the exact final
+`q3.test.mjs` (SHA-256 verified): four real-caller/runner cases, four resume cases,
+and the missing-status/exit case all fail meaningfully on the committed code.
+The fixed file passes **73 checks** on each required Node.
+
+The initial resume-record solution also had a header-to-record interruption gap.
+Two added after-header cases exposed it (**exit 1**). Moving inherited state into
+the first durable registration frame and making the mirror idempotent fixed it:
+the four resume cases plus the duplicate-new-cell guard exited **0** together.
+
+Each table value below is an **actual final process exit code**. File commands
+were `node --experimental-vm-modules --test PATH`, using the corresponding nvm
+binary and PATH. npm runs used the offline environment, default local counter
+root and no snapshot reuse override.
+
+| Command / test file | Node 22.16.0 | Node 24.15.0 | Node 24.22.1 |
+| --- | --- | --- | --- |
+| `tools/testing/measure-context-read-product-fix1.test.mjs` | 0 | 0 | 0 |
+| `tools/testing/measure-context-read-product-fix2.test.mjs` | 0 | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4.test.mjs` | 0 | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4fix1.test.mjs` | 1 | 1 | 1 |
+| `tools/testing/measure-context-read-product-v4fix3.test.mjs` | 0 | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4fix4.test.mjs` | 0 | 0 | 0 |
+| `tools/testing/measure-context-read-product.test.mjs` | 0 | 0 | 0 |
+| `tools/testing/fixtures/context-product/functional-check.mjs` | 0 | 0 | 0 |
+| `evaluation/context-read-qualification/test/q2.test.mjs` | 0 | 0 | 0 |
+| `evaluation/context-read-qualification/test/q3.test.mjs` | 0 | 0 | 0 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 | 0 | 0 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 | 0 | 0 |
+| `npm run test:qualification-inputs` | 0 | 0 | 0 |
+
+The red suite has exactly the same four assertion failures on every Node:
+
+- `tools/testing/measure-context-read-product-v4fix1.test.mjs:118` expects zero
+  inherited complete cells; the new contract correctly retains 727 and reruns
+  only the incomplete T cell.
+- Line 180 uses `blocked:true`; real capability probes use a dependency list.
+- Line 251 supplies a failed read without an error code; the prepared patch uses
+  the registered `read_timeout` outcome without changing any percentile checks.
+- Line 268 supplies freshness targets without identity/revision; the prepared
+  patch adds those fields and preserves both the 100- and 99-target assertions.
+
+`git apply --check` for the prepared four-change patch exits **0**. The file
+itself still matches `4baefc3b` byte for byte; no forbidden test edits were made.
+
+All three **final reduced runs** exited **0**: **116 checks, 112 passed, four
+intentional layout skips, zero failed**. The earlier Node-22 reduced trial exited
+**1** because a real v23 fixture-preparation maintenance call returned
+`read_timeout`. An unchanged focused v23 repeat exited **0**; the final whole
+Node-22 repeat above also exited **0**. The 5,000-ms functional setup bounds and
+all assertions are unchanged. That initial failure is retained, not erased.
+The other initial matrix commands exited **0**.
+
+`npm run test:qualification-inputs:full` on Node **24.15.0** exited **0** for the
+final code: **116 passed, zero skipped, zero failed**. An earlier development
+full run, before the extra header-boundary cases, also exited **0** (**113
+passed**). The final-code full run rebuilt all six physical layouts and the two
+small-layout determinism repeats; all frozen seals, catalogs and template bytes
+matched. No timing gate or timing claim was added.
+
+Other development process exits are retained: original seven-case red file
+**1**; coordinator/runner durability group **0**; initial seven fixed cases **0**;
+classifier registry/control group **0**; combined Q3/v4fix4/v4fix1 run **1** (only
+the four old-fixture conflicts); expanded Q3 file **0**; real tiny functional
+classifier test **0**. The first raw-file guard run exited **1** for the new IO
+child sites; updating only their exact, justified allowlist entries made it
+**0**. The guard test source itself remains unchanged. Subsequent guard exits
+on every Node are the zeros in the table.
+
+### Round-3 rehearsal, classifier audit and remaining work
+
+Registration fill and validation on Node **v24.22.1** each exited **0**. After
+final-code verification, the full `--profile engine --rehearse` command ran
+**once** on that exact Node and exited **1**, with **197 real journal records**:
+
+```json
+{"status":"failed","functionalPassed":false,"cleanup":true,"qualifying":false,"timingClaims":false}
+```
+
+Requests, overflow/O, exposure/W plus WM, backup/B and all four post-catch-up T
+subprobes passed. F/A alone retained the four expected engine failures:
+
+- `unobserved_target:tiny-memory:current`
+- `unobserved_target:tiny-memory:history`
+- `unobserved_target:tiny-card:current`
+- `unobserved_target:tiny-card:history`
+
+The strict classifier was independently applied to every main/failure journal
+record: audit **0**, **zero non-F/A failures**. Only F/A's `session-validation`
+and `pump-drain` records classify as failures. No new non-F/A functional failure
+was introduced. No records, observations or first-eligible targets were fabricated
+or dropped. F/A settings match the baseline exactly.
+
+Report archives/resumes must keep `.records.jsonl`, `.failures.jsonl` and
+`.header.json` beside the completed report or its `.jsonl.partial` file.
+
+At the end of round 3, remaining work was owner approval/application of the
+four-change older-suite patch and its three-Node verification; round 3b below
+supersedes that pending item. The separate engine-owned F/A blocker still
+prevents either long qualification run.
+All started commands have exited; no autonomous/background supervision is needed.
+Work stopped before the requested 22:30 shared-machine cutoff. No commit, network,
+keys, engine runtime edits or long timing runs were used.
+
+## Fix round 3b
+
+The test owner explicitly approved this one-off edit of an older session's test,
+with approval conveyed by the primary in the round-3b instruction. Exactly the
+four approved changes were applied to
+`tools/testing/measure-context-read-product-v4fix1.test.mjs`; no other older-session
+test was edited. Their original properties remain intact:
+
+- The mid-T exception still leaves that T cell incomplete, reruns it exactly once,
+  and retains failure. The assertion now also preserves the other 727 inherited
+  complete cells instead of expecting replay to erase them.
+- The absent-capability control uses the actual blocked dependency list shape;
+  it still proves that a blocked, incomplete capability is rerunnable rather
+  than a retained failure.
+- The short population still contains only 49 successful samples. Its failed
+  attempt now explicitly identifies the expected `read_timeout`
+  control, so malformed failures cannot masquerade as healthy controls.
+- The freshness percentile still fails for 100 targets at the same recorded
+  times and remains incomplete at 99. Targets now have distinct IDs and revision
+  1, satisfying the actual target record shape without changing the timing or
+  sample-size assertions.
+
+### Functional preparation hardening
+
+`test-preparation.mjs` wraps the existing build loop with a test-only maintainer
+runtime. Its isolated Worker freezes the monotonic operation and index clocks.
+The public maintainer, worker implementation, authority, real refresh, telemetry
+and cleanup paths still execute. A separate real-time **120,000 ms watchdog**
+bounds each preparation operation. This is setup supervision, not a timing gate
+or a registered product deadline. A failed quantum propagates immediately;
+there is no retry. Normal partial/rebuilding progress follows the existing build
+loop unchanged.
+
+All test-only build callers in this package were audited: `inputs.test.mjs`
+`world()`, the sidecar-verifier fixture helper in `harness-fixes.test.mjs`, both
+Q1 orphan/large-evidence preparations, both functional-check build sites and the
+`--functional-only` CLI build now use this helper. Even the functional-check's
+smaller quantum uses the same setup policy. Measured reads still open separate
+ordinary runtimes with real clocks. Qualification and rehearsal keep their
+existing `series.build` calls and default configuration dependency; registered
+read/open deadlines, product pump values, registration/template bytes and F/A
+configuration were not changed. The shared build function only gains an optional
+configuration dependency for test setup; its ordinary default is unchanged.
+
+`preparation.test.mjs` deterministically models a successful quantum taking
+6,001 ms, without sleeping or asserting a wall-time limit. The ordinary build
+fails with `read_timeout`; controlled preparation completes exactly one quantum
+for each intent. Separate controls prove immediate propagation/cleanup of a
+failed quantum and that the Worker clock override cannot affect the parent
+process. In an exclusively owned detached `4baefc3b` worktree, the new helper and
+regression were exercised with the original unchanged build loop: **exit 1**,
+with `read_timeout` in the slow-success case. After the fix: **exit 0**. Worktree
+creation and removal each exited **0**. The initial complete functional-check
+run on Node 24.22.1 also exited **0**.
+
+### Shortened verification and acceptance handoff
+
+The primary shortened this window's verification to touched tests and the
+approved older suite on all three Nodes, plus the reduced script on Node
+24.22.1. The full three-Node harness/guard matrix, full snapshot script and
+rehearsal are deferred to the primary's acceptance after the work window. No
+full script or rehearsal was run in round 3b. The prior round-3 results above
+remain historical evidence, not a claim that those commands ran again.
+
+Every table entry is an actual process exit code. File commands used the
+corresponding nvm Node/PATH with `QUAL_INPUT_MODE=reduced node
+--experimental-vm-modules --test PATH`. The reduced script used the default
+offline counter root; no snapshot-reuse override or retry was used.
+
+| Test file | Node 22.16.0 | Node 24.15.0 | Node 24.22.1 |
+| --- | --- | --- | --- |
+| `evaluation/context-read-qualification/test/preparation.test.mjs` | 0 | 0 | 0 |
+| `evaluation/context-read-qualification/test/harness-fixes.test.mjs` | 0 | 0 | 0 |
+| `evaluation/context-read-qualification/test/q1.test.mjs` | 0 | 0 | 0 |
+| `evaluation/context-read-qualification/test/q3.test.mjs` | 0 | 0 | 0 |
+| `evaluation/context-read-qualification/test/inputs.test.mjs` | 0 | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4fix1.test.mjs` | 0 | 0 | 0 |
+| `tools/testing/fixtures/context-product/functional-check.mjs` | 0 | 0 | 0 |
+
+`npm run test:qualification-inputs` on Node **24.22.1** exited **0**. Its
+119 checks passed **115**, with the same **four layouts skipped by design**.
+The two guards were additionally run on Node 24.22.1:
+`core/test/no-raw-db-fd.test.mjs` **0** and
+`core/test/sqlite-lock-safety.test.mjs` **0**. Thus all **24** final verification
+processes exited **0**. The v4fix1 suite's prior round-3 exits were **1 / 1 / 1**;
+after the approved fixture correction its exits are **0 / 0 / 0**, with all
+**99** checks passing on each Node. The new preparation file has **three**
+passing checks on each Node. The separate initial preparation regression and
+functional-check processes also each exited **0** on Node 24.22.1.
+
+No round-3b implementation work remains. The primary will run the full
+three-Node harness/guard acceptance matrix, full snapshot script and rehearsal
+after this work window. The engine-owned F/A qualification blocker remains.
+All verification processes have exited; no background continuation is running.
+
+
 ## Changed files, cross-checked two ways
 
-Relative to `62d6e871`, Git diff plus untracked inventory was compared with an
-independent HEAD blob/mode comparison of **2488 files** and `rg --files --hidden`
-disk discovery. Both routes agree at **10 paths**, including this handoff and both
-new modules. The cross-check exits **0**. The seven harness test paths were also
-cross-checked by filesystem glob versus `rg` (**7 paths**, exit **0**).
-There are **zero engine runtime changes** and **zero database files** in this
-round's delivery list. The raw-file guard source, its exception list, the pinned
-dependency manifests, both registration templates and both F/A configuration
-files match `62d6e871` exactly. The earlier round-1/reduced-CI inventory is
-preserved in that commit. Final delivery, whitespace and operator-path/private-name
-scans exit **0**, including untracked files. Eight protected source/configuration
-files compare byte for byte (**0**); no owned log writers or baseline worktrees
-remain. No commit, network access, keys, engine runtime changes or long timing
-runs were used.
+Relative to `4baefc3b`, Git diff plus untracked inventory was compared with an
+independent HEAD blob/mode comparison and `rg --files --hidden` disk discovery.
+Both routes agree at **20 paths**, across **2490 HEAD files**; exit **0**.
+There are zero engine runtime changes and zero database files in the delivery
+list. Card projection, no-read handling, exactly-once lane exits, the session pump
+wrapper, both guard test sources, writer implementations, pinned dependency
+manifests and the registration/template match the baseline exactly. The rehearsal
+file changes only failure-sink forwarding; removing that property reproduces its
+baseline bytes, so all F/A settings remain exact. The older v4fix1 suite has only
+the four owner-approved replacements. The guard allowlist changes only the IO
+child's new import and exact failure-journal descriptor site, with an explicit
+SQLite-free justification. No files were staged or committed.
 
+- `core/test/fixtures/no-raw-db-fd-allowlist.json`
 - `docs/plans/context-read-qualification-inputs.md`
-- `evaluation/context-read-qualification/canonical-evidence.mjs`
-- `evaluation/context-read-qualification/test/q2.test.mjs`
-- `tools/testing/fixtures/context-product/engine.mjs`
+- `evaluation/context-read-qualification/test/harness-fixes.test.mjs`
+- `evaluation/context-read-qualification/test/inputs.test.mjs`
+- `evaluation/context-read-qualification/test/preparation.test.mjs`
+- `evaluation/context-read-qualification/test/q1.test.mjs`
+- `evaluation/context-read-qualification/test/q3.test.mjs`
+- `tools/testing/fixtures/context-product/functional-check.mjs`
+- `tools/testing/fixtures/context-product/io-child.mjs`
 - `tools/testing/fixtures/context-product/journal-failures.mjs`
 - `tools/testing/fixtures/context-product/report.mjs`
 - `tools/testing/fixtures/context-product/series.mjs`
+- `tools/testing/fixtures/context-product/test-preparation-worker.mjs`
+- `tools/testing/fixtures/context-product/test-preparation.mjs`
 - `tools/testing/fixtures/context-product/v4-checkpoint-child.mjs`
-- `tools/testing/fixtures/context-product/v4-session-pump.mjs`
-- `tools/testing/fixtures/context-product/v4-session-work.mjs`
+- `tools/testing/fixtures/context-product/v4-rehearsal.mjs`
+- `tools/testing/fixtures/context-product/v4-runner.mjs`
+- `tools/testing/fixtures/context-product/v4-session.mjs`
+- `tools/testing/measure-context-read-product-v4fix1.test.mjs`
+- `tools/testing/measure-context-read-product.mjs`

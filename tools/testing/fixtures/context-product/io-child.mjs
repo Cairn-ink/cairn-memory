@@ -1,5 +1,5 @@
 // SQLite-free process: every raw database copy/hash descriptor lives here.
-import { copyFileSync, readFileSync, statSync, readdirSync, chmodSync, constants, createReadStream } from 'node:fs';
+import { copyFileSync, readFileSync, statSync, readdirSync, chmodSync, constants, createReadStream, openSync, writeSync, fsyncSync, closeSync, fstatSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { PROTOCOL } from './protocol.mjs';
 import { join } from 'node:path';
@@ -39,6 +39,18 @@ if(process.argv[2]==='group-stop') {
     for(let n=0;n<100&&groupAlive(group);n++){if(n===20)signal('SIGKILL');await delay(50);}
     if(groupAlive(group))throw Error('session_descendants_alive_workspace_retained');
   }
+} else if(['failure-journal-init','failure-journal-append'].includes(process.argv[2])) {
+  // Independent owner: the main journal may still be leased to live children.
+  // This process never imports SQLite or opens engine connections.
+  const path=process.argv[3]+'.failures.jsonl',initial=process.argv[2]==='failure-journal-init';
+  const fd=openSync(path,initial?'wx':constants.O_WRONLY|constants.O_APPEND|constants.O_NOFOLLOW,0o600);
+  try {
+    if(!fstatSync(fd).isFile())throw Error('failure_journal_regular_file_required');
+    const data=Buffer.from(process.argv[4]+'\n');let offset=0;
+    while(offset<data.length)offset+=writeSync(fd,data,offset,data.length-offset);
+    fsyncSync(fd);
+  }finally{closeSync(fd);}
+  console.log(JSON.stringify({durable:true}));
 } else if(process.argv[2]==='journal-sequence') {
   const input=createReadStream(process.argv[3]+'.records.jsonl');
   let sequence=0,lastByte;input.on('data',chunk=>{lastByte=chunk.at(-1);});

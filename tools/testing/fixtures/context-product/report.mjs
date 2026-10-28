@@ -12,10 +12,12 @@ export async function createReportSink(path,header) {
   const registration=await open(path+'.header.json','wx',0o400);
   try{await registration.writeFile(headerText+'\n');await registration.sync();}finally{await registration.close();}
   const journal=await open(path+'.records.jsonl','ax',0o600),partial=await open(path+'.partial','wx',0o600);
-  await journal.writeFile(JSON.stringify({type:'header',headerHash})+'\n');await journal.sync();
+  fileChild('failure-journal-init',path,JSON.stringify({type:'header',headerHash}));
+  await journal.writeFile(JSON.stringify({type:'header',headerHash,failureJournal:true})+'\n');await journal.sync();
   await partial.writeFile(JSON.stringify({type:'registration',headerHash,header})+'\n');await partial.sync();
   let sequence=0,finished=false,delegated=false;
   return {
+    async failure(cell,series,record){fileChild('failure-journal-append',path,JSON.stringify({type:'record',cell,series,record,...(journalFailure(series,record)?{failure:true}:{})}));},
     async delegate(){if(delegated)throw Error('journal_delegated');delegated=true;return {path,sequence};},
     async reclaim(next){if(!Number.isSafeInteger(next))next=fileChild('journal-sequence',path).value.sequence;if(next<sequence)throw Error('journal_sequence');sequence=next;delegated=false;},
     async record(cell,series,record){if(delegated)throw Error('journal_delegated');await journal.writeFile(JSON.stringify({type:'record',sequence:++sequence,cell,series,record,...(journalFailure(series,record)?{failure:true}:{})})+'\n');await journal.sync();},
@@ -37,4 +39,10 @@ export async function appendSessionRecords({path,sequence,rehearsal=false}) {
     const line=JSON.stringify({type:'record',sequence:++sequence,cell,series,record:filter(record),...(journalFailure(series,record)?{failure:true}:{})})+'\n';
     return writing=writing.then(async()=>{await journal.writeFile(line);await journal.sync();});
   },async close(){try{await writing;}finally{await journal.close();}}};
+}
+
+// Real report sinks have an independent failure journal. In-memory test sinks
+// implement record directly and never own a child lease or database descriptor.
+export async function persistFailure(sink,cell,series,record) {
+  return (sink.failure??sink.record).call(sink,cell,series,record);
 }

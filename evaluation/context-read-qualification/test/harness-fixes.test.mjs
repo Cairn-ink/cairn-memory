@@ -9,7 +9,7 @@ import { errorSchema } from '../schemas.mjs';
 import { inventory } from '../corpus.mjs';
 import { createCounter,defaultDependencyRoot } from '../counter.mjs';
 import { storage } from '../../../tools/testing/measure-context-read-product.mjs';
-import { build } from '../../../tools/testing/fixtures/context-product/series.mjs';
+import { buildForTests as build } from '../../../tools/testing/fixtures/context-product/test-preparation.mjs';
 import { configure,selectReadSet } from '../../../tools/testing/fixtures/context-product/engine.mjs';
 import { rehearsalDecision,functionalEvidence,rehearsalSession } from '../../../tools/testing/fixtures/context-product/rehearsal-checks.mjs';
 import { checkedSegments } from '../../../tools/testing/fixtures/context-product/v4-checkpoints.mjs';
@@ -35,8 +35,7 @@ test('rehearsal can never qualify, retains failures, and strips timing observati
 test('real format-2 sidecar verifier visits documents, postings and statistics for both intents',async t=>{
   const w=createTestWorkspace(t),path=join(w.path,'tiny.sqlite');
   generateSnapshot({schema:23,count:32,cards:4},path);
-  // Fixture preparation has no performance assertion; allow the supported 5 s
-  // operation budget on a shared host. Registered measurement quanta stay fixed.
+  // Fixture preparation has a controlled clock. Registered measurement quanta stay fixed.
   const config={path,...selectReadSet(inventory,'verify-v2'),types:['memory','card'],canonical:'DELETE',sidecar:'DELETE',functionalOnly:true,
     deadlines:{openMs:5000,requestMs:5000,readMs:5000},buildCeiling:1000,pump:{quantum:{maxItems:128,maxMs:5000}}};
   const request=await configure(config),service=await configure(config,true);

@@ -6,7 +6,7 @@ import claims from './v4-claims.json' with {type:'json'};
 import { V4,DEFINITIONS,buildV4Plan,estimateV4,rotatingCell } from './v4-plan.mjs';
 import { validateSessionRegistration,admissionBudget,rotationCoverage } from './v4-validation.mjs';
 import { V3_DEFINITION,PROTOCOL,aggregate } from './protocol.mjs';
-import { createReportSink,digest,immutable } from './report.mjs';
+import { createReportSink,digest,immutable,persistFailure } from './report.mjs';
 import { selectReadSet } from './engine.mjs';
 import { build,requestSeries } from './series.mjs';
 import { exposureCell } from './v4-windows.mjs';
@@ -62,12 +62,16 @@ export async function runV4(input,{profile,segmentId,reportPath,registrationPath
   if(process.version!==input.productionNode)throw Error('v4_registered_node_patch_required');
   if(profile==='production'&&(platform()!=='linux'||/microsoft/i.test(release())||Number(legacy.filesystem.type)!==0xef53))throw Error('v4_production_runtime_or_volume');
   const registrationHash=digest({input,node:process.version,implementationCommit:legacy.implementationCommit,hardware:{platform:legacy.hardware.platform,release:legacy.hardware.release,arch:legacy.hardware.arch,models:legacy.hardware.cpus.map(c=>c.model),memoryBytes:legacy.hardware.memoryBytes},filesystem:{type:legacy.filesystem.type,blockSize:legacy.filesystem.blockSize},source:legacy.sourceDiffHash,sourceHashes:legacy.changedSourceHashes,corpus:legacy.corpus,inputHashes:legacy.inputHashes});
-  const header=immutable({...legacy,protocol:{...PROTOCOL,version:V4.protocol,revision:1},platformProfile:V4.profiles[profile],protocolDefinition:DEFINITIONS[profile],
+  const baseHeader=immutable({...legacy,protocol:{...PROTOCOL,version:V4.protocol,revision:1},platformProfile:V4.profiles[profile],protocolDefinition:DEFINITIONS[profile],
     estimate:estimateV4(profile,plan),inventory:plan,cellCount:plan.length,expandedInventory:undefined,expandedCellCount:undefined,
     minimumFixedWindowMs:estimateV4(profile).fixedWindows*30000,registrationHash,segmentId,segments:input.segments,
     productInputs:input.productInputs,readCutoffReport:input.readCutoffReport,host:input.host,volume:input.volume,reservation:input.reservation,observationBudgetMs:input.observationBudgetMs,supervision:input.supervision,
     sessionSchedules:input.sessions,claimsTable:claims.claimsTable,coverageTable:claims.coverageTable,unclaimed:claims.unclaimed});
-  const previous=resume.length?checkedSegments(header,await readSegments(resume)):{cells:[]};
+  const previous=resume.length?checkedSegments(baseHeader,await readSegments(resume)):{cells:[]};
+  const carried={inheritedFailure:previous.decision==='failed',cells:previous.cells,cellKeys:previous.cells.map(c=>c.key),retainedDecisions:[...(previous.decision==='failed'?['failed']:[]),...previous.cells.map(c=>c.decision)]};
+  // The first replayable registration frame must already carry its ancestry.
+  // A process can stop before the later resumed-checkpoints record is written.
+  const header=resume.length?immutable({...baseHeader,resumedCheckpoint:carried}):baseHeader;
   const adapter=await import(input.adapterModule),tally={},completed=new Set(),decisions=[];
   const workspace=createTestWorkspace(null,{parent:resolve(input.volumeRoot),prefix:'product-v4-'});let sink,descendantsConfirmed=true;
   try{sink=await createReportSink(reportPath,header);}catch(error){await workspace.cleanup();throw error;}
@@ -90,7 +94,7 @@ export async function runV4(input,{profile,segmentId,reportPath,registrationPath
     const value={...decision,complete:genuine,key:cell.key};await sink.cell(cell,value);await sink.record(cell.id,'checkpoint',{segmentId,registrationHash,complete:genuine,cellKey:cell.key,decision:value});};
   try {
     input.registeredFixtureHashes=Object.fromEntries(header.corpus.map(f=>[f.id,f.hash]));
-    if(previous.cells.length)await sink.record(-1,'resumed-checkpoints',{cellKeys:previous.cells.map(c=>c.key),retainedDecisions:previous.cells.map(c=>c.decision)});
+    if(resume.length)await sink.record(-1,'resumed-checkpoints',carried);
     await sink.record(-1,'idle-baseline',await deps.idleBaseline());
     for(const cell of plan.filter(c=>segment.cellKeys.includes(c.key))){
       if(completed.has(cell.key))continue;
@@ -151,7 +155,7 @@ export async function runV4(input,{profile,segmentId,reportPath,registrationPath
         }
         if(!['injection','exposure'].includes(cell.kind)){const final=await config.inspectLedger();await sink.record(cell.id,'population',{initial:config.initialCounts,final:{memories:final.memories,cards:final.cardCount,schema:final.schema}});}
         await complete(cell,decision);
-      }catch(e){if(e.cleanup?.descendantsUnconfirmed){descendantsConfirmed=false;console.error(JSON.stringify({status:'failed',reason:e.code??e.message,workspaceRetained:true,cleanup:e.cleanup}));throw e;}await sink.record(cell.id,'failure',{code:e.code??e.message,exitCode:e.exitCode??null,signal:e.signal??null,...(e.cleanup?{cleanup:e.cleanup}:{}),...(e.diagnostics?{diagnostics:e.diagnostics}:{})});await complete(cell,{decision:'failed',reason:'harness_failed'},false);stopped='harness_failed';}
+      }catch(e){if(e.cleanup?.descendantsUnconfirmed){descendantsConfirmed=false;try{await persistFailure(sink,cell.id,'failure',{stage:'runner-cleanup',code:e.code??e.message,cleanup:e.cleanup});}catch(journalError){e.journalError=journalError.code??journalError.message;}console.error(JSON.stringify({status:'failed',reason:e.code??e.message,workspaceRetained:true,cleanup:e.cleanup}));throw e;}await sink.record(cell.id,'failure',{code:e.code??e.message,exitCode:e.exitCode??null,signal:e.signal??null,...(e.cleanup?{cleanup:e.cleanup}:{}),...(e.diagnostics?{diagnostics:e.diagnostics}:{})});await complete(cell,{decision:'failed',reason:'harness_failed'},false);stopped='harness_failed';}
       finally{if(descendantsConfirmed)await cellWorkspace.cleanup();observedCosts.set(cell.kind,Math.max(observedCosts.get(cell.kind)??0,Date.now()-began));}
     }
     status=stopped?(decisions.includes('failed')?'failed':'inconclusive'):aggregate([...decisions,...(completed.size===plan.length?[]:['inconclusive'])]);

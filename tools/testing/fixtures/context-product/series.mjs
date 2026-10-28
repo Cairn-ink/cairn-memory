@@ -15,8 +15,8 @@ export function windows(smoke=false) {
     windowMs:smoke?E1.smokeWindowMs:E1.windowMs,order:repetition%2?['reader','baseline']:['baseline','reader']}));
 }
 const overlap=(r,calls)=>calls.some(w=>r.readStartedAt<w.writeFinishedAt&&r.readFinishedAt>w.writeStartedAt);
-export async function build(config,write=async()=>{}) {
-  const c=await configure(config,true);let h;const calls=[];
+export async function build(config,write=async()=>{},{configure:setup=configure}={}) {
+  const c=await setup(config,true);let h;const calls=[];
   try {
     h=await c.open({signal:config.signal});
     for(const intent of ['current','history']) {

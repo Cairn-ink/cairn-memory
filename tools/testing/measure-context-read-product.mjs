@@ -353,7 +353,8 @@ export async function functionalOnly(reportPath,namespaces=1) {
     await storage('seed',{path,count:4,inventory});const ledger=(await storage('inspect',{path})).value;
     const {tinySchema}=await import('./fixtures/context-product/tiny-schema.mjs');config.responseSchema=tinySchema;
     const probe=await probeDependencies(config);if(!probe.ready)throw Error('tiny_dependency');
-    await build(config,(s,r)=>sink.record(0,s,r));
+    const {buildForTests}=await import('./fixtures/context-product/test-preparation.mjs');
+    await buildForTests(config,(s,r)=>sink.record(0,s,r));
     const r=await attempt(config,{oracle:result=>result?.ok===true&&result.value.items.length===4&&result.value.items.every(i=>ledger.memory.some(m=>m.id===i.ref.memoryId&&m.revision===i.ref.revision))});
     record=r.record;await sink.record(0,'functional',record);
     if(!record.ok||!record.validated||!record.bounds||!record.expected||record.telemetry!=='complete')throw Error('functional_assertion');

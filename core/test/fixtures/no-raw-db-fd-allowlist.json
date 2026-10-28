@@ -1311,7 +1311,7 @@
   },
   {
     "path": "tools/testing/fixtures/context-product/io-child.mjs",
-    "source": "import { copyFileSync, readFileSync, statSync, readdirSync, chmodSync, constants, createReadStream } from 'node:fs'",
+    "source": "import { copyFileSync, readFileSync, statSync, readdirSync, chmodSync, constants, createReadStream, openSync, writeSync, fsyncSync, closeSync, fstatSync } from 'node:fs'",
     "reason": "SQLite-free child only: exclusive database copy/hash with owner mode and procfs sampling cannot release host SQLite locks."
   },
   {
@@ -1628,5 +1628,10 @@
     "path": "evaluation/context-read-qualification/registration.mjs",
     "source": "writeFileSync(get('--out'),JSON.stringify(input,null,2)+'\\n',{flag:'wx',mode:0o400});",
     "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/io-child.mjs",
+    "source": "const fd=openSync(path,initial?'wx':constants.O_WRONLY|constants.O_APPEND|constants.O_NOFOLLOW,0o600);",
+    "reason": "SQLite-free IO child exclusively creates or appends the independent harness failure journal and fsyncs before returning; it never imports SQLite or holds engine connections, including while the main journal remains delegated."
   }
 ]

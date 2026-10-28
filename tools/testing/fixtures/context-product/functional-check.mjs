@@ -11,7 +11,7 @@ import { storage } from '../../measure-context-read-product.mjs';
 import { startWriter } from './controller.mjs';
 import { terminate, coldAttempt, fileChild } from './actors.mjs';
 import { configure, selectReadSet, probeDependencies, attempt } from './engine.mjs';
-import { build } from './series.mjs';
+import { buildForTests as build } from './test-preparation.mjs';
 import { postCatchupHasRef } from './v4-state.mjs';
 import { decide } from './protocol.mjs';
 import { tinySchema } from './tiny-schema.mjs';

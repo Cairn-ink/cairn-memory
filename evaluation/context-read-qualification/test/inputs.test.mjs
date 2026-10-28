@@ -13,7 +13,7 @@ import { createCounter,counterConfiguration } from '../counter.mjs';
 import { validateFilled,segmentEstimates } from '../registration.mjs';
 import template from '../registration.engine.template.json' with {type:'json'};
 import { storage,prepareInput,validateWorkload,functionalOnly } from '../../../tools/testing/measure-context-read-product.mjs';
-import { build } from '../../../tools/testing/fixtures/context-product/series.mjs';
+import { buildForTests as build } from '../../../tools/testing/fixtures/context-product/test-preparation.mjs';
 import { attempt,selectReadSet,closedShape } from '../../../tools/testing/fixtures/context-product/engine.mjs';
 import { summarize } from '../../../tools/testing/summarize-context-read-product.mjs';
 import { methodProfile } from '../../../tools/testing/fixtures/context-product/v4-plan.mjs';
@@ -88,8 +88,7 @@ async function world(t,schema) {
     readCutoffReport:{thresholdMs:1000,gate:false},functionalOnly:true,deadlines:{openMs:5000,requestMs:5000,readMs:5000},load:'idle',buildCeiling:100,counterModule:new URL('../counter.mjs',import.meta.url).href,counterId:'o200k_base-v1',counterConfiguration:counterConfiguration({counterId:'o200k_base-v1'}),
     pump:{id:'functional',quantum:{maxItems:1024,maxMs:5000},cronMs:60000,pollMs:1000,renewalMs:60000,budgets:{maxItems:100000,maxMs:60000}},seriesCeilingMs:180000,
     writerProfile:{captureMs:25000,reviewMs:5000,provenance:'synthetic functional only'},ledger:(await storage('inspect',{path})).value};
-  // Functional preparation uses the supported 5-second bound, independently of
-  // the frozen production pump quantum. Ordinary tests impose no speed gate.
+  // Test preparation has a controlled clock; measured reads retain their real deadlines.
   await build(config);return {w,config};
 }
 for(const schema of [18,23,33])test(`tiny physical v${schema} real harness reads all ten profiles, both intents, closed schemas and exact evidence`,async t=>{
