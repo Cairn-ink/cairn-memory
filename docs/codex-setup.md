@@ -14,7 +14,7 @@ npx @cairn-ink/memory status
 npx @cairn-ink/memory uninstall --local
 ```
 
-發布前可用 `node packages/setup/bin/memory.mjs setup --local`。第一次互動
+也可從原始碼執行 `node packages/setup/bin/memory.mjs setup --local`。第一次互動
 安裝不加旗標時會問一次本機或雲端；非互動時請指定 `--local`／`--cloud`，
 既有雲端使用者維持原流程。本機模式透過 CLI 為 Codex 與 Claude Code 註冊
 `cairn-local` stdio MCP server，預設共用
