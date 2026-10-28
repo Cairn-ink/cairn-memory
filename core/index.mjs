@@ -10,6 +10,7 @@ export { openContextReader } from './context-reader.mjs';
 export { openContextProductReader, openContextIndexMaintainer } from './context-product-reader.mjs';
 export { createContextReadSupervisor } from './context-read-supervisor.mjs';
 export { renewContextMaintenancePump } from './context-product-pump.mjs';
+export { openContextSemanticCoordinator } from './context-semantic-coordinator.mjs';
 // U5c-2 public configuration constants; storage readers remain internal.
 export { CONTEXT_SOURCES, SOURCE_LIMITS } from './context-read-input.mjs';
 
@@ -82,3 +83,5 @@ export { roleTaskMeteredText, roleTaskToolResponse } from './role-context-wire.m
 
 // U5c-3: dependency authoring remains under explicit Card confirmation authority.
 export { CARD_CURRENT_VERSION, CARD_CURRENT_METHODS } from './card-current-input.mjs';
+
+export { selectContextProductNamespaces } from './context-product-selection.mjs';

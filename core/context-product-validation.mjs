@@ -1,13 +1,13 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { boundedData, PRODUCT_PROFILE } from './context-product-control.mjs';
-import { namespaceKey } from './context-read-input.mjs';
+import { contextReadSet } from './context-read-input.mjs';
 import { fail } from './validation.mjs';
 
 export const canonicalJson = value => JSON.stringify(boundedData(value, 262144));
 export const digest = value => createHash('sha256').update(canonicalJson(value)).digest('base64url');
 export const accessDigest = binding => digest({ profile: PRODUCT_PROFILE, ownerId: binding.ownerId,
-  readSet: [...binding.namespaces.readSet].sort((a,b)=>Buffer.compare(Buffer.from(namespaceKey(a)),Buffer.from(namespaceKey(b)))), ownerGeneration: binding.ownerGeneration ?? null });
-export const projectionDigest = input => digest({ profile: PRODUCT_PROFILE, readSet: input.readSet,
+  readSet: contextReadSet(binding.namespaces.readSet, PRODUCT_PROFILE), ownerGeneration: binding.ownerGeneration ?? null });
+export const projectionDigest = input => digest({ profile: PRODUCT_PROFILE, readSet: contextReadSet(input.readSet, PRODUCT_PROFILE),
   types: ['memory', 'card'].filter(type => input.types.includes(type)), intent: input.intent });
 const sign = (secret, purpose, value) => createHmac('sha256', secret)
   .update(PRODUCT_PROFILE + '/' + purpose + '\n' + canonicalJson(value)).digest('base64url');
@@ -37,7 +37,7 @@ export function verifiedRecord(secret, purpose, text) {
           (value.kind === 'delta') !== (value.progress.baseSequence > 0)) fail('invalid_input');
     } else {
       if (!keys(value, 'version,profile,format,storeId,canonical,sidecar,projectionDigest,accessDigest,canonicalFenceDigest,dependencyFenceDigest,tokenizer,representation,generation,publicationId,manifestDigest,counts,mac') ||
-          value.version !== 'context-index-validation-v1' || value.format !== 1 || !opaque(value.publicationId) || !hash(value.manifestDigest) ||
+          value.version !== 'context-index-validation-v1' || value.format !== 3 || !opaque(value.publicationId) || !hash(value.manifestDigest) ||
           !keys(value.canonical,'device,inode,applicationId,userVersion,schemaVersion') || !file(value.canonical) ||
           !integer(value.canonical.applicationId) || !integer(value.canonical.userVersion) ||
           !keys(value.sidecar,'device,inode,incarnation,schemaVersion') || !file(value.sidecar) || !opaque(value.sidecar.incarnation) ||
