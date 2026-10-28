@@ -10,13 +10,10 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
 - [ ] Review delivered patches and recorded checks; approve the release before
   merging or publishing. Confirm npm scope access and `@cairn-ink/memory`.
   Unscoped `cairn-memory` is owned by someone else.
-- [ ] Confirm installer version **0.6.0** (0.5.2 was published on 2026-10-13) in
+- [ ] Confirm installer version **0.6.2** (0.6.1 was published on 2026-10-28) in
   `packages/setup/package.json`. Future releases explicitly bump this version.
-  It is independent of plugin versions. Plugin 0.3.2 includes the required
-  hook credential-state fix. If plugin changes ship too, bump plugin,
-  marketplace and runtime versions together per `CONTRIBUTING.md`.
-- [ ] Move the installer entry in root `CHANGELOG.md` from Unreleased to the
-  approved installer version/date. Keep plugin release notes separate.
+  It is independent of plugin versions. The Claude plugin is 0.3.3. If plugin
+  changes ship too, bump plugin, marketplace and runtime versions together per `CONTRIBUTING.md`.
 - [ ] On Node **22.16.0** and **24.15.0**, install isolated maintainer dependencies
   per `CONTRIBUTING.md`; first check each `node_modules` for a shared symlink.
   Run the following from the repository root, recording actual exit codes:
@@ -32,7 +29,14 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
   npm run test:artifact
   ```
 
-- [ ] Run the 0.6.0 setup gates on **both Node versions**, first from the checkout
+- [ ] **Pin the engine:** record the release commit and the engine source commit.
+  Installer 0.6.2 retains the engine bundle built from `be2bc543`, the commit
+  used to build 0.6.1; the hosted runtime also stays byte-identical to 0.6.1.
+  At the release commit, `node packages/setup/build-runtime.mjs --check` must
+  pass for `runtime/engine` and the hosted runtime. If main has moved, release
+  from a branch cut at the tested commit; do not merge a newer engine bundle
+  into the tested tarball.
+- [ ] Run the 0.6.2 setup gates on **both Node versions**, first from the checkout
   for source-only documentation/build checks, then against the installed packed
   installer. The builder reads the adapter lockfiles; isolated `npm ci` alone
   does not prime the nested-shrinkwrap engine cache. In a network-enabled phase:
@@ -42,9 +46,25 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
   node packages/setup/build-runtime.mjs --check
   ```
 
-  Use an absolute private `release_cache` directory. Pack with prepack enabled,
-  install the installer tarball with `npm install --offline --ignore-scripts
-  --cache "$release_cache" --prefix "$release_install" <tarball>`, and run the suite from the checkout
+  Use an absolute private `release_cache` directory.
+- [ ] **Pack once at the release commit**, with prepack enabled, into a private
+  `release_artifacts` directory. Record the commit, filename, SHA-1, SHA-256,
+  packed/unpacked bytes and file count. Use this exact file for every packed
+  gate, real-model smoke and publication; rebuilding requires restarting those
+  checks. For example, from `packages/setup`:
+
+  ```sh
+  npm pack --json --pack-destination "$release_artifacts"
+  sha1sum "$release_tarball"
+  sha256sum "$release_tarball"
+  ```
+
+  Capture stdout/stderr separately: prepack text can precede npm JSON. Parse
+  and validate the trailing JSON array, and take `release_tarball` from its
+  filename in `release_artifacts`.
+- [ ] On both Node versions, install that exact installer tarball with
+  `npm install --offline --ignore-scripts --cache "$release_cache"
+  --prefix "$release_install" "$release_tarball"`, and run the suite from the checkout
   harness with `CAIRN_SETUP_TEST_PACKAGE` pointing at
   `$release_install/node_modules/@cairn-ink/memory`, `CAIRN_SETUP_NPM_CACHE` pointing
   at the primed cache, and `CAIRN_SETUP_NPM_OFFLINE=1`. Also set
@@ -57,8 +77,8 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
   preload must capture exactly its four fixture requests with nothing reaching
   the network. Do not use a real key. `--offline` constrains npm; use the release
   environment's network isolation to verify the broader no-network boundary.
-- [ ] Record installer tarball packed/unpacked bytes, file count and SHA-256;
-  compare with the previous release and explain the bundled engine size increase.
+- [ ] Cross-check the recorded tarball hashes, packed/unpacked bytes and file
+  count against the previous release; explain any size change.
   For E02, diff `tar -tzf` against `runtime/engine/manifest.json`'s file list;
   independently derive the list from `packaging/artifact-files.json` plus builder
   extras/generated files. Verify every `sourceHashes` entry against source and
@@ -76,8 +96,12 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
   retryable. Keep all engine opt-ins off.
 - [ ] Run L06 against the immutable 0.5.3 git baseline (`b2513501`), including the
   injected-unrelated-difference normalizer regression. Normalize only installer
-  versions and version-derived hosted runtime names/digests; copied runtime file
-  contents and all other bytes/mutating-call order must still match.
+  versions and version-derived hosted runtime names/digests; all other bytes
+  and mutating-call order must match except for the four named PR #454 runtime
+  exceptions in contract §16, whose installed bytes must equal the packaged
+  files. Run L33/L24 with `CAIRN_SETUP_REQUIRE_BASELINE=1`: baseline 0.5.3 uses
+  a created neutral TMPDIR, while both current runs use HOME/tmp and an owned
+  fallback. Run L34–L38, including L34a, for hosted fallback and managed refusals.
 - [ ] Verify local/cloud/mixed/unknown conflicts (including `--client` checking
   both tools), ordered hosted detach commands, orphan/invalid-descriptor
   recovery, interrupted setup, changed client homes, and missing Node repair.
@@ -85,13 +109,20 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
   uninstall, `--yes`, scoped uninstall with the other client retained,
   pending-setup scoped refusal, and `--purge-config` restrictions. Data must stay;
   retain engines when detachment of every recorded client cannot be proven.
-- [ ] **M01 is manual release work:** install the packed 0.6.0 with real Claude
-  Code and real Codex in a fresh private temporary `HOME`/`CODEX_HOME`. Run
-  `setup --local`, call `remember_memory` from one tool and `inspect_memory` from
-  the other, and record the same memory ID in the PR. With no model key,
-  `recall_memory` must report `model_not_configured`. Record client versions and
-  results; fake-CLI success does not replace this step. Linux/WSL are tested;
-  macOS remains untested and native Windows local setup must refuse.
+- [ ] **Real-model smoke is manual release work:** install the exact tested
+  tarball with real Claude Code and real Codex, using isolated private
+  `HOME`/`CODEX_HOME` and client configurations. Record the tarball hashes,
+  client/model versions and results. Run `setup --local`, call `remember_memory`
+  from one client and `inspect_memory` from the other, and record the same
+  memory ID. With no model key, `recall_memory` must report
+  `model_not_configured`. Repeat with TMPDIR inside HOME and an existing Codex
+  config: local setup and `status` must exit 0 without `codex_tmpdir` when the
+  fallback is usable. Compare hosted dry-run with the immutable baseline under
+  a neutral TMPDIR. Upgrade a prior local installation using the same tarball,
+  confirm both registrations point at the new generation, and read its saved
+  memory from both clients. Do not write cloud account settings. Fake-CLI
+  success does not replace these checks. Linux/WSL are tested; macOS remains
+  untested and native Windows local setup must refuse.
 - [ ] The hosted `codex-hooks.test.mjs` suite has a known timing flake under load.
   Run serially with private scratch; retain the failing case, actual exit code
   and load evidence. Re-run that single test only after investigating it; do not
@@ -115,21 +146,12 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
   memory-ID choices, explicit third-endpoint reauthorization and backup rollback.
 - [ ] Use a fresh private TMPDIR (`mktemp -d`, mode 0700), then remove it.
   Do not read/write real `~/.claude`, `~/.codex` or credentials.
-- [ ] Build and inspect the archive from `packages/setup`. Run `npm pack --dry-run`
-  with the runtime-manifest prepack check. Derive the expected list from package
-  `files` plus npm's automatic metadata files; independently cross-check against
-  `npm pack --json` and `tar -tzf`, diff the lists and print the count. Prepack
-  lifecycle text can precede npm JSON: capture stdout/stderr separately, then
-  parse the trailing JSON array and validate its shape; do not JSON.parse the
-  entire stdout blindly. Keep prepack enabled. Expect
-  `package.json`, `LICENSE`, `README.md`, `bin/`, `lib/` (including client/auth
-  coordination), and the frozen `runtime/`; exclude tests and build-runtime.mjs.
-
-  ```sh
-  cd packages/setup
-  npm pack --dry-run --json
-  npm pack --json --pack-destination /tmp
-  ```
+- [ ] Inspect the already packed archive. Derive its expected list from package
+  `files` plus npm's automatic metadata files; independently cross-check npm
+  pack JSON with `tar -tzf "$release_tarball"`, diff the lists and print the
+  count. Expect `package.json`, `LICENSE`, `README.md`, `bin/`, `lib/` (including
+  client/auth coordination), and the frozen `runtime/`; exclude tests and
+  build-runtime.mjs. Do not repack after testing.
 
 - [ ] In a disposable Claude Code profile, verify packed `setup --dry-run`,
   `setup`, `status`, device-code approval, `--no-browser`, `--manual-token`,
@@ -140,17 +162,31 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
   Never put a PAT or proof in arguments, environment, URLs or logs.
 - [ ] Check current CLI and older fallback. `configure --values-stdin` requires
   Claude Code 2.1.285+; setup checks actual help output.
-- [ ] After chichi approves, publish **from the package directory**:
+- [ ] After chichi approves, the npm owner publishes the **tested file**.
+  OTP is required; do not publish the package directory or rebuild the archive:
 
   ```sh
-  cd packages/setup
-  npm publish --access public
+  npm publish "$release_tarball" --access public --otp=<code>
   ```
 
-- [ ] After successful 0.6.0 publication, remove its awaiting-publication caveats
-  from root, plugin and package READMEs. Verify registry name/version and smoke-test
-  `npx @cairn-ink/memory setup --dry-run` in a clean temporary profile. This does
-  not publish the local SQLite preview under `packaging/`.
+- [ ] Verify the registry version, dist-tag and archive identity:
+
+  ```sh
+  npm view "@cairn-ink/memory@$release_version" version dist.shasum dist.integrity
+  npm view @cairn-ink/memory dist-tags --json
+  npm pack "@cairn-ink/memory@$release_version" --pack-destination "$registry_artifacts"
+  cmp "$release_tarball" "$registry_artifacts/cairn-ink-memory-$release_version.tgz"
+  ```
+
+  The dist-tag must select the approved version and the downloaded tarball must
+  byte-match the tested file. In another isolated temporary client profile,
+  smoke-test `npx @cairn-ink/memory@<version> setup --dry-run` and `status`.
+  This does not publish the local SQLite preview under `packaging/`.
+- [ ] Open a publication-record PR after registry verification. Record the
+  publication date and the actual "built from" release commit in `CHANGELOG.md`;
+  update README publication status lines where needed, keeping the installer
+  and Claude plugin versions distinct. Preserve the tested engine pin and
+  tarball hashes in the publication record.
 
 ## CLI verification boundary
 

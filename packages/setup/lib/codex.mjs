@@ -4,7 +4,7 @@ import { selectEndpoint } from './options.mjs';
 import { constants, accessSync } from 'node:fs';
 import { lstat, mkdir, open, readFile, rename, rm, mkdtemp, realpath } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
-import { delimiter, join, resolve, dirname } from 'node:path';
+import { delimiter, join, resolve, dirname, basename } from 'node:path';
 import { spawn } from 'node:child_process';
 import { resolveCLI, qualifyBinary, cachedQualification } from '../runtime/integrations/codex/qualification.mjs';
 import { readInstallation, readCredential } from '../runtime/integrations/codex/installed-state.mjs';
@@ -134,7 +134,7 @@ export function runCodex(args, { env = process.env, cwd } = {}) {
 export async function setupCodex({ action, flags, write, prompt, interactive, browse,
   SetupError, validEndpoint, t, endpointOverride, authOptions, signal, inspectOnly = false, pairingConsent, claudeDeclined, dailyCap,
     captureExec, verbose, identityPlan, endpointChoice,
-  expectedCodex, hostsStopped, coordinated, progress = {} }) {
+  expectedCodex, hostsStopped, coordinated, progress = {}, inspection = {} }) {
   const fail = message => new SetupError(message);
   if (process.platform === 'win32') {
     if (inspectOnly) return { qualified: false, reason: 'codex_windows' };
@@ -164,22 +164,11 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
   if (expectedCodex && !unchanged(expectedCodex,before)) throw new SetupError('codex_concurrent',2);
   // Inspect only a copy of the user's file. No trusted-project layer or OAuth
   // discovery participates in the decision to create a full entry or add a header.
-  const neutral = await realpath(await mkdtemp(join(tmpdir(), 'cairn-codex-inspect-')));
-  try {
-    for (let directory = neutral; ; directory = dirname(directory)) {
-      try {
-        await lstat(join(directory, '.codex', 'config.toml'));
-        throw fail('codex_tmpdir');
-      } catch (error) { if (error.code !== 'ENOENT') throw error; }
-      if (directory === dirname(directory)) break;
-    }
-    // System-managed overlays would also break the user-file-only guarantee.
-    for (const path of ['/etc/codex/config.toml', '/etc/codex/managed_config.toml']) {
-      try {
-        await lstat(path);
-        throw fail('codex_managed');
-      } catch (error) { if (error.code !== 'ENOENT') throw error; }
-    }
+  const plannedConfigPath = action === 'setup' && !flags.includes('--dry-run') && !inspectOnly ?
+    await canonicalInspectionPath(configPath) : undefined;
+  let bodyStarted = false;
+  const inspect = async neutral => {
+    bodyStarted = true;
     const inspectionHome = join(neutral, 'user-file');
     await mkdir(inspectionHome, { mode: 0o700 });
     if (before.stat) await privateWrite(join(inspectionHome, 'config.toml'), before.text);
@@ -365,7 +354,30 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     automaticStatus(write, t);
     write(t('codex_restart'));
     return 0;
-  } finally { await rm(neutral, { recursive: true, force: true }); }
+  };
+  try {
+    return await withCodexInspectionEnvironment({
+      fallbackParent: inspection.fallbackParent, managedPaths: inspection.managedPaths,
+      env: process.env, plannedConfigPath,
+    }, inspect);
+  } catch (error) {
+    if (!bodyStarted && error instanceof CodexInspectionError) throw new SetupError(error.key);
+    throw error;
+  }
+}
+
+// Canonicalise existing ancestors without creating a planned configuration.
+async function canonicalInspectionPath(path) {
+  try { return await realpath(path); }
+  catch (error) {
+    if (error.code !== 'ENOENT' || dirname(path) === path) throw error;
+    return join(await canonicalInspectionPath(dirname(path)), basename(path));
+  }
+}
+
+// Only selector-created refusals are translated at the hosted boundary.
+class CodexInspectionError extends Error {
+  constructor(key) { super(key); this.key = key; }
 }
 
 // Local-mode inspection shares the hosted file checks, isolated HOME and CLI
@@ -403,13 +415,13 @@ export async function withCodexInspectionEnvironment({ env = process.env, fallba
       }
       if (!usable) continue;
       for (const path of managedPaths) {
-        try { await lstat(path); throw Object.assign(new Error('codex_managed'), { key: 'codex_managed' }); }
+        try { await lstat(path); throw new CodexInspectionError('codex_managed'); }
         catch (error) { if (error.code !== 'ENOENT') throw error; }
       }
       return await work(neutral);
     } finally { if (attempt) await rm(attempt, { recursive: true, force: true }); }
   }
-  throw Object.assign(new Error('codex_tmpdir'), { key: 'codex_tmpdir' });
+  throw new CodexInspectionError('codex_tmpdir');
 }
 export async function inspectCodexServers({ home = codexHome(), env = process.env, ...inspection } = {}) {
   const before = await snapshot(join(home, 'config.toml'));

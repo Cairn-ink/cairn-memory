@@ -13,7 +13,7 @@ if (state.killBefore === args.join(' ')) {
   process.kill(process.ppid, 'SIGKILL'); process.exit(0);
 }
 if (state.fail === args.join(' ') || (state.failValidation && (home.includes('.cairn-validate-') || home.includes('cx5-candidate')))) {
-  writeSync(2, state.token); process.exit(7);
+  writeSync(2, state.token || 'synthetic validation failure'); process.exit(7);
 }
 if (args.includes('--help')) {
   writeSync(1, state.old || (state.noMcpAdd && args[1] === 'add') ? 'old CLI' : '--url --json -- <COMMAND>'); process.exit(0);
