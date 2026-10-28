@@ -556,8 +556,17 @@ sequence-0 independent anchor. The internal control-plane helper
 `provisionSemanticOwner` accepts that authority; it is not a request, set-owner,
 projection-maintenance or MCP method. Keep the independent anchor registry and
 its enrollment/tombstone history outside the accounting file and vector cache.
-The runtime `semanticLedgerAuthority` supplies `load(ownerId)` and
-`compareAndSwap(expected,next)`. Its storage/transactions must obey the same
+The runtime `semanticLedgerAuthority` supplies `load(ownerId)`,
+`compareAndSwap(expected,next)` and `listOwners({accountingDomainId,ledgerId})`.
+`listOwners` returns the complete, nonempty, duplicate-free array of owner IDs
+enrolled in that accounting domain and ledger. It must come from the same
+independently durable enrollment authority as the anchors, never from rows in
+the accounting file: shared-identity limits are enforced over this inventory,
+so a missing, restored or deleted owner row is detected instead of silently
+dropping that owner's spent exposure. An inventory that is unavailable,
+malformed or inconsistent with the ledger leaves semantic admission
+unavailable. A host without `listOwners` is refused with `invalid_input`.
+Its storage/transactions must obey the same
 SQLite file safety and bounded native-wait rules; the host receives
 `resourceOwner.sqlitePolicy` and registers owned resources for disposal.
 
