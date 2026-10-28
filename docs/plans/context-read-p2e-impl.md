@@ -1279,3 +1279,125 @@ cases per runtime**, with zero failures, cancellations or skips. Child statuses
 were captured directly; no pipeline or final stdout lines were used to infer
 success. All supervised runs, subprocesses and Workers finish before handoff.
 No commit was created.
+
+## CI fix round 1
+
+### Decision and contract evidence
+
+The CI failure is a test ordering assumption. For the status call after a fatal
+service Worker exit, either code is specified **depending on whether the parent
+has observed the exit before admitting that call**: an admitted call interrupted
+by the unexpected exit returns bare `reader_failed`; entry on the discarded
+handle returns bare `store_closed`. This is not permission to accept arbitrary
+errors or to report a successful closed-state status.
+
+`docs/plans/context-read-product.md:247` gives first-terminal-event precedence;
+`:269` requires failed cleanup to report `reader_failed`, and `:273` pins its
+quarantine. `:380` requires a closed/discarded handle to return `store_closed`
+without a success DTO. The error table at `:529` distinguishes unexpected
+Worker/protocol/cleanup failure from a closed/discarded handle. P2e E.2 (`:1210`)
+requires supervised coordinator disposal; P2e-05 (`:1514`) requires crash and
+independent resource-cleanup evidence; P2e-14 (`:1523`) requires exact lifecycle
+and supervisor/quarantine observables. None establishes a happens-before edge
+from a borrowed reader's degraded result to the parent's Worker exit callback.
+Revision 1's supersession table (`:1166`) retains those lifecycle rules.
+Revision 2 (`:1633` onward) defers the
+local provider and explicitly leaves the other rows unchanged; it adds no exit
+ordering or status-code override.
+
+### State transition evidence and change
+
+The fake hosted provider exits its actual Worker at
+`core/testing/context-semantic-host.mjs:74`. A borrowed reader independently
+observes MessagePort closure in `core/context-semantic-client.mjs:20`, rejecting
+its semantic call with `ledger_unavailable`; this can finish lexical degradation
+before the coordinator's parent receives the exit event.
+
+In `core/context-semantic-coordinator.mjs:93`, `error` rejects pending calls as
+`reader_failed` without establishing closed state. At `:94`, `exit` synchronously
+sets `exited` and `closed`, marks cleanup, finishes the supervised resource and
+rejects pending calls as `reader_failed`. There is no await in that transition.
+Status entry at `:128` returns `store_closed` if already closed; otherwise
+`:134` registers a pending operation and `:140` dispatches it. A slower parent
+can therefore admit status before handling exit, reproducing CI's `reader_failed`.
+This is an exit-event/status-entry race, not a race inside supervisor settlement.
+
+`core/context-read-supervisor.mjs:135` derives actual disposal fields from the
+shared resource counts; `:54` pins failed cleanup and rejects its delivery.
+Coordinator close at `core/context-semantic-coordinator.mjs:67` sees the recorded
+exit and awaits that delivery at `:76`, so it rejects `reader_failed` without
+waiting for another exit. Closed status and failed disposal describe different
+things and must both remain observable.
+
+The test now holds delivery of the real coordinator exit event, waits for the
+reader's actual degraded result and the actual exit, then forces both orderings.
+Before delivery it proves the handle is open and status was dispatched; after
+delivery the pending status must return exactly `reader_failed`. After delivery,
+a new status must return exactly `store_closed` without dispatch. Both variants
+retain the failed-close, stopped-Worker and unsettled-provider assertions.
+Quarantined inode retention runs even after an assertion failure. No production
+module, deadline, provider policy, contract or generated bundle changes.
+
+### Reproduction and verification
+
+With all production modules still at `919f7ce6`, the forced-ordering fixture
+retaining the old unconditional `store_closed` assertion exits **1** on Node
+22.16.0: **1/2 pass**, zero cancellations/skips. The before-exit variant produces
+CI's exact bare `reader_failed` versus expected `store_closed` mismatch; the
+after-exit variant passes. The final assertion selects exactly `reader_failed`
+before observation and exactly `store_closed` afterward, and both variants also
+assert that every subsequent status entry returns `store_closed`.
+
+One earlier development run was explicitly stopped, exit **143**, while refining
+the rendezvous: Node removes Worker listeners after emitting exit, so delayed
+delivery must preserve the original listeners, including once wrappers. That
+stopped run is not reproduction or acceptance evidence. The final fixture
+preserves and delivers those listeners exactly once and restores the hook on
+early failure. Every native run is serialized through `cairn-heavy`; all provider
+and crash inputs remain synthetic and offline.
+
+The final serial driver held one `cairn-heavy` lock around all native child
+commands. Each command used the selected runtime's toolchain first on PATH and
+npm offline mode; statuses were captured directly, independently of log tails.
+Both runtime version probes exit **0**, reporting **v22.16.0 / v24.15.0**.
+The focused command was repeated **30 times per runtime**:
+
+```sh
+"$NODE" tools/testing/run.mjs --test-reporter=tap --test-concurrency=1 \
+  --test-name-pattern='P2e-05/14 fatal service Worker exit' \
+  core/test/context-read-product-semantic.test.mjs
+```
+
+Both runtimes pass **30/30 runs**, **60/60 forced-ordering cases each**;
+every repeated command exits **0**, with zero failures/cancellations/skips.
+The same driver then ran the complete registered required set on each runtime:
+
+| Required group | Files | Node 22.16.0 exit (pass/total) | Node 24.15.0 exit (pass/total) |
+| --- | ---: | ---: | ---: |
+| `core/test/context-read*.test.mjs` | 37 | 0 (804/804) | 0 (804/804) |
+| `core/test/topic-*.test.mjs` | 17 | 0 (238/238) | 0 (238/238) |
+| `core/test/no-raw-db-fd.test.mjs`, `sqlite-lock-safety.test.mjs`, `sqlite-journal-probe.test.mjs` | 3 | 0 (44/44) | 0 (44/44) |
+| `adapters/mcp/test/context-read*.test.mjs` | 6 | 0 (97/97) | 0 (97/97) |
+| `packaging/test/topic-overview-raw29.test.mjs` | 1 | 0 (3/3) | 0 (3/3) |
+| `tools/testing/p2e-*.test.mjs` | 4 | 0 (36/36) | 0 (36/36) |
+
+All **six required group commands exit 0 per runtime**, **1,222/1,222 passing
+cases each**, with zero failures/cancellations/skips. The additional case is the
+forced before-exit ordering. The **72** final command receipts (60 repetitions
+plus 12 required groups) are independently cross-checked against **72** native
+TAP logs, including their test/pass/fail/cancel/skip summaries. The serial driver
+itself exits **0**. All native runs for this fix finish at **21:16 on 2026-10-28,
+Asia/Taipei**, before the requested 22:30 cutoff. No native task from this fix
+remains running.
+
+### Scope checks
+
+Glob expansion and independent ignore-aware `rg --files` enumeration agree on
+**68 required files**, zero differences. Git diff plus untracked enumeration and
+an independent HEAD blob/mode comparison plus ignore-aware disk walk agree on
+**two changed paths**: this plan and the semantic test. The original plan prefix
+is byte-identical to `919f7ce6`. All **180 production core modules** and all
+generated bundle bytes remain unchanged, so runtime regeneration and its
+`--check` are not applicable to this test-only fix. Added-line local-path checks
+and `git diff --check` exit **0**. No network, secrets, installation or commit is
+introduced.
