@@ -5,7 +5,7 @@ import { digest, canonicalJson } from '../context-product-validation.mjs';
 export async function createContextReadHost(c) {
   const state=new Int32Array(c.state),binding=c.semanticServiceBinding??c.serviceBinding??c.requestBinding;
   const base={authorize(){return binding;},isCurrent(){const n=Atomics.add(state,1,1)+1;return Atomics.load(state,0)===1&&Atomics.load(state,2)!==n;},
-    counter:{id:'synthetic-exact-characters',countTokens(text){if(c.counterBarrier){const barrier=new Int32Array(c.counterBarrier);if(barrier.length>3)Atomics.add(barrier,3,1);if(Atomics.exchange(barrier,0,0)===1){Atomics.store(barrier,1,1);Atomics.notify(barrier,1);while(Atomics.load(barrier,2)===0)Atomics.wait(barrier,2,0);}}return Array.from(text).length;}}};
+    counter:{id:c.counterDivisor?'synthetic-scaled-characters':'synthetic-exact-characters',countTokens(text){if(c.counterBarrier){const barrier=new Int32Array(c.counterBarrier);if(barrier.length>3)Atomics.add(barrier,3,1);if(Atomics.exchange(barrier,0,0)===1){Atomics.store(barrier,1,1);Atomics.notify(barrier,1);while(Atomics.load(barrier,2)===0)Atomics.wait(barrier,2,0);}}if(c.counterThrow)throw Error('synthetic counter fault');return Math.ceil(Array.from(text).length/(c.counterDivisor??1));}}};
   if(!c.semanticServiceBinding)return base;
   if(c.utcClock){const clock=new BigInt64Array(c.utcClock);Date.now=()=>Number(Atomics.load(clock,0));}
   if(c.abortState){const counts=new Int32Array(c.abortState),Controller=globalThis.AbortController;globalThis.AbortController=class extends Controller {constructor(){super();Atomics.add(counts,0,1);}abort(...args){if(!this.signal.aborted)Atomics.add(counts,1,1);return super.abort(...args);}};}
@@ -84,7 +84,11 @@ export async function createContextReadHost(c) {
   return {...base,isCurrent(){const a=load(binding.ownerId);return base.isCurrent()&&a?.ledgerEpoch===binding.ledgerEpoch&&a?.bindingRevision===binding.bindingRevision;},
     contextEmbedding:c.localRuntime?{embedder:{...embedder,id:'local:bge-m3:dense',revision:'synthetic',dimensions:1024},policy:c.localRuntime==='identity'?{family:'hosted',maxRequests:100,maxConcurrent:1,maxUsd:100}:{family:'local',maxRequests:100,maxConcurrent:1,maxBatchDocuments:1},...(c.localRuntime==='shape'?{localStatus(){Atomics.add(state,8,1);}}:{})}:
       {embedder,policy:{family:'hosted',maxRequests:c.maxRequests??100000,maxConcurrent:c.maxConcurrent??4,maxUsd:100}},
-    semanticLedgerAuthority:{load,compareAndSwap,confirmDisposed:()=>c.recovery===true},
+    semanticLedgerAuthority:{load,compareAndSwap,
+      // Independent anchors are permanent enrollment records, never ledger
+      // discovery. A missing ledger row cannot remove an anchored member.
+      listOwners({accountingDomainId,ledgerId}){return anchor.prepare("SELECT owner FROM anchors WHERE json_extract(anchor,'$.accountingDomainId')=? AND json_extract(anchor,'$.ledgerId')=? ORDER BY owner").all(accountingDomainId,ledgerId).map(row=>row.owner);},
+      confirmDisposed:()=>c.recovery===true},
     semanticPriceAuthority:{current(){Atomics.add(state,15,1);if(Atomics.load(state,9))return null;const p=c.priceState&&Atomics.load(new Int32Array(c.priceState),0)?c.nextPriceTable:c.priceTable;return {authorityId:p.authorityId,revision:p.revision,sequence:p.sequence,tableDigest:digest(p),effectiveFromUtcMs:p.effectiveFromUtcMs,effectiveUntilUtcMs:p.effectiveUntilUtcMs};}},
     close(){anchor.close();Atomics.add(state,13,1);}};
 }

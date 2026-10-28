@@ -279,14 +279,28 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         coverage:{...source.coverage,depths:{...source.coverage.depths,semantic:0},omitted:{lexical:Math.max(0,lexical.matched-24),semantic:null,horizon:0}}});
       if(method==='contextRead') {
         if(!p.vectorPublication)return assemble(p,access,c);
-        // Prepare both possible deliveries before the final authority sample.
-        // Native publication races may select lexical after counting; neither
-        // a counter callback, another embedding nor another fusion follows it.
-        const hybrid=assemble(p,access,c,true),fallback=assemble(p,access,lexicalFallback(c),true);
-        const hybridTrace=hybrid.result.value.diagnostics.trace,fallbackTrace=fallback.result.value.diagnostics.trace;
-        const calls=hybridTrace.counterCalls+fallbackTrace.counterCalls,assemblyMs=hybridTrace.timings.assemblyMs+fallbackTrace.timings.assemblyMs;
-        for(const trace of [hybridTrace,fallbackTrace]){trace.counterCalls=calls;trace.timings.assemblyMs=assemblyMs;}
-        return final(p,access,c.observed.publication,valid=>valid?hybrid.complete():fallback.complete(),'snapshot_stale');
+        // Freeze publication only for synchronous assembly/final validation;
+        // no provider/authority await or SQLite transaction spans the gate.
+        // Choose one horizon before counting, preserving the single-assembly
+        // counter bound even when the two horizons have no shared units.
+        let release;
+        try {release=semantic.gate.enter(snapshot.policy);}catch {
+          delete p.vectorPublication;
+          return assemble(p,access,lexicalFallback(c));
+        }
+        try {
+          const current=read(()=>{const lexical=storage.observe(p,access.accessGenerations);return vectors.observe(p,lexical.publication,snapshot);});
+          if(current.status!=='complete'||current.record.publicationId!==p.vectorPublication) {
+            delete p.vectorPublication;
+            return assemble(p,access,lexicalFallback(c));
+          }
+          const delivery=assemble(p,access,c,true);
+          return final(p,access,c.observed.publication,valid=>{
+            // Out-of-protocol evidence damage cannot authorize stale vectors.
+            if(!valid)fail('snapshot_stale');
+            return delivery.complete();
+          },'snapshot_stale');
+        }finally{release();}
       }
       for(const [id,r] of rankings)if(r.expires<=Date.now())rankings.delete(id);while(rankings.size>=128)rankings.delete(rankings.keys().next().value);
       const binding=digest({readSet:p.readSet,types:p.types,intent:p.intent,query:p.query,semantic:p.semantic,access:access.accessGenerations});

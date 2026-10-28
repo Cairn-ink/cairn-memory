@@ -639,3 +639,168 @@ contract, dependency installation, artifact manifest or raw-fd allowlist.
 - `core/test/context-read-product-semantic.test.mjs`
 - `core/testing/context-semantic-host.mjs`
 - `docs/plans/context-read-p2e-impl.md`
+
+
+## Fix round 2
+
+Addresses both remaining P1 findings against `0f43acaf`.
+
+The host ledger authority now requires
+`listOwners({accountingDomainId, ledgerId})`, returning its independently durable,
+complete membership inventory. Enrollment must register membership before a
+ledger row can exist; membership survives ledger deletion, snapshot restore,
+restart, disable and purge. It must never be reconstructed from ledger rows.
+The synthetic authority enumerates its separately persisted permanent anchors.
+Every anchored owner is authenticated before shared identity admission, and the
+complete row inventory and exact sequences/digests are checked again in the
+reservation transaction. Missing members, missing anchors and extra rows refuse
+closed. No ordinary operation initializes, repairs or removes membership.
+
+Semantic assembly now selects a single horizon. After query embedding, an
+observed vector-publication change still selects the original lexical result.
+Before counting a hybrid horizon, the reader enters the existing synchronous
+publication gate and rechecks vector evidence. Contention or changed evidence
+selects lexical before counting. The gate spans only synchronous preparation,
+counting and final validation; no provider/authority await or SQLite transaction
+spans it. Valid publication cannot change during that pass. Unexpected evidence
+damage still refuses `snapshot_stale`. The gate releases in `finally`, and the
+existing supervised Worker-exit cleanup releases only that Worker's gate slot.
+Both alternatives therefore use the same single assembly path: at most 24 bodies
+and 16 receipts per body, `U <= 408`, and `2 + 2U + R <= 1,226` counter calls.
+There is no second assembly, embedding or fusion after final authority reads.
+
+Regression coverage includes B exhausting `maxRequests:1` followed by row
+deletion, same-inode snapshot restoration and coordinator restart while B's
+anchor remains; A must report `budget_denied` with zero additional sends. The
+maximum-horizon fixture has 24 items and 16 short receipts each, all fitting,
+with an independent actual counter-call total under every assembly policy.
+Embedding-time republication still checks exact lexical delivery for both
+`findCandidates` and `contextRead`. The former final-assembly republication case
+now verifies publication exclusion and a valid hybrid delivery; additional cases
+verify gate release after a throwing counter and actual Worker termination.
+
+Default lexical code, serializer defaults, frozen contracts, WAL/native-lock
+policy, generated runtime and raw-fd allowlist are unchanged. All providers,
+prices, counters and credentials are synthetic; no network or keys are used.
+No commit or staging operation is performed.
+
+
+### Round 2 verification
+
+The required inventory was derived from the handoff's explicit path tables and
+independently expanded from filesystem test-family globs: **61 paths, zero
+differences**. Each complete-file command uses the exact pinned Node version
+first on PATH, offline npm mode and the managed process-group runner:
+
+```sh
+"$p2e_node" tools/testing/run.mjs --test-reporter=tap --test-concurrency=1 "$p2e_test"
+```
+
+An isolated `0f43acaf` archive received only the new tests and synthetic host
+fixture changes. On **both Node 22.16.0 and 24.15.0**, the five defect probes
+(row deletion, pre-enrollment snapshot restoration, restart, whole-policy
+maximum receipts, coverage-policy maximum receipts) all fail: each baseline
+command exits **1**, with **five failures and zero passes/skips**. Both counter
+probes report **1,636 actual calls**. Baseline comparison wrappers exit **0**
+after verifying the expected failures; no baseline runtime source was edited.
+
+Two preliminary Node 22 baseline commands exited **1**, with four failures: the
+initial snapshot fixture performed a preliminary denied refresh that advanced
+A's coverage hint, accidentally testing A's rollback as well as B's omission.
+Removing that operation isolates B's missing row; the final snapshot probe
+fails on the baseline on both runtimes. The first matrix was deliberately
+interrupted at the Node 22 assembly file to correct the fixture; that managed
+command exited **143**, drained its process group, and was subsequently rerun.
+Earlier completed paths were retained rather than rerun.
+
+Focused Node 22 development commands exited **0**: nine race/missing-row/counter
+cases and two gate-cleanup cases. All four changed JavaScript files pass
+individual syntax checks on both versions: **eight actual exits 0**.
+
+
+### Round 2 final per-path results
+
+Both exact-version probes exit **0**. All **61 complete-file commands per runtime**
+exit **0**, with **1,100 passing tests and zero skips on each runtime**.
+The hosted-semantic file includes all eight added cases and passes **70/70**
+on both versions. The managed matrix runner exits **0** and verifies that all
+four JavaScript source hashes remain unchanged throughout the resumed matrix.
+
+| Explicit path | Node 22.16.0 exit (pass) | Node 24.15.0 exit (pass) |
+| --- | ---: | ---: |
+| `adapters/mcp/test/context-read-assembly.test.mjs` | 0 (43) | 0 (43) |
+| `adapters/mcp/test/context-read-default-entropy.test.mjs` | 0 (1) | 0 (1) |
+| `adapters/mcp/test/context-read-product-owner-evidence.test.mjs` | 0 (34) | 0 (34) |
+| `adapters/mcp/test/context-read-product-provider.test.mjs` | 0 (9) | 0 (9) |
+| `adapters/mcp/test/context-read-sources.test.mjs` | 0 (4) | 0 (4) |
+| `adapters/mcp/test/context-read.test.mjs` | 0 (6) | 0 (6) |
+| `core/test/context-read-assembly-races.test.mjs` | 0 (7) | 0 (7) |
+| `core/test/context-read-assembly-readonly.test.mjs` | 0 (28) | 0 (28) |
+| `core/test/context-read-assembly.test.mjs` | 0 (20) | 0 (20) |
+| `core/test/context-read-bm25.test.mjs` | 0 (3) | 0 (3) |
+| `core/test/context-read-budget.test.mjs` | 0 (5) | 0 (5) |
+| `core/test/context-read-core.test.mjs` | 0 (26) | 0 (26) |
+| `core/test/context-read-default-entropy.test.mjs` | 0 (1) | 0 (1) |
+| `core/test/context-read-embedder.test.mjs` | 0 (5) | 0 (5) |
+| `core/test/context-read-fusion.test.mjs` | 0 (4) | 0 (4) |
+| `core/test/context-read-local-embedder.test.mjs` | 0 (38) | 0 (38) |
+| `core/test/context-read-local-status.test.mjs` | 0 (3) | 0 (3) |
+| `core/test/context-read-moc-source.test.mjs` | 0 (15) | 0 (15) |
+| `core/test/context-read-process.test.mjs` | 0 (1) | 0 (1) |
+| `core/test/context-read-product-artifact.test.mjs` | 0 (1) | 0 (1) |
+| `core/test/context-read-product-control.test.mjs` | 0 (83) | 0 (83) |
+| `core/test/context-read-product-import.test.mjs` | 0 (2) | 0 (2) |
+| `core/test/context-read-product-index.test.mjs` | 0 (65) | 0 (65) |
+| `core/test/context-read-product-overflow-status.test.mjs` | 0 (16) | 0 (16) |
+| `core/test/context-read-product-owner.test.mjs` | 0 (15) | 0 (15) |
+| `core/test/context-read-product-p2cd.test.mjs` | 0 (2) | 0 (2) |
+| `core/test/context-read-product-pump.test.mjs` | 0 (24) | 0 (24) |
+| `core/test/context-read-product-semantic-gates.test.mjs` | 0 (7) | 0 (7) |
+| `core/test/context-read-product-semantic.test.mjs` | 0 (70) | 0 (70) |
+| `core/test/context-read-product-service.test.mjs` | 0 (2) | 0 (2) |
+| `core/test/context-read-product-wal.test.mjs` | 0 (85) | 0 (85) |
+| `core/test/context-read-product.test.mjs` | 0 (126) | 0 (126) |
+| `core/test/context-read-recovery.test.mjs` | 0 (10) | 0 (10) |
+| `core/test/context-read-review.test.mjs` | 0 (10) | 0 (10) |
+| `core/test/context-read-sidecar.test.mjs` | 0 (17) | 0 (17) |
+| `core/test/context-read-source-work.test.mjs` | 0 (7) | 0 (7) |
+| `core/test/context-read-sources-authority.test.mjs` | 0 (6) | 0 (6) |
+| `core/test/context-read-sources-bounds.test.mjs` | 0 (5) | 0 (5) |
+| `core/test/context-read-sources-races.test.mjs` | 0 (16) | 0 (16) |
+| `core/test/context-read-sources.test.mjs` | 0 (14) | 0 (14) |
+| `core/test/context-read-tokenize.test.mjs` | 0 (2) | 0 (2) |
+| `core/test/no-raw-db-fd.test.mjs` | 0 (5) | 0 (5) |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 (16) | 0 (16) |
+| `core/test/topic-members-bounds.test.mjs` | 0 (7) | 0 (7) |
+| `core/test/topic-members-compatibility.test.mjs` | 0 (32) | 0 (32) |
+| `core/test/topic-members-integration.test.mjs` | 0 (1) | 0 (1) |
+| `core/test/topic-members-mutations.test.mjs` | 0 (20) | 0 (20) |
+| `core/test/topic-members-primary.test.mjs` | 0 (26) | 0 (26) |
+| `core/test/topic-members-recheck-findings.test.mjs` | 0 (33) | 0 (33) |
+| `core/test/topic-members-review-findings.test.mjs` | 0 (7) | 0 (7) |
+| `core/test/topic-members-round3-findings.test.mjs` | 0 (18) | 0 (18) |
+| `core/test/topic-members-scale.test.mjs` | 0 (2) | 0 (2) |
+| `core/test/topic-members-visibility.test.mjs` | 0 (10) | 0 (10) |
+| `core/test/topic-members.test.mjs` | 0 (10) | 0 (10) |
+| `core/test/topic-overview-lifecycle.test.mjs` | 0 (11) | 0 (11) |
+| `core/test/topic-overview-raw29.test.mjs` | 0 (22) | 0 (22) |
+| `core/test/topic-overview-visibility.test.mjs` | 0 (8) | 0 (8) |
+| `core/test/topic-overview.test.mjs` | 0 (4) | 0 (4) |
+| `core/test/topic-reader-cancellation.test.mjs` | 0 (6) | 0 (6) |
+| `core/test/topic-reader-sqlite.test.mjs` | 0 (21) | 0 (21) |
+| `packaging/test/topic-overview-raw29.test.mjs` | 0 (3) | 0 (3) |
+
+
+### Round 2 changed files
+
+Cross-checked Git diff/untracked enumeration against independent HEAD blob
+hashes and filesystem enumeration: **5 files, zero differences**. Whitespace
+and added-text local-path/private-dispatch checks exit **0**. No frozen
+contract, generated runtime, dependency, artifact manifest or raw-fd allowlist
+changes. No commit or staging operation.
+
+- `core/context-product-index.mjs`
+- `core/context-semantic-ledger.mjs`
+- `core/test/context-read-product-semantic.test.mjs`
+- `core/testing/context-semantic-host.mjs`
+- `docs/plans/context-read-p2e-impl.md`

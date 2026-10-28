@@ -677,12 +677,84 @@ for(const transition of ['replacement','expiry'])test(`Fix1 already-sent settlem
   const sends=s.view[6];const denied=ok(await m.h.refreshContextIndex(history,m.credential));assert.equal(denied.progress.embeddingAttempts,0);assert.equal(denied.channels.semantic.state,'budget_denied');assert.equal(s.view[6],sends);
 });
 
-test('Fix1 vector republication during final assembly reuses lexical results without another embedding',async t=>{
+test('Fix2 publication gate keeps final assembly to one validated horizon',async t=>{
   const s=await setup(t),m=await prepared(s),r=s.configure(false),counterBarrier=new SharedArrayBuffer(16),barrier=new Int32Array(counterBarrier);
   r.options.host.configuration.counterBarrier=counterBarrier;
   const reader=await openContextProductReader(r.options);s.f.workspace.defer(()=>reader.close());
-  const input={...query,budget:{maxTokens:4000,maxItems:12}},expected=ok(await reader.contextRead({...input,semantic:false},r.credential));
+  const input={...query,budget:{maxTokens:4000,maxItems:12}},expected=ok(await reader.contextRead(input,r.credential));
+  const db=sidecar(s),pointers=db.prepare('SELECT pointer FROM vector_publications ORDER BY projection').all();
   barrier[0]=1;barrier[3]=0;s.f.workspace.defer(()=>release(barrier,2));const before=s.view[6],pending=reader.contextRead(input,r.credential);await rendezvous(barrier,1,pending);
-  const refreshed=ok(await m.h.refreshContextIndex(refreshInput(ns),m.credential));assert.equal(refreshed.progress.embeddingAttempts,0);release(barrier,2);
-  const value=ok(await pending),detail=value.diagnostics.candidates;assert.equal(detail.trace.effective,'lexical');assert.equal(detail.trace.semantic.degradedReason,'validation_invalid');assert.equal(s.view[6],before+1);assert.deepEqual(value.metered.items,expected.metered.items);assert.equal(value.diagnostics.trace.counterCalls,barrier[3]);
+  const refreshed=ok(await m.h.refreshContextIndex(refreshInput(ns),m.credential));assert.equal(refreshed.progress.embeddingAttempts,0);assert.deepEqual(db.prepare('SELECT pointer FROM vector_publications ORDER BY projection').all(),pointers);release(barrier,2);
+  const value=ok(await pending),detail=value.diagnostics.candidates;assert.equal(detail.trace.effective,'hybrid');assert.equal(detail.trace.semantic.degradedReason,null);assert.equal(s.view[6],before+1);assert.deepEqual(value.metered.items,expected.metered.items);assert.equal(value.diagnostics.trace.counterCalls,barrier[3]);
+});
+
+
+for(const damage of ['delete','snapshot','restart'])test(`Fix2 missing anchored owner row refuses shared exposure after ${damage}`,async t=>{
+  const bns={...ns,ownerId:'synthetic-other'},s=await setup(t,{host:{maxRequests:1},corpus:[['semantic a',ns],['semantic b',bns]]});
+  const a=await lexicalOnly(s),db=ledgerView(s),snapshot=db.prepare('SELECT * FROM semantic_owners ORDER BY owner_id').all();
+  const other=await enrollOther(s),b=await openContextSemanticCoordinator(other.options);s.f.workspace.defer(()=>b.close());
+  const m=await lexicalOnly(s,b,other.namespace,other.token);
+  assert.equal(ok(await m.h.refreshContextIndex(refreshInput(bns),m.credential)).progress.embedded,1);await m.h.close();await b.close();
+  const anchor=s.authority.prepare('SELECT anchor FROM anchors WHERE owner=?').get(bns.ownerId);
+  assert.ok(Object.values(JSON.parse(ownerRow(db,bns.ownerId).state).reservations).some(r=>r.status==='settled'));
+  // Keep A's row/anchor current across the pre-enrollment snapshot. A
+  // preliminary denied refresh would itself record a later coverage hint.
+  const sends=s.view[6];
+  if(damage==='snapshot') {
+    db.exec('BEGIN IMMEDIATE');db.exec('DELETE FROM semantic_owners');
+    for(const row of snapshot)db.prepare('INSERT INTO semantic_owners VALUES(?,?,?,?)').run(row.owner_id,row.sequence,row.state_digest,row.state);
+    db.exec('COMMIT');
+  }else db.prepare('DELETE FROM semantic_owners WHERE owner_id=?').run(bns.ownerId);
+  assert.deepEqual(s.authority.prepare('SELECT anchor FROM anchors WHERE owner=?').get(bns.ownerId),anchor);
+  assert.equal(ownerRow(db,bns.ownerId),undefined);
+  let maintainer=a;
+  if(damage==='restart') {
+    await a.h.close();await s.coordinator.close();
+    const next=await openContextSemanticCoordinator(s.options);s.f.workspace.defer(()=>next.close());
+    const config=s.configure(true);config.options.semanticConfig.coordinator=next;
+    const h=await openContextIndexMaintainer(config.options);s.f.workspace.defer(()=>h.close());maintainer={...config,h};
+  }
+  const value=ok(await maintainer.h.refreshContextIndex(refreshInput(ns),maintainer.credential));
+  assert.equal(value.channels.semantic.state,'budget_denied');assert.equal(value.progress.embeddingAttempts,0);assert.equal(s.view[6],sends);
+  assert.equal(Object.values(JSON.parse(ownerRow(db).state).reservations).length,0);
+});
+
+for(const policy of ['rank-first-whole-v1','coverage-first-v1','rank-first-first-source-v1'])test(`Fix2 24 items with 16 receipts share the 1226 counter bound under ${policy}`,async t=>{
+  const s=await setup(t,{corpus:Array.from({length:24},(_,i)=>['semantic '+i,ns])}),writer=new DatabaseSync(s.f.path);
+  try {
+    for(const [i,row] of writer.prepare('SELECT id FROM memories ORDER BY id').all().entries()) {
+      writer.prepare('DELETE FROM receipts WHERE memory_id=?').run(row.id);
+      for(let j=0;j<16;j++) {
+        const source={client:'synthetic',sessionId:'counter-bound',eventId:`item-${i}-receipt-${j}`,role:'user',excerpt:`r${j}`};
+        writer.prepare('INSERT INTO receipts(id,memory_id,receipt_key,client,session_id,event_id,role,excerpt,created_at) VALUES(?,?,?,?,?,?,?,?,?)')
+          .run(randomUUID(),row.id,createHash('sha256').update(JSON.stringify(source)).digest('hex'),source.client,source.sessionId,source.eventId,source.role,source.excerpt,'2026-01-01T00:00:00.000Z');
+      }
+    }
+  }finally{writer.close();}
+  await prepared(s);
+  const r=s.configure(false),counterBarrier=new SharedArrayBuffer(16),counts=new Int32Array(counterBarrier);
+  Object.assign(r.options.host.configuration,{counterBarrier,counterDivisor:100});
+  const reader=await openContextProductReader(r.options);s.f.workspace.defer(()=>reader.close());
+  const value=ok(await reader.contextRead({...query,policy:{id:policy},budget:{maxTokens:4000,maxItems:24}},r.credential));
+  assert.equal(value.diagnostics.candidates.trace.effective,'hybrid');assert.equal(value.metered.items.length,24);
+  assert.equal(value.metered.items.reduce((n,item)=>n+item.sources.length,0),24*(policy==='rank-first-first-source-v1'?1:16));
+  assert.equal(value.diagnostics.omitted.oversized,0);assert.equal(value.diagnostics.stops.budget,false);
+  assert.equal(value.diagnostics.trace.counterCalls,counts[3]);assert.ok(counts[3]<=1226,`actual counter calls: ${counts[3]}`);
+});
+
+
+for(const failure of ['counter','termination'])test(`Fix2 assembly publication gate is released after ${failure}`,async t=>{
+  const s=await setup(t),m=await prepared(s),r=s.configure(false),counterBarrier=new SharedArrayBuffer(16),barrier=new Int32Array(counterBarrier);
+  Object.assign(r.options.host.configuration,{counterBarrier,counterThrow:failure==='counter'});
+  const reader=await openContextProductReader(r.options);s.f.workspace.defer(()=>reader.close());
+  const db=sidecar(s),before=db.prepare('SELECT pointer FROM vector_publications ORDER BY projection').all();
+  if(failure==='counter')assert.deepEqual(await reader.contextRead({...query,budget:{maxTokens:4000,maxItems:24}},r.credential),bare('token_count_unavailable'));
+  else {
+    barrier[0]=1;s.f.workspace.defer(()=>release(barrier,2));
+    const pending=reader.contextRead({...query,budget:{maxTokens:4000,maxItems:24}},r.credential);await rendezvous(barrier,1,pending);
+    await reader.close();assert.equal((await pending).ok,false);
+  }
+  assert.equal(Atomics.load(new BigInt64Array(semanticHandle(s.coordinator).ownerState),5),0n);
+  const value=ok(await m.h.refreshContextIndex(refreshInput(ns),m.credential));assert.equal(value.progress.embeddingAttempts,0);assert.equal(value.status,'complete');
+  assert.notDeepEqual(db.prepare('SELECT pointer FROM vector_publications ORDER BY projection').all(),before);
 });

@@ -50,7 +50,7 @@ function anchor(value) {
   return a;
 }
 export function openSemanticLedger({path,identity,authority,policy,observer}) {
-  if (!authority || typeof authority.load !== 'function' || typeof authority.compareAndSwap !== 'function') fail('invalid_input');
+  if (!authority || typeof authority.load !== 'function' || typeof authority.compareAndSwap !== 'function' || typeof authority.listOwners !== 'function') fail('invalid_input');
   const sqlite = policy ?? createProductSqlitePolicy({observer});
   const files = sqlite.files(path), physical = sqliteFileStat(path);
   const native = observer ? observer.invoke('open','connection',()=>new DatabaseSync(path)) : new DatabaseSync(path);
@@ -91,8 +91,16 @@ export function openSemanticLedger({path,identity,authority,policy,observer}) {
     return {anchor:a,...row};
   }
   async function authenticateAll() {
-    const owners=db.prepare('SELECT owner_id FROM semantic_owners ORDER BY owner_id').all(),rows=[];
-    for(const {owner_id} of owners)rows.push(await authenticate(owner_id));
+    // Inventory is independently durable host authority, enrolled before a
+    // ledger row can exist. Discovering it from this file would bless a
+    // same-inode snapshot that silently drops another owner's exposure.
+    let owners;
+    try {owners=await authority.listOwners({...identity});} catch {unavailable();}
+    if(!Array.isArray(owners)||!owners.length||owners.some(id=>typeof id!=='string'||!id.length)||new Set(owners).size!==owners.length)unavailable();
+    owners=[...owners].sort((a,b)=>Buffer.compare(Buffer.from(a),Buffer.from(b)));
+    const rows=[];
+    for(const ownerId of owners)rows.push(await authenticate(ownerId));
+    checkAll(rows);
     return rows;
   }
   function checkAll(rows) {
