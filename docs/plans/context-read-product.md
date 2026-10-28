@@ -1655,3 +1655,151 @@ A synchronous observer cannot be sampled across the Worker boundary without coor
 - Rows P2e-01 to P2e-22 are otherwise unchanged. Where a row names local selection or child runtimes on the product profile, the required observable for this revision is the corresponding refusal above: zero effects for a declared local selection, or the post-factory boundary for a runtime mismatch.
 
 Everything else in this delta is unchanged. This revision edits no frozen section, and it does not change any earlier P2e text in place.
+
+## P2-product-v4 revision 2: production-equivalent isolated host (delta, 2026-10-28)
+
+Status: **proposed additive measurement revision**, based on `be5698fa65ec9ba032ab25a0b99fc8a5ad7cb71d` and revising only the `production-launch-v4` platform profile of the P2-product-v4 delta above. The frozen API/profile remains `context-read-product-v1.1`. No implementation, measurement or acceptance is claimed.
+
+**Owner decision (2026-10-28).** The production-launch run executes in an **isolated, production-equivalent environment** provisioned by the product on its production hosting provider, not inside the live production service. A **post-enablement canary** observes real production reads after the product enables context reads on each surface.
+
+**Reason.** The production column needs an exclusive quiet reservation of 7 h 30 min (V4.2). Inside the live service, real users would load the same host during the run. That breaks the quiet-host condition every timing population assumes. It would also expose users to the run's continuous synthetic writers and maintenance load. An isolated environment with the same configuration measures the same host class without either problem. The trade-off is that the run then cannot observe co-located real-user load. R2.3 and R2.4 state that boundary and how it is partly covered.
+
+### R2.1 Production-equivalent isolated host
+
+A host is **production-equivalent isolated** only when every item below holds for the whole reservation. The R2.2 attestations must prove the first group, and the run owner must attest the second.
+
+Equal to the production service that will serve the reads:
+- the same hosting provider and region;
+- the same plan or instance class, vCPU count, RAM limit and CPU model as reported inside the service;
+- the same volume class, filesystem (`ext4`, non-WSL), mount options and block size;
+- the same OS image or release and kernel release, as reported inside the service;
+- the same build pipeline: builder identity and version, and the same build configuration;
+- the same pinned Node patch (the deployed Node 24 patch; `v24.22.1` at the time of writing) and `node:sqlite` SQLite version;
+- the same engine commit and product adapter/profile commit;
+- the same process settings that affect the engine: `NODE_OPTIONS`, `UV_THREADPOOL_SIZE` and the process umask;
+- directory mode **0700** and canonical/sidecar/companion file mode **0600**, as §7 requires.
+
+Isolation, for the isolated environment only:
+- **no user traffic**: no public ingress, domain or credential routes user requests to it;
+- **no co-tenant services**: no other service, job or replica shares its instance or volume, and no scheduled work runs except the registered pump and writers;
+- its volume holds only the run's synthetic snapshots, registration, reports and journals.
+
+Noise from the provider's shared hardware cannot be controlled or attested. It is disclosed with the result, not excluded.
+
+### R2.2 Recorded attestations
+
+The run owner captures two attestation records with the same procedure, from inside each running service:
+- **production**: within 24 hours before the reservation starts, and again after the run ends;
+- **isolated**: immediately before the reservation starts.
+
+Each record is a closed JSON object with exactly the R2.1 equality fields plus these **identity fields**: service or environment identifier, instance identifier, volume identifier, hostname, `capturedAt` and `capturedBy`.
+
+Equivalence is decided mechanically:
+1. Remove the identity fields from each record.
+2. Serialise what remains as canonical JSON (sorted keys, mount options as a sorted list).
+3. Compare the bytes.
+
+The pre-run production record and the isolated record must be **byte-identical after step 2**. Any other difference, or any equality field that is missing or unknown, prevents registration.
+
+The registration records:
+- all three records and their SHA-256 digests;
+- the comparison result for each pair: pre-run production against isolated, and pre-run against post-run production.
+
+The post-run production record must equal the pre-run one apart from identity fields. If production changed during the run, for example through a new Node patch, builder version or plan, the result describes a configuration that is no longer deployed. Launch evidence is then **inconclusive** until a new run is made against the new configuration.
+
+The product enables context reads only on a production deployment that still matches the attested configuration.
+
+### R2.3 Claim boundary
+
+A complete pass of `production-launch-v4` revision 2 is production launch evidence **for the attested production-equivalent host configuration**. Within that boundary it carries the same claims as the V4.2 production row: the same registered populations, the same compact-only R7 mapping, and the same unclaimed full/snapshot mixed-pair latency.
+
+It does **not** cover:
+- behaviour under co-located real-user load on the production service;
+- noise from shared provider hardware beyond what occurred during the run;
+- owner corpora larger than the registered 3,336-Memory population;
+- any configuration that differs from the attestation.
+
+R2.4's canary observes part of the first point after enablement, report-only. A clean canary does not widen this claim boundary.
+
+### R2.4 Post-enablement canary
+
+The product registers the canary **before** it enables context reads on the first production surface. The registration is hashed and kept with the run's results. It contains:
+- the ordered list of surfaces;
+- each surface's request window. Today that is 2,000 ms for the short surface and 5,000 ms for the others; the registration uses the value actually deployed.
+- the telemetry sources;
+- the window rule below.
+
+**Window.** For each surface, the window starts when context reads are enabled on it. It ends when **both** of these hold:
+- at least 24 hours have passed;
+- at least 100 normal index-dependent attempts per enabled method have been observed on that surface.
+
+The product registers a maximum duration. If the count is still short at that maximum, the surface's canary is **inconclusive**, and rollout pauses as for a breach.
+
+**Observations**, per surface and per method (`findCandidates`, `fetchCandidateEvidence`, `contextRead`), for real production reads:
+- successful latency: p50, p95 (nearest rank) and maximum, measured over the same public interval the product's adapter times;
+- public `read_timeout` and cancellation counts;
+- public `storage_busy` counts, plus native busy where the product records it;
+- not-ready outcomes, as defined in §10.4;
+- capture and review write timeouts or deadline overruns that overlap a context read;
+- the host main-loop maximum, if the product instruments it. If it does not, the report says "not instrumented".
+
+**Alerts.** These reuse §10.3 and §10.4 as **report-only alert thresholds**. They are not gates and do not change those sections.
+- Successful p95 or maximum above the §10.3 fresh main/cold lifecycle numbers for that method:
+  - use the 1,112 column for owners with at most 1,112 Memories, and the 3,336 column otherwise;
+  - report owners above 3,336 Memories separately, outside the qualified population, and alert them on the 3,336 numbers.
+- Any public `read_timeout`, alerted on its own whatever the latency figures show. A timed-out read has no successful latency, so the latency alerts cannot catch it.
+- Any public `storage_busy` on a WAL database.
+- On DELETE, report all busy outcomes. Alert on any capture or review timeout or deadline overrun that overlaps a context read.
+- A not-ready fraction above 1% (§10.4).
+- A host main-loop maximum above 100 ms, where instrumented.
+
+**Breach.** Any alert, or an inconclusive window:
+- pauses rollout to the next surface;
+- is reported to the owner with the canary report.
+
+The surface that is already enabled stays as it is unless the owner decides to switch it off with the product's off switch. Rollout resumes only on a recorded owner decision. Alert thresholds are never relaxed to resume.
+
+### R2.5 Supersession and unchanged text
+
+This revision supersedes exactly the following, and only for the production launch profile:
+
+| Superseded text | Replacement |
+| --- | --- |
+| §7 "**Must qualify:** Linux ext4 on the production volume" | Linux ext4 on a production-equivalent isolated host meeting R2.1, with the R2.2 attestations. The rest of §7 is unchanged: 0700/0600, WSL2/APFS as separate should-qualify reports, network filesystems out of scope, production remains DELETE. |
+| §10.1 "production Linux ext4 is launch-required" | Production-equivalent isolated Linux ext4 (R2.1) is launch-required. |
+| V4.2 `production-launch-v4` "Required environment" cell, "The product's production-class **Linux ext4 production volume**, non-WSL host" | A production-equivalent isolated host (R2.1) with the R2.2 attestations, plus the rest of that cell unchanged: exact deployed Node 24 patch, 0700/0600, the production column, a 7 h 30 min reservation. |
+| V4.2 "Before registration, the product supplies: … the actual production volume/mount and ext4 attestation" | The three R2.2 attestation records, their digests and comparison results, plus the R2.1 isolation attestation. |
+| V4.2 `production-launch-v4` claims cell | The same claims, bounded by R2.3. |
+| Appendix V4-A `profiles.production.requiredRole` | See the encoding below. |
+
+**Encoding.** The production profile's protocol definition becomes the Revision 1 Appendix V4-A definition with two changes:
+- `revision` is set to `2`;
+- `profiles.production` is replaced by:
+
+```json
+{"id": "production-launch-v4", "reservationSeconds": 27000, "requiredRole": "production-equivalent isolated Linux ext4", "runtime": "exact deployed Node 24 patch", "attestations": ["production-pre", "isolated", "production-post"], "claimBoundary": "attested production-equivalent host; excludes co-located real-user load"}
+```
+
+The **engine** profile's definition stays the Revision 1 definition, byte for byte. Engine registrations, templates and expected counts are therefore unaffected.
+
+A revision-2 production registration must:
+- use `platformRole` `production-equivalent-linux-ext4`;
+- set `volume.productionEquivalent: true`, `volume.filesystem: "ext4"` and `volume.nonWSL: true`;
+- carry the attestations as R2.2 describes.
+
+The harness rejects:
+- a revision-1 production definition;
+- a missing, extra or mismatched attestation;
+- the old `production-linux-ext4` role under revision 2.
+
+Running on the live production volume again would need a further revision.
+
+Implementing this encoding in the harness is a separate reviewed change. Until it merges, no revision-2 production registration can be validated.
+
+**Unchanged:**
+- every §10.3 and §10.4 number and gate meaning, and V4.1;
+- the 488-cell production column, its expected counts, populations, sample rules and the 7 h 30 min reservation;
+- the engine profile;
+- §§1–9 runtime requirements other than the §7 sentence above;
+- the §11 integration dependencies;
+- every earlier delta, including P2e.
