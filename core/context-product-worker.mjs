@@ -4,6 +4,7 @@ import { requestAuthority } from './context-product-authority.mjs';
 import { nativeObserver, sealNative } from './context-product-telemetry.mjs';
 import { PRODUCT_PROFILE, verifyRecords, boundedData, mono, issuance, deadline, operationRecord } from './context-product-control.mjs';
 import { productFailure } from './context-product-reader.mjs';
+import { createProductSqlitePolicy } from './context-product-sqlite.mjs';
 import { fail } from './validation.mjs';
 
 const { request, operation: opening, binding } = workerData;
@@ -17,6 +18,8 @@ const resourceOwner = Object.freeze({
   },
 });
 const observer = nativeObserver(workerData.frame);
+const sqlite = workerData.wal ? createProductSqlitePolicy({ observer }) : null;
+const startSqlite = op => sqlite?.start(Number(mono(op.operationCutoffMonoNs)) / 1e6);
 
 // Match the legacy native mapping without linking SQLite into bootstrap.
 const nativeFailure = error => productFailure(error?.code === 'ERR_SQLITE_ERROR'
@@ -37,13 +40,14 @@ function dispose() {
 function capabilities() {
   return { ok: true, value: { version: 'context-read-v1', profile: PRODUCT_PROFILE,
     methods: workerData.maintenance ? ['refreshContextIndex','getContextIndexStatus'] : ['findCandidates','contextRead','fetchCandidateEvidence','getContextIndexStatus'], types: facade.capabilities.types, intents: ['current', 'history'],
-    execution: 'worker', hardResponseCutoff: true, cancellation: true, readSetMaximum: 2,
+    execution: 'worker', hardResponseCutoff: true, cancellation: true, readSetMaximum: 32,
     namespaceSelection: 'recent-projects-v1', readyOnly: true, maintenance: Boolean(workerData.maintenance), assembly: index.assembly,
     channels: { lexical: { enabled: true }, semantic: { configured: false, enabled: false } },
     schemas: { memory: [18, ...Array.from({ length: 14 }, (_, i) => i + 20)], card: Array.from({ length: 11 }, (_, i) => i + 23) },
-    journals: ['DELETE'], sidecarJournals: ['DELETE'], wal: {available:false,reason:'deferred_to_p2d'}, unsupported: ['semantic', 'relations', 'moc', 'raw-search'] } };
+    ...(workerData.wal ? { journals: ['DELETE','WAL'], sidecarJournals: ['DELETE','WAL'], wal: {available:true} } : { journals: ['DELETE'], sidecarJournals: ['DELETE'], wal: {available:false,reason:'deferred_to_p2d'} }), unsupported: ['semantic', 'relations', 'moc', 'raw-search'] } };
 }
 try {
+  startSqlite(opening);
   verifyRecords(request, opening, request, operationRecord(request, mono(request.admittedMonoNs), workerData.deadlineMs, 1, opening.operationId)); within(opening);
   if (workerData.maintenance) serviceIssuance(binding,workerData.readSet,workerData.ownerCoverage);
   else issuance(binding, request, workerData.readSet, workerData.ownerCoverage);
@@ -64,9 +68,9 @@ try {
   const authorize = (method,payload,credential) => requestAuthority(host,binding,currentControl)(method,payload,credential);
   within(opening);
   const { openContextProductFacade } = await import('./context-read-facade.mjs');
-  facade = openContextProductFacade(workerData.path, { observer, authorize });
+  facade = openContextProductFacade(workerData.path, { observer, authorize, sqlite });
   const { openProductIndex } = await import('./context-product-index.mjs');
-  index = openProductIndex({path:workerData.path,facade,authorize,ownerCoverage:workerData.ownerCoverage,observer,maintenance:workerData.maintenance,counter:host.counter});
+  index = openProductIndex({path:workerData.path,facade,authorize,ownerCoverage:workerData.ownerCoverage,observer,sqlite,sidecarJournalMode:workerData.sidecarJournalMode,maintenance:workerData.maintenance,counter:host.counter});
   within(opening);
   // The opening telemetry remains unsealed until connection disposal.
   result(opening, { ok: true, value: null }, { fileIdentity: facade.fileIdentity });
@@ -92,6 +96,7 @@ parentPort.on('message', async message => {
       deadline(message.method === 'refreshContextIndex' ? message.input?.budget?.maxMs : message.input?.deadlineMs), opening.workerEpoch, operation.operationId));
     if (operation.workerEpoch !== opening.workerEpoch) fail('authority_required');
     currentControl = callRequest;
+    startSqlite(operation);
     within(operation);
     if (frame && (frame.operationId !== operation.operationId || frame.workerEpoch !== operation.workerEpoch)) fail('reader_failed');
     let response;

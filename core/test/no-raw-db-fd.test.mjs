@@ -135,9 +135,14 @@ function violations(path, source) {
 function audit(base, paths) {
   return paths.flatMap(path => violations(relative(base, path).replaceAll('\\', '/'), readFileSync(path, 'utf8')));
 }
+function evaluationPaths() {
+  return [...files(join(root, 'evaluation/context-read-p2e')),
+    ...readdirSync(join(root, 'tools/testing')).filter(name => /^p2e-.*\.mjs$/.test(name) && !name.endsWith('.test.mjs')).map(name => join(root, 'tools/testing', name))];
+}
 test('runtime raw filesystem access has an exact, justified allowlist', () => {
   const paths = ['core', 'adapters', 'packages/setup/lib', 'integrations', 'plugins']
     .flatMap(path => files(join(root, path)));
+  paths.push(...evaluationPaths());
   paths.push(join(root, 'evaluation/live/diagnostics.mjs')); // Shipped archive diagnostic utility.
   paths.push(join(root, 'tools/testing/measure-context-read-product.mjs'),
     join(root, 'tools/testing/summarize-context-read-product.mjs'));

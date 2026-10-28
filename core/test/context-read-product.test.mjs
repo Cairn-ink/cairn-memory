@@ -67,7 +67,7 @@ for (const version of [18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 3
   const capabilities = ok(await reader.getContextReadCapabilities());
   assert.ok(config.view[4] > 0);
   assert.equal(capabilities.profile, PRODUCT_PROFILE); assert.equal(capabilities.execution, 'worker');
-  assert.equal(capabilities.readSetMaximum, 2); assert.deepEqual(capabilities.methods, ['findCandidates','contextRead','fetchCandidateEvidence','getContextIndexStatus']);
+  assert.equal(capabilities.readSetMaximum, 32); assert.deepEqual(capabilities.methods, ['findCandidates','contextRead','fetchCandidateEvidence','getContextIndexStatus']);
   assert.deepEqual(capabilities.types, version >= 23 ? ['memory', 'card'] : ['memory']);
   const fetched = ok(await reader.fetchCandidateEvidence(fetchInput(memory), config.credential));
   assert.equal(fetched.items[0].content, canonical); assert.equal(config.view[1], 2);

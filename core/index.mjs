@@ -82,3 +82,5 @@ export { roleTaskMeteredText, roleTaskToolResponse } from './role-context-wire.m
 
 // U5c-3: dependency authoring remains under explicit Card confirmation authority.
 export { CARD_CURRENT_VERSION, CARD_CURRENT_METHODS } from './card-current-input.mjs';
+
+export { selectContextProductNamespaces } from './context-product-selection.mjs';

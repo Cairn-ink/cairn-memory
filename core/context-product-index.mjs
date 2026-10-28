@@ -18,25 +18,28 @@ const channels = ready => ({lexical:{state:ready?'ready':'unavailable',causes:re
 const trace = semantic => ({requested:semantic?'hybrid':'lexical',effective:'lexical',family:'local',preset:'rrf-k60-d12',embedder:null,
   tokenizer:TOKENIZER_VERSION,representation:REPRESENTATION_VERSION,
   timings:{maintenanceMs:0,lexicalMs:0,semanticPreflightMs:0,embeddingMs:0,fusionMs:0}});
-export function openProductIndex({ path, facade, authorize, ownerCoverage, observer, maintenance, counter }) {
+export function openProductIndex({ path, facade, authorize, ownerCoverage, observer, sqlite, sidecarJournalMode, maintenance, counter }) {
   const { db,read,evidence,bind,encode,identity,features,canonicalFence } = facade.port;
-  const storage = productSidecar({path,db,identity,features,observer,writable:maintenance}), rankings=new Map();
+  const storage = productSidecar({path,db,identity,features,observer,sqlite,sidecarJournalMode,writable:maintenance}), rankings=new Map();
   const types=facade.capabilities.types;
+  // Selection provenance is request coverage, never part of lexical identity.
+  const selectionTrace = semantic => ({ ...trace(semantic), ...(ownerCoverage.omittedNamespaces > 0
+    ? { namespaceSelection: { ...ownerCoverage } } : {}) });
   function validate(method,original) {
     if (method==='getContextIndexStatus') {
       const payload=ownData(original,['readSet','types','intent','deadlineMs']); deadline(payload.deadlineMs);
-      const {input}=contextInput('findCandidates',{readSet:payload.readSet,types:payload.types,intent:payload.intent,query:'status'},types);
+      const {input}=contextInput('findCandidates',{readSet:payload.readSet,types:payload.types,intent:payload.intent,query:'status'},types,undefined,PRODUCT_PROFILE);
       return {payload:original,input};
     }
     if (method==='refreshContextIndex') {
       if (!maintenance) fail('invalid_input');
       const {mode,...rest}=ownData(original,['readSet','types','intent','mode','budget']);
       if (!['lexical','embeddings'].includes(mode)) fail('invalid_input');
-      const parsed=contextInput(method,rest,types); return {payload:original,input:{...parsed.input,mode}};
+      const parsed=contextInput(method,rest,types,undefined,PRODUCT_PROFILE); return {payload:original,input:{...parsed.input,mode}};
     }
     // The flag cannot enable a provider. The default product policy always
     // reports disabled semantics and preserves the fully validated lexical list.
-    return contextInput(method,original,types);
+    return contextInput(method,original,types,undefined,PRODUCT_PROFILE);
   }
   function coverage(dto) {
     const ready=dto.lexical.state==='ready';
@@ -46,7 +49,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       depths:{lexical:ready?24:0,semantic:0},omitted:{lexical:null,semantic:null,horizon:null},stops:{deadline:false,budget:false}};
   }
   function unavailable(access,dto,assembly=false,semantic=false) {
-    const details={channels:channels(false),coverage:coverage(dto),trace:trace(semantic)};
+    const details={channels:channels(false),coverage:coverage(dto),trace:selectionTrace(semantic)};
     return access.envelope(()=>({ok:false,error:{code:'index_unavailable',retryable:false,details:assembly?{candidates:details}:details}}));
   }
   function final(p,access,publication,work,code='index_unavailable') {
@@ -70,11 +73,11 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
   function candidates(p,access) {
     const observed=read(()=>storage.observe(p,access.accessGenerations));
     if (observed.dto.lexical.state!=='ready') return {observed};
-    const detail=trace(p.semantic),started=performance.now();
+    const detail=selectionTrace(p.semantic),started=performance.now();
     const ranked=storage.lexical(p,observed.publication,p.query);
     detail.timings.lexicalMs=performance.now()-started;
     const fusionStarted=performance.now();
-    const fused=fuseCandidates(ranked.rows,[],{});
+    const fused=fuseCandidates(ranked.rows,[],{preset:detail.preset,limit:24,semanticState:'disabled',coverageComplete:false});
     detail.timings.fusionMs=performance.now()-fusionStarted;
     const covered=coverage(observed.dto);
     covered.omitted={lexical:Math.max(0,ranked.matched-24),semantic:null,horizon:Math.max(0,fused.unionSize-24)};

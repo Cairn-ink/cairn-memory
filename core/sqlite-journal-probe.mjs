@@ -110,6 +110,36 @@ const create = `
   let fd, dir, temporary, lifecycle, published = false;
   const replacing = process.argv[2] === 'replace-product-cache';
   const init = process.argv[4] ? JSON.parse(process.argv[4]) : null;
+  const observed = process.argv[5] === 'observe-native';
+  let value, calls=0;
+  const call = (database, stage, statement, work) => {
+    if (!observed) return work();
+    const sequence=++calls;
+    console.log(JSON.stringify({begin:{sequence,database,stage,statement}}));
+    try {
+      const result=work();console.log(JSON.stringify({outcome:{sequence,database,stage,statement,ok:true}}));return result;
+    } catch(error) {
+      console.log(JSON.stringify({outcome:{sequence,database,stage,statement,ok:false,extendedCode:Number.isInteger(error.errcode)?error.errcode:0}}));
+      throw error;
+    }
+  };
+  const database = async (path, options = {}, role) => {
+    const {DatabaseSync}=await import('node:sqlite');
+    const native=call(role,'open','connection',()=>new DatabaseSync(path,options));
+    return {
+      exec(sql) {
+        const verb=sql.trim().split(/[ ;]/)[0].toLowerCase();
+        const stage=['begin','commit','rollback'].includes(verb)?verb:'configure';
+        return call(role,stage,sql.startsWith('PRAGMA journal_mode=')?'journal_mode':'transaction',()=>native.exec(sql));
+      },
+      prepare(sql) {
+        const statement=sql.startsWith('PRAGMA application_id')?'application_id':sql.startsWith('PRAGMA user_version')?'user_version':sql.includes('sqlite_schema')?'schema_metadata':'context_metadata';
+        const prepared=call(role,'prepare',statement,()=>native.prepare(sql));
+        return Object.fromEntries(['get','all','run'].map(method=>[method,(...args)=>call(role,'execute',statement,()=>prepared[method](...args))]));
+      },
+      close(){return call(role,'close','connection',()=>native.close());},
+    };
+  };
   try {
     if (replacing || init) {
       if (!target.endsWith('.context-read-product-v1.1.sqlite')) throw Error('unsafe_cache');
@@ -118,8 +148,7 @@ const create = `
       catch (error) { if (error.code !== 'EEXIST') throw error; }
       const lockStat = lstatSync(lock);
       if (!lockStat.isFile() || lockStat.isSymbolicLink() || (lockStat.mode & 0o777) !== 0o600) throw Error('unsafe_lock');
-      const { DatabaseSync } = await import('node:sqlite');
-      lifecycle = new DatabaseSync(lock);
+      lifecycle = await database(lock,undefined,'lifecycle');
       lifecycle.exec('PRAGMA busy_timeout=0; BEGIN EXCLUSIVE');
       if (replacing) {
         const current = lstatSync(target, { bigint: true });
@@ -138,7 +167,7 @@ const create = `
           const uri=pathToFileURL(target);uri.searchParams.set('mode','ro');uri.searchParams.set('nolock','1');
           let incumbent, damaged=false;
           try {
-            incumbent=new DatabaseSync(uri.href,{readOnly:true});
+            incumbent=await database(uri.href,{readOnly:true},'incumbent');
             const format=init.attestation;
             const rows=incumbent.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name").all();
             damaged=incumbent.prepare('PRAGMA application_id').get().application_id!==format.applicationId ||
@@ -173,13 +202,18 @@ const create = `
     if (init) {
       // Repair publishes a complete format, so another selection cannot mistake
       // an intermediate empty successor for a damaged cache and replace it.
-      const { DatabaseSync } = await import('node:sqlite');
-      const db = new DatabaseSync(temporary);
+      const db = await database(temporary,undefined,'initialize');
+      let initializationError;
       try {
+        if (init.journalMode !== undefined) {
+          if (!['DELETE','WAL'].includes(init.journalMode)) throw Error('unsafe_journal_mode');
+          db.exec('PRAGMA journal_mode=' + init.journalMode);
+        }
         db.exec('BEGIN IMMEDIATE;' + init.sql);
         db.prepare('INSERT INTO product_metadata VALUES(1,?,?,?,?)').run(init.storeId,init.profile,init.incarnation,replacing ? 'rebuild' : 'initial');
         db.exec('COMMIT');
-      } finally { db.close(); }
+      } catch(error) {initializationError=error;throw error;}
+      finally {try {db.close();}catch(error){if(!initializationError)throw error;}}
     }
     fsyncSync(fd);
     closeSync(fd); fd = undefined;
@@ -208,25 +242,41 @@ const create = `
       }
       if (dir !== undefined) { closeSync(dir); dir = undefined; }
     }
-    console.log(JSON.stringify({ dev, ino }));
-  } catch (error) { console.log(JSON.stringify({ error: error.code ?? 'EIO', errcode: Number.isInteger(error.errcode) ? error.errcode : null, published })); }
+    value={dev,ino};
+  } catch (error) { value={error:error.code??'EIO',errcode:Number.isInteger(error.errcode)?error.errcode:null,published}; }
   finally {
     if (fd !== undefined) closeSync(fd);
     if (dir !== undefined) closeSync(dir);
     if (temporary !== undefined) { try { unlinkSync(temporary); } catch {} }
-    lifecycle?.close();
+    try { lifecycle?.close(); } catch(error) { value=value?.error?value:{error:error.code??'EIO',errcode:Number.isInteger(error.errcode)?error.errcode:null,published}; }
   }
+  console.log(JSON.stringify(observed?{value,calls}:value));
 `;
-export function createExclusiveSqliteFile(path, productReplacement, productInitialization) {
+export function createExclusiveSqliteFile(path, productReplacement, productInitialization, {observe} = {}) {
+  if(observe)return observe(()=>runCreation(path,productReplacement,productInitialization,true));
+  return runCreation(path,productReplacement,productInitialization,false);
+}
+function runCreation(path, productReplacement, productInitialization, structured) {
   if (productReplacement) {
     const current = sqliteFileStat(path);
     if (!path.endsWith('.context-read-product-v1.1.sqlite') || !current.isFile() || current.isSymbolicLink() ||
         (current.mode & 0o777n) !== 0o600n || String(current.dev)+':'+String(current.ino) !== productReplacement) throw Error('unsafe_cache');
   }
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', create, path,
-    ...(productReplacement || productInitialization ? [productReplacement ? 'replace-product-cache' : 'initialize-product-cache', productReplacement ?? '', ...(productInitialization ? [JSON.stringify(productInitialization)] : [])] : [])], {
-    encoding: 'utf8', timeout: 5000, maxBuffer: 4096, env: {},
+    ...(productReplacement || productInitialization ? [productReplacement ? 'replace-product-cache' : 'initialize-product-cache', productReplacement ?? '', ...(productInitialization ? [JSON.stringify(productInitialization), ...(structured?['observe-native']:[])] : [])] : [])], {
+    encoding: 'utf8', timeout: 5000, maxBuffer: structured ? 65536 : 4096, env: {},
   });
+  if(structured){
+    const events=[];let value,calls,complete=!result.error && result.status===0 && !result.signal;
+    try {
+      for(const line of result.stdout.trim().split('\n')){
+        const event=JSON.parse(line);
+        if(event.value){if(value)complete=false;value=event.value;calls=event.calls;}
+        else {if(value)complete=false;events.push(event);}
+      }
+    }catch{complete=false;}
+    return {value,calls,events,complete:complete && Boolean(value)};
+  }
   if (result.error || result.status !== 0 || result.signal) throw new Error('sqlite_file_creation_failed');
   const value = JSON.parse(result.stdout);
   if (value.error) throw Object.assign(new Error('sqlite_file_creation_failed'), { code: Number.isInteger(value.errcode) ? 'ERR_SQLITE_ERROR' : value.error, ...(Number.isInteger(value.errcode) ? {errcode:value.errcode} : {}), published: value.published });

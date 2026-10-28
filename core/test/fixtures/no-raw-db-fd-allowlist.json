@@ -1393,5 +1393,125 @@
     "path": "tools/testing/fixtures/context-product/io-child.mjs",
     "source": "const input=createReadStream(process.argv[3]+'.records.jsonl');",
     "reason": "SQLite-free IO child only: streams the leased harness journal after confirmed descendant exit to recover its durable numeric sequence; never reads SQLite files."
+  },
+  {
+    "path": "evaluation/context-read-p2e/cost.mjs",
+    "source": "import { mkdirSync } from 'node:fs'",
+    "reason": "Creates only the durable admission-state directory; allowance and reservation storage uses DatabaseSync, never raw database reads."
+  },
+  {
+    "path": "evaluation/context-read-p2e/fixtures.mjs",
+    "source": "import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'",
+    "reason": "Reads and authors frozen synthetic corpus and label JSON resources under the fixture root, never canonical database files."
+  },
+  {
+    "path": "evaluation/context-read-p2e/fixtures.mjs",
+    "source": "const fixture = JSON.parse(readFileSync(new URL('corpus-queries.json', ROOT)));",
+    "reason": "Reads and authors frozen synthetic corpus and label JSON resources under the fixture root, never canonical database files."
+  },
+  {
+    "path": "evaluation/context-read-p2e/fixtures.mjs",
+    "source": "const labels = JSON.parse(readFileSync(new URL('labels.json', ROOT)));",
+    "reason": "Reads and authors frozen synthetic corpus and label JSON resources under the fixture root, never canonical database files."
+  },
+  {
+    "path": "evaluation/context-read-p2e/fixtures.mjs",
+    "source": "writeFileSync(new URL('corpus-queries.json', ROOT), json(fixture));",
+    "reason": "Reads and authors frozen synthetic corpus and label JSON resources under the fixture root, never canonical database files."
+  },
+  {
+    "path": "evaluation/context-read-p2e/fixtures.mjs",
+    "source": "writeFileSync(new URL('labels.json', ROOT), json(labels));",
+    "reason": "Reads and authors frozen synthetic corpus and label JSON resources under the fixture root, never canonical database files."
+  },
+  {
+    "path": "evaluation/context-read-p2e/registration.mjs",
+    "source": "import { readFileSync, readdirSync } from 'node:fs'",
+    "reason": "Enumerates source modules and reads their bytes plus frozen fixture JSON to verify the complete sealed input manifest."
+  },
+  {
+    "path": "evaluation/context-read-p2e/registration.mjs",
+    "source": "const defaultRead = name => readFileSync(new URL(`../../${name}`, import.meta.url));",
+    "reason": "Enumerates source modules and reads their bytes plus frozen fixture JSON to verify the complete sealed input manifest."
+  },
+  {
+    "path": "evaluation/context-read-p2e/runner.mjs",
+    "source": "import { readFileSync, writeFileSync } from 'node:fs'",
+    "reason": "Reads registration, reviewed binding source, safety evidence and fixture JSON, and writes evaluation reports; canonical inventory uses SQLite."
+  },
+  {
+    "path": "evaluation/context-read-p2e/runner.mjs",
+    "source": "const registration = verifyRegistration(JSON.parse(readFileSync(options.registration ?? new URL('./registration.json', import.meta.url))));",
+    "reason": "Reads registration, reviewed binding source, safety evidence and fixture JSON, and writes evaluation reports; canonical inventory uses SQLite."
+  },
+  {
+    "path": "evaluation/context-read-p2e/runner.mjs",
+    "source": "const { fixture, labels } = loadFixtures(), inventory = JSON.parse(readFileSync(new URL('inventory.json', ROOT)));",
+    "reason": "Reads registration, reviewed binding source, safety evidence and fixture JSON, and writes evaluation reports; canonical inventory uses SQLite."
+  },
+  {
+    "path": "evaluation/context-read-p2e/runner.mjs",
+    "source": "const tokenTable = JSON.parse(readFileSync(new URL('tokens.json', ROOT)));",
+    "reason": "Reads registration, reviewed binding source, safety evidence and fixture JSON, and writes evaluation reports; canonical inventory uses SQLite."
+  },
+  {
+    "path": "evaluation/context-read-p2e/runner.mjs",
+    "source": "const safetyFixture = JSON.parse(readFileSync(new URL('safety.json', ROOT)));",
+    "reason": "Reads registration, reviewed binding source, safety evidence and fixture JSON, and writes evaluation reports; canonical inventory uses SQLite."
+  },
+  {
+    "path": "evaluation/context-read-p2e/runner.mjs",
+    "source": "const bindingBytes = readFileSync(options.binding);",
+    "reason": "Reads registration, reviewed binding source, safety evidence and fixture JSON, and writes evaluation reports; canonical inventory uses SQLite."
+  },
+  {
+    "path": "evaluation/context-read-p2e/runner.mjs",
+    "source": "const safetyBytes = readFileSync(options.safetyReport);",
+    "reason": "Reads registration, reviewed binding source, safety evidence and fixture JSON, and writes evaluation reports; canonical inventory uses SQLite."
+  },
+  {
+    "path": "evaluation/context-read-p2e/runner.mjs",
+    "source": "if (options?.report) writeFileSync(options.report, json(report));",
+    "reason": "Reads registration, reviewed binding source, safety evidence and fixture JSON, and writes evaluation reports; canonical inventory uses SQLite."
+  },
+  {
+    "path": "tools/testing/p2e-product.mjs",
+    "source": "import { mkdtempSync, rmSync } from 'node:fs'",
+    "reason": "Creates and removes supervised disposable test directories after closing readers and stores; never opens raw canonical database descriptors."
+  },
+  {
+    "path": "tools/testing/p2e-seal.mjs",
+    "source": "import { readFileSync, writeFileSync, readdirSync } from 'node:fs'",
+    "reason": "Offline authoring reads source and fixture bytes and writes registration/inventory JSON; no canonical database file access."
+  },
+  {
+    "path": "tools/testing/p2e-seal.mjs",
+    "source": "const registration = sealRegistration(JSON.parse(readFileSync(process.argv[3])));",
+    "reason": "Offline authoring reads source and fixture bytes and writes registration/inventory JSON; no canonical database file access."
+  },
+  {
+    "path": "tools/testing/p2e-seal.mjs",
+    "source": "writeFileSync(process.argv[5], json(registration), { flag: 'wx' });",
+    "reason": "Offline authoring reads source and fixture bytes and writes registration/inventory JSON; no canonical database file access."
+  },
+  {
+    "path": "tools/testing/p2e-seal.mjs",
+    "source": "writeFileSync(new URL('inventory.json', ROOT), json(inventory(fixture)));",
+    "reason": "Offline authoring reads source and fixture bytes and writes registration/inventory JSON; no canonical database file access."
+  },
+  {
+    "path": "tools/testing/p2e-seal.mjs",
+    "source": "writeFileSync(new URL('safety.json', ROOT), json(safetyFixtures()));",
+    "reason": "Offline authoring reads source and fixture bytes and writes registration/inventory JSON; no canonical database file access."
+  },
+  {
+    "path": "tools/testing/p2e-seal.mjs",
+    "source": "files: Object.fromEntries(files.map(name => [name, hash(readFileSync(new URL(name, root)))])) });",
+    "reason": "Offline authoring reads source and fixture bytes and writes registration/inventory JSON; no canonical database file access."
+  },
+  {
+    "path": "tools/testing/p2e-seal.mjs",
+    "source": "writeFileSync(new URL('evaluation/context-read-p2e/registration.json', root), json(registration));",
+    "reason": "Offline authoring reads source and fixture bytes and writes registration/inventory JSON; no canonical database file access."
   }
 ]

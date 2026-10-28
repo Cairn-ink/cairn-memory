@@ -49,15 +49,16 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
   return async function openContextProductReader(original, controls = {}) {
     // These samples precede even option reflection/validation.
     const admitted = now(), admissionUtc = utc();
-    const options = ownData(original, ['supervisor', 'path', 'version', 'profile', 'readSet', 'ownerCoverage', 'requestControl', 'host', 'diagnostics', 'deadlineMs', ...(maintenance ? ['sidecarJournalMode'] : [])]);
+    const options = ownData(original, ['supervisor', 'path', 'version', 'profile', 'readSet', 'ownerCoverage', 'requestControl', 'host', 'diagnostics', 'deadlineMs', 'wal', ...(maintenance ? ['sidecarJournalMode'] : [])]);
     const { signal } = ownData(controls, ['signal']);
     signalAborted(signal);
     if (options.version !== 'context-read-v1' || options.profile !== PRODUCT_PROFILE ||
-        options.diagnostics !== undefined && typeof options.diagnostics !== 'boolean') fail('invalid_input');
+        options.diagnostics !== undefined && typeof options.diagnostics !== 'boolean' ||
+        options.wal !== undefined && typeof options.wal !== 'boolean') fail('invalid_input');
     if (typeof options.path !== 'string' || !isAbsolute(options.path) || options.path.includes('\0')) fail('invalid_path');
     const owner = supervisorOwner(options.supervisor), { registry } = owner;
     let readSet;
-    try { readSet = contextReadSet(boundedData(options.readSet)); } catch { fail('invalid_read_set'); }
+    try { readSet = contextReadSet(options.readSet, PRODUCT_PROFILE); } catch { fail('invalid_read_set'); }
     const ownerCoverage = coverage(options.ownerCoverage, readSet);
     const host = ownData(options.host, ['moduleUrl', 'configuration']);
     try {
@@ -67,7 +68,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       host.moduleUrl = pathToFileURL(resolve(modulePath)).href;
     } catch { fail('invalid_input'); }
     const configuration = hostConfiguration(host.configuration);
-    if (maintenance && options.sidecarJournalMode !== 'DELETE') {
+    if (maintenance && options.sidecarJournalMode !== 'DELETE' && !(options.wal === true && options.sidecarJournalMode === 'WAL')) {
       if (options.sidecarJournalMode === 'WAL') fail('index_unavailable');
       fail('invalid_input');
     }
@@ -84,6 +85,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     const frame = options.diagnostics ? nativeTelemetry(first.operationId, 1) : null;
     const resources = new SharedArrayBuffer(16);
     const openingData = { path: options.path, readSet, ownerCoverage, request, binding: issuedBinding, maintenance,
+      wal: options.wal === true, ...(maintenance ? { sidecarJournalMode: options.sidecarJournalMode } : {}),
       host: { moduleUrl: host.moduleUrl, configuration }, operation: first, frame, resources, deadlineMs: openDeadline };
     hostConfiguration(openingData);
     const reservation = configuration.requestReservation;
@@ -159,9 +161,16 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         signalAborted(signal);
         if (!opening) {
           if (method !== 'getContextReadCapabilities' && (credential === undefined || credential === null)) fail('authority_required');
+          let selected;
+          try {
+            if (types.isProxy(payload)) fail('invalid_read_set');
+            const descriptor = Object.getOwnPropertyDescriptor(payload, 'readSet');
+            if (!descriptor || !Object.hasOwn(descriptor, 'value')) fail('invalid_read_set');
+            selected = contextReadSet(descriptor.value, PRODUCT_PROFILE);
+          } catch { fail('invalid_read_set'); }
           input = boundedData(payload); token = method === 'getContextReadCapabilities' ? null : boundedData(credential, 16384);
           if (method !== 'getContextReadCapabilities' && credentialDigest(token) !== issuedBinding.credentialDigest) fail('authority_required');
-          if (JSON.stringify(contextReadSet(input.readSet)) !== JSON.stringify(readSet)) fail('invalid_read_set');
+          if (JSON.stringify(selected) !== JSON.stringify(readSet)) fail('invalid_read_set');
           duration = deadline(method === 'refreshContextIndex' ? input.budget?.maxMs : input.deadlineMs);
         } else duration = openDeadline;
       } catch (error) {
