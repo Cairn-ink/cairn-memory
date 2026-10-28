@@ -10,6 +10,7 @@ import { fail } from './validation.mjs';
 
 const { request, operation: opening, binding } = workerData;
 let facade, index, host, active = false, disposing, currentControl = request;
+let semantic,currentOperation=opening;
 const owned = [], resources = new Int32Array(workerData.resources);
 const resourceOwner = Object.freeze({
   register(kind, close) {
@@ -31,7 +32,7 @@ function result(operation, result, extra = {}) { parentPort.postMessage({ operat
 function dispose() {
   return disposing ??= (async () => {
     let failed = false;
-    try { index?.close(); facade?.close(); } catch { failed = true; }
+    try { semantic?.close(); index?.close(); facade?.close(); } catch { failed = true; }
     for (const resource of owned.reverse()) {
       try { await resource.close(); Atomics.add(resources, resource.at + 1, 1); } catch { failed = true; }
     }
@@ -67,11 +68,15 @@ try {
   host = await module.createContextReadHost(Object.freeze({ ...workerData.host.configuration, resourceOwner }));
   if (typeof host?.close === 'function') resourceOwner.register('lease', () => host.close());
   const authorize = (method,payload,credential) => requestAuthority(host,binding,currentControl)(method,payload,credential);
+  if(workerData.semanticConfig) {
+    const {semanticClient}=await import('./context-semantic-client.mjs');
+    semantic=semanticClient(workerData.semanticPort,workerData.semanticConfig,()=>currentOperation);
+  }
   within(opening);
   const { openContextProductFacade } = await import('./context-read-facade.mjs');
   facade = openContextProductFacade(workerData.path, { observer, authorize, sqlite });
   const { openProductIndex } = await import('./context-product-index.mjs');
-  index = openProductIndex({path:workerData.path,facade,authorize,ownerCoverage:workerData.ownerCoverage,observer,sqlite,sidecarJournalMode:workerData.sidecarJournalMode,maintenance:workerData.maintenance,counter:host.counter});
+  index = openProductIndex({path:workerData.path,facade,authorize,ownerCoverage:workerData.ownerCoverage,observer,sqlite,sidecarJournalMode:workerData.sidecarJournalMode,maintenance:workerData.maintenance,counter:host.counter,semantic,operation:()=>currentOperation});
   within(opening);
   // The opening telemetry remains unsealed until connection disposal.
   result(opening, { ok: true, value: null }, { fileIdentity: facade.fileIdentity });
@@ -97,11 +102,22 @@ parentPort.on('message', async message => {
       deadline(message.method === 'refreshContextIndex' ? message.input?.budget?.maxMs : message.input?.deadlineMs), opening.workerEpoch, operation.operationId));
     if (operation.workerEpoch !== opening.workerEpoch) fail('authority_required');
     currentControl = callRequest;
+    currentOperation=operation;
     startSqlite(operation);
     within(operation);
     if (frame && (frame.operationId !== operation.operationId || frame.workerEpoch !== operation.workerEpoch)) fail('reader_failed');
     let response;
-    if (message.method === 'getContextReadCapabilities') response = capabilities();
+    if (message.method === 'getContextReadCapabilities') {
+      response = capabilities();
+      if(semantic) {
+        const access=requestAuthority(host,binding,currentControl)(message.method,message.input,message.credential),snapshot=await semantic.snapshot();
+        const value=response.value;
+        value.channels.semantic={configured:snapshot.identity!==null,enabled:snapshot.policy?.semantic??null};
+        value.unsupported=value.unsupported.filter(x=>x!=='semantic');
+        value.semanticExtension={version:'context-read-product-p2e-v1',ownerVectorPurge:true,queryEmbeddingMaximum:1,completeCoverageRequired:true,durableOwnerLedger:true,refreshBudgetDimensions:['maxItems','maxMs','maxUsd']};
+        response=access.envelope(()=>response);
+      }
+    }
     else if (message.method === 'fetchCandidateEvidence') {
       if (workerData.maintenance) fail('authority_required');
       const payload = boundedData(message.input), { deadlineMs, ...fetchInput } = payload;
@@ -109,7 +125,7 @@ parentPort.on('message', async message => {
       response = facade.fetchCandidateEvidence(fetchInput, message.credential, payload);
     } else {
       if (workerData.maintenance && !['getContextIndexStatus','refreshContextIndex'].includes(message.method)) fail('authority_required');
-      response = index.run(message.method, boundedData(message.input), message.credential,
+      response = await index.run(message.method, boundedData(message.input), message.credential,
         performance.now() + Number(mono(operation.operationCutoffMonoNs)-process.hrtime.bigint())/1e6);
     }
     within(operation); sealNative(frame); result(operation, response);

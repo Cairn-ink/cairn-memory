@@ -14,8 +14,9 @@ import { canonicalJson, digest, projectionDigest, signedRecord, verifiedRecord }
 import { maintenanceQuantum } from './context-product-quantum.mjs';
 import { ManifestHash } from './context-product-manifest.mjs';
 import { fail } from './validation.mjs';
+import { VECTOR_DDL } from './context-product-vectors.mjs';
 
-export const PRODUCT_SIDECAR_FORMAT = 2;
+export const PRODUCT_SIDECAR_FORMAT = 3;
 export const PRODUCT_SIDECAR_SUFFIX = '.context-read-product-v1.1.sqlite';
 const APPLICATION_ID = 0x43525032;
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
@@ -60,7 +61,7 @@ CREATE TABLE statistics(generation INTEGER NOT NULL,term_id INTEGER NOT NULL,ter
 function schema(db) {
   return db.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name").all();
 }
-const expectedSchema = ddl.trim().split(';').filter(sql => sql.trim()).map(sql => {
+const expectedSchema = (ddl+VECTOR_DDL).trim().split(';').filter(sql => sql.trim()).map(sql => {
   sql=sql.trim(); const match=/^CREATE (TABLE|INDEX) (\w+)/.exec(sql);
   return {type:match[1].toLowerCase(),name:match[2],tbl_name:match[1]==='TABLE'?match[2]:/ ON (\w+)/.exec(sql)[1],sql};
 }).sort((a,b) => Buffer.compare(Buffer.from(a.type),Buffer.from(b.type)) || Buffer.compare(Buffer.from(a.name),Buffer.from(b.name)));
@@ -219,7 +220,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         sideFormat=candidate.prepare('PRAGMA user_version').get().user_version;
         admittedMetadata=candidate.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
         if(!admittedMetadata || admittedMetadata.store_id!==identity.storeId)unavailable('wrong_store');
-        if (sideFormat === 1) unavailable('incompatible');
+        if (sideFormat > 0 && sideFormat !== PRODUCT_SIDECAR_FORMAT) unavailable('incompatible');
         attest(candidate);
         if(admittedMetadata.profile!==PRODUCT_PROFILE)unavailable('incompatible');
         if(wantsWrite && (candidate.prepare('PRAGMA quick_check').get().quick_check!=='ok' || candidate.prepare('PRAGMA foreign_key_check').get()))unavailable('corrupt');
@@ -228,7 +229,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     side=candidate;sideWritable=wantsWrite;sideFiles=files;openedIdentity=admittedIdentity;metadata=admittedMetadata;
     return true;
   }
-  const initialization=()=>({autoVacuum:'INCREMENTAL',...(sqlite ? {journalMode:sidecarJournalMode} : {}),sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=${PRODUCT_SIDECAR_FORMAT}; ${ddl}`,
+  const initialization=()=>({autoVacuum:'INCREMENTAL',...(sqlite ? {journalMode:sidecarJournalMode} : {}),sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=${PRODUCT_SIDECAR_FORMAT}; ${ddl} ${VECTOR_DDL}`,
     storeId:identity.storeId,profile:PRODUCT_PROFILE,incarnation:randomUUID(),
     attestation:{applicationId:APPLICATION_ID,userVersion:PRODUCT_SIDECAR_FORMAT,schema:expectedSchema}});
   const sideIdentity = () => ({ ...productFile(sidePath), incarnation: metadata.incarnation,
@@ -483,19 +484,46 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       if(old) {
         side.prepare('DELETE FROM publications WHERE projection=?').run(old.projection);
         side.prepare('DELETE FROM work WHERE projection=?').run(old.projection);
+        side.prepare('DELETE FROM vector_publications WHERE projection=? AND owner=?').run(old.projection,owner);
+        side.prepare('DELETE FROM vector_work WHERE projection=?').run(old.projection);
         side.prepare('DELETE FROM selections WHERE projection=?').run(old.projection);
       }
     });
   }
+  function vectorCandidate(owner,lexicalGeneration) {
+    return side.prepare(`SELECT storage_id,id FROM vector_generations v WHERE owner=? AND ${lexicalGeneration!==undefined?'lexical_generation=?':`
+      (NOT EXISTS(SELECT 1 FROM generations l JOIN publications p ON p.generation=l.id WHERE l.storage_id=v.lexical_generation AND p.projection=v.projection)
+       OR (NOT EXISTS(SELECT 1 FROM vector_publications WHERE generation=v.storage_id) AND NOT EXISTS(SELECT 1 FROM vector_work WHERE generation=v.storage_id)))`}
+      ORDER BY storage_id LIMIT 1`).get(owner,...(lexicalGeneration!==undefined?[lexicalGeneration]:[]));
+  }
+  // Remove rows before their signed metadata. A slice advances exactly one
+  // bounded range; an interrupted deletion resumes from the remaining rows.
+  function collectVector(owner,lexicalGeneration) {
+    if(lexicalGeneration!==undefined) {
+      const cached=side.prepare(`DELETE FROM semantic_vectors WHERE owner=? AND generation=? AND (doc,identity,epoch) IN
+        (SELECT doc,identity,epoch FROM semantic_vectors WHERE owner=? AND generation=? LIMIT 128)`).run(owner,lexicalGeneration,owner,lexicalGeneration);
+      if(cached.changes)return true;
+    }
+    const g=vectorCandidate(owner,lexicalGeneration);
+    if(!g)return false;
+    const rows=side.prepare('DELETE FROM vector_rows WHERE generation=? AND doc IN (SELECT doc FROM vector_rows WHERE generation=? LIMIT 128)').run(g.storage_id,g.storage_id);
+    if(rows.changes)return true;
+    side.prepare('DELETE FROM vector_publications WHERE generation=? AND owner=?').run(g.storage_id,owner);
+    side.prepare('DELETE FROM vector_work WHERE generation=?').run(g.storage_id);
+    side.prepare('DELETE FROM vector_validation_records WHERE generation=? AND owner=?').run(g.storage_id,owner);
+    side.prepare('DELETE FROM vector_generations WHERE storage_id=? AND owner=?').run(g.storage_id,owner);
+    return true;
+  }
   function collect(quantum,owner,maximum=128) {
     let slices=0;
     while(quantum.admit('gc') && slices++<maximum) {
-      // A read-only hint avoids empty write transactions. Only the selection
-      // repeated under BEGIN IMMEDIATE below authorizes a deletion.
-      if(!side.prepare(`SELECT 1 FROM generations g WHERE g.owner=? AND
+      // A read-only hint avoids empty write transactions. Repeat both
+      // lexical and vector retirement decisions under BEGIN IMMEDIATE.
+      const lexicalCandidate=side.prepare(`SELECT 1 FROM generations g WHERE g.owner=? AND
         NOT EXISTS(SELECT 1 FROM publications WHERE generation=g.id) AND
         NOT EXISTS(SELECT 1 FROM work WHERE generation=g.id) AND
-        NOT EXISTS(SELECT 1 FROM generations b JOIN work w ON w.generation=b.id WHERE b.base_id=g.id) LIMIT 1`).get(owner))break;
+        NOT EXISTS(SELECT 1 FROM generations b JOIN work w ON w.generation=b.id WHERE b.base_id=g.id) LIMIT 1`).get(owner);
+      if(!lexicalCandidate&&!vectorCandidate(owner))break;
       rendezvous('gc-candidate');
       let found=false;
       quantum.measure(()=>{write(()=>{
@@ -504,20 +532,19 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         NOT EXISTS(SELECT 1 FROM work WHERE generation=g.id) AND
         NOT EXISTS(SELECT 1 FROM generations b JOIN work w ON w.generation=b.id WHERE b.base_id=g.id)
         ORDER BY storage_id LIMIT 1`).get(owner);
-        if(!g)return;
+        if(!g){found=collectVector(owner);return;}
         found=true;
         for(const [table,key] of [['postings','doc,term'],['documents','doc'],['statistics','term_id']]) {
           const result=side.prepare(`DELETE FROM ${table} WHERE generation=? AND (${key}) IN (SELECT ${key} FROM ${table} WHERE generation=? LIMIT 128)`).run(g.storage_id,g.storage_id);
           if(result.changes)return;
         }
+        if(collectVector(owner,g.storage_id))return;
         side.prepare('DELETE FROM validation_records WHERE generation=?').run(g.id);
         side.prepare('DELETE FROM progress_records WHERE generation=?').run(g.id);
         side.prepare('DELETE FROM generations WHERE id=?').run(g.id);
       });if(found)rendezvous('gc');},'gc');
       if(!found)break;
     }
-    // Incremental auto-vacuum returns a bounded number of free tail pages to
-    // the volume; other free pages remain reusable by the next staging build.
     if(quantum.admit('gc'))quantum.measure(()=>side.exec('PRAGMA incremental_vacuum(32)'),'gc');
   }
   function refresh(p,access,budget,quantum) {
@@ -691,6 +718,17 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   }
 
   return {
+    vectorFence(p,lexical) {
+      return recordBindings(lexical,target(projection(p),lexical.accessDigest))===null&&
+        side.prepare('SELECT publication FROM publications WHERE projection=?').get(lexical.projectionDigest)?.publication===lexical.publicationId;
+    },
+    vectors(work, mutation=false) {
+      return guarded(()=>{
+        if(!connection(mutation))return null;
+        if(!side.prepare("SELECT 1 FROM sqlite_schema WHERE name='vector_publications' AND type='table'").get())return null;
+        return (mutation ? write : read)(()=>work(side));
+      });
+    },
     observe(p,...args) {
       p=projection(p);
       try {return guarded(()=>observe(p,...args));}
@@ -719,7 +757,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       if (!writable) fail('invalid_input');
       if (!connection(true)) return;
       write(() => {
-        side.exec('DELETE FROM publications; DELETE FROM work; DELETE FROM validation_records; DELETE FROM progress_records; DELETE FROM postings; DELETE FROM documents; DELETE FROM statistics; DELETE FROM generations; DELETE FROM selections;');
+        side.exec('DELETE FROM vector_publications; DELETE FROM vector_work; DELETE FROM vector_rows; DELETE FROM semantic_vectors; DELETE FROM vector_validation_records; DELETE FROM vector_generations; DELETE FROM vector_purge_checkpoints; DELETE FROM publications; DELETE FROM work; DELETE FROM validation_records; DELETE FROM progress_records; DELETE FROM postings; DELETE FROM documents; DELETE FROM statistics; DELETE FROM generations; DELETE FROM selections;');
         side.prepare('UPDATE product_metadata SET incarnation=?,kind=? WHERE singleton=1').run(randomUUID(),'rebuild');
       });
       metadata = side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();

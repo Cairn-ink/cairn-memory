@@ -6,6 +6,7 @@ const Native=process.getBuiltinModule('node:sqlite').DatabaseSync;
 let pendingCollection=false;
 function collectCaptured(){
   const code=`
+    import ${JSON.stringify(new URL('../../testing/context-product-test-clock.mjs',import.meta.url).href)};
     import {DatabaseSync} from 'node:sqlite';
     import {openContextProductFacade} from ${JSON.stringify(new URL('../../context-read-facade.mjs',import.meta.url).href)};
     import {productSidecar} from ${JSON.stringify(new URL('../../context-product-sidecar.mjs',import.meta.url).href)};

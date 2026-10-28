@@ -309,5 +309,18 @@
   "docs/plans/context-read-p2b-impl.md",
   "docs/plans/context-read-p2d-impl.md",
   "core/context-product-selection.mjs",
-  "docs/plans/context-read-p2c-impl.md"
+  "docs/plans/context-read-p2c-impl.md",
+  "adapters/openai/product-embedding.mjs",
+  "core/context-product-vectors.mjs",
+  "core/context-semantic-client.mjs",
+  "core/context-semantic-coordinator.mjs",
+  "core/context-semantic-gate.mjs",
+  "core/context-semantic-gates.mjs",
+  "core/context-semantic-input.mjs",
+  "core/context-semantic-ledger.mjs",
+  "core/context-semantic-maintenance.mjs",
+  "core/context-semantic-pump.mjs",
+  "core/context-semantic-worker.mjs",
+  "core/context-vector-validation.mjs",
+  "docs/plans/context-read-p2e-impl.md"
 ]
