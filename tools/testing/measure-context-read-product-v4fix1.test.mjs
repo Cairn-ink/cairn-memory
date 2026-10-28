@@ -115,7 +115,7 @@ test('mid-T exception remains incomplete and is rerun on resume',async t=>{
   const w=createTestWorkspace(t),path=join(w.path,'interrupted.jsonl'),s=await createReportSink(path,header(cell));
   for(const r of report.rows)if(r.type==='cell')await s.cell(r.cell,r.decision);else await s.record(r.cell,r.series,r.record);
   await s.finish(report.final.status);
-  const {readSegments}=await load('v4-checkpoints.mjs'),segments=await readSegments([path]);assert.equal(segments[0].cells.length,0);assert.equal(segments[0].knownFailure,true);
+  const {readSegments}=await load('v4-checkpoints.mjs'),segments=await readSegments([path]);assert.equal(segments[0].cells.length,plan.length-1);assert.ok(segments[0].cells.every(c=>c.key!==cell.key));assert.equal(segments[0].knownFailure,true);
   const rerun=await runner(t,{exception:true,resumed:segments});assert.equal(rerun.runs,1);assert.equal(rerun.report.final.status,'failed');
 });
 function header(cell){return {protocol:{version:'P2-product-v4'},segmentId:'first',registrationHash:'registered',host:{id:'host'},volume:{id:'volume'},node:'v24.15.0',segments:[{id:'first',cellKeys:[cell.key]}],inventory:[cell],cellCount:1};}
@@ -177,7 +177,7 @@ test('round6 nonfailure incomplete verdicts and blocked capabilities remain reru
     const value={decision,observedFailure:false,complete:false};await sink.cell(cell,value);await sink.record(cell.id,'checkpoint',{decision:value});
   }
   await sink.record(cell.id,'resumed-checkpoints',{retainedDecisions:['passed','invalid','inconclusive']});
-  await sink.record(cell.id,'capability',{ready:false,blocked:true});await sink.interrupt();
+  await sink.record(cell.id,'capability',{ready:false,blocked:['missing-capability']});await sink.interrupt();
   const [segment]=await round6Recovery([path+'.partial']);assert.equal(segment.knownFailure,false);assert.deepEqual(segment.cells,[]);
 });
 for(const [method,max] of Object.entries(PROTOCOL.latency))for(const series of method==='findCandidates'?['main','cold','warm-reference','WM']:['main','cold'])test(`interrupted ${method} ${series} maximum stays failed after a faster complete segment`,async t=>{
@@ -248,7 +248,7 @@ for(const overlap of [false,true])test(`round2 completed loaded p95 uses final o
 });
 test('round2 incomplete and failed attempts do not complete a percentile population',async t=>{
   const cell={id:0,key:'short',kind:'requests',method:'findCandidates',count:1112};
-  const rows=Array.from({length:49},()=>['main',good({elapsedMs:800})]);rows.push(['main',good({ok:false,elapsedMs:1})]);
+  const rows=Array.from({length:49},()=>['main',good({elapsedMs:800})]);rows.push(['main',good({ok:false,code:'read_timeout',elapsedMs:1})]);
   assert.equal((await percentileCheckpoint(t,cell,rows)).failed,false);
 });
 test('round2 prefix percentile failures are evaluated on the final population',async t=>{
@@ -265,7 +265,7 @@ test('round2 WM keeps method and intent percentiles separate',async t=>{
 });
 test('round2 completed freshness percentile survives interruption and resume',async t=>{
   const cell={id:0,key:'F',kind:'freshness',count:1112,type:'memory',intent:'current'};
-  const targets=Array.from({length:100},()=>({type:'memory',intent:'current',committedAt:0,observedAt:31000}));
+  const targets=Array.from({length:100},(_,i)=>({type:'memory',id:'target-'+i,revision:1,intent:'current',committedAt:0,observedAt:31000}));
   const r=await percentileCheckpoint(t,cell,[['freshness-targets',targets]]);assert.equal(r.failed,true);assert.equal(r.merged,'failed');
   assert.equal((await percentileCheckpoint(t,cell,[['freshness-targets',targets.slice(0,99)]])).failed,false);
 });

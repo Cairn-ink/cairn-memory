@@ -88,3 +88,12 @@ export function rotatingCell(cell,ordinal) {
 export function windowSlot(cell,repetition,ordinal) {
   return {...cell,...methodProfile(LABELS[ordinal%10]),language:LANGUAGES[(ordinal+repetition)%3],intent:INTENTS[(Math.floor(ordinal/10)+repetition)%2]};
 }
+
+export function estimateV4Segment(profile,registration,id) {
+  const segment=registration.segments.find(s=>s.id===id);if(!segment)throw Error('v4_segment_required');
+  const plan=buildV4Plan(profile).filter(c=>segment.cellKeys.includes(c.key)),estimate=estimateV4(profile,plan);
+  const sessions=new Set(plan.filter(c=>['freshness','availability'].includes(c.kind)).map(c=>JSON.stringify([c.count,c.schema,c.canonical,c.sidecar]))).size;
+  estimate.costSeconds.sharedSessions=sessions*180;
+  estimate.costSeconds.failuresAndSlowOperations=estimateV4(profile).costSeconds.failuresAndSlowOperations/registration.segments.length;
+  return {...estimate,segmentId:id,sessions,estimateSeconds:Math.round(Object.values(estimate.costSeconds).reduce((a,b)=>a+b,0)*10)/10};
+}

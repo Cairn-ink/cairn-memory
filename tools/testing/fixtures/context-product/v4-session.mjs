@@ -1,3 +1,4 @@
+import { persistFailure } from './report.mjs';
 import { actor,terminate,startSampler,attributeBlocks } from './actors.mjs';
 import { prepareSessionPump } from './v4-session-pump.mjs';
 import { observeLoop } from './engine.mjs';
@@ -30,6 +31,7 @@ export async function sharedSession(cells,session,{config,sink},{makeSession=c=>
     deadline=schedule(()=>{expired=true;const error=Error('session_parent_timeout');failure??=error;rejectTerminal(error);cancellation.abort();void cleanup().catch(()=>{});},Math.max(1,Math.min(allowance,(config.sessionDeadlineAt??Infinity)-Date.now())));
   };arm(false);
   try {
+    await sink.sessionOpen?.(config.cell.id);
     writerLease=await sink.delegate();
     const encoded=JSON.stringify({config:transfer,cells,session,journal:writerLease});
     if(Buffer.byteLength(encoded)>1048576)throw Error('session_configuration_size');
@@ -76,7 +78,14 @@ export async function sharedSession(cells,session,{config,sink},{makeSession=c=>
     if((preparation&&!prepared)||(driver&&!pumpClosed)){
       cleanupFailure??=Object.assign(Error('session_pump_shutdown_unconfirmed_workspace_retained'),{cause:failure,cleanup:{descendantsUnconfirmed:true,pumpUnconfirmed:true}});
     }
-    if(cleanupFailure)throw cleanupFailure;
+    if(cleanupFailure){
+      // Observation has ended, but the child may still own the main journal.
+      // Export buffered pump evidence via the independent SQLite-free owner.
+      try{if(driver?.report)await driver.report((series,record)=>persistFailure(sink,config.cell.id,series,record));
+      await persistFailure(sink,config.cell.id,'failure',{stage:'shared-session',code:cleanupFailure.code??cleanupFailure.message,cause:failure?.code??failure?.message??null,cleanup:cleanupFailure.cleanup});
+      }catch(journalError){cleanupFailure.journalError=journalError.code??journalError.message;}
+      throw cleanupFailure;
+    }
     if(writerLease)await sink.reclaim(exported?.sequence);
   }
   if(!hostLoop)throw failure??Error('session_startup_failed');
@@ -92,5 +101,7 @@ export async function sharedSession(cells,session,{config,sink},{makeSession=c=>
   if(failure)throw failure;
   if(exported?.error)throw Object.assign(Error(exported.error),{code:exported.error});
   if(inspectLedger){const final=await inspectLedger();await sink.record(config.cell.id,'population',{session:session.key,initial:config.initialCounts,final:{memories:final.memories,cards:final.cardCount,schema:final.schema}});}
-  return sessionDecision(cells,session,config,exported.value,hostLoop,drain);
+  const decisions=sessionDecision(cells,session,config,exported.value,hostLoop,drain);
+  await sink.sessionClosed?.(config.cell.id);
+  return decisions;
 }

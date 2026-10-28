@@ -1,0 +1,55 @@
+{
+  "seed": "qualification-p2-product-v4-r1",
+  "hashAlgorithm": "sha256",
+  "contentEncoding": "sorted SQLite table name + sorted JSON rows, newline; includes all canonical tables",
+  "snapshots": [
+    {
+      "id": "m1112-v18",
+      "count": 1112,
+      "schema": 18,
+      "cards": 0,
+      "contentHash": "49638f920888a091378293437ed874b77759488144a7bc115c34b0e774c980ed",
+      "schemaHash": "1f7109c6d48d6ed4cb91379be685bd005d4575dfaf642dd9703ff6ed2a04d2ef"
+    },
+    {
+      "id": "m1112-v23",
+      "count": 1112,
+      "schema": 23,
+      "cards": 111,
+      "contentHash": "6980d6fa1917d69c7a2e522b81930342f838df8e88f615a31639554ba2823ffb",
+      "schemaHash": "4933e63b26490023a82a75734b192556dd71fbbb43fde83407f6a99aa86c0b96"
+    },
+    {
+      "id": "m1112-v33",
+      "count": 1112,
+      "schema": 33,
+      "cards": 111,
+      "contentHash": "6d53dc25a61cb98c5986a37d141557772046364fc24a168094f8e2209ca19f59",
+      "schemaHash": "ed025fa6e06cca825e98bb0734b11c8f63d31dddfe0a52a9744c62314405a3eb"
+    },
+    {
+      "id": "m3336-v18",
+      "count": 3336,
+      "schema": 18,
+      "cards": 0,
+      "contentHash": "b6fcc3e7e48d65144233eeef09ab35ed9e8cb4b1182fb22aea2c961dbb27c0a0",
+      "schemaHash": "1f7109c6d48d6ed4cb91379be685bd005d4575dfaf642dd9703ff6ed2a04d2ef"
+    },
+    {
+      "id": "m3336-v23",
+      "count": 3336,
+      "schema": 23,
+      "cards": 333,
+      "contentHash": "0926adeb84e568baeaac6b5f15931e9478c57fb66902be83a85c6d20bbded1de",
+      "schemaHash": "4933e63b26490023a82a75734b192556dd71fbbb43fde83407f6a99aa86c0b96"
+    },
+    {
+      "id": "m3336-v33",
+      "count": 3336,
+      "schema": 33,
+      "cards": 333,
+      "contentHash": "8ba3931cb59c8360e49c418e31a4f978556e9b9d78d081fffbdb9962b78d3842",
+      "schemaHash": "ed025fa6e06cca825e98bb0734b11c8f63d31dddfe0a52a9744c62314405a3eb"
+    }
+  ]
+}

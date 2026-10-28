@@ -1,5 +1,13 @@
 // Pure protocol arithmetic. No clocks, storage, imports of SQLite or runtime hooks.
 import { isDeepStrictEqual } from 'node:util';
+// Native engine diagnostics must never claim a production volume or contradict
+// the ext4/non-WSL declaration. Runtime corroboration remains a separate check.
+export function validateNativeVolume(input) {
+  if(input.platformRole==='native-linux-ext4'&&(input.volume?.filesystem!=='ext4'||
+    Object.hasOwn(input,'filesystem')&&input.filesystem!==input.volume.filesystem||
+    input.volume?.nonWSL!==true||input.volume?.production!==false||input.volume?.productionEquivalent===true))throw Error('native_volume_declaration');
+  return input;
+}
 export const PROTOCOL = Object.freeze({ version: 'P2-product-v3', profile: 'context-read-product-v1.1',
   warmups: 3, pumpDrainMs:100, idleBaselineMs:100, mainMinimum: 50, mainCeiling: 500, coldMinimum: 10, coldCeiling: 100,
   repetitions: 5, windowMs: 30000, smokeWindowMs: 2000, writerCadenceMs: 20,
@@ -240,7 +248,7 @@ export function decide(cell, data) {
   }
   if (data.availability) checks.availability = data.availability.decision === 'failed' ? false : data.availability.decision === 'inconclusive' ? null : true;
   if (data.freshness) checks.freshness = data.freshness.decision === 'failed' ? false : data.freshness.decision === 'inconclusive' ? null : true;
-  if (data.reportOutputsComplete === false || data.production === false) unknown.push('required_outputs_or_platform');
+  if (data.reportOutputsComplete === false || (data.enginePlatformEligible ?? data.production) === false) unknown.push('required_outputs_or_platform');
   const failed = Object.values(checks).some(v => v === false);
   return { decision: invalid.length ? 'invalid' : failed ? 'failed' : unknown.length || Object.values(checks).some(v => v === null) ? 'inconclusive' : 'passed',
     checks, invalid, unknown, observedFailure: failed };

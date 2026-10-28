@@ -6,7 +6,8 @@ import { PROTOCOL } from './protocol.mjs';
 export async function prepareSessionPump(config) {
   const {renewContextMaintenancePump}=await import('../../../../core/index.mjs');
   const c=await configure(config,true),exports=[],completions=[],renewals=[];
-  let pump,renewal,drainTimer,draining,lastDrain=performance.now(),incomplete=false,stopped=false,renewFailure;
+  let pump,renewal,drainTimer,draining,lastDrain=performance.now(),incomplete=false,renewFailure;
+  const recordCompletion=r=>{completions.push(r);if(r.state==='failed')renewFailure??=Object.assign(Error(r.error??'maintenance_pump_failed'),{code:r.error??'maintenance_pump_failed'});};
   const drain=()=>draining??=(async()=>{
     if(performance.now()-lastDrain>500)incomplete=true;
     const records=await c.supervisor.drain();exports.push(records);
@@ -21,20 +22,21 @@ export async function prepareSessionPump(config) {
       projections:[{options:c.options,types:config.types}],serviceCredential:c.token});
     // Engine status calls stay observed. Only raw scalars/results are buffered.
     renewals.push(pump.getStatus());
-    pump.completion.then(r=>{if(!stopped)completions.push(r);}).catch(()=>{incomplete=true;});
+    pump.completion.then(recordCompletion).catch(error=>{incomplete=true;recordCompletion({state:'failed',error:error.code??error.message});});
   };
   return {start(){
-    const tick=()=>{try{renew();}catch(e){renewFailure??=e;}};
+    const tick=()=>{try{renew();}catch(e){recordCompletion({kind:'renewal-exception',state:'failed',error:e.code??e.message});}};
     tick();renewal=setInterval(tick,config.pump.cronMs);drainTimer=setInterval(()=>{void drain();},PROTOCOL.pumpDrainMs);
     return {async stop(){
-      stopped=true;clearInterval(renewal);clearInterval(drainTimer);
-      await draining;try{await pump?.close();}finally{try{await c.supervisor.close();}finally{await drain();}}
+      clearInterval(renewal);clearInterval(drainTimer);
+      await draining;let closeError;try{try{await pump?.close();}catch(error){closeError=error;recordCompletion({kind:'close-exception',state:'failed',error:error.code??error.message});}if(pump)recordCompletion({...pump.getStatus(),final:true});}finally{try{await c.supervisor.close();}finally{await drain();}}
+      if(closeError)throw closeError;
       if(renewFailure)throw renewFailure;
       return exports;
     }};
   },async dispose(){await c.supervisor.close();await drain();},async report(write){
     for(const [ordinal,status] of renewals.entries())await write('pump',{kind:'renew',ordinal,status});
-    for(const [tick,r] of completions.entries())await write('pump',{tick,state:r.state,error:r.error});
+    for(const [tick,r] of completions.entries())await write('pump',{tick,...r});
     return incomplete?[{diagnostics:{protocol:'context-native-v1',coverage:'incomplete',busy:0,records:[]}}]:[];
   }};
 }

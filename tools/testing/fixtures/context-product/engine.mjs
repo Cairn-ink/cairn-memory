@@ -49,6 +49,7 @@ export function selectReadSet(inventory, selectionRevision) {
   return {readSet,ownerCoverage:{policy:'recent-projects-v1',selectionRevision,requestedNamespaces:inventory.length,selectedNamespaces:readSet.length,omittedNamespaces:inventory.length-readSet.length}};
 }
 export async function configure(config,service=false) {
+  if(config.counterId==='o200k_base-v1'&&config.counterModule!==new URL('../../../../evaluation/context-read-qualification/counter.mjs',import.meta.url).href)throw Error('counter_module_must_be_registered');
   const {credentialDigest}=await import('../../../../core/context-product-control.mjs');
   const {createContextReadSupervisor,openContextProductReader,openContextIndexMaintainer}=await import('../../../../core/index.mjs');
   const supervisor=createContextReadSupervisor(),token={opaque:randomUUID()};
@@ -56,8 +57,8 @@ export async function configure(config,service=false) {
   const binding={kind:service?'service':'request',...(service?{serviceId:randomUUID(),credentialBindingId:ids.credentialBindingId,credentialExpiresUtcMs:null}:ids),
     credentialDigest:credentialDigest(token),ownerId:config.readSet[0].ownerId,namespaces:{readSet:config.readSet,ownerCoverage:config.ownerCoverage},issuedAt:0};
   const options={supervisor,path:config.path,version:'context-read-v1',profile:'context-read-product-v1.1',readSet:config.readSet,ownerCoverage:config.ownerCoverage,
-    diagnostics:true,deadlineMs:config.deadlines.openMs,...(service?{sidecarJournalMode:config.sidecar}:{requestControl:{...ids,requestMaxMs:config.deadlines.requestMs}}),
-    host:{moduleUrl:new URL('./host.mjs',import.meta.url).href,configuration:{[service?'serviceBinding':'requestBinding']:binding,
+    wal:config.canonical==='WAL'||config.sidecar==='WAL',diagnostics:true,deadlineMs:config.deadlines.openMs,...(service?{sidecarJournalMode:config.sidecar}:{requestControl:{...ids,requestMaxMs:config.deadlines.requestMs}}),
+    host:{moduleUrl:new URL(service?'./service-host.mjs':'./host.mjs',import.meta.url).href,configuration:{[service?'serviceBinding':'requestBinding']:binding,
       ...(service?{}:{requestReservation:new SharedArrayBuffer(4)}),counterModule:config.counterModule??null,counterId:config.counterId??null,counterConfiguration:config.counterConfiguration??null,functionalOnly:config.functionalOnly===true}}};
   return {supervisor,token,options,open:(control={})=> (service?openContextIndexMaintainer:openContextProductReader)(options,control)};
 }
@@ -67,9 +68,9 @@ export async function drain(supervisor) {
   return exported;
 }
 // Probes real public admission and advertised capabilities; no operator switch.
-export async function probeDependencies(config) {
+export async function probeDependencies(config,{configure:setup=configure}={}) {
   async function readerProbe(selected) {
-    const c=await configure(selected);let h,capabilities,error;
+    const c=await setup(selected);let h,capabilities,error;
     try{h=await c.open();const r=await h.getContextReadCapabilities();if(r.ok)capabilities=r.value;else error=r.error.code;}
     catch(e){error=e.code??'reader_failed';}
     finally{await h?.close();await c.supervisor.close();await drain(c.supervisor);}
@@ -84,7 +85,7 @@ export async function probeDependencies(config) {
   if(wal&&(actual.error==='index_unavailable'||actual.capabilities&&(!actual.capabilities.journals?.includes(config.canonical)||!actual.capabilities.sidecarJournals?.includes(config.sidecar))))missing.push('P2d-WAL');
   if(missing.length)return {ready:false,blocked:missing,code:initial.error??actual.error??null};
   if(initial.error)return {ready:false,blocked:null,code:initial.error};
-  const m=await configure(config,true);let maintainer;
+  const m=await setup(config,true);let maintainer;
   try{maintainer=await m.open();}
   catch(e){if(e.code==='index_unavailable'&&wal)return {ready:false,blocked:['P2d-WAL'],code:e.code};throw e;}
   finally{await maintainer?.close();await m.supervisor.close();await drain(m.supervisor);}
@@ -159,12 +160,14 @@ export async function attempt(config,{open,validate=validateResponse,oracle,loop
         loop=loopFactory();
         if(!initial.ok){result=initial;initialized=false;}
       }
-      readStartedAt=clock();const read=performance.now();
-      if(config.injection==='crash')void gc.workers.at(-1)?.terminate();
-      const abort=config.injection==='abort'?new AbortController():null;if(abort){cancelObservedAt=clock();abort.abort();}
-      if(initialized)result=await h[config.method](input,c.token,{signal:abort?.signal??signal});readMs=performance.now()-read;readFinishedAt=clock();
+      if(initialized){
+        readStartedAt=clock();const read=performance.now();
+        if(config.injection==='crash')void gc.workers.at(-1)?.terminate();
+        const abort=config.injection==='abort'?new AbortController():null;if(abort){cancelObservedAt=clock();abort.abort();}
+        result=await h[config.method](input,c.token,{signal:abort?.signal??signal});readMs=performance.now()-read;readFinishedAt=clock();
+      }
       code=result.ok?null:result.error.code;
-    }catch(e){rejectedAt=clock();code=e.code??'reader_failed';cleanupId=e.cleanupId;}
+    }catch(e){rejectedAt=clock();if(readStartedAt!==null)readMs=Math.max(0,rejectedAt-readStartedAt);code=e.code??'reader_failed';cleanupId=e.cleanupId;}
     finally {
       publicMs=performance.now()-start;
       try {await h?.close();if(cleanupId)await c.supervisor.drain(cleanupId);}
@@ -188,7 +191,7 @@ export async function attempt(config,{open,validate=validateResponse,oracle,loop
   for(const r of exports)c.supervisor.ackCleanup(r.cleanupId);
   const gcBlocks=hostLoop.blocks.map(b=>({...b,gc:gc.entries.filter(g=>g.startAt<b.finishedAt&&g.startAt+g.durationMs>b.startedAt)}));
   const cutoff=Math.min(startedAt+config.deadlines.requestMs,readStartedAt===null?startedAt+config.deadlines.openMs:readStartedAt+(config.input.deadlineMs??5000));
-  return {record:{hostPid:process.pid,startedAt,finishedAt,readStartedAt,readFinishedAt,elapsedMs,readMs,publicMs,openMs:(readStartedAt??rejectedAt)-startedAt,cleanupLagMs:elapsedMs-publicMs,rejectedAt,code,ok:result?.ok===true,
+  return {record:{method:config.method,...(config.readCutoffReport?{readExceededAdapterDefault:readStartedAt===null?null:readMs>config.readCutoffReport.thresholdMs}:{}),hostPid:process.pid,startedAt,finishedAt,readStartedAt,readFinishedAt,elapsedMs,readMs,publicMs,openMs:(readStartedAt??rejectedAt??finishedAt)-startedAt,cleanupLagMs:elapsedMs-publicMs,rejectedAt,code,ok:result?.ok===true,
     ...checked,expected,...(initialization?{initialization}:{}),quality:retrievalQuality(result,config),scopePartial,overlap:config.load==='idle',hostLoop:{...hostLoop,blocks:gcBlocks},resources,gc:gc.entries,
     nativeBusy:diagnostics.reduce((n,d)=>n+(d.busy??0),0),publicBusy:code==='storage_busy'?1:0,
     telemetry:diagnostics.length&&diagnostics.every(d=>d.coverage==='complete')?'complete':'incomplete',diagnostics,

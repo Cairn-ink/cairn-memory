@@ -78,6 +78,8 @@
     "test:local-embedder": "node tools/testing/run.mjs adapters/local-embedder/test/*.test.mjs",
     "measure:topic-overview-contention": "node tools/testing/run.mjs --script tools/testing/measure-topic-overview-contention.mjs",
     "measure:topic-reader-wal": "node tools/testing/run.mjs --script tools/testing/measure-topic-reader-wal.mjs",
-    "measure:context-read-product": "node tools/testing/run.mjs --script tools/testing/measure-context-read-product.mjs"
+    "measure:context-read-product": "node tools/testing/run.mjs --script tools/testing/measure-context-read-product.mjs",
+    "test:qualification-inputs": "QUAL_INPUT_MODE=reduced node --experimental-vm-modules --test --test-concurrency=1 evaluation/context-read-qualification/test/*.test.mjs",
+    "test:qualification-inputs:full": "QUAL_INPUT_MODE=full node --experimental-vm-modules --test --test-concurrency=1 evaluation/context-read-qualification/test/*.test.mjs"
   }
 }

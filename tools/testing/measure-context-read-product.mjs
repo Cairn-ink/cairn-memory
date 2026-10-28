@@ -9,11 +9,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as delay } from 'node:timers/promises';
-import { DEFINITIONS, buildV4Plan, estimateV4 } from './fixtures/context-product/v4-plan.mjs';
-import { runV4 } from './fixtures/context-product/v4-runner.mjs';
+import { DEFINITIONS, buildV4Plan, estimateV4, estimateV4Segment } from './fixtures/context-product/v4-plan.mjs';
+import { rehearseV4 } from './fixtures/context-product/v4-rehearsal.mjs';
+import { runV4,validateV4Registration } from './fixtures/context-product/v4-runner.mjs';
 import { readSegments,checkedSegments } from './fixtures/context-product/v4-checkpoints.mjs';
 import { createTestWorkspace } from './workspace.mjs';
-import { PROTOCOL, buildPlan, expandPlan, aggregate, decide, availability, freshness, population, estimatePlan, V3_DEFINITION, readerLoops, maintainerCoverage, validateDefinition } from './fixtures/context-product/protocol.mjs';
+import { PROTOCOL, buildPlan, expandPlan, aggregate, decide, availability, freshness, population, estimatePlan, V3_DEFINITION, readerLoops, maintainerCoverage, validateDefinition, validateNativeVolume } from './fixtures/context-product/protocol.mjs';
 import { configure, drain, attempt, observeLoop, probeDependencies, selectReadSet } from './fixtures/context-product/engine.mjs';
 import { fileChild, terminate, startSampler, actor } from './fixtures/context-product/actors.mjs';
 import { startWriter, recordedWriter } from './fixtures/context-product/controller.mjs';
@@ -23,11 +24,12 @@ export { PROTOCOL, buildPlan, buildV4Plan, DEFINITIONS };
 const storageUrl=new URL('./fixtures/context-product/storage-child.mjs',import.meta.url);
 export async function storage(kind,configuration) {
   const child=spawn(process.execPath,[fileURLToPath(storageUrl),kind,JSON.stringify(configuration)],{env:{},stdio:['ignore','pipe','pipe']});
-  let stdout='',stderrBytes=0;child.stdout.on('data',b=>{stdout+=b;if(stdout.length>64*1024*1024)child.kill('SIGKILL');});child.stderr.on('data',b=>{stderrBytes+=b.length;});
+  const chunks=[];let stdoutBytes=0,stderrBytes=0;child.stdout.on('data',b=>{stdoutBytes+=b.length;if(stdoutBytes>64*1024*1024)child.kill('SIGKILL');else chunks.push(b);});child.stderr.on('data',b=>{stderrBytes+=b.length;});
   const timeout=configuration.protocol==='P2-product-v4'?null:setTimeout(()=>child.kill('SIGKILL'),30000);
   try {const exit=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',(code,signal)=>resolve({code,signal}));});
+    if(stdoutBytes>64*1024*1024)throw Error('storage_child_output_size');
     if(exit.code!==0||exit.signal)throw Object.assign(Error('storage_child_failed'),{code:'child_failed',exitCode:exit.code,signal:exit.signal,stderrBytes});
-    return {...JSON.parse(stdout),exit};
+    return {...JSON.parse(Buffer.concat(chunks).toString('utf8')),exit};
   }finally{clearTimeout(timeout);}
 }
 export function writerProfile(value) {
@@ -38,20 +40,23 @@ export function writerProfile(value) {
 function git(...args) {
   const r=spawnSync('git',args,{encoding:'utf8'});if(r.status!==0)throw Error('git_failed');return r.stdout.trim();
 }
-export function validateRegistration(input) {
+export function validateRegistration(input,{engineProfile=false}={}) {
+  validateNativeVolume(input);
+  if(input.platformRole==='native-linux-ext4'&&!engineProfile)throw Error('native_platform_engine_profile_only');
+  if(input.rehearsal!==undefined)throw Error('rehearsal_cannot_qualify');
   if(input.protocolDefinition?.version===V3_DEFINITION.version&&!isDeepStrictEqual(input.protocolDefinition,V3_DEFINITION))throw Error('protocol_revision_required');
   validateDefinition(input.protocolDefinition??V3_DEFINITION);
   const positive=k=>Number.isSafeInteger(input[k])&&input[k]>0;
   if(new Set(input.fixtures?.map(f=>f.id)).size!==6||input.fixtures?.some(f=>typeof f.id!=='string'||!f.id))throw Error('fixture_ids');
-  if(!/^v24\.\d+\.\d+$/.test(input.productionNode)||!['production-linux-ext4','wsl2-ext4','apfs'].includes(input.platformRole)||
+  if(!/^v24\.\d+\.\d+$/.test(input.productionNode)||!['production-linux-ext4','wsl2-ext4','apfs','native-linux-ext4'].includes(input.platformRole)||
     !input.filesystem||!input.counterId||!Array.isArray(input.fixtures)||input.fixtures.length!==6||
     !['seriesCeilingMs','buildCeiling','freshnessObservationMs','availabilityWindows'].every(positive)||input.freshnessObservationMs<30000)throw Error('invalid_registration');
   for(const k of ['profileCommit','protocolCommit'])if(!/^[a-f0-9]{40}$/.test(input[k]))throw Error('commit_required');
   for(const k of ['openMs','requestMs','readMs'])if(!Number.isSafeInteger(input.deadlines?.[k])||input.deadlines[k]<2000||input.deadlines[k]>5000)throw Error('production_deadlines_required');
   const p=input.pump;
-  if(!p||p.cronMs!==60000||!Number.isSafeInteger(p.pollMs)||p.pollMs<1||p.pollMs>5000||!Number.isSafeInteger(p.renewalMs)||p.renewalMs<1||p.renewalMs>60000||
+  if(!p||![20000,60000].includes(p.cronMs)||!Number.isSafeInteger(p.pollMs)||p.pollMs<1||p.pollMs>5000||!Number.isSafeInteger(p.renewalMs)||p.renewalMs<1||p.renewalMs>60000||
     !Number.isSafeInteger(p.quantum?.maxItems)||p.quantum.maxItems<1||p.quantum.maxItems>1024||!Number.isSafeInteger(p.quantum?.maxMs)||p.quantum.maxMs<1||p.quantum.maxMs>2500||
-    2*Math.max(p.pollMs,p.quantum.maxMs)>5000||!Number.isSafeInteger(p.budgets?.maxItems)||p.budgets.maxItems<1||!Number.isSafeInteger(p.budgets?.maxMs)||p.budgets.maxMs<1)throw Error('pump_registration');
+    2*Math.max(p.pollMs,p.quantum.maxMs)+p.quantum.maxMs>5000||!Number.isSafeInteger(p.budgets?.maxItems)||p.budgets.maxItems<1||!Number.isSafeInteger(p.budgets?.maxMs)||p.budgets.maxMs<1)throw Error('pump_registration');
   for(const count of [1112,3336])for(const schema of [18,23,33]) {
     const f=input.fixtures.filter(f=>f.count===count&&f.schema===schema);if(f.length!==1)throw Error('fixture_inventory');
     if(f[0].consistency!=='closed-snapshot'||f[0].cards<(schema===18?0:1)||schema===18&&f[0].cards!==0||f[0].inventory?.length!==4||!f[0].overflowInventory||!f[0].otherOwnerNamespace)throw Error('fixture_metadata');
@@ -98,7 +103,7 @@ export async function prepareCell(input,cell,workspace,adapter,suffix='main') {
   if(cell.scope==='overflow')requireOverflow(selection);
   if(cell.scope==='launch'&&selection.readSet.length!==4)throw Error('launch_requires_four_namespaces');
   const config={path,...selection,types:cell.schema===18?['memory']:['memory','card'],canonical:cell.canonical,sidecar:cell.sidecar,
-    deadlines:input.deadlines,pump:{...input.pump,id:`product-${cell.id}-${suffix}`},buildCeiling:input.buildCeiling,
+    readCutoffReport:input.readCutoffReport,deadlines:input.deadlines,pump:{...input.pump,id:`product-${cell.id}-${suffix}`},buildCeiling:input.buildCeiling,
     counterModule:input.counterModule,counterId:input.counterId,counterConfiguration:input.counterConfiguration,production:process.version===input.productionNode&&input.platformRole==='production-linux-ext4'&&platform()==='linux'&&!/microsoft/i.test(release())&&Number((await statfs(workspace.path)).type)===0xef53,
     seriesCeilingMs:input.seriesCeilingMs,load:cell.load??'idle',writerProfile:input.writerProfile,
     namespace:cell.load?.endsWith('other')?fixture.otherOwnerNamespace:selection.readSet[0],
@@ -175,7 +180,7 @@ export async function availabilitySeries(config,cell,input,sink,oracle,{startPum
     const metrics=availability(records,{minimum:cell.sampleRules?.availability.minimum??PROTOCOL.availabilityMinimum});
     return {...decide(cell,{records,loops:[...readerLoops(records),result.hostLoop],availability:metrics,readerCoverage:records.every(r=>r.telemetry==='complete')?'complete':'incomplete',
       maintainerCoverage:maintainerCoverage(maintenance,config.maintainerCoverage),writerCoverage:result.diagnostics.coverage,baselineCoverage:result.diagnostics.coverage,
-      nativeBusy:records.reduce((n,r)=>n+r.nativeBusy,0)+result.diagnostics.busy+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:records.reduce((n,r)=>n+r.publicBusy,0),writers:result.calls,production:config.production}),availability:metrics};
+      nativeBusy:records.reduce((n,r)=>n+r.nativeBusy,0)+result.diagnostics.busy+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:records.reduce((n,r)=>n+r.publicBusy,0),writers:result.calls,production:config.production,enginePlatformEligible:config.enginePlatformEligible}),availability:metrics};
   }finally{try {if(writer&&!result)await writer.stop();}
     finally {if(pump&&!pumpDrain)await write('pump-drain',await pump.stop());}}
 }
@@ -207,7 +212,7 @@ export async function freshnessSeries(config,cell,input,sink,{startPump:makePump
     const metrics=freshness(targets,{minimum:cell.sampleRules?.freshness.minimum??PROTOCOL.freshnessMinimum});
     const decision=decide(cell,{records,loops:[...readerLoops(records),writerResult.hostLoop],freshness:metrics,readerCoverage:records.every(r=>r.telemetry==='complete')?'complete':'incomplete',
       maintainerCoverage:maintainerCoverage(maintenance,config.maintainerCoverage),writerCoverage:writerResult.diagnostics.coverage,baselineCoverage:writerResult.diagnostics.coverage,
-      nativeBusy:records.reduce((n,r)=>n+r.nativeBusy,0)+writerResult.diagnostics.busy+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:records.reduce((n,r)=>n+r.publicBusy,0),writers:writerResult.calls,production:config.production});
+      nativeBusy:records.reduce((n,r)=>n+r.nativeBusy,0)+writerResult.diagnostics.busy+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:records.reduce((n,r)=>n+r.publicBusy,0),writers:writerResult.calls,production:config.production,enginePlatformEligible:config.enginePlatformEligible});
     if(!intervalValid||targets.some(t=>now()-t.committedAt<PROTOCOL.freshnessMs))return {...decision,decision:'invalid',reason:'probe_cadence_or_writer_drain'};
     return {...decision,freshness:{...metrics,p50Ms:Number.isFinite(metrics.p50Ms)?metrics.p50Ms:null,p95Ms:Number.isFinite(metrics.p95Ms)?metrics.p95Ms:null,maxMs:Number.isFinite(metrics.maxMs)?metrics.maxMs:null,p95Infinite:metrics.p95Ms===Infinity,maxInfinite:metrics.maxMs===Infinity,finiteMaximumMs:Math.max(0,...targets.filter(t=>t.observedAt!==null).map(t=>t.observedAt-t.committedAt))}};
   }finally{try {if(writer&&!writerResult)await writer.stop();}
@@ -255,7 +260,7 @@ export async function backupSeries(config,cell,workspace,sink,oracle,{startSampl
     const decision=decide({...cell,method:config.method},{records:[read.record],...(config.protocol==='P2-product-v4'?{loops:[...readerLoops([read.record]),...verificationLoops]}:{}),populations:{restored:population([read.record],{rule:cell.sampleRules?.['restored-reader']??{minimum:1,ceiling:1}})},
       readerCoverage:read.record.telemetry,maintainerCoverage:maintainerCoverage(maintenance,rebuilt.coverage),rebuildCoverage:rebuilt.coverage,
       writerCoverage:'complete',baselineCoverage:'complete',nativeBusy:(read.record.nativeBusy??0)+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:read.record.publicBusy,
-      production:config.production,reportOutputsComplete:output.sidecar.peak!==null&&output.peakSamplingCoverage==='complete'});
+      production:config.production,enginePlatformEligible:config.enginePlatformEligible,reportOutputsComplete:output.sidecar.peak!==null&&output.peakSamplingCoverage==='complete'});
     return {...decision,outputs:output};
   }finally{if(!attribution)await sampler.stop();}
 }
@@ -351,7 +356,8 @@ export async function functionalOnly(reportPath,namespaces=1) {
     await storage('seed',{path,count:4,inventory});const ledger=(await storage('inspect',{path})).value;
     const {tinySchema}=await import('./fixtures/context-product/tiny-schema.mjs');config.responseSchema=tinySchema;
     const probe=await probeDependencies(config);if(!probe.ready)throw Error('tiny_dependency');
-    await build(config,(s,r)=>sink.record(0,s,r));
+    const {buildForTests}=await import('./fixtures/context-product/test-preparation.mjs');
+    await buildForTests(config,(s,r)=>sink.record(0,s,r));
     const r=await attempt(config,{oracle:result=>result?.ok===true&&result.value.items.length===4&&result.value.items.every(i=>ledger.memory.some(m=>m.id===i.ref.memoryId&&m.revision===i.ref.revision))});
     record=r.record;await sink.record(0,'functional',record);
     if(!record.ok||!record.validated||!record.bounds||!record.expected||record.telemetry!=='complete')throw Error('functional_assertion');
@@ -361,24 +367,25 @@ export async function functionalOnly(reportPath,namespaces=1) {
   console.log(status);return {status,functionalPassed:status==='inconclusive',record};
 }
 export async function main(args=process.argv.slice(2)) {
-  let reportPath=resolve('context-read-product-report.jsonl'),registrationPath,profilePath,smoke=false,functional=false,namespaces=1,plan=false,estimate=false,profile='engine',profileExplicit=false,protocol='v4',segmentId;const resume=[],merge=[];
+  let reportPath=resolve('context-read-product-report.jsonl'),registrationPath,profilePath,smoke=false,functional=false,rehearse=false,namespaces=1,plan=false,estimate=false,profile='engine',profileExplicit=false,protocol='v4',segmentId;const resume=[],merge=[];
   for(let i=0;i<args.length;i++) {
-    const a=args[i];if(a==='--profile'){profile=args[++i];profileExplicit=true;}else if(a==='--protocol')protocol=args[++i];else if(a==='--segment')segmentId=args[++i];else if(a==='--resume')resume.push(resolve(args[++i]));else if(a==='--merge')merge.push(resolve(args[++i]));else if(a==='--estimate')estimate=true;else if(a==='--smoke')smoke=true;else if(a==='--functional-only')functional=true;else if(a==='--plan')plan=true;
+    const a=args[i];if(a==='--profile'){profile=args[++i];profileExplicit=true;}else if(a==='--protocol')protocol=args[++i];else if(a==='--segment')segmentId=args[++i];else if(a==='--resume')resume.push(resolve(args[++i]));else if(a==='--merge')merge.push(resolve(args[++i]));else if(a==='--estimate')estimate=true;else if(a==='--smoke')smoke=true;else if(a==='--rehearse')rehearse=true;else if(a==='--functional-only')functional=true;else if(a==='--plan')plan=true;
     else if(a==='--report')reportPath=resolve(args[++i]);else if(a==='--registration')registrationPath=resolve(args[++i]);
     else if(a==='--writer-profile')profilePath=resolve(args[++i]);else if(a==='--namespaces')namespaces=Number(args[++i]);else throw Error('usage');
   }
   if(![1,2].includes(namespaces)||!reportPath.endsWith('.jsonl'))throw Error('invalid_output_or_namespace_count');
   if(!['engine','production'].includes(profile)||!['v3','v4'].includes(protocol))throw Error('invalid_profile_or_protocol');
   let result;
+  if(rehearse&&(merge.length||resume.length||smoke||functional||estimate||plan||protocol!=='v4'||profile!=='engine'))throw Error('rehearsal_mode_conflict');
   if(merge.length){
     const segments=await readSegments(merge),header=segments[0].header,checked=checkedSegments(header,segments),sink=await createReportSink(reportPath,{...header,mergedSegments:segments.map(s=>s.id)});
-    for(const c of checked.cells)await sink.cell(c.cell,c.record,c.summary);await sink.finish(checked.decision,{complete:checked.complete,mergedCells:checked.cells.length});
-    console.log(checked.decision);if(checked.decision!=='passed')process.exitCode=1;return checked;
+    for(const c of checked.cells)await sink.cell(c.cell,c.record,c.summary);await sink.finish(checked.decision,{complete:checked.complete,mergedCells:checked.cells.length,...(checked.diagnostic?{qualifying:false,diagnostic:true,diagnosticReason:checked.diagnosticReason}:{})});
+    console.log(checked.diagnostic?JSON.stringify({status:checked.decision,qualifying:false,diagnostic:true,diagnosticReason:checked.diagnosticReason}):checked.decision);if(checked.decision!=='passed')process.exitCode=1;return checked;
   }
   if(estimate){
     if(protocol==='v4'&&!registrationPath){const value=estimateV4(profile);console.log(JSON.stringify(value));return value;}
     const definition=registrationPath?JSON.parse(await readFile(registrationPath,'utf8')).protocolDefinition??(protocol==='v4'?DEFINITIONS[profile]:V3_DEFINITION):V3_DEFINITION;
-    if(definition.protocol==='P2-product-v4'){if(!isDeepStrictEqual(definition,DEFINITIONS[definition.platformProfile??profile]))throw Error('protocol_revision_required');const value=estimateV4(definition.platformProfile??profile);console.log(JSON.stringify(value));return value;}
+    if(definition.protocol==='P2-product-v4'){if(!isDeepStrictEqual(definition,DEFINITIONS[definition.platformProfile??profile]))throw Error('protocol_revision_required');const registered=JSON.parse(await readFile(registrationPath,'utf8'));validateV4Registration(registered,definition.platformProfile??profile);const value=segmentId?estimateV4Segment(definition.platformProfile??profile,registered,segmentId):estimateV4(definition.platformProfile??profile);console.log(JSON.stringify(value));return value;}
     const value=estimatePlan(buildPlan(definition),definition);console.log(JSON.stringify(value));return value;
   }
   if(plan){const inventory=protocol==='v4'?buildV4Plan(profile):buildPlan();console.log(JSON.stringify({protocol:protocol==='v4'?{...PROTOCOL,version:'P2-product-v4',revision:1,platformProfile:profile}:PROTOCOL,cellCount:inventory.length,inventory}));result={status:'inconclusive'};console.log(result.status);}
@@ -388,7 +395,8 @@ export async function main(args=process.argv.slice(2)) {
     if(!registrationPath.endsWith('.json')||!profilePath.endsWith('.json'))throw Error('json_inputs_required');
     const input=JSON.parse(await readFile(registrationPath,'utf8'));input.writerProfile=writerProfile(JSON.parse(await readFile(profilePath,'utf8')));
     input.inputFiles=[...(input.inputFiles??[]),profilePath];
-    if(protocol==='v4'&&!smoke){
+    if(rehearse){result=await rehearseV4(input,{reportPath});}
+    else if(protocol==='v4'&&!smoke){
       if(!profileExplicit)throw Error('v4_explicit_profile_required');
       result=await runV4(input,{profile,segmentId,reportPath,registrationPath,resume},{validateRegistration,preregister,prepareCell,prepareInput,backupSeries,probeDependencies,storage,
         idleBaseline:async()=>{const loop=observeLoop();await delay(PROTOCOL.idleBaselineMs);return loop.finish();}});

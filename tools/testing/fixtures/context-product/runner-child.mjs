@@ -2,7 +2,7 @@ import { attempt } from './engine.mjs';
 import { startSampler, attributeBlocks } from './actors.mjs';
 import { writerProcess } from './writer.mjs';
 const startup=globalThis[Symbol.for('product-cold-startup-loop')];startup?.pause();
-const kind=process.argv[2];let encoded='';for await(const chunk of process.stdin){encoded+=chunk;if(encoded.length>1048576)throw Error('child_configuration_size');}
+const kind=process.argv[2];const chunks=[];let bytes=0;for await(const chunk of process.stdin){bytes+=chunk.length;if(bytes>1048576)throw Error('child_configuration_size');chunks.push(chunk);}const encoded=Buffer.concat(chunks).toString('utf8');
 const config=JSON.parse(encoded);startup?.resume();
 try {
   if(kind==='session')await (await import('./v4-session-child.mjs')).sessionChild(config);

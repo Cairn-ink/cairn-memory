@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 // SQLite-free checkpoint reader. No engine imports or native database handles.
 import { createReadStream,constants } from 'node:fs';
 import { lstat } from 'node:fs/promises';
@@ -14,13 +15,7 @@ async function* rows(path) {
     let row;try{row=JSON.parse(line);}catch{throw Error('v4_checkpoint_corrupt');}yield row;
   }
 }
-// Verdicts are durable evidence even when their cells must be rerun. Include
-// nested checkpoint/pair/WM decisions, without importing their sample data.
-function failedVerdict(value) {
-  if(!value||typeof value!=='object')return false;
-  if(value.decision==='failed'||value.observedFailure===true)return true;
-  return Object.values(value).some(v=>v&&typeof v==='object'&&failedVerdict(v));
-}
+import { journalFailure } from './journal-failures.mjs';
 function knownFailure(cell,record,series) {
   if(cell?.kind==='injection'){if(Array.isArray(record.calls))return knownFailure({...cell,kind:'requests'},record,series);return typeof record.id==='string'&&Object.hasOwn(record,'code')?validateSubprobes(cell,[record]).decision==='failed':false;}
   const wal=cell&&(cell.canonical==='WAL'||cell.sidecar==='WAL');
@@ -87,23 +82,41 @@ async function readSegments(paths) {
   const segments=[];
   for(const path of paths){
     if(!path.endsWith('.jsonl')&&!path.endsWith('.jsonl.partial'))throw Error('v4_checkpoint_report_required');
-    let header,headerHash,failed=false;const cells=[];
-    for await(const row of rows(path)){
-      if(row.type==='registration'){header=row.header;headerHash=row.headerHash;if(digest(header)!==headerHash)throw Error('v4_checkpoint_header_hash');}
-      if(row.type==='cell'){
-        failed||=failedVerdict(row.decision);
-        if(row.decision?.complete===true)cells.push({key:row.cell.key,complete:true,decision:row.decision.decision,cell:row.cell,record:row.decision,summary:row.summary});
+    let header,headerHash,failed=false;const cells=[],inherited=new Map(),openSessions=new Set();
+    const restore=list=>{
+      if(!Array.isArray(list)){failed=true;return;}
+      const seen=new Set();
+      for(const c of list){
+        if(!c||c.complete!==true||typeof c.key!=='string'||!c.cell||!['passed','failed','invalid','inconclusive'].includes(c.decision)){failed=true;continue;}
+        if(seen.has(c.key)){failed=true;continue;}seen.add(c.key);
+        const originSegmentId=c.originSegmentId??header.segments.find(s=>s.cellKeys.includes(c.key))?.id??header.segmentId;
+        if(inherited.has(c.key)&&!isDeepStrictEqual(inherited.get(c.key),{...c,originSegmentId})){failed=true;continue;}
+        inherited.set(c.key,{...c,originSegmentId});
       }
-      if(row.type==='final'&&row.status==='failed')failed=true;
+    };
+    for await(const row of rows(path)){
+      if(row.type==='registration'){header=row.header;headerHash=row.headerHash;if(digest(header)!==headerHash)throw Error('v4_checkpoint_header_hash');if(Object.hasOwn(header,'resumedCheckpoint')){failed||=journalFailure('resumed-checkpoints',header.resumedCheckpoint);restore(header.resumedCheckpoint?.cells);}}
+      if(row.type==='session-open'){if(!Number.isSafeInteger(row.cell)||openSessions.has(row.cell))failed=true;openSessions.add(row.cell);}
+      if(row.type==='session-cleanup-complete'){if(!openSessions.delete(row.cell))failed=true;}
+      if(row.type==='cell'){
+        failed||=journalFailure('checkpoint',{decision:row.decision})||typeof row.decision?.complete!=='boolean';
+        if(row.decision?.complete===true)cells.push({originSegmentId:header.segmentId,key:row.cell.key,complete:true,decision:row.decision.decision,cell:row.cell,record:row.decision,summary:row.summary});
+      }
+      if(row.type==='final'&&!['passed','invalid','inconclusive'].includes(row.status))failed=true;
     }
+    if(openSessions.size)failed=true;
     if(header?.protocol?.version!=='P2-product-v4')throw Error('v4_checkpoint_header');
     const base=path.endsWith('.partial')?path.slice(0,-8):path,journal=base+'.records.jsonl';
     if(!await lstat(journal).then(()=>true,e=>{if(e.code==='ENOENT')return false;throw e;}))throw Error('v4_checkpoint_missing_journal');
+    const failureJournal=base+'.failures.jsonl';let requiresFailureJournal=false;
     let currentCell;
     let ordinals=new Map(),pendingLatency=new Set(),percentiles;
     for await(const row of rows(journal)){
-      if(row.type==='header'&&row.headerHash!==headerHash)throw Error('v4_checkpoint_journal_identity');
+      if(row.type==='header'){if(row.headerHash!==headerHash)throw Error('v4_checkpoint_journal_identity');requiresFailureJournal=row.failureJournal===true;}
       if(row.type==='record'){
+        if(row.series==='resumed-checkpoints'&&Object.hasOwn(row.record??{},'cells'))restore(row.record.cells);
+        // Latch malformed/unknown records before any population dereference.
+        if(row.failure===true||journalFailure(row.series,row.record)){failed=true;continue;}
         const cell=header.inventory.find(c=>c.id===row.cell);
         if(row.cell!==currentCell){failed||=percentiles?.failed()??false;currentCell=row.cell;ordinals=new Map();pendingLatency=new Set();percentiles=percentileFailures(cell);}
         percentiles.record(row.series,row.record);
@@ -114,13 +127,18 @@ async function readSegments(paths) {
           if(limit&&qualifies(row.record)&&row.record.elapsedMs>limit.maxMs)pendingLatency.add(row.series+':'+index);
         }
         if(row.series==='overlap-final'&&row.record.overlap===true&&pendingLatency.has(row.record.series+':'+row.record.index))failed=true;
-        if(failedVerdict(row.record)||['failure','lane-failure','session-supervision'].includes(row.series)||
-          row.series==='resumed-checkpoints'&&row.record.retainedDecisions?.includes('failed')||
-          row.series==='capability'&&row.record.ready===false&&!row.record.blocked||knownFailure(cell,row.record,row.series))failed=true;
-      }
+        if(knownFailure(cell,row.record,row.series))failed=true;
+      }else if(row.type!=='header')failed=true;
     }
     failed||=percentiles?.failed()??false;
-    segments.push({id:header.segmentId,registrationHash:header.registrationHash,hostId:header.host.id,volumeId:header.volume.id,node:header.node,header,cells,knownFailure:failed});
+    const hasFailures=await lstat(failureJournal).then(()=>true,e=>{if(e.code==='ENOENT')return false;throw e;});
+    if(requiresFailureJournal&&!hasFailures)throw Error('v4_checkpoint_missing_failure_journal');
+    if(hasFailures){let identified=false;for await(const row of rows(failureJournal)){
+      if(row.type==='header'){if(identified||row.headerHash!==headerHash)throw Error('v4_checkpoint_failure_identity');identified=true;}
+      else if(row.type==='record'&&identified){if(row.failure===true||journalFailure(row.series,row.record)){failed=true;continue;}if(knownFailure(header.inventory.find(c=>c.id===row.cell),row.record,row.series))failed=true;}
+      else throw Error('v4_checkpoint_failure_record');
+    }if(!identified)throw Error('v4_checkpoint_failure_identity');}
+    segments.push({id:header.segmentId,registrationHash:header.registrationHash,hostId:header.host.id,volumeId:header.volume.id,node:header.node,header,cells:[...inherited.values()].filter(c=>c.originSegmentId===header.segmentId&&!cells.some(r=>r.key===c.key)).concat(cells),carriedCells:[...inherited.values()].filter(c=>c.originSegmentId!==header.segmentId),knownFailure:failed});
   }
   return segments;
 }

@@ -1,3 +1,4 @@
+import { rehearsalDecision,readWorks,writerWorks } from './rehearsal-checks.mjs';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as delay } from 'node:timers/promises';
 import { exposureMetrics, PROTOCOL as E1 } from '../../measure-topic-reader-wal.mjs';
@@ -14,8 +15,8 @@ export function windows(smoke=false) {
     windowMs:smoke?E1.smokeWindowMs:E1.windowMs,order:repetition%2?['reader','baseline']:['baseline','reader']}));
 }
 const overlap=(r,calls)=>calls.some(w=>r.readStartedAt<w.writeFinishedAt&&r.readFinishedAt>w.writeStartedAt);
-export async function build(config,write=async()=>{}) {
-  const c=await configure(config,true);let h;const calls=[];
+export async function build(config,write=async()=>{},{configure:setup=configure}={}) {
+  const c=await setup(config,true);let h;const calls=[];
   try {
     h=await c.open({signal:config.signal});
     for(const intent of ['current','history']) {
@@ -35,7 +36,8 @@ export async function build(config,write=async()=>{}) {
 }
 export async function startPump(config,write,{harness=fn=>fn()}={}) {
   const {renewContextMaintenancePump}=await import('../../../../core/index.mjs');
-  const c=await harness(()=>configure(config,true));let pump,renewal,tick=0,stopped=false,draining=null,lastDrain=performance.now(),drainIncomplete=false;
+  const c=await harness(()=>configure(config,true));let pump,renewal,renewFailure,tick=0,draining=null,lastDrain=performance.now(),drainIncomplete=false;
+  const recordCompletion=r=>{observations.push({tick:tick++,...r});if(r.state==='failed')renewFailure??=Object.assign(Error(r.error??'maintenance_pump_failed'),{code:r.error??'maintenance_pump_failed'});};
   const exported=[],pending=[],observations=[],trace=harness(()=>[{kind:'start',at:Date.now(),id:config.pump.id,settings:config.pump}]);
   // Engine calls stay in the caller's observed scope; only harness preparation
   // and diagnostic record construction cross this optional boundary.
@@ -55,15 +57,16 @@ export async function startPump(config,write,{harness=fn=>fn()}={}) {
     if(config.protocol==='P2-product-v4')traceEvent('renew',{replaced:previous!==undefined&&pump!==previous});
     // Every completion is observed, including expiry/exhaustion/failure. No
     // detached background task promises supervision after the caller returns.
-    pump.completion.then(r=>harness(()=>{if(!stopped)observations.push({tick:tick++,state:r.state,error:r.error});})).catch(()=>{drainIncomplete=true;});
+    pump.completion.then(r=>harness(()=>recordCompletion(r))).catch(error=>{drainIncomplete=true;harness(()=>recordCompletion({state:'failed',error:error.code??error.message}));});
   };
-  renew();renewal=setInterval(renew,config.pump.cronMs);
+  try{renew();}catch(error){await c.supervisor.close();await drain(c.supervisor);throw error;}
+  renewal=setInterval(()=>{try{renew();}catch(error){harness(()=>recordCompletion({kind:'renewal-exception',state:'failed',error:error.code??error.message}));}},config.pump.cronMs);
   // Only public engine drain/ack and minimal queueing run on this timer. Record
   // validation and serialization are deferred until between reader observations.
   const drainTimer=setInterval(()=>{void exportNow();},PROTOCOL.pumpDrainMs);
   const flush=async()=>{if(config.protocol==='P2-product-v4')traceEvent('quantum');await exportNow();if(pending.length)await harness(()=>write('maintenance-drain',pending.splice(0)));for(const observation of observations.splice(0))await harness(()=>write('pump',observation));};
-  return {flush,trace,async stop(){if(config.protocol==='P2-product-v4')traceEvent('stopping');stopped=true;clearInterval(renewal);clearInterval(drainTimer);await draining;await pump.close();await c.supervisor.close();await flush();if(config.protocol==='P2-product-v4')traceEvent('stop');
-    if(drainIncomplete)harness(()=>exported.push({diagnostics:{protocol:'context-native-v1',coverage:'incomplete',busy:0,records:[]}}));return exported;}};
+  return {flush,trace,async stop(){if(config.protocol==='P2-product-v4')traceEvent('stopping');clearInterval(renewal);clearInterval(drainTimer);await draining;let closeError;try{try{await pump.close();}catch(error){closeError=error;harness(()=>recordCompletion({kind:'close-exception',state:'failed',error:error.code??error.message}));}const finalStatus=pump.getStatus?.();if(finalStatus)harness(()=>recordCompletion({...finalStatus,final:true}));else if(config.protocol==='P2-product-v4')throw Error('pump_final_status_missing');}finally{try{await c.supervisor.close();}finally{await flush();}}if(closeError)throw closeError;if(config.protocol==='P2-product-v4')traceEvent('stop');
+    if(drainIncomplete)harness(()=>exported.push({diagnostics:{protocol:'context-native-v1',coverage:'incomplete',busy:0,records:[]}}));if(renewFailure)throw renewFailure;return exported;}};
 }
 export async function requestSeries(config,{cell,sink,oracle,smoke=false},{attempt:readAttempt=attempt,coldAttempt:readCold=coldAttempt,startPump:makePump=startPump,startWriter:makeWriter=startWriter,startSampler:makeSampler=startSampler,prepareAttempt=async c=>c}={}) {
   const records={warmups:[],main:[],cold:[]},decisions=[];let writer,writerResult,pump,sampler;
@@ -107,12 +110,13 @@ export async function requestSeries(config,{cell,sink,oracle,smoke=false},{attem
     const pumpDrain=pump?await pump.stop():[];pump=null;await write('pump-drain',pumpDrain);
     const maintenance=[...(config.maintainerDiagnostics??[]),...pumpDrain.map(r=>r.diagnostics).filter(d=>d.protocol==='context-native-v1')];
     const all=Object.values(records).flat(),populations=Object.fromEntries(Object.entries(records).filter(([s])=>s!=='warmups').map(([s,r])=>[s,population(r,{cold:s==='cold',concurrent:concurrency&&s!=='warm-reference',warmReference:s==='warm-reference',rule:rules[s]})]));
+    if(config.rehearsal===true)return {decision:rehearsalDecision(all.length&&all.every(r=>readWorks(r))&&(!writerResult||writerWorks(writerResult))?[]:['request_functional']),populations:{},languageCoverage:true};
     const decision=decide(cell,{smoke,records:all,populations,warmups:records.warmups.length,
       ownerCoverage:config.ownerCoverage,loops:[...readerLoops(all),...(writerResult?[writerResult.hostLoop]:[])],
       readerCoverage:all.every(r=>r.telemetry==='complete')?'complete':'incomplete',maintainerCoverage:maintainerCoverage(maintenance,config.maintainerCoverage),
       writerCoverage:writerResult?.diagnostics.coverage??'complete',baselineCoverage:writerResult?.diagnostics.coverage??'complete',
       nativeBusy:all.reduce((n,r)=>n+r.nativeBusy,0)+(writerResult?.diagnostics.busy??0)+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:all.reduce((n,r)=>n+r.publicBusy,0),
-      writers:concurrency?writerResult?.calls:undefined,production:config.production});
+      writers:concurrency?writerResult?.calls:undefined,production:config.production,enginePlatformEligible:config.enginePlatformEligible});
     if(cell.protocol==='P2-product-v4')normalizeV4Decision(decision,[...readerLoops(all),...(writerResult?[writerResult.hostLoop]:[])]);
     return {decision,populations,languageCoverage:cell.language!=='language-rotation-v4'||Object.entries(records).filter(([s])=>s!=='warmups').every(([series,rs])=>rotationCoverage(rs,concurrency&&series!=='warm-reference')),writer:writerResult?{exit:writerResult.exit,coverage:writerResult.diagnostics.coverage}:null};
   }finally {
@@ -167,7 +171,7 @@ export async function pairedWindows(config,options,prepareClone) {
       writerCoverage:writer.diagnostics.coverage,baselineCoverage:base.writer.diagnostics.coverage,
       nativeBusy:records.reduce((n,r)=>n+r.nativeBusy,0)+writer.diagnostics.busy+base.writer.diagnostics.busy+[...reader.maintenance,...base.maintenance].reduce((n,d)=>n+(d.busy??0),0),
       publicBusy:records.reduce((n,r)=>n+r.publicBusy,0)+[...writer.calls,...base.writer.calls].filter(w=>w.code==='storage_busy').length,
-      writers:[...writer.calls,...base.writer.calls],production:config.production});
+      writers:[...writer.calls,...base.writer.calls],production:config.production,enginePlatformEligible:config.enginePlatformEligible});
     decisions.push(d);await options.sink.record(options.cell.id,'pair',{repetition:window.repetition,order:window.order,decision:d,
       exposure:exp,baselineExposure:base.exposure,throughputRatio:base.measured.commits?reader.measured.commits/base.measured.commits:null});
   }
