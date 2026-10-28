@@ -22,6 +22,9 @@ const APPLICATION_ID = 0x43525032;
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const unavailable = reason => { throw Object.assign(Error('index_unavailable'), { code: 'index_unavailable', reason }); };
+// Private control flow: rollback this batch, then report honest progress.
+// Never classify storage/corruption/authority errors by their public code.
+const fenceChanged = Symbol('maintenance fence changed');
 const same = (a,b) => canonicalJson(a) === canonicalJson(b);
 // Cleanup must not replace a native failure already committed to telemetry.
 function cleaned(work, cleanup) {
@@ -616,7 +619,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       let units=0, processed=0, last=g.last_key;
       // Include postings/dictionary writes in the observed item cost. Staging
       // rows and their checkpoint commit together, even when admission yields.
-      write(() => {
+      try { write(() => {
         for (const row of rows) {
           if (processed && !quantum.admit() || m.transformed>=budget.maxItems) break;
           if(now()>=quantum.cutoff)fail('read_timeout');
@@ -638,11 +641,11 @@ export function productSidecar({ path, db: canonical, identity, features, observ
           if (!kept) break;
         }
         rendezvous('transformed');
-        if(!fresh(t,p,access))unavailable('fence_changed');
+        if(!fresh(t,p,access))throw fenceChanged;
         g.last_key=last;
         if(processed===rows.length && rows.length<maximum){g.phase++;g.last_key='';}
         g.checkpoint++;save(g,t);
-      });
+      }); } catch(e) { if(e===fenceChanged)return m;throw e; }
       rendezvous('checkpoint');
     }
     while (g.phase>=g.streams.length && g.verify.phase<3 && quantum.admit('verify-scan') && quantum.admit('verification') &&

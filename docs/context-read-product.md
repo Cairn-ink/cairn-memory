@@ -490,14 +490,89 @@ millisecond domain, strictly future and no more than 60,000 ms away. Supply
 nonnegative safe `usedItems`/`usedMs` from the host's cumulative ledger.
 Per-window items are a positive safe integer, milliseconds are 1–60,000;
 quantum bounds are 1–1,024 and 1–5,000. `pollMs` is 1–5,000 and `renewalMs` is
-1–60,000. The full round-robin sweep must satisfy
-`2 * activeSelections * max(pollMs, quantum.maxMs) <= 5000`; configurations
-that cannot meet that observation cadence refuse before dispatch. Scheduling
-and native overhead still require the deployment qualification. Freeze these
-settings before qualification. Quanta reserve their full
-item/time allowance before opening/dispatch, including unknown usage after
-failure. This conservative accounting can exhaust a window before all reserved
-work is used; counters never refund unknown work.
+1–60,000. Let `N = 2 * activeSelections` and
+`S = max(pollMs, quantum.maxMs)`. Admission requires
+`N * S + quantum.maxMs <= 5000`; otherwise it refuses `invalid_input` before
+reserving quota or scheduling work. The additional quantum reserves headroom
+for disposal, opening, Worker dispatch and the actual epoch observation.
+A nominal five-second admission sweep alone cannot guarantee five-second reads.
+Freeze these settings before qualification.
+
+Dispatches are paced using the configured minute allowance and full quantum
+sizes, with `S` as the minimum admission spacing. Each projection's next read
+is due no later than 5,000 ms after its last actual epoch observation. The
+scheduler looks ahead through the round-robin order and advances admissions
+to leave a full quantum for the next observation and `S` for each intervening
+turn. The Worker samples the monotonic clock at entry to the fresh final
+canonical snapshot read (§6.1.2). This conservatively bounds the actual
+observation time: acquisition/native-read costs cannot postpone its next
+deadline. The parent retains this timing privately, outside public results.
+
+The first sweep is due within five seconds of activation. Continuous renewal
+preserves observation deadlines and order, including renewal exactly at an
+authority/window boundary; renewal after an authority/quota gap starts a new
+observation interval.
+
+Late timer delivery or a successful observation beyond the five-second target
+records a cadence miss and continues maintenance while authority and quota last.
+The scheduler replans from actual observations, preserving round-robin order
+and minimum spacing during recovery. Successful late settlements receive the
+same known-usage refunds as punctual ones.
+
+The closed public status/completion DTOs remain unchanged (`active`, no error
+for an isolated cadence miss). Each status/completion observation has an
+immutable fixed internal diagnostic, obtainable with
+`maintenancePumpDiagnostic(observation)` from the internal pump module:
+`{cadenceMisses,worstGapMs,observation}`. It counts each overdue projection
+interval once and records the worst missed gap; `observation` is the latest
+successful epoch observation's `{projection,atMonoMs,gapMs,cadenceMiss}` or
+null before any success. This bounded process-local metadata contains no path
+or credential, has no history buffer, and is absent from serialized DTOs and
+the public entry point. Hosts must still provision and qualify timer delivery
+and native capacity; recovery cannot undo a missed freshness target.
+
+A genuine quantum cutoff reports `failed` with `read_timeout`, stops scheduling
+and drains. Missing or invalid internal observation timing reports
+`reader_failed`; authority, storage, corruption and lifecycle failures also
+stop and drain. Failed/uncertain work keeps its full reservation. A parent
+deadline timer exposes failure even while disposal or refresh remains pending;
+supervision continues to own the drain. No additional host input is needed.
+
+Quanta reserve their full item/time allowance before opening/dispatch. After a
+successful settled quantum with a valid transformation-attempt count and known
+elapsed time, unused items and milliseconds are returned to that minute window.
+Elapsed time is rounded up and includes handle disposal/opening and result
+delivery. Attempts in a rolled-back fence-race batch remain charged. Missing or
+invalid usage, failure, timeout, crash or uncertain settlement retains the full
+reservation. Host-supplied cumulative usage remains a conservative floor, even
+if renewal occurs during dispatch; neither renewal nor restart erases charges.
+Persist the full outstanding reservation before process replacement whenever
+settlement is uncertain. Counters never refund unknown work.
+
+The admission, cadence, observation-timing, miss-recovery, quantum-watchdog
+and known-usage refund rules above apply to the lexical maintenance pump. An
+embedding-enabled pump (below) does not yet implement them: it schedules a
+nominal sweep from its own ticks, treats any unsuccessful turn as terminal and
+settles USD only. Bring it to parity before qualifying or enabling semantic
+maintenance in production.
+
+A recognized canonical/dependency fence change during a batch rolls back that
+batch and returns successful `rebuilding` progress. Earlier committed batches
+survive. The pump schedules another quantum; storage, corruption, authority and
+lifecycle refusals still fail and drain. This does not certify mixed generations
+or make stale publications ready.
+
+Renewal must remain valid through the next cron invocation and its handoff
+margin. For a 60-second cron, a 10-second renewal leaves a 50-second authority
+gap: renew more frequently, or arrange overlapping renewals within the existing
+60-second renewal bound. Keep service credential authority valid as well.
+Minute budgets are cumulative, not fresh per poll. An allowance of eight full
+quanta cannot fund the minimum 24 observations per minute for two intents if
+those quanta use their full reservations. Reconciliation helps cheap/no-op
+work; pacing cannot create quota or guarantee freshness under insufficient
+capacity. Provision for both intents, scanning, verification, races and writes,
+then qualify the actual registered workload. Continuous writes may still
+abandon staged work and require full-corpus catch-up.
 
 Each of 1–32 active selections supplies validated maintainer options with the
 same supervisor and explicit physical types. Both intents are included
@@ -511,7 +586,8 @@ replacement, maps new-process monotonic windows, and controls cross-process
 ownership. HTTP credentials cannot open the pump.
 
 Status exposes `active`, `budget_exhausted`, `renewal_expired`, `failed` or
-`stopped`, along with cumulative reservations and a sanitized error code. The
+`stopped`, along with settled usage plus outstanding/unknown reservations and a
+sanitized error code. The
 completion promise reports exhaustion/renewal expiry or failure; the product
 must observe the promise returned after each renewal, export cumulative
 usage, and apply its configured reschedule/failure policy. Failure stops further
@@ -734,7 +810,8 @@ An embedding-enabled pump adds `semanticConfig`, the separate
 `semanticServiceCredential`, `firstCoverageValidation:{maxTargets,maxMs}`,
 `projections[].modes:['lexical','embeddings']`, and `maxUsd` to budgets/quantum
 plus `usedUsd` to its window. The nominal full observation sweep, including
-startup status and validation turns, must fit five seconds. Validation retains
+startup status and validation turns, must fit five seconds. This nominal sweep
+is not the lexical pump's cadence guarantee (see the scope note above). Validation retains
 time capacity after paid item/USD exhaustion; lexical turns continue when
 embedding turns are skipped for off/block/USD constraints. Window reservations
 are durable; another pump ID cannot recharge an unexpired window. Observe each

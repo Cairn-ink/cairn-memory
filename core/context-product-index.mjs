@@ -146,7 +146,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     };
     return prepareOnly?{complete,result}:final(p,access,c.observed.publication,complete,'snapshot_stale');
   }
-  function run(method,original,credential,cutoff=Infinity) {
+  function run(method,original,credential,cutoff=Infinity,observation) {
     if(semantic&&(method==='getContextIndexStatus'||method==='refreshContextIndex'&&original.mode==='embeddings'||['findCandidates','contextRead'].includes(method)&&original.semantic===true&&original.cursor===undefined))return runSemantic(method,original,credential,cutoff);
     let access;
     try {
@@ -164,6 +164,12 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         const m=p.mode==='lexical'?storage.refresh(p,access.accessGenerations,p.budget):{transformed:0};
         const knownFailure=storage.prepareObservation();access.check();
         return read(()=>{
+          // This first canonical read acquires the fresh snapshot (§6.1.2).
+          // Sample at its entry so acquisition/native-read latency cannot move
+          // the previous observation's deadline later. This is a conservative
+          // bound on the actual snapshot time, not admission or result delivery.
+          // No host callback or await; only successful comparisons transport it.
+          if(observation)observation.at=Number(process.hrtime.bigint())/1e6;
           db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();
           const observed=storage.observe(p,access.accessGenerations,{knownFailure}),ready=observed.dto.lexical.state==='ready';
           const covered=coverage(observed.dto);covered.stops.budget=m.transformed>=p.budget.maxItems;
