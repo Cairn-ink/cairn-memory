@@ -1658,148 +1658,212 @@ Everything else in this delta is unchanged. This revision edits no frozen sectio
 
 ## P2-product-v4 revision 2: production-equivalent isolated host (delta, 2026-10-28)
 
-Status: **proposed additive measurement revision**, based on `be5698fa65ec9ba032ab25a0b99fc8a5ad7cb71d` and revising only the `production-launch-v4` platform profile of the P2-product-v4 delta above. The frozen API/profile remains `context-read-product-v1.1`. No implementation, measurement or acceptance is claimed.
+Status: **proposed additive measurement revision, Revision 1 after the two REJECT DELTA audits**, based on `be5698fa65ec9ba032ab25a0b99fc8a5ad7cb71d`. This revises only the `production-launch-v4` measurement platform and adds its post-enablement canary. The API/profile remains `context-read-product-v1.1`. No implementation, measurement or acceptance is claimed. R2.5 enumerates the exceptions to earlier text; all other requirements remain normative.
 
-**Owner decision (2026-10-28).** The production-launch run executes in an **isolated, production-equivalent environment** provisioned by the product on its production hosting provider, not inside the live production service. A **post-enablement canary** observes real production reads after the product enables context reads on each surface.
+**Owner decision (2026-10-28).** The product provisions an **isolated, production-equivalent environment** on the hosting provider for the production-launch run. After enablement, a **production canary** observes real reads on each surface.
 
-**Reason.** The production column needs an exclusive quiet reservation of 7 h 30 min (V4.2). Inside the live service, real users would load the same host during the run. That breaks the quiet-host condition every timing population assumes. It would also expose users to the run's continuous synthetic writers and maintenance load. An isolated environment with the same configuration measures the same host class without either problem. The trade-off is that the run then cannot observe co-located real-user load. R2.3 and R2.4 state that boundary and how it is partly covered.
+**Reason.** V4.2 requires an exclusive quiet reservation of **7 h 30 min**. Live user traffic would violate that reservation and share resources with synthetic writers and maintenance. The isolated run measures the attested configuration under the registered workload. It leaves co-located real-user load outside the qualification claim; R2.4 observes that load after enablement without replacing qualification evidence.
 
 ### R2.1 Production-equivalent isolated host
 
-A host is **production-equivalent isolated** only when every item below holds for the whole reservation. The R2.2 attestations must prove the first group, and the run owner must attest the second.
+The isolated service uses the same hosting provider as production. Equivalence is a closed, versioned record, **`production-equivalence-attestation-v1`**, defined in R2.2. It separates four groups:
 
-Equal to the production service that will serve the reads:
-- the same hosting provider and region;
-- the same plan or instance class, vCPU count, RAM limit and CPU model as reported inside the service;
-- the same volume class, filesystem (`ext4`, non-WSL), mount options and block size;
-- the same OS image or release and kernel release, as reported inside the service;
-- the same build pipeline: builder identity and version, and the same build configuration;
-- the same pinned Node patch (the deployed Node 24 patch; `v24.22.1` at the time of writing) and `node:sqlite` SQLite version;
-- the same engine commit and product adapter/profile commit;
-- the same process settings that affect the engine: `NODE_OPTIONS`, `UV_THREADPOOL_SIZE` and the process umask;
-- directory mode **0700** and canonical/sidecar/companion file mode **0600**, as §7 requires.
+- **`controlled`: byte-identical.** Compare the canonical bytes of the entire group. Provider region, effective cgroup v2 controls, volume filesystem/mount properties, OS/build provenance, executable/runtime/SQLite build identity, engine/adapter commits, relevant environment, serving-process umask, seccomp and protected file modes must match. A provider plan-class name is not exposed; cgroup limits are the resource comparison. No injected plan, image or builder label substitutes for observed values or linked provider/build evidence.
+- **`placement`: a mechanical tolerance.** CPU `vendor_id` and `cpu family` must equal; kernel release must match on **major.minor**. CPU model name, kernel patch, host-visible `nproc` and current clocksource are recorded and disclosed, with no equality requirement. The volume-root mode is also recorded here without comparison. Differences in these un-compared observations are disclosed with the result and do not invalidate it. A mismatch in vendor/family or kernel major.minor refuses equivalence; there is no subjective override of that comparator.
+- **`isolation`: isolated environment only.** No public ingress, domain or user credential routes to it. No co-tenant service, job or replica shares its instance or volume. Only registered run processes, including the pump and writers, execute there; its volume holds only run data. Production has `isolation:null` and is never claimed to satisfy these isolation conditions.
+- **`identity`: identity information only, excluded from equivalence comparison.** This exclusion does not remove the binding and continuity checks below. Configuration, resource limits or workload data cannot be hidden in identity fields.
 
-Isolation, for the isolated environment only:
-- **no user traffic**: no public ingress, domain or credential routes user requests to it;
-- **no co-tenant services**: no other service, job or replica shares its instance or volume, and no scheduled work runs except the registered pump and writers;
-- its volume holds only the run's synthetic snapshots, registration, reports and journals.
+The **private directory** in §7 is the directory holding canonical, sidecar and companion files: it must be **0700**, and those files **0600**. The volume root is a separate observation; it need not be 0700. Shared-hardware noise remains a disclosed limitation. These observations do not promise equal instantaneous CPU frequency, physical-host load or unexposed provider behavior.
 
-Noise from the provider's shared hardware cannot be controlled or attested. It is disclosed with the result, not excluded.
+### R2.2 Closed records, provenance and capture sequence
 
-### R2.2 Recorded attestations
+**Scalar and encoding rules.** `String` below means a nonempty Unicode-scalar string unless an empty value is explicitly permitted. `UInt` is a nonnegative safe integer; counts, bytes and UTC milliseconds are integers in those units. `Digest` is a full **43-character unpadded base64url SHA-256**, with canonical base64url re-encoding required. `Commit` is a full 40-character lowercase hexadecimal commit ID. Modes are exactly four octal digits, including their leading zero. Booleans are JSON booleans. Missing, unknown, unobservable, malformed or extra fields refuse registration; no `unknown`/empty placeholder or injected label is allowed. The only nullable fields are those explicitly marked below.
 
-The run owner captures two attestation records with the same procedure, from inside each running service:
-- **production**: within 24 hours before the reservation starts, and again after the run ends;
-- **isolated**: immediately before the reservation starts.
+Reuse **E.4.1's canonical encoding**: recursively sort object keys by UTF-8 bytes; preserve prescribed array order; strict UTF-8 JSON with no BOM, insignificant whitespace or trailing LF; minimal unsigned safe-integer decimal digits, no negative zero/exponents; escape quote, backslash and controls as specified there, emitting other Unicode scalars directly without normalization. Reject malformed Unicode, duplicate keys at every nesting level, unknown keys and bytes differing from canonical re-encoding. Booleans/null retain their JSON literals. All arrays described as sorted use ascending UTF-8 byte order, with duplicates rejected unless stated otherwise. Every digest of structured data below uses these canonical bytes. Raw executable and evidence-artifact digests hash their exact raw bytes.
 
-Each record is a closed JSON object with exactly the R2.1 equality fields plus these **identity fields**: service or environment identifier, instance identifier, volume identifier, hostname, `capturedAt` and `capturedBy`.
+An attestation has **exactly** the top-level keys `version`, `kind`, `controlled`, `placement`, `isolation`, `identity`, `evidence`, `digest`. `version` is the literal `production-equivalence-attestation-v1`. `kind` is one of `production-pre`, `isolated-pre`, `run-start`, `run-end`, `production-post`, `isolated-post`, `pre-enablement`. The last kind observes production before enablement. `digest` hashes the canonical **complete record with only its top-level `digest` omitted**: version, kind, all four groups and provenance are covered. Equivalence compares only canonical `controlled` bytes plus the specified placement comparator; it never compares complete-record digests across captures.
 
-Equivalence is decided mechanically:
-1. Remove the identity fields from each record.
-2. Serialise what remains as canonical JSON (sorted keys, mount options as a sorted list).
-3. Compare the bytes.
+**Exact `controlled` schema and sources.** Every named object below is closed. A dotted path declares its exact nesting; objects have exactly their listed children. This table is exhaustive.
 
-The pre-run production record and the isolated record must be **byte-identical after step 2**. Any other difference, or any equality field that is missing or unknown, prevents registration.
+| Path under `controlled` | Type / representation | Observation source |
+| --- | --- | --- |
+| `providerRegion` | String, the provider's region identifier | Linked hosting-provider deployment/region evidence for this service and instance. |
+| `cgroup.version` | Literal integer `2` | `/proc/self/cgroup` and the actual cgroup2 mount. Resolve the serving process's effective cgroup; do not read an unrelated cgroup. |
+| `cgroup["cpu.max"]`, `cgroup["cpu.max.burst"]`, `cgroup["cpu.weight"]` | Strings, each exactly its corresponding control-file text with one terminal LF removed | Resolved cgroup v2 `cpu.max`, `cpu.max.burst`, `cpu.weight`; quota/period and burst are microseconds, weight is dimensionless. |
+| `cgroup["memory.max"]`, `cgroup["memory.high"]`, `cgroup["memory.swap.max"]` | Strings, same exact file-text rule; decimal bytes or the kernel's literal `max` | Resolved `memory.max`, `memory.high`, `memory.swap.max`. |
+| `cgroup["io.max"]` | String, empty allowed for an empty file; preserve internal LF and device/limit entries, remove only one terminal LF | Resolved `io.max`; kernel device numbers and `rbps`/`wbps` bytes/s, `riops`/`wiops` operations/s remain in the observed text. |
+| `cgroup["pids.max"]` | String, decimal process count or literal `max` | Resolved `pids.max`, same file-text rule. |
+| `volume.filesystem` | Literal string `ext4` | Actual mounted filesystem type for the volume holding the run files, from mount information, corroborated by `statfs`. |
+| `volume.magic` | Literal integer `61267` (`0xef53`) | `statfs` on that filesystem. |
+| `volume.mountOptions` | Sorted array of String | All effective per-mount and superblock options from `/proc/self/mountinfo`, split on commas, combined as a distinct sorted list; retain option values. |
+| `volume.blockSizeBytes` | Positive UInt, bytes | `statfs` filesystem block size for that same volume. |
+| `os.id`, `os.versionId` | Strings | Parsed `ID` and `VERSION_ID` from `/etc/os-release`; both required. |
+| `os.imageDigest` | String containing the provider's exact algorithm-qualified image digest, or null | Linked provider image evidence. Null is permitted **only** when linked evidence establishes that the hosting provider exposes no image digest; it never means collection failed. |
+| `build.builderIdentity`, `build.builderVersion` | Strings | Linked provider/build-log evidence identifying the builder and exact version for this deployment. |
+| `build.planOrConfigurationDigest` | Digest | SHA-256 of the complete build plan or configuration artifact's raw bytes, with that artifact linked from provider/build-log evidence; no selected-flags summary. |
+| `node.version` | String, exact deployed `process.version`, matching the registered Node 24 patch | Inside the serving process. |
+| `node.executableDigest` | Digest | SHA-256 of the actual Node executable used by that process, resolved from its executable descriptor. |
+| `node.versions` | Complete object mapping String keys to String values | Exact full `process.versions`; its observed key set is the allowed key set, with no omitted or added versions. This is a source-defined map, not an extensible configuration object. |
+| `node.configDigest` | Digest | Canonical encoding of the full observed `process.config`, preserving its complete object/array/scalar values; retain the captured payload as evidence. |
+| `sqlite.version`, `sqlite.sourceId` | Strings | `SELECT sqlite_version(), sqlite_source_id()` through the SQLite binding used by the engine. |
+| `sqlite.compileOptionsDigest` | Digest | Canonical sorted array of the full String rows returned by `PRAGMA compile_options`; retain rows as evidence, no filtering. |
+| `libuvVersion` | String, must equal `node.versions.uv` | Observed `process.versions.uv`. |
+| `engineCommit`, `adapterCommit` | Commit | Verified deployed artifact/build provenance for the engine and the product's adapter/profile. |
+| `environment` | Complete map of environment-name strings to string values; values may be empty | Enumerate the serving process's actual environment. Include exactly names beginning with `NODE_`, `UV_` or `LC_`, plus the exact names `TZ` and `LANG`. Unset names are absent; empty set values remain present. In particular omission of `NODE_OPTIONS`/`UV_THREADPOOL_SIZE` means observed unset, not unchecked. No nonmatching key is allowed. |
+| `umask` | Four-octal-digit String | Observe the **serving process that runs the engine**, through its own umask getter or its `/proc/self/status` `Umask`; PID 1's umask is insufficient. |
+| `seccompMode` | UInt in `{0,1,2}` | `Seccomp` from the serving process's `/proc/self/status`. |
+| `permissions.directoryMode` | Literal string `0700` | Descriptor-based stat of each private directory holding canonical/sidecar/companion files, applying §7's safe-identity checks. |
+| `permissions.canonicalMode`, `permissions.sidecarMode`, `permissions.companionMode` | Literal strings `0600` | Descriptor-based stat of every corresponding existing file, with an evidence inventory of checked roles and absent companions; enforce §7's safe 0600 creation checks whenever a companion is created. These are verified mode invariants across the files, not caller-supplied labels. Any disagreeing file refuses the capture or invalidates the run. |
 
-The registration records:
-- all three records and their SHA-256 digests;
-- the comparison result for each pair: pre-run production against isolated, and pre-run against post-run production.
+For clarity, `cgroup` has exactly nine keys: `version`, `cpu.max`, `cpu.max.burst`, `cpu.weight`, `memory.max`, `memory.high`, `memory.swap.max`, `io.max`, `pids.max`. Dots in these eight file-name keys are literal, not further nesting. The PID limit is a process count. All effective finite ancestor limits must also be accounted for: the linked cgroup evidence records the resolved hierarchy and establishes that no ancestor imposes a tighter resource control than the recorded effective group. If that cannot be observed/proven, equivalence registration refuses. No plan-name substitution or unobserved burst-credit assumption is allowed.
 
-The post-run production record must equal the pre-run one apart from identity fields. If production changed during the run, for example through a new Node patch, builder version or plan, the result describes a configuration that is no longer deployed. Launch evidence is then **inconclusive** until a new run is made against the new configuration.
+**Exact `placement` schema and sources.** It is `{cpu:{vendorId,family,modelNames},kernel:{release,major,minor,patch},nproc,currentClocksource,volumeRootMode}` with exactly these keys.
 
-The product enables context reads only on a production deployment that still matches the attested configuration.
+| Field | Type / source / comparison |
+| --- | --- |
+| `cpu.vendorId`, `cpu.family` | String `vendor_id` and UInt `cpu family` from `/proc/cpuinfo`. Require all visible CPU records to agree on each, then compare both fields for equality across environments. |
+| `cpu.modelNames` | Distinct sorted String array of `model name` values from `/proc/cpuinfo`; recorded/disclosed only. |
+| `kernel.release`, `kernel.major`, `kernel.minor`, `kernel.patch` | String from `uname -r`/`os.release()`, parsed by `^([0-9]+)\.([0-9]+)\.(.+)$` into UInt major/minor and String patch (the complete remainder, including suffix). Reject inconsistent parsed values. Compare major/minor only; disclose release/patch differences. |
+| `nproc` | Positive UInt, host-visible `nproc` output, logical processors; recorded/disclosed only, not a resource-plan comparator. |
+| `currentClocksource` | String from `/sys/devices/system/clocksource/clocksource0/current_clocksource`, terminal LF removed; recorded/disclosed only. |
+| `volumeRootMode` | Four-octal-digit String from descriptor stat of the volume mount root; recorded/disclosed only. It is excluded from `controlled.permissions`. |
+
+**Exact `isolation` schema.** For isolated captures (`isolated-pre`, `run-start`, `run-end`, `isolated-post`) it is exactly `{publicIngress:false,domainRoutes:false,userCredentialRoutes:false,coTenantServices:false,coTenantJobs:false,coTenantReplicas:false,runDataOnly:true}`. Sources are linked provider ingress/domain/credential-routing configuration, service/job/replica placement and volume-attachment inventories, plus the volume's run-data inventory and registered process schedule. Each boolean needs evidence; an operator's unsupported assertion is insufficient. For production kinds it is null. The isolation attestation is the isolated record's non-null `isolation` plus its covering evidence and digest; it is already available at registration.
+
+**Exact `identity` schema.** `{serviceOrEnvironmentId,instanceOrContainerId,boot_id,volumeId,hostname,capturedAt,capturedBy}`. All but `capturedAt` are String identity values only; `capturedAt` is UInt UTC milliseconds. Provider inventory supplies service/instance/volume identities, `/proc/sys/kernel/random/boot_id` supplies `boot_id`, the service supplies its hostname, the collector supplies trusted capture time and its operator/service-principal identity. `capturedBy` identifies the actor, not a configuration label. No further identity keys are allowed.
+
+**Exact `evidence` schema.** A nonempty array of closed objects `{field,source,artifact,digest}`, sorted by `(field,source,artifact)` UTF-8 bytes; duplicate triples refuse. `field` is a JSON Pointer to the attested leaf or source-defined map/subtree it supports. `source` is exactly one of `process`, `kernel`, `filesystem`, `sqlite`, `provider`, `build-log`, `deployment`. `artifact` is a String immutable artifact reference linked in the evidence bundle, not a local filesystem location or injected value. `digest` verifies the artifact's raw bytes. Source artifacts cover **every observed field in the four groups** and show the service/instance/volume and capture time to which observations belong; version/kind and calculated digests are record metadata, not recursively attested observations. Provider/build-only facts require those source classes, with their original linked records; an injected environment label cannot prove them. Linked artifacts are retained and hash-verified, with access governed by the product's evidence channel. If neither service observation nor linked provider/build evidence can establish a field, registration refuses. Identity strings cannot supply missing provenance.
+
+**Mechanical pre-run comparison.** Recompute all record/artifact digests, validate the closed schema and source coverage, compare canonical `controlled` bytes, then compare CPU vendor/family and kernel major/minor. Require the same collector source digest and code for both captures. `host.id` and `volume.id` in registration bind to the isolated instance and volume identities; the runner verifies these against its own observations. Production and isolated service/environment, instance/container and volume IDs must be distinct; the evidence must establish that they share no instance or volume. Hostname or `boot_id` equality across environments alone cannot prove or refute isolation; provider placement evidence is required. A swapped record, wrong volume, contradictory isolation identity or unavailable comparator refuses registration.
+
+**Sequence and continuity.** Pin both environments' deployed artifacts and configuration over the complete capture interval. Each production capture, including the pre-enablement check, follows the product's approval rule for touching production; where that rule requires the owner, record approval for **each** capture.
+
+1. **Before immutable registration:** capture `production-pre` within **6 h (21,600,000 ms) before the reservation starts**; capture `isolated-pre` immediately before run start, with the same collector. Use that same collector code/source digest for every subsequent record. Registration contains exactly these two initial attestation records and their digests, their pre-comparison, the isolation attestation, the collector commit/source digest, and the **full post-run procedure specified here**. Fix the expected isolated instance, volume and `boot_id`, trusted timestamps, provider-history sources, comparisons, sealing procedure and acceptance rules before collection. Registration contains no future capture or future comparison result. Its existing hash remains unchanged afterward.
+2. **At run boundaries:** the **harness itself** executes that collector **inside the isolated process running the engine**, immediately at run start and at run end after final drain. Seal `run-start`/`run-end`, actual run UTC start/end and actual exits with the run ID and registration hash. These observations must bind to the registered instance, volume and `boot_id`, and their `controlled` bytes must match `isolated-pre`. Verify protected modes as files are created. Any controlled-field, instance, volume or `boot_id` change during the isolated run **invalidates the run**, including a later-reverted change.
+3. **After the run:** capture `isolated-post` immediately after the run-boundary collection, and `production-post` within **6 h (21,600,000 ms) after run end**. Require `production-post.controlled` byte-identical to `production-pre.controlled`, and `isolated-post.controlled` byte-identical to `isolated-pre.controlled`; apply the placement comparator to the post-run production/isolated pair too. Collect the hosting provider's deployment **and configuration history for both environments covering their entire [pre, post] intervals**, including restarts, placement/volume changes and reverted changes. Histories must establish no deploy, restart or configuration change, and captures must show unchanged instance identity and `boot_id` within each environment. Retain the pinned configuration/build evidence as well as boundary records; matching snapshots alone do not establish continuity. Missing history or an unobserved interval withholds acceptance as inconclusive. An observed production change, **even if later reverted**, makes launch evidence **inconclusive**; isolated-run changes remain invalid, and known gate failures remain failures.
+4. **Sealed result artifact:** store the actual post-run and harness records, all digests, capture/approval references, history evidence and interval bounds, run/instance/volume bindings, comparisons, placement disclosures and actual exits in an immutable content-addressed result artifact **bound to the unchanged registration hash**. Hash its canonical complete payload with only its own top-level digest omitted. Validate every linkage, six-hour bound, controlled comparison, placement tolerance and continuity assertion. **Acceptance is withheld until the sealed result validates**; appending results never amends registration. There is no registration-time requirement to invent `production-post`.
+5. **Before enablement:** record a `pre-enablement` production capture and matching-deployment comparison showing that production's controlled fields still equal the attested ones. Follow the same approval rule and collector provenance. Retain deployment history from `production-post` through this check so an intervening controlled-field change and reversion cannot disappear. A controlled mismatch leaves launch evidence inconclusive for that deployment. A later engine repin or any other controlled-field change falls outside this evidence, including a reverted change: it requires **a new run or a recorded owner decision** on proceeding outside it; nothing automatically extends qualification.
+
+“Immediately” means collection is the adjacent boundary action, with no intervening deployment, configuration change or unrelated job. V4.6's pre-registered checkpoint/segment continuation remains available on the same instance, volume, `boot_id` and controlled configuration. Each additional reserved segment repeats the boundary captures, six-hour production bounds and history validation under the registered procedure; its later pre/post records and segment ID go into sealed results under the original registration hash. Evidence must cover intervening gaps too. A restart, identity/configuration change or evidence gap cannot be hidden by joining segments, and no segment replaces failures or changes a population.
 
 ### R2.3 Claim boundary
 
-A complete pass of `production-launch-v4` revision 2 is production launch evidence **for the attested production-equivalent host configuration**. Within that boundary it carries the same claims as the V4.2 production row: the same registered populations, the same compact-only R7 mapping, and the same unclaimed full/snapshot mixed-pair latency.
+A complete revision-2 production pass supports V4.2's lexical v1.1 C-1–C-4 launch claim **for the attested configuration and registered population recipes**. Those recipes include their recorded **initial and final counts and scheduled growth during continuous-write sessions**. A growing 3,336-initial-Memory recipe is not excluded when its scheduled inserts exceed its initial size. The compact-only production R7 mapping and unclaimed full/snapshot mixed-pair latency remain unchanged.
 
-It does **not** cover:
-- behaviour under co-located real-user load on the production service;
-- noise from shared provider hardware beyond what occurred during the run;
-- owner corpora larger than the registered 3,336-Memory population;
-- any configuration that differs from the attestation.
-
-R2.4's canary observes part of the first point after enablement, report-only. A clean canary does not widen this claim boundary.
+The claim excludes co-located real-user load, provider noise beyond the observed run, unregistered populations/interactions and anything differing from the attestation. R2.4 observes real-user operation report-only; a clean canary neither widens this boundary nor supplies missing cells, successes, telemetry or package/adapter sign-off. Later configuration changes have the R2.2 new-run/recorded-owner-decision boundary.
 
 ### R2.4 Post-enablement canary
 
-The product registers the canary **before** it enables context reads on the first production surface. The registration is hashed and kept with the run's results. It contains:
-- the ordered list of surfaces;
-- each surface's request window. Today that is 2,000 ms for the short surface and 5,000 ms for the others; the registration uses the value actually deployed.
-- the telemetry sources;
-- the window rule below.
+The product registers and hashes the canary **before enabling the first production surface**, and keeps it with the qualification results. Register the ordered surfaces, deployed request windows and enabled methods/intents, canonical-count provenance, timestamp boundaries, telemetry sources/coverage, build-certification events, planned-rebuild procedure and the window/alert rules below. The product adds a **metadata-only recorder in its adapter**, exported through an **authenticated internal channel**: no content, query text or owner IDs. Per-owner counting/size assignment occurs inside the adapter; exported records use window-local attempt/build correlation without exporting owner identity.
 
-**Window.** For each surface, the window starts when context reads are enabled on it. It ends when **both** of these hold:
-- at least 24 hours have passed;
-- at least 100 normal index-dependent attempts per enabled method have been observed on that surface.
+Surfaces in current rollout order are:
 
-The product registers a maximum duration. If the count is still short at that maximum, the surface's canary is **inconclusive**, and rollout pauses as for a breach.
+1. A **web chat surface**, deployed window **5,000 ms**.
+2. An **MCP tool surface**, deployed window **5,000 ms**.
+3. A **session-start hook**, proposed window **3,000 ms**.
 
-**Observations**, per surface and per method (`findCandidates`, `fetchCandidateEvidence`, `contextRead`), for real production reads:
-- successful latency: p50, p95 (nearest rank) and maximum, measured over the same public interval the product's adapter times;
-- public `read_timeout` and cancellation counts;
-- public `storage_busy` counts, plus native busy where the product records it;
-- not-ready outcomes, as defined in §10.4;
-- capture and review write timeouts or deadline overruns that overlap a context read;
-- the host main-loop maximum, if the product instruments it. If it does not, the report says "not instrumented".
+Registration takes the values actually deployed; a proposed value is not a deployed fact. These canary windows do not revise any qualification deadline or E.9 surface-window registration.
 
-**Alerts.** These reuse §10.3 and §10.4 as **report-only alert thresholds**. They are not gates and do not change those sections.
-- Successful p95 or maximum above the §10.3 fresh main/cold lifecycle numbers for that method:
-  - use the 1,112 column for owners with at most 1,112 Memories, and the 3,336 column otherwise;
-  - report owners above 3,336 Memories separately, outside the qualified population, and alert them on the 3,336 numbers.
-- Any public `read_timeout`, alerted on its own whatever the latency figures show. A timed-out read has no successful latency, so the latency alerts cannot catch it.
-- Any public `storage_busy` on a WAL database.
-- On DELETE, report all busy outcomes. Alert on any capture or review timeout or deadline overrun that overlaps a context read.
-- A not-ready fraction above 1% (§10.4).
-- A host main-loop maximum above 100 ms, where instrumented.
+**Population and window.** For each surface the observation window starts at enablement. For each owner and intent, normal attempts start counting at its **first completed certified build**; retain the certification time as provenance. Thereafter **every normal attempt counts**, including errors, timeouts, dirty/maintenance/cron gaps and fallback invocations. Fallback is a not-ready engine attempt, even if the product fallback succeeds.
 
-**Breach.** Any alert, or an inconclusive window:
-- pauses rollout to the next surface;
-- is reported to the owner with the canary report.
+Only **`findCandidates` and `contextRead`** form the index-dependent population. The §10.4 not-ready numerator and denominator apply to that population, with mutually exclusive per-attempt classification and separate error/timeout counts; **`fetchCandidateEvidence` never enters either** (§8.3/§10.4). Completion requires **at least 100 normal index-dependent attempts per enabled index-dependent method per surface**, reported by method and intent; availability fractions retain their owner/readSet/types/intent populations, ≥100-attempt minimum and combined-method denominator as §10.4 requires. Do not pool owners/intents to label an under-covered availability population clean; report its coverage as inconclusive. Enabled `fetchCandidateEvidence` separately needs **at least 100 normal attempts per surface for its latency alerts**, after the corresponding first-build counting boundary, with no index-dependence claim. Successful latency counts are reported separately; normal errors still count toward attempt coverage and never become successful samples.
 
-The surface that is already enabled stays as it is unless the owner decides to switch it off with the product's off switch. Rollout resumes only on a recorded owner decision. Alert thresholds are never relaxed to resume.
+The window ends at the **later of 24 h and fulfillment of these attempt minimums**, with a registered maximum of **7 days per surface**. If minimums are not met by then, the window is **inconclusive**: rollout pauses, and the owner decides whether to extend observation, widen the allowlist or proceed. Record the decision; an extension/proceed decision does not relabel the incomplete window clean.
 
-### R2.5 Supersession and unchanged text
+A **planned rebuild** (an engine repin or a format change forcing a rebuild) must be recorded **before it starts**. It closes the current window as **“interrupted by planned rebuild”**; retain and report every observation and any alert already seen. A new window starts once the rebuilt projection certifies; the per-surface 7-day maximum and 24-hour/minimum rule apply anew. A rebuild not recorded beforehand is **unplanned**: its not-ready attempts remain counted, with no reset or dirty-period exclusion. A repin also invokes R2.2's qualification boundary; starting a new canary never extends the isolated-run claim. An interrupted window cannot be reported as a completed clean canary or silently advance rollout.
 
-This revision supersedes exactly the following, and only for the production launch profile:
+**Intervals and size populations.** Latency-alert comparisons use §10.1's **constructor-entry → one public read → awaited close** lifecycle, including startup/validation/IPC and failed-open supervisor drain as applicable. Register those exact timestamp boundaries; report read-call timing and open/final-native/resource/close components separately. If the adapter cannot measure the full lifecycle, label its measured interval a **proxy**, name its exact boundaries and limitations, and mark that latency alert **“not comparable”**. That alert and window are **inconclusive**, never clean; a fast proxy cannot clear them. Successful latency statistics exclude fallback/error results, with all-attempt outcomes and intervals retained separately.
 
-| Superseded text | Replacement |
+Each attempt's owner size comes from a **canonical Memory count**. Record the count's provenance (canonical observation time/revision and counting source, without owner IDs), using a count current to that attempt rather than a sidecar or stale profile label. Report counts and nearest-rank successful p50/p95/maximum separately by surface, method, intent and these buckets; do not pool buckets:
+
+| Canonical size bucket | Latency alert column from §10.3 |
 | --- | --- |
-| §7 "**Must qualify:** Linux ext4 on the production volume" | Linux ext4 on a production-equivalent isolated host meeting R2.1, with the R2.2 attestations. The rest of §7 is unchanged: 0700/0600, WSL2/APFS as separate should-qualify reports, network filesystems out of scope, production remains DELETE. |
-| §10.1 "production Linux ext4 is launch-required" | Production-equivalent isolated Linux ext4 (R2.1) is launch-required. |
-| V4.2 `production-launch-v4` "Required environment" cell, "The product's production-class **Linux ext4 production volume**, non-WSL host" | A production-equivalent isolated host (R2.1) with the R2.2 attestations, plus the rest of that cell unchanged: exact deployed Node 24 patch, 0700/0600, the production column, a 7 h 30 min reservation. |
-| V4.2 "Before registration, the product supplies: … the actual production volume/mount and ext4 attestation" | The three R2.2 attestation records, their digests and comparison results, plus the R2.1 isolation attestation. |
-| V4.2 `production-launch-v4` claims cell | The same claims, bounded by R2.3. |
-| Appendix V4-A `profiles.production.requiredRole` | See the encoding below. |
+| ≤1,112 Memories | 1,112 column |
+| 1,113–3,336 Memories | 3,336 column |
+| >3,336 Memories | 3,336 column, explicitly **outside the qualified population** for this alert report; R2.3's registered-growth claim remains as specified there. |
 
-**Encoding.** The production profile's protocol definition becomes the Revision 1 Appendix V4-A definition with two changes:
-- `revision` is set to `2`;
-- `profiles.production` is replaced by:
+**Observations and coverage.** Record public outcomes (`read_timeout`, cancellation, `storage_busy`, not-ready and other errors), latency populations and counts, native busy, overlapping capture/review write intervals and deadlines, lifecycle components, and host main-loop observations. **Every observation family** has a coverage status and numerator/eligible-observation counts, including native busy, writer overlap **and** writer deadline coverage, lifecycle components, and main loop. Use **“instrumented”**, **“partial”** or **“not instrumented”** as applicable; partial coverage states what is missing. No coverage means no zero-event claim. Main-loop coverage also records the actual **`monitorEventLoopDelay` resolution in ms**, or “not instrumented”. Missing essential read telemetry (**latency or outcome**) makes the canary **inconclusive**. An unavailable optional family is disclosed; it never manufactures a clean alert for that family. Fewer successful samples than attempts and missing size/count provenance are visible in coverage; an unassignable size or unmeasurable comparison cannot produce a clean latency alert.
+
+**Alerts.** Reuse §10.3/§10.4 only as **report-only alert thresholds**; these are not acceptance gates and change no gate number or meaning:
+
+- Successful lifecycle p95 or maximum above the §10.3 fresh main/cold numbers for that method, using its separate size bucket and the table above; never substitute read-call/proxy timing.
+- **Any public `read_timeout`**, alerted separately whatever successful latency shows; timeout has no successful latency.
+- Any public `storage_busy` on a WAL database; report native busy with its coverage.
+- On DELETE, report **all busy outcomes**. Alert on **any capture/review timeout or deadline overrun overlapping a context read**; no DELETE busy-rate gate is introduced.
+- A §10.4 not-ready fraction **above 1%**, using only index-dependent attempts and preserving their population boundaries.
+- A host main-loop maximum **above 100 ms**, where instrumented.
+
+**Breach/pause rule unchanged.** Any alert or inconclusive window pauses rollout to the next surface and is reported to the owner with the report. The enabled surface stays enabled unless the owner uses the product's off switch. Rollout resumes only on a **recorded owner decision**; alert thresholds are never relaxed to resume. The canary does not replace missing qualification evidence.
+
+### R2.5 Exact supersession and production-only encoding
+
+Only the production-launch platform requirement is superseded. The **source** column contains exact verbatim substrings from the frozen prefix, with frozen-prefix line references; replace only those substrings in their stated launch contexts. Quoting a source here does not edit frozen bytes. All adjacent text remains normative.
+
+| Frozen location | Exact superseded source substring | Narrow replacement |
+| --- | --- | --- |
+| §7, line 491 | `**Must qualify:** Linux ext4 on the production volume` | **Must qualify:** Linux ext4 on the R2.1 production-equivalent isolated volume, with R2.2 validated evidence. |
+| §7, line 491 | `the the production host result` | the production-equivalent isolated-host result qualified under R2.1–R2.2 |
+| §8.3 WAL row, line 550 | `Qualified production Linux ext4 required` | Qualified production-equivalent isolated Linux ext4 under R2.1–R2.2 required |
+| §10, line 605 | `on the production host for launch` | on the production-equivalent isolated host under R2.1–R2.2 for launch |
+| §10.1 modes/platforms, line 613 | `production Linux ext4 is launch-required` | production-equivalent isolated Linux ext4 under R2.1–R2.2 is launch-required |
+| §11 P2d, line 678 | `production runtime/volume` | the attested production-equivalent isolated runtime/volume under R2.1–R2.2 |
+| §12 Q5, line 692 | `production Linux ext4 0700 directory/0600 files is must-qualify` | production-equivalent isolated Linux ext4 under R2.1–R2.2, 0700 directory/0600 files, is must-qualify |
+| §14 item 4, line 739 | `production-environment access/run ownership` | isolated-environment access/run ownership plus production-capture approval and evidence ownership under R2.2 |
+| V4.2 production environment, line 779 | `The product's production-class **Linux ext4 production volume**, non-WSL host` | The product's production-equivalent isolated **Linux ext4 volume**, non-WSL host under R2.1–R2.2 |
+| V4.2 input phrase only, line 781 | `the actual production volume/mount and ext4 attestation` | the isolated volume/mount and ext4 evidence, `production-pre` and `isolated-pre` records/digests and pre-comparison, isolation attestation and complete R2.2 post-run procedure |
+| V4.7 platform row, line 924 | `Production Linux ext4 is still launch-required (§7)` | Production-equivalent isolated Linux ext4 under R2.1–R2.2 is still launch-required (§7) |
+| Appendix V4-A production role, line 1131 | `"requiredRole": "production Linux ext4 on production volume"` | the `requiredRole` member of the production-only overlay below |
+
+The V4.2 production claims remain bounded by R2.3. **Every other V4.2 registration input is explicitly preserved**: concrete host/CPU/RAM/OS and run owner; exact deployed Node patch and engine/profile/protocol commits; physical synthetic snapshots, both sizes and Card distributions; selection metadata, labels/queries/unique probes and known misses; exact production counter/module/configuration; normal open/request/read deadlines and **capture/review deadlines with provenance**; writer recipe/rate/busy policy; supervised pump service, minute budgets/renewal and capacity; diagnostic capacities, telemetry coverage and drain/ack schedule; and exclusive quiet reservation. The missing-deadline/inconclusive rule, no invented review deadline, and engine-fixture claim boundary remain. Host/volume evidence changes do not waive any of these inputs.
+
+**Definition overlay, production revision 2 only.** Keep Appendix V4-A and **`DEFINITIONS.engine` byte-identical**, including its embedded revision-1 `profiles.production`, `platform` and existing engine registration equality. Do not mutate the shared appendix and derive both profiles from the mutation. Construct a separate production definition from the revision-1 definition: set its top-level `revision` to `2`, replace only its `profiles.production` with the exact object below, and consistently regenerate its derived `platform` as that same new `profiles.production` object. Preserve `platformProfile:"production"` and all other definition members. Expanded production descriptors report revision 2; their stable keys/dimensions, counts, samples and ordering stay unchanged.
 
 ```json
-{"id": "production-launch-v4", "reservationSeconds": 27000, "requiredRole": "production-equivalent isolated Linux ext4", "runtime": "exact deployed Node 24 patch", "attestations": ["production-pre", "isolated", "production-post"], "claimBoundary": "attested production-equivalent host; excludes co-located real-user load"}
+{
+  "id": "production-launch-v4",
+  "reservationSeconds": 27000,
+  "requiredRole": "production-equivalent isolated Linux ext4",
+  "runtime": "exact deployed Node 24 patch",
+  "platformRole": "production-equivalent-linux-ext4",
+  "volume": {"production": false, "productionEquivalent": true, "filesystem": "ext4", "nonWSL": true},
+  "attestationVersion": "production-equivalence-attestation-v1",
+  "registrationAttestations": ["production-pre", "isolated-pre"],
+  "resultAttestations": ["run-start", "run-end", "production-post", "isolated-post"],
+  "postRunProcedure": "R2.2",
+  "claimBoundary": "attested configuration and registered population recipes including scheduled growth; excludes co-located real-user load"
+}
 ```
 
-The **engine** profile's definition stays the Revision 1 definition, byte for byte. Engine registrations, templates and expected counts are therefore unaffected.
+A revision-2 production registration must exactly equal that derived production definition and supply **all** of `volume.production:false`, `volume.productionEquivalent:true`, `platformRole:"production-equivalent-linux-ext4"`, `volume.filesystem:"ext4"`, `volume.nonWSL:true` and the validated R2.2 initial records/isolation/procedure. Existing required host/volume identities, mount and other V4.2 inputs remain. Any top-level `filesystem` mirror must also be `ext4`; contradictory copies refuse. Retire the legacy `volume.production:true` live-volume requirement **only for this production revision**. Reject missing/extra/mismatched captures at their stage, a revision-1 production definition, the old `production-linux-ext4` role, true live-production flags, false/missing equivalence flags, contradictory filesystem/non-WSL values, unsupported record versions/provenance or conflicting identities. Engine validation stays unchanged.
 
-A revision-2 production registration must:
-- use `platformRole` `production-equivalent-linux-ext4`;
-- set `volume.productionEquivalent: true`, `volume.filesystem: "ext4"` and `volume.nonWSL: true`;
-- carry the attestations as R2.2 describes.
+**Runtime launch eligibility.** For revision-2 production, `measure-context-read-product.mjs:102`'s internal **`production` flag must be true under exactly these conditions together**: the equivalent-host production registration above has validated; runtime `process.version` exactly equals its registered deployed Node patch; the OS is Linux; the runtime is non-WSL; `statfs` on the bound volume reports ext4 magic **0xef53**; and the harness's in-process collector matches `isolated-pre`'s **controlled bytes** and registered instance/volume/`boot_id`. The runtime non-WSL check must corroborate registration, not trust the flag alone. Otherwise that flag is false and launch acceptance is withheld; a false `volume.production` is intentional and does not force it false. A later mismatch invalidates the isolated run even if the flag was true at startup. The flag alone never grants a pass: the sealed post-run evidence and every unchanged required gate/cell/package still must validate.
 
-The harness rejects:
-- a revision-1 production definition;
-- a missing, extra or mismatched attestation;
-- the old `production-linux-ext4` role under revision 2.
+The production-only validator/definition/runtime-eligibility changes in `v4-plan.mjs`, `v4-runner.mjs` and `measure-context-read-product.mjs` remain **a separate reviewed harness change**. Until that implementation exists, no revision-2 production registration can be validated by the current harness. This revision authorizes no code changes or run. A return to live-volume qualification requires a further contract revision.
 
-Running on the live production volume again would need a further revision.
+**Unchanged, with the explicit exceptions above:** all §10.3/§10.4 numbers and gate meanings and V4.1; **488 production cells**, all expected counts, population/success rules and the **27,000 s (7 h 30 min)** reservation; the entire engine definition/profile/registrations; all §§1–9 runtime, permission and safe-WAL rules except the enumerated launch-platform phrases; all §11 package dependencies, including P2a+P2b+P2c and adapter sign-off, except its mapped runtime/volume location; and **every earlier delta except the enumerated production-platform/definition overlay**. In particular **P2e and E.9's production-class staging requirement are unaffected**, including their own inventories, windows, gates and authorization. Production remains DELETE, WSL2/APFS remain separate should reports, network filesystems remain out of scope, and no schema/WAL rollout is authorized.
 
-Implementing this encoding in the harness is a separate reviewed change. Until it merges, no revision-2 production registration can be validated.
+### Revision 1 changelog (P2-product-v4 revision 2)
 
-**Unchanged:**
-- every §10.3 and §10.4 number and gate meaning, and V4.1;
-- the 488-cell production column, its expected counts, populations, sample rules and the 7 h 30 min reservation;
-- the engine profile;
-- §§1–9 runtime requirements other than the §7 sentence above;
-- the §11 integration dependencies;
-- every earlier delta, including P2e.
+Finding numbers below follow each audit's original order; all **10 validity** and **7 consistency** findings are mapped individually.
+
+| Audit finding | Change in this revision |
+| --- | --- |
+| Validity 1 — P1, materially different equality hosts | R2.1–R2.2 replace plan/vCPU/version labels with effective cgroup v2 controls including burst/swap/I/O, filesystem/OS/build artifacts, Node binary/config/full versions, SQLite source/options, seccomp, full relevant environment and serving-process umask. Placement tolerance and disclosed clocks/CPU details are explicit. |
+| Validity 2 — P1, snapshots lack continuity | R2.2 pins configuration, adds both harness boundary and isolated-post captures, instance/volume/boot binding, both environments' complete deployment/config histories including reverts, six-hour production bounds and a recorded pre-enablement matching-deployment check. |
+| Validity 3 — P1, future evidence at registration | R2.2 preregisters only production-pre/isolated-pre, isolation and the complete post-run procedure. Actual later captures/comparisons enter sealed results bound to the unchanged registration hash; acceptance waits for validation. |
+| Validity 4 — P1, imprecise V4.2 input supersession | R2.5 quotes only the exact volume/mount phrase and explicitly preserves every other V4.2 input, including counter, deadline provenance, writer, pump, telemetry and reservation. |
+| Validity 5 — P1, impossible index-dependent fetch minimum | R2.4 limits index-dependent completion/not-ready accounting to candidates and assembly; evidence fetch has its own ≥100 normal-attempt minimum for latency alerts. |
+| Validity 6 — P2, collection/canonicalization underspecified | R2.2 defines the versioned closed nested schema, types/units, exact observation sources, evidence objects, unknown/null rules, E.4.1 canonical bytes, duplicate-key rejection and digest payload. Identity fields contain only identity; unavailable provider/build facts refuse. |
+| Validity 7 — P2, incomparable latency interval | R2.4 requires constructor-through-awaited-close latency, separate read-call/components, and labels an unavailable full interval as a proxy with a not-comparable/inconclusive alert. |
+| Validity 8 — P2, pooled size statistics | R2.4 records canonical count provenance per attempt and separate ≤1,112 / 1,113–3,336 / >3,336 counts/percentiles and alert columns. |
+| Validity 9 — P2, missing telemetry appears clean | R2.4 requires coverage status/counts for every family, including native busy, writer overlap/deadline, lifecycle and main loop/resolution; missing essential latency/outcome makes the canary inconclusive. |
+| Validity 10 — P2, size exclusion understates recipe | R2.3 bounds claims to registered recipes with initial/final counts and scheduled continuous-write growth; removes the fixed corpus-size exclusion. |
+| Consistency 1 — P1, incomplete/non-verbatim supersession | R2.5 enumerates exact narrow substrings at all cited launch locations plus the second §7 host reference and Appendix role; preserves package/registration dependencies and qualifies earlier-delta precedence. E.9 stays unaffected. |
+| Consistency 2 — P1, future evidence at registration | R2.2 separates initial immutable registration from sealed post-run results, fixes collector/procedure before collection and withholds acceptance pending post-run validation. |
+| Consistency 3 — P1, no closed JSON schema | R2.2 specifies every closed object/key, dynamic source-defined map, scalar/unit/source, timestamp bounds, isolation proof, digest payload and canonical/duplicate/unknown-value rejection. |
+| Consistency 4 — P1, no whole-reservation equivalence | R2.2 adds actual in-process start/end and isolated-post evidence, pinned deployments, full histories, identity/boot continuity and reverted-change handling for both environments and checkpoint gaps. |
+| Consistency 5 — P1, incomplete eligibility encoding | R2.5 defines a production-only revision-2 overlay with regenerated `platform`, explicit false live-volume/true equivalent flags, contradiction rejection and exact runtime derivation of the internal `production` flag; engine bytes remain unchanged. |
+| Consistency 6 — P2, ambiguous fetch completion | R2.4 names the two index-dependent methods and their denominator; fetch's separate normal-attempt latency minimum cannot dilute availability. |
+| Consistency 7 — P2, mismatched latency threshold interval | R2.4 aligns latency-alert timestamps with §10.1, reports read-call timing separately and makes any proxy comparison explicitly inconclusive. |
+
+Additional settled canary details: counting begins at each owner/intent's first certified build, planned rebuilds close and retain interrupted windows, unplanned rebuilds keep counting, the maximum is 7 days per surface, and the deployed three-surface order/windows and metadata-only authenticated recorder are specified. Report-only alerts, separate timeout alert, DELETE busy policy and breach/pause behavior remain unchanged. No numerical qualification gate, inventory count or engine registration is revised.
