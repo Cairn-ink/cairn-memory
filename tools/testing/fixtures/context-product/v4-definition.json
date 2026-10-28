@@ -1,0 +1,999 @@
+{
+  "protocol": "P2-product-v4",
+  "revision": 1,
+  "engineProfile": "context-read-product-v1.1",
+  "thresholds": "unchanged frozen sections 10.3 and 10.4",
+  "sets": {
+    "B": [
+      1112,
+      3336
+    ],
+    "L": [
+      3336
+    ],
+    "S": [
+      18,
+      23,
+      33
+    ],
+    "C": [
+      23,
+      33
+    ],
+    "P": [
+      18,
+      33
+    ],
+    "J": [
+      [
+        "DELETE",
+        "DELETE"
+      ],
+      [
+        "WAL",
+        "WAL"
+      ]
+    ],
+    "X": [
+      [
+        "DELETE",
+        "WAL"
+      ],
+      [
+        "WAL",
+        "DELETE"
+      ]
+    ],
+    "I": [
+      "current",
+      "history"
+    ],
+    "Q": [
+      "zh",
+      "ja",
+      "mixed"
+    ],
+    "rotation": [
+      "language-rotation-v4"
+    ],
+    "D": [
+      "c12",
+      "a1500",
+      "f24-full",
+      "f24-compact",
+      "f24-snapshot"
+    ],
+    "stress": [
+      "c24",
+      "a4000"
+    ],
+    "adapters": [
+      "full",
+      "compact",
+      "snapshot"
+    ],
+    "faults": [
+      "absent",
+      "exhaustion",
+      "abort",
+      "crash",
+      "post-catch-up"
+    ]
+  },
+  "methods": {
+    "c12": {
+      "method": "findCandidates",
+      "limit": 12
+    },
+    "c24": {
+      "method": "findCandidates",
+      "limit": 24
+    },
+    "a1500": {
+      "method": "contextRead",
+      "maxTokens": 1500,
+      "maxItems": 12
+    },
+    "a4000": {
+      "method": "contextRead",
+      "maxTokens": 4000,
+      "maxItems": 24
+    },
+    "fetch": {
+      "method": "fetchCandidateEvidence",
+      "refs": [
+        1,
+        24
+      ],
+      "adapterSet": "adapters"
+    }
+  },
+  "requestRows": [
+    {
+      "id": "R1",
+      "profiles": "both",
+      "world": "B",
+      "schema": "S",
+      "journal": "J",
+      "intent": "I",
+      "method": [
+        "c12"
+      ],
+      "language": "Q",
+      "load": [
+        "idle"
+      ]
+    },
+    {
+      "id": "R2e",
+      "profiles": [
+        "engine"
+      ],
+      "world": "B",
+      "schema": "S",
+      "journal": "J",
+      "intent": "I",
+      "method": [
+        "a1500"
+      ],
+      "language": "Q",
+      "load": [
+        "idle"
+      ]
+    },
+    {
+      "id": "R2p33",
+      "profiles": [
+        "production"
+      ],
+      "world": "B",
+      "schema": [
+        33
+      ],
+      "journal": "J",
+      "intent": "I",
+      "method": [
+        "a1500"
+      ],
+      "language": "Q",
+      "load": [
+        "idle"
+      ]
+    },
+    {
+      "id": "R2p18-23",
+      "profiles": [
+        "production"
+      ],
+      "world": "B",
+      "schema": [
+        18,
+        23
+      ],
+      "journal": "J",
+      "intent": "I",
+      "method": [
+        "a1500"
+      ],
+      "language": "rotation",
+      "load": [
+        "idle"
+      ]
+    },
+    {
+      "id": "R3",
+      "profiles": "both",
+      "world": "B",
+      "schema": "S",
+      "journal": "J",
+      "intent": "I",
+      "method": [
+        "fetch"
+      ],
+      "refs": [
+        24
+      ],
+      "adapter": "adapters",
+      "language": "rotation",
+      "load": [
+        "idle"
+      ]
+    },
+    {
+      "id": "R4e",
+      "profiles": [
+        "engine"
+      ],
+      "world": "B",
+      "schema": "S",
+      "journal": "J",
+      "intent": "I",
+      "method": [
+        "fetch"
+      ],
+      "refs": [
+        1
+      ],
+      "adapter": "adapters",
+      "language": "rotation",
+      "load": [
+        "idle"
+      ]
+    },
+    {
+      "id": "R4p",
+      "profiles": [
+        "production"
+      ],
+      "world": "L",
+      "schema": "S",
+      "journal": "J",
+      "intent": "I",
+      "method": [
+        "fetch"
+      ],
+      "refs": [
+        1
+      ],
+      "adapter": "adapters",
+      "language": "rotation",
+      "load": [
+        "idle"
+      ]
+    },
+    {
+      "id": "R5e",
+      "profiles": [
+        "engine"
+      ],
+      "world": "L",
+      "schema": "S",
+      "journal": "J",
+      "intent": "I",
+      "method": "D",
+      "language": "rotation",
+      "load": [
+        "fresh-same",
+        "fresh-other"
+      ]
+    },
+    {
+      "id": "R5p",
+      "profiles": [
+        "production"
+      ],
+      "world": "L",
+      "schema": "P",
+      "journal": "J",
+      "intent": "I",
+      "method": "D",
+      "language": "rotation",
+      "load": [
+        "fresh-same"
+      ]
+    },
+    {
+      "id": "R6e-idle",
+      "profiles": [
+        "engine"
+      ],
+      "world": "L",
+      "schema": "C",
+      "journal": "J",
+      "intent": "I",
+      "method": "stress",
+      "language": "Q",
+      "load": [
+        "idle"
+      ]
+    },
+    {
+      "id": "R6e-loaded",
+      "profiles": [
+        "engine"
+      ],
+      "world": "L",
+      "schema": "C",
+      "journal": "J",
+      "intent": "I",
+      "method": "stress",
+      "language": "rotation",
+      "load": [
+        "fresh-same"
+      ]
+    },
+    {
+      "id": "R6p",
+      "profiles": [
+        "production"
+      ],
+      "world": "L",
+      "schema": [
+        33
+      ],
+      "journal": "J",
+      "intent": "I",
+      "method": "stress",
+      "language": "Q",
+      "load": [
+        "idle"
+      ]
+    },
+    {
+      "id": "R7e",
+      "profiles": [
+        "engine"
+      ],
+      "world": "L",
+      "schema": "S",
+      "journal": "X",
+      "intent": "I",
+      "method": "D",
+      "language": "rotation",
+      "load": [
+        "idle"
+      ]
+    },
+    {
+      "id": "R7p",
+      "profiles": [
+        "production"
+      ],
+      "world": "L",
+      "schema": "P",
+      "journal": "X",
+      "intent": "I",
+      "method": [
+        "c12",
+        "a1500",
+        "f24-compact"
+      ],
+      "language": "rotation",
+      "load": [
+        "idle"
+      ]
+    }
+  ],
+  "series": {
+    "allRequestRows": {
+      "warmups": 3,
+      "main": {
+        "minimumSuccesses": 50,
+        "maximumAttempts": 500
+      }
+    },
+    "cold": {
+      "where": {
+        "load": "idle"
+      },
+      "minimumSuccesses": 10,
+      "maximumAttempts": 100,
+      "freshProcess": true,
+      "warmups": 0
+    },
+    "reference": {
+      "where": {
+        "load": "idle",
+        "method": "findCandidates"
+      },
+      "minimumSuccesses": 50,
+      "maximumAttempts": 500,
+      "interval": "initialized read call"
+    },
+    "windowReference": {
+      "id": "pump-active-post-writer-reference-v4",
+      "where": "every W cell",
+      "method": [
+        "c12",
+        "c24"
+      ],
+      "intent": "I",
+      "language": "rotation",
+      "minimumSuccesses": 50,
+      "maximumAttempts": 500,
+      "interval": "initialized read call",
+      "p95MaximumMs": 300,
+      "maximumMs": 1500,
+      "start": "immediately after last reader window's writer stop and drain; same pump remains active",
+      "seriesOrder": [
+        [
+          "c12",
+          "current"
+        ],
+        [
+          "c24",
+          "current"
+        ],
+        [
+          "c12",
+          "history"
+        ],
+        [
+          "c24",
+          "history"
+        ]
+      ],
+      "interleaveBy": "attempt ordinal; omit only completed series; each series owns language ordinal and ceiling",
+      "readinessWaitAllowed": false,
+      "pumpReplacementAllowed": false,
+      "pumpStop": "after all four series finish; then drain",
+      "retainedPopulation": "post-combined-retained-target-rotation",
+      "requiredEvidence": [
+        "writer stop/drain",
+        "unchanged live pump schedule and activity",
+        "all attempt intervals",
+        "final pump telemetry drain"
+      ],
+      "countsAsCell": false,
+      "countsAsWindowExposure": false
+    },
+    "quantiles": "nearest-rank successful-only; all-attempt statistics separate",
+    "languageRotation": {
+      "by": "attempt ordinal",
+      "order": [
+        "zh",
+        "ja",
+        "mixed"
+      ],
+      "reset": "each series",
+      "requireAllLanguagesSuccessful": true
+    },
+    "concurrentSuccess": "actual public read-call/write-call overlap"
+  },
+  "windowRows": [
+    {
+      "id": "W1",
+      "profiles": "both",
+      "world": "B",
+      "schema": "S",
+      "journal": "J",
+      "load": [
+        "fresh-same"
+      ]
+    },
+    {
+      "id": "W2e",
+      "profiles": [
+        "engine"
+      ],
+      "world": "B",
+      "schema": "S",
+      "journal": "J",
+      "load": [
+        "fresh-other"
+      ]
+    },
+    {
+      "id": "W2p",
+      "profiles": [
+        "production"
+      ],
+      "world": "L",
+      "schema": "P",
+      "journal": "J",
+      "load": [
+        "fresh-other"
+      ]
+    },
+    {
+      "id": "W3e",
+      "profiles": [
+        "engine"
+      ],
+      "world": "B",
+      "schema": "S",
+      "journal": "J",
+      "load": [
+        "retained-target-rotation"
+      ]
+    },
+    {
+      "id": "W3p",
+      "profiles": [
+        "production"
+      ],
+      "world": "L",
+      "schema": "P",
+      "journal": "J",
+      "load": [
+        "retained-target-rotation"
+      ]
+    }
+  ],
+  "windows": {
+    "repetitions": 5,
+    "durationMs": 30000,
+    "pairedBaseline": "unique for each reader window",
+    "retainedRepetitions": 8,
+    "readerLanes": 1,
+    "evenOrder": [
+      "baseline",
+      "reader"
+    ],
+    "oddOrder": [
+      "reader",
+      "baseline"
+    ],
+    "readMix": {
+      "id": "window-read-mix-v4",
+      "methods": [
+        "c12",
+        "c24",
+        "a1500",
+        "a4000",
+        "f1-full",
+        "f1-compact",
+        "f1-snapshot",
+        "f24-full",
+        "f24-compact",
+        "f24-snapshot"
+      ],
+      "methodIndex": "k % 10",
+      "languageIndex": "(k+r) % 3",
+      "intentIndex": "(floor(k/10)+r) % 2",
+      "perWindowCoverage": "every method, every language, both intents",
+      "acrossRepetitionsCoverage": "each method with every language and both intents",
+      "perMethodLatencyGate": false
+    },
+    "successfulMethodExposure": {
+      "labels": "readMix.methods",
+      "scope": "within one W cell's reader windows",
+      "minimumWriteOverlappingSuccessesPerLabel": 20,
+      "minimumFreshCloseOverlappingSuccessesPerLabel": 10,
+      "freshCloseSuccessMustAlsoOverlapPublicWrite": true,
+      "retainedTargetEvaluation": "each label separately for each of same and other",
+      "minimumDistinctWriteSuccessWindowsPerLabelPerTarget": 3,
+      "minimumDistinctFreshCloseSuccessWindowsPerLabel": 3,
+      "qualifies": "ok:true complete oracle-validated result; actual clipped public read-call/write-call or fresh-close intersection",
+      "deduplicationKey": [
+        "cell",
+        "window",
+        "attempt",
+        "method",
+        "writerTarget"
+      ],
+      "multipleCredits": "only independently attested intersections; never transfer across methods or cells",
+      "exclude": [
+        "unavailable",
+        "failed",
+        "missed overlap",
+        "out of window",
+        "WM references"
+      ],
+      "validateAfter": "final telemetry drain; re-derive all counters from raw intervals/outcomes",
+      "belowMinimum": "invalid cell"
+    },
+    "writerCadenceMs": 20,
+    "freshOperations": [
+      "capture",
+      "review"
+    ],
+    "freshReaderMinima": {
+      "writeOverlaps": 20,
+      "commits": 100,
+      "closeOverlaps": 10
+    },
+    "baselineMinima": {
+      "commits": 100
+    },
+    "retainedCycle": [
+      [
+        "same",
+        "capture"
+      ],
+      [
+        "other",
+        "capture"
+      ],
+      [
+        "same",
+        "review"
+      ],
+      [
+        "other",
+        "review"
+      ]
+    ],
+    "retainedPerTargetReaderMinima": {
+      "writeOverlaps": 20,
+      "commits": 100
+    },
+    "retainedPerTargetBaselineMinima": {
+      "commits": 100
+    },
+    "retainedShutdownClose": "observed outside exposure; no fresh-close minimum"
+  },
+  "otherRows": [
+    {
+      "id": "F",
+      "profiles": "both",
+      "world": "B",
+      "schemaType": [
+        [
+          18,
+          "memory"
+        ],
+        [
+          23,
+          "memory"
+        ],
+        [
+          23,
+          "card"
+        ],
+        [
+          33,
+          "memory"
+        ],
+        [
+          33,
+          "card"
+        ]
+      ],
+      "journal": "J",
+      "intent": "I",
+      "minimumTargets": 100
+    },
+    {
+      "id": "A",
+      "profiles": "both",
+      "world": "B",
+      "schema": "S",
+      "journal": "J",
+      "intent": "I",
+      "minimumAttempts": 100,
+      "methods": [
+        "c12",
+        "a1500"
+      ],
+      "methodIndex": "scheduled ordinal within intent % 2",
+      "minimumAttemptsPerMethod": 50,
+      "methodCountDifferenceMaximum": 1,
+      "language": "language-rotation-v4"
+    },
+    {
+      "id": "O",
+      "profiles": "both",
+      "world": "B",
+      "schema": "S",
+      "journal": "J",
+      "intent": "I",
+      "method": [
+        "c24"
+      ],
+      "language": [
+        "mixed"
+      ],
+      "load": [
+        "idle"
+      ],
+      "scope": "overflow",
+      "requestedNamespaces": 33,
+      "selectedNamespaces": 32,
+      "series": [
+        "warmups",
+        "main",
+        "cold"
+      ]
+    },
+    {
+      "id": "B",
+      "profiles": "both",
+      "world": "B",
+      "schema": "S",
+      "journal": "J",
+      "verifyIntents": [
+        "current",
+        "history"
+      ]
+    },
+    {
+      "id": "T",
+      "profiles": "both",
+      "world": "B",
+      "schema": "S",
+      "journal": "J",
+      "case": "faults",
+      "population": "expected outcome only",
+      "requiredSubprobes": "stateSubprobes[case]",
+      "subprobesExpandCells": false
+    }
+  ],
+  "sessions": {
+    "rows": [
+      "F",
+      "A"
+    ],
+    "key": [
+      "world",
+      "schema",
+      "journal"
+    ],
+    "count": 12,
+    "durationMs": 180000,
+    "lastTargetCommitByMs": 120000,
+    "continuousWriterUntilMs": 180000,
+    "probeIntervalMaximumMs": 1000,
+    "writer": {
+      "process": "independent",
+      "lifecycle": "fresh per ordinary operation: open/write/finally-close",
+      "target": "same owner and selected four-namespace projection",
+      "operations": [
+        "capture",
+        "review"
+      ],
+      "operationIndex": "ordinary operation ordinal % 2",
+      "cadenceMs": 20,
+      "cadencePolicy": "approximately 20 ms, nonsaturating, no backlog",
+      "keeper": false,
+      "startMs": 0,
+      "continueUntilMs": 180000,
+      "targetReleases": "interleaved additions; never replace the continuous ordinary stream",
+      "deadlines": "unchanged production capture/review values with provenance"
+    },
+    "targetIdentitiesPerType": 100,
+    "targetsPerTypePerIntent": 100,
+    "targetCreationReleaseIntervalMs": [
+      0,
+      85000
+    ],
+    "targetReviewReleaseAfterCreationMs": 35000,
+    "targetEligibility": "separate first eligible native commit and exact revision per intent; share only if actually coincident",
+    "probeBatchMaximumTargets": 20,
+    "probeResultLimit": 24,
+    "probeLanes": 20,
+    "availabilityLanes": 1,
+    "probeLaneIndex": "2*batchOrdinal+intentOrdinal",
+    "availabilitySchedule": "required immutable release IDs/times throughout session; at least 100 attempts per intent, strictly alternate c12/a1500 independently per intent; errors advance scheduled ordinal; disjoint from probes",
+    "validation": {
+      "beforeCollection": [
+        "strict method alternation per intent",
+        "each method >=50 scheduled; count difference <=1",
+        "release times span session",
+        "writer fresh lifecycle, same-projection target, capture/review cycle and 20 ms nonsaturating cadence",
+        "hash full schedules and writer settings"
+      ],
+      "afterCollection": [
+        "bijection from scheduled A IDs to executed attempts, preserving release order/method/intent",
+        "each A method >=50 executed; count difference <=1",
+        "denominator includes every normal A attempt regardless of outcome",
+        "actual writer open/write/close per operation, same target, cycle/cadence, continuous tail, commits, acknowledged final seal and actual exit"
+      ],
+      "violation": "invalid session and its dependent F/A cells; known failures retained"
+    },
+    "censorUnseenAs": "+infinity",
+    "poolTargetsOrAvailabilityPopulations": false
+  },
+  "stateSubprobeDefaults": {
+    "intent": "current",
+    "candidates": "c12",
+    "fetch": "f24-full",
+    "assembly": "a1500",
+    "language": "mixed",
+    "deadlineMsForTimeoutProbe": "required immutable per-path input, 1..5000 ms; attested native entry must precede cutoff",
+    "abortAt": "attested native entry, before result acceptance",
+    "cutoffEvidence": [
+      "immutable admission/operation cutoff",
+      "public settlement timestamp",
+      "no late data",
+      "host-loop trace"
+    ],
+    "timeoutExpected": "read_timeout by immutable cutoff +50 ms",
+    "abortExpected": "read_cancelled within 50 ms of host-observed abort",
+    "exhaustionDeadline": "register sufficient time beyond native wait exhaustion within unchanged 5000 ms cap; expected busy must precede cutoff",
+    "cleanupFor": [
+      "abort"
+    ],
+    "cleanupEvidence": {
+      "nativeWork": "attested pending at public settlement; retained native hold exercises disposal lag",
+      "writer": {
+        "lifecycle": "fresh",
+        "target": "same projection",
+        "operations": [
+          "capture",
+          "review"
+        ],
+        "cadenceMs": 20,
+        "backlog": false
+      },
+      "required": [
+        "writer native commit while native cleanup remains pending",
+        "no reader-induced production writer deadline overrun",
+        "supervisor ownership/quarantine until confirmed native disposal",
+        "opening probes: failure cleanupId without returned handle",
+        "actual native/resource disposal and final writer drain/seal/exit"
+      ],
+      "telemetry": "label expected incomplete native outcome after injected termination; keep all known failures; never claim normal zero-busy"
+    },
+    "crashCleanupEvidence": [
+      "actual Worker exit and confirmed native/resource disposal",
+      "supervisor ownership and quarantine until disposal, or failed-cleanup latch if disposal cannot be confirmed",
+      "opening probes: failure cleanupId without returned handle",
+      "retain known native failures and label expected incomplete crash telemetry; no normal zero-busy claim"
+    ],
+    "reset": "independent prepared injection state for each subprobe; do not reuse a cancelled/crashed handle",
+    "missingSubprobe": "invalid cell",
+    "wrongExpectedOutcome": "failed cell",
+    "allDeterministicBranches": "unchanged section 9; both intents, stress and other adapters remain required there"
+  },
+  "stateSubprobes": {
+    "absent": [
+      {
+        "id": "status",
+        "expected": "absent/missing, null progress/counts; no create/build/repair"
+      },
+      {
+        "id": "candidates",
+        "expected": "index_unavailable; no create/build/repair"
+      },
+      {
+        "id": "fetch",
+        "expected": "validated exact evidence succeeds from frozen refs without sidecar"
+      },
+      {
+        "id": "assembly",
+        "expected": "index_unavailable; no create/build/repair"
+      }
+    ],
+    "exhaustion": [
+      {
+        "id": "opening",
+        "expected": "storage_busy from injected native 5/6 after native allowance exhausts; no handle escapes"
+      },
+      {
+        "id": "candidates",
+        "expected": "storage_busy with preserved native 5/6; no retry or reclassification"
+      },
+      {
+        "id": "fetch",
+        "expected": "storage_busy with preserved native 5/6; no partial evidence"
+      },
+      {
+        "id": "assembly",
+        "expected": "storage_busy with preserved native 5/6; no partial assembly"
+      }
+    ],
+    "abort": [
+      {
+        "id": "opening-abort",
+        "path": "opening",
+        "trigger": "abort",
+        "expected": "abortExpected + cleanupEvidence"
+      },
+      {
+        "id": "opening-timeout",
+        "path": "opening",
+        "trigger": "deadline",
+        "expected": "timeoutExpected + cleanupEvidence"
+      },
+      {
+        "id": "candidates-abort",
+        "path": "candidates",
+        "trigger": "abort",
+        "expected": "abortExpected + cleanupEvidence"
+      },
+      {
+        "id": "candidates-timeout",
+        "path": "candidates",
+        "trigger": "deadline",
+        "expected": "timeoutExpected + cleanupEvidence"
+      },
+      {
+        "id": "fetch-abort",
+        "path": "fetch",
+        "trigger": "abort",
+        "expected": "abortExpected + cleanupEvidence"
+      },
+      {
+        "id": "fetch-timeout",
+        "path": "fetch",
+        "trigger": "deadline",
+        "expected": "timeoutExpected + cleanupEvidence"
+      },
+      {
+        "id": "assembly-abort",
+        "path": "assembly",
+        "trigger": "abort",
+        "expected": "abortExpected + cleanupEvidence"
+      },
+      {
+        "id": "assembly-timeout",
+        "path": "assembly",
+        "trigger": "deadline",
+        "expected": "timeoutExpected + cleanupEvidence"
+      }
+    ],
+    "crash": [
+      {
+        "id": "opening",
+        "expected": "reader_failed; no handle/data escapes; crashCleanupEvidence"
+      },
+      {
+        "id": "candidates",
+        "expected": "reader_failed; no late data; crashCleanupEvidence"
+      },
+      {
+        "id": "fetch",
+        "expected": "reader_failed; no partial/late evidence; crashCleanupEvidence"
+      },
+      {
+        "id": "assembly",
+        "expected": "reader_failed; no partial/late assembly; crashCleanupEvidence"
+      }
+    ],
+    "post-catch-up": [
+      {
+        "id": "status",
+        "expected": "ready, certified counts/current fences after explicit catch-up"
+      },
+      {
+        "id": "candidates",
+        "expected": "success with exact newly eligible ref/revision and frozen ranks"
+      },
+      {
+        "id": "fetch",
+        "expected": "success with exact current evidence/fences"
+      },
+      {
+        "id": "assembly",
+        "expected": "success with frozen known answer, exact counter and bytes"
+      }
+    ]
+  },
+  "profiles": {
+    "engine": {
+      "id": "engine-platform-v4",
+      "reservationSeconds": 47700,
+      "requiredRole": "engine platform",
+      "productionClaim": false
+    },
+    "production": {
+      "id": "production-launch-v4",
+      "reservationSeconds": 27000,
+      "requiredRole": "production Linux ext4 on production volume",
+      "runtime": "exact deployed Node 24 patch"
+    }
+  },
+  "expectedCounts": {
+    "engine": {
+      "request": 532,
+      "exposure": 36,
+      "freshness": 40,
+      "availability": 24,
+      "overflow": 24,
+      "storage": 12,
+      "state": 60,
+      "stateSubprobes": 288,
+      "cells": 728,
+      "main": 556,
+      "warmupGroups": 556,
+      "cold": 420,
+      "idleReference": 108,
+      "windowReference": 144,
+      "reference": 252,
+      "fixedWindows": 432,
+      "writeSuccessCredits": 9600,
+      "freshCloseSuccessCredits": 2400
+    },
+    "production": {
+      "request": 308,
+      "exposure": 20,
+      "freshness": 40,
+      "availability": 24,
+      "overflow": 24,
+      "storage": 12,
+      "state": 60,
+      "stateSubprobes": 288,
+      "cells": 488,
+      "main": 332,
+      "warmupGroups": 332,
+      "cold": 292,
+      "idleReference": 92,
+      "windowReference": 80,
+      "reference": 172,
+      "fixedWindows": 224,
+      "writeSuccessCredits": 4800,
+      "freshCloseSuccessCredits": 1600
+    }
+  }
+}
