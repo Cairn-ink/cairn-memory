@@ -1024,6 +1024,164 @@
   },
   "profileCommit": "PLACEHOLDER_PROFILE_COMMIT",
   "protocolCommit": "PLACEHOLDER_PROTOCOL_COMMIT",
+  "labelsFile": "${packageRoot}/labels.json",
+  "queriesFile": "${packageRoot}/queries.json",
+  "adapterModule": "${packageRoot}/adapter.mjs",
+  "counterModule": "${packageRoot}/counter.mjs",
+  "counterId": "o200k_base-v1",
+  "counterConfiguration": {
+    "counterId": "o200k_base-v1"
+  },
+  "writerProfileFile": "${volumeRoot}/writer-profile.json",
+  "writerProfile": {
+    "captureMs": 25000,
+    "reviewMs": 5000,
+    "provenance": "PLACEHOLDER_PRIMARY_WRITER_PROFILE_PROVENANCE"
+  },
+  "deadlineProvenance": "adapter: 5000 ms request window agreed with product as the measured read deadline; adapter: unvalidated per-read default 1000 ms reported separately, not gated; proposed: hook 3000 ms metadata only; engine default: reader open 5000 ms",
+  "deadlines": {
+    "openMs": 5000,
+    "requestMs": 5000,
+    "readMs": 5000
+  },
+  "pump": {
+    "cronMs": 60000,
+    "pollMs": 25,
+    "renewalMs": 10000,
+    "quantum": {
+      "maxItems": 128,
+      "maxMs": 1000
+    },
+    "budgets": {
+      "maxItems": 1024,
+      "maxMs": 8000
+    }
+  },
+  "telemetryCapacities": {
+    "readerProtocol": "context-native-v1",
+    "readerFailureCapacity": 512,
+    "writerProtocol": "product-writer-v1",
+    "writerCapacity": 65536,
+    "writerMaximumOperations": 100000,
+    "chunkRecords": 65536
+  },
+  "drainSchedule": "after every read and close; pump engine drain/ack every 100ms (over 500ms is incomplete), serialize between observations; export before immediate ack; writer chunks after every lifecycle; seal after final close, ack before disconnect",
+  "reservation": {
+    "seconds": 47700,
+    "exclusive": true,
+    "owner": "PLACEHOLDER_RESERVATION_OWNER"
+  },
+  "observationBudgetMs": 47700000,
+  "supervision": {
+    "stallMs": 120000,
+    "progressMs": 300000,
+    "drainAllowanceMs": 60000
+  },
+  "stateDeadlines": {
+    "opening": 5000,
+    "candidates": 5000,
+    "fetch": 5000,
+    "assembly": 5000
+  },
+  "seriesCeilingMs": 180000,
+  "buildCeiling": 10000,
+  "freshnessObservationMs": 180000,
+  "availabilityWindows": 1,
+  "readCutoffReport": {
+    "thresholdMs": 1000,
+    "source": "adapter",
+    "validated": false,
+    "gate": false,
+    "groupBy": [
+      "cell",
+      "method"
+    ]
+  },
+  "productInputs": {
+    "productionNode": {
+      "source": "production",
+      "value": "v24.22.1"
+    },
+    "counter": {
+      "source": "adapter",
+      "counterId": "o200k_base-v1",
+      "library": "tiktoken",
+      "version": "1.0.22",
+      "entry": "tiktoken/lite",
+      "ranksLibrary": "js-tiktoken",
+      "ranksVersion": "1.0.21",
+      "ranks": "o200k_base",
+      "encode": "encode(text,[],[])",
+      "multiplier": 1
+    },
+    "deadlines": {
+      "source": "adapter",
+      "readMs": 5000,
+      "requestMs": 5000,
+      "note": "adapter request window; agreed with product as the measured deadline"
+    },
+    "readerOpen": {
+      "source": "engine default",
+      "openMs": 5000
+    },
+    "perReadDefault": {
+      "source": "adapter",
+      "deadlineMs": 1000,
+      "validated": false,
+      "gate": false
+    },
+    "hook": {
+      "source": "proposed",
+      "deadlineMs": 3000,
+      "metadataOnly": true
+    },
+    "pump": {
+      "source": "adapter",
+      "quantum": {
+        "maxItems": 128,
+        "maxMs": 1000
+      },
+      "perTick": {
+        "maxItems": 1024,
+        "maxMs": 8000
+      },
+      "pollMs": 25,
+      "renewalMs": 10000,
+      "cronMs": 60000,
+      "maintainerOpenMs": 5000,
+      "sidecarJournal": "per cell as protocol registers"
+    },
+    "telemetryCapacities": {
+      "source": "engine default",
+      "values": {
+        "readerProtocol": "context-native-v1",
+        "readerFailureCapacity": 512,
+        "writerProtocol": "product-writer-v1",
+        "writerCapacity": 65536,
+        "writerMaximumOperations": 100000,
+        "chunkRecords": 65536
+      }
+    },
+    "writer": {
+      "source": "production",
+      "captureMs": 25000,
+      "reviewMs": 5000,
+      "provenance": "registration input writerProfileFile; original provenance retained there"
+    },
+    "stateDeadlines": {
+      "source": "engine default",
+      "values": {
+        "opening": 5000,
+        "candidates": 5000,
+        "fetch": 5000,
+        "assembly": 5000
+      }
+    },
+    "drainSchedule": {
+      "source": "engine default",
+      "value": "after every read and close; pump engine drain/ack every 100ms (over 500ms is incomplete), serialize between observations; export before immediate ack; writer chunks after every lifecycle; seal after final close, ack before disconnect"
+    }
+  },
   "fixtures": [
     {
       "id": "m1112-v18",
@@ -2244,115 +2402,6 @@
       "path": "${volumeRoot}/qualification-snapshots/m3336-v33.sqlite"
     }
   ],
-  "labelsFile": "${packageRoot}/labels.json",
-  "queriesFile": "${packageRoot}/queries.json",
-  "adapterModule": "${packageRoot}/adapter.mjs",
-  "counterModule": "${packageRoot}/counter.mjs",
-  "counterId": "o200k_base-v1",
-  "counterConfiguration": {
-    "counterId": "o200k_base-v1"
-  },
-  "writerProfileFile": "${volumeRoot}/writer-profile.json",
-  "writerProfile": {
-    "captureMs": 25000,
-    "reviewMs": 5000,
-    "provenance": "PLACEHOLDER_PRIMARY_WRITER_PROFILE_PROVENANCE"
-  },
-  "deadlineProvenance": "adapter: 5000 ms request window agreed with product as the measured read deadline; adapter: unvalidated per-read default 1000 ms reported separately, not gated; proposed: hook 3000 ms metadata only; engine default: reader open 5000 ms",
-  "deadlines": {
-    "openMs": 5000,
-    "requestMs": 5000,
-    "readMs": 5000
-  },
-  "pump": {
-    "cronMs": 60000,
-    "pollMs": 25,
-    "renewalMs": 10000,
-    "quantum": {
-      "maxItems": 128,
-      "maxMs": 1000
-    },
-    "budgets": {
-      "maxItems": 1024,
-      "maxMs": 8000
-    }
-  },
-  "telemetryCapacities": {
-    "readerProtocol": "context-native-v1",
-    "readerFailureCapacity": 512,
-    "writerProtocol": "product-writer-v1",
-    "writerCapacity": 65536,
-    "writerMaximumOperations": 100000,
-    "chunkRecords": 65536
-  },
-  "drainSchedule": "after every read and close; pump engine drain/ack every 100ms (over 500ms is incomplete), serialize between observations; export before immediate ack; writer chunks after every lifecycle; seal after final close, ack before disconnect",
-  "reservation": {
-    "seconds": 47700,
-    "exclusive": true,
-    "owner": "PLACEHOLDER_RESERVATION_OWNER"
-  },
-  "observationBudgetMs": 47700000,
-  "supervision": {
-    "stallMs": 120000,
-    "progressMs": 300000,
-    "drainAllowanceMs": 60000
-  },
-  "stateDeadlines": {
-    "opening": 5000,
-    "candidates": 5000,
-    "fetch": 5000,
-    "assembly": 5000
-  },
-  "stateProbes": {
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,18,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:status": "qcatchupcell72probe0lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,18,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:candidates": "qcatchupcell72probe1lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,18,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:fetch": "qcatchupcell72probe2lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,18,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:assembly": "qcatchupcell72probe3lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,18,[\"WAL\",\"WAL\"],\"post-catch-up\"]:status": "qcatchupcell77probe0lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,18,[\"WAL\",\"WAL\"],\"post-catch-up\"]:candidates": "qcatchupcell77probe1lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,18,[\"WAL\",\"WAL\"],\"post-catch-up\"]:fetch": "qcatchupcell77probe2lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,18,[\"WAL\",\"WAL\"],\"post-catch-up\"]:assembly": "qcatchupcell77probe3lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,23,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:status": "qcatchupcell154probe0lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,23,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:candidates": "qcatchupcell154probe1lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,23,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:fetch": "qcatchupcell154probe2lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,23,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:assembly": "qcatchupcell154probe3lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,23,[\"WAL\",\"WAL\"],\"post-catch-up\"]:status": "qcatchupcell159probe0lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,23,[\"WAL\",\"WAL\"],\"post-catch-up\"]:candidates": "qcatchupcell159probe1lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,23,[\"WAL\",\"WAL\"],\"post-catch-up\"]:fetch": "qcatchupcell159probe2lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,23,[\"WAL\",\"WAL\"],\"post-catch-up\"]:assembly": "qcatchupcell159probe3lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,33,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:status": "qcatchupcell236probe0lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,33,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:candidates": "qcatchupcell236probe1lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,33,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:fetch": "qcatchupcell236probe2lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,33,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:assembly": "qcatchupcell236probe3lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,33,[\"WAL\",\"WAL\"],\"post-catch-up\"]:status": "qcatchupcell241probe0lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,33,[\"WAL\",\"WAL\"],\"post-catch-up\"]:candidates": "qcatchupcell241probe1lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,33,[\"WAL\",\"WAL\"],\"post-catch-up\"]:fetch": "qcatchupcell241probe2lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",1112,33,[\"WAL\",\"WAL\"],\"post-catch-up\"]:assembly": "qcatchupcell241probe3lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,18,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:status": "qcatchupcell374probe0lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,18,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:candidates": "qcatchupcell374probe1lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,18,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:fetch": "qcatchupcell374probe2lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,18,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:assembly": "qcatchupcell374probe3lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,18,[\"WAL\",\"WAL\"],\"post-catch-up\"]:status": "qcatchupcell379probe0lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,18,[\"WAL\",\"WAL\"],\"post-catch-up\"]:candidates": "qcatchupcell379probe1lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,18,[\"WAL\",\"WAL\"],\"post-catch-up\"]:fetch": "qcatchupcell379probe2lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,18,[\"WAL\",\"WAL\"],\"post-catch-up\"]:assembly": "qcatchupcell379probe3lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,23,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:status": "qcatchupcell548probe0lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,23,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:candidates": "qcatchupcell548probe1lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,23,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:fetch": "qcatchupcell548probe2lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,23,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:assembly": "qcatchupcell548probe3lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,23,[\"WAL\",\"WAL\"],\"post-catch-up\"]:status": "qcatchupcell553probe0lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,23,[\"WAL\",\"WAL\"],\"post-catch-up\"]:candidates": "qcatchupcell553probe1lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,23,[\"WAL\",\"WAL\"],\"post-catch-up\"]:fetch": "qcatchupcell553probe2lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,23,[\"WAL\",\"WAL\"],\"post-catch-up\"]:assembly": "qcatchupcell553probe3lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,33,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:status": "qcatchupcell722probe0lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,33,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:candidates": "qcatchupcell722probe1lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,33,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:fetch": "qcatchupcell722probe2lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,33,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:assembly": "qcatchupcell722probe3lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,33,[\"WAL\",\"WAL\"],\"post-catch-up\"]:status": "qcatchupcell727probe0lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,33,[\"WAL\",\"WAL\"],\"post-catch-up\"]:candidates": "qcatchupcell727probe1lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,33,[\"WAL\",\"WAL\"],\"post-catch-up\"]:fetch": "qcatchupcell727probe2lexical",
-    "[\"P2-product-v4\",\"engine\",\"T\",3336,33,[\"WAL\",\"WAL\"],\"post-catch-up\"]:assembly": "qcatchupcell727probe3lexical"
-  },
   "sessions": [
     {
       "key": "[1112,18,\"DELETE\",\"DELETE\"]",
@@ -36693,10 +36742,56 @@
       "startLocal": null
     }
   ],
-  "seriesCeilingMs": 180000,
-  "buildCeiling": 10000,
-  "freshnessObservationMs": 180000,
-  "availabilityWindows": 1,
+  "stateProbes": {
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,18,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:status": "qcatchupcell72probe0lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,18,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:candidates": "qcatchupcell72probe1lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,18,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:fetch": "qcatchupcell72probe2lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,18,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:assembly": "qcatchupcell72probe3lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,18,[\"WAL\",\"WAL\"],\"post-catch-up\"]:status": "qcatchupcell77probe0lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,18,[\"WAL\",\"WAL\"],\"post-catch-up\"]:candidates": "qcatchupcell77probe1lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,18,[\"WAL\",\"WAL\"],\"post-catch-up\"]:fetch": "qcatchupcell77probe2lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,18,[\"WAL\",\"WAL\"],\"post-catch-up\"]:assembly": "qcatchupcell77probe3lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,23,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:status": "qcatchupcell154probe0lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,23,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:candidates": "qcatchupcell154probe1lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,23,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:fetch": "qcatchupcell154probe2lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,23,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:assembly": "qcatchupcell154probe3lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,23,[\"WAL\",\"WAL\"],\"post-catch-up\"]:status": "qcatchupcell159probe0lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,23,[\"WAL\",\"WAL\"],\"post-catch-up\"]:candidates": "qcatchupcell159probe1lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,23,[\"WAL\",\"WAL\"],\"post-catch-up\"]:fetch": "qcatchupcell159probe2lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,23,[\"WAL\",\"WAL\"],\"post-catch-up\"]:assembly": "qcatchupcell159probe3lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,33,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:status": "qcatchupcell236probe0lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,33,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:candidates": "qcatchupcell236probe1lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,33,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:fetch": "qcatchupcell236probe2lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,33,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:assembly": "qcatchupcell236probe3lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,33,[\"WAL\",\"WAL\"],\"post-catch-up\"]:status": "qcatchupcell241probe0lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,33,[\"WAL\",\"WAL\"],\"post-catch-up\"]:candidates": "qcatchupcell241probe1lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,33,[\"WAL\",\"WAL\"],\"post-catch-up\"]:fetch": "qcatchupcell241probe2lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",1112,33,[\"WAL\",\"WAL\"],\"post-catch-up\"]:assembly": "qcatchupcell241probe3lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,18,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:status": "qcatchupcell374probe0lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,18,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:candidates": "qcatchupcell374probe1lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,18,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:fetch": "qcatchupcell374probe2lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,18,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:assembly": "qcatchupcell374probe3lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,18,[\"WAL\",\"WAL\"],\"post-catch-up\"]:status": "qcatchupcell379probe0lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,18,[\"WAL\",\"WAL\"],\"post-catch-up\"]:candidates": "qcatchupcell379probe1lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,18,[\"WAL\",\"WAL\"],\"post-catch-up\"]:fetch": "qcatchupcell379probe2lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,18,[\"WAL\",\"WAL\"],\"post-catch-up\"]:assembly": "qcatchupcell379probe3lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,23,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:status": "qcatchupcell548probe0lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,23,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:candidates": "qcatchupcell548probe1lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,23,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:fetch": "qcatchupcell548probe2lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,23,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:assembly": "qcatchupcell548probe3lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,23,[\"WAL\",\"WAL\"],\"post-catch-up\"]:status": "qcatchupcell553probe0lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,23,[\"WAL\",\"WAL\"],\"post-catch-up\"]:candidates": "qcatchupcell553probe1lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,23,[\"WAL\",\"WAL\"],\"post-catch-up\"]:fetch": "qcatchupcell553probe2lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,23,[\"WAL\",\"WAL\"],\"post-catch-up\"]:assembly": "qcatchupcell553probe3lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,33,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:status": "qcatchupcell722probe0lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,33,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:candidates": "qcatchupcell722probe1lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,33,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:fetch": "qcatchupcell722probe2lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,33,[\"DELETE\",\"DELETE\"],\"post-catch-up\"]:assembly": "qcatchupcell722probe3lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,33,[\"WAL\",\"WAL\"],\"post-catch-up\"]:status": "qcatchupcell727probe0lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,33,[\"WAL\",\"WAL\"],\"post-catch-up\"]:candidates": "qcatchupcell727probe1lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,33,[\"WAL\",\"WAL\"],\"post-catch-up\"]:fetch": "qcatchupcell727probe2lexical",
+    "[\"P2-product-v4\",\"engine\",\"T\",3336,33,[\"WAL\",\"WAL\"],\"post-catch-up\"]:assembly": "qcatchupcell727probe3lexical"
+  },
   "probes": {
     "1112:18:memory:current": [
       "qfreshs01t0n000lexical",
@@ -38738,100 +38833,5 @@
       "qfreshs11t1n098lexical",
       "qfreshs11t1n099lexical"
     ]
-  },
-  "readCutoffReport": {
-    "thresholdMs": 1000,
-    "source": "adapter",
-    "validated": false,
-    "gate": false,
-    "groupBy": [
-      "cell",
-      "method"
-    ]
-  },
-  "productInputs": {
-    "productionNode": {
-      "source": "production",
-      "value": "v24.22.1"
-    },
-    "counter": {
-      "source": "adapter",
-      "counterId": "o200k_base-v1",
-      "library": "tiktoken",
-      "version": "1.0.22",
-      "entry": "tiktoken/lite",
-      "ranksLibrary": "js-tiktoken",
-      "ranksVersion": "1.0.21",
-      "ranks": "o200k_base",
-      "encode": "encode(text,[],[])",
-      "multiplier": 1
-    },
-    "deadlines": {
-      "source": "adapter",
-      "readMs": 5000,
-      "requestMs": 5000,
-      "note": "adapter request window; agreed with product as the measured deadline"
-    },
-    "readerOpen": {
-      "source": "engine default",
-      "openMs": 5000
-    },
-    "perReadDefault": {
-      "source": "adapter",
-      "deadlineMs": 1000,
-      "validated": false,
-      "gate": false
-    },
-    "hook": {
-      "source": "proposed",
-      "deadlineMs": 3000,
-      "metadataOnly": true
-    },
-    "pump": {
-      "source": "adapter",
-      "quantum": {
-        "maxItems": 128,
-        "maxMs": 1000
-      },
-      "perTick": {
-        "maxItems": 1024,
-        "maxMs": 8000
-      },
-      "pollMs": 25,
-      "renewalMs": 10000,
-      "cronMs": 60000,
-      "maintainerOpenMs": 5000,
-      "sidecarJournal": "per cell as protocol registers"
-    },
-    "telemetryCapacities": {
-      "source": "engine default",
-      "values": {
-        "readerProtocol": "context-native-v1",
-        "readerFailureCapacity": 512,
-        "writerProtocol": "product-writer-v1",
-        "writerCapacity": 65536,
-        "writerMaximumOperations": 100000,
-        "chunkRecords": 65536
-      }
-    },
-    "writer": {
-      "source": "production",
-      "captureMs": 25000,
-      "reviewMs": 5000,
-      "provenance": "registration input writerProfileFile; original provenance retained there"
-    },
-    "stateDeadlines": {
-      "source": "engine default",
-      "values": {
-        "opening": 5000,
-        "candidates": 5000,
-        "fetch": 5000,
-        "assembly": 5000
-      }
-    },
-    "drainSchedule": {
-      "source": "engine default",
-      "value": "after every read and close; pump engine drain/ack every 100ms (over 500ms is incomplete), serialize between observations; export before immediate ack; writer chunks after every lifecycle; seal after final close, ack before disconnect"
-    }
   }
 }

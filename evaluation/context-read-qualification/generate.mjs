@@ -1,16 +1,21 @@
 // Controller has no SQLite imports/connections. Hashing uses the existing
 // short SQLite-free IO child, after the generator has exited successfully.
 import { spawnSync } from 'node:child_process';
-import { mkdirSync,existsSync,readFileSync } from 'node:fs';
-import { join,resolve } from 'node:path';
+import { mkdirSync,existsSync,readFileSync,mkdtempSync,rmSync } from 'node:fs';
+import { join,resolve,dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fixtureSpecs } from './corpus.mjs';
 import { fileChild } from '../../tools/testing/fixtures/context-product/actors.mjs';
 export function generateSnapshot(spec,path) {
   if(!spec.inspectOnly&&existsSync(path))throw Error('destination_exists:'+path);
-  const child=spawnSync(process.execPath,[fileURLToPath(new URL('./generate-child.mjs',import.meta.url)),JSON.stringify({...spec,path})],{encoding:'utf8',maxBuffer:64*1024*1024,stdio:['ignore','pipe','inherit']});
-  if(child.error||child.status!==0)throw Error(`generator_exit:${child.status}: ${child.stderr}`);
-  return {...JSON.parse(child.stdout),fileHash:fileChild('hash',path).value[0].hash};
+  const stage=spec.inspectOnly?null:mkdtempSync(join(dirname(resolve(path)),'.qualification-stage-'));
+  const staged=stage?join(stage,'snapshot.sqlite'):path;
+  try {
+    const child=spawnSync(process.execPath,[fileURLToPath(new URL('./generate-child.mjs',import.meta.url)),JSON.stringify({...spec,path:staged})],{encoding:'utf8',maxBuffer:64*1024*1024,stdio:['ignore','pipe','inherit']});
+    if(child.error||child.status!==0)throw Error(`generator_exit:${child.status}: ${child.stderr}`);
+    if(stage)fileChild('copy',staged,path);
+    return {...JSON.parse(child.stdout),fileHash:fileChild('hash',path).value[0].hash};
+  }finally{if(stage)rmSync(stage,{recursive:true,force:true});}
 }
 export function prepareSnapshots(volumeRoot) {
   const manifest=JSON.parse(readFileSync(new URL('./manifest.json',import.meta.url),'utf8'));

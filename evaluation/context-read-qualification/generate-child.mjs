@@ -41,6 +41,7 @@ try {
 const db=new DatabaseSync(configuration.path);
 let contentHash,schemaHash;
 try {
+  for(const entry of catalog??[]){const row=db.prepare(entry.ref.type==='memory'?'SELECT content AS text FROM memories WHERE id=?':"SELECT title||char(10)||body AS text FROM private_cards WHERE id=?").get(entry.ref.memoryId??entry.ref.cardId);entry.text=row.text;}
   if(db.prepare('PRAGMA user_version').get().user_version!==configuration.schema)throw Error('physical_schema_changed');
   if(db.prepare('SELECT count(*) AS n FROM memories WHERE deleted=0').get().n!==configuration.count)throw Error('memory_count');
   const hasCards=!!db.prepare("SELECT 1 FROM sqlite_schema WHERE name='private_cards'").get();

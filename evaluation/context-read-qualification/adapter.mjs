@@ -1,4 +1,5 @@
 import { isDeepStrictEqual as equal } from 'node:util';
+import {goldRanking} from './gold-rank.mjs';
 import labels from './labels.json' with {type:'json'};
 import { queries,refKey,compareRefs } from './corpus.mjs';
 import { candidates,assembly,statusSchema,exactSchema,errorSchema,union } from './schemas.mjs';
@@ -10,12 +11,14 @@ export async function prepare({cell,config,ledger}) {
   const base={readSet:config.readSet,deadlineMs:config.deadlines.readMs};
   const method=config.method??cell.method??'findCandidates',intent=cell.intent??'current';
   const fixture=labels.fixtures.find(f=>f.count===cell.count&&f.schema===cell.schema);
-  const definition=queries.find(q=>q.id===(cell.queryId??cell.language))??queries.find(q=>q.id==='mixed');
+  const largeAssembly=method==='contextRead'&&ledger.memory.some(r=>r.content.length===4000);
+  const definition=queries.find(q=>q.id===(cell.queryId??(largeAssembly?'assembly-'+cell.language:cell.language)))??queries.find(q=>q.id==='mixed');
   const label=fixture?.queries.find(q=>q.id===definition.id);
   let relevant=label?.relevant??[],order=label?.ranking??[],query=definition.query;
   if(!fixture&&!cell.probeBatch&&!config.injectionProbe) {
     // Tiny rehearsals retain the identical authoring order across namespaces.
-    relevant=ledger.memory.filter(m=>m.content.includes(definition.query.split(' ')[0])).map(m=>rowRef(m)).sort(compareRefs);order=definition.knownMiss?[]:relevant;
+    const catalog=[...ledger.memory.map(m=>({ref:rowRef(m),text:m.content})),...ledger.cards.filter(c=>c.state==='confirmed').map(c=>({ref:rowRef(c,'card'),text:c.title+'\n'+c.body}))].filter(x=>eligible(x.ref,config));
+    order=goldRanking(catalog,definition.query);relevant=definition.knownMiss?ledger.memory.filter(m=>m.content==='中文').map(m=>rowRef(m)):order;
   }
   relevant=relevant.filter(r=>eligible(r,config));order=order.filter(r=>eligible(r,config));
   if(cell.probeBatch){query=cell.probeBatch.query;relevant=probeRefs(cell.probeTargets);order=[];}
@@ -24,23 +27,15 @@ export async function prepare({cell,config,ledger}) {
   const schemas={findCandidates:candidates(24),contextRead:assembly(24)};
   if(method==='getContextIndexStatus')return {input:{...base,types:config.types,intent},responseSchema:statusSchema,schemas,oracleData};
   if(method==='fetchCandidateEvidence') {
-    const languageOrdinal=['zh','ja','mixed'].indexOf(cell.language),offset=Math.max(0,languageOrdinal);
-    const matches=r=>r.content.startsWith(['海港','桜庭','cobaltledger'][offset]);
-    const rows=ledger.memory.filter(r=>eligible(rowRef(r),config));
-    const preferred=rows.filter(r=>matches(r)||Number(/^entry(\d+)/.exec(r.content)?.[1])%3===offset);
-    const preferredIds=new Set(preferred.map(r=>r.id));
-    const memory=[...preferred.sort((a,b)=>Number(matches(b))-Number(matches(a))||compareRefs(rowRef(a),rowRef(b))),...rows.filter(r=>!preferredIds.has(r.id)).sort((a,b)=>compareRefs(rowRef(a),rowRef(b)))].map(r=>rowRef(r));
-    const cards=ledger.cards.filter(r=>r.state==='confirmed').map(r=>rowRef(r,'card')).filter(r=>eligible(r,config)).sort(compareRefs);
-    if(cards.length)cards.push(...cards.splice(0,offset%cards.length));
-    let refs=config.postCatchupIdentity?[rowRef(config.postCatchupIdentity),...memory.filter(r=>r.memoryId!==config.postCatchupIdentity.id)]:memory;
-    if(!config.postCatchupIdentity&&cards.length)refs=memory.flatMap((r,i)=>i<cards.length?[r,cards[i]]:[r]);
-    refs=refs.slice(0,cell.refs??24);if(refs.length!==(cell.refs??24))throw Error('insufficient_evidence_refs');
+    const refs=selectEvidenceRefs(cell,config,ledger);
+    const independent=refs.map(ref=>{const item=ledger.evidence?.find(item=>equal(item.ref,ref));if(!item)throw Error('independent_evidence_missing');return item;});
     const c=await configure(config);let h,expected;
     try {h=await c.open();expected=await h.fetchCandidateEvidence({...base,intent,refs},c.token);if(!expected.ok)throw Error('evidence_preparation:'+expected.error.code);}
     finally{await h?.close();await c.supervisor.close();await drain(c.supervisor);}
-    oracleData.evidence=expected.value.items;oracleData.snapshot=expected.value.snapshot;
+    if(!equal(expected.value.items,independent))throw Object.assign(Error('evidence_preparation_mismatch'),{difference:firstDifference(expected.value.items,independent)});
+    oracleData.evidence=independent;oracleData.snapshot=expected.value.snapshot;
     const fences=JSON.parse(Buffer.from(expected.value.snapshot.split('.')[0],'base64url')).fences.map(f=>f.slice(0,8));
-    const schema=exactSchema(expected);schema.properties.value.properties.snapshot={type:'string',max:16384};
+    const schema=exactSchema({ok:true,value:{items:independent,snapshot:''}});schema.properties.value.properties.snapshot={type:'string',max:16384};
     return {input:cell.adapter==='snapshot'?{...base,snapshot:expected.value.snapshot}:{...base,intent,refs,...(cell.adapter==='compact'?{fences}:{})},responseSchema:union(schema,errorSchema),schemas,oracleData};
   }
   const input={...base,types:config.types,intent,query,semantic:false,...(method==='contextRead'?{budget:{maxTokens:cell.maxTokens??1500,maxItems:cell.limit??12}}:{limit:cell.limit??12})};
@@ -66,10 +61,33 @@ export function validate(result,config) {
   }
   return true;
 }
-function labelsBody(ref,config) {const row=config.ledger?.memory.find(m=>m.id===ref.memoryId);return row?.content??labels.fixtures.flatMap(f=>f.catalog).find(x=>refKey(x.ref)===refKey(ref))?.text;}
+function labelsBody(ref,config) {const row=config.ledger?.memory.find(m=>m.id===ref.memoryId),card=config.ledger?.cards.find(c=>c.id===ref.cardId);return row?.content??(card?card.title+'\n'+card.body:undefined)??labels.fixtures.flatMap(f=>f.catalog).find(x=>refKey(x.ref)===refKey(ref))?.text;}
 export function validateProbe(result,{targets,config}) {
   if(!result?.ok||!closedShape(result,config.responseSchema))return false;
   const allowed=probeRefs(targets);
   const refs=result.value.items.map(i=>i.ref);
   return new Set(refs.map(refKey)).size===refs.length&&refs.every(r=>allowed.some(a=>equal(a,r)))&&refs.every(r=>eligible(r,config));
+}
+
+function firstDifference(a,b,path='items') {if(equal(a,b))return null;if(a&&b&&typeof a==='object'&&typeof b==='object'){for(const key of new Set([...Object.keys(a),...Object.keys(b)])){const diff=firstDifference(a[key],b[key],path+'.'+key);if(diff)return diff;}}return {path,actual:typeof a==='string'?{length:a.length,prefix:a.slice(0,80)}:a,expected:typeof b==='string'?{length:b.length,prefix:b.slice(0,80)}:b};}
+
+export function selectEvidenceRefs(cell,config,ledger) {
+    const languageOrdinal=['zh','ja','mixed'].indexOf(cell.language),offset=Math.max(0,languageOrdinal);
+    const matches=r=>r.content.startsWith(['海港','桜庭','cobaltledger'][offset]);
+    const rows=ledger.memory.filter(r=>eligible(rowRef(r),config));
+    const large=rows.filter(r=>r.content.length===4000&&r.content.startsWith(['海港','桜庭','cobaltledger'][offset])).map(r=>rowRef(r));
+    const preferred=rows.filter(r=>matches(r)||Number(/^entry(\d+)/.exec(r.content)?.[1])%3===offset);
+    const memoryById=new Map(rows.map(r=>[r.id,r])),cardById=new Map(ledger.cards.map(r=>[r.id,r]));
+    const preferredIds=new Set(preferred.map(r=>r.id));
+    const memory=[...preferred.sort((a,b)=>Number(matches(b))-Number(matches(a))||compareRefs(rowRef(a),rowRef(b))),...rows.filter(r=>!preferredIds.has(r.id)).sort((a,b)=>compareRefs(rowRef(a),rowRef(b)))].map(r=>rowRef(r));
+    const cards=ledger.cards.filter(r=>r.state==='confirmed').map(r=>rowRef(r,'card')).filter(r=>eligible(r,config)).sort(compareRefs);
+    if(cards.length)cards.push(...cards.splice(0,offset%cards.length));
+    const bigCards=cards.filter(ref=>cardById.get(ref.cardId)?.title.startsWith('Large '+['zh','ja','mixed'][offset]+' '));
+    const largeRefs=cell.refs===1&&cell.adapter==='compact'&&bigCards.length?bigCards:[...large,...bigCards];
+    const smallMemory=memory.filter(ref=>!large.some(r=>r.memoryId===ref.memoryId)&&memoryById.get(ref.memoryId).content.length<4000);
+    const smallCards=cards.filter(ref=>!cardById.get(ref.cardId).title.startsWith('Large ')).slice(0,2);
+    let refs=config.postCatchupIdentity?[rowRef(config.postCatchupIdentity),...memory.filter(r=>r.memoryId!==config.postCatchupIdentity.id)]:memory;
+    if(!config.postCatchupIdentity){const fill=smallMemory.flatMap((r,i)=>i<smallCards.length?[r,smallCards[i]]:[r]);refs=[...largeRefs,...fill];}
+    refs=refs.slice(0,cell.refs??24);if(refs.length!==(cell.refs??24))throw Error('insufficient_evidence_refs');
+  return refs;
 }

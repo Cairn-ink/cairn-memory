@@ -59,7 +59,7 @@ export async function exposureCell(cell,{prepareClone,prepareInput,sink},{read=a
         pair[variant]={startAt,endAt,writer:result,attempts,maintenance,maintainerCoverage:config.maintainerCoverage,config};
         if(references){
           const evidence={...references,pumpStoppedAt,trace,telemetry:maintainerCoverage(maintenance,config.maintainerCoverage)};
-          const validation=config.rehearsal===true?rehearsalDecision(references.records.length===cell.references.length&&references.records.every(r=>readWorks(r,true))?[]:['WM_functional']):validateWM(cell,evidence);
+          const validation=config.rehearsal===true?rehearsalDecision(references.records.length===cell.references.length&&references.records.every(r=>readWorks(r))?[]:['WM_functional']):validateWM(cell,evidence);
           if(config.rehearsal===true){wm={validation};await write('WM-functional',validation);}else {
           const populations=references.states.map(s=>({key:s.methodLabel+':'+s.intent,sample:population(s.records,{warmReference:true})}));
           const ds=references.states.map(s=>normalDecision({...cell,method:'findCandidates'},s.records,{maintenance,maintainerCoverage:config.maintainerCoverage,

@@ -2,6 +2,7 @@
 import { performance } from 'node:perf_hooks';
 import { createHash } from 'node:crypto';
 import { REPRESENTATION_VERSION } from '../../../../core/context-read-tokenize.mjs';
+import { canonicalEvidence } from '../../../../evaluation/context-read-qualification/canonical-evidence.mjs';
 import { observeLoop } from './engine.mjs';
 const kind=process.argv[2];let encoded=process.argv[3];if(encoded===undefined){encoded='';for await(const chunk of process.stdin)encoded+=chunk;}
 const c=JSON.parse(encoded),loop=observeLoop();
@@ -31,13 +32,16 @@ if(kind==='busy-probe') {
     const memory=db.prepare('SELECT owner_id,scope,project_id,id,revision,content FROM memories WHERE deleted=0 ORDER BY owner_id,scope,project_id,id').all();
     const cards=schema>=23?db.prepare('SELECT * FROM private_cards ORDER BY id').all():[];
     const integrity=db.prepare('PRAGMA integrity_check').get().integrity_check;
-    value={schema,memory,cards,memories:memory.length,cardCount:cards.length,integrity,
+    value={schema,memory,cards,...(kind==='inspect'?{evidence:canonicalEvidence(db)}:{}),memories:memory.length,cardCount:cards.length,integrity,
       logicalHash:createHash('sha256').update(JSON.stringify([memory,cards])).digest('hex'),verifyMs:performance.now()-start};
   }finally{db.close();}
 } else if(kind==='verify-sidecar') {
   const start=performance.now(),db=new DatabaseSync(c.path,{readOnly:true});
   try {
     if(db.prepare('PRAGMA integrity_check').get().integrity_check!=='ok')throw Error('sidecar_integrity');
+    if(db.prepare('PRAGMA foreign_key_check').all().length)throw Error('sidecar_foreign_keys');
+    const orphan=db.prepare("SELECT 1 FROM postings p LEFT JOIN documents d ON d.generation=p.generation AND d.doc=p.doc LEFT JOIN statistics s ON s.generation=p.generation AND s.term_id=p.term WHERE d.doc IS NULL OR s.term_id IS NULL OR s.term IS NULL OR s.term='' LIMIT 1").get();
+    if(orphan)throw Error('orphan_posting');
     const publications=db.prepare('SELECT * FROM publications ORDER BY projection').all();
     if(publications.length!==2)throw Error('projection_count');
     let verifiedRows=0;

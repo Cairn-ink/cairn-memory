@@ -7,7 +7,7 @@ import { generateSnapshot } from '../generate.mjs';
 import { validate } from '../adapter.mjs';
 import { errorSchema } from '../schemas.mjs';
 import { inventory } from '../corpus.mjs';
-import { createCounter } from '../counter.mjs';
+import { createCounter,defaultDependencyRoot } from '../counter.mjs';
 import { storage } from '../../../tools/testing/measure-context-read-product.mjs';
 import { build } from '../../../tools/testing/fixtures/context-product/series.mjs';
 import { configure,selectReadSet } from '../../../tools/testing/fixtures/context-product/engine.mjs';
@@ -16,7 +16,7 @@ import { checkedSegments } from '../../../tools/testing/fixtures/context-product
 import { validateFilled } from '../registration.mjs';
 import template from '../registration.engine.template.json' with {type:'json'};
 test('counter matches the exact offline adapter tokenizer including literal special tokens',async()=>{
-  const dependencyRoot=process.env.QUAL_COUNTER_ROOT;
+  const dependencyRoot=process.env.QUAL_COUNTER_ROOT??defaultDependencyRoot;
   assert.ok(dependencyRoot,'set QUAL_COUNTER_ROOT to the offline dependency root');
   const require=createRequire(join(dependencyRoot,'package.json'));
   const {Tiktoken}=require('js-tiktoken/lite'),ranks=require('js-tiktoken/ranks/o200k_base'),reference=new Tiktoken(ranks);

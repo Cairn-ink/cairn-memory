@@ -1515,63 +1515,118 @@
     "reason": "Offline authoring reads source and fixture bytes and writes registration/inventory JSON; no canonical database file access."
   },
   {
-    "path": "evaluation/context-read-qualification/generate.mjs",
-    "source": "import { mkdirSync,existsSync,readFileSync } from 'node:fs'",
-    "reason": "Controller has no SQLite connections; manifest reads and existence/directory metadata only. Database bytes are hashed in the existing SQLite-free IO child."
+    "path": "tools/testing/measure-context-read-product.mjs",
+    "source": "if(definition.protocol==='P2-product-v4'){if(!isDeepStrictEqual(definition,DEFINITIONS[definition.platformProfile??profile]))throw Error('protocol_revision_required');const registered=JSON.parse(await readFile(registrationPath,'utf8'));validateV4Registration(registered,definition.platformProfile??profile);const value=segmentId?estimateV4Segment(definition.platformProfile??profile,registered,segmentId):estimateV4(definition.platformProfile??profile);console.log(JSON.stringify(value));return value;}",
+    "reason": "Reads registration JSON only for a non-collecting segment estimate; no database bytes or open SQLite connection."
   },
   {
-    "path": "evaluation/context-read-qualification/generate.mjs",
-    "source": "const manifest=JSON.parse(readFileSync(new URL('./manifest.json',import.meta.url),'utf8'));",
-    "reason": "Controller has no SQLite connections; manifest reads and existence/directory metadata only. Database bytes are hashed in the existing SQLite-free IO child."
+    "path": "evaluation/context-read-qualification/build-template.mjs",
+    "source": "import { writeFileSync } from 'node:fs'",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
   },
   {
-    "path": "evaluation/context-read-qualification/registration.mjs",
-    "source": "import { readFileSync,writeFileSync,realpathSync } from 'node:fs'",
-    "reason": "Preparation-only controller without SQLite: reads operator/template/writer JSON, resolves owned volume metadata, and exclusively writes the frozen registration JSON."
+    "path": "evaluation/context-read-qualification/build-template.mjs",
+    "source": "if(process.argv[1]===fileURLToPath(import.meta.url))writeFileSync(new URL('./registration.engine.template.json',import.meta.url),JSON.stringify(buildTemplate(),null,2)+'\\n');",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
   },
   {
-    "path": "evaluation/context-read-qualification/registration.mjs",
-    "source": "let input=JSON.parse(readFileSync(new URL('./registration.engine.template.json',import.meta.url),'utf8'));",
-    "reason": "Preparation-only controller without SQLite: reads operator/template/writer JSON, resolves owned volume metadata, and exclusively writes the frozen registration JSON."
+    "path": "evaluation/context-read-qualification/counter-closure-child.mjs",
+    "source": "import fs from 'node:fs'",
+    "reason": "SQLite-free child observes only tokenizer source/package metadata/WASM loads to discover the executed dependency chain. No engine/database imports."
   },
   {
-    "path": "evaluation/context-read-qualification/registration.mjs",
-    "source": "input.writerProfile=writerProfile(JSON.parse(readFileSync(input.writerProfileFile,'utf8')));",
-    "reason": "Preparation-only controller without SQLite: reads operator/template/writer JSON, resolves owned volume metadata, and exclusively writes the frozen registration JSON."
+    "path": "evaluation/context-read-qualification/counter-closure-child.mjs",
+    "source": "const configuration=JSON.parse(process.argv[2]),files=new Set(),read=fs.readFileSync;",
+    "reason": "SQLite-free child observes only tokenizer source/package metadata/WASM loads to discover the executed dependency chain. No engine/database imports."
   },
   {
-    "path": "evaluation/context-read-qualification/registration.mjs",
-    "source": "const input=validateFilled(JSON.parse(readFileSync(get('--validate'),'utf8')));",
-    "reason": "Preparation-only controller without SQLite: reads operator/template/writer JSON, resolves owned volume metadata, and exclusively writes the frozen registration JSON."
+    "path": "evaluation/context-read-qualification/counter-closure-child.mjs",
+    "source": "fs.readFileSync=function(path,...args){if(typeof path==='string'||path instanceof URL)files.add(path instanceof URL?fileURLToPath(path):path);return read.call(this,path,...args);};syncBuiltinESMExports();",
+    "reason": "SQLite-free child observes only tokenizer source/package metadata/WASM loads to discover the executed dependency chain. No engine/database imports."
   },
   {
-    "path": "evaluation/context-read-qualification/registration.mjs",
-    "source": "const input=await fillRegistration(JSON.parse(readFileSync(get('--host'),'utf8')),args.includes('--writer-profile')?get('--writer-profile'):undefined);",
-    "reason": "Preparation-only controller without SQLite: reads operator/template/writer JSON, resolves owned volume metadata, and exclusively writes the frozen registration JSON."
+    "path": "evaluation/context-read-qualification/counter-closure-child.mjs",
+    "source": "const require=createRequire(import.meta.url);",
+    "reason": "SQLite-free child observes only tokenizer source/package metadata/WASM loads to discover the executed dependency chain. No engine/database imports."
   },
   {
-    "path": "evaluation/context-read-qualification/registration.mjs",
-    "source": "writeFileSync(get('--out'),JSON.stringify(input,null,2)+'\\n',{flag:'wx',mode:0o400});",
-    "reason": "Preparation-only controller without SQLite: reads operator/template/writer JSON, resolves owned volume metadata, and exclusively writes the frozen registration JSON."
+    "path": "evaluation/context-read-qualification/counter-closure-child.mjs",
+    "source": "}finally{fs.readFileSync=read;syncBuiltinESMExports();}",
+    "reason": "SQLite-free child observes only tokenizer source/package metadata/WASM loads to discover the executed dependency chain. No engine/database imports."
   },
   {
     "path": "evaluation/context-read-qualification/counter.mjs",
-    "source": "const require=createRequire(configuration.dependencyRoot?pathToFileURL(resolve(configuration.dependencyRoot,'package.json')):new URL('../../adapters/openai/package.json',import.meta.url));",
-    "reason": "Loads pinned offline tokenizer code/WASM and package version metadata only; never opens database bytes."
+    "source": "const require=createRequire(pathToFileURL(resolve(counterConfiguration(configuration).dependencyRoot,'package.json')));",
+    "reason": "Resolves only installed tokenizer package/code paths. Dependency discovery executes in a SQLite-free child; neither resolver nor discovery opens database or companion bytes."
   },
   {
     "path": "evaluation/context-read-qualification/counter.mjs",
     "source": "try {const entry=require.resolve(name);installed=require(resolve(dirname(entry),name==='js-tiktoken'?'../package.json':'package.json')).version;}",
-    "reason": "Loads pinned offline tokenizer code/WASM and package version metadata only; never opens database bytes."
+    "reason": "Resolves only installed tokenizer package/code paths. Dependency discovery executes in a SQLite-free child; neither resolver nor discovery opens database or companion bytes."
+  },
+  {
+    "path": "evaluation/context-read-qualification/freeze.mjs",
+    "source": "import { mkdirSync,writeFileSync } from 'node:fs'",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/freeze.mjs",
+    "source": "if(write){writeFileSync(new URL('./manifest.json',import.meta.url),JSON.stringify(manifest,null,2)+'\\n');writeFileSync(new URL('./labels.json',import.meta.url),JSON.stringify(labels,null,2)+'\\n');writeFileSync(new URL('./queries.json',import.meta.url),JSON.stringify(queries,null,2)+'\\n');}",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/freeze.mjs",
+    "source": "if(write){writeFileSync(new URL('./manifest.json',import.meta.url),JSON.stringify(manifest,null,2)+'\\n');writeFileSync(new URL('./labels.json',import.meta.url),JSON.stringify(labels,null,2)+'\\n');writeFileSync(new URL('./queries.json',import.meta.url),JSON.stringify(queries,null,2)+'\\n');}",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/freeze.mjs",
+    "source": "if(write){writeFileSync(new URL('./manifest.json',import.meta.url),JSON.stringify(manifest,null,2)+'\\n');writeFileSync(new URL('./labels.json',import.meta.url),JSON.stringify(labels,null,2)+'\\n');writeFileSync(new URL('./queries.json',import.meta.url),JSON.stringify(queries,null,2)+'\\n');}",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/generate.mjs",
+    "source": "import { mkdirSync,existsSync,readFileSync,mkdtempSync,rmSync } from 'node:fs'",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/generate.mjs",
+    "source": "const manifest=JSON.parse(readFileSync(new URL('./manifest.json',import.meta.url),'utf8'));",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "import { readFileSync,writeFileSync,realpathSync } from 'node:fs'",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
   },
   {
     "path": "evaluation/context-read-qualification/registration.mjs",
     "source": "const frozen=JSON.parse(readFileSync(new URL('./registration.engine.template.json',import.meta.url),'utf8'));",
-    "reason": "Preparation-only controller with no SQLite connections; reads the frozen registration JSON to reject product-setting overrides."
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
   },
   {
-    "path": "tools/testing/measure-context-read-product.mjs",
-    "source": "if(definition.protocol==='P2-product-v4'){if(!isDeepStrictEqual(definition,DEFINITIONS[definition.platformProfile??profile]))throw Error('protocol_revision_required');const registered=JSON.parse(await readFile(registrationPath,'utf8'));validateV4Registration(registered,definition.platformProfile??profile);const value=segmentId?estimateV4Segment(definition.platformProfile??profile,registered,segmentId):estimateV4(definition.platformProfile??profile);console.log(JSON.stringify(value));return value;}",
-    "reason": "Reads registration JSON only for a non-collecting segment estimate; no database bytes or open SQLite connection."
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "let input=JSON.parse(readFileSync(new URL('./registration.engine.template.json',import.meta.url),'utf8'));",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "input.writerProfile=writerProfile(JSON.parse(readFileSync(input.writerProfileFile,'utf8')));",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "const input=validateFilled(JSON.parse(readFileSync(get('--validate'),'utf8')));",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "const input=await fillRegistration(JSON.parse(readFileSync(get('--host'),'utf8')),args.includes('--writer-profile')?get('--writer-profile'):undefined);",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "writeFileSync(get('--out'),JSON.stringify(input,null,2)+'\\n',{flag:'wx',mode:0o400});",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
   }
 ]

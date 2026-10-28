@@ -1,7 +1,7 @@
 // Functional assertions only. These can never grant a qualification decision.
 export const rehearsalDecision=(errors=[])=>({decision:errors.length?'failed':'inconclusive',reason:'non_qualifying_rehearsal',functionalPassed:errors.length===0,errors});
 export function readWorks(r,allowUnavailable=false) {
-  return !!r&&r.validated===true&&r.bounds===true&&r.telemetry==='complete'&&
+  return !!r&&r.expected===true&&(!r.initialization||r.initialization.ok===true&&r.initialization.expected===true&&r.initialization.bounds===true&&r.initialization.validated===true)&&r.validated===true&&r.bounds===true&&r.telemetry==='complete'&&
     (r.ok===true?r.expected===true:allowUnavailable&&r.code==='index_unavailable');
 }
 export function writerWorks(w) {

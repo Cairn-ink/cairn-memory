@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import { readFileSync,mkdtempSync,rmSync,existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import {fileURLToPath} from 'node:url';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
+import {snapshotPlan,verifyFrozenCatalogs} from './snapshot-checks.mjs';
 import { generateSnapshot } from '../generate.mjs';
-import { fixtureSpecs,queries,inventory,overflowInventory,compareRefs,refKey } from '../corpus.mjs';
-import { prepare,validate,validateProbe } from '../adapter.mjs';
-import { createCounter } from '../counter.mjs';
+import { fixtureSpecs,queries,inventory,overflowInventory,refKey } from '../corpus.mjs';
+import { prepare,validate,validateProbe,selectEvidenceRefs } from '../adapter.mjs';
+import { createCounter,counterConfiguration } from '../counter.mjs';
 import { validateFilled,segmentEstimates } from '../registration.mjs';
 import template from '../registration.engine.template.json' with {type:'json'};
 import { storage,prepareInput,validateWorkload,functionalOnly } from '../../../tools/testing/measure-context-read-product.mjs';
@@ -17,6 +19,7 @@ import { summarize } from '../../../tools/testing/summarize-context-read-product
 import { methodProfile } from '../../../tools/testing/fixtures/context-product/v4-plan.mjs';
 import { createReportSink } from '../../../tools/testing/fixtures/context-product/report.mjs';
 const root=new URL('../',import.meta.url),read=name=>JSON.parse(readFileSync(new URL(name,root),'utf8'));
+const plan=snapshotPlan(process.env.QUAL_INPUT_MODE);
 test('three physical layouts deterministically reproduce every canonical row and schema',()=>{
   const directory=mkdtempSync(join(tmpdir(),'qualification-determinism-'));
   try {for(const schema of [18,23,33]) {
@@ -25,31 +28,44 @@ test('three physical layouts deterministically reproduce every canonical row and
     assert.equal(a.contentHash,b.contentHash);assert.equal(a.schemaHash,b.schemaHash);assert.equal(a.fileHash,b.fileHash);assert.deepEqual(a.catalog,b.catalog);
   }}finally{rmSync(directory,{recursive:true,force:true});}
 });
-test('six sealed hashes and every labelled identity match actual SQLite inventories',async()=>{
-  const manifest=read('manifest.json'),labels=read('labels.json');
-  assert.equal(manifest.snapshots.length,6);assert.equal(labels.fixtures.length,6);
-  const own=!process.env.QUAL_VERIFY_VOLUME,directory=process.env.QUAL_VERIFY_VOLUME??mkdtempSync(join(tmpdir(),'qualification-manifest-'));
-  try {for(const spec of fixtureSpecs){
-    const path=join(directory,spec.id+'.sqlite');
-    const actual=generateSnapshot({...spec,...(!own?{inspectOnly:true}:{})},path);
-    const sealed=manifest.snapshots.find(f=>f.id===spec.id);
-    assert.equal(actual.contentHash,sealed.contentHash,spec.id);assert.equal(actual.schemaHash,sealed.schemaHash,spec.id);
-    const ledger=(await storage('inspect',{path})).value;
-    const f=labels.fixtures.find(f=>f.id===spec.id),all=new Map(f.catalog.map(x=>[refKey(x.ref),x]));
-    for(const q of f.queries){
-      assert.equal(new Set(q.relevant.map(refKey)).size,q.relevant.length,'ambiguous gold');
-      for(const ref of [...q.relevant,...q.ranking,...q.knownMisses]){
-        assert.ok(all.has(refKey(ref)));const row=ledger.memory.find(r=>r.id===ref.memoryId)??ledger.cards.find(r=>r.id===ref.cardId);
-        assert.ok(row);assert.equal(row.revision,ref.revision);if(ref.type==='card')assert.equal(row.body_revision,ref.bodyRevision);
-      }
-      if(q.id==='single-han'){assert.equal(q.knownMisses.length,1);assert.equal(all.get(refKey(q.knownMisses[0])).text,'中文');assert.deepEqual(q.ranking,[]);assert.equal(q.recallAt12,0);}
-      else {assert.deepEqual(q.ranking,[...q.relevant].sort(compareRefs));assert.equal(q.recallAt5,q.relevant.length?Math.min(5,q.ranking.length)/q.relevant.length:null);assert.equal(q.recallAt12,q.relevant.length?Math.min(12,q.ranking.length)/q.relevant.length:null);}
-    }
-    assert.deepEqual(selectReadSet(overflowInventory,'sealed').ownerCoverage,{policy:'recent-projects-v1',selectionRevision:'sealed',requestedNamespaces:33,selectedNamespaces:32,omittedNamespaces:1});
-  }}finally{if(own)rmSync(directory,{recursive:true,force:true});}
+test('all six manifest entries and all six canonical label/ref catalogs remain checked in both modes',t=>{
+  verifyFrozenCatalogs(read('manifest.json'),read('labels.json'));
+  t.diagnostic(`${plan.mode} snapshot coverage: rebuild ${plan.selected.map(s=>s.id).join(', ')}; ${plan.skipped.length} layouts skipped by design${plan.skipped.length?': '+plan.skipped.map(s=>s.id).join(', '):''}`);
+  assert.deepEqual(selectReadSet(overflowInventory,'sealed').ownerCoverage,{policy:'recent-projects-v1',selectionRevision:'sealed',requestedNamespaces:33,selectedNamespaces:32,omittedNamespaces:1});
 });
+for(const spec of fixtureSpecs) {
+  const selected=plan.selected.some(s=>s.id===spec.id),deterministic=plan.deterministicIds.includes(spec.id);
+  test(`${plan.mode} ${spec.id}: rebuilt seal, canonical inventory${deterministic?' and full-layout determinism':''}`,{
+    skip:selected?false:'reduced mode: four layouts skipped by design; manifest and label/ref checks still run',
+  },async t=>{
+    const manifest=read('manifest.json'),labels=read('labels.json'),w=createTestWorkspace(t,{prefix:'qualification-seal-'}),path=join(w.path,spec.id+'.sqlite');
+    // Always generate fresh databases. No existing-volume option can bypass a
+    // rebuild, including in the explicit full acceptance mode.
+    const actual=generateSnapshot(spec,path),sealed=manifest.snapshots.find(f=>f.id===spec.id);
+    assert.equal(actual.contentHash,sealed.contentHash,spec.id);assert.equal(actual.schemaHash,sealed.schemaHash,spec.id);
+    if(deterministic){
+      const repeat=generateSnapshot(spec,join(w.path,'repeat.sqlite'));
+      assert.equal(repeat.contentHash,actual.contentHash);assert.equal(repeat.schemaHash,actual.schemaHash);
+      assert.equal(repeat.fileHash,actual.fileHash);assert.deepEqual(repeat.catalog,actual.catalog);
+    }
+    const ledger=(await storage('inspect',{path})).value;
+    for(const language of ['zh','ja','mixed'])for(const label of ['f1-full','f1-compact','f24-full','f24-compact','f24-snapshot']){
+      const selected=selectReadSet(inventory,'qualification-selection-r1'),cell={language,...methodProfile(label)},refs=selectEvidenceRefs(cell,selected,ledger),items=refs.map(ref=>ledger.evidence.find(i=>refKey(i.ref)===refKey(ref)));
+      assert.equal(refs.length,cell.refs);assert.ok(items.some(i=>(i.content?.length===4000||i.body?.length===20000)));
+      const snapshot={v:1,scope:'x'.repeat(43),intent:'current',refs:refs.map(r=>[selected.readSet.findIndex(n=>JSON.stringify(n)===JSON.stringify(r.namespace)),r.type,r.memoryId??r.cardId,r.revision,...(r.type==='card'?[r.bodyRevision]:[])]),generations:selected.readSet.map(()=>({memory:Number.MAX_SAFE_INTEGER,card:Number.MAX_SAFE_INTEGER})),access:'x'.repeat(43),fences:refs.map(()=> 'x'.repeat(43))};
+      const snapshotLength=Math.ceil(Buffer.byteLength(JSON.stringify(snapshot))*4/3)+44;assert.ok(snapshotLength<=16384);
+      assert.ok(Buffer.byteLength(JSON.stringify({ok:true,value:{items,snapshot:'x'.repeat(snapshotLength)}}))<=65536,label+':'+spec.id);
+    }
+    const f=labels.fixtures.find(f=>f.id===spec.id);
+    for(const c of f.catalog){
+      const ref=c.ref,row=ref.type==='memory'?ledger.memory.find(r=>r.id===ref.memoryId):ledger.cards.find(r=>r.id===ref.cardId);
+      assert.ok(row);assert.equal(row.revision,ref.revision);if(ref.type==='card')assert.equal(row.body_revision,ref.bodyRevision);
+      assert.equal(c.text,ref.type==='memory'?row.content:row.title+'\n'+row.body);
+    }
+  });
+}
 test('filled engine template passes both harness validators; two segments cover exactly 728 cells',()=>{
-  const input=structuredClone(template);
+  const input=JSON.parse(JSON.stringify(template).replaceAll('${volumeRoot}','/synthetic-run-volume').replaceAll('${packageRoot}',fileURLToPath(root)));
   Object.assign(input,{productionNode:'v24.22.1',platformRole:'wsl2-ext4',filesystem:'ext4',profileCommit:'a'.repeat(40),protocolCommit:'b'.repeat(40),counterId:'o200k_base-v1',volumeRoot:'/synthetic-run-volume',adapterModule:new URL('../adapter.mjs',import.meta.url).href,counterModule:new URL('../counter.mjs',import.meta.url).href});
   input.host={id:'test-host',cpu:'test-cpu',ramBytes:1024,os:'test-os',owner:'test-owner'};input.volume={id:'test-volume',mount:'/synthetic-run-volume',filesystem:'ext4',production:false};input.reservation.owner='test-owner';
   input.writerProfile.provenance='synthetic functional validation';
@@ -64,14 +80,16 @@ test('counter wraps the product assembly tokenizer and keeps configured identity
   const c=await createCounter({counterId:'o200k_base-v1',dependencyRoot:process.env.QUAL_COUNTER_ROOT});
   assert.equal(c.id,'o200k_base-v1');assert.equal(c.countTokens('assembly one two three four five six seven eight nine ten eleven twelve thirteen fourteen'),15);
 });
-const adapter={prepare,validate,validateProbe};
+const adapter={prepare,validate,validateProbe,selectEvidenceRefs};
 async function world(t,schema) {
   const w=createTestWorkspace(t,{prefix:'qualification-functional-'}),path=join(w.path,'tiny.sqlite');
   generateSnapshot({schema,count:32,cards:schema===18?0:4},path);
   const config={path,...selectReadSet(inventory,'qualification-selection-r1'),types:schema===18?['memory']:['memory','card'],canonical:'DELETE',sidecar:'DELETE',
-    readCutoffReport:{thresholdMs:1000,gate:false},functionalOnly:true,deadlines:{openMs:5000,requestMs:5000,readMs:5000},load:'idle',buildCeiling:100,counterModule:new URL('../counter.mjs',import.meta.url).href,counterId:'o200k_base-v1',counterConfiguration:{counterId:'o200k_base-v1',dependencyRoot:process.env.QUAL_COUNTER_ROOT},
-    pump:{id:'functional',quantum:{maxItems:1024,maxMs:1000},cronMs:60000,pollMs:1000,renewalMs:60000,budgets:{maxItems:100000,maxMs:60000}},seriesCeilingMs:180000,
+    readCutoffReport:{thresholdMs:1000,gate:false},functionalOnly:true,deadlines:{openMs:5000,requestMs:5000,readMs:5000},load:'idle',buildCeiling:100,counterModule:new URL('../counter.mjs',import.meta.url).href,counterId:'o200k_base-v1',counterConfiguration:counterConfiguration({counterId:'o200k_base-v1'}),
+    pump:{id:'functional',quantum:{maxItems:1024,maxMs:5000},cronMs:60000,pollMs:1000,renewalMs:60000,budgets:{maxItems:100000,maxMs:60000}},seriesCeilingMs:180000,
     writerProfile:{captureMs:25000,reviewMs:5000,provenance:'synthetic functional only'},ledger:(await storage('inspect',{path})).value};
+  // Functional preparation uses the supported 5-second bound, independently of
+  // the frozen production pump quantum. Ordinary tests impose no speed gate.
   await build(config);return {w,config};
 }
 for(const schema of [18,23,33])test(`tiny physical v${schema} real harness reads all ten profiles, both intents, closed schemas and exact evidence`,async t=>{

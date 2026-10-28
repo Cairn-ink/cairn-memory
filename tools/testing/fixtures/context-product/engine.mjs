@@ -49,6 +49,7 @@ export function selectReadSet(inventory, selectionRevision) {
   return {readSet,ownerCoverage:{policy:'recent-projects-v1',selectionRevision,requestedNamespaces:inventory.length,selectedNamespaces:readSet.length,omittedNamespaces:inventory.length-readSet.length}};
 }
 export async function configure(config,service=false) {
+  if(config.counterId==='o200k_base-v1'&&config.counterModule!==new URL('../../../../evaluation/context-read-qualification/counter.mjs',import.meta.url).href)throw Error('counter_module_must_be_registered');
   const {credentialDigest}=await import('../../../../core/context-product-control.mjs');
   const {createContextReadSupervisor,openContextProductReader,openContextIndexMaintainer}=await import('../../../../core/index.mjs');
   const supervisor=createContextReadSupervisor(),token={opaque:randomUUID()};

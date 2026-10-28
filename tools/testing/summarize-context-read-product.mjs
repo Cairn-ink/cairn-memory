@@ -15,8 +15,12 @@ export async function summarize(path,write=output) {
         if(r.summary?.reader)await write(JSON.stringify({type:'reader-statistics',cell:r.cell.id,populations:r.summary.reader}));
       }
       if(r.type==='record'&&Object.hasOwn(r.record??{},'readExceededAdapterDefault')){
-        const key=JSON.stringify([r.cell,r.record.method]),row=adapterReadCutoffs.get(key)??{cell:r.cell,method:r.record.method,reads:0,exceeded1000Ms:0,noRead:0,gate:false};
-        if(r.record.readExceededAdapterDefault===null)row.noRead++;else{row.reads++;row.exceeded1000Ms+=Number(r.record.readExceededAdapterDefault);}adapterReadCutoffs.set(key,row);
+        const populations=r.record.populationIdentities??[{cell:r.cell,method:r.record.method,intent:r.record.intent??null}];
+        const seen=new Set();for(const p of populations){
+          const key=JSON.stringify([p.cell,p.method,p.intent??null]);if(seen.has(key))continue;seen.add(key);
+          const row=adapterReadCutoffs.get(key)??{cell:p.cell,method:p.method,intent:p.intent??null,reads:0,exceeded1000Ms:0,noRead:0,gate:false};
+          if(r.record.readExceededAdapterDefault===null)row.noRead++;else{row.reads++;row.exceeded1000Ms+=Number(r.record.readExceededAdapterDefault);}adapterReadCutoffs.set(key,row);
+        }
       }
       if(r.type==='record')for(const name of ['hostLoop','launcherLoop','startupLoop']) {
         const loop=r.record?.[name];

@@ -36,7 +36,8 @@ export async function build(config,write=async()=>{}) {
 }
 export async function startPump(config,write,{harness=fn=>fn()}={}) {
   const {renewContextMaintenancePump}=await import('../../../../core/index.mjs');
-  const c=await harness(()=>configure(config,true));let pump,renewal,renewFailure,tick=0,stopped=false,draining=null,lastDrain=performance.now(),drainIncomplete=false;
+  const c=await harness(()=>configure(config,true));let pump,renewal,renewFailure,tick=0,draining=null,lastDrain=performance.now(),drainIncomplete=false;
+  const recordCompletion=r=>{observations.push({tick:tick++,...r});if(r.state==='failed')renewFailure??=Object.assign(Error(r.error??'maintenance_pump_failed'),{code:r.error??'maintenance_pump_failed'});};
   const exported=[],pending=[],observations=[],trace=harness(()=>[{kind:'start',at:Date.now(),id:config.pump.id,settings:config.pump}]);
   // Engine calls stay in the caller's observed scope; only harness preparation
   // and diagnostic record construction cross this optional boundary.
@@ -56,7 +57,7 @@ export async function startPump(config,write,{harness=fn=>fn()}={}) {
     if(config.protocol==='P2-product-v4')traceEvent('renew',{replaced:previous!==undefined&&pump!==previous});
     // Every completion is observed, including expiry/exhaustion/failure. No
     // detached background task promises supervision after the caller returns.
-    pump.completion.then(r=>harness(()=>{if(!stopped){observations.push({tick:tick++,state:r.state,error:r.error});if(r.state==='failed')renewFailure??=Object.assign(Error('maintenance_pump_failed'),{code:r.error??'maintenance_pump_failed'});}})).catch(()=>{drainIncomplete=true;});
+    pump.completion.then(r=>harness(()=>recordCompletion(r))).catch(error=>{drainIncomplete=true;harness(()=>recordCompletion({state:'failed',error:error.code??error.message}));});
   };
   try{renew();}catch(error){await c.supervisor.close();await drain(c.supervisor);throw error;}
   renewal=setInterval(()=>{try{renew();}catch(error){renewFailure??=error;}},config.pump.cronMs);
@@ -64,7 +65,7 @@ export async function startPump(config,write,{harness=fn=>fn()}={}) {
   // validation and serialization are deferred until between reader observations.
   const drainTimer=setInterval(()=>{void exportNow();},PROTOCOL.pumpDrainMs);
   const flush=async()=>{if(config.protocol==='P2-product-v4')traceEvent('quantum');await exportNow();if(pending.length)await harness(()=>write('maintenance-drain',pending.splice(0)));for(const observation of observations.splice(0))await harness(()=>write('pump',observation));};
-  return {flush,trace,async stop(){if(config.protocol==='P2-product-v4')traceEvent('stopping');stopped=true;clearInterval(renewal);clearInterval(drainTimer);await draining;await pump.close();await c.supervisor.close();await flush();if(config.protocol==='P2-product-v4')traceEvent('stop');
+  return {flush,trace,async stop(){if(config.protocol==='P2-product-v4')traceEvent('stopping');clearInterval(renewal);clearInterval(drainTimer);await draining;let closeError;try{try{await pump.close();}catch(error){closeError=error;}const finalStatus=pump.getStatus?.();if(finalStatus)harness(()=>recordCompletion({...finalStatus,final:true}));else if(config.protocol==='P2-product-v4')throw Error('pump_final_status_missing');}finally{try{await c.supervisor.close();}finally{await flush();}}if(closeError)throw closeError;if(config.protocol==='P2-product-v4')traceEvent('stop');
     if(drainIncomplete)harness(()=>exported.push({diagnostics:{protocol:'context-native-v1',coverage:'incomplete',busy:0,records:[]}}));if(renewFailure)throw renewFailure;return exported;}};
 }
 export async function requestSeries(config,{cell,sink,oracle,smoke=false},{attempt:readAttempt=attempt,coldAttempt:readCold=coldAttempt,startPump:makePump=startPump,startWriter:makeWriter=startWriter,startSampler:makeSampler=startSampler,prepareAttempt=async c=>c}={}) {

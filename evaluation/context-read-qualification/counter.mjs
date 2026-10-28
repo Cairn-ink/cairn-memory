@@ -1,8 +1,11 @@
 import { createRequire } from 'node:module';
 import { dirname,resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath,pathToFileURL } from 'node:url';
+export const defaultDependencyRoot=fileURLToPath(new URL('./counter-deps/',import.meta.url));
+export function counterConfiguration(configuration={}){configuration??={};return {...configuration,dependencyRoot:configuration.dependencyRoot??process.env.QUAL_COUNTER_ROOT??defaultDependencyRoot};}
 function dependencies(configuration) {
-  const require=createRequire(configuration.dependencyRoot?pathToFileURL(resolve(configuration.dependencyRoot,'package.json')):new URL('../../adapters/openai/package.json',import.meta.url));
+  const require=createRequire(pathToFileURL(resolve(counterConfiguration(configuration).dependencyRoot,'package.json')));
   for(const [name,version] of [['tiktoken','1.0.22'],['js-tiktoken','1.0.21']]) {
     let installed;
     try {const entry=require.resolve(name);installed=require(resolve(dirname(entry),name==='js-tiktoken'?'../package.json':'package.json')).version;}
@@ -12,11 +15,13 @@ function dependencies(configuration) {
   return require;
 }
 export function counterAssets(configuration={}) {
-  const require=dependencies(configuration);
-  return [resolve(dirname(require.resolve('tiktoken')),'package.json'),resolve(dirname(require.resolve('js-tiktoken')),'../package.json'),...['tiktoken/lite','tiktoken/lite/tiktoken_bg.wasm','js-tiktoken/ranks/o200k_base'].map(name=>require.resolve(name))];
+  const child=spawnSync(process.execPath,[fileURLToPath(new URL('./counter-closure-child.mjs',import.meta.url)),JSON.stringify(counterConfiguration(configuration))],{encoding:'utf8',env:{},maxBuffer:1024*1024});
+  if(child.status!==0||child.error)throw Error('counter_dependency_discovery_failed:'+child.status+':'+child.stderr);
+  return [fileURLToPath(import.meta.url),fileURLToPath(new URL('./counter-closure-child.mjs',import.meta.url)),...JSON.parse(child.stdout)];
 }
 let encoder,loadedFrom;
 export async function createCounter(configuration={}) {
+  configuration??={};
   const require=dependencies(configuration),source=require.resolve('js-tiktoken/ranks/o200k_base');
   if(!encoder||loadedFrom!==source) {
     const {Tiktoken}=require('tiktoken/lite'),ranks=require('js-tiktoken/ranks/o200k_base');

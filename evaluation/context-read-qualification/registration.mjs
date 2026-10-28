@@ -8,7 +8,7 @@ import { validateV4Registration } from '../../tools/testing/fixtures/context-pro
 import { estimateV4Segment } from '../../tools/testing/fixtures/context-product/v4-plan.mjs';
 import { V3_DEFINITION } from '../../tools/testing/fixtures/context-product/protocol.mjs';
 import { isDeepStrictEqual } from 'node:util';
-import { createCounter,counterAssets } from './counter.mjs';
+import { counterAssets,counterConfiguration } from './counter.mjs';
 const packageRoot=dirname(fileURLToPath(import.meta.url));
 export function segmentEstimates(registration) {
   return registration.segments.map(segment=>{
@@ -17,9 +17,10 @@ export function segmentEstimates(registration) {
   });
 }
 export function validateFilled(input) {
-  if(JSON.stringify(input).includes('PLACEHOLDER'))throw Error('unfilled_registration');
+  if(/PLACEHOLDER|\$\{[^}]*\}/.test(JSON.stringify(input)))throw Error('unfilled_registration');
   const frozen=JSON.parse(readFileSync(new URL('./registration.engine.template.json',import.meta.url),'utf8'));
   for(const key of ['productionNode','counterId','deadlines','pump','productInputs','readCutoffReport','stateDeadlines'])if(!isDeepStrictEqual(input[key],frozen[key]))throw Error('product_input_changed:'+key);
+  if(input.counterModule!==new URL('./counter.mjs',import.meta.url).href)throw Error('counter_module_must_be_registered');
   validateV4Registration(input,'engine');
   validateRegistration({...input,protocolDefinition:V3_DEFINITION});
   writerProfile(input.writerProfile);
@@ -34,29 +35,31 @@ export function validateFilled(input) {
 function gitHead() {const r=spawnSync('git',['rev-parse','HEAD'],{encoding:'utf8'});if(r.status!==0)throw Error('git_exit:'+r.status);return r.stdout.trim();}
 export async function fillRegistration(hostInput,profilePath) {
   let input=JSON.parse(readFileSync(new URL('./registration.engine.template.json',import.meta.url),'utf8'));
+  const allowed=new Set(['host','volume','volumeRoot','platformRole','filesystem','profileCommit','protocolCommit','counterConfiguration']);
+  for(const field of Object.keys(hostInput))if(!allowed.has(field))throw Error('host_field_not_fillable:'+field);
+  if(Object.keys(hostInput.counterConfiguration??{}).some(k=>k!=='dependencyRoot'))throw Error('host_field_not_fillable:counterConfiguration');
   for(const field of ['host','volume','volumeRoot','platformRole'])if(!hostInput[field])throw Error('host_field_required:'+field);
   const volumeRoot=realpathSync(resolve(hostInput.volumeRoot));
   // Explicit host overrides are registered before validation and collection.
   input={...input,...hostInput,volumeRoot,filesystem:hostInput.filesystem??hostInput.volume.filesystem,
     profileCommit:hostInput.profileCommit??gitHead(),protocolCommit:hostInput.protocolCommit??gitHead()};
-  const counterId=hostInput.counterId??'o200k_base-v1';
-  input.counterId=counterId;input.counterConfiguration={...hostInput.counterConfiguration,counterId};
+  input.counterConfiguration=counterConfiguration({...hostInput.counterConfiguration,counterId:input.counterId});
   input.reservation={...input.reservation,owner:hostInput.host.owner};
   if(!profilePath)throw Error('writer_profile_registration_input_required');
   input.writerProfileFile=resolve(profilePath);
   input.writerProfile=writerProfile(JSON.parse(readFileSync(input.writerProfileFile,'utf8')));
   input=JSON.parse(JSON.stringify(input).replaceAll('${volumeRoot}',volumeRoot).replaceAll('${packageRoot}',packageRoot));
   for(const key of ['adapterModule','counterModule'])input[key]=pathToFileURL(input[key]).href;
-  input.inputFiles=[input.writerProfileFile,...counterAssets(input.counterConfiguration),...['manifest.json','corpus.mjs','labels.json','queries.json','schemas.mjs','registration.engine.template.json','registration.mjs','generate.mjs','generate-child.mjs'].map(n=>resolve(packageRoot,n))];
+  input.inputFiles=[input.writerProfileFile,...counterAssets(input.counterConfiguration),...['manifest.json','corpus.mjs','labels.json','queries.json','schemas.mjs','registration.engine.template.json','registration.mjs','generate.mjs','generate-child.mjs','canonical-evidence.mjs','build-template.mjs','registration.constants.json','gold-rank.mjs','freeze.mjs','counter-deps/package.json','counter-deps/package-lock.json'].map(n=>resolve(packageRoot,n))];
   validateFilled(input);
-  const counter=await createCounter(input.counterConfiguration);if(counter.id!==input.counterId||counter.countTokens('東京 海港 orchard')<1)throw Error('counter_unavailable');
+  const counter=await (await import(input.counterModule)).createCounter(input.counterConfiguration);if(counter.id!==input.counterId||counter.countTokens('東京 海港 orchard')<1)throw Error('counter_unavailable');
   return input;
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)) {
   const args=process.argv.slice(2),get=k=>args[args.indexOf(k)+1];
   if(args.includes('--validate')){
     const input=validateFilled(JSON.parse(readFileSync(get('--validate'),'utf8')));
-    await createCounter(input.counterConfiguration);
+    const counter=await (await import(input.counterModule)).createCounter(input.counterConfiguration);if(counter.id!==input.counterId)throw Error('counter_identity');
     for(const value of segmentEstimates(input))console.log(JSON.stringify(value));
   }else{
     if(!args.includes('--host')||!args.includes('--out'))throw Error('usage: registration.mjs --host host.json --out registration.json [--writer-profile writer-profile.json]');

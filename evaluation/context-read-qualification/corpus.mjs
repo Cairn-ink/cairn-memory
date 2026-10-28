@@ -11,6 +11,7 @@ export const queries = [
   {id:'ja',language:'ja',query:'桜庭',terms:['桜庭']},
   {id:'mixed',language:'mixed',query:'cobaltledger 檢索',terms:['cobaltledger','檢索']},
   {id:'single-han',language:'zh',query:'中',terms:['中'],knownMiss:true},
+  ...['zh','ja','mixed'].map((language,i)=>({id:'assembly-'+language,language,query:'qbyte'+language+' '+['巨幅','大冊','巨篇'][i],terms:['qbyte'+language,['巨幅','大冊','巨篇'][i]]})),
   {id:'empty',language:'mixed',query:'noeligiblequartzneedle',terms:['noeligiblequartzneedle'],empty:true}
 ];
 const lead = ['海港 計畫 證據 排序','桜庭 計画 記録 検索','cobaltledger 檢索 orchard evidence'];
@@ -20,9 +21,16 @@ const prose = ['團隊每週核對專案規劃，保留維護預算與資料安�
 export function memoryText(i) {
   if(i<12)return `${lead[Math.floor(i/4)]} specimen${i}`;
   if(i===12)return '中文';
+  if(i>=16&&i<=18){const prefix=lead[i-16]+' qbyte'+['zh','ja','mixed'][i-16]+' ';return prefix+'a'.repeat(4000-prefix.length);}
   return `entry${i} ${prose[i%3]} ${prose[(i+1)%3]} ${prose[(i+2)%3]}`;
 }
-export function cardText(i) {return {title:`Authored record ${i}`,body:`${prose[i%3]} ${prose[(i+1)%3]}`};}
+export function cardText(i) {
+  if(i>=4&&i<=6){
+    const language=['zh','ja','mixed'][i-4],prefix=lead[i-4]+' qbyte'+language+' ',title='Large '+language+' '+lead[i-4]+' ';
+    return {title:title+'a'.repeat(200-title.length),body:prefix+' '.repeat(20000-prefix.length-1)+'Z'};
+  }
+  return {title:`Authored record ${i}`,body:`${prose[i%3]} ${prose[(i+1)%3]}`};
+}
 export const fixtureSpecs = [1112,3336].flatMap(count=>[18,23,33].map(schema=>({id:`m${count}-v${schema}`,count,schema,cards:schema===18?0:Math.floor(count/10),
   consistency:'closed-snapshot',inventory,overflowInventory,selectionRevision:'qualification-selection-r1',otherOwnerNamespace})));
 export const refKey = ref => JSON.stringify([ref.type,ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId,ref.memoryId??ref.cardId]);
