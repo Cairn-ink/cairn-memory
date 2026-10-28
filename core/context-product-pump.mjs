@@ -12,6 +12,11 @@ import { canonicalJson } from './context-product-validation.mjs';
 const processKey=Symbol.for('context-read-product-v1.1/pumps');
 const state=()=>globalThis[processKey]??={entries:new Map(),ledgers:new Map()};
 const integer=(n,max)=>{if(!Number.isSafeInteger(n)||n<1||n>max)fail('invalid_input');return n;};
+// Fixed internal diagnostic, attached to each status/completion observation.
+// Keep the closed public DTO (including its error/state semantics) unchanged.
+// No history, paths, credentials or callbacks; snapshots die with their DTOs.
+const pumpDiagnostics=new WeakMap();
+export const maintenancePumpDiagnostic=observation=>pumpDiagnostics.get(observation);
 // Quotas and renewal identity are host configuration. The process ledger lives
 // beyond handle shutdown; a host persists the same monotonic window/quota state
 // across process restarts before reopening admission (see the product guide).
@@ -86,8 +91,24 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     // Initial observations are due within five seconds of activation. Expired
     // authority/quota starts a new duty interval when explicitly renewed.
     const observations=projections.map(()=>lastTick);
-    function observation(){return Object.freeze({id:c.id,state:error?'failed':stopped?'stopped':exhausted()?'budget_exhausted':now()>=renewedUntil?'renewal_expired':'active',
-      windowId:window.id,usedItems:Math.max(...[...ledgers.values()].map(l=>l.items)),usedMs:Math.max(...[...ledgers.values()].map(l=>l.ms)),maxItems:budgets.maxItems,maxMs:budgets.maxMs,error});}
+    const missed=projections.map(()=>false);
+    let cadenceMisses=0,worstGapMs=0,lastObservation=null;
+    function checkCadence(time){
+      for(let i=0;i<observations.length;i++){
+        // Duty ends at authority/window expiry, even if delivery is later.
+        const until=Math.min(time,renewedUntil,ledgers.get(domainOf(projections[i])).endsAt);
+        const gap=until-observations[i];
+        if(gap<=5000)continue;
+        if(!missed[i]){missed[i]=true;cadenceMisses++;}
+        worstGapMs=Math.max(worstGapMs,gap);
+      }
+    }
+    function observation(){
+      const value=Object.freeze({id:c.id,state:error?'failed':stopped?'stopped':exhausted()?'budget_exhausted':now()>=renewedUntil?'renewal_expired':'active',
+        windowId:window.id,usedItems:Math.max(...[...ledgers.values()].map(l=>l.items)),usedMs:Math.max(...[...ledgers.values()].map(l=>l.ms)),maxItems:budgets.maxItems,maxMs:budgets.maxMs,error});
+      pumpDiagnostics.set(value,Object.freeze({cadenceMisses,worstGapMs,observation:lastObservation}));
+      return value;
+    }
     // Stop this selection conservatively at its first exhausted domain; a new
     // selection can still use another domain, but cannot recharge this one.
     function exhausted(){return [...ledgers.values()].some(l=>now()>=l.endsAt||l.items>=l.maxItems||l.ms>=l.maxMs);}
@@ -126,12 +147,14 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       // punctual, in-budget turn, so advancing it preserves minimum spacing.
       const due=Math.min(...observations.map((time,i)=>time+5000-quantum.maxMs-
         ((i-at%projections.length+projections.length)%projections.length)*spacing));
-      timer=setTimer(tick,Math.max(0,Math.min(lastTick+interval(),due,renewedUntil,window.endsAtMonoMs)-now()));
+      // After a cadence miss the old deadline can be in the past. Recover in
+      // round-robin order without violating spacing or spinning overdue timers.
+      timer=setTimer(tick,Math.max(0,Math.min(Math.max(lastTick+spacing,Math.min(lastTick+interval(),due)),renewedUntil,window.endsAtMonoMs)-now()));
     }
     function tick(){
       if(stopped||error)return;
       if(exhausted()||now()>=renewedUntil){report(observation());return;}
-      if(observations.some(time=>now()-time>5000)){error='read_timeout';void stop();return;}
+      checkCadence(now());
       lastTick=now();
       let quantumTimer;
       return running=(async()=>{
@@ -166,14 +189,13 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           const time=observedAt(result),finished=now();
           // Missing timing is uncertain, never an invented observation at
           // admission/delivery. A quantum overrun retains its full reservation.
-          if(!Number.isFinite(time)||time<lastTick||time>finished||finished-lastTick>maxMs||
-            (time-observations[index]>5000 && time<renewedUntil && time<ledger.endsAt)){
-            error='read_timeout';return;
-          }
+          if(finished-lastTick>maxMs){error='read_timeout';return;}
+          if(!Number.isFinite(time)||time<lastTick||time>finished){error='reader_failed';return;}
+          checkCadence(time);
+          lastObservation=Object.freeze({projection:index,atMonoMs:time,gapMs:time-observations[index],cadenceMiss:missed[index]});
           observations[index]=time;
-          if(finished<renewedUntil&&finished<ledger.endsAt&&observations.some(time=>finished-time>5000)){
-            error='read_timeout';return;
-          }
+          missed[index]=false;
+          checkCadence(finished);
           // A successful settled quantum reports all transformation attempts,
           // including rolled-back work. Elapsed time includes opening/draining
           // and delivery. Missing/invalid usage or any failed settlement keeps
@@ -203,7 +225,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       } else ledgers=admit(w,b);
       // A settled observer cannot report renewed usage, even at exhaustion.
       if(settled)cycle();
-      if(inactive)observations.fill(now());
+      if(inactive){observations.fill(now());missed.fill(false);}
       renewedUntil=now()+next.renewalMs;grant=g;clearTimer(timer);if(exhausted())report(observation());else if(!running)schedule();
     }};
     all.entries.set(c.id,entry);if(exhausted())report(observation());schedule();return api;

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import * as productReader from '../context-product-reader.mjs';
 const { openContextIndexMaintainer } = productReader;
-import { createMaintenancePumpRuntime } from '../context-product-pump.mjs';
+import * as productPump from '../context-product-pump.mjs';
+const { createMaintenancePumpRuntime, maintenancePumpDiagnostic } = productPump;
 import { createContextReadSupervisor } from '../context-read-supervisor.mjs';
 import { credentialDigest } from '../context-product-control.mjs';
 import { fixture, ok } from '../testing/context-read-fixture.mjs';
@@ -62,7 +63,7 @@ test('renewal expiry is observable and a new quota window cannot overlap its pre
   assert.equal((await p.completion).state,'renewal_expired');assert.equal(s.calls.length,0);
   // End this duty interval before the deliberate jump to the next minute.
   // Leaving authority active during that jump would simulate overdue timers,
-  // which must now fail rather than silently discard observation deadlines.
+  // which must be reported rather than silently discard observation deadlines.
   const expired=p.completion;s.renew({...s.c,renewalMs:2000});assert.notEqual(p.completion,expired);await s.next();assert.equal(s.calls.length,1);
   s.setTime(60000);const next={...s.c,window:{id:'minute-2',endsAtMonoMs:120000,usedItems:0,usedMs:0},renewalMs:60000};
   assert.equal(s.renew(next),p);await s.next();assert.equal(p.getStatus().windowId,'minute-2');assert.equal(s.calls.length,2);await p.close();
@@ -448,17 +449,104 @@ for(const [name,observedAt] of [['missing',()=>undefined],['future',time=>time+1
 test(`Fix A1 ${name} observation timing fails visibly without refund`,async t=>{
   const s=setup(t,{}, {observedAt,result:()=>settled()}),p=s.renew(s.c);
   await s.next();
-  assert.equal(p.getStatus().state,'failed');assert.equal(p.getStatus().error,'read_timeout');
-  assert.equal((await p.completion).error,'read_timeout');assert.equal(s.timers.size,0);
+  assert.equal(p.getStatus().state,'failed');assert.equal(p.getStatus().error,'reader_failed');
+  assert.equal((await p.completion).error,'reader_failed');assert.equal(s.timers.size,0);
   assert.equal(p.getStatus().usedItems,1);assert.equal(p.getStatus().usedMs,100);await p.close();
 });
 
-test('Fix A1 overdue timer exposes a missed observation instead of silently resuming',async t=>{
+test('Fix A2 overdue first timer reports missed observations and keeps maintaining',async t=>{
   const s=setup(t,{}, {result:()=>settled()}),p=s.renew(s.c);
   const [id,timer]=[...s.timers][0];s.timers.delete(id);s.setTime(5001);await timer.f();
-  assert.equal(p.getStatus().state,'failed');assert.equal((await p.completion).error,'read_timeout');
-  assert.equal(s.calls.length,0);assert.equal(s.opened.length,0);assert.equal(s.timers.size,0);
+  const status=p.getStatus();
+  assert.equal(status.state,'active');assert.equal(status.error,null);
+  const diagnostic=maintenancePumpDiagnostic(status);
+  assert.equal(diagnostic.cadenceMisses,4);assert.equal(diagnostic.worstGapMs,5001);
+  assert.deepEqual(diagnostic.observation,{projection:0,atMonoMs:5001,gapMs:5001,cadenceMiss:true});
+  assert.equal(s.calls.length,1);assert.equal(s.opened.length,1);assert.equal(s.timers.size,1);
+  for(let i=0;i<7;i++)await s.next();
+  assert.equal(maintenancePumpDiagnostic(p.getStatus()).cadenceMisses,4,'one miss per overdue interval');
   assert.equal(p.getStatus().usedItems,0);assert.equal(p.getStatus().usedMs,0);await p.close();
+  assert.equal(maintenancePumpDiagnostic(await p.completion).cadenceMisses,4);
+});
+
+for(const [name,delivered,workMs] of [
+  ['spec late timer',6251,0],['standards late timer',6300,0],['late successful refresh',6240,20],
+])test(`Fix A2 ${name} reports cadence and converges without renewal`,async t=>{
+  const visits=new Map(),complete=new Set();
+  const s=setup(t,{}, {workMs:n=>n===5?workMs:0,result:input=>{
+    const key=JSON.stringify([input.readSet,input.intent]),count=(visits.get(key)??0)+1;
+    visits.set(key,count);if(count>=3)complete.add(key);
+    return settled(0,count>=3?'complete':'rebuilding');
+  }}),p=s.renew(s.c);
+  for(let i=0;i<4;i++)await s.next();
+  assert.deepEqual(s.observations.map(o=>o.at),[1250,2500,3750,4900]);
+  const before=p.getStatus(),[id,timer]=[...s.timers][0];
+  assert.equal(timer.at,6150);s.timers.delete(id);s.setTime(delivered);await timer.f();
+  const status=p.getStatus(),gap=delivered+workMs-1250;
+  assert.equal(status.state,'active');assert.equal(status.error,null);assert.equal(s.timers.size,1);
+  assert.equal(status.usedItems,0);assert.equal(status.usedMs,workMs,'known late usage is refunded');
+  const diagnostic=maintenancePumpDiagnostic(status);
+  assert.equal(diagnostic.cadenceMisses,1);assert.equal(diagnostic.worstGapMs,gap);
+  assert.deepEqual(diagnostic.observation,{projection:0,atMonoMs:delivered+workMs,gapMs:gap,cadenceMiss:true});
+  assert.deepEqual(maintenancePumpDiagnostic(before),{cadenceMisses:0,worstGapMs:0,
+    observation:{projection:3,atMonoMs:4900,gapMs:4900,cadenceMiss:false}},'old status is an immutable snapshot');
+  assert.deepEqual(Reflect.ownKeys(status).sort(),['error','id','maxItems','maxMs','state','usedItems','usedMs','windowId']);
+  assert.equal(JSON.stringify(status).includes('cadence'),false,'internal diagnostic never enters public JSON');
+  assert.ok(Object.isFrozen(diagnostic));assert.ok(Object.isFrozen(diagnostic.observation));
+  assert.equal(await Promise.race([p.completion,Promise.resolve('pending')]),'pending');
+  for(let i=0;i<11;i++)await s.next();
+  assert.equal(complete.size,4,'all remaining projections converge from bounded successful work');
+  assert.equal(p.getStatus().state,'active');assert.equal(p.getStatus().usedItems,0);assert.equal(p.getStatus().usedMs,workMs);
+  assert.equal(p.getStatus().windowId,s.c.window.id);assert.equal(s.timers.size,1);
+  for(const scope of ['personal','project'])for(const intent of ['current','history']){
+    const times=s.observations.filter(o=>o.input.readSet[0].scope===scope&&o.input.intent===intent).map(o=>o.at);
+    assert.equal(times.length,4,'fair round-robin visits');
+    assert.ok(times[3]-times[2]<=5000,'actual observation deadlines recover after the delayed sweep');
+  }
+  const final=maintenancePumpDiagnostic(p.getStatus());
+  assert.equal(final.cadenceMisses,1,'the remaining lanes recover before their deadlines');
+  assert.equal(final.worstGapMs,Math.max(...s.observations.slice(4).map((o,i)=>o.at-s.observations[i].at)));
+  await p.close();assert.equal(s.closed.length,s.opened.length);assert.equal(s.timers.size,0);
+});
+
+test('Fix A2 successful delivery crossing other observation deadlines keeps scheduling and refunds',async t=>{
+  const s=setup(t,{}, {workMs:n=>n===1?20:0,deliveryMs:n=>n===1?40:0,result:()=>settled()}),p=s.renew(s.c);
+  const [id,timer]=[...s.timers][0];s.timers.delete(id);s.setTime(4950);await timer.f();
+  assert.equal(p.getStatus().state,'active');assert.equal(p.getStatus().error,null);
+  assert.equal(p.getStatus().usedItems,0);assert.equal(p.getStatus().usedMs,60);
+  const diagnostic=maintenancePumpDiagnostic(p.getStatus());
+  assert.equal(diagnostic.cadenceMisses,3);assert.equal(diagnostic.worstGapMs,5010);
+  assert.deepEqual(diagnostic.observation,{projection:0,atMonoMs:4970,gapMs:4970,cadenceMiss:false});
+  for(let i=0;i<7;i++)await s.next();
+  assert.equal(p.getStatus().state,'active');assert.equal(s.timers.size,1);
+  assert.equal(maintenancePumpDiagnostic(p.getStatus()).cadenceMisses,3);await p.close();
+});
+
+for(const cutoff of ['native','parent'])test(`Fix A2 ${cutoff} quantum cutoff after cadence recovery still stops and drains`,async t=>{
+  let attempt=0,entered,release;
+  const pending=new Promise(resolve=>{entered=resolve;});
+  const s=setup(t,{}, {workMs:n=>n===5?20:0,result:()=>{
+    if(++attempt!==6)return settled();
+    if(cutoff==='native')return {ok:false,error:{code:'read_timeout'}};
+    entered();return new Promise(resolve=>{release=()=>resolve(settled());});
+  }}),p=s.renew(s.c);
+  for(let i=0;i<4;i++)await s.next();
+  const [id,timer]=[...s.timers][0];s.timers.delete(id);s.setTime(6240);await timer.f();
+  assert.equal(p.getStatus().state,'active');assert.equal(p.getStatus().usedMs,20);
+  const operation=s.next();
+  if(cutoff==='parent'){
+    await pending;
+    try{
+      const [timerId,deadline]=[...s.timers][0];s.timers.delete(timerId);s.setTime(deadline.at);await deadline.f();
+      assert.equal(p.getStatus().error,'read_timeout','parent cutoff is visible before operation settles');
+    }finally{release();}
+  }
+  await operation;
+  const final=await p.completion;
+  assert.equal(final.state,'failed');assert.equal(final.error,'read_timeout');
+  assert.equal(final.usedItems,1);assert.equal(final.usedMs,120,'uncertain cutoff retains the full reservation');
+  assert.equal(maintenancePumpDiagnostic(final).cadenceMisses,1);
+  assert.equal(s.timers.size,0);await p.close();assert.equal(s.closed.length,s.opened.length);
 });
 
 test('Fix A1 Worker epoch observation time stays outside the public DTO',async t=>{

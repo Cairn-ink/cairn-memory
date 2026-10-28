@@ -431,6 +431,10 @@ also pass checks with **exit 0**. All changes remain uncommitted for the primary
 
 ### Fix A round 1: observation deadlines and latency headroom
 
+This section records round 1. Its terminal handling of cadence misses is
+superseded by round 2 below; the admission arithmetic and punctual bounded
+cadence guarantees remain.
+
 Both non-author reviews of `ca2540a4` found the same P1. With two selections
 and both intents, a 1,000-ms poll and 100-ms quantum, the nominal 1,250-ms
 spacing allowed variable opening latency to move observations from 1,260 to
@@ -587,3 +591,135 @@ inventory diff **exit 0**:
 Final tracked whitespace and unchanged source/test hash checks both exit
 **0**. All test processes have completed; no unattended work remains. Changes
 remain uncommitted for the primary.
+
+
+### Fix A round 2: recoverable cadence misses continue maintenance
+
+Both re-reviews of `f1282669` found that round 1 made a scheduling miss
+terminal. With observations at 1,250, 2,500, 3,750 and 4,900 ms, delivering
+the next timer at 6,251 ms stopped before dispatch with no usage and no timer.
+The standards review also exercised 6,300 ms. A timer at 6,240 ms followed by
+a successful 20-ms refresh stopped after the observation at 6,260 ms and
+incorrectly retained its entire 1-item/100-ms reservation. Authority and quota
+were still available in each case.
+
+Cadence reporting is now independent of operation failure:
+
+* Pre-dispatch, actual successful epoch observation and successful delivery
+  check for missed projection deadlines without setting a terminal error.
+  Each overdue projection interval counts once; later checks can increase its
+  worst gap until a successful observation starts that lane's next interval.
+  Duty is bounded by authority/window expiry. An inactive renewal resets lane
+  deadlines and overdue flags, while cumulative diagnostics remain available.
+* Every status/completion observation retains its exact closed public shape.
+  A private WeakMap attaches an immutable, fixed-size diagnostic, retrieved
+  internally with `maintenancePumpDiagnostic(status)`:
+  `{cadenceMisses,worstGapMs,observation}`. The latest successful observation
+  carries `{projection,atMonoMs,gapMs,cadenceMiss}`; before success it is null.
+  This adds no public DTO field, public entry-point export, callback, event
+  history, path, namespace or credential. Old snapshots retain their original
+  diagnostic, including after subsequent recovery or shutdown.
+* Maintenance continues on its existing fair round-robin path and replans
+  from actual observation times. Recovery clamps overdue deadlines to the
+  minimum admission spacing, avoiding immediate timer loops or burst dispatch.
+  The round-1 headroom admission refusal and punctual bounded scheduling
+  arithmetic remain intact. A missed target is reported honestly; continued
+  maintenance does not retroactively satisfy that target.
+* Successful late settlements reconcile known attempts and parent elapsed
+  time exactly as punctual settlements do. The 20-ms case uses zero items
+  and 20 ms after refund. Unknown, crashed and failed usage remains fully
+  charged, and host floors and process-ledger persistence remain unchanged.
+* Native operation timeouts, parent quantum cutoffs (including pending
+  disposal/refresh), authority, storage, corruption and lifecycle failures
+  still stop and drain. Invalid/missing private timing is a corrupt or
+  uncertain result and reports existing `reader_failed`, rather than claiming
+  an operation timeout. Actual quantum overruns retain `read_timeout` and
+  their full reservations.
+
+Seven round-2 regressions replace the terminal overdue-timer expectation and
+add both late-timer reproductions, the late successful refresh, successful
+delivery crossing other lanes' deadlines, and native/parent quantum cutoffs
+after cadence recovery. The three reviewer reproductions check the exact
+initial timestamps, continued timers and pending completion, known-usage
+refunds, four-lane convergence without renewal, restored bounded observation
+gaps, fairness and complete handle disposal. Diagnostics check miss counts,
+worst gaps against independent observation arithmetic, observation attachment,
+snapshot immutability and unchanged own keys/JSON. The first-sweep and delivery
+cases check that repeated inspection of one overdue interval does not count
+it repeatedly. Both cutoff cases verify terminal timeout, retained charge and
+drain after an earlier recoverable miss. Round-1 punctual varying-latency,
+configuration-refusal and timeout supervision coverage remains.
+
+The host guide now distinguishes recoverable cadence diagnostics from genuine
+operation failures. Hosts still own valid renewal, cumulative capacity,
+supervision and timer delivery. Fix B's retarget reuse and O(changes) catch-up,
+format-2 certification, SQL, public results, WAL policy and locking rules are
+unchanged. These functional regressions introduce no qualification or timing
+acceptance gate.
+
+### Fix A round 2 verification receipts
+
+The matrix asserts each exact runtime's `--version` and dispatches explicit
+file arrays with `--test --test-reporter=tap --test-concurrency=1`. Glob
+expansion and independent directory enumeration/filename matching agree on
+**61 required files**, inventory comparison **exit 0**. Each child return code
+is captured directly. Runs are sequential, with the matching runtime first in
+`PATH` and npm offline, audit/fund disabled. No checkout dependency install,
+network/provider/key access, qualification run, timing benchmark or commit is
+part of this correction.
+
+The final pump test file was overlaid on an isolated `git archive f1282669`
+snapshot without changing its runtime. On **both Node 22.16.0 and 24.15.0**,
+`--test --test-reporter=tap --test-concurrency=1 --test-name-pattern='Fix A2'
+core/test/context-read-product-pump.test.mjs` exits **1** with **all seven
+regressions failing**, zero passes, cancellations or skips. Every failure is
+the old terminal `failed` state where continued `active` maintenance is
+asserted; these are behavioral failures, not missing diagnostic imports.
+
+Earlier nonzero receipts are retained: the initial filtered Node 22 development
+run exited **1**, 30/33 passed, because three tests expected four missed lanes
+instead of the one actually late lane. The remaining lanes recovered before
+their deadlines; correcting those expectations required no pump change. The
+subsequent full pump run exited **0**, 63/63 passed.
+
+The initial full Node 22 context group exited **1**, 744/745 passed. The existing
+native Worker fence-race fixture had no first result at its assertion, the same
+intermittent symptom recorded in round 1. Its unchanged isolated rerun exited
+**0**, 1/1 passed, and the unchanged focused convergence/pump group exited
+**0**, 69/69 passed. No timeout, quantum, fixture, authority or readiness
+assertion was relaxed. This initial failure remains separate from subsequent
+full-group receipts. Live-log failure scanning was added to matrix supervision
+after the failure was missed during initial progress inspection.
+
+
+Final full-group and focused receipts (all commands retain the flags above):
+
+| File arguments after Node test flags | Files | Node 22.16.0 exit / pass | Node 24.15.0 exit / pass |
+| --- | ---: | --- | --- |
+| `core/test/context-read*.test.mjs` | 35 | **0 / 745** | **0 / 745** |
+| `core/test/topic-*.test.mjs` | 17 | **0 / 238** | **0 / 238** |
+| `core/test/no-raw-db-fd.test.mjs core/test/sqlite-lock-safety.test.mjs core/test/sqlite-journal-probe.test.mjs` | 3 | **0 / 44** | **0 / 44** |
+| `adapters/mcp/test/context-read*.test.mjs` | 5 | **0 / 88** | **0 / 88** |
+| `packaging/test/topic-overview-raw29.test.mjs` | 1 | **0 / 3** | **0 / 3** |
+| `core/test/context-read-maintenance-convergence.test.mjs core/test/context-read-product-pump.test.mjs` | 2 | **0 / 69** | **0 / 69** |
+
+The unchanged Node 22 full context-group rerun exits **0**, 745/745 passed,
+including the native race fixture. All final required groups on both runtimes
+have zero failures, cancellations and skips: **1,118 required passing cases per
+runtime**. The 69-case focused run is a subset, not additional required cases.
+Both modified source/test hashes remained unchanged across the resumed matrix
+and its final full-group rerun; the hash comparison exits **0**.
+
+Delivery inventory compares `git diff --name-only -z HEAD` plus nonignored
+untracked paths with independent hashes/modes of **2,465 HEAD blobs** and
+filesystem enumeration. The routes agree on **4 changed files**, inventory
+diff **exit 0**:
+
+* `core/context-product-pump.mjs`
+* `core/test/context-read-product-pump.test.mjs`
+* `docs/context-read-product.md`
+* `docs/plans/context-read-maintenance-convergence.md`
+
+Final whitespace and inventory checks exit **0**. All test processes have
+completed; no unattended work remains. Changes remain uncommitted for the
+primary.

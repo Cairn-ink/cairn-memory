@@ -498,13 +498,30 @@ preserves observation deadlines and order, including renewal exactly at an
 authority/window boundary; renewal after an authority/quota gap starts a new
 observation interval.
 
-If timing is missing, a quantum exceeds its reserved time, or an observation
-misses its deadline while authority and quota last, the pump reports
-`failed` with `read_timeout`, stops scheduling and drains. The failed quantum
-keeps its full reservation. A parent deadline timer also exposes failure while
-disposal is still pending; supervision continues to own the drain. Provision
-and qualify timer delivery and native capacity. A failed cadence is visible in
-status. No additional host input is needed.
+Late timer delivery or a successful observation beyond the five-second target
+records a cadence miss and continues maintenance while authority and quota last.
+The scheduler replans from actual observations, preserving round-robin order
+and minimum spacing during recovery. Successful late settlements receive the
+same known-usage refunds as punctual ones.
+
+The closed public status/completion DTOs remain unchanged (`active`, no error
+for an isolated cadence miss). Each status/completion observation has an
+immutable fixed internal diagnostic, obtainable with
+`maintenancePumpDiagnostic(observation)` from the internal pump module:
+`{cadenceMisses,worstGapMs,observation}`. It counts each overdue projection
+interval once and records the worst missed gap; `observation` is the latest
+successful epoch observation's `{projection,atMonoMs,gapMs,cadenceMiss}` or
+null before any success. This bounded process-local metadata contains no path
+or credential, has no history buffer, and is absent from serialized DTOs and
+the public entry point. Hosts must still provision and qualify timer delivery
+and native capacity; recovery cannot undo a missed freshness target.
+
+A genuine quantum cutoff reports `failed` with `read_timeout`, stops scheduling
+and drains. Missing or invalid internal observation timing reports
+`reader_failed`; authority, storage, corruption and lifecycle failures also
+stop and drain. Failed/uncertain work keeps its full reservation. A parent
+deadline timer exposes failure even while disposal or refresh remains pending;
+supervision continues to own the drain. No additional host input is needed.
 
 Quanta reserve their full item/time allowance before opening/dispatch. After a
 successful settled quantum with a valid transformation-attempt count and known
