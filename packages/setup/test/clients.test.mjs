@@ -1,7 +1,7 @@
 import runTest from 'node:test';
 const test = process.env.CAIRN_SETUP_TEST_GROUP ? () => {} : runTest;
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdir, readdir, chmod } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, chmod, realpath } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -11,11 +11,14 @@ import { wireChild } from './http-wire.mjs';
 import { readInstallation } from '../runtime/integrations/codex/installed-state.mjs';
 import { clientProjectId, opaqueProjectId } from '../runtime/integrations/client/pairing.mjs';
 
-export async function fixture(t, { claude = true, codex = true, qualified = true, auth = {}, legacyKey = false } = {}) {
+export async function fixture(t, { claude = true, codex = true, qualified = true, auth = {}, legacyKey = false, codexHomeRelative = '.codex' } = {}) {
   const ws = createTestWorkspace(t, { prefix: 'both-clients-' });
   const home = join(ws.path, 'home'), bin = join(ws.path, 'bin');
   await mkdir(home, { mode: 0o700 }); await mkdir(bin);
-  const codexHome = join(home, '.codex');
+  const codexHome = join(home, codexHomeRelative);
+  const neutralParent = join(ws.path, 'neutral'), fallbackParent = join(ws.path, 'fallback');
+  await mkdir(neutralParent); await mkdir(fallbackParent);
+  const defaultInspection = { fallbackParent, managedPaths: [] };
   const profileRoot = join(home, '.claude/plugins/data/cairn-memory-cairn-memory');
   let originalId;
   if (legacyKey) {
@@ -42,10 +45,17 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
   const server = await fakeAuthServer(t, auth);
   const targetModule = process.env.CAIRN_SETUP_TEST_MODULE || (process.env.CAIRN_SETUP_TEST_PACKAGE ? pathToFileURL(join(process.env.CAIRN_SETUP_TEST_PACKAGE, 'lib/setup.mjs')).href : new URL('../lib/setup.mjs', import.meta.url).href);
   const harness = join(ws.path, 'harness.mjs');
-  const makeHarness = async (targetModule, path) => writeFile(path, `import{writeSync,writeFileSync}from'node:fs';import{main}from${JSON.stringify(targetModule)};
+  const makeHarness = async (targetModule, path, historicalManagedPaths) => writeFile(path, `import{writeSync,writeFileSync}from'node:fs';import fsPromises from'node:fs/promises';import{syncBuiltinESMExports}from'node:module';import{main}from${JSON.stringify(targetModule)};
     import{SetupError}from${JSON.stringify(new URL('./errors.mjs', targetModule).href)};
     import{requestJSON}from${JSON.stringify(new URL('./transport.mjs', targetModule).href)};
     import{installChildWire}from${JSON.stringify(new URL('./http-wire.mjs', import.meta.url).href)};
+    // Guard historical libraries that lack the internal fallback seam.
+    const mkdtemp=fsPromises.mkdtemp;fsPromises.mkdtemp=(path,...args)=>{if(String(path).startsWith('/tmp/cairn-codex-inspect-'))throw Object.assign(new Error('unowned inspection parent'),{code:'EACCES'});return mkdtemp(path,...args);};
+    const historicalManagedPaths=${JSON.stringify(historicalManagedPaths) ?? 'undefined'};
+    if(historicalManagedPaths){const lstat=fsPromises.lstat;fsPromises.lstat=(path,...args)=>{
+      const index=['/etc/codex/config.toml','/etc/codex/managed_config.toml'].indexOf(path);
+      return lstat(index<0?path:historicalManagedPaths[index],...args);};}
+    syncBuiltinESMExports();
     const disconnect=installChildWire();let clock=0;const choices=JSON.parse(process.env.TEST_CHOICES);
     if(process.env.TEST_FIXED_NOW){const{default:crypto}=await import('node:crypto');const{syncBuiltinESMExports}=await import('node:module');const uuids=new Map();
       // New versioned runtime copies need extra temporary UUIDs. Keep each
@@ -58,7 +68,7 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
       const OriginalDate=Date,stamp=Number(process.env.TEST_FIXED_NOW);
       globalThis.Date=class extends OriginalDate{constructor(...args){super(...(args.length?args:[stamp]));}static now(){return stamp;}};}
 
-    process.exitCode=await main(process.argv.slice(2),{disableLocalMode:process.env.TEST_HOSTED_BASELINE==='true',interactive:process.env.TEST_TTY==='true',
+    process.exitCode=await main(process.argv.slice(2),{inspection:JSON.parse(process.env.TEST_INSPECTION),disableLocalMode:process.env.TEST_HOSTED_BASELINE==='true',interactive:process.env.TEST_TTY==='true',
       ...(choices.inspectionError ? {inspectCodex:async()=>{throw new SetupError(choices.inspectionError,1,{client:'codex',args:'mcp get cairn --json',code:7});}} : {}),
       ...(choices.windows ? {inspectCodex:async()=>({qualified:false,reason:'codex_windows'})} : {}),
       prompt:async(q,o)=>{writeSync(1, JSON.stringify({prompt:q,secret:Boolean(o?.secret)})+'\\n');
@@ -80,14 +90,20 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
   await makeHarness(targetModule, harness);
   const installation = join(codexHome, 'cairn/installation.json');
   const lines = async path => (await readFile(path, 'utf8')).trim().split('\n').filter(Boolean).map(JSON.parse);
-  async function run({ args = ['setup'], choices = {}, interactive = true, tmpdir, disableLocalMode = true, fixedNow, module } = {}) {
+  async function run({ args = ['setup'], choices = {}, interactive = true, tmpdir, disableLocalMode = true, fixedNow, module,
+    inspection = defaultInspection, mapHistoricalManagedPaths = false } = {}) {
     const configured=JSON.parse(await readFile(claudeState,'utf8')).configured;
     const installed=await readInstallation(installation).then(()=>true,()=>false);
     if(args[0]==='setup'&&!args.includes('--local')&&!configured&&!installed&&!args.includes('--endpoint'))args=[...args,'--endpoint',server.endpoint];
     const selectedHarness = module ? join(ws.path, 'historical-harness.mjs') : harness;
-    if (module) await makeHarness(module, selectedHarness);
+    if (mapHistoricalManagedPaths) {
+      assert.ok(module, 'Managed-file mapping is restricted to the historical harness');
+      assert.equal(inspection.managedPaths.length, 2);
+    }
+    if (module) await makeHarness(module, selectedHarness, mapHistoricalManagedPaths ? inspection.managedPaths : undefined);
     const child = spawn(process.execPath, [selectedHarness, ...args], { cwd: ws.path,
-      env: { HOME: home, CODEX_HOME: codexHome, PATH: bin, LANG: 'en_US.UTF-8', TMPDIR: tmpdir ?? process.env.TMPDIR,
+      env: { HOME: home, CODEX_HOME: codexHome, PATH: bin, LANG: 'en_US.UTF-8', TMPDIR: tmpdir ?? neutralParent,
+        TEST_INSPECTION: JSON.stringify(inspection),
         FAKE_GLOBAL_CALLS: allCalls, TEST_CHOICES: JSON.stringify(choices), TEST_TTY: String(interactive), TEST_HOSTED_BASELINE: String(disableLocalMode), TEST_FIXED_NOW: fixedNow === undefined ? '' : String(fixedNow), CAIRN_MEMORY_HOME: join(home, 'local-memory') }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
     wireChild(child, server.server);
     let stdout = '', stderr = '';
@@ -96,7 +112,10 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
     const code = await new Promise((resolve, reject) => { child.on('error', reject); child.on('close', resolve); });
     clearTimeout(timer);
     for (const text of [stdout, stderr, await readFile(claudeCalls, 'utf8'), await readFile(codexCalls, 'utf8')]) assert.ok(!text.includes(secret));
-    const nativeStores = new Set([ join(codexHome, 'cairn/credential.json'), join(codexHome, 'config.toml')]);
+    const nativePaths = [join(codexHome, 'cairn/credential.json'), join(codexHome, 'config.toml')];
+    const nativeStores = new Set([...nativePaths, ...await Promise.all(nativePaths.map(path => realpath(path).catch(error => {
+      if (error.code !== 'ENOENT') throw error; return path;
+    })))]);
     const audit = async directory => {
       for (const entry of await readdir(directory, { withFileTypes: true })) {
         const path = join(directory, entry.name);
@@ -107,7 +126,7 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
     await audit(home);
     return { code, stdout, stderr, prompts: stdout.split('\n').filter(line => line.startsWith('{"prompt":')).map(JSON.parse) };
   }
-  return { setAuth:value=>Object.assign(auth,value), home, bin, codexHome, installation, profileRoot, originalId, server, run, addClaude, addCodex, scratch: ws.path,
+  return { setAuth:value=>Object.assign(auth,value), home, bin, codexHome, installation, profileRoot, originalId, server, run, addClaude, addCodex, scratch: ws.path, neutralParent, fallbackParent, inspection: defaultInspection,
     setClaudeState: value => writeFile(claudeState, JSON.stringify(value)),
     setCodexState: async value => writeFile(codexState, JSON.stringify({ ...JSON.parse(await readFile(codexState, 'utf8')), ...value })),
     claudeState: () => readFile(claudeState, 'utf8').then(JSON.parse),
@@ -350,7 +369,7 @@ test('explicit --reauthorize across both tools issues exactly one replacement gr
 
 for (const failure of ['native command', 'native JSON', 'unsafe config', 'project TMPDIR', 'MCP endpoint conflict']) test(`actual Codex inspection failure (${failure}) still installs Claude`, async t => {
   const f = await fixture(t);
-  let tmpdir, args = ['setup'];
+  let tmpdir, inspection, args = ['setup'];
   if (failure === 'native command') await f.setCodexState({ fail: '--version', token: secret });
   if (failure === 'native JSON') await f.setCodexState({ badJSON: true, token: secret });
   if (failure === 'unsafe config' || failure === 'MCP endpoint conflict') {
@@ -362,8 +381,11 @@ for (const failure of ['native command', 'native JSON', 'unsafe config', 'projec
   if (failure === 'project TMPDIR') {
     tmpdir = join(f.scratch, 'project-tmp'); await mkdir(join(tmpdir, '.codex'), { recursive: true });
     await writeFile(join(tmpdir, '.codex/config.toml'), 'model = "synthetic-project"\n');
+    await mkdir(join(f.fallbackParent, '.codex'));
+    await writeFile(join(f.fallbackParent, '.codex/config.toml'), '');
+    inspection = f.inspection;
   }
-  const result = await f.run({ args, tmpdir }); assert.equal(result.code, 0, result.stdout);
+  const result = await f.run({ args, tmpdir, inspection }); assert.equal(result.code, 0, result.stdout);
   assert.match(result.stdout, /Skipping Codex:/); assert.match(result.stdout, /setup --client codex/);
   assert.equal((await f.claudeState()).configured, true);
   await assert.rejects(readFile(f.installation), { code: 'ENOENT' });

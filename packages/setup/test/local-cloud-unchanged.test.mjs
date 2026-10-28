@@ -1,17 +1,19 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFile, writeFile, readdir, cp, rm, mkdtemp, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readFile, writeFile, readdir, cp, rm, mkdtemp, mkdir, realpath, symlink } from 'node:fs/promises';
+import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { fixture } from './clients.test.mjs';
 
-// Extract the immutable 0.5.3 git object, never current source, with the same
+// Extract immutable historical git objects, never current source, with the same
 // fakes and private homes. No credentials or machine paths are recorded.
-let historicalPromise, historicalScratch;
-after(async () => { if (historicalScratch) await rm(historicalScratch, { recursive: true, force: true }); });
+const historicalPromises = new Map(), historicalScratch = new Set();
+after(async () => {
+  await Promise.all([...historicalScratch].map(path => rm(path, { recursive: true, force: true })));
+});
 function native(executable, args, { input, ...options } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, { ...options, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -22,17 +24,19 @@ function native(executable, args, { input, ...options } = {}) {
     child.stdin.on('error', () => {}); child.stdin.end(input);
   });
 }
-function historicalInstaller() {
-  return historicalPromise ??= (async () => {
-    historicalScratch = await mkdtemp(join(tmpdir(), 'cairn-053-baseline-'));
+function historicalInstaller(revision = 'b2513501', version = '0.5.3') {
+  if (!historicalPromises.has(revision)) historicalPromises.set(revision, (async () => {
+    const scratch = await mkdtemp(join(tmpdir(), 'cairn-' + version.replaceAll('.', '') + '-baseline-'));
+    historicalScratch.add(scratch);
     try {
-      const env = { PATH: process.env.PATH, HOME: historicalScratch };
-      const archive = await native('git', ['archive', 'b2513501', 'packages/setup'], {
+      const env = { PATH: process.env.PATH, HOME: scratch };
+      const archive = await native('git', ['archive', revision, 'packages/setup'], {
         cwd: fileURLToPath(new URL('../../../', import.meta.url)), env });
-      await native('tar', ['-xf', '-', '-C', historicalScratch], { input: archive, env });
-      return { module: pathToFileURL(join(historicalScratch, 'packages/setup/lib/setup.mjs')).href };
-    } catch { return { skip: 'Historical 0.5.3 comparison requires git object b2513501 and working git/tar child pipes.' }; }
-  })();
+      await native('tar', ['-xf', '-', '-C', scratch], { input: archive, env });
+      return { module: pathToFileURL(join(scratch, 'packages/setup/lib/setup.mjs')).href };
+    } catch { return { skip: `Historical ${version} comparison requires git object ${revision} and working git/tar child pipes.` }; }
+  })());
+  return historicalPromises.get(revision);
 }
 function acceptBaseline(t, historical, required = process.env.CAIRN_SETUP_REQUIRE_BASELINE === '1') {
   if (historical.module) return historical;
@@ -290,45 +294,13 @@ for (const lang of ['zh', 'en']) test(`L02 fresh cloud choice preserves hosted f
   assert.equal(routed.prompts.filter(p => /Where should memory live|記憶要存在哪裡/u.test(p.prompt)).length, 1);
   await assert.rejects(readdir(join(routedFixture.home, 'local-memory')), { code: 'ENOENT' });
 });
-// The fixture runner supplies internal inspection paths by calling the library
-// router, then delegates the unchanged hosted flow to main. Production main
-// needs no new option or environment seam.
-async function routingFixture(scratch, inspection) {
-  const root = process.env.CAIRN_SETUP_TEST_PACKAGE || fileURLToPath(new URL('../', import.meta.url));
-  const lib = name => pathToFileURL(join(root, 'lib', name + '.mjs')).href;
-  const wrapper = join(scratch, 'routed-setup.mjs');
-  for (const name of ['errors', 'transport']) await writeFile(join(scratch, name + '.mjs'),
-    `export * from ${JSON.stringify(lib(name))};`);
-  await writeFile(wrapper, `import{main as hosted}from${JSON.stringify(lib('setup'))};
-    import{routeLocalMode,localStatus}from${JSON.stringify(lib('local-mode'))};
-    import{parseOptions}from${JSON.stringify(lib('options'))};
-    import{parseClient}from${JSON.stringify(lib('codex'))};
-    import{SetupError}from${JSON.stringify(lib('errors'))};
-    import{translator}from${JSON.stringify(lib('messages'))};
-    import{spawn}from'node:child_process';import{writeSync}from'node:fs';
-    export async function main(argv,options={}){
-      const parsed=parseOptions(argv),selection=parseClient(parsed.argv,SetupError);
-      const write=options.write??(line=>{if(line!==undefined)writeSync(1,line+'\\n');});write.literal??=write;
-      const runClaude=args=>new Promise(resolve=>{const child=spawn('claude',args,{stdio:['ignore','pipe','pipe']});
-        let stdout='',stderr='',error;child.stdout.on('data',v=>stdout+=v);child.stderr.on('data',v=>stderr+=v);
-        child.on('error',v=>error=v);child.on('close',status=>resolve({stdout,stderr,error,status}));});
-      const context={...options,env:process.env,inspection:${JSON.stringify(inspection)},write,t:translator(parsed.lang??'en'),
-        runClaude,supportedNode:()=>true,nodeVersion:process.versions.node};
-      const result=await routeLocalMode(parsed,selection,context);
-      if(result.handled)return result.code;
-      const code=await hosted(argv,{...options,disableLocalMode:true});
-      if(result.detection)await localStatus(result.detection,context);
-      return Math.max(code,result.statusCode??0);
-    }`);
-  return pathToFileURL(wrapper).href;
-}
 const cells = [
   ...scenarios.flatMap(scenario => actions.map(args => ({ scenario, args, label: 'L06' }))),
   ...scenarios.slice(0, 4).flatMap(scenario => [['setup'], ['setup', '--client', 'claude'], ['setup', '--cloud'],
-    ['setup', '--dry-run'], ['status'], ['pause']].map(args => ({ scenario, args, label: 'L24' }))),
+    ['setup', '--dry-run'], ['status'], ['pause']].map(args => ({ scenario, args, label: 'L33/L24' }))),
 ];
 for (const { scenario, args, label } of cells) test(`${label} hosted baseline: ${scenario}; ${args.join(' ')}`, async t => {
-  const historical = label === 'L24' ? acceptBaseline(t, await historicalInstaller(), true) : await baselineForTest(t);
+  const historical = label === 'L33/L24' ? acceptBaseline(t, await historicalInstaller(), true) : await baselineForTest(t);
   if (!historical) return;
   const f = await fixture(t, { claude: scenario !== 'Codex qualified' && scenario !== 'Codex fallback',
     codex: scenario !== 'Claude only', qualified: scenario !== 'Codex fallback' });
@@ -345,15 +317,13 @@ for (const { scenario, args, label } of cells) test(`${label} hosted baseline: $
     await writeFile(join(f.home, '.claude.json'), JSON.stringify({ mcpServers: { cairn: { type: 'stdio', command: 'legacy', args: [] } } }));
   }
   if (scenario === 'Claude inspection failure') await f.setClaudeState({ fail: 'plugin list --json', failCode: 7 });
-  let inspectionTmpdir, routedModule;
-  if (label === 'L24') {
+  let inspectionTmpdir;
+  if (label === 'L33/L24') {
     inspectionTmpdir = join(f.home, 'tmp'); await mkdir(inspectionTmpdir);
     await mkdir(f.codexHome, { recursive: true });
     await writeFile(join(f.codexHome, 'config.toml'), await readFile(join(f.codexHome, 'config.toml')).catch(error => {
       if (error.code !== 'ENOENT') throw error; return Buffer.from('model = "fixture"\n');
     }), { mode: 0o600 });
-    const fallbackParent = join(f.scratch, 'fallback'); await mkdir(fallbackParent);
-    routedModule = await routingFixture(f.scratch, { fallbackParent, managedPaths: [] });
   }
   const run = options => f.run({ ...options, tmpdir: inspectionTmpdir });
   const saved = join(f.scratch, 'baseline-home'); await cp(f.home, saved, { recursive: true });
@@ -362,7 +332,7 @@ for (const { scenario, args, label } of cells) test(`${label} hosted baseline: $
   const choices = { claude: 'no', codex: 'no' }, fixedNow = Date.now();
   if (args.length === 1 && args[0] === 'setup') {
     const before = await inventory(f.home), calls = (await f.orderedCalls()).length;
-    const conflict = await run({ args: ['setup', '--local'], disableLocalMode: false, ...(routedModule ? { module: routedModule } : {}) });
+    const conflict = await run({ args: ['setup', '--local'], disableLocalMode: false });
     assert.equal(conflict.code, 2, conflict.stdout);
     assert.match(conflict.stdout, scenario === 'Claude inspection failure' ? /Cannot inspect/ : /Cloud memory is configured/);
     assert.deepEqual(await inventory(f.home), before);
@@ -370,7 +340,7 @@ for (const { scenario, args, label } of cells) test(`${label} hosted baseline: $
   }
   const beforeCalls = await f.calls(), beforeOrdered = (await f.orderedCalls()).length;
   // --cloud selects the pre-existing hosted setup; 0.5.3 had no mode flag.
-  const baseline = await run({ args: args.filter(arg => arg !== '--cloud'), choices, fixedNow, disableLocalMode: true, module: historical.module });
+  const baseline = await f.run({ tmpdir: f.neutralParent, args: args.filter(arg => arg !== '--cloud'), choices, fixedNow, disableLocalMode: true, module: historical.module });
   const baselineFiles = await inventory(f.home, true, { historical: true }), baselineCalls = await f.calls();
   const mutating = (all, start) => Object.fromEntries(['claude', 'codex'].map(client => [client,
     all[client].slice(start[client].length).filter(callsThatMutate).map(call => ({ args: call.args.map(arg => normalizeRuntime(arg, f.codexHome)), keys: call.keys, endpoint: call.endpoint, pairingRecord: call.pairingRecord }))]));
@@ -395,7 +365,7 @@ for (const { scenario, args, label } of cells) test(`${label} hosted baseline: $
   });
   await restore();
   const beforeRouted = await f.calls(), routedOrdered = (await f.orderedCalls()).length;
-  const routed = await run({ args, choices, fixedNow, disableLocalMode: false, ...(routedModule ? { module: routedModule } : {}) });
+  const routed = await run({ args, choices, fixedNow, disableLocalMode: false });
   assert.equal(routed.code, baseline.code, routed.stdout);
   assert.equal(normalized(routed.stdout, f.codexHome), normalized(baseline.stdout, f.codexHome));
   assert.deepEqual(routed.prompts, baseline.prompts);
@@ -428,4 +398,158 @@ test('L06 pre-header Claude option error: ' + lang + ' ' + flags[0], async t => 
   assert.deepEqual(await inventory(f.home), before);
   assert.deepEqual((await f.orderedCalls()).slice(calls).filter(callsThatMutate), []);
   await assert.rejects(readdir(join(f.home, 'local-memory')), { code: 'ENOENT' });
+});
+
+
+// F2 uses the same immutable HOME and native state for each neutral/inside pair.
+async function saveFixture(f) {
+  const saved = join(f.scratch, 'f2-home');
+  await cp(f.home, saved, { recursive: true });
+  const states = await Promise.all(['claude', 'codex'].map(name => readFile(join(f.scratch, name + '.json'))));
+  return async () => {
+    await rm(f.home, { recursive: true }); await cp(saved, f.home, { recursive: true });
+    for (const [index, name] of ['claude', 'codex'].entries()) await writeFile(join(f.scratch, name + '.json'), states[index]);
+  };
+}
+async function assertNoAttempts(f, primary) {
+  for (const parent of [primary, f.neutralParent, f.fallbackParent]) {
+    assert.deepEqual((await readdir(parent)).filter(name => name.startsWith('cairn-codex-inspect-')), [], parent);
+  }
+}
+const hostedCalls = calls => calls.filter(call => call.cwd.includes('/cairn-codex-inspect-') && call.args.join(' ') !== 'mcp list --json');
+const hostedActions = [['setup', '--client', 'codex'], ['setup', '--cloud'], ['setup', '--dry-run'],
+  ['setup', '--client', 'codex', '--dry-run'], ['setup', '--client', 'codex', '--reauthorize']];
+for (const qualified of [false, true]) for (const present of [false, true]) for (const args of hostedActions)
+test(`L34 hosted fallback equivalence: qualified=${qualified}; config=${present}; ${args.join(' ')}`, async t => {
+  const f = await fixture(t, { claude: false, qualified });
+  if (args.includes('--reauthorize')) assert.equal((await f.run()).code, 0);
+  const primary = join(f.home, 'tmp'); await mkdir(primary);
+  if (present && !args.includes('--reauthorize')) {
+    await mkdir(f.codexHome, { recursive: true });
+    await writeFile(join(f.codexHome, 'config.toml'), 'model = "fixture"\n', { mode: 0o600 });
+  }
+  // Reauthorization always starts with an existing cloud installation.
+  const configured = present || args.includes('--reauthorize');
+  const restore = await saveFixture(f), fixedNow = Date.now();
+  const before = (await f.orderedCalls()).length;
+  const control = await f.run({ args, fixedNow, disableLocalMode: false, tmpdir: f.neutralParent });
+  const controlFiles = await inventory(f.home, true);
+  const mutations = (await f.orderedCalls()).slice(before).filter(callsThatMutate).map(call => normalizedCall(call, f.codexHome));
+  assert.equal(control.code, 0, control.stdout);
+  await restore();
+  const start = (await f.calls()).codex.length, orderedStart = (await f.orderedCalls()).length;
+  const actual = await f.run({ args, fixedNow, disableLocalMode: false, tmpdir: primary });
+  assert.equal(actual.code, control.code, actual.stdout);
+  assert.equal(normalized(actual.stdout, f.codexHome), normalized(control.stdout, f.codexHome));
+  assert.deepEqual(actual.prompts, control.prompts);
+  assert.deepEqual((await f.orderedCalls()).slice(orderedStart).filter(callsThatMutate).map(call => normalizedCall(call, f.codexHome)), mutations);
+  assert.deepEqual(await inventory(f.home, true), controlFiles);
+  const calls = hostedCalls((await f.calls()).codex.slice(start));
+  assert.ok(calls.length, 'hosted body reached');
+  const readOnly = args.includes('--dry-run');
+  const expected = await realpath(configured || !readOnly ? f.fallbackParent : primary);
+  // Unscoped setup first performs a read-only inspectOnly probe. The final
+  // hosted group owns the mutating reservation; qualification has its own cwd.
+  const groups = [...new Set(calls.map(call => call.cwd))];
+  assert.equal(dirname(groups.at(-1)), expected);
+  if (!configured && args.includes('--cloud')) {
+    assert.equal(groups.length, 2, 'inspectOnly and mutating setup select separate attempts');
+    assert.equal(dirname(groups[0]), await realpath(primary), 'inspectOnly does not reserve the absent config');
+  }
+  for (const cwd of groups) assert.ok([expected, ...(!configured && !readOnly ? [await realpath(primary)] : [])].includes(dirname(cwd)), cwd);
+  await assertNoAttempts(f, primary);
+});
+for (const relativeHome of ['settings', 'tmp/.codex', 'tmp/settings', 'alias/missing/.codex'])
+for (const dryRun of [false, true]) test(`L34a planned config: ${relativeHome}; dry-run=${dryRun}`, async t => {
+  const f = await fixture(t, { claude: false, qualified: false, codexHomeRelative: relativeHome });
+  const primary = join(f.home, 'tmp'); await mkdir(primary);
+  if (relativeHome.startsWith('alias/')) await symlink(primary, join(f.home, 'alias'));
+  // For the symlink case the absent planned path is tmp/missing/.codex;
+  // make TMPDIR that missing path's existing parent through an alias.
+  let tmp = primary;
+  if (relativeHome.startsWith('alias/')) { await mkdir(join(primary, 'missing')); tmp = join(f.home, 'alias/missing'); }
+  const args = ['setup', '--client', 'codex', ...(dryRun ? ['--dry-run'] : [])];
+  const result = await f.run({ args, tmpdir: tmp });
+  assert.equal(result.code, 0, result.stdout);
+  const calls = hostedCalls((await f.calls()).codex);
+  assert.ok(calls.length);
+  const reservedAncestor = relativeHome === 'tmp/.codex' || relativeHome.startsWith('alias/');
+  const expected = await realpath(!dryRun && reservedAncestor ? f.fallbackParent : tmp);
+  for (const call of calls) assert.equal(dirname(call.cwd), expected);
+  if (dryRun) await assert.rejects(readdir(f.codexHome), { code: 'ENOENT' });
+  else assert.match(await readFile(join(f.codexHome, 'config.toml'), 'utf8'), /Authorization = /u);
+  await assertNoAttempts(f, primary);
+  if (tmp !== primary) assert.deepEqual((await readdir(tmp)).filter(name => name.startsWith('cairn-codex-inspect-')), []);
+});
+for (const args of [['status'], ['status', '--client', 'codex']]) test(`L35 cloud status fallback: ${args.join(' ')}`, async t => {
+  const f = await fixture(t, { claude: false }); assert.equal((await f.run()).code, 0);
+  const primary = join(f.home, 'tmp'); await mkdir(primary);
+  const before = await inventory(f.home);
+  const neutral = await f.run({ args, tmpdir: f.neutralParent, disableLocalMode: false });
+  const actual = await f.run({ args, tmpdir: primary, disableLocalMode: false });
+  assert.equal(actual.code, 0, actual.stdout); assert.equal(actual.code, neutral.code);
+  assert.equal(actual.stdout, neutral.stdout); assert.doesNotMatch(actual.stdout, /TMPDIR has ancestor/u);
+  assert.deepEqual(await inventory(f.home), before); await assertNoAttempts(f, primary);
+});
+for (const cause of ['codex_tmpdir', 'codex_managed']) for (const args of [['setup', '--cloud'], ['setup', '--client', 'codex'], ['status']])
+test(`L36 hosted refusal: ${cause}; ${args.join(' ')}`, async t => {
+  const historical = acceptBaseline(t, await historicalInstaller('be2bc543', '0.6.1'), true);
+  const f = await fixture(t, { claude: false });
+  // Hosted-only preserves its historical refusal. Routed setup may refuse
+  // earlier with mode_unknown, which remains covered by L27/L28.
+  let primary = f.neutralParent, inspection = f.inspection;
+  if (cause === 'codex_tmpdir') {
+    primary = join(f.home, 'tmp'); await mkdir(primary); await mkdir(f.codexHome);
+    await writeFile(join(f.codexHome, 'config.toml'), '', { mode: 0o600 });
+    await mkdir(join(f.fallbackParent, '.codex')); await writeFile(join(f.fallbackParent, '.codex/config.toml'), '');
+  } else {
+    const managed = join(f.scratch, 'managed'); await writeFile(managed, '');
+    inspection = { ...inspection, managedPaths: [join(f.scratch, 'absent-managed-config'), managed] };
+  }
+  const before = await inventory(f.home);
+  // 0.6.1 has no hosted inspection seam. Map only its two managed-file stat
+  // probes to the internal fixture paths, leaving its source, refusal, params
+  // and output path untouched. Both versions encounter the same cause before
+  // any native call, without accessing a real managed configuration.
+  const baseline = await f.run({ args, tmpdir: primary, inspection, module: historical.module,
+    mapHistoricalManagedPaths: cause === 'codex_managed' });
+  assert.equal(baseline.code, args.includes('--cloud') ? 0 : 1, baseline.stdout);
+  assert.deepEqual(await inventory(f.home), before); assert.deepEqual(await f.calls(), { claude: [], codex: [] });
+  await assertNoAttempts(f, primary);
+  const result = await f.run({ args, tmpdir: primary, inspection });
+  assert.equal(result.code, args.includes('--cloud') ? 0 : 1, result.stdout);
+  assert.equal(result.code, baseline.code);
+  assert.equal(normalized(result.stdout, f.codexHome), normalized(baseline.stdout, f.codexHome));
+  const phrase = cause === 'codex_tmpdir' ? 'TMPDIR has ancestor' : 'system-managed Codex';
+  assert.equal(result.stdout.split('\n').filter(line => line.includes(phrase)).length, 1, result.stdout);
+  assert.deepEqual(await inventory(f.home), before); assert.deepEqual(await f.calls(), { claude: [], codex: [] });
+  await assertNoAttempts(f, primary);
+});
+for (const failure of [false, true]) test(`L37 fallback body and validation cleanup: failure=${failure}`, async t => {
+  const f = await fixture(t, { claude: false });
+  await mkdir(f.codexHome); await writeFile(join(f.codexHome, 'config.toml'), 'model = "fixture"\n', { mode: 0o600 });
+  const primary = join(f.home, 'tmp'); await mkdir(primary);
+  if (failure) await f.setCodexState({ failValidation: true });
+  const result = await f.run({ args: ['setup', '--client', 'codex'], tmpdir: primary });
+  assert.equal(result.code, failure ? 7 : 0, result.stdout);
+  const calls = hostedCalls((await f.calls()).codex);
+  const validation = calls.find(call => call.home.endsWith('/cx5-candidate') && call.args.join(' ') === 'mcp get cairn --json');
+  assert.ok(validation, 'qualified validation-only get reached after fallback selection');
+  assert.equal(dirname(validation.cwd), await realpath(f.fallbackParent));
+  for (const call of calls) await assert.rejects(readdir(call.cwd), { code: 'ENOENT' });
+  await assertNoAttempts(f, primary);
+});
+
+for (const relativeHome of ['settings', 'tmp/.codex']) test(`L34a endpoint reauthorization precedes selector: ${relativeHome}`, async t => {
+  const f = await fixture(t, { claude: false, codexHomeRelative: relativeHome });
+  await mkdir(join(f.home, 'tmp'), { recursive: true });
+  assert.equal((await f.run()).code, 0);
+  await mkdir(join(f.fallbackParent, '.codex')); await writeFile(join(f.fallbackParent, '.codex/config.toml'), '');
+  const before = await inventory(f.home), start = (await f.calls()).codex.length;
+  const args = ['setup', '--client', 'codex', '--endpoint', 'https://changed.example'];
+  const control = await f.run({ args, tmpdir: f.neutralParent });
+  const actual = await f.run({ args, tmpdir: join(f.home, 'tmp') });
+  assert.equal(actual.code, 2, actual.stdout); assert.equal(actual.stdout, control.stdout);
+  assert.match(actual.stdout, /--reauthorize/u); assert.doesNotMatch(actual.stdout, /TMPDIR has ancestor/u);
+  assert.equal((await f.calls()).codex.length, start); assert.deepEqual(await inventory(f.home), before);
 });

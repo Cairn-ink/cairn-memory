@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.2 — 2026-10-28: hosted Codex inspection TMPDIR fallback
+
+- Fix the 0.6.1 known limitation: cloud-mode Codex setup and `status` no longer
+  stop with `codex_tmpdir` when `TMPDIR` is inside `HOME` and a usable `/tmp`
+  exists.
+- System-managed Codex configuration still refuses with `codex_managed`.
+  With both a contaminated `TMPDIR` and a managed configuration, the reported
+  cause is now `codex_managed` after selecting the usable fallback.
+- The embedded engine and hosted runtime are unchanged from 0.6.1.
+- Existing 0.6.1 installations need no setup rerun for this fix.
+  `npx @cairn-ink/memory` now runs 0.6.2; rerun
+  `npx @cairn-ink/memory setup` if the earlier setup was blocked.
+- The npm package was built from `34182d51`. It ships the 0.6.1 engine bundle
+  (built from `be2bc543`), so engine changes merged after that commit are not
+  in 0.6.2.
+
 ## 0.6.1 — 2026-10-28: installer fixes and engine update
 
 - Fix local Codex inspection when `TMPDIR` is inside `HOME` by falling back to
