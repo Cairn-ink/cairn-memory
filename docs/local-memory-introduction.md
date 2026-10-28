@@ -12,7 +12,7 @@ npx @cairn-ink/memory status
 npx @cairn-ink/memory uninstall --local
 ```
 
-Installer 0.6.1 was published on 2026-10-28; a checkout can also run
+Installer 0.6.2 was published on 2026-10-28; a checkout can also run
 `node packages/setup/bin/memory.mjs setup --local`. A fresh interactive `setup`
 asks once for local or cloud storage; non-interactive runs need `--local` or
 `--cloud`. Existing cloud users keep their flow. Local mode registers
@@ -33,7 +33,7 @@ the tools share the database. Conflicts require ordered detachment, with no
 cloud/local data migration. Linux/WSL are tested, macOS is untested, and native
 Windows local setup is refused. See the [installer guide](../packages/setup/README.md).
 
-Installer 0.6.1 已於 2026-10-28 發布，也可用上方原始碼指令。第一次互動安裝會問一次
+Installer 0.6.2 已於 2026-10-28 發布，也可用上方原始碼指令。第一次互動安裝會問一次
 本機或雲端，非互動時需用 `--local`／`--cloud`，既有雲端使用者維持原流程。
 本機模式為 Claude Code、Codex 註冊 `cairn-local` stdio MCP，預設共用上述
 SQLite 路徑，也能用絕對路徑的 `CAIRN_MEMORY_HOME` 指定根目錄；外部資料庫
