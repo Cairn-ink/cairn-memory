@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
+import { spawnSync } from 'node:child_process';
 import { fixture } from '../testing/context-read-fixture.mjs';
 import { four, descriptor } from '../testing/context-product-owner-fixture.mjs';
 import { openContextProductFacade } from '../context-read-facade.mjs';
-import { productSidecar, PRODUCT_SIDECAR_SUFFIX } from '../context-product-sidecar.mjs';
+import { productSidecar, PRODUCT_SIDECAR_SUFFIX, canonicalProductIdentity, productFile } from '../context-product-sidecar.mjs';
 import { productVectors } from '../context-product-vectors.mjs';
 import { accessDigest } from '../context-product-validation.mjs';
 import { maintenanceQuantum } from '../context-product-quantum.mjs';
@@ -175,4 +176,86 @@ test('format 3 cross-intent cache reuse rejects an orphan storage generation',t=
   a.db.prepare('DELETE FROM generations WHERE id=?').run(a.lexical.generation.id);
   assert.throws(()=>a.vectors.certify(p,history,snapshot,a.quantum()),{code:'index_unavailable'});
   assert.equal(a.db.prepare('SELECT count(*) n FROM vector_publications').get().n,0);
+});
+
+
+test('Integration fix round 1: 600ms open and 250ms scans commit strictly increasing embedding progress and certify',async t=>{
+  const {openProductIndex}=await import('../context-product-index.mjs');
+  const a=setup(t,4);let clock=0,sends=0,scans=0,index,opened=false;
+  const semantic={configuration:{selection:{maxBatchDocuments:64}},snapshot:async()=>snapshot,gate:{enter:()=>()=>{}},async call(method,input){
+    if(method!=='embed')return;
+    sends++;clock+=20;
+    return {vectors:input.texts.map(()=>Array.from({length:1536},(_,i)=>i===0?1:0)),chargedUsd:'0'};
+  }};
+  const observer={invoke(stage,_kind,fn){const r=fn();if(stage==='open'&&!opened){clock+=600;opened=true;}return r;},database(db){return new Proxy(db,{get(target,key){
+    if(key==='prepare')return sql=>{const stmt=target.prepare(sql);return new Proxy(stmt,{get(s,m){const value=Reflect.get(s,m,s);return typeof value==='function'?(...args)=>{const r=Reflect.apply(value,s,args);if(m==='all'&&/\bFROM (documents|vector_rows|semantic_vectors)\b/.test(sql)&&/LIMIT 128/.test(sql)){clock+=250;scans++;}return r;}:value;}});};
+    const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
+  }});}};
+  const db=a.db,options={path:a.f.path,facade:a.facade,ownerCoverage:a.p.ownerCoverage,maintenance:true,semantic,observer,now:()=>clock,
+    operation:()=>({operationCutoffMonoNs:String(process.hrtime.bigint()+1000000000n)}),authorize:()=>({accessGenerations:a.access,check(){},envelope:fn=>fn()})};
+  t.after(()=>index?.close());
+  let previous=null,done=false;
+  for(let turn=0;turn<40&&!done;turn++) {
+    clock=0;opened=false;index=openProductIndex(options);
+    const result=await index.run('refreshContextIndex',{readSet:four,types:['memory'],intent:'current',mode:'embeddings',budget:{maxItems:1024,maxMs:1000,maxUsd:'0.50'}},{},1000);
+    assert.equal(result.ok,true,JSON.stringify(result));
+    const cache=db.prepare('SELECT count(*) n FROM semantic_vectors').get().n;
+    const state=db.prepare('SELECT g.state FROM vector_work w JOIN vector_generations g ON g.storage_id=w.generation').get()?.state;
+    const body=state?JSON.parse(state).body:{},planning=body.planning??{};
+    const current=[cache,db.prepare('SELECT count(*) n FROM vector_publications').get().n,planning.stream??0,planning.after??'',planning.pending??0,Number(planning.complete??false),body.phase??0,Object.values(body.seen??{}).reduce((n,c)=>n+c,0),body.verified??0,body.cacheLast?.[0]??0];
+    if(previous){const first=current.findIndex((v,i)=>v!==previous[i]);assert.ok(first>=0&&current[first]>previous[first],'every successful quantum must strictly advance committed work: '+JSON.stringify({previous,current}));}previous=current;
+    done=result.value.status==='complete';
+    assert.ok(clock<1000,'the deterministic work fits the original quantum');
+    index.close();
+  }
+  assert.equal(done,true);assert.ok(scans>0);assert.ok(sends>0);
+  assert.equal(db.prepare('SELECT count(*) n FROM semantic_vectors').get().n,4);
+});
+
+for(const operation of ['plan','put','certify'])for(const collected of [false,true])test(`Integration fix round 1: ${operation} refuses a ${collected?'collected':'retired'} captured lexical generation`,t=>{
+  const a=setup(t),rows=a.vectors.plan(a.p,a.lexical,snapshot,1);
+  a.db.prepare('DELETE FROM publications WHERE generation=?').run(a.lexical.generation.id);
+  if(collected)a.db.prepare('DELETE FROM generations WHERE id=?').run(a.lexical.generation.id);
+  assert.throws(()=>{
+    if(operation==='plan')a.vectors.plan(a.p,a.lexical,snapshot,1,a.quantum());
+    if(operation==='put')a.vectors.put(a.p,a.lexical,snapshot,rows,rows.map(()=>Array.from({length:1536},(_,i)=>i===0?1:0)));
+    if(operation==='certify')a.vectors.certify(a.p,a.lexical,snapshot,a.quantum());
+  },{code:'index_unavailable'});
+});
+
+test('Integration fix round 1: purge metadata VM steps stay equal at 1000 and 19000 generations',async t=>{
+  const {semanticMaintenance}=await import('../context-semantic-maintenance.mjs');
+  const a=setup(t),statements=[];
+  const prepare=DatabaseSync.prototype.prepare;
+  DatabaseSync.prototype.prepare=function(sql){if(/SELECT storage_id,id,projection FROM vector_generations/.test(sql))statements.push(sql);return Reflect.apply(prepare,this,[sql]);};
+  const service=semanticMaintenance({c:{host:{configuration:{}}},identity:()=>identity});
+  const entry={canonicalPath:a.f.path,storeId:a.facade.port.identity.storeId,canonicalIdentity:canonicalProductIdentity(a.f.path,a.facade.port.db),sidecarIdentity:productFile(a.f.path+PRODUCT_SIDECAR_SUFFIX)};
+  let state={ownerId:four[0].ownerId,policy:{purgeEpoch:1},catalog:{entry},purge:{state:'pending',deletedVectors:0}};
+  try {
+    await service.purge({input:{budget:{maxItems:1}},operation:{operationCutoffMonoNs:String(process.hrtime.bigint()+5000000000n)},current:async()=>({state}),change:async fn=>{fn(state);return {state};}});
+  } finally {DatabaseSync.prototype.prepare=prepare;service.close();}
+  assert.equal(statements.length,1);
+  const schema=a.db.prepare("SELECT sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' AND sql IS NOT NULL ORDER BY type DESC,name").all().map(r=>r.sql);
+  const probe=spawnSync('python3',['-c',String.raw`
+import json,sqlite3,sys
+source=json.load(sys.stdin)
+results=[]
+for size in [1000,19000]:
+ db=sqlite3.connect(':memory:')
+ for sql in source['schema']: db.execute(sql)
+ for i in range(size):
+  db.execute("INSERT INTO vector_generations(id,lexical_generation,owner,projection,identity,epoch,lexical,state,published) VALUES(?,1,?,'projection','identity',0,'lexical','state',0)",('id%05d'%(size-i),source['owner']))
+ calls=[0]
+ def step(): calls[0]+=1;return 0
+ db.set_progress_handler(step,1)
+ rows=db.execute(source['statement'],(source['owner'],)).fetchall()
+ db.set_progress_handler(None,0)
+ results.append({'steps':calls[0],'rows':len(rows)})
+print(json.dumps(results))
+`],{input:JSON.stringify({schema,statement:statements[0],owner:four[0].ownerId}),encoding:'utf8',env:{}});
+  assert.equal(probe.status,0,probe.stderr);
+  const [small,large]=JSON.parse(probe.stdout);t.diagnostic(JSON.stringify({small,large}));
+  assert.equal(small.rows,128);assert.equal(large.rows,128);
+  assert.ok(large.steps<=small.steps+50,JSON.stringify({small,large}));
+  assert.ok(large.steps<3000);
 });

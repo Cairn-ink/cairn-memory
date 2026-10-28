@@ -39,8 +39,13 @@ const manifestRow=(r,identity)=>{
   const ref=rowRef(r);return {item:{...ref.namespace,type:ref.type,id:ref.memoryId??ref.cardId},revision:ref.revision,
     bodyRevision:ref.bodyRevision??null,representation:r.representation,vector:r.vector===null?null:manifestVector(r.vector,identity)};
 };
-const lexicalKey=(db,lexical)=>db.prepare('SELECT storage_id FROM generations WHERE id=?').get(lexical.generation.id)?.storage_id;
-const vectorKey=(db,id)=>db.prepare('SELECT storage_id FROM vector_generations WHERE id=?').get(id)?.storage_id;
+function storageKey(db,table,id) {
+  const key=db.prepare(`SELECT storage_id FROM ${table} WHERE id=?`).get(id)?.storage_id;
+  if(key===undefined)fail('index_unavailable');
+  return key;
+}
+const lexicalKey=(db,lexical)=>storageKey(db,'generations',lexical.generation.id);
+const vectorKey=(db,id)=>storageKey(db,'vector_generations',id);
 // Cache reuse across intents still resolves the original integer reference;
 // an orphan cached vector cannot become evidence for a new publication.
 function cachedVector(db,owner,id,epoch,row,representation) {
@@ -52,6 +57,30 @@ function cachedVector(db,owner,id,epoch,row,representation) {
 }
 export function productVectors({storage,facade}) {
   const {identity:store}=facade.port;
+  const mac=body=>createHmac('sha256',store.cursorSecret).update(PRODUCT_PROFILE+'/vector-progress\0'+canonicalJson(body)).digest('base64url');
+  const seal=body=>canonicalJson({body,mac:mac(body)});
+  const unseal=text=>{const r=JSON.parse(text);if(canonicalJson(r)!==text||r.mac!==mac(r.body))fail('index_unavailable');return r.body;};
+  function work(db,p,lexical,snapshot,planning,persist=true) {
+    const key=lexicalKey(db,lexical),owner=p.readSet[0].ownerId,id=digest(snapshot.identity),epoch=snapshot.policy.purgeEpoch,ld=digest(lexical);
+    if(db.prepare('SELECT publication FROM publications WHERE projection=?').get(lexical.projectionDigest)?.publication!==lexical.publicationId)fail('index_unavailable');
+    let g=db.prepare('SELECT g.* FROM vector_work w JOIN vector_generations g ON g.storage_id=w.generation WHERE w.projection=?').get(lexical.projectionDigest);
+    if(!g||g.lexical!==ld||g.identity!==id||g.epoch!==epoch) {
+      const prior=db.prepare('SELECT pointer FROM vector_publications WHERE projection=?').get(lexical.projectionDigest);
+      const sequence=prior?JSON.parse(prior.pointer).generation.sequence+1:1;
+      g={id:randomUUID(),owner,projection:lexical.projectionDigest,identity:id,epoch,lexical:ld};
+      const state={sidecarIdentityDigest:digest({format:3,...lexical.sidecar}),phase:0,after:'',seen:Object.fromEntries(Object.keys(lexical.counts.byType).map(t=>[t,0])),counts:{byType:Object.fromEntries(Object.entries(lexical.counts.byType).map(([t,c])=>[t,{eligible:c.eligible,embedded:0}])),vectors:0,vectorBytes:0},sequence,checkpoint:0,incarnation:randomUUID(),hash:null,
+        planning:planning??{stream:0,after:'',pending:null,complete:false}};
+      g.state=seal(state);
+      if(persist) {
+        db.prepare('INSERT INTO vector_generations(id,lexical_generation,owner,projection,identity,epoch,lexical,state,published) VALUES(?,?,?,?,?,?,?,?,0)').run(g.id,key,owner,g.projection,id,epoch,ld,g.state);
+        g.storage_id=vectorKey(db,g.id);
+        db.prepare('INSERT OR REPLACE INTO vector_work VALUES(?,?)').run(g.projection,g.storage_id);
+      }
+    }
+    const s=unseal(g.state);
+    if(s.sidecarIdentityDigest!==digest({format:3,...lexical.sidecar}))fail('index_unavailable');
+    return {g,s};
+  }
   function observe(p,lexical,snapshot,{load=false}={}) {
     const missing={status:'partial',reason:'missing_vectors',record:null,rows:[]};
     if(!lexical)return {...missing,status:'unavailable',reason:'index_not_ready'};
@@ -101,61 +130,77 @@ export function productVectors({storage,facade}) {
     }
   }
   function plan(p,lexical,snapshot,maximum,quantum) {
-    return storage.vectors(db=>{
-      const found=[],id=digest(snapshot.identity),epoch=snapshot.policy.purgeEpoch,owner=p.readSet[0].ownerId;
-      for(const stream of orderedStreams(p)) {
-        let after='';
-        while(found.length<maximum) {
-        if(quantum ? !quantum.admit('vector-scan')||!quantum.admit('vector-plan') : performance.now()>=p.deadlineAt)break;
-        const scan=()=>db.prepare('SELECT * FROM documents WHERE generation=? AND stream=? AND eligible=1 AND id>? ORDER BY id LIMIT 128').all(lexicalKey(db,lexical),stream.stream,after);
-        const rows=quantum?quantum.measure(scan,'vector-scan'):scan();
-        for(const row of rows) {
-          if(quantum&&!quantum.admit('vector-plan'))return found;
-          const check=()=>{if(!cachedVector(db,owner,id,epoch,row,lexical.representation))found.push({...row,representation:lexical.representation,ref:rowRef(row)});};
-          if(quantum)quantum.measure(check,'vector-plan');else check();
-          if(found.length===maximum)break;
-        }
-        if(rows.length<128)break;after=rows.at(-1).id;
-        }
-        if(found.length===maximum)break;
+    const planned=storage.vectors(db=>{
+      const {s}=work(db,p,lexical,snapshot,undefined,false),cursor=s.planning??={stream:0,after:'',pending:null,complete:false};
+      const found=[],id=digest(snapshot.identity),epoch=snapshot.policy.purgeEpoch,owner=p.readSet[0].ownerId,streams=orderedStreams(p);
+      const admit=kind=>quantum?quantum.admit(kind):performance.now()<p.deadlineAt;
+      const measure=(fn,kind)=>quantum?quantum.measure(fn,kind):fn();
+      const check=row=>{if(!cachedVector(db,owner,id,epoch,row,lexical.representation))found.push({...row,representation:lexical.representation,ref:rowRef(row)});};
+      // A discovered missing row is a durable next unit. Resume it by an exact
+      // key probe, so a costly planning scan cannot consume every provider turn.
+      if(cursor.pending!==null&&!cursor.complete) {
+        const row=db.prepare('SELECT * FROM documents WHERE generation=? AND doc=? AND eligible=1').get(lexicalKey(db,lexical),cursor.pending);
+        if(!row)fail('index_unavailable');
+        measure(()=>check(row),'vector-plan');
+        if(found.length)return {found,cursor};
+        cursor.after=row.id;cursor.pending=null;
       }
-      return found;
-    })??[];
+      const scanCursor={...cursor};
+      while(!scanCursor.complete&&found.length<maximum&&admit('vector-scan')&&admit('vector-plan')) {
+        const stream=streams[scanCursor.stream];
+        const rows=measure(()=>db.prepare('SELECT * FROM documents WHERE generation=? AND stream=? AND eligible=1 AND id>? ORDER BY id LIMIT 128').all(lexicalKey(db,lexical),stream.stream,scanCursor.after),'vector-scan');
+        let processed=0;
+        for(const row of rows) {
+          // The admitted scan includes its first row, like lexical format 2.
+          if(processed&&!admit('vector-plan'))break;
+          measure(()=>check(row),'vector-plan');processed++;
+          scanCursor.after=row.id;
+          if(found.length){cursor.pending??=row.doc;if(found.length===maximum)break;}
+          else cursor.after=row.id;
+        }
+        if(processed===rows.length&&rows.length<128) {
+          scanCursor.stream++;scanCursor.after='';scanCursor.complete=scanCursor.stream===streams.length;
+          if(!found.length)Object.assign(cursor,scanCursor);
+        }
+      }
+      return {found,cursor};
+    });
+    if(!planned)return [];
+    // When dispatch can proceed, put() commits the cursor with the received
+    // vectors. Otherwise commit planning now, after releasing the read snapshot.
+    if(!planned.found.length||quantum&&!quantum.admit('embedding-item'))storage.vectors(db=>{
+      const {g,s}=work(db,p,lexical,snapshot);s.planning=planned.cursor;s.checkpoint++;
+      db.prepare('UPDATE vector_generations SET state=? WHERE id=?').run(seal(s),g.id);
+    },true);
+    return planned.found;
   }
   function put(p,lexical,snapshot,rows,vectors) {
     return storage.vectors(db=>{
       if(!facade.port.read(()=>storage.vectorFence(p,lexical)))fail('index_unavailable');
-      const current=db.prepare('SELECT publication FROM publications WHERE projection=?').get(lexical.projectionDigest);
-      if(current?.publication!==lexical.publicationId)fail('index_unavailable');
+      const {g,s}=work(db,p,lexical,snapshot);
       for(let i=0;i<rows.length;i++) {
         const r=rows[i];db.prepare('INSERT OR IGNORE INTO semantic_vectors VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(lexicalKey(db,lexical),r.doc,p.readSet[0].ownerId,digest(snapshot.identity),snapshot.policy.purgeEpoch,r.identity,r.revision,r.body_revision,r.representation,canonicalVectorBytes(vectors[i],snapshot.identity),sortKey(r.identity));
       }
-      db.prepare('DELETE FROM vector_work WHERE projection=?').run(lexical.projectionDigest);
+      // New cache bytes invalidate staged verification, but retain the planning
+      // cursor. Old staging is reclaimed by the existing bounded collector.
+      const last=rows.at(-1),streams=orderedStreams(p);
+      const planning=last?{stream:streams.findIndex(r=>r.stream===last.stream),after:last.id,pending:null,complete:false}:s.planning;
+      if(s.phase===0&&!s.after) {
+        s.planning=planning;s.checkpoint++;
+        db.prepare('UPDATE vector_generations SET state=? WHERE id=?').run(seal(s),g.id);
+      } else {
+        db.prepare('DELETE FROM vector_work WHERE projection=?').run(lexical.projectionDigest);
+        work(db,p,lexical,snapshot,planning);
+      }
     },true);
   }
   // Verification hashes bounded pages and durably authenticates its checkpoint.
   // No manifest or canonical body is assembled in memory by a read request.
   function certify(p,lexical,snapshot,quantum) {
     const owner=p.readSet[0].ownerId,id=digest(snapshot.identity),epoch=snapshot.policy.purgeEpoch,ld=digest(lexical);
-    const mac=body=>createHmac('sha256',store.cursorSecret).update(PRODUCT_PROFILE+'/vector-progress\0'+canonicalJson(body)).digest('base64url');
-    const seal=body=>canonicalJson({body,mac:mac(body)});
-    const unseal=text=>{const r=JSON.parse(text);if(canonicalJson(r)!==text||r.mac!==mac(r.body))fail('index_unavailable');return r.body;};
     while(quantum.admit('vector-scan')&&quantum.admit('vector-verification')) {
       const done=storage.vectors(db=>{
-        if(db.prepare('SELECT publication FROM publications WHERE projection=?').get(lexical.projectionDigest)?.publication!==lexical.publicationId)fail('index_unavailable');
-        let g=db.prepare('SELECT g.* FROM vector_work w JOIN vector_generations g ON g.storage_id=w.generation WHERE w.projection=?').get(lexical.projectionDigest);
-        if(!g||g.lexical!==ld||g.identity!==id||g.epoch!==epoch) {
-          const prior=db.prepare('SELECT pointer FROM vector_publications WHERE projection=?').get(lexical.projectionDigest);
-          const sequence=prior?JSON.parse(prior.pointer).generation.sequence+1:1;
-          g={id:randomUUID(),owner,projection:lexical.projectionDigest,identity:id,epoch,lexical:ld};
-          const state={sidecarIdentityDigest:digest({format:3,...lexical.sidecar}),phase:0,after:'',seen:Object.fromEntries(Object.keys(lexical.counts.byType).map(t=>[t,0])),counts:{byType:Object.fromEntries(Object.entries(lexical.counts.byType).map(([t,c])=>[t,{eligible:c.eligible,embedded:0}])),vectors:0,vectorBytes:0},sequence,checkpoint:0,incarnation:randomUUID(),hash:null};
-          g.state=seal(state);
-          db.prepare('INSERT INTO vector_generations(id,lexical_generation,owner,projection,identity,epoch,lexical,state,published) VALUES(?,?,?,?,?,?,?,?,0)').run(g.id,lexicalKey(db,lexical),owner,g.projection,id,epoch,ld,g.state);
-          g.storage_id=vectorKey(db,g.id);
-          db.prepare('INSERT OR REPLACE INTO vector_work VALUES(?,?)').run(g.projection,g.storage_id);
-        }
-        const s=unseal(g.state);
-        if(s.sidecarIdentityDigest!==digest({format:3,...lexical.sidecar}))fail('index_unavailable');
+        const {g,s}=work(db,p,lexical,snapshot);
         if(s.phase===0) {
           const page=quantum.measure(()=>db.prepare(`SELECT * FROM documents WHERE generation=? AND eligible=1 ${s.after?'AND identity>?':''} ORDER BY identity LIMIT 128`).all(lexicalKey(db,lexical),...(s.after?[s.after]:[])),'vector-scan');
           let processed=0;

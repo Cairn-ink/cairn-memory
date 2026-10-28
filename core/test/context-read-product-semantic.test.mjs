@@ -780,3 +780,27 @@ test('format 3 fresh public lexical build, vector refresh, semantic read and int
   for(const table of ['semantic_vectors','vector_rows','vector_generations','vector_validation_records','vector_publications','vector_work'])assert.equal(db.prepare(`SELECT count(*) n FROM ${table}`).get().n,0);
   assert.equal(db.prepare('PRAGMA foreign_key_check').get(),undefined);
 });
+
+
+test('Integration fix round 1: collecting a captured lexical generation is recoverable and keeps the maintainer alive',async t=>{
+  const {createProductReaderRuntime}=await import('../context-product-reader.mjs');
+  const {Worker}=await import('node:worker_threads');
+  const s=await setup(t),m=s.configure(true);
+  m.options.host.configuration.collectCaptured='catchup';
+  const open=createProductReaderRuntime({maintenance:true,spawnWorker:data=>new Worker(new URL('./fixtures/context-product-index-worker.mjs',import.meta.url),
+    {workerData:data,transferList:[data.semanticPort],env:{},execArgv:[],stdout:true,stderr:true})});
+  const h=await open(m.options);s.f.workspace.defer(()=>h.close());
+  ok(await s.coordinator.setOwnerSemantic({ownerId:ns.ownerId,semantic:true,expectedRevision:0},s.token));
+  const input={readSet:[ns],types:['memory'],intent:'current'};
+  ok(await h.refreshContextIndex({...input,mode:'lexical',budget:{maxItems:1024,maxMs:5000}},m.credential));
+  const db=sidecar(s),captured=db.prepare('SELECT generation FROM publications').get().generation;
+  Atomics.store(s.view,7,0); // Publication telemetry shares this fixture slot with provider faults.
+  Atomics.store(s.view,6,1);
+  const result=await h.refreshContextIndex({...input,mode:'embeddings',budget:{maxItems:1024,maxMs:5000,maxUsd:'0.50'}},m.credential);
+  assert.equal(Atomics.load(s.view,6),2,'competing maintenance ran after the captured observation');
+  assert.equal(db.prepare('SELECT 1 FROM generations WHERE id=?').get(captured),undefined);
+  assert.equal(result.ok,false,JSON.stringify(result));assert.equal(result.error.code,'index_unavailable');
+  assert.equal(ok(await h.getContextIndexStatus({...input,deadlineMs:5000},m.credential)).lexical.state,'ready');
+  const resumed=ok(await h.refreshContextIndex({...input,mode:'embeddings',budget:{maxItems:1024,maxMs:5000,maxUsd:'0.50'}},m.credential));
+  assert.equal(resumed.status,'complete',JSON.stringify(resumed));
+});

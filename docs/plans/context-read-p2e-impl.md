@@ -1046,3 +1046,106 @@ recovered from conflict markers in that automatic merge tree.
 - `packages/setup/runtime/engine/cairn-memory-local-preview-0.0.0-preview.1.tgz`
 - `packages/setup/runtime/engine/manifest.json`
 - `tools/testing/p2e-eval.test.mjs`
+
+## Integration fix round 1
+
+The embedding planner now uses the lexical scan/first-row admission rule. It
+retains an authenticated stream/key cursor and an exact pending document probe
+in the existing vector work checkpoint. A quantum that cannot dispatch after
+planning commits that planning progress; the next quantum resumes the pending
+unit without repeating the expensive scan. Received vectors and their planning
+cursor commit together. New vectors invalidate staged verification while
+preserving planning progress; the existing bounded collector reclaims obsolete
+staging. Once planning is exhausted, later quanta proceed directly to resumable
+certification, so a scan estimate cannot permanently bar certification.
+
+Planning releases its read snapshot before checkpoint writes or provider work.
+The existing native transactions, publication/fence checks, semantic gate,
+provider cutoff/reserve, lock order and WAL policy remain in force. No host callback,
+provider operation or await was added inside a transaction. The public contract,
+lexical implementation and semantic-off result assembly are unchanged.
+
+All lexical and vector ID-to-storage-key lookups in the vector module now use a
+checked resolver. A missing key yields recoverable `index_unavailable` before
+SQLite binding. Planning, insertion and certification also check that the
+captured lexical publication is still current. Cached origins still require an
+exact published lexical document reference; loaded vector pages still validate
+all document bindings. Collected and retired generations cannot supply new
+vector evidence or terminate an otherwise usable maintainer.
+
+Purge metadata selection now orders by `storage_id`, matching the existing
+`vector_generation_owner(owner,storage_id)` index. The regression executes the
+captured production statement with SQLite's instruction callback: both 1,000
+and 19,000 empty generations return 128 rows in **2,058 VM instructions**.
+
+The nine added regression cases cover deterministic 1,000 ms quanta with a
+600 ms opening and 250 ms planning/verification scans, strictly increasing
+committed progress across handle recreation and eventual certification;
+collected/retired captured generations in planning, insertion and certification;
+the public maintainer's recovery after competing collection; and bounded purge
+metadata VM work. Progress assertions compare actual cache/cursor/verification
+state, excluding checkpoint-only increments and random IDs. No wall-clock
+threshold, external provider, credential or network service is used.
+
+The focused new-regression command on Node 22.16.0 exits **0**, **9/9 passing**.
+The same regression sources applied to untouched `e0822184` exit **1** on
+Node 22.16.0 and 24.15.0 as expected: embedding progress repeats without advancing, collection returns
+`reader_failed`, and purge work grows from **21,268 to 399,268 VM instructions**.
+The different purge baseline totals reflect deliberately reversed ID order;
+the fixed production query has identical work at both sizes.
+
+The initial Node 22 context group exits **1**: **802/803 passing**, one bare
+`read_timeout` in the existing daily-cap/UTC-rollover embedding refresh test.
+Its unchanged focused rerun exits **0** (1/1), and the complete unchanged
+`context-read-product-semantic.test.mjs` rerun exits **0** (72/72). These outcomes
+are reported separately; the initial group exit is not relabeled. No deadline,
+budget, timing assertion, fixture corpus or production policy was relaxed.
+
+Development-only focused attempts also exited **1** while unconditional planning
+writes introduced extra connection-opening work. The final planner uses a
+read snapshot for planning and persists separately when dispatch cannot proceed;
+successful dispatch commits planning with received vectors. An initial public
+race fixture retry encountered its shared publication/provider fault slot; the
+new test clears that synthetic fault selector before invoking embeddings.
+Existing tests and assertions remain unchanged.
+
+### Required commands and actual exits
+
+Both exact runtime probes exit **0**, reporting **v22.16.0 / v24.15.0**.
+Commands used each runtime’s executable and toolchain with npm offline mode:
+
+```sh
+"$NODE22" tools/testing/run.mjs --test-reporter=tap --test-concurrency=1 <expanded paths>
+"$NODE24" tools/testing/run.mjs --test-reporter=tap --test-concurrency=1 <expanded paths>
+```
+
+Glob expansion and independent directory/`rg --files` enumeration agree on
+**68 required files, zero differences**. Counts include the nine new cases.
+
+| Expanded group | Files | Node 22.16.0 exit (passed/total) | Node 24.15.0 exit (passed/total) |
+| --- | ---: | ---: | ---: |
+| `core/test/context-read*.test.mjs` | 37 | 1 (802/803) | 0 (803/803) |
+| `core/test/topic-*.test.mjs` | 17 | 0 (238/238) | 0 (238/238) |
+| Raw-fd, SQLite lock-safety and journal-probe guards | 3 | 0 (44/44) | 0 (44/44) |
+| `adapters/mcp/test/context-read*.test.mjs` | 6 | 0 (97/97) | 0 (97/97) |
+| `packaging/test/topic-overview-raw29.test.mjs` | 1 | 0 (3/3) | 0 (3/3) |
+| `tools/testing/p2e-*.test.mjs` | 4 | 0 (36/36) | 0 (36/36) |
+
+The initial Node 22 context exit **1** is retained above. Its only failing
+case passes in both the unchanged focused rerun (exit **0**, 1/1) and the
+unchanged complete semantic-file rerun (exit **0**, 72/72), as recorded above.
+Every required case has passed on both runtimes across these recorded runs;
+the required union contains **1,221 cases per runtime**, with zero skips or
+cancellations. All nine new regression cases pass on both runtimes.
+
+Individual syntax checks on all four changed JavaScript files exit **0** on
+both runtimes: **8 commands, 8 exits 0**. Bundle generation and `--check` on
+Node 24.15.0 each exit **0**, with **32 client / 330 engine files**. The bundle
+is regenerated and checked again after this report is complete.
+
+The changed-path inventory independently compares Git diff/untracked output
+with baseline-tree blob hashes, filesystem bytes and an ignore-aware file walk:
+**7 paths, zero differences**. Client manifest/filesystem and engine
+manifest/archive/source-byte inventories independently agree at **32 / 330
+files**, zero differences; the archive SHA-256 matches its manifest. All
+generated content comes from the runtime builder. No commit was created.

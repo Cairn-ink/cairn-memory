@@ -136,7 +136,7 @@ export function semanticMaintenance({c,sqlite,identity,secretState}) {
         for(const r of pointers)db.prepare('DELETE FROM vector_publications WHERE projection=? AND owner=?').run(r.projection,s.ownerId);
         const records=db.prepare('SELECT publication FROM vector_validation_records WHERE owner=? ORDER BY publication LIMIT 128').all(s.ownerId);
         for(const r of records)db.prepare('DELETE FROM vector_validation_records WHERE publication=? AND owner=?').run(r.publication,s.ownerId);
-        const generations=db.prepare('SELECT storage_id,id,projection FROM vector_generations WHERE owner=? AND NOT EXISTS(SELECT 1 FROM vector_rows WHERE generation=vector_generations.storage_id) ORDER BY id LIMIT 128').all(s.ownerId);
+        const generations=db.prepare('SELECT storage_id,id,projection FROM vector_generations WHERE owner=? AND NOT EXISTS(SELECT 1 FROM vector_rows WHERE generation=vector_generations.storage_id) ORDER BY storage_id LIMIT 128').all(s.ownerId);
         for(const r of generations){db.prepare('DELETE FROM vector_work WHERE generation=?').run(r.storage_id);db.prepare('DELETE FROM vector_generations WHERE id=? AND owner=?').run(r.id,s.ownerId);}
         const exhausted=!db.prepare('SELECT 1 FROM semantic_vectors WHERE owner=? LIMIT 1').get(s.ownerId)&&!db.prepare('SELECT 1 FROM vector_generations WHERE owner=? LIMIT 1').get(s.ownerId)&&
           !db.prepare('SELECT 1 FROM vector_publications WHERE owner=? LIMIT 1').get(s.ownerId)&&!db.prepare('SELECT 1 FROM vector_validation_records WHERE owner=? LIMIT 1').get(s.ownerId);
