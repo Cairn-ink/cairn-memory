@@ -180,7 +180,7 @@ export async function main(argv, {
   env = process.env, locale = Intl.DateTimeFormat().resolvedOptions().locale,
   coordinated = false, pairingConsent, claudeDeclined, inspectCodex, identityPlan, endpointChoice,
   forceReauthorize = false, expectedCodex, hostsStopped, progress = {}, disableLocalMode = false, platform = process.platform,
-  localInstallerVersion = installerVersion,
+  localInstallerVersion = installerVersion, inspection,
 } = {}) {
   const rawWrite = write;
   const rawPrompt = prompt;
@@ -234,22 +234,22 @@ export async function main(argv, {
     };
     if (!coordinated && !disableLocalMode) {
       const routed = await routeLocalMode(options, selection, { write, prompt, interactive, env, t, verbose,
-        runClaude: run, nodeVersion, supportedNode, installerVersion: localInstallerVersion, platform, progress, beforeRouting });
+        runClaude: run, nodeVersion, supportedNode, installerVersion: localInstallerVersion, platform, progress, beforeRouting, inspection });
       localDetection = routed.detection; localStatusCode = routed.statusCode ?? 0;
       if (routed.handled) return routed.code;
     } else beforeRouting();
     if (!coordinated && !selection.client && ['setup', 'status'].includes(selection.argv[0])) {
       return Math.max(localStatusCode, await setupDetected(selection.argv, { write, prompt, interactive, browse, nodeVersion,
         authOptions, env, locale, t, endpointOverride, dailyCap:options.dailyCap, captureExec:options.captureExec, verbose, progress,
-        signal, supportedNode, SetupError, validEndpoint, inspectCodex,
+        signal, supportedNode, SetupError, validEndpoint, inspectCodex, inspection,
         inspectClaude: async () => (await installed(run)).length ? configuration(run) : undefined,
         runClient: (args, overrides) => main(args, { write, prompt, interactive, browse, nodeVersion,
-          authOptions, env, locale, progress, coordinated: true, ...overrides }) }));
+          authOptions, env, locale, progress, inspection, coordinated: true, ...overrides }) }));
     }
     const dispatch = await dispatchClient(options.argv, { write, prompt, interactive, browse: launchBrowser,
       nodeVersion, supportedNode, SetupError, validEndpoint, t, endpointOverride, dailyCap:options.dailyCap,
       captureExec:options.captureExec, verbose, authOptions, signal, pairingConsent,
-      identityPlan, endpointChoice, expectedCodex, hostsStopped, coordinated, claudeDeclined, progress });
+      identityPlan, endpointChoice, expectedCodex, hostsStopped, coordinated, claudeDeclined, progress, inspection });
     if (dispatch.handled) return Math.max(localStatusCode, dispatch.code);
     argv = dispatch.argv;
     const [action, ...flags] = argv;

@@ -23,7 +23,7 @@ const { claudeSnippet, claudeAddArguments } = await fromPackage('local-claude');
 const { codexSnippet, codexAddArguments } = await fromPackage('local-codex');
 const { shellArgument, tomlString, argvDisplay, columns } = await fromPackage('output');
 const { translator } = await fromPackage('messages');
-const { inspectCodexServers, withCodexInspectionEnvironment } = await fromPackage('codex');
+const { setupCodex, inspectCodexServers, withCodexInspectionEnvironment } = await fromPackage('codex');
 const { modeUnion } = await fromPackage('local-mode');
 const version = JSON.parse(await readFile(join(packageRoot, 'package.json'))).version;
 const manifestBytes = await readFile(join(packageRoot, 'runtime/engine/manifest.json'));
@@ -59,7 +59,7 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
   const moduleURL = pathToFileURL(join(testedPackageRoot, 'lib/setup.mjs')).href;
   const harness = join(ws.path, 'harness.mjs');
   await writeFile(harness, `import{main}from${JSON.stringify(moduleURL)};import{writeSync,readFileSync,chmodSync}from'node:fs';
-    import{spawn}from'node:child_process';
+    import{spawn}from'node:child_process';import fsPromises from'node:fs/promises';import{syncBuiltinESMExports}from'node:module';
     import{registerClaude}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/local-claude.mjs')).href)};
     import{registerCodex}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/local-codex.mjs')).href)};
     import{translator}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/messages.mjs')).href)};
@@ -67,6 +67,7 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
     import{parseOptions}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/options.mjs')).href)};
     import{parseClient}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/codex.mjs')).href)};
     import{SetupError}from${JSON.stringify(pathToFileURL(join(testedPackageRoot, 'lib/errors.mjs')).href)};
+    const mkdtemp=fsPromises.mkdtemp;fsPromises.mkdtemp=(path,...args)=>{if(String(path).startsWith('/tmp/cairn-codex-inspect-'))throw Object.assign(new Error('unowned inspection parent'),{code:'EACCES'});return mkdtemp(path,...args);};syncBuiltinESMExports();
     const config=JSON.parse(process.env.LOCAL_TEST_OPTIONS),answers=config.answers??[];
     const output=line=>writeSync(1,String(line)+'\\n');
     output.literal=line=>{for(const part of String(line).split('\\n'))writeSync(1,JSON.stringify({literal:part})+'\\n');};
@@ -83,7 +84,7 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
       try{const result=await routeLocalMode(options,selection,context);
         if(result.detection){
           const progress={};
-          if(config.hostedStatus)await main(process.argv.slice(2),{disableLocalMode:true,write:output,progress});
+          if(config.hostedStatus)await main(process.argv.slice(2),{disableLocalMode:true,inspection:config.inspection,write:output,progress});
           await localStatus(result.detection,{...context,emittedEnvironmentCauses:progress.codexEnvironmentCauses??new Set(config.emitted??[])});
         }
         if(!result.handled&&!result.detection)output('HOSTED');
@@ -95,11 +96,11 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
         registerCodex({root:process.env.CAIRN_MEMORY_HOME,checkpoint:d.operation.checkpoints.codex,env:process.env,inspection:config.inspection,write:output,t:translator('en')}));output(state);}
       catch(error){output(error.key);process.exitCode=error.code??1;}
     }else process.exitCode=await main(process.argv.slice(2),{interactive:config.interactive??false,disableLocalMode:config.disableLocalMode??false,
-      localInstallerVersion:config.installerVersion,platform:config.platform??process.platform,nodeVersion:config.nodeVersion??process.versions.node,
+      inspection:config.inspection,localInstallerVersion:config.installerVersion,platform:config.platform??process.platform,nodeVersion:config.nodeVersion??process.versions.node,
       write:output,prompt:answer,
       authOptions:{request:async()=>{throw new Error('Local mode must not authorize');}}});`);
   const env = { HOME: home, CODEX_HOME: codexHome, CAIRN_MEMORY_HOME: root, LANG: 'en_US.UTF-8',
-    PATH: bin,
+    PATH: bin, TMPDIR: ws.path,
     CAIRN_SETUP_NPM_CACHE: process.env.CAIRN_SETUP_NPM_CACHE, CAIRN_SETUP_NPM_OFFLINE: '1' };
   const run = async (args = ['setup', '--local'], options = {}) => {
     const child = spawn(nodeExecutable, [harness, ...args], { cwd: ws.path,
@@ -1038,24 +1039,74 @@ test('L26 hidden Codex ownership remains orphan with fallback', async t => {
   }
   await noAttempts(options);
 });
-test('L27/L28 status emission bookkeeping: hosted/local causes once for every client scope', async t => {
-  for (const cause of ['codex_tmpdir', 'codex_managed', 'both']) {
-    const f = await localFixture(t); await seed(f);
-    const options = await inspectionFixture(f, { blocked: cause === 'codex_tmpdir', managed: cause !== 'codex_tmpdir' });
-    if (cause === 'both') await f.config('');
-    if (cause === 'codex_managed') options.env.TMPDIR = options.fallback;
-    const before = await f.inventory();
-    for (const client of [null, 'claude', 'codex']) for (const argv of client ?
-      [['status', '--client', client], ['--client', client, 'status']] : [['status']]) {
-      const result = await f.run(argv, { ...options, hostedStatus: true });
-      const tmpdirLines = result.display.split('\n').filter(line => line.includes('TMPDIR has ancestor'));
-      const managedLines = result.display.split('\n').filter(line => line.includes('system-managed Codex'));
-      assert.equal(tmpdirLines.length, cause === 'codex_tmpdir' || (cause === 'both' && client !== 'claude') ? 1 : 0, result.display);
-      assert.equal(managedLines.length, cause !== 'codex_tmpdir' ? 1 : 0, result.display);
-      assert.deepEqual(await f.inventory(), before);
-      await noAttempts(options);
+for (const cloud of [false, true]) for (const args of [['status'], ['status', '--client', 'codex']])
+test(`L35 local${cloud ? ' and cloud' : '-only'} status fallback matches neutral parent: ${args.join(' ')}`, async t => {
+  const f = await localFixture(t); await seed(f);
+  if (cloud) await f.config(await readFile(join(f.codexHome, 'config.toml'), 'utf8') +
+    '[mcp_servers.cairn]\nurl = "https://cairn.ink/api/mcp"\n');
+  const options = await inspectionFixture(f);
+  // Supply an executable receipt without installing or starting an engine.
+  const executable = executableFor(f.root, engineId);
+  await mkdir(dirname(executable), { recursive: true }); await writeFile(executable, '// status fixture\n');
+  const before = await f.inventory();
+  const control = await f.run(args, { ...options, library: false, env: { TMPDIR: options.fallback } });
+  const result = await f.run(args, { ...options, library: false });
+  assert.equal(control.code, 0, control.display);
+  assert.equal(result.code, 0, result.display);
+  assert.equal(result.stdout, control.stdout);
+  assert.doesNotMatch(result.display, /TMPDIR has ancestor/u);
+  assert.match(result.display, /Registration: registered/u);
+  assert.deepEqual(await f.inventory(), before); await noAttempts(options);
+});
+
+// Exercise the hosted boundary directly so dispatch's generic failure wrapper
+// cannot hide whether a body error was wrongly remapped by the selector.
+test('L36 selector refusals retain SetupError code/params; hosted body errors keep identity', async t => {
+  const { SetupError } = await fromPackage('errors');
+  const f = await localFixture(t);
+  const options = await inspectionFixture(f, { blocked: true });
+  const originalEnv = process.env;
+  const context = { action: 'status', flags: [], SetupError, write: () => {}, t: key => key, inspection: options.inspection };
+  try {
+    process.env = { ...originalEnv, ...f.env, TMPDIR: options.primary };
+    for (const key of ['codex_tmpdir', 'codex_managed']) {
+      if (key === 'codex_managed') {
+        await rm(join(options.fallback, '.codex'), { recursive: true });
+        await writeFile(options.inspection.managedPaths[1], '');
+      }
+      await assert.rejects(setupCodex(context), error => {
+        assert.ok(error instanceof SetupError); assert.equal(error.key, key);
+        assert.equal(error.code, 1); assert.deepEqual(error.params, {}); return true;
+      });
     }
-  }
+    let nestedSelectorError;
+    await assert.rejects(withCodexInspectionEnvironment({ env: process.env, ...options.inspection }), error => { nestedSelectorError = error; return true; });
+    await rm(options.inspection.managedPaths[1]);
+    await assert.rejects(setupCodex({ ...context, write: () => { throw nestedSelectorError; } }), error => error === nestedSelectorError);
+    const bodyError = Object.assign(new Error('body refusal'), { key: 'codex_managed' });
+    await assert.rejects(setupCodex({ ...context, write: () => { throw bodyError; } }), error => error === bodyError);
+    const bodySetupError = new SetupError('codex_tmpdir', 7, { body: true });
+    await assert.rejects(setupCodex({ ...context, write: () => { throw bodySetupError; } }), error => error === bodySetupError);
+    await noAttempts(options);
+  } finally { process.env = originalEnv; }
+});
+
+for (const cause of ['codex_tmpdir', 'codex_managed', 'both']) for (const argv of [
+  ['status'], ['status', '--client', 'claude'], ['--client', 'claude', 'status'],
+  ['status', '--client', 'codex'], ['--client', 'codex', 'status'],
+]) test(`L38 status emission bookkeeping: ${cause}; ${argv.join(' ')}`, async t => {
+  const f = await localFixture(t); await seed(f);
+  const options = await inspectionFixture(f, { blocked: cause === 'codex_tmpdir', managed: cause !== 'codex_tmpdir' });
+  if (cause === 'both') await f.config('');
+  if (cause === 'codex_managed') options.env.TMPDIR = options.fallback;
+  const before = await f.inventory();
+  const result = await f.run(argv, { ...options, hostedStatus: true });
+  const tmpdirLines = result.display.split('\n').filter(line => line.includes('TMPDIR has ancestor'));
+  const managedLines = result.display.split('\n').filter(line => line.includes('system-managed Codex'));
+  assert.equal(tmpdirLines.length, cause === 'codex_tmpdir' ? 1 : 0, result.display);
+  assert.equal(managedLines.length, cause !== 'codex_tmpdir' ? 1 : 0, result.display);
+  assert.deepEqual(await f.inventory(), before);
+  await noAttempts(options);
 });
 for (const action of ['setup', 'uninstall']) test(`Codex pre-check maps unsafe config to local recovery: ${action}`, async t => {
   const f = await localFixture(t), options = await inspectionFixture(f, { outside: true });

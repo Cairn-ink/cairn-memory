@@ -1,6 +1,6 @@
 # Codex 安裝與自動記憶：CX-5
 
-2026-10-28 更新。Installer **0.6.1** 已於 2026-10-28 發布；0.6.0（2026-10-25）加入本機模式（0.5.2 於 2026-10-13 發布）。配套 plugin 現為 0.3.3、protocol 維持 0.3.0。0.5.3 修正 setup、resume 之後新開的 Codex 對話，第一段內容被當成暫停邊界跳過的問題。0.5.2 只調整安裝畫面裡說明自動工作的兩句話，行為不變。0.5.1 修正互動 TUI 對話沒有被記下的問題，並只納入互動的 app-server 用戶端；0.5.0 更新了安裝流程、預設每日上限與 exec 自動工作的保存設定。A7 framing 與 certificate inputs 保持原樣。
+2026-10-28 更新。Installer **0.6.2** 已於 2026-10-28 發布；0.6.0（2026-10-25）加入本機模式（0.5.2 於 2026-10-13 發布）。配套 plugin 現為 0.3.3、protocol 維持 0.3.0。0.5.3 修正 setup、resume 之後新開的 Codex 對話，第一段內容被當成暫停邊界跳過的問題。0.5.2 只調整安裝畫面裡說明自動工作的兩句話，行為不變。0.5.1 修正互動 TUI 對話沒有被記下的問題，並只納入互動的 app-server 用戶端；0.5.0 更新了安裝流程、預設每日上限與 exec 自動工作的保存設定。A7 framing 與 certificate inputs 保持原樣。
 
 本機是 **codex-cli 0.160.1**。CX-5 已接上 browser credential、私有 runtime、四個 user hooks、Stop／PreCompact capture，以及 SessionStart pause EOF boundary。UserPromptSubmit recall 注入已通過 [A7 pinned-host adversarial evaluation](../evaluation/codex-a7/RESULTS.md)，**在格式合格的 host 預設開啟**，可用 kill switch 關閉。MCP recall 仍可使用。
 
@@ -176,7 +176,7 @@ UserPromptSubmit port 有同一 2 s budget、redacted 4,000-unit query、project
 | LAC／HMA | 不在此次 hosted runtime scope | 原設計契約的 model isolation／usage／latency gates；沒有宣稱 local adapter 已完成 |
 | App-server 用戶端範圍 | 0.5.1 只把 `codex-tui`、`codex_vscode`、`Codex Desktop` 的 `vscode` thread 當互動，其他 originator 需 exec opt-in。TUI 經 daemon 由合成 native header probe 與 installed-hook 測試驗證；`codex_vscode` 另有 extension 原始碼與實際 header metadata 佐證 | `Codex Desktop` 只來自 binary 字串與合成 probe，尚未觀察到實際 session；VS Code extension 與桌面 app 的實際 hook delivery 未驗證；originator 由用戶端自報，冒用互動名稱的自動化無法區分。詳見 [limitations](limitations.md#codex-app-server-client-scope-installer-051) |
 | 新 session 邊界 | 0.5.3：第一次觀察即 boundary，UserPromptSubmit（Codex 記錄 prompt 之前）就是第一次觀察，第一輪由 Stop 記下；legacy marker 由 tripwire 偵測，不論順序都不送暫停期間的文字；Codex 不寫 `control.json`。以 worker 不變式測試（含先前版本會失敗的情境：lock 被占用、沒被觀察到的 marker、沒有 `control.json` 的 root）與 fake endpoint 的 installed-hook 測試驗證 | Hook 依序（先寫 header、後記錄 prompt）來自 Codex 原始碼，沒有在實際 TUI 上觀察 hook delivery。手動刪掉或改動 `.paused-tripwire`／`codex-tripwire.json` 不在保護範圍。詳見 [limitations](limitations.md#codex-new-session-boundary-installer-053) |
-| 發布 | Installer 0.6.1 已於 2026-10-28 發布 | 本機模式的自動保存／回想列為 0.7 候選 |
+| 發布 | Installer 0.6.2 已於 2026-10-28 發布 | 本機模式的自動保存／回想列為 0.7 候選 |
 
 ## 驗證與剩餘限制
 

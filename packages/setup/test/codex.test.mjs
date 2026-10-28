@@ -17,6 +17,9 @@ async function fixture(t, options = {}) {
   const fakeBin = join(workspace.path, 'bin'); mkdirSync(fakeBin);
   const projectTmp = join(workspace.path, 'project-tmp');
   if (options.projectTmp) { mkdirSync(join(projectTmp, '.codex'), {recursive:true}); writeFileSync(join(projectTmp,'.codex','config.toml'), 'model = "project"\n'); }
+  const fallbackWorkspace = createTestWorkspace(t, { prefix: 'cairn-codex-fallback-' });
+  const fallbackParent = join(fallbackWorkspace.path, 'fallback'); mkdirSync(fallbackParent);
+  if (options.blockFallback) { mkdirSync(join(fallbackParent, '.codex')); writeFileSync(join(fallbackParent, '.codex/config.toml'), ''); }
   const callsPath = join(workspace.path, 'calls.jsonl'); writeFileSync(callsPath, '');
   const statePath = join(workspace.path, 'state.json'); writeFileSync(statePath, JSON.stringify({ token: secret, ...options.state, ...(options.projectConfig ? {projectConfig: options.projectConfig, projectCwd: workspace.path} : {}) }));
   if (!options.noCodex) writeFileSync(join(fakeBin, 'codex'),
@@ -37,7 +40,7 @@ async function fixture(t, options = {}) {
     import {main} from ${JSON.stringify(moduleURL)};
     import {appendFileSync,writeFileSync,writeSync} from 'node:fs';
     const answers = ${JSON.stringify(options.answers ?? [secret])};
-    process.exitCode = await main(process.argv.slice(2), { disableLocalMode: true,
+    process.exitCode = await main(process.argv.slice(2), { disableLocalMode: true, inspection: ${JSON.stringify({ fallbackParent, managedPaths: [] })},
       interactive: ${options.interactive ?? true}, nodeVersion: ${JSON.stringify(options.nodeVersion ?? process.versions.node)},
       prompt: async (question, options) => {
         appendFileSync(${JSON.stringify(promptsPath)}, JSON.stringify({question, options}) + '\\n');
@@ -268,8 +271,8 @@ test('Claude-only help does not prepend the Codex client line', async t => {
 });
 
 
-test('a temporary parent with project config fails closed before any CLI or credential collection', async t => {
-  const result = await fixture(t, { projectTmp: true });
+test('L38 exhausted temporary parents fail closed before any CLI or credential collection', async t => {
+  const result = await fixture(t, { projectTmp: true, blockFallback: true });
   assert.equal(result.code, 1); assert.deepEqual(result.prompts, []); assert.deepEqual(result.calls, []);
   assert.match(result.stdout, /Choose a neutral temporary directory/); assert.equal(result.config, null);
 });
@@ -307,4 +310,12 @@ test('Codex reports the existing origin when preserving configuration', async t 
   assert.equal(result.code, 0);
   assert.match(result.stdout, /Cairn endpoint: https:\/\/cairn\.ink \(from existing config\)/);
   assert.doesNotMatch(result.stdout, /[\p{Script=Han}]/u);
+});
+
+
+test('L38 a contaminated primary parent proceeds through the owned fallback', async t => {
+  const result = await fixture(t, { projectTmp: true });
+  assert.equal(result.code, 0, result.stdout);
+  assert.ok(result.config.includes('Authorization = "Bearer ' + secret + '"'));
+  assert.ok(result.calls.some(call => call.cwd.includes('/fallback/cairn-codex-inspect-')));
 });
