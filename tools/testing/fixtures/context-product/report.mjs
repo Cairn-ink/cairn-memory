@@ -28,11 +28,12 @@ export async function createReportSink(path,header) {
 
 // Only the session child opens this harness-owned numeric journal. Parent and
 // child never write concurrently; the lease carries its next sequence number.
-export async function appendSessionRecords({path,sequence}) {
+export async function appendSessionRecords({path,sequence,rehearsal=false}) {
+  const filter=rehearsal?(await import('./rehearsal-checks.mjs')).functionalEvidence:value=>value;
   const journal=await open(path+'.records.jsonl','a',0o600);
   let writing=Promise.resolve();
   return {get sequence(){return sequence;},record(cell,series,record){
-    const line=JSON.stringify({type:'record',sequence:++sequence,cell,series,record})+'\n';
+    const line=JSON.stringify({type:'record',sequence:++sequence,cell,series,record:filter(record)})+'\n';
     return writing=writing.then(async()=>{await journal.writeFile(line);await journal.sync();});
   },async close(){try{await writing;}finally{await journal.close();}}};
 }

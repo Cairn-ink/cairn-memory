@@ -10,8 +10,10 @@ import { summarize } from '../../summarize-context-read-product.mjs';
 import { storage } from '../../measure-context-read-product.mjs';
 import { startWriter } from './controller.mjs';
 import { terminate, coldAttempt, fileChild } from './actors.mjs';
-import { configure, selectReadSet, probeDependencies } from './engine.mjs';
+import { configure, selectReadSet, probeDependencies, attempt } from './engine.mjs';
 import { build } from './series.mjs';
+import { postCatchupHasRef } from './v4-state.mjs';
+import { decide } from './protocol.mjs';
 import { tinySchema } from './tiny-schema.mjs';
 const entry=fileURLToPath(new URL('../../measure-context-read-product.mjs',import.meta.url));
 for(const namespaces of [1,2])test(`tiny DELETE ${namespaces} namespace functional CLI, journal/report, nonpass exit and cleanup`,async t=>{
@@ -41,14 +43,15 @@ test('tiny ordinary independent writer is armed before import, drains native jou
     assert.ok(result.diagnostics.records.some(r=>r.stage==='open'));assert.ok(result.diagnostics.records.some(r=>r.stage==='close'));assert.ok(result.diagnostics.commits>0);
   }finally{await terminate(writer.child);}
 });
-test('runtime probes register unavailable owner-wide and WAL; fresh-process cold machinery works on narrow DELETE',async t=>{
+test('runtime probes accept merged owner-wide and WAL capabilities; fresh-process cold machinery works on narrow DELETE',async t=>{
   const w=createTestWorkspace(t),path=join(w.path,'probe.sqlite'),ns={ownerId:'synthetic-product',scope:'personal',projectId:null};
   await storage('seed',{path,count:2,inventory:[ns]});
   const config={path,...selectReadSet([ns],'probe'),canonical:'DELETE',sidecar:'DELETE',functionalOnly:true,types:['memory'],load:'idle',
     deadlines:{openMs:5000,requestMs:5000},buildCeiling:100,pump:{quantum:{maxItems:1024,maxMs:5000}},method:'findCandidates',input:{readSet:[ns],types:['memory'],intent:'current',query:'needle',limit:12,deadlineMs:5000},responseSchema:tinySchema};
   const wide={...config,...selectReadSet([ns,...['a','b','c'].map(projectId=>({...ns,scope:'project',projectId}))],'wide')};
-  const a=await probeDependencies(wide);assert.deepEqual(a.blocked,['P2c']);
-  const b=await probeDependencies({...config,canonical:'WAL',sidecar:'WAL'});assert.deepEqual(b.blocked,['P2d-WAL']);
+  const a=await probeDependencies(wide);assert.equal(a.blocked,null);assert.equal(a.ready,true);
+  const walPath=join(w.path,'wal.sqlite');await storage('seed',{path:walPath,count:2,inventory:[ns]});await storage('mode',{path:walPath,mode:'WAL'});
+  const b=await probeDependencies({...config,path:walPath,canonical:'WAL',sidecar:'WAL'});assert.equal(b.blocked,null);assert.equal(b.ready,true);
   assert.equal((await probeDependencies(config)).ready,true);
   await build(config);
   const cold=await coldAttempt(config);assert.equal(cold.record.ok,true);assert.equal(cold.record.validated,true);assert.equal(cold.record.processExit.code,0);assert.ok(cold.record.launcherLoop);
@@ -109,4 +112,26 @@ test('history Memory freshness exports a storage-refreshed target at capture bef
     const commits=result.diagnostics.records.filter(r=>r.phase==='write'&&r.commit);
     assert.equal(target.committedAt,commits.at(-1).at);
   }finally{await terminate(writer.child);}
+});
+
+test('a genuinely absent capability remains blocked_dependency with an injected public probe',async()=>{
+  const ns={ownerId:'synthetic-product',scope:'personal',projectId:null};
+  const config={...selectReadSet([ns,...['a','b','c'].map(projectId=>({...ns,scope:'project',projectId}))],'missing'),canonical:'DELETE',sidecar:'DELETE'};
+  const probe=await probeDependencies(config,{configure:async()=>({supervisor:{close:async()=>{},drain:async()=>[]},open:async()=>({getContextReadCapabilities:async()=>({ok:true,value:{readSetMaximum:2}}),close:async()=>{}})})});
+  assert.deepEqual(probe.blocked,['P2c']);assert.equal(probe.ready,false);
+  assert.equal(decide({}, {blocked:probe.blocked}).reason,'blocked_dependency');
+});
+test('post-catch-up accepts a real SQLite personal row returned by a real tiny read',async t=>{
+  const w=createTestWorkspace(t),path=join(w.path,'personal.sqlite'),ns={ownerId:'synthetic-product',scope:'personal',projectId:null};
+  await storage('seed',{path,count:2,inventory:[ns]});
+  const config={path,...selectReadSet([ns],'personal-regression'),canonical:'DELETE',sidecar:'DELETE',functionalOnly:true,types:['memory'],load:'idle',
+    deadlines:{openMs:5000,requestMs:5000},buildCeiling:100,pump:{quantum:{maxItems:128,maxMs:1000}},method:'findCandidates',
+    input:{readSet:[ns],types:['memory'],intent:'current',query:'needle',limit:12,deadlineMs:5000},responseSchema:tinySchema};
+  await build(config);const {result}=await attempt(config);
+  assert.equal(result.ok,true);assert.ok(result.value.items.length);
+  const row=(await storage('inspect',{path})).value.memory.find(r=>r.id===result.value.items[0].ref.memoryId);
+  assert.equal(row.project_id,'');assert.equal(result.value.items[0].ref.namespace.projectId,null);
+  assert.equal(postCatchupHasRef(result,row),true);
+  assert.equal(postCatchupHasRef(result,{...row,owner_id:'another-owner'}),false);
+  assert.equal(postCatchupHasRef(result,{...row,scope:'project',project_id:'another-project'}),false);
 });

@@ -12,6 +12,7 @@ export async function readSegments(paths) {
   return value.segments;
 }
 export function checkedSegments(header,segments) {
+  if(header.mode==='rehearse'||header.qualifying===false)throw Error('rehearsal_cannot_qualify');
   const r=mergeSegments({hash:header.registrationHash,hostId:header.host.id,volumeId:header.volume.id,node:header.node,
     segmentIds:header.segments.map(s=>s.id),cellCount:header.cellCount},segments);
   const keys=new Set(header.inventory.map(c=>c.key));

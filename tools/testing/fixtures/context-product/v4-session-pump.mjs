@@ -21,7 +21,7 @@ export async function prepareSessionPump(config) {
       projections:[{options:c.options,types:config.types}],serviceCredential:c.token});
     // Engine status calls stay observed. Only raw scalars/results are buffered.
     renewals.push(pump.getStatus());
-    pump.completion.then(r=>{if(!stopped)completions.push(r);}).catch(()=>{incomplete=true;});
+    pump.completion.then(r=>{if(!stopped){completions.push(r);if(r.state==='failed')renewFailure??=Object.assign(Error('maintenance_pump_failed'),{code:r.error??'maintenance_pump_failed'});}}).catch(()=>{incomplete=true;});
   };
   return {start(){
     const tick=()=>{try{renew();}catch(e){renewFailure??=e;}};

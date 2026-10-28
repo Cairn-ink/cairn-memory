@@ -1,3 +1,4 @@
+import { rehearsalDecision,rehearsalSession } from './rehearsal-checks.mjs';
 import { isDeepStrictEqual } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
 import { actor } from './actors.mjs';
@@ -18,7 +19,7 @@ export function sessionPopulation(cell,records,targets) {
 }
 // Runs only in the session child. Parent observation never executes these callbacks.
 export async function sessionWork(cells,session,{config,prepareInput,sink,validateProbe},{makeLane=c=>actor('lane',c,{quietWhenIdle:true,stallMs:c.supervision.stallMs}),makeWriter=startWriter,now=Date.now,wait=delay,ready=async()=>{},start=async()=>{},stopped=()=>null}={}) {
-  const prereg=validateSessionRegistration(session,config.cell.schema);if(prereg.decision!=='passed')throw Error('v4_session_registration');
+  const prereg=config.rehearsal===true?{decision:'passed'}:validateSessionRegistration(session,config.cell.schema);if(prereg.decision!=='passed')throw Error('v4_session_registration');
   const lanes=[],records=[],targets=[],availabilityRecords=[],attempted=new Set(),lastProbe=new Map(),pending=[],extraLoops=[];
   let sessionError;
   let observationEndAt;let writer,writerResult,probeCadenceMissed=false,omittedReleases=false;
@@ -48,18 +49,18 @@ export async function sessionWork(cells,session,{config,prepareInput,sink,valida
     p.catch(error=>{sessionError??=error;probeCadenceMissed=true;});
   };
   try {
-    for(let n=0;n<21;n++){if(stopped())throw Error(stopped());const lane=makeLane({protocol:'P2-product-v4',supervision:config.supervision,oracleModule:config.oracleModule});lanes.push(lane);const ready=await lane.wait('ready');if(ready.startupLoop){extraLoops.push(ready.startupLoop);await write('lane-startup',{pid:lane.pid,startupLoop:ready.startupLoop});}}
+    for(let n=0;n<(config.rehearsal===true?3:21);n++){if(stopped())throw Error(stopped());const lane=makeLane({protocol:'P2-product-v4',supervision:config.supervision,oracleModule:config.oracleModule});lanes.push(lane);const ready=await lane.wait('ready');if(ready.startupLoop){extraLoops.push(ready.startupLoop);await write('lane-startup',{pid:lane.pid,startupLoop:ready.startupLoop});}}
     if(stopped())throw Error(stopped());
     writer=await recordedWriter(()=>makeWriter({...config,session},'fresh'),write,'session-writer');
     await ready();await start();
-    const startAt=now()+50,endAt=startAt+180000;observationEndAt=endAt;writer.start(startAt,endAt);await wait(Math.max(0,startAt-now()));
+    const startAt=now()+50,endAt=startAt+(config.rehearsal===true?6000:180000);observationEndAt=endAt;writer.start(startAt,endAt);await wait(Math.max(0,startAt-now()));
     while(now()<endAt&&!sessionError&&!stopped()){
       ingest();const relative=now()-startAt;
       for(const scheduled of session.availability)if(!stopped()&&relative>=scheduled.releaseMs&&!attempted.has(scheduled.id)){
         attempted.add(scheduled.id);
         const cell={...config.cell,kind:'availability',...methodProfile(scheduled.methodLabel),language:scheduled.language,intent:scheduled.intent};
         const prepared=await prepareInput({...config,cell,method:cell.method},cell);
-        await dispatch(lanes[20],scheduled.id,prepared,{kind:'availability',scheduled:true,scheduledId:scheduled.id,releaseMs:scheduled.releaseMs,method:cell.method,methodLabel:cell.methodLabel,language:cell.language,intent:cell.intent});
+        await dispatch(lanes[config.rehearsal===true?2:20],scheduled.id,prepared,{kind:'availability',scheduled:true,scheduledId:scheduled.id,releaseMs:scheduled.releaseMs,method:cell.method,methodLabel:cell.methodLabel,language:cell.language,intent:cell.intent});
       }
       for(const batch of session.batches)for(const [i,intent] of INTENTS.entries()){
         const active=targets.filter(t=>t.batch===batch.ordinal&&t.intent===intent&&t.observedAt===null);
@@ -85,7 +86,7 @@ export async function sessionWork(cells,session,{config,prepareInput,sink,valida
     for(const t of targets){const probes=records.filter(r=>r.kind==='probe'&&r.batch===t.batch&&r.intent===t.intent&&r.startedAt>=t.committedAt).sort((a,b)=>a.startedAt-b.startedAt);let last=t.committedAt;
       for(const p of probes){if(t.observedAt!==null&&last>=t.observedAt)break;if(p.startedAt-last>1000)probeCadenceMissed=true;last=p.startedAt;}if((t.observedAt??endAt)-last>1000)probeCadenceMissed=true;}
     const evidence={startAt,durationMs:180000,writer:writerResult,writerEndAt:writerResult.writerEndAt,scheduleHash:digest(session),availability:availabilityRecords,targets,probeCadenceMissed,omittedReleases:omittedReleases||attempted.size!==session.availability.length};
-    const validation=validateSessionEvidence(session,evidence);await write('session-validation',{...validation,scheduleHash:evidence.scheduleHash,startAt,endAt});
+    const validation=config.rehearsal===true?rehearsalSession(session,{records,targets,availabilityRecords,writerResult,omittedReleases:evidence.omittedReleases}):validateSessionEvidence(session,evidence);await write('session-validation',{...validation,scheduleHash:evidence.scheduleHash,startAt,endAt});
     return {records,targets,availabilityRecords,writerResult,extraLoops,validation};
   }finally{
     try{
@@ -97,6 +98,7 @@ export async function sessionWork(cells,session,{config,prepareInput,sink,valida
   }
 }
 export function sessionDecision(cells,session,config,{records,targets,availabilityRecords,writerResult,extraLoops,validation},parentLoop,drain) {
+  if(config.rehearsal===true)return new Map(cells.map(c=>[c.key,validation]));
   extraLoops=[...extraLoops,parentLoop];
   const maintenance=[...(config.maintainerDiagnostics??[]),...drain.map(r=>r.diagnostics).filter(d=>d.protocol==='context-native-v1')];
   return new Map(cells.map(cell=>{

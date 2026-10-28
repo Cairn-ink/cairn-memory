@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const output=line=>new Promise((resolve,reject)=>process.stdout.write(line+'\n',error=>error?reject(error):resolve()));
 export async function summarize(path,write=output) {
-  const tally={};let cells=0,final=null,blockCount=0;
+  const tally={},adapterReadCutoffs=new Map();let cells=0,final=null,blockCount=0;
   await write('cell series source startedAt finishedAt gapMs overlappingGC major minor voluntary involuntary cpuUs runqueueNs swap');
   async function scan(source) {
     for await(const line of createInterface({input:createReadStream(source),crlfDelay:Infinity})) {
@@ -13,6 +13,10 @@ export async function summarize(path,write=output) {
       if(r.type==='cell') {
         cells++;const d=r.decision.decision;tally[d]=(tally[d]??0)+1;
         if(r.summary?.reader)await write(JSON.stringify({type:'reader-statistics',cell:r.cell.id,populations:r.summary.reader}));
+      }
+      if(r.type==='record'&&Object.hasOwn(r.record??{},'readExceededAdapterDefault')){
+        const key=JSON.stringify([r.cell,r.record.method]),row=adapterReadCutoffs.get(key)??{cell:r.cell,method:r.record.method,reads:0,exceeded1000Ms:0,noRead:0,gate:false};
+        if(r.record.readExceededAdapterDefault===null)row.noRead++;else{row.reads++;row.exceeded1000Ms+=Number(r.record.readExceededAdapterDefault);}adapterReadCutoffs.set(key,row);
       }
       if(r.type==='record')for(const name of ['hostLoop','launcherLoop','startupLoop']) {
         const loop=r.record?.[name];
@@ -37,7 +41,7 @@ export async function summarize(path,write=output) {
     const base=path.endsWith('.partial')?path.slice(0,-8):path;
     if(await stat(base+'.records.jsonl').then(()=>true,e=>{if(e.code==='ENOENT')return false;throw e;}))await scan(base+'.records.jsonl');
   }
-  const result={cells,tally,blockCount,status:final??'interrupted'};
+  const result={cells,tally,blockCount,status:final??'interrupted',adapterReadCutoffs:[...adapterReadCutoffs.values()]};
   await write(JSON.stringify(result));return result;
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))await summarize(process.argv[2]);

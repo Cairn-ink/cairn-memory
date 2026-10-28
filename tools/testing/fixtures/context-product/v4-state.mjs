@@ -1,3 +1,4 @@
+import { rehearsalDecision,writerWorks } from './rehearsal-checks.mjs';
 import { isDeepStrictEqual } from 'node:util';
 import threads from 'node:worker_threads';
 import { syncBuiltinESMExports } from 'node:module';
@@ -35,7 +36,7 @@ function injectionWorker({gate,opening,crash}) {
 }
 export function postCatchupHasRef(result,row) {
   if(!row)return false;const items=result?.value?.items??result?.value?.diagnostics?.items??[];
-  const namespace={ownerId:row.owner_id,scope:row.scope,projectId:row.project_id};
+  const namespace={ownerId:row.owner_id,scope:row.scope,projectId:row.scope==='personal'?null:row.project_id};
   return items.some(i=>i.ref?.type==='memory'&&i.ref.memoryId===row.id&&i.ref.revision===row.revision&&isDeepStrictEqual(i.ref.namespace,namespace));
 }
 // Observe the existing supervisor ownership seam, including every safety-latch
@@ -75,10 +76,10 @@ export async function stateCell(cell,{prepare,prepareInput,build,sink,input},{co
     if(cell.injection!=='absent')await build(config);
     const canonicalBefore=cell.injection==='absent'?fileChild('hash',config.path).value[0].hash:null;
     config=await prepareInput(config,{...subcell,injectionProbe:config.injectionProbe});
-    const deadlineMs=input.stateDeadlines[path];
+    const deadlineMs=path==='status'?config.deadlines.readMs:input.stateDeadlines[path];
     config={...config,deadlines:{...config.deadlines,openMs:deadlineMs,requestMs:config.deadlines.requestMs},input:{...config.input,deadlineMs}};
     const gate=new SharedArrayBuffer(48),native=nativeFactory({gate,opening:path==='opening'&&['abort','crash'].includes(cell.injection),crash:cell.injection==='crash'});
-    const abort=new AbortController();let c,h,result,code=null,cleanupId,settledAt,writer,writerResult,lock,lockResult,record,gc,sampler,loop,cleanupLoop,loopFinished=false,cleanupFinished=false,quarantine;
+    const abort=new AbortController();let readStartedAt=null;let c,h,result,code=null,cleanupId,settledAt,writer,writerResult,lock,lockResult,record,gc,sampler,loop,cleanupLoop,loopFinished=false,cleanupFinished=false,quarantine;
     const loops=[];let offset;
     try {
       c=await setup(config);gc=makeGc();sampler=await makeSampler([process.pid]);loop=makeLoop();offset=timestamp()-Number(process.hrtime.bigint())/1e6;
@@ -90,7 +91,7 @@ export async function stateCell(cell,{prepare,prepareInput,build,sink,input},{co
       else {h=await opening;
         if(cell.injection==='exhaustion'){lock=makeLock(config);await lock.wait('ready');}
         if(['abort','crash'].includes(cell.injection))native.arm();
-        pending=h[config.method](config.input,c.token,{signal:abort.signal});
+        readStartedAt=timestamp();pending=h[config.method](config.input,c.token,{signal:abort.signal});
       }
       // Observe rejection immediately, even while waiting for native entry.
       let settled=false;
@@ -127,7 +128,7 @@ export async function stateCell(cell,{prepare,prepareInput,build,sink,input},{co
         (await Promise.all(['','-wal','-shm','-journal'].map(suffix=>stat(config.path+'.context-read-product-v1.1.sqlite'+suffix).then(()=>false,e=>{if(e.code==='ENOENT')return true;throw e;})))).every(Boolean);
       const nativeFailures=diagnostics.flatMap(r=>r.diagnostics.records??[]).filter(r=>[5,6].includes(r.sqlite?.code));
       const catchupExpected=cell.injection!=='post-catch-up'||path==='status'||postCatchupHasRef(result,config.postCatchupIdentity);
-      record={id:probe.id,path,trigger:probe.trigger??null,resetId,code,noLateData:!result?.ok||code===null,
+      record={method:config.method,...(config.readCutoffReport?{readExceededAdapterDefault:readStartedAt===null?null:settledAt-readStartedAt>config.readCutoffReport.thresholdMs}:{}),id:probe.id,path,trigger:probe.trigger??null,resetId,code,noLateData:!result?.ok||code===null,
         expected:checked.bounds&&checked.validated&&catchupExpected&&(result?.ok===true?(config.oracle?await config.oracle(result,{...config,code}):true):code!==null),
         loop:loopRecord,cutoffAt,settledAt,nativeEnteredAt:nativeEnteredAt??(cell.injection==='exhaustion'&&nativeFailures.length?settledAt:null),abortObservedAt,nativePendingAtSettlement:pendingAtSettlement,
         writerCommitWhileCleanupPending,writerDeadlineOverrun,supervisedUntilDisposal:cell.injection==='crash'?quarantineEvidence?.heldUntilDisposal===true:cell.injection!=='abort'||supervised&&(path!=='opening'||status?.state==='pending'),
@@ -157,5 +158,6 @@ export async function stateCell(cell,{prepare,prepareInput,build,sink,input},{co
       if(!record)await sink.record(cell.id,'subprobe-incomplete',{id:probe.id,path,resetId});
     }
   }
+  if(input.rehearsal===true){const errors=[];for(const r of records){const code=cell.injection==='absent'?(['candidates','assembly'].includes(r.path)?'index_unavailable':null):cell.injection==='exhaustion'?'storage_busy':cell.injection==='abort'?(r.trigger==='abort'?'read_cancelled':'read_timeout'):cell.injection==='crash'?'reader_failed':null;if(r.code!==code||!r.expected||!r.nativeDisposed||!r.ownershipDrained||!r.actualExitConfirmed)errors.push('state:'+r.id);if(cell.injection==='absent'&&!r.sidecarUnchanged)errors.push('absent_side_effect');if(cell.injection==='post-catch-up'&&r.path==='status'&&r.state!=='ready')errors.push('catchup_state');if(cell.injection==='abort'&&(!r.nativePendingAtSettlement||!r.writerCommitWhileCleanupPending||!writerWorks(r.writer)||!r.supervisedUntilDisposal))errors.push('abort_cleanup');if(cell.injection==='crash'&&!r.supervisedUntilDisposal)errors.push('crash_cleanup');}return {...rehearsalDecision(errors),subprobes:records.length};}
   return {...validateSubprobes(cell,records),subprobes:records.length};
 }

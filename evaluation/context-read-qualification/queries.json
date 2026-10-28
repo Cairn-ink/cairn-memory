@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "queries": [
+    {
+      "id": "zh",
+      "language": "zh",
+      "query": "海港",
+      "terms": [
+        "海港"
+      ]
+    },
+    {
+      "id": "ja",
+      "language": "ja",
+      "query": "桜庭",
+      "terms": [
+        "桜庭"
+      ]
+    },
+    {
+      "id": "mixed",
+      "language": "mixed",
+      "query": "cobaltledger 檢索",
+      "terms": [
+        "cobaltledger",
+        "檢索"
+      ]
+    },
+    {
+      "id": "single-han",
+      "language": "zh",
+      "query": "中",
+      "terms": [
+        "中"
+      ],
+      "knownMiss": true
+    },
+    {
+      "id": "empty",
+      "language": "mixed",
+      "query": "noeligiblequartzneedle",
+      "terms": [
+        "noeligiblequartzneedle"
+      ],
+      "empty": true
+    }
+  ]
+}

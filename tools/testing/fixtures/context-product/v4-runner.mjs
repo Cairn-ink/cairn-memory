@@ -14,6 +14,7 @@ import { stateCell } from './v4-state.mjs';
 import { readSegments,checkedSegments } from './v4-checkpoints.mjs';
 import { sharedSession } from './v4-session.mjs';
 export function validateV4Registration(input,profile,plan=buildV4Plan(profile)) {
+  if(input.rehearsal!==undefined)throw Error('rehearsal_cannot_qualify');
   if(!DEFINITIONS[profile])throw Error('v4_profile_required');
   if(input.protocolDefinition&&!isDeepStrictEqual(input.protocolDefinition,DEFINITIONS[profile]))throw Error('protocol_revision_required');
   for(const [name,value] of Object.entries({host:input.host,volume:input.volume}))if(!value||typeof value.id!=='string'||!value.id)throw Error('v4_'+name+'_identity');
@@ -64,7 +65,7 @@ export async function runV4(input,{profile,segmentId,reportPath,registrationPath
   const header=immutable({...legacy,protocol:{...PROTOCOL,version:V4.protocol,revision:1},platformProfile:V4.profiles[profile],protocolDefinition:DEFINITIONS[profile],
     estimate:estimateV4(profile,plan),inventory:plan,cellCount:plan.length,expandedInventory:undefined,expandedCellCount:undefined,
     minimumFixedWindowMs:estimateV4(profile).fixedWindows*30000,registrationHash,segmentId,segments:input.segments,
-    host:input.host,volume:input.volume,reservation:input.reservation,observationBudgetMs:input.observationBudgetMs,supervision:input.supervision,
+    productInputs:input.productInputs,readCutoffReport:input.readCutoffReport,host:input.host,volume:input.volume,reservation:input.reservation,observationBudgetMs:input.observationBudgetMs,supervision:input.supervision,
     sessionSchedules:input.sessions,claimsTable:claims.claimsTable,coverageTable:claims.coverageTable,unclaimed:claims.unclaimed});
   const previous=resume.length?checkedSegments(header,await readSegments(resume)):{cells:[]};
   const adapter=await import(input.adapterModule),tally={},completed=new Set(),decisions=[];

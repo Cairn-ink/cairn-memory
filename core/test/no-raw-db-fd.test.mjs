@@ -137,6 +137,7 @@ function audit(base, paths) {
 }
 function evaluationPaths() {
   return [...files(join(root, 'evaluation/context-read-p2e')),
+    ...files(join(root, 'evaluation/context-read-qualification')),
     ...readdirSync(join(root, 'tools/testing')).filter(name => /^p2e-.*\.mjs$/.test(name) && !name.endsWith('.test.mjs')).map(name => join(root, 'tools/testing', name))];
 }
 test('runtime raw filesystem access has an exact, justified allowlist', () => {

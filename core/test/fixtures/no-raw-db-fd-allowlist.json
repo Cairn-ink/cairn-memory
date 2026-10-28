@@ -1513,5 +1513,65 @@
     "path": "tools/testing/p2e-seal.mjs",
     "source": "writeFileSync(new URL('evaluation/context-read-p2e/registration.json', root), json(registration));",
     "reason": "Offline authoring reads source and fixture bytes and writes registration/inventory JSON; no canonical database file access."
+  },
+  {
+    "path": "evaluation/context-read-qualification/generate.mjs",
+    "source": "import { mkdirSync,existsSync,readFileSync } from 'node:fs'",
+    "reason": "Controller has no SQLite connections; manifest reads and existence/directory metadata only. Database bytes are hashed in the existing SQLite-free IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/generate.mjs",
+    "source": "const manifest=JSON.parse(readFileSync(new URL('./manifest.json',import.meta.url),'utf8'));",
+    "reason": "Controller has no SQLite connections; manifest reads and existence/directory metadata only. Database bytes are hashed in the existing SQLite-free IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "import { readFileSync,writeFileSync,realpathSync } from 'node:fs'",
+    "reason": "Preparation-only controller without SQLite: reads operator/template/writer JSON, resolves owned volume metadata, and exclusively writes the frozen registration JSON."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "let input=JSON.parse(readFileSync(new URL('./registration.engine.template.json',import.meta.url),'utf8'));",
+    "reason": "Preparation-only controller without SQLite: reads operator/template/writer JSON, resolves owned volume metadata, and exclusively writes the frozen registration JSON."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "input.writerProfile=writerProfile(JSON.parse(readFileSync(input.writerProfileFile,'utf8')));",
+    "reason": "Preparation-only controller without SQLite: reads operator/template/writer JSON, resolves owned volume metadata, and exclusively writes the frozen registration JSON."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "const input=validateFilled(JSON.parse(readFileSync(get('--validate'),'utf8')));",
+    "reason": "Preparation-only controller without SQLite: reads operator/template/writer JSON, resolves owned volume metadata, and exclusively writes the frozen registration JSON."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "const input=await fillRegistration(JSON.parse(readFileSync(get('--host'),'utf8')),args.includes('--writer-profile')?get('--writer-profile'):undefined);",
+    "reason": "Preparation-only controller without SQLite: reads operator/template/writer JSON, resolves owned volume metadata, and exclusively writes the frozen registration JSON."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "writeFileSync(get('--out'),JSON.stringify(input,null,2)+'\\n',{flag:'wx',mode:0o400});",
+    "reason": "Preparation-only controller without SQLite: reads operator/template/writer JSON, resolves owned volume metadata, and exclusively writes the frozen registration JSON."
+  },
+  {
+    "path": "evaluation/context-read-qualification/counter.mjs",
+    "source": "const require=createRequire(configuration.dependencyRoot?pathToFileURL(resolve(configuration.dependencyRoot,'package.json')):new URL('../../adapters/openai/package.json',import.meta.url));",
+    "reason": "Loads pinned offline tokenizer code/WASM and package version metadata only; never opens database bytes."
+  },
+  {
+    "path": "evaluation/context-read-qualification/counter.mjs",
+    "source": "try {const entry=require.resolve(name);installed=require(resolve(dirname(entry),name==='js-tiktoken'?'../package.json':'package.json')).version;}",
+    "reason": "Loads pinned offline tokenizer code/WASM and package version metadata only; never opens database bytes."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "const frozen=JSON.parse(readFileSync(new URL('./registration.engine.template.json',import.meta.url),'utf8'));",
+    "reason": "Preparation-only controller with no SQLite connections; reads the frozen registration JSON to reject product-setting overrides."
+  },
+  {
+    "path": "tools/testing/measure-context-read-product.mjs",
+    "source": "if(definition.protocol==='P2-product-v4'){if(!isDeepStrictEqual(definition,DEFINITIONS[definition.platformProfile??profile]))throw Error('protocol_revision_required');const registered=JSON.parse(await readFile(registrationPath,'utf8'));validateV4Registration(registered,definition.platformProfile??profile);const value=segmentId?estimateV4Segment(definition.platformProfile??profile,registered,segmentId):estimateV4(definition.platformProfile??profile);console.log(JSON.stringify(value));return value;}",
+    "reason": "Reads registration JSON only for a non-collecting segment estimate; no database bytes or open SQLite connection."
   }
 ]

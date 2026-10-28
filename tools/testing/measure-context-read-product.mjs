@@ -9,8 +9,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as delay } from 'node:timers/promises';
-import { DEFINITIONS, buildV4Plan, estimateV4 } from './fixtures/context-product/v4-plan.mjs';
-import { runV4 } from './fixtures/context-product/v4-runner.mjs';
+import { DEFINITIONS, buildV4Plan, estimateV4, estimateV4Segment } from './fixtures/context-product/v4-plan.mjs';
+import { rehearseV4 } from './fixtures/context-product/v4-rehearsal.mjs';
+import { runV4,validateV4Registration } from './fixtures/context-product/v4-runner.mjs';
 import { readSegments,checkedSegments } from './fixtures/context-product/v4-checkpoints.mjs';
 import { createTestWorkspace } from './workspace.mjs';
 import { PROTOCOL, buildPlan, expandPlan, aggregate, decide, availability, freshness, population, estimatePlan, V3_DEFINITION, readerLoops, maintainerCoverage, validateDefinition } from './fixtures/context-product/protocol.mjs';
@@ -39,6 +40,7 @@ function git(...args) {
   const r=spawnSync('git',args,{encoding:'utf8'});if(r.status!==0)throw Error('git_failed');return r.stdout.trim();
 }
 export function validateRegistration(input) {
+  if(input.rehearsal!==undefined)throw Error('rehearsal_cannot_qualify');
   if(input.protocolDefinition?.version===V3_DEFINITION.version&&!isDeepStrictEqual(input.protocolDefinition,V3_DEFINITION))throw Error('protocol_revision_required');
   validateDefinition(input.protocolDefinition??V3_DEFINITION);
   const positive=k=>Number.isSafeInteger(input[k])&&input[k]>0;
@@ -98,7 +100,7 @@ export async function prepareCell(input,cell,workspace,adapter,suffix='main') {
   if(cell.scope==='overflow')requireOverflow(selection);
   if(cell.scope==='launch'&&selection.readSet.length!==4)throw Error('launch_requires_four_namespaces');
   const config={path,...selection,types:cell.schema===18?['memory']:['memory','card'],canonical:cell.canonical,sidecar:cell.sidecar,
-    deadlines:input.deadlines,pump:{...input.pump,id:`product-${cell.id}-${suffix}`},buildCeiling:input.buildCeiling,
+    readCutoffReport:input.readCutoffReport,deadlines:input.deadlines,pump:{...input.pump,id:`product-${cell.id}-${suffix}`},buildCeiling:input.buildCeiling,
     counterModule:input.counterModule,counterId:input.counterId,counterConfiguration:input.counterConfiguration,production:process.version===input.productionNode&&input.platformRole==='production-linux-ext4'&&platform()==='linux'&&!/microsoft/i.test(release())&&Number((await statfs(workspace.path)).type)===0xef53,
     seriesCeilingMs:input.seriesCeilingMs,load:cell.load??'idle',writerProfile:input.writerProfile,
     namespace:cell.load?.endsWith('other')?fixture.otherOwnerNamespace:selection.readSet[0],
@@ -361,15 +363,16 @@ export async function functionalOnly(reportPath,namespaces=1) {
   console.log(status);return {status,functionalPassed:status==='inconclusive',record};
 }
 export async function main(args=process.argv.slice(2)) {
-  let reportPath=resolve('context-read-product-report.jsonl'),registrationPath,profilePath,smoke=false,functional=false,namespaces=1,plan=false,estimate=false,profile='engine',profileExplicit=false,protocol='v4',segmentId;const resume=[],merge=[];
+  let reportPath=resolve('context-read-product-report.jsonl'),registrationPath,profilePath,smoke=false,functional=false,rehearse=false,namespaces=1,plan=false,estimate=false,profile='engine',profileExplicit=false,protocol='v4',segmentId;const resume=[],merge=[];
   for(let i=0;i<args.length;i++) {
-    const a=args[i];if(a==='--profile'){profile=args[++i];profileExplicit=true;}else if(a==='--protocol')protocol=args[++i];else if(a==='--segment')segmentId=args[++i];else if(a==='--resume')resume.push(resolve(args[++i]));else if(a==='--merge')merge.push(resolve(args[++i]));else if(a==='--estimate')estimate=true;else if(a==='--smoke')smoke=true;else if(a==='--functional-only')functional=true;else if(a==='--plan')plan=true;
+    const a=args[i];if(a==='--profile'){profile=args[++i];profileExplicit=true;}else if(a==='--protocol')protocol=args[++i];else if(a==='--segment')segmentId=args[++i];else if(a==='--resume')resume.push(resolve(args[++i]));else if(a==='--merge')merge.push(resolve(args[++i]));else if(a==='--estimate')estimate=true;else if(a==='--smoke')smoke=true;else if(a==='--rehearse')rehearse=true;else if(a==='--functional-only')functional=true;else if(a==='--plan')plan=true;
     else if(a==='--report')reportPath=resolve(args[++i]);else if(a==='--registration')registrationPath=resolve(args[++i]);
     else if(a==='--writer-profile')profilePath=resolve(args[++i]);else if(a==='--namespaces')namespaces=Number(args[++i]);else throw Error('usage');
   }
   if(![1,2].includes(namespaces)||!reportPath.endsWith('.jsonl'))throw Error('invalid_output_or_namespace_count');
   if(!['engine','production'].includes(profile)||!['v3','v4'].includes(protocol))throw Error('invalid_profile_or_protocol');
   let result;
+  if(rehearse&&(merge.length||resume.length||smoke||functional||estimate||plan||protocol!=='v4'||profile!=='engine'))throw Error('rehearsal_mode_conflict');
   if(merge.length){
     const segments=await readSegments(merge),header=segments[0].header,checked=checkedSegments(header,segments),sink=await createReportSink(reportPath,{...header,mergedSegments:segments.map(s=>s.id)});
     for(const c of checked.cells)await sink.cell(c.cell,c.record,c.summary);await sink.finish(checked.decision,{complete:checked.complete,mergedCells:checked.cells.length});
@@ -378,7 +381,7 @@ export async function main(args=process.argv.slice(2)) {
   if(estimate){
     if(protocol==='v4'&&!registrationPath){const value=estimateV4(profile);console.log(JSON.stringify(value));return value;}
     const definition=registrationPath?JSON.parse(await readFile(registrationPath,'utf8')).protocolDefinition??(protocol==='v4'?DEFINITIONS[profile]:V3_DEFINITION):V3_DEFINITION;
-    if(definition.protocol==='P2-product-v4'){if(!isDeepStrictEqual(definition,DEFINITIONS[definition.platformProfile??profile]))throw Error('protocol_revision_required');const value=estimateV4(definition.platformProfile??profile);console.log(JSON.stringify(value));return value;}
+    if(definition.protocol==='P2-product-v4'){if(!isDeepStrictEqual(definition,DEFINITIONS[definition.platformProfile??profile]))throw Error('protocol_revision_required');const registered=JSON.parse(await readFile(registrationPath,'utf8'));validateV4Registration(registered,definition.platformProfile??profile);const value=segmentId?estimateV4Segment(definition.platformProfile??profile,registered,segmentId):estimateV4(definition.platformProfile??profile);console.log(JSON.stringify(value));return value;}
     const value=estimatePlan(buildPlan(definition),definition);console.log(JSON.stringify(value));return value;
   }
   if(plan){const inventory=protocol==='v4'?buildV4Plan(profile):buildPlan();console.log(JSON.stringify({protocol:protocol==='v4'?{...PROTOCOL,version:'P2-product-v4',revision:1,platformProfile:profile}:PROTOCOL,cellCount:inventory.length,inventory}));result={status:'inconclusive'};console.log(result.status);}
@@ -388,7 +391,8 @@ export async function main(args=process.argv.slice(2)) {
     if(!registrationPath.endsWith('.json')||!profilePath.endsWith('.json'))throw Error('json_inputs_required');
     const input=JSON.parse(await readFile(registrationPath,'utf8'));input.writerProfile=writerProfile(JSON.parse(await readFile(profilePath,'utf8')));
     input.inputFiles=[...(input.inputFiles??[]),profilePath];
-    if(protocol==='v4'&&!smoke){
+    if(rehearse){result=await rehearseV4(input,{reportPath});}
+    else if(protocol==='v4'&&!smoke){
       if(!profileExplicit)throw Error('v4_explicit_profile_required');
       result=await runV4(input,{profile,segmentId,reportPath,registrationPath,resume},{validateRegistration,preregister,prepareCell,prepareInput,backupSeries,probeDependencies,storage,
         idleBaseline:async()=>{const loop=observeLoop();await delay(PROTOCOL.idleBaselineMs);return loop.finish();}});
