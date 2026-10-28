@@ -248,8 +248,7 @@ test('T4 controller crash exports acknowledged BUSY evidence to the numeric repo
 });
 
 test('declarative v3 preserves every original cell and descriptor; a data-only revision changes the plan',async()=>{
-  const original=spawnSync('git',['show','41669767:tools/testing/fixtures/context-product/protocol.mjs'],{encoding:'utf8'});assert.equal(original.status,0);
-  const legacy=await import('data:text/javascript;base64,'+Buffer.from(original.stdout).toString('base64'));
+  const legacy=await import('./fixtures/context-product/legacy-v3-protocol-41669767.mjs');
   const plan=buildPlan(),old=legacy.buildPlan();
   assert.deepEqual(plan.map(c=>Object.fromEntries(Object.keys(old[c.id]).map(k=>[k,c[k]]))),old);
   assert.deepEqual(expandPlan(plan),legacy.expandPlan(old));
