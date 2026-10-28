@@ -12,6 +12,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createHash,createHmac,randomUUID } from 'node:crypto';
 import { copyFileSync,linkSync,unlinkSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { Worker } from 'node:worker_threads';
 import { join } from 'node:path';
 import { fixture,ns,ok } from '../testing/context-read-fixture.mjs';
 import { createExclusiveSqliteFile } from '../sqlite-journal-probe.mjs';
@@ -503,17 +504,49 @@ test('P2e-17/21 staged 26-namespace scope excludes foreign canaries and public p
 });
 
 
-test('P2e-05/14 fatal service Worker exit pins unknown resources and close reports failure without waiting for another exit',async t=>{
-  const s=await setup(t,{expectedCleanupFailure:true});await prepared(s);s.view[7]=12;
+for(const ordering of ['before','after'])test(`P2e-05/14 fatal service Worker exit: status admitted ${ordering} parent observes exit`,async t=>{
+  // Capture only the coordinator opened by setup, then leave other Workers alone.
+  let worker;const postMessage=Worker.prototype.postMessage;
+  const capture=t.mock.method(Worker.prototype,'postMessage',function(message,...args){
+    if(message.kind==='identity-ack')worker=this;
+    return Reflect.apply(postMessage,this,[message,...args]);
+  });
+  const s=await setup(t,{expectedCleanupFailure:true});capture.mock.restore();assert.ok(worker);
+  await prepared(s);
+  // A reader's MessagePort close and the parent's Worker exit are independent.
+  // Hold the real exit event until the degraded read and selected status entry.
+  let exitArgs,exitListeners,notifyExit,delivered=false;
+  const exited=new Promise(resolve=>{notifyExit=resolve;}),emit=worker.emit;
+  const held=t.mock.method(worker,'emit',function(event,...args){
+    if(event==='exit'){exitArgs=args;exitListeners=this.rawListeners(event);notifyExit();return true;}
+    return Reflect.apply(emit,this,[event,...args]);
+  });
+  // Node removes Worker listeners after emitting exit. Preserve the original
+  // listeners (including once wrappers) and deliver them exactly once.
+  const observeExit=()=>{held.mock.restore();delivered=true;for(const listener of exitListeners)Reflect.apply(listener,worker,exitArgs);};
+  const sends=t.mock.method(worker,'postMessage');
   const {owner}=supervisorOwner(s.supervisor),record=[...owner.records].find(r=>r.domain==='context-read-product-p2e-v1/coordinator'&&r.expiresAt===null);
-  const value=ok((await candidate(s)).result);assert.equal(value.trace.effective,'lexical');assert.equal(value.trace.semantic.degradedReason,'ledger_unavailable');
-  assert.deepEqual(await s.coordinator.getOwnerSemanticStatus({ownerId:ns.ownerId},s.token),bare('store_closed'));
-  await assert.rejects(s.coordinator.close(),{code:'reader_failed'});const status=s.supervisor.getCleanupStatus(record.id);assert.equal(status.state,'failed');assert.equal(status.workerStopped,true);assert.equal(status.providersSettled,false);
-  // Keep this intentionally quarantined inode allocated until the test process
-  // finishes. Reusing it for a later independent fixture must not impersonate
-  // the failed resource; do not clear or recover the production quarantine.
-  const retained=createTestWorkspace(null,{prefix:'semantic-quarantine-'});
-  linkSync(s.ledgerPath,join(retained.path,'ledger.sqlite'));retainedQuarantines.push(retained);
+  try {
+    s.view[7]=12;
+    const value=ok((await candidate(s)).result);assert.equal(value.trace.effective,'lexical');assert.equal(value.trace.semantic.degradedReason,'ledger_unavailable');
+    await exited;assert.equal(exitArgs[0],1);
+    assert.equal(s.supervisor.getCleanupStatus(record.id).workerStopped,false);
+    assert.equal(semanticHandle(s.coordinator).closed(),false);
+    if(ordering==='after')observeExit();
+    const pending=s.coordinator.getOwnerSemanticStatus({ownerId:ns.ownerId},s.token);
+    assert.equal(sends.mock.calls.filter(c=>c.arguments[0].kind==='call').length,ordering==='before'?1:0);
+    if(ordering==='before')observeExit();
+    assert.deepEqual(await pending,bare(ordering==='before'?'reader_failed':'store_closed'));
+    assert.deepEqual(await s.coordinator.getOwnerSemanticStatus({ownerId:ns.ownerId},s.token),bare('store_closed'));
+    await assert.rejects(s.coordinator.close(),{code:'reader_failed'});const status=s.supervisor.getCleanupStatus(record.id);assert.equal(status.state,'failed');assert.equal(status.workerStopped,true);assert.equal(status.providersSettled,false);
+  } finally {
+    if(exitArgs&&!delivered)observeExit();
+    else held.mock.restore();
+    // Keep this intentionally quarantined inode allocated until the test process
+    // finishes, including after a failed assertion. Never recover the quarantine.
+    const retained=createTestWorkspace(null,{prefix:'semantic-quarantine-'});
+    linkSync(s.ledgerPath,join(retained.path,'ledger.sqlite'));retainedQuarantines.push(retained);
+  }
 });
 
 
