@@ -71,9 +71,12 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       if(p.vectorPublication) {
         try{semantic.gate.check(p.semanticSnapshot.policy);}catch{fail(code);}
         const vector=vectors.observe(p,current.publication,p.semanticSnapshot);
-        if(vector.status!=='complete'||vector.record.publicationId!==p.vectorPublication)fail(code);
+        if(vector.status!=='complete'||vector.record.publicationId!==p.vectorPublication) {
+          if(!p.freshSemantic)fail(code);
+          return work(false);
+        }
       }
-      return work();
+      return work(true);
     });
   }
   function page(r,position,limit) {
@@ -101,7 +104,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     return {observed,items:fused.rows.map((row,i)=>({ref:row.ref,rank:i+1,fusionScore:row.fusionScore,channels:row.channels})),
       channels:channels(true),coverage:covered,trace:detail,...(prepareOnly?{lexical:ranked}:{})};
   }
-  function assemble(p,access,c) {
+  function assemble(p,access,c,prepareOnly=false) {
     if (!counter) fail('token_count_unavailable');
     const prepared=read(()=>{
       const generations=canonicalFence(p.readSet,p.types),items=[]; let unavailable=0;
@@ -130,7 +133,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     assembled.diagnostics.candidates={count:c.items.length,channels:c.channels,coverage:c.coverage,trace:c.trace};
     const result=success(assembled);
     if(Buffer.byteLength(JSON.stringify(result))>65536)fail('context_item_too_large');
-    return final(p,access,c.observed.publication,()=>{
+    const complete=()=>{
       if(delivered.length && !same(canonicalFence(p.readSet,[...new Set(delivered.map(i=>i.type))]),generationsFor(delivered)))fail('snapshot_stale');
       for(const item of delivered){
         let current;
@@ -139,7 +142,8 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         if(bind('snapshot-item',current)!==item.fence)fail('snapshot_stale');
       }
       return result;
-    },'snapshot_stale');
+    };
+    return prepareOnly?{complete,result}:final(p,access,c.observed.publication,complete,'snapshot_stale');
   }
   function run(method,original,credential) {
     if(semantic&&(method==='getContextIndexStatus'||method==='refreshContextIndex'&&original.mode==='embeddings'||['findCandidates','contextRead'].includes(method)&&original.semantic===true&&original.cursor===undefined))return runSemantic(method,original,credential);
@@ -233,7 +237,8 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         detail.channels.semantic={state,causes:state==='ready'?[]:[state]};
         return access.envelope(()=>({ok:false,error:{code:'index_unavailable',retryable:false,details:method==='contextRead'?{candidates:detail}:detail}}));
       }
-      const detail=c.trace;
+      const detail=c.trace,lexicalItems=c.items;
+      p.freshSemantic=true;
       const lifecycleReason=semanticReason(snapshot,true);let reason=lifecycleReason,preflight;
       detail.family='hosted';detail.preset='rrf-k10';detail.embedder=snapshot.identity&&(({id,revision,dimensions,normalization})=>({id,revision,dimensions,normalization}))(snapshot.identity);
       if(!reason||reason==='provider_unavailable'){preflight=vectors.observe(p,c.observed.publication,snapshot,{load:!reason});if(!reason)reason=preflight.reason;}
@@ -253,6 +258,13 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
           diagnostic.queryEmbeddingMs=diagnostic.queryEmbeddingAttempts?performance.now()-started:0;detail.timings.embeddingMs=diagnostic.queryEmbeddingMs;
         }
       }
+      if(p.vectorPublication) {
+        const current=read(()=>{const lexical=storage.observe(p,access.accessGenerations);return vectors.observe(p,lexical.publication,snapshot);});
+        if(current.status!=='complete'||current.record.publicationId!==p.vectorPublication) {
+          reason=current.reason??'validation_invalid';ranked=[];delete p.vectorPublication;
+          diagnostic.coverage=current.status;
+        }
+      }
       diagnostic.degradedReason=reason;detail.semantic=diagnostic;
       const channel=channelFor(reason),causes=[...new Set([lifecycleReason,preflight?.reason,reason].filter(Boolean).map(channelFor))];c.channels.semantic={state:channel,causes};
       if(preflight?.record)for(const t of p.types){const count=preflight.record.counts.byType[t];c.coverage.byType[t].embedded=count.embedded;c.coverage.byType[t].embeddedFraction=count.eligible?count.embedded/count.eligible:1;}
@@ -261,12 +273,30 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       c.items=fused.rows.map((row,i)=>({ref:row.ref,rank:i+1,fusionScore:row.fusionScore,channels:row.channels}));
       detail.effective=fused.mode;c.coverage.depths.semantic=reason===null?24:0;
       c.coverage.omitted={lexical:Math.max(0,lexical.matched-24),semantic:reason===null?Math.max(0,ranked.length-24):null,horizon:Math.max(0,fused.unionSize-24)};
-      if(method==='contextRead')return assemble(p,access,c);
+      const lexicalFallback=source=>({...source,items:lexicalItems,
+        trace:{...source.trace,effective:'lexical',semantic:{...diagnostic,degradedReason:'validation_invalid',coverage:'unavailable'}},
+        channels:{...source.channels,semantic:{state:'partial_coverage',causes:['partial_coverage']}},
+        coverage:{...source.coverage,depths:{...source.coverage.depths,semantic:0},omitted:{lexical:Math.max(0,lexical.matched-24),semantic:null,horizon:0}}});
+      if(method==='contextRead') {
+        if(!p.vectorPublication)return assemble(p,access,c);
+        // Prepare both possible deliveries before the final authority sample.
+        // Native publication races may select lexical after counting; neither
+        // a counter callback, another embedding nor another fusion follows it.
+        const hybrid=assemble(p,access,c,true),fallback=assemble(p,access,lexicalFallback(c),true);
+        const hybridTrace=hybrid.result.value.diagnostics.trace,fallbackTrace=fallback.result.value.diagnostics.trace;
+        const calls=hybridTrace.counterCalls+fallbackTrace.counterCalls,assemblyMs=hybridTrace.timings.assemblyMs+fallbackTrace.timings.assemblyMs;
+        for(const trace of [hybridTrace,fallbackTrace]){trace.counterCalls=calls;trace.timings.assemblyMs=assemblyMs;}
+        return final(p,access,c.observed.publication,valid=>valid?hybrid.complete():fallback.complete(),'snapshot_stale');
+      }
       for(const [id,r] of rankings)if(r.expires<=Date.now())rankings.delete(id);while(rankings.size>=128)rankings.delete(rankings.keys().next().value);
       const binding=digest({readSet:p.readSet,types:p.types,intent:p.intent,query:p.query,semantic:p.semantic,access:access.accessGenerations});
       const r={...c,id:randomUUID(),binding,publication:c.observed.publication,expires:Date.now()+300000,vectorPublication:p.vectorPublication,semanticSnapshot:snapshot};rankings.set(r.id,r);
-      const result=page(r,0,p.limit);
-      return final(p,access,r.publication,()=>{for(const candidate of result.value.items)evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);return result;});
+      return final(p,access,r.publication,valid=>{
+        if(!valid){Object.assign(r,lexicalFallback(r));delete r.vectorPublication;}
+        const result=page(r,0,p.limit);
+        for(const candidate of result.value.items)evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);
+        return result;
+      });
     }catch(error){return failure(error.code==='ERR_SQLITE_ERROR'?[5,6].includes(error.errcode&255)?'storage_busy':'storage_error':error.code??'storage_error');}
   }
   async function embeddingRefresh(p,access,cutoff) {

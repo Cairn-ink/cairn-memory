@@ -77,7 +77,7 @@ export function evaluateSemanticGates({queries,strata,seed,safety,extension,acce
     const ndcgDelta=aggregate?mean(['zh-to-en','en-to-zh'].map(id=>{
       const membership=new Set(strata.find(s=>s.id===id)?.queryIds??[]);return mean(positives.filter(q=>membership.has(q.id)).map(q=>q.b.ndcg12-q.a.ndcg12));
     })):mean(positives.map(q=>q.b.ndcg12-q.a.ndcg12));
-    const critical=['zh-to-en','en-to-zh','cross-language','paraphrase'].some(id=>s.id===id||s.id.startsWith(id+':'));
+    const critical=['zh-to-en','en-to-zh','cross-language','paraphrase'].includes(s.id);
     const identifier=s.id==='exact-identifier'||s.id.startsWith('exact-identifier:')||s.id.startsWith('identifier:');
     const noRegression=bootstrap.delta>=-Math.max(bootstrap.uncertainty,.01);
     reports.push({id:s.id,delta:bootstrap.delta,ndcgDelta,bootstrap,pass:noRegression&&(!critical||bootstrap.delta>=.05)&&(!identifier||bootstrap.delta>=0)});

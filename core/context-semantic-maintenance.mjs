@@ -59,7 +59,7 @@ export function semanticMaintenance({c,sqlite,identity,secretState}) {
     targets(c.backfillTargets);
     const cutoff=mono(operation.operationCutoffMonoNs),hasTime=()=>process.hrtime.bigint()+20000000n<cutoff;
     let visited=0,invalid=false;
-    const receipts={...s.receipts};
+    const receipts=Object.assign(Object.create(null),s.receipts);
     let ordinal=s.validationOrdinal??0;
     for(let count=0;count<s.targets.length&&visited<input.budget.maxTargets&&hasTime();count++) {
       const i=ordinal++%s.targets.length;
@@ -78,23 +78,25 @@ export function semanticMaintenance({c,sqlite,identity,secretState}) {
     s.targets.forEach((t,i)=>{const v=resolve(t),key=t.storeId+':'+canonicalJson(t.canonicalIdentity);if(!groups.has(key))groups.set(key,{v,targets:[]});groups.get(key).targets.push({t,i});});
     const next=structuredClone(s);next.firstCoverageComplete=true;next.validationPending=false;
     const prepared=await prepare(next);
-    if(!hasTime()){pending({prepared:prepared.prepared,sealed:prepared.previous});const value={status:'partial',firstCoverage:coverageStatus(s)};final();return {ok:true,value};}
+    const recovery={prepared:prepared.prepared,sealed:prepared.previous,invalidReceipts:[]};
+    // Register before any cutoff, authority sample or native final comparison.
+    pending(recovery);
+    if(!hasTime()){const value={status:'partial',firstCoverage:coverageStatus(s)};final();return {ok:true,value};}
     final();let valid=true;
     for(const [,group] of [...groups].sort(([a],[b])=>Buffer.compare(Buffer.from(a),Buffer.from(b)))) {
       group.v.facade.port.read(()=>{
         group.v.facade.port.db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();
-        for(const {t,i} of group.targets)if(!same(probe(t,s),receipts[i]))valid=false;
+        for(const {t,i} of group.targets)if(!same(probe(t,s),receipts[i])){valid=false;recovery.invalidReceipts.push([i,receipts[i]]);delete s.receipts[i];delete s.hints[i];s.validationPending=false;}
       });
     }
     if(process.hrtime.bigint()>=cutoff)fail('read_timeout');
     if(!valid) {
-      pending({prepared:prepared.prepared,sealed:prepared.previous});
       return {ok:true,value:{status:'partial',firstCoverage:coverageStatus(s)}};
     }
     const sealed=ledger.commit(prepared,(db,current)=>{
       if(!current.policy.semantic||current.policy.purgeEpoch!==s.policy.purgeEpoch||current.targetSetDigest!==s.targetSetDigest)fail('revision_conflict');
     });
-    pending({prepared:prepared.prepared,sealed});
+    recovery.sealed=sealed;
     return {ok:true,value:{status:'complete',firstCoverage:coverageStatus(next)}};
   }
   function catalog(input,metadata) {

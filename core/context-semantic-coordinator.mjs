@@ -25,7 +25,7 @@ export function semanticConfiguration(value,{maintenance=false,requestMaxMs=5000
   }
   const writerKey=Symbol.for('context-read-product-p2e-v1/writer-sequence');
   const writer=(globalThis[writerKey]??0n)+1n;globalThis[writerKey]=writer;
-  return {handle,configuration:{version:SEMANTIC_VERSION,selection:handle.selection,ownerState:handle.ownerState,cancellation:new SharedArrayBuffer(4),writer:String(writer),...(!maintenance?{queryEmbeddingMaxMs:c.queryEmbeddingMaxMs,finalizeReserveMs:c.finalizeReserveMs}:{})}};
+  return {handle,configuration:{version:SEMANTIC_VERSION,selection:handle.selection,providerIdentity:handle.providerIdentity,ownerState:handle.ownerState,cancellation:new SharedArrayBuffer(4),writer:String(writer),...(!maintenance?{queryEmbeddingMaxMs:c.queryEmbeddingMaxMs,finalizeReserveMs:c.finalizeReserveMs}:{})}};
 }
 export async function openContextSemanticCoordinator(original,controls={}) {
   const entered=process.hrtime.bigint(),utc=Date.now();
@@ -49,6 +49,7 @@ export async function openContextSemanticCoordinator(original,controls={}) {
   const ownerState=new SharedArrayBuffer(64),policyRegistry=globalThis[Symbol.for('context-read-product-p2e-v1/identity-policy')]??=new Map();
   const policyKey='openai:text-embedding-3-small:provider-unversioned';
   const policyLedger=JSON.stringify(identity);
+  const physicalPolicies=globalThis[Symbol.for('context-read-product-p2e-v1/physical-policy')]??=new Map();
   const policyConflict=policyRegistry.has(policyKey)&&policyRegistry.get(policyKey)!==policyLedger,newPolicyBinding=!policyRegistry.has(policyKey);
   const data={ledgerPath:c.ledgerPath,ledgerIdentity:identity,provider,refreshCaps,priceTable:prices,backfillTargets:targets,ownerState,
     host:{moduleUrl,configuration},binding,request:first,operation:firstOperation};hostConfiguration(data);
@@ -56,7 +57,7 @@ export async function openContextSemanticCoordinator(original,controls={}) {
   const resources=new SharedArrayBuffer(16),resource=registry.register(owner,{path:c.ledgerPath,domain:resourceDomain,resources});
   if(policyConflict){registry.finish(resource);throw Object.assign(Error('index_unavailable'),{code:'index_unavailable',cleanupId:resource.id});}
   policyRegistry.set(policyKey,policyLedger);
-  const pending=new Map();let worker,exited=false,closed=false,closing,opened=false,readyResolve,readyReject;
+  const pending=new Map();let worker,exited=false,closed=false,closing,opened=false,readyResolve,readyReject,providerIdentity;
   const ready=new Promise((r,j)=>{readyResolve=r;readyReject=j;});
   all.set(key,resource);
   function reject(code,finished=false) {
@@ -95,6 +96,10 @@ export async function openContextSemanticCoordinator(original,controls={}) {
       if(message.kind==='identity') {
         try {
           if(typeof message.identity!=='string'||!/^\d+:\d+$/.test(message.identity)||JSON.stringify(message.operation)!==JSON.stringify(firstOperation))fail('reader_failed');
+          // A logical ID cannot bind a second accounting file and multiply the
+          // process-wide allowance, including after the first service closes.
+          if(physicalPolicies.has(policyKey)&&physicalPolicies.get(policyKey)!==message.identity)fail('index_unavailable');
+          physicalPolicies.set(policyKey,message.identity);
           registry.bind(resource,message.identity);worker.postMessage({kind:'identity-ack',operation:firstOperation});
         }catch(error){closed=true;registry.cleanup(resource);reject(error.code??'reader_failed');worker.terminate().then(()=>registry.finish(resource),()=>registry.finish(resource,false));}
         return;
@@ -103,7 +108,7 @@ export async function openContextSemanticCoordinator(original,controls={}) {
         clearTimeout(timeout);
         if(closed||process.hrtime.bigint()>=mono(firstOperation.operationCutoffMonoNs))return;
         if(!message.result?.ok){closed=true;registry.cleanup(resource);reject(message.result?.error?.code??'reader_failed');worker.terminate().then(()=>registry.finish(resource),()=>registry.finish(resource,false));all.delete(key);return;}
-        opened=true;readyResolve();return;
+        providerIdentity=message.result.value.identity;opened=true;readyResolve();return;
       }
       const p=pending.get(message.id);if(!p)return;
       pending.delete(message.id);clearTimeout(p.timer);p.detach?.();
@@ -139,7 +144,7 @@ export async function openContextSemanticCoordinator(original,controls={}) {
   const api=Object.freeze(Object.fromEntries(['setOwnerSemantic','getOwnerSemanticStatus','validateOwnerSemanticCoverage','purgeOwnerVectors'].map(method=>[method,(...args)=>call(method,...args)]).concat([['close',stop]])));
   let pumpPort,pumpOperation;
   const attachment=metadata=>{if(closed)fail('store_closed');const {port1,port2}=new MessageChannel();worker.postMessage({kind:'attach',port:port1,metadata},[port1]);return port2;};
-  handles.set(api,{closed:()=>closed,ownerId:binding.ownerId,selection:provider,ownerState,configuration:{...identity},targets,
+  handles.set(api,{closed:()=>closed,ownerId:binding.ownerId,selection:provider,ownerState,providerIdentity,configuration:{...identity},targets,
     validatePumpCredential(credential){if(!binding.methods.includes('validateOwnerSemanticCoverage')||credentialDigest(credential)!==binding.credentialDigest)fail('authority_required');},
     pumpCall(method,input,duration=5000){
       if(!pumpPort)pumpPort=semanticClient(attachment({ownerId:binding.ownerId,pump:true}),{ownerState,writer:'0'},()=>pumpOperation);

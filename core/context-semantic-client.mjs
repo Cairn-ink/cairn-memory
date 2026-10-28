@@ -28,5 +28,5 @@ export function semanticClient(port,configuration,operation) {
     });
   }
   const gate=semanticGate(configuration.ownerState,BigInt(configuration.writer));
-  return {configuration,call,gate,close(){port.close();},async snapshot(){try{return await call('snapshot');}catch{return {policy:null,identity:null,unavailable:true};}}};
+  return {configuration,call,gate,close(){port.close();},async snapshot(){try{return await call('snapshot');}catch{return {policy:null,identity:configuration.providerIdentity??null,unavailable:true};}}};
 }

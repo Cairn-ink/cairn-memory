@@ -74,3 +74,13 @@ test('P2e-07 the full 64-target canonical digest does not inherit a whole-IPC no
   assert.throws(()=>boundedData(targets),{code:'invalid_input'});
   assert.equal(targetSetDigest(targets),createHash('sha256').update(encode(targets)).digest('base64url'));
 });
+
+test('Fix1 quality slices +4/+6/+8 pp pass the +6 pp critical aggregates',()=>{
+  const r=registration();
+  for(const q of r.queries)q.b.recall12=({18:.04,23:.06,33:.08})[q.cell.schema];
+  const result=evaluateSemanticGates(r);assert.equal(result.state,'pass');
+  for(const id of ['zh-to-en','en-to-zh','cross-language','paraphrase']) {
+    const aggregate=result.reports.find(row=>row.id===id);assert.ok(Math.abs(aggregate.delta-.06)<1e-15);assert.equal(aggregate.pass,true);
+    const slice=result.reports.find(row=>row.id===`${id}:current:18:1112`);assert.equal(slice.delta,.04);assert.equal(slice.pass,true);
+  }
+});

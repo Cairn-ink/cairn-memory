@@ -337,3 +337,305 @@ against HEAD blob hashes plus an independent `rg` filesystem enumeration:
 - `docs/plans/context-read-p2e-impl.md`
 - `packaging/artifact-files.json`
 - `packaging/test/topic-overview-raw29.test.mjs`
+
+## Fix round 1
+
+Addresses both independent reviews of `7b56a88c`. Defaults, frozen contracts,
+WAL/native wait policy, raw-fd allowlist and lazy import boundaries are retained.
+All providers, prices, faults and clocks are synthetic; new asynchronous races
+use shared-state rendezvous, never elapsed-time assertions. No network, real
+credential, measurement, product enablement or commit is part of this round.
+
+### Findings, fixes and regressions
+
+The test references below are in `core/test/context-read-product-semantic.test.mjs`
+unless the gates file is named explicitly. New titles start with `Fix1`.
+
+1. **Safety 1, physical ledgers:** process-wide provider policy now binds the
+   attested device/inode as well as logical ledger IDs. A second physical ledger
+   refuses before its host/provider factory, including after the first service
+   closes. The two `shared identity refuses a second physical ledger` cases use
+   separately enrolled owners with identical logical IDs and unit request and
+   concurrency limits. This implementation chooses configuration refusal rather
+   than independent allowances in multiple files.
+2. **Spec 1, other owners:** global admission authenticates every contributing
+   owner against that owner's independent anchor outside the ledger transaction.
+   The reservation transaction then compares the complete owner inventory and
+   every authenticated sequence/digest before aggregating exposure. Both
+   `shared identity authenticates another owner's` cases preserve A's anchor
+   while rolling back B's rows inside the same inode or removing B's anchor.
+   Neither can authorize a new send or reservation.
+3. **Safety 2, ID records:** all ledger dictionaries are rebuilt with null
+   prototypes at initialization, JSON decoding and mutation cloning; new window
+   quanta and reset pump bindings also use null prototypes. Authority/revision
+   IDs retain the closed, nonempty, well-formed, NUL-free, 200-unit opaque grammar.
+   The `__proto__ price authority` regression accepts sequence 2, inspects its
+   durable own-property high-water, reopens and refuses sequence 1 without a send.
+   The record audit covered days, reservations, identities, prices, receipts,
+   hints, windows/quanta, pump bindings and catalog; transient operation/client,
+   coordinator, path/view and ranking registries already use Map/Set. Remaining
+   ordinary objects have fixed schema keys (including literal model/type keys),
+   or use the existing own-data whitelist/unsafe-key rejection boundary.
+4. **Safety 4, pre-invocation cleanup:** reservation admission failures now enter
+   the existing settlement path with invocation still false. A durable reserved
+   row becomes released; both abort-controller sets are cleaned and the controller
+   is aborted. Every service mutation registers its exact preparation, so a native
+   error after the may_transmit COMMIT can be reconciled before no-invocation
+   settlement too. The two `pre-invocation` cases inject a mock monotonic expiry
+   after the reserved seal or an error after the may_transmit COMMIT, assert zero
+   invocation, released state, zero reserved items and created/aborted controller
+   counts, then successfully refresh with maxConcurrent 1 on the same service.
+5. **Spec 2 / safety 3, prepared validation:** register reconciliation immediately
+   after prepare, before any final authority sample, cutoff branch or native read.
+   The four `validation ... after prepare` cases rendezvous at that exact
+   preparation, inject revocation, a native read exception, mock cutoff or an
+   error reported after a successful native COMMIT, assert the frozen error, and
+   reconcile through the next authorized status admission. Reconciliation selects
+   the exact previous or committed state from its persisted sequence/digest; an
+   already committed latch remains steady.
+   Validation then completes on the still-open coordinator without another send.
+6. **Spec 3, invalid receipts:** final mismatches remove affected receipts/hints
+   from returned progress and retain exact receipt invalidations in the pending
+   reconciliation. The next authorized admission cancels the unused preparation
+   and persists those invalidations through an anchored mutation before allowing
+   dependent work. `failed final comparison` changes exactly one certificate
+   after receipt collection, then asserts partial 1/2 progress both immediately
+   and durably, an unset latch and a cleared validation barrier. It also injects
+   a post-COMMIT error during receipt reconciliation itself; the following
+   authorized admission recovers the exact invalidation without stranding state.
+7. **Safety 5, vector republication:** re-observe vector publication after the query
+   attempt; invalidated semantic evidence yields the captured valid lexical list
+   and validation_invalid degradation. The final native check can also select
+   lexical delivery if publication races counting. Assembly prepares both delivery
+   alternatives before the final authority sample; final delivery performs only
+   native evidence comparisons, with one query embedding and one fusion. Both
+   preparation branches are included in counter-call and assembly-time telemetry.
+   Three
+   `vector republication` cases cover candidates, assembly during embedding, and
+   assembly during the counter callback. They compare lexical item bytes and
+   retain unchanged lexical certificates under a no-op vector refresh.
+8. **Spec 4, configured capability:** the opening handshake retains verified runtime
+   identity independently of mutable owner accounting. Snapshot failure keeps that
+   identity, marks owner policy unknown and reports ledger_unavailable.
+   `ledger failure retains configured provider` uses the real service/client and
+   public capabilities/status/read methods to assert configured true, enabled null
+   and lexical degradation after a ledger row becomes unavailable.
+9. **Spec 5, quality gates:** the +5-pp condition matches only the four named critical
+   aggregates/directions. All slices retain their no-regression checks, including
+   strict identifier nonregression. The gates-file `quality slices +4/+6/+8 pp`
+   regression gives +6-pp critical aggregates, positive nDCG and no regressions;
+   each +4-pp slice and the complete gate must pass.
+10. **Spec 6 / Revision 2 test:** the fake local runtime now supplies both independent
+    authorities and owned disposal. The strengthened Revision 2 case separately
+    exercises invalid runtime shape/observer wiring and local identity behind a
+    valid hosted policy. Each reaches the post-factory boundary, confirms Worker
+    and native disposal and asserts zero provider/observer/authority operations.
+    Removing just runtime identity validation makes the old test pass and the
+    strengthened test fail; this mutation is checked on both required runtimes.
+11. **Spec 7, accounting transitions:** `canonical edits after first completion`
+    uses distinct steady/backfill item and USD limits, completes coverage, performs
+    a public canonical correction, rebuilds lexical coverage and actually attempts
+    embedding refresh. The attempt must refuse at steady limits without new sends
+    or changed exposure. The two `already-sent settlement` cases hold an actual
+    transmitted refresh at a rendezvous, replace the independent price publication
+    or advance mock UTC to expiry, then settle while the coordinator stays open.
+    They independently check the reserved revision/rate and exact token cost,
+    zero outstanding exposure, and refusal of subsequent new transmissions.
+
+### Verification
+
+The required test inventory is expanded independently from the previous explicit
+path table and filesystem family globs: **61 paths, zero differences**. Each path
+runs separately through the managed process-group runner with the pinned Node
+binary directory first on PATH. Actual subprocess return codes are captured,
+without pipes; logs retain full TAP and child cleanup results. The active command,
+progress, process state, failures and exits are supervised until completion.
+
+Commands (the test and Node variables denote the mechanically enumerated path
+and the exact version's executable):
+
+```sh
+"$p2e_node" --version
+"$p2e_node" tools/testing/run.mjs --test-reporter=tap --test-concurrency=1 "$p2e_test"
+"$p2e_node" tools/testing/run.mjs --test-name-pattern='Fix1|Revision 2' \
+  core/test/context-read-product-semantic.test.mjs \
+  core/test/context-read-product-semantic-gates.test.mjs
+"$p2e_node" tools/testing/run.mjs --test-name-pattern='Revision 2' \
+  core/test/context-read-product-semantic.test.mjs
+"$p2e_node" tools/testing/run.mjs --test-name-pattern='Fix1 canonical edits' \
+  core/test/context-read-product-semantic.test.mjs
+"$p2e_node" tools/testing/run.mjs --test-name-pattern='Fix1 already-sent' \
+  core/test/context-read-product-semantic.test.mjs
+"$p2e_node" --check "$p2e_changed_js"
+git diff --check
+```
+
+The baseline and mutation commands run in an isolated checkout of `7b56a88c`,
+with the new tests and synthetic host overlaid. Runtime mutations are confined to
+that checkout. The accounting-transition additions and corrected runtime fixture
+are coverage fixes: they pass against the original runtime, so they are verified
+by deliberately broken implementations instead of claiming a false baseline
+failure. The original runtime-mismatch test's false positive is also demonstrated
+explicitly. No assertion is weakened to manufacture red/green evidence.
+
+| Baseline / deliberately broken implementation command | Node 22.16.0 exit | Node 24.15.0 exit |
+| --- | ---: | ---: |
+| Baseline `--test-name-pattern='Fix1\|Revision 2'`, both semantic files | 1 (20 cases: 16 fail, 4 pass) | 1 (20 cases: 16 fail, 4 pass) |
+| Baseline `--test-name-pattern='Fix1 pre-invocation native'` (additional boundary) | 1 (1 fail) | 1 (1 fail) |
+| Identity validation removed; original `Revision 2` test | 0 (false positive demonstrated) | 0 (false positive demonstrated) |
+| Identity validation removed; strengthened `Revision 2` test | 1 (expected rejection missing) | 1 (expected rejection missing) |
+| Refresh admission uses backfill limits; `Fix1 canonical edits` | 1 | 1 |
+| Settlement uses a replacement rate; `Fix1 already-sent` | 1 (both cases fail) | 1 (both cases fail) |
+
+These nonzero baseline/mutation exits are required red evidence, not final-suite
+failures. The four baseline passes are the corrected runtime test and three
+previously missing accounting-transition tests. The additional native reservation
+case brings unique baseline red evidence to 17 cases per runtime. Final accounting follow-up also
+performs a canonical correction before testing new price admission: history alone
+would reuse current-intent cached vectors and could pass without a new reservation.
+
+Node 22 development commands retained actual exits: the first focused `Fix1`
+command exited 1 (12 pass / 2 fail) because the test queried a nonexistent
+certificate field and exceeded the existing assembly token bound. Correcting
+those fixture inputs gave vector-query regressions exit 0 (2/2) and the combined
+Revision 2 / receipt / transition command exit 0 (5/5). A final-assembly race probe
+then exited 1: retrying the authority's one-use final sample refused. Preparing
+both deliveries before that sample fixed it; the pooled-oracle / subdeadline /
+vector command exited 0 (5/5), and the counter-telemetry probe exited 0 (1/1).
+The post-COMMIT fault probes initially exited 1 because a read hook consumed the
+commit fault and because status correctly returns an unknown-owner envelope on
+native unavailability. Corrected fault assertions passed the reconciliation
+command with exit 0 (5/5); the final in-flight settlement command exited 0 (2/2).
+An initial mutation driver exited 2 after its test exited 0: changing the whole
+phase was independently caught by the transmission barrier. The corrected mutant
+changes only refresh admission limits; its actual failing exits are recorded
+above. No production deadline, gate, golden or error precedence was loosened.
+
+
+The first Node 24 complete semantic command exited **1** (57 pass / 4 fail).
+Those failures occurred in coordinator binding after the intentional fatal-exit
+case: fixture cleanup freed its quarantined ledger inode, and unrelated later
+fixtures reused it. The supervisor correctly refused that identity. The fatal
+fixture now retains a hard link only after its Worker has exited and close has
+reported failure; the link is removed by the file-level cleanup after all tests.
+The failed provider/resource quarantine remains asserted and is never cleared or
+recovered. This is test-lifetime isolation, with no production safety exception.
+The first isolation retry exited **1** (60 pass / 1 fail): registering `after()`
+inside the fatal test scoped cleanup to that test. Registering the cleanup hook
+at file scope retains the inode through every subsequent case. A focused
+fatal-exit/64-target diagnostic command exited **0** (2/2); complete-file retries
+remain the acceptance evidence, since inode allocation can vary between runs.
+The matrix stopped on that nonzero exit and resumed from the failed path, without
+repeating completed paths. The initial Node 22 semantic command exited 0 (60
+cases) before the extra post-COMMIT case and final assertions; its final complete
+file rerun is reported with the final per-path results below.
+
+
+The added post-COMMIT reservation boundary also required preparation tracking for
+ordinary service mutations, rather than only validation latches. Its focused
+baseline command exited **1** on both runtimes, while the final combined
+reservation/validation/receipt probes exited **0** on both (**7/7 each**).
+Two earlier fault-simulator development probes were stopped with actual exit
+**143**: the new reservation fault mode accidentally entered a validation-only
+rendezvous. Restricting that rendezvous to its declared modes corrected the
+fixture. Neither stopped probe is counted as red/green acceptance evidence.
+
+### Final per-path results
+
+All **61 required paths on each runtime** have final complete-file exit **0**,
+with **zero skips**. Latest complete-file totals are **1092 / 1092 passing tests**
+on Node 22.16.0 / 24.15.0. The Node 22 final semantic rerun and the corrected
+Node 24 complete semantic command each passed all **62 cases**, exit **0**.
+Earlier failed commands remain documented above; this table reports each path
+after its final correction, rather than relabeling those failures.
+
+| Explicit path | Node 22.16.0 exit (pass) | Node 24.15.0 exit (pass) |
+| --- | ---: | ---: |
+| `adapters/mcp/test/context-read-assembly.test.mjs` | 0 (43) | 0 (43) |
+| `adapters/mcp/test/context-read-default-entropy.test.mjs` | 0 (1) | 0 (1) |
+| `adapters/mcp/test/context-read-product-owner-evidence.test.mjs` | 0 (34) | 0 (34) |
+| `adapters/mcp/test/context-read-product-provider.test.mjs` | 0 (9) | 0 (9) |
+| `adapters/mcp/test/context-read-sources.test.mjs` | 0 (4) | 0 (4) |
+| `adapters/mcp/test/context-read.test.mjs` | 0 (6) | 0 (6) |
+| `core/test/context-read-assembly-races.test.mjs` | 0 (7) | 0 (7) |
+| `core/test/context-read-assembly-readonly.test.mjs` | 0 (28) | 0 (28) |
+| `core/test/context-read-assembly.test.mjs` | 0 (20) | 0 (20) |
+| `core/test/context-read-bm25.test.mjs` | 0 (3) | 0 (3) |
+| `core/test/context-read-budget.test.mjs` | 0 (5) | 0 (5) |
+| `core/test/context-read-core.test.mjs` | 0 (26) | 0 (26) |
+| `core/test/context-read-default-entropy.test.mjs` | 0 (1) | 0 (1) |
+| `core/test/context-read-embedder.test.mjs` | 0 (5) | 0 (5) |
+| `core/test/context-read-fusion.test.mjs` | 0 (4) | 0 (4) |
+| `core/test/context-read-local-embedder.test.mjs` | 0 (38) | 0 (38) |
+| `core/test/context-read-local-status.test.mjs` | 0 (3) | 0 (3) |
+| `core/test/context-read-moc-source.test.mjs` | 0 (15) | 0 (15) |
+| `core/test/context-read-process.test.mjs` | 0 (1) | 0 (1) |
+| `core/test/context-read-product-artifact.test.mjs` | 0 (1) | 0 (1) |
+| `core/test/context-read-product-control.test.mjs` | 0 (83) | 0 (83) |
+| `core/test/context-read-product-import.test.mjs` | 0 (2) | 0 (2) |
+| `core/test/context-read-product-index.test.mjs` | 0 (65) | 0 (65) |
+| `core/test/context-read-product-overflow-status.test.mjs` | 0 (16) | 0 (16) |
+| `core/test/context-read-product-owner.test.mjs` | 0 (15) | 0 (15) |
+| `core/test/context-read-product-p2cd.test.mjs` | 0 (2) | 0 (2) |
+| `core/test/context-read-product-pump.test.mjs` | 0 (24) | 0 (24) |
+| `core/test/context-read-product-semantic-gates.test.mjs` | 0 (7) | 0 (7) |
+| `core/test/context-read-product-semantic.test.mjs` | 0 (62) | 0 (62) |
+| `core/test/context-read-product-service.test.mjs` | 0 (2) | 0 (2) |
+| `core/test/context-read-product-wal.test.mjs` | 0 (85) | 0 (85) |
+| `core/test/context-read-product.test.mjs` | 0 (126) | 0 (126) |
+| `core/test/context-read-recovery.test.mjs` | 0 (10) | 0 (10) |
+| `core/test/context-read-review.test.mjs` | 0 (10) | 0 (10) |
+| `core/test/context-read-sidecar.test.mjs` | 0 (17) | 0 (17) |
+| `core/test/context-read-source-work.test.mjs` | 0 (7) | 0 (7) |
+| `core/test/context-read-sources-authority.test.mjs` | 0 (6) | 0 (6) |
+| `core/test/context-read-sources-bounds.test.mjs` | 0 (5) | 0 (5) |
+| `core/test/context-read-sources-races.test.mjs` | 0 (16) | 0 (16) |
+| `core/test/context-read-sources.test.mjs` | 0 (14) | 0 (14) |
+| `core/test/context-read-tokenize.test.mjs` | 0 (2) | 0 (2) |
+| `core/test/no-raw-db-fd.test.mjs` | 0 (5) | 0 (5) |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 (16) | 0 (16) |
+| `core/test/topic-members-bounds.test.mjs` | 0 (7) | 0 (7) |
+| `core/test/topic-members-compatibility.test.mjs` | 0 (32) | 0 (32) |
+| `core/test/topic-members-integration.test.mjs` | 0 (1) | 0 (1) |
+| `core/test/topic-members-mutations.test.mjs` | 0 (20) | 0 (20) |
+| `core/test/topic-members-primary.test.mjs` | 0 (26) | 0 (26) |
+| `core/test/topic-members-recheck-findings.test.mjs` | 0 (33) | 0 (33) |
+| `core/test/topic-members-review-findings.test.mjs` | 0 (7) | 0 (7) |
+| `core/test/topic-members-round3-findings.test.mjs` | 0 (18) | 0 (18) |
+| `core/test/topic-members-scale.test.mjs` | 0 (2) | 0 (2) |
+| `core/test/topic-members-visibility.test.mjs` | 0 (10) | 0 (10) |
+| `core/test/topic-members.test.mjs` | 0 (10) | 0 (10) |
+| `core/test/topic-overview-lifecycle.test.mjs` | 0 (11) | 0 (11) |
+| `core/test/topic-overview-raw29.test.mjs` | 0 (22) | 0 (22) |
+| `core/test/topic-overview-visibility.test.mjs` | 0 (8) | 0 (8) |
+| `core/test/topic-overview.test.mjs` | 0 (4) | 0 (4) |
+| `core/test/topic-reader-cancellation.test.mjs` | 0 (6) | 0 (6) |
+| `core/test/topic-reader-sqlite.test.mjs` | 0 (21) | 0 (21) |
+| `packaging/test/topic-overview-raw29.test.mjs` | 0 (3) | 0 (3) |
+
+Both exact-version probes exited **0**. All **10 changed JavaScript files**
+passed individual `--check` commands on both versions: **20 actual exits 0**.
+The final source SHA-256 inventory remained unchanged throughout the last
+complete-file verification. Managed runners completed and drained their owned
+process groups before returning. The isolated baseline checkout was removed
+only after independently verifying zero processes in it. No commit or staging
+operation was performed.
+
+### Fix-round changed files
+
+Cross-checked `git diff --name-only HEAD` plus untracked enumeration against
+independent HEAD blob hashes and an `rg --files --hidden` filesystem inventory:
+**11 files, zero differences**. This round changes no generated runtime,
+contract, dependency installation, artifact manifest or raw-fd allowlist.
+
+- `core/context-product-index.mjs`
+- `core/context-semantic-client.mjs`
+- `core/context-semantic-coordinator.mjs`
+- `core/context-semantic-gates.mjs`
+- `core/context-semantic-ledger.mjs`
+- `core/context-semantic-maintenance.mjs`
+- `core/context-semantic-worker.mjs`
+- `core/test/context-read-product-semantic-gates.test.mjs`
+- `core/test/context-read-product-semantic.test.mjs`
+- `core/testing/context-semantic-host.mjs`
+- `docs/plans/context-read-p2e-impl.md`

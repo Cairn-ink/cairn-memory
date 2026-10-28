@@ -18,6 +18,15 @@ const ownerId=c.binding.ownerId,resources=new Int32Array(c.resources),owned=[],a
 const sqlContext=new AsyncLocalStorage();sqlContext.enterWith({until:-Infinity});
 const sqlite=createProductSqlitePolicy({state:()=>sqlContext.getStore()});let host,ledger,port,policy,maintenance,closed=false,queue=Promise.resolve(),pendingSeal,lastState;
 const controllers=new Set();
+async function mutate(current,fn,check,beforeCommit,invalidReceipts) {
+  let recovery;
+  const result=await ledger.mutate(current,fn,check,beforeCommit,preparation=>{
+    recovery={prepared:preparation.prepared,sealed:preparation.previous,invalidReceipts};
+    pendingSeal=recovery;
+  });
+  if(pendingSeal===recovery)pendingSeal=null;
+  return result;
+}
 const gate=semanticGate(c.ownerState);
 let providerUnavailable=false;
 const ownershipPath=c.ledgerPath+'.semantic-owner-'+digest(ownerId)+'.lock.sqlite';let ownership;
@@ -28,11 +37,35 @@ const serial=work=>{if(queued>=128)fail('read_in_progress');queued++;const resul
 const failure=error=>productFailure(error?.code==='ERR_SQLITE_ERROR'?[5,6].includes(error.errcode&255)?'storage_busy':'storage_error':error?.code);
 async function admission() {
   if(pendingSeal) {
-    if(await host.semanticLedgerAuthority.compareAndSwap(pendingSeal.prepared,pendingSeal.sealed)!==true)fail('index_unavailable');pendingSeal=null;
+    const recovery=pendingSeal;
+    const row=ledger.read(ownerId),prepared=recovery.prepared;
+    const matches=anchor=>row.sequence===anchor.sequence&&row.state_digest===anchor.stateDigest;
+    if(prepared.pending) {
+      const previous={...prepared,pending:null},next={...previous,sequence:prepared.pending.sequence,stateDigest:prepared.pending.stateDigest};
+      recovery.sealed=matches(previous)?previous:matches(next)?next:null;
+    }
+    if(!recovery.sealed||!matches(recovery.sealed))fail('index_unavailable');
+    if(await host.semanticLedgerAuthority.compareAndSwap(prepared,recovery.sealed)!==true) {
+      // A failed uncommitted mutation may already have canceled this exact
+      // preparation. Accept only an independently authenticated matching seal.
+      const current=await ledger.authenticate(ownerId);
+      if(canonicalJson(current.anchor)!==canonicalJson(recovery.sealed))fail('index_unavailable');
+    }
+    // Seal first; retain receipt invalidation until its own anchored mutation
+    // succeeds. No authority callback is added after validation's final reads.
+    recovery.prepared=recovery.sealed;
+    if(recovery.invalidReceipts?.length) {
+      const current=await ledger.authenticate(ownerId);
+      await mutate(current,n=>{
+        for(const [i,receipt] of recovery.invalidReceipts)if(canonicalJson(n.receipts[i]??null)===canonicalJson(receipt)){delete n.receipts[i];delete n.hints[i];}
+        n.validationPending=false;
+      },undefined,undefined,recovery.invalidReceipts);
+    }
+    pendingSeal=null;
   }
   const result=await ledger.authenticate(ownerId);lastState=result.state;return result;
 }
-const change=(fn,guard)=>serial(async()=>{guard?.();const result=await ledger.mutate(await admission(),n=>{guard?.();fn(n);},undefined,guard);lastState=result.state;gate.publish(lastState);return result;});
+const change=(fn,guard)=>serial(async()=>{guard?.();const result=await mutate(await admission(),n=>{guard?.();fn(n);},undefined,guard);lastState=result.state;gate.publish(lastState);return result;});
 const current=()=>serial(admission);
 function refreshExposure(state,day) {
   let itemsCharged=0,itemsReserved=0,charged=0n,reserved=0n,lifetimeCharged=0n,lifetimeReserved=0n;
@@ -87,10 +120,10 @@ function inputBound(texts) {
   for(const text of texts){if(typeof text!=='string'||!text.trim()||!text.isWellFormed()||text.includes('\0'))fail('invalid_input');const n=Buffer.byteLength(text)+16;if(n>8192)fail('context_item_too_large');tokens+=n;}
   if(tokens>300000||Buffer.byteLength(JSON.stringify({model:c.provider.model,dimensions:1536,encoding_format:'float',input:texts}))>2097152)fail('context_item_too_large');return tokens;
 }
-function globalPolicy(db,next,id) {
+function globalPolicy(rows,next,id) {
   let requests=0,money=0n,concurrent=0;
-  for(const row of db.prepare('SELECT owner_id,state FROM semantic_owners').iterate()) {
-    const s=row.owner_id===ownerId?next:JSON.parse(row.state);
+  for(const row of rows) {
+    const s=row.state.ownerId===ownerId?next:row.state;
     if(s.identities[id]?.blocked)fail('provider_error');
     for(const r of Object.values(s.reservations))if(r.identity===id&&r.status!=='released') {
       requests++;money+=BigInt(r.cost);if(['reserved','may_transmit'].includes(r.status))concurrent++;
@@ -108,7 +141,8 @@ async function embed(input,op,metadata) {
   let transmitted=false,invoked=false,usage,protocolFailure=false;
   const cutoff=Math.min(Number(mono(op.operationCutoffMonoNs))/1e6,Number(process.hrtime.bigint())/1e6+c.provider.requestTimeoutMs);
   const deadlineAt=performance.now()+cutoff-Number(process.hrtime.bigint())/1e6;
-  await serial(async()=>{
+  let admissionError;
+  try {await serial(async()=>{
     const admitted=await admission(),s=admitted.state;checkState(s,expected);const p=price(s),day=Math.floor(utc()/86400000);
     if(day<s.dayHighWater)fail('budget_denied');
     const phase=s.firstCoverageComplete?'steady':'backfill',limits=c.refreshCaps[phase],e=refreshExposure(s,day);
@@ -119,18 +153,19 @@ async function embed(input,op,metadata) {
     if(kind==='refresh') {
       if(texts.length+e.itemsCharged+e.itemsReserved>limits.maxItemsPerUtcDay||cost+e.charged+e.reserved>usd(limits.maxUsdPerUtcDay)||cost>usd(maxUsd))fail('budget_denied');
       if(phase==='backfill'&&cost+e.lifetimeCharged+e.lifetimeReserved>usd(c.refreshCaps.backfill.maxUsdTotal)) {
-        if(e.lifetimeCharged+e.lifetimeReserved>=usd(c.refreshCaps.backfill.maxUsdTotal)){await ledger.mutate(admitted,n=>{n.blocked=true;});fail('backfill_ceiling');}
+        if(e.lifetimeCharged+e.lifetimeReserved>=usd(c.refreshCaps.backfill.maxUsdTotal)){await mutate(admitted,n=>{n.blocked=true;});fail('backfill_ceiling');}
         fail('budget_denied');
       }
     }
     within(op);
-    let r=await ledger.mutate(admitted,n=>{
+    const globalRows=await ledger.authenticateAll();
+    let r=await mutate(admitted,n=>{
       n.dayHighWater=Math.max(n.dayHighWater,day);n.prices[p.authorityId]=p;
       n.reservations[reservationId]={id:reservationId,kind,items:kind==='refresh'?texts.length:0,day,phase,identity:id,price:{...p,rate:c.priceTable.usdPerMillionInputTokens[c.provider.model]},tokensBound:bound,cost:String(cost),status:'reserved',usage:'unknown',epoch:expected.purgeEpoch,incarnation:op.operationId};
       if(quantum){n.windows[n.activeWindowId].quanta[quantumId].planned=String(BigInt(quantum.planned)+cost);n.reservations[reservationId].quantumId=quantumId;}
-    },(db,n)=>globalPolicy(db,n,id),()=>within(op));
-    r=await ledger.mutate(r,n=>{n.reservations[reservationId].status='may_transmit';},undefined,()=>within(op));
-  });
+    },(db,n)=>{ledger.checkAll(globalRows);globalPolicy(globalRows,n,id);},()=>within(op));
+    r=await mutate(r,n=>{n.reservations[reservationId].status='may_transmit';},undefined,()=>within(op));
+  });}catch(error){admissionError=error;}
   function checkDispatch() {
     within(op);if(controller.signal.aborted||performance.now()>=deadlineAt)fail('timeout');
     const s=ledger.read(ownerId).state;checkState(s,expected);price(s);
@@ -149,7 +184,7 @@ async function embed(input,op,metadata) {
   };
   let underlying;
   Atomics.add(resources,2,1);
-  try {checkDispatch();invoked=true;const operation=operations.get(op.operationId);if(operation){operation.attempts=1;if(operation.attemptState)Atomics.store(new Int32Array(operation.attemptState),0,1);}underlying=Promise.resolve(port.embed(Object.freeze([...texts]),{signal:controller.signal,deadlineAt,beforeDispatch,settleInputTokens}));}
+  try {if(admissionError)throw admissionError;checkDispatch();invoked=true;const operation=operations.get(op.operationId);if(operation){operation.attempts=1;if(operation.attemptState)Atomics.store(new Int32Array(operation.attemptState),0,1);}underlying=Promise.resolve(port.embed(Object.freeze([...texts]),{signal:controller.signal,deadlineAt,beforeDispatch,settleInputTokens}));}
   catch(error){underlying=Promise.reject(error);}
   const settled=underlying.then(value=>({value}),error=>({error})).then(async result=>{
     if(result.error?.code==='provider_unavailable')providerUnavailable=true;
@@ -157,7 +192,7 @@ async function embed(input,op,metadata) {
     if(protocolFailure)usage=undefined;
     try {
       await serial(async()=>{
-        const a=await admission();await ledger.mutate(a,s=>{
+        const a=await admission();await mutate(a,s=>{
           const r=s.reservations[reservationId];if(!r||!['reserved','may_transmit'].includes(r.status))return;
           r.status=!invoked?'released':usage===undefined?'unknown':'settled';r.usage=usage===undefined?'unknown':'validated';
           if(usage!==undefined)r.cost=String(tokenCost(usage,r.price.rate));
@@ -166,8 +201,8 @@ async function embed(input,op,metadata) {
           if(!s.firstCoverageComplete&&e.lifetimeCharged+e.lifetimeReserved>=usd(c.refreshCaps.backfill.maxUsdTotal))s.blocked=true;
         });
       });
-    } finally {Atomics.add(resources,3,1);active.delete(settled);controllers.delete(controller);}
-    if(result.error){if(['not_enabled','purge_pending','backfill_ceiling','price_unavailable','budget_denied','provider_error','rate_limited','dimension_mismatch','timeout','provider_unavailable','index_unavailable','read_timeout'].includes(result.error.code))throw result.error;fail('provider_error');}
+    } finally {Atomics.add(resources,3,1);active.delete(settled);controllers.delete(controller);operations.get(op.operationId)?.controllers.delete(controller);controller.abort();}
+    if(result.error){if(admissionError)throw admissionError;if(['not_enabled','purge_pending','backfill_ceiling','price_unavailable','budget_denied','provider_error','rate_limited','dimension_mismatch','timeout','provider_unavailable','index_unavailable','read_timeout'].includes(result.error.code))throw result.error;fail('provider_error');}
     if(!transmitted||protocolFailure||!Array.isArray(result.value)||result.value.length!==texts.length)fail('provider_error');
     return result.value.map(v=>validateVector(v,port));
   });
@@ -255,7 +290,7 @@ async function internalCall(message,metadata) {
       if(old&&old.id!==input.window.id&&time<old.endsUtcMs)fail('invalid_input');
       let w=s.windows[input.window.id];
       const maxUsd=usd(input.budgets.maxUsd),floor=usd(input.window.usedUsd);
-      if(!w)w=s.windows[input.window.id]={id:input.window.id,endsUtcMs:time+Math.max(0,input.remainingMs),maxItems:input.budgets.maxItems,maxMs:input.budgets.maxMs,maxUsd:String(maxUsd),usedItems:input.window.usedItems,usedMs:input.window.usedMs,usedUsd:String(floor),quanta:{}};
+      if(!w)w=s.windows[input.window.id]={id:input.window.id,endsUtcMs:time+Math.max(0,input.remainingMs),maxItems:input.budgets.maxItems,maxMs:input.budgets.maxMs,maxUsd:String(maxUsd),usedItems:input.window.usedItems,usedMs:input.window.usedMs,usedUsd:String(floor),quanta:Object.create(null)};
       if(w.maxItems!==input.budgets.maxItems||w.maxMs!==input.budgets.maxMs||w.maxUsd!==String(maxUsd))fail('invalid_input');
       w.usedItems=Math.max(w.usedItems,input.window.usedItems);w.usedMs=Math.max(w.usedMs,input.window.usedMs);w.usedUsd=String(BigInt(w.usedUsd)>floor?BigInt(w.usedUsd):floor);
       const amount=usd(input.maxUsd),reserved=Object.values(w.quanta).filter(q=>q.status==='reserved').reduce((sum,q)=>sum+BigInt(q.maxUsd),0n);
@@ -336,19 +371,19 @@ try {
   if(Object.values(lastState.reservations).some(r=>['reserved','may_transmit'].includes(r.status))) {
     const a=await admission();
     if(typeof host.semanticLedgerAuthority.confirmDisposed!=='function'||await host.semanticLedgerAuthority.confirmDisposed(a.anchor)!==true)fail('read_in_progress');
-    const recovered=await ledger.mutate(a,s=>{
+    const recovered=await mutate(a,s=>{
       for(const r of Object.values(s.reservations))if(r.status==='reserved')r.status='released';else if(r.status==='may_transmit'){r.status='unknown';r.usage='unknown';}
       for(const w of Object.values(s.windows))for(const q of Object.values(w.quanta))if(q.status==='reserved'){
         const exposure=Object.values(s.reservations).filter(r=>r.quantumId===q.id&&r.status!=='released').reduce((sum,r)=>sum+BigInt(r.cost),0n);
         w.usedUsd=String(BigInt(w.usedUsd)+exposure);q.status='settled';
       }
-      s.pumpBindings={};
+      s.pumpBindings=Object.create(null);
     });lastState=recovered.state;
   }
   gate.publish(lastState,true);
   const {semanticMaintenance}=await import('./context-semantic-maintenance.mjs');maintenance=semanticMaintenance({c,sqlite,identity:identityMetadata,secretState:()=>ledger.read(ownerId).state});
   if(lastState.targets&&!lastState.firstCoverageComplete){const configured=maintenance.targets(c.backfillTargets),ids=new Set(configured.map(digest));if(lastState.targets.some(t=>!ids.has(digest(t))))fail('revision_conflict');}
-  within(c.operation);parentPort.postMessage({kind:'ready',result:{ok:true,value:null}});
+  within(c.operation);parentPort.postMessage({kind:'ready',result:{ok:true,value:{identity:identityMetadata()}}});
 }catch(error){try{await dispose();}catch{}parentPort.postMessage({kind:'ready',result:failure(error)});}
 function ownEmbedding(value) {
   // Runtime functions are inspected separately from own-data configuration.

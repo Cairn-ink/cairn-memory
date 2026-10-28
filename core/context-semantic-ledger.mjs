@@ -29,11 +29,19 @@ const expected=DDL.split(';').filter(Boolean).map(sql=>{const name=/CREATE TABLE
 function attest(db) {
   if(db.prepare('PRAGMA application_id').get().application_id!==APPLICATION_ID||db.prepare('PRAGMA user_version').get().user_version!==1||!same(schema(db),expected))unavailable();
 }
+// Rebuild ID-keyed records after JSON/structuredClone, which do not preserve
+// null prototypes. Values remain ordinary closed engine records.
+function stateRecords(state) {
+  for(const key of ['days','reservations','identities','prices','receipts','hints','windows','pumpBindings','catalog'])
+    state[key]=Object.assign(Object.create(null),state[key]);
+  for(const window of Object.values(state.windows))window.quanta=Object.assign(Object.create(null),window.quanta);
+  return state;
+}
 export function zeroSemanticOwner(ownerId, ledgerEpoch = 1, bindingRevision = 1) {
-  return {ownerId,ledgerEpoch,bindingRevision,sequence:0,ledgerFile:null,policy:{ownerId,semantic:false,revision:0,purgeEpoch:0},
+  return stateRecords({ownerId,ledgerEpoch,bindingRevision,sequence:0,ledgerFile:null,policy:{ownerId,semantic:false,revision:0,purgeEpoch:0},
     dayHighWater:0,days:{},reservations:{},identities:{},prices:{},targets:null,targetSetDigest:null,
     receipts:{},validationOrdinal:0,hints:{},validationPending:false,firstCoverageComplete:false,backfillUsd:'0',blocked:false,
-    windows:{},pumpBindings:{},catalog:{},purge:{state:'idle',epoch:0,deletedVectors:0,checkpoint:null,remainingVectors:null,reason:null}};
+    windows:{},pumpBindings:{},catalog:{},purge:{state:'idle',epoch:0,deletedVectors:0,checkpoint:null,remainingVectors:null,reason:null}});
 }
 function anchor(value) {
   const a = exact(value,'ownerId,accountingDomainId,ledgerId,ledgerEpoch,bindingRevision,sequence,stateDigest,pending');
@@ -60,7 +68,7 @@ export function openSemanticLedger({path,identity,authority,policy,observer}) {
     const row = db.prepare('SELECT sequence,state_digest,state FROM semantic_owners WHERE owner_id=?').get(ownerId);
     if (!row) unavailable();
     let state;
-    try { state=JSON.parse(row.state); } catch {unavailable();}
+    try { state=stateRecords(JSON.parse(row.state)); } catch {unavailable();}
     if (row.state!==stateBytes(state) || stateDigest(state)!==row.state_digest || state.ownerId!==ownerId || state.sequence!==row.sequence ||
         !same(state.ledgerFile,{device:String(physical.dev),inode:String(physical.ino)})) unavailable();
     return {...row,state};
@@ -81,6 +89,16 @@ export function openSemanticLedger({path,identity,authority,policy,observer}) {
     }
     if (!same(a,e)) unavailable();
     return {anchor:a,...row};
+  }
+  async function authenticateAll() {
+    const owners=db.prepare('SELECT owner_id FROM semantic_owners ORDER BY owner_id').all(),rows=[];
+    for(const {owner_id} of owners)rows.push(await authenticate(owner_id));
+    return rows;
+  }
+  function checkAll(rows) {
+    const owners=db.prepare('SELECT owner_id FROM semantic_owners ORDER BY owner_id').all();
+    if(!same(owners.map(r=>r.owner_id),rows.map(r=>r.state.ownerId)))unavailable();
+    for(const row of rows){const current=read(row.state.ownerId);if(current.sequence!==row.sequence||current.state_digest!==row.state_digest)unavailable();}
   }
   async function prepare(current,nextState) {
     if(!Number.isSafeInteger(current.anchor.sequence+1))unavailable();
@@ -104,9 +122,9 @@ export function openSemanticLedger({path,identity,authority,policy,observer}) {
     } catch(error) {if(db.isTransaction)db.exec('ROLLBACK');throw error;}
     return {...prepared,sequence:prepared.pending.sequence,stateDigest:nextDigest,pending:null};
   }
-  async function mutate(current,change,check,beforeCommit) {
-    const next=structuredClone(current.state); change(next);
-    const preparation=await prepare(current,next);let sealed;
+  async function mutate(current,change,check,beforeCommit,onPrepare) {
+    const next=stateRecords(structuredClone(current.state)); change(next);
+    const preparation=await prepare(current,next);onPrepare?.(preparation);let sealed;
     try {beforeCommit?.();sealed=commit(preparation,check);}catch(error) {
       // Failed native admission never acquired permission to send. Cancel only
       // an exact still-uncommitted preparation; ambiguous states stay pinned.
@@ -118,7 +136,7 @@ export function openSemanticLedger({path,identity,authority,policy,observer}) {
     if(await authority.compareAndSwap(preparation.prepared,sealed)!==true)unavailable();
     return {anchor:sealed,sequence:sealed.sequence,state_digest:sealed.stateDigest,state:next};
   }
-  return {read,authenticate,prepare,commit,mutate,close:()=>db.close(),db};
+  return {read,authenticate,authenticateAll,checkAll,prepare,commit,mutate,close:()=>db.close(),db};
 }
 
 // Explicit control-plane enrollment. The host's independent enrollment service
