@@ -49,8 +49,8 @@ export function productSqliteFiles(path) {
  * policy's TOPIC_WAL_WAIT_MS / TOPIC_WAL_REPLY_RESERVE_MS pair without a copy.
  * start() is called only at Worker operation admission, never at connection or
  * transaction admission. The observer remains immediately around native calls. */
-export function createProductSqlitePolicy({ observer, now = () => Number(process.hrtime.bigint()) / 1e6 } = {}) {
-  const policy = createTopicSqlitePolicy({ now });
+export function createProductSqlitePolicy({ observer, now = () => Number(process.hrtime.bigint()) / 1e6, state } = {}) {
+  const policy = createTopicSqlitePolicy({ now, state });
   return {
     start: deadlineAt => policy.start(deadlineAt),
     files: productSqliteFiles,

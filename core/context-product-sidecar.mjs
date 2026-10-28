@@ -13,6 +13,7 @@ import { contextReadSet } from './context-read-input.mjs';
 import { canonicalJson, digest, projectionDigest, signedRecord, verifiedRecord } from './context-product-validation.mjs';
 import { ManifestHash } from './context-product-manifest.mjs';
 import { fail } from './validation.mjs';
+import { VECTOR_DDL, vectorSchema } from './context-product-vectors.mjs';
 
 export const PRODUCT_SIDECAR_SUFFIX = '.context-read-product-v1.1.sqlite';
 const APPLICATION_ID = 0x43525032;
@@ -62,7 +63,8 @@ const expectedSchema = ddl.trim().split(';').filter(sql => sql.trim()).map(sql =
 }).sort((a,b) => Buffer.compare(Buffer.from(a.type),Buffer.from(b.type)) || Buffer.compare(Buffer.from(a.name),Buffer.from(b.name)));
 function attest(db) {
   if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID ||
-      db.prepare('PRAGMA user_version').get().user_version !== 1 || !same(schema(db), expectedSchema)) unavailable('incompatible');
+      db.prepare('PRAGMA user_version').get().user_version !== 1 ||
+      !same(schema(db), expectedSchema) && !same(schema(db), [...expectedSchema,...vectorSchema].sort((a,b)=>Buffer.compare(Buffer.from(a.type),Buffer.from(b.type))||Buffer.compare(Buffer.from(a.name),Buffer.from(b.name))))) unavailable('incompatible');
 }
 export function productFile(path, optional = false) {
   let s;
@@ -101,7 +103,7 @@ export function canonicalProductIdentity(path, db) {
 // Construction acquires no sidecar. Only a separately authorized operation
 // invokes observe/refresh, including when the file is missing or malformed.
 export function productSidecar({ path, db: canonical, identity, features, observer, sqlite, sidecarJournalMode = 'DELETE', writable = false,
-  now = () => performance.now(), rendezvous = () => {} }) {
+  now = () => performance.now(), rendezvous = () => {}, semantic = false }) {
   features={...features,reviews:features.cards,receipts:features.cards};
   const sidePath = path + PRODUCT_SIDECAR_SUFFIX;
   let side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0;
@@ -179,6 +181,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         if (!metadata || metadata.store_id!==identity.storeId) unavailable('wrong_store');
         attest(side);
         if (metadata.profile!==PRODUCT_PROFILE) unavailable('incompatible');
+        if (semantic && !side.prepare("SELECT 1 FROM sqlite_schema WHERE name='vector_publications' AND type='table'").get()) unavailable('incompatible');
       });
       return true;
     }
@@ -214,6 +217,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         admittedMetadata=candidate.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
         if(!admittedMetadata || admittedMetadata.store_id!==identity.storeId)unavailable('wrong_store');
         attest(candidate);
+        if(wantsWrite && semantic && !candidate.prepare("SELECT 1 FROM sqlite_schema WHERE name='vector_publications' AND type='table'").get()) unavailable('incompatible');
         if(admittedMetadata.profile!==PRODUCT_PROFILE)unavailable('incompatible');
         if(wantsWrite && (candidate.prepare('PRAGMA quick_check').get().quick_check!=='ok' || candidate.prepare('PRAGMA foreign_key_check').get()))unavailable('corrupt');
       });
@@ -221,9 +225,9 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     side=candidate;sideWritable=wantsWrite;sideFiles=files;openedIdentity=admittedIdentity;metadata=admittedMetadata;
     return true;
   }
-  const initialization=()=>({...(sqlite ? {journalMode:sidecarJournalMode} : {}),sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=1; ${ddl}`,
+  const initialization=()=>({...(sqlite ? {journalMode:sidecarJournalMode} : {}),sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=1; ${ddl} ${semantic ? VECTOR_DDL : ''}`,
     storeId:identity.storeId,profile:PRODUCT_PROFILE,incarnation:randomUUID(),
-    attestation:{applicationId:APPLICATION_ID,schema:expectedSchema}});
+    attestation:{applicationId:APPLICATION_ID,schema:semantic ? [...expectedSchema,...vectorSchema].sort((a,b)=>Buffer.compare(Buffer.from(a.type),Buffer.from(b.type))||Buffer.compare(Buffer.from(a.name),Buffer.from(b.name))) : expectedSchema}});
   const sideIdentity = () => ({ ...productFile(sidePath), incarnation: metadata.incarnation,
     schemaVersion: side.prepare('PRAGMA schema_version').get().schema_version });
   function target(p, access) {
@@ -527,6 +531,17 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   }
 
   return {
+    vectorFence(p,lexical) {
+      return recordBindings(lexical,target(projection(p),lexical.accessDigest))===null&&
+        side.prepare('SELECT publication FROM publications WHERE projection=?').get(lexical.projectionDigest)?.publication===lexical.publicationId;
+    },
+    vectors(work, mutation=false) {
+      return guarded(()=>{
+        if(!connection(mutation))return null;
+        if(!side.prepare("SELECT 1 FROM sqlite_schema WHERE name='vector_publications' AND type='table'").get())return null;
+        return (mutation ? write : read)(()=>work(side));
+      });
+    },
     observe(p,...args) {
       p=projection(p);
       try {return guarded(()=>observe(p,...args));}

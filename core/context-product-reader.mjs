@@ -13,6 +13,7 @@ import { nativeTelemetry } from './context-product-telemetry.mjs';
 import { PRODUCT_PROFILE, boundedData, hostConfiguration, requestRecord, operationRecord, issuance, coverage,
   credentialDigest, deadline, mono, operationMessage } from './context-product-control.mjs';
 import { fail } from './validation.mjs';
+import { semanticConfiguration } from './context-semantic-coordinator.mjs';
 
 const codes = new Set(['invalid_input', 'invalid_read_set', 'authority_required', 'scope_changed', 'invalid_snapshot', 'snapshot_stale', 'invalid_cursor', 'cursor_stale', 'token_count_unavailable',
   'revision_conflict', 'evidence_unavailable', 'context_item_too_large', 'index_unavailable', 'storage_busy', 'storage_error',
@@ -24,7 +25,7 @@ const aborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted'
 // timeout/composite signals and their sources may carry extra data properties.
 const signalPrototype = AbortSignal.prototype;
 const sharedLength = Object.getOwnPropertyDescriptor(SharedArrayBuffer.prototype, 'byteLength').get;
-function signalAborted(signal) {
+export function signalAborted(signal) {
   if (signal === undefined) return false;
   if (!signal || typeof signal !== 'object' || types.isProxy(signal) ||
       Object.getPrototypeOf(signal) !== signalPrototype) fail('invalid_input');
@@ -34,12 +35,13 @@ function signalAborted(signal) {
 }
 // After registration the shape may change legitimately (for example any()).
 // An unreadable state discards this result without invalidating the reader.
-function signalCancelled(signal) {
+export function signalCancelled(signal) {
   if (signal === undefined) return false;
   try { return Reflect.apply(aborted, signal, []); } catch { return true; }
 }
 const nativeWorker = data => new Worker(new URL('./context-product-worker.mjs', import.meta.url), {
   workerData: data, env: {}, execArgv: [], stdout: true, stderr: true,
+  ...(data.semanticPort ? {transferList:[data.semanticPort]} : {}),
   // Lexical-only P2a has no vector cache or counter runtime. Reserve 192 MiB
   // rather than inheriting the topic reader's 64 MiB limit.
   resourceLimits: { maxOldGenerationSizeMb: 192 },
@@ -49,7 +51,9 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
   return async function openContextProductReader(original, controls = {}) {
     // These samples precede even option reflection/validation.
     const admitted = now(), admissionUtc = utc();
-    const options = ownData(original, ['supervisor', 'path', 'version', 'profile', 'readSet', 'ownerCoverage', 'requestControl', 'host', 'diagnostics', 'deadlineMs', 'wal', ...(maintenance ? ['sidecarJournalMode'] : [])]);
+    const options = ownData(original, ['supervisor', 'path', 'version', 'profile', 'readSet', 'ownerCoverage', 'requestControl', 'host', 'diagnostics', 'deadlineMs', 'wal', 'semanticConfig', ...(maintenance ? ['sidecarJournalMode'] : [])]);
+    const semantic=options.semanticConfig===undefined?null:semanticConfiguration(options.semanticConfig,{maintenance,requestMaxMs:maintenance?5000:ownData(options.requestControl,['requestId','handleId','credentialBindingId','credentialExpiresUtcMs','requestMaxMs']).requestMaxMs});
+    const releaseSemanticWriter=()=>{if(semantic){const state=new BigInt64Array(semantic.configuration.ownerState);if(Atomics.compareExchange(state,5,BigInt(semantic.configuration.writer),0n)===BigInt(semantic.configuration.writer))Atomics.notify(state,5);}};
     const { signal } = ownData(controls, ['signal']);
     signalAborted(signal);
     if (options.version !== 'context-read-v1' || options.profile !== PRODUCT_PROFILE ||
@@ -60,6 +64,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     let readSet;
     try { readSet = contextReadSet(options.readSet, PRODUCT_PROFILE); } catch { fail('invalid_read_set'); }
     const ownerCoverage = coverage(options.ownerCoverage, readSet);
+    if(semantic && semantic.handle.ownerId!==readSet[0].ownerId)fail('authority_required');
     const host = ownData(options.host, ['moduleUrl', 'configuration']);
     try {
       if (typeof host.moduleUrl !== 'string') fail('invalid_input');
@@ -88,6 +93,10 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       wal: options.wal === true, ...(maintenance ? { sidecarJournalMode: options.sidecarJournalMode } : {}),
       host: { moduleUrl: host.moduleUrl, configuration }, operation: first, frame, resources, deadlineMs: openDeadline };
     hostConfiguration(openingData);
+    if(semantic) {
+      openingData.semanticConfig=semantic.configuration;
+      openingData.semanticPort=semantic.handle.attach({ownerId:readSet[0].ownerId,path:options.path,readSet,maintenance,bindingId:issuedBinding.credentialBindingId,cancellation:semantic.configuration.cancellation});
+    }
     const reservation = configuration.requestReservation;
     if (!maintenance && (!types.isSharedArrayBuffer(reservation) || Reflect.apply(sharedLength, reservation, []) !== 4 ||
         Atomics.compareExchange(new Int32Array(reservation), 0, 0, 1) !== 0)) fail('authority_required');
@@ -97,6 +106,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     const lifecycle = createReaderWorkerLifecycle({ clearTimer, onStop(termination) {
       registry.cleanup(resource);
       termination.then(() => {
+        releaseSemanticWriter();
         registry.finish(resource); if (resource.state === 'complete') releaseWriter?.();
         const slot = lifecycle.pending;
         if (slot?.record && slot.record !== resource) registry.finish(slot.record);
@@ -106,6 +116,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     function shutdown(code) {
       closed = true; terminal ??= code; clearTimer(idle);
       const slot = lifecycle.pending;
+      if(semantic){Atomics.store(new Int32Array(semantic.configuration.cancellation),0,1);if(slot)semantic.handle.cancel(slot.operation.operationId);}
       const stopped = lifecycle.stop();
       if (!lifecycle.worker && !resource.cleaning) { registry.cleanup(resource); registry.finish(resource); }
       if (slot) {
@@ -160,7 +171,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         ({ signal } = ownData(control ?? {}, ['signal']));
         signalAborted(signal);
         if (!opening) {
-          if (method !== 'getContextReadCapabilities' && (credential === undefined || credential === null)) fail('authority_required');
+          if ((method !== 'getContextReadCapabilities'||semantic) && (credential === undefined || credential === null)) fail('authority_required');
           let selected;
           try {
             if (types.isProxy(payload)) fail('invalid_read_set');
@@ -168,8 +179,8 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
             if (!descriptor || !Object.hasOwn(descriptor, 'value')) fail('invalid_read_set');
             selected = contextReadSet(descriptor.value, PRODUCT_PROFILE);
           } catch { fail('invalid_read_set'); }
-          input = boundedData(payload); token = method === 'getContextReadCapabilities' ? null : boundedData(credential, 16384);
-          if (method !== 'getContextReadCapabilities' && credentialDigest(token) !== issuedBinding.credentialDigest) fail('authority_required');
+          input = boundedData(payload); token = method === 'getContextReadCapabilities'&&!semantic ? null : boundedData(credential, 16384);
+          if ((method !== 'getContextReadCapabilities'||semantic) && credentialDigest(token) !== issuedBinding.credentialDigest) fail('authority_required');
           if (JSON.stringify(selected) !== JSON.stringify(readSet)) fail('invalid_read_set');
           duration = deadline(method === 'refreshContextIndex' ? input.budget?.maxMs : input.deadlineMs);
         } else duration = openDeadline;
@@ -182,7 +193,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       const operation = opening ? first : operationRecord(callRequest, entered, duration, epoch);
       const callFrame = opening ? frame : options.diagnostics ? nativeTelemetry(operation.operationId, epoch) : null;
       const outbound = opening ? openingData : { method, input, credential: token, request: callRequest, operation, frame: callFrame };
-      operationMessage(outbound);
+      if(opening && semantic) {const {semanticPort,...data}=outbound;operationMessage(data);}else operationMessage(outbound);
       const record = opening ? resource : registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, parent: resource, frame: callFrame });
       let subscription;
       const detach = () => {
@@ -230,9 +241,13 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       catch (error) { return Promise.resolve(productFailure(error.code)); }
     };
     return Object.freeze({
-      getContextReadCapabilities(control = {}) {
+      getContextReadCapabilities(input = {},credential,control) {
+        if(semantic) {
+          try {const data=ownData(input,['deadlineMs']);return call('getContextReadCapabilities',{readSet,deadlineMs:deadline(data.deadlineMs)},credential,control);}
+          catch(error){return Promise.resolve(productFailure(error.code));}
+        }
         // Public configuration only, no credential/private projection observation.
-        return call('getContextReadCapabilities', { readSet, deadlineMs: 1000 }, null, control);
+        return call('getContextReadCapabilities', { readSet, deadlineMs: 1000 }, null, input);
       },
       ...(!maintenance ? { fetchCandidateEvidence: (input, credential, control) => call('fetchCandidateEvidence', input, credential, control),
       findCandidates: (input, credential, control) => call('findCandidates', input, credential, control),
@@ -240,6 +255,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       getContextIndexStatus: (input, credential, control) => call('getContextIndexStatus', input, credential, control),
       ...(maintenance ? { refreshContextIndex: (input, credential, control) => call('refreshContextIndex', input, credential, control) } : {}),
       close() {
+        if(semantic)Atomics.store(new Int32Array(semantic.configuration.cancellation),0,1);
         return closePromise ??= (async () => {
           if (!closed && !lifecycle.pending && lifecycle.worker) {
             // Graceful native close receives an independent cleanup acknowledgement.
@@ -250,7 +266,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
               instance.once('exit', code => code === 0 ? resolve() : reject(coded('reader_failed')));
               instance.once('error', reject);
               instance.postMessage({ method: 'close' });
-            }).then(() => { registry.finish(resource); if (resource.state === 'complete') releaseWriter?.(); }, () => registry.finish(resource, false));
+            }).then(() => { releaseSemanticWriter();registry.finish(resource); if (resource.state === 'complete') releaseWriter?.(); }, () => registry.finish(resource, false));
             lifecycle.worker = undefined;
           } else await shutdown('store_closed');
           await resource.delivery;
