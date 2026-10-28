@@ -723,3 +723,211 @@ diff **exit 0**:
 Final whitespace and inventory checks exit **0**. All test processes have
 completed; no unattended work remains. Changes remain uncommitted for the
 primary.
+
+### Fix A round 3: retain expiry evidence and expose native test failures
+
+Both round-2 re-reviews confirm that the terminal-cadence P1 is fixed. Their
+remaining P2 is an accounting boundary: the expiry guard ran before the cadence
+check, and inactive renewal could replace the old ledger or reset observations
+before recording the old duty interval. The pump now checks cadence before the
+expiry guard and before renewal replaces any ledger, authority or observation.
+The existing check caps each lane at its old authority/window endpoint. Public
+results, admission, pacing, quotas and failure behavior are unchanged.
+
+Twelve deterministic regressions cover both authority and window endpoints,
+with expiry delivery, direct inactive renewal, and expiry followed by renewal.
+They exercise both review reproductions: observations at 1,250/2,500/3,750/4,900
+ms, recovery at 6,300 ms and duty ending at 8,000 ms retain **2 misses / 5,500
+ms**; four unvisited lanes ending at 10,000 ms retain **4 misses / 10,000 ms**
+when the timer arrives at 10,001 ms. Late delivery never extends authorized duty.
+Renewed observations retain the cumulative evidence without counting it again.
+
+The native race test now records the raw result before returning to the pump.
+Success assertions run after `await clock.next()`, outside the pump catch, and
+include both pump status and the raw error. A forced `storage_error` regression
+retains the result and demonstrates a failure message containing `state:failed`,
+`error:storage_error` and `forced raw failure`, rather than an empty result array.
+The race Worker prestarts its independent ordinary writer and waits for its
+readiness before importing the maintenance runtime. The in-batch hook releases
+the writer through a shared-memory rendezvous and waits for its commit. Writer
+startup is outside the unchanged 1,000-ms quantum. No sleeps, extra clock steps
+or relaxed assertions were added to the race test.
+
+Four deterministic product-admission cases keep 1–4 owner pumps resident, each
+with a separate UTC-minute window and its own owner selection. Each selection
+contains all four fixture namespaces, Memory/Card types, and both intent lanes.
+The exact product settings are admitted: quantum **32 items / 1,000 ms**, window
+**2,048 items / 60,000 ms**, poll **25 ms**, authority renewal **60 s**, host ticks
+**20 s**, and commit nudges **3 s**. Per pump, two lanes reserve
+`2 * max(25, 1000) + 1000 = 3000 ms <= 5000 ms`; four resident pumps do not merge
+into one eight-lane selection. The tests retain pump identity through nudges
+and ticks, with no refusal, cadence miss or quota collision between owners.
+
+### Fix A round 3 non-gating native freshness diagnostic
+
+`tools/testing/context-product-freshness.diagnostic.mjs` is a report-only tool,
+excluded from the required test set. It imports the selected checkout's real
+pump and reuses `core/testing/context-product-owner-fixture.mjs`. Each run starts
+with **1,642 Memories / 26 Cards**, prebuilds both intents, and uses the exact
+product settings above for one resident owner. A prestarted independent writer
+performs **21 ordinary Memory capture commits**, in bursts `[1,2,3,4,5,1,2,3]`
+spaced 12 seconds apart; no optional review burst is included. Both campaigns
+start at a fresh real UTC-minute boundary. Nudge timers run three seconds after
+each commit, and host ticks run every 20 seconds. Those host renewals continue
+after pump failures; the existing runtime drains failed handles and retains
+their charged usage. The report records pump/renewal errors instead of using
+them as a diagnostic acceptance gate.
+
+Latency begins immediately after successful canonical commit acknowledgement,
+before writer-to-observer IPC. It ends when a native reader first observes
+current-intent lexical `ready` and finds that committed Memory by its unique
+query and ID.
+Observation waits 100 ms between native requests; Worker startup, status/query
+work and timer delivery add sampling overhead. Each request has a fresh reader
+binding, preserving the five-second request lifetime. Unavailable opens, status
+and query responses count as not-ready observations, remain in the raw report,
+and contribute to latency until a ready/findable observation succeeds. Frequent
+cold native requests can add DELETE-mode contention; the observed error counts
+and final pump states are reported alongside latency. These are real timers,
+not virtual-clock measurements. The tool emits raw samples, n, nearest-rank
+p50/p95, max, unresolved commits, operational errors, load averages and wall
+time, with no latency or sample-count pass/fail gate.
+
+This is an **early signal for the product's 30-second freshness gate, not
+qualification evidence**. It does not reproduce the full registered workload
+or qualify four-owner performance. The product's earlier **55 / 50 s** old-pin
+freshness measurements remain separate from this diagnostic.
+
+Observed diagnostic results on Node 22.16.0 (latencies in milliseconds; load
+triples are 1/5/15-minute averages):
+
+| Runtime source | n | p50 ms | p95 ms | max ms | Wall s | Campaign s | Exit |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| This branch (round 3 over `4d853a7f`) | 21 | 75827.918 | 111802.827 | 123786.795 | 183.004 | 123.929 | 0 |
+| Untouched separate `be5698fa` checkout | 21 | 113206.342 | 149154.164 | 161158.799 | 261.948 | 161.339 | 0 |
+
+Wall time excludes queue waiting and includes fixture creation, prebuild and
+alignment to the next UTC minute; campaign time begins at pump activation. Both runs have zero unresolved
+commits or writer errors. Pump events and unavailable reader observations are
+recorded as not ready and included in the latencies, with counts below.
+The comparison checkout was not modified. No freshness threshold determined either execution exit code.
+
+* Branch unavailable reader observations: **22**; pump events: **8**.
+* Branch final pump: `active` / `null`. Reader error counts: `{'storage_busy': 4, 'read_in_progress': 3, 'index_unavailable': 10, 'reader_failed': 5}`; pump event counts: `{'storage_busy': 3, 'index_unavailable': 2, 'read_in_progress': 3}`.
+* Branch load: start **2.25/2.84/3.93**, campaign **2.76/2.90/3.89**, end **6.60/4.32/4.28**. Run: `2026-10-28T12:40:00.871Z` to `2026-10-28T12:43:03.942Z`.
+* Branch raw commit-to-ready latencies, in observation order (ms):
+
+```json
+[123786.79535400867, 111802.82681697607, 111735.4345960021, 99810.42781996727, 99744.39841496944, 99676.20286500454, 87819.28711599112, 87753.01035499573, 87690.2405179739, 87626.03033602238, 75827.91847097874, 75762.54724794626, 75693.68444401026, 75627.91133797169, 75562.5332340002, 63837.638711988926, 51847.6538310051, 51767.5779440403, 39830.318450033665, 39760.75423300266, 39686.68283998966]
+```
+
+* Pre-fix unavailable reader observations: **65**; pump events: **15**.
+* Pre-fix final pump: `failed` / `storage_busy`. Reader error counts: `{'index_unavailable': 23, 'storage_busy': 13, 'read_in_progress': 26, 'reader_failed': 3}`; pump event counts: `{'storage_busy': 8, 'read_in_progress': 4, 'read_timeout': 1, 'index_unavailable': 1, 'reader_failed': 1}`.
+* Pre-fix load: start **5.82/6.08/6.15**, campaign **6.89/6.35/6.24**, end **3.90/5.69/6.04**. Run: `2026-10-28T12:16:19.349Z` to `2026-10-28T12:20:41.372Z`.
+* Pre-fix raw commit-to-ready latencies, in observation order (ms):
+
+```json
+[161158.79868102074, 149154.16370004416, 149055.81277400255, 137160.53553795815, 137040.106022954, 136928.50365000963, 125176.58646202087, 125063.84757298231, 124941.44700103998, 124715.51778900623, 113206.34237700701, 113086.85815602541, 112985.425178051, 112872.49298000336, 112756.74884599447, 100975.94855600595, 88933.64837503433, 88608.56945097446, 76981.81081396341, 76640.63196003437, 76258.7101150155]
+```
+
+Both observed p95s exceed 30 seconds. The branch observation is lower here,
+but the runs had different loads and frequent native failures, so this is not
+causal attribution or evidence that the product freshness gate passes. The
+existing 55/50-second product measurements are a separate workload. Cold reader
+bootstrap and polling can affect DELETE-mode availability and measured latency.
+Both final campaigns completed before 22:30 Taipei time; no task work entered
+the reserved 22:45–00:30 machine window.
+
+Three earlier diagnostic attempts are retained separately:
+
+* Initial branch run: **exit 1**, no latency report, because a cold reader open
+  returned `index_unavailable` and aborted the observer.
+* Initial `be5698fa` run: **exit 1**, no latency report, because a cold reader
+  open returned `storage_busy` and aborted the observer.
+* The next branch attempt recorded unavailable opens but reused the fixture's
+  single-use request binding. Later opens returned `authority_required`. After
+  identifying and fixing that harness error, the invalid attempt was stopped
+  with SIGTERM (**exit 143**). It supplies no latency evidence.
+
+The final observer issues a new request binding/reservation for every poll,
+counts unavailable opens/status/query responses as not ready, and keeps the
+configured host ticks/nudges active. It never substitutes stale results for
+ready/findable documents, bypasses native authority or changes the pump's
+failure/drain behavior. Both 21-sample reports were independently checked
+against the raw JSON, and their percentiles were recomputed; count, distinct-
+document, median, nearest-rank p95 and maximum checks each exit **0**.
+
+Reproduce from the branch checkout, with Node 22.16.0 first in `PATH` and an
+existing separate checkout at `be5698fa` supplied by the host:
+
+```sh
+cairn-heavy node tools/testing/context-product-freshness.diagnostic.mjs
+cairn-heavy node tools/testing/context-product-freshness.diagnostic.mjs --checkout "$PRE_FIX_CHECKOUT"
+```
+
+### Fix A round 3 verification receipts
+
+Every native test, repetition and diagnostic ran under `cairn-heavy`. Exact
+Node versions were asserted before testing (each version check exit **0**).
+The required commands retain `--test --test-reporter=tap --test-concurrency=1`
+and explicit file arrays, with the matching runtime first in `PATH` and npm
+offline, audit/fund disabled. Glob expansion and independent recursive filename
+matching agree on **61 required files**, inventory comparison **exit 0**. The
+report-only diagnostic is outside that set. Each child exit code was captured
+directly, independently of log tails.
+
+| File arguments after Node test flags | Files | Node 22.16.0 exit / pass | Node 24.15.0 exit / pass |
+| --- | ---: | --- | --- |
+| `core/test/context-read*.test.mjs` | 35 | **0 / 762** | **0 / 762** |
+| `core/test/topic-*.test.mjs` | 17 | **0 / 238** | **0 / 238** |
+| `core/test/no-raw-db-fd.test.mjs core/test/sqlite-lock-safety.test.mjs core/test/sqlite-journal-probe.test.mjs` | 3 | **0 / 44** | **0 / 44** |
+| `adapters/mcp/test/context-read*.test.mjs` | 5 | **0 / 88** | **0 / 88** |
+| `packaging/test/topic-overview-raw29.test.mjs` | 1 | **0 / 3** | **0 / 3** |
+
+Each runtime passes **1,135 required cases**, including all 17 added round-3
+cases, with zero failures, cancellations or skips. The native race was also
+repeated **30 times per runtime under two concurrent CPU-load workers** through
+the queue wrapper: **30/30 on Node 22.16.0 and 30/30 on Node 24.15.0**. Every one
+of the 60 individual repetition commands exited **0**; the loop exited **0**.
+Node 22.16.0 repetition wall time: **78.108 s**; measured 1-minute load range **7.33–10.38**.
+Node 24.15.0 repetition wall time: **79.155 s**; measured 1-minute load range **8.57–9.60**.
+
+On an isolated archive of `4d853a7f`, with only the final pump test overlaid,
+`--test-name-pattern='Fix A3 .*lanes retain cadence'` fails all **12/12**
+regressions on **both** runtimes: each command **exit 1**, zero passes,
+cancellations or skips. A byte comparison against `git show` verifies the
+archived pump is unchanged (**exit 0**). These failures are the missing cadence
+counts/gaps, rather than missing APIs or setup errors.
+
+The initial filtered Node 22 development run exited **1**, with **12/18 passing**:
+six recovered-lane cases used a larger fixture budget that changed pacing from
+the review reproduction. Restoring the original fixture budget restored the
+1,250/2,500/3,750/4,900-ms observations. The corrected filtered run exited **0**,
+**18/18 passing**, including the forced failure, native race, all twelve cadence
+cases and all four product-admission cases. No production timing limit or
+assertion was relaxed. These initial failures are retained separately from the
+final complete matrix.
+
+Diagnostic syntax checks on both Node versions exit **0**. The five tested
+production/test source files retain their matrix/stress digests, and the final
+diagnostic source has the same digest for both measured campaigns: six-file
+hash comparison **exit 0**. No required test source changed after the passing
+matrix or repetitions. The separate `be5698fa` checkout retains its exact HEAD
+and has no tracked or untracked changes: identity/cleanliness check **exit 0**.
+
+Delivery inventory compares `git diff --name-only -z HEAD` plus nonignored
+untracked paths with independent SHA-1 blob/mode checks against **2,465 HEAD
+blobs** and filesystem enumeration. The routes agree on **7 changed files**,
+inventory comparison **exit 0**:
+
+* `core/context-product-pump.mjs`
+* `core/test/context-read-maintenance-convergence.test.mjs`
+* `core/test/context-read-product-pump.test.mjs`
+* `core/test/fixtures/context-maintenance-race-worker.mjs`
+* `core/test/fixtures/context-maintenance-writer.mjs`
+* `docs/plans/context-read-maintenance-convergence.md`
+* `tools/testing/context-product-freshness.diagnostic.mjs`
+
+Final whitespace, untracked-text newline/trailing-space and delivery inventory
+checks exit **0**. All test and diagnostic processes have completed; no
+unattended work remains. Changes remain uncommitted for the primary.

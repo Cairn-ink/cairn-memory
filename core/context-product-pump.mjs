@@ -153,8 +153,8 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     }
     function tick(){
       if(stopped||error)return;
-      if(exhausted()||now()>=renewedUntil){report(observation());return;}
       checkCadence(now());
+      if(exhausted()||now()>=renewedUntil){report(observation());return;}
       lastTick=now();
       let quantumTimer;
       return running=(async()=>{
@@ -217,6 +217,9 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       const inactive=now()>renewedUntil||[...ledgers.values()].some(l=>now()>l.endsAt||
         (!running&&(l.items>=l.maxItems||l.ms>=l.maxMs)));
       if(next.pollMs!==c.pollMs||JSON.stringify(next.quantum)!==JSON.stringify(c.quantum))fail('invalid_input');
+      // Account against the old authority and ledgers before any replacement
+      // or inactive reset can erase this duty interval's overdue evidence.
+      checkCadence(now());
       if(w.id!==window.id){
         if([...ledgers.values()].some(l=>now()<l.endsAt))fail('invalid_input');
         const nextLedgers=admit(w,b);

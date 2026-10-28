@@ -579,3 +579,68 @@ test('Fix A1 pending disposal reports timeout before it settles and never dispat
   assert.equal(final.usedItems,1);assert.equal(final.usedMs,100);assert.equal(s.timers.size,0);
   await p.close();assert.equal(s.closed.length,s.opened.length);
 });
+
+for(const recovered of [false,true])for(const boundary of ['authority','window'])for(const action of ['expiry','renew','expiry then renew'])
+test(`Fix A3 ${recovered?'recovered':'unvisited'} lanes retain cadence at ${boundary} ${action}`,async t=>{
+  const endpoint=recovered?8000:10000;
+  const s=setup(t,{...(boundary==='authority'?{renewalMs:endpoint}:{})},
+    {result:()=>settled()});
+  if(boundary==='window')s.c.window.endsAtMonoMs=endpoint;
+  const p=s.renew(s.c),completion=p.completion;
+  if(recovered){
+    for(let i=0;i<4;i++)await s.next();
+    assert.deepEqual(s.observations.map(o=>o.at),[1250,2500,3750,4900]);
+    const [id,timer]=[...s.timers][0];s.timers.delete(id);s.setTime(6300);await timer.f();
+    assert.equal(maintenancePumpDiagnostic(p.getStatus()).cadenceMisses,1);
+  }
+  const [id,timer]=[...s.timers][0];s.timers.delete(id);s.setTime(endpoint+(recovered?100:1));
+  const expected={cadenceMisses:recovered?2:4,worstGapMs:recovered?5500:10000};
+  const check=status=>{
+    const {cadenceMisses,worstGapMs}=maintenancePumpDiagnostic(status);
+    assert.deepEqual({cadenceMisses,worstGapMs},expected);
+  };
+  if(action!=='renew'){
+    await timer.f();check(await completion);
+    assert.equal(s.calls.length,recovered?5:0);
+    assert.equal(p.getStatus().state,boundary==='authority'?'renewal_expired':'budget_exhausted');
+  }
+  if(action!=='expiry'){
+    s.renew({...s.c,...(boundary==='window'?{window:{...s.c.window,id:'next',endsAtMonoMs:endpoint+60000}}:{})});
+    check(p.getStatus());
+    if(boundary==='window')check(await completion);
+    await s.next();check(p.getStatus());
+    assert.equal(p.getStatus().state,'active');
+  }
+  check(p.getStatus());await p.close();
+});
+
+for(let residents=1;residents<=4;residents++)
+test(`Fix A3 product configuration admits ${residents} resident owner pumps with separate minute windows`,async t=>{
+  const pumps=[];
+  for(let owner=0;owner<residents;owner++){
+    const s=setup(t,{quantum:{maxItems:32,maxMs:1000},budgets:{maxItems:2048,maxMs:60000},pollMs:25,renewalMs:60000},
+      {result:()=>settled()});
+    const options=s.c.projections[0].options,readSet=four.map(ns=>({...ns,ownerId:'product-'+owner})),ownerCoverage=descriptor(readSet);
+    const serviceBinding={...options.host.configuration.serviceBinding,ownerId:readSet[0].ownerId,namespaces:{readSet,ownerCoverage}};
+    s.c.projections=[{types:['memory','card'],options:{...options,readSet,ownerCoverage,
+      host:{...options.host,configuration:{serviceBinding}}}}];
+    s.c.window.id='owner-'+owner+'-utc-minute';
+    // One owner selection has two intent lanes: 2*max(25,1000)+1000=3000 <=5000.
+    const p=s.renew(s.c);pumps.push({s,p});
+    assert.equal(p.getStatus().state,'active');
+  }
+  assert.equal(pumps.length,residents);
+  // Host nudges at 3 seconds and ticks at 20/40 seconds retain identity and
+  // leave the internal cadence timer active; renewal is 60 seconds.
+  for(const {s,p} of pumps){
+    for(const at of [3000,20000,40000]){
+      while(Math.min(...[...s.timers.values()].map(timer=>timer.at))<=at)await s.next();
+      s.setTime(at);assert.equal(s.renew(s.c),p);
+      assert.equal(p.getStatus().state,'active');
+    }
+    assert.equal(s.timers.size,1);assert.equal(maintenancePumpDiagnostic(p.getStatus()).cadenceMisses,0);
+    assert.deepEqual(new Set(s.calls.map(([input])=>input.intent)),new Set(['current','history']));
+    assert.equal(p.getStatus().usedItems,0);assert.equal(p.getStatus().usedMs,0);
+    await p.close();
+  }
+});

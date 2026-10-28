@@ -63,6 +63,29 @@ function pumpConfig(service) {
     projections: [{ options: service.options, types }] };
 }
 
+function successfulResult(result, pump) {
+  assert.equal(result?.ok, true, JSON.stringify({ pump: pump.getStatus(), raw: result }));
+  return result.value;
+}
+
+test('Fix A3: failed refresh retains the raw error outside the pump catch', async t => {
+  const f = fixture(t), service = configured(t, f.path, readSet, { service: true });
+  const raw = { ok: false, error: { code: 'storage_error', message: 'forced raw failure' } }, results = [];
+  const clock = scheduler(async () => ({ close: async () => {}, async refreshContextIndex() {
+    results.push(raw); return raw;
+  } })), pump = clock.renew(pumpConfig(service));
+  t.after(() => pump.close());
+  await clock.next();
+  assert.deepEqual(results, [raw]);
+  assert.throws(() => successfulResult(results[0], pump), error => {
+    assert.match(error.message, /forced raw failure/);
+    assert.match(error.message, /"state":"failed"/);
+    assert.match(error.message, /"error":"storage_error"/);
+    t.diagnostic(error.message.split('\n')[0]);
+    return true;
+  });
+});
+
 test('Fix A: in-batch fence race yields progress and preserves earlier committed documents', t => {
   const f = fixture(t, { cards: true }); f.admit('seed batch probe'); f.admit('second batch probe');
   let raced = false, items = 0, armed = false;
@@ -98,18 +121,18 @@ test('Fix A: actual product Worker fence race returns rebuilding and the pump co
   const clock = scheduler(async options => {
     const h = first ? handle : await open(options); first = false;
     return { close: () => h.close(), async refreshContextIndex(...args) {
-      const result = await h.refreshContextIndex(...args); results.push({ ...ok(result), intent: args[0].intent }); return result;
+      const result = await h.refreshContextIndex(...args); results.push({ result, intent: args[0].intent }); return result;
     } };
   }), pump = clock.renew({ ...pumpConfig(service), renewalMs: 60000 });
   t.after(() => pump.close()); await clock.next();
-  assert.equal(results[0].status, 'rebuilding');
+  assert.equal(successfulResult(results[0]?.result, pump).status, 'rebuilding');
   assert.equal(pump.getStatus().state, 'active'); assert.equal(pump.getStatus().error, null);
   assert.equal(service.view[6], 1); assert.equal(clock.timers.size, 1);
   const reader = configured(t, f.path, readSet), h = await reader.open();
   assert.equal(ok(await h.getContextIndexStatus(input, reader.token)).lexical.reason, 'fence_changed');
   assert.equal((await h.findCandidates({ ...input, query: 'probe' }, reader.token)).error.code, 'index_unavailable');
-  for (let i = 0; i < 8 && !results.slice(1).some(r => r.status === 'complete' && r.intent === 'current'); i++) await clock.next();
-  assert.ok(results.slice(1).some(r => r.status === 'complete' && r.intent === 'current'));
+  for (let i = 0; i < 8 && !results.slice(1).some(r => successfulResult(r.result, pump).status === 'complete' && r.intent === 'current'); i++) await clock.next();
+  assert.ok(results.slice(1).some(r => successfulResult(r.result, pump).status === 'complete' && r.intent === 'current'));
   assert.equal(pump.getStatus().error, null);
   assert.equal(ok(await h.getContextIndexStatus(input, reader.token)).lexical.state, 'ready');
 });

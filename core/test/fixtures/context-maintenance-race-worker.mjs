@@ -1,11 +1,20 @@
 // Inject an independent ordinary commit after the native staged item writes,
 // before the engine's final in-batch fence check. No production seam changes.
 import { registerHooks } from 'node:module';
-import { workerData } from 'node:worker_threads';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { Worker, workerData } from 'node:worker_threads';
+import { once } from 'node:events';
 const Native = process.getBuiltinModule('node:sqlite').DatabaseSync;
 const state = new Int32Array(workerData.host.configuration.state);
+const rendezvous = new Int32Array(new SharedArrayBuffer(8));
+if (Atomics.load(state, 6) === 0) {
+  const writer = new Worker(new URL('./context-maintenance-writer.mjs', import.meta.url), {
+    workerData: { path: workerData.path, input: { namespace: workerData.readSet[0], type: 'memory', operation: 'capture' },
+      rendezvous: rendezvous.buffer }, env: {}, execArgv: [], stdout: true, stderr: true,
+  });
+  // Imported runtime sends ready only after the independent writer is ready.
+  const [message] = await once(writer, 'message');
+  if (message !== 'ready') throw Error('independent writer not ready');
+}
 globalThis.maintenanceRaceDatabase = class extends Native {
   constructor(path, options) { super(path, options); this.side = String(path).endsWith('.context-read-product-v1.1.sqlite'); }
   prepare(sql) {
@@ -17,10 +26,9 @@ globalThis.maintenanceRaceDatabase = class extends Native {
       return (...args) => {
         const result = Reflect.apply(value, target, args);
         if (Atomics.compareExchange(state, 6, 0, 1) === 0) {
-          const child = spawnSync(process.execPath, [fileURLToPath(new URL('./context-maintenance-writer.mjs', import.meta.url)),
-            workerData.path, JSON.stringify({ namespace: workerData.readSet[0], type: 'memory', operation: 'capture' })],
-          { encoding: 'utf8', env: {}, timeout: 15000 });
-          if (child.status !== 0) throw Error('independent writer exit ' + child.status + ': ' + child.stderr);
+          Atomics.store(rendezvous, 0, 1); Atomics.notify(rendezvous, 0);
+          Atomics.wait(rendezvous, 1, 0, 15000);
+          if (Atomics.load(rendezvous, 1) !== 1) throw Error('independent writer did not commit');
         }
         return result;
       };
