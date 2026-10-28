@@ -1,4 +1,4 @@
-# Installer local mode: contract for `@cairn-ink/memory` 0.6.0 (amended for 0.6.1)
+# Installer local mode: contract for `@cairn-ink/memory` 0.6.0 (amended for 0.6.1 and 0.6.2)
 
 Status: v0.10 (setup session, 2026-10-25). v0.1 (`f053a18c`) was audited by a
 non-author Codex auditor (gpt-6.1-sol, xhigh, read-only): no P0, fourteen P1,
@@ -23,6 +23,8 @@ per inspection, dry-run planning and uninstall completion are explicit,
 status deduplicates per cause, and L27–L32 are sharpened.
 v0.14 (2026-10-28, for installer 0.6.1) records the implemented, per-file
 hosted runtime exception to L06/L24 in §16.
+v0.15 (2026-10-28, for installer 0.6.2) adds §17: the hosted Codex
+inspection uses the §15 parent selection.
 
 Base: `main` at `b2513501` (PR #469 local V1 Raw chain and PR #470 unified
 memory V1 are merged). Branch `feat/setup-local-mode`.
@@ -1000,3 +1002,95 @@ it does not broaden the local-mode scope. The rules below refer to
    `CAIRN_SETUP_REQUIRE_BASELINE=1 npm run test:setup`; the baseline must
    not silently skip (test:37–52, 325–332). These commands are PR validation
    requirements; the comparison test does not itself rebuild the runtime.
+
+## 17. 0.6.2 amendment: hosted Codex inspection uses the §15 parent selection
+
+### 17.1 Defect (found in the 0.6.1 post-publish check, 2026-10-28)
+
+§15.2 rule 1 deliberately left the hosted inspection at 0.5.3 behaviour. In
+`setupCodex` (`packages/setup/lib/codex.mjs`, the `cairn-codex-inspect-`
+directory created after the `config.toml` snapshot) it still creates its
+neutral directory only under `os.tmpdir()`, and refuses with `codex_tmpdir`
+when an ancestor of that directory contains `.codex/config.toml`. Observed
+with the published 0.6.0 and 0.6.1 in synthetic temp homes, with `TMPDIR`
+inside `HOME` and `~/.codex/config.toml` present: `npx … setup --local`
+succeeds (the §15 fallback), but `status` exits 1 and prints `codex_tmpdir`
+for the Codex automatic-memory section, also for a local-only user; with
+`TMPDIR` outside `HOME`, both exit 0. The same check stops every hosted Codex
+`setup` before it changes anything. Workaround until 0.6.2: `TMPDIR=/tmp`.
+
+### 17.2 Rules
+
+1. **One parent selection.** The hosted inspection directory is created
+   through `withCodexInspectionEnvironment`, the helper the local inspection
+   already uses (§15.2 rule 1): ordered candidates
+   `[env.TMPDIR || os.tmpdir(), '/tmp']`, the fallback only on non-Windows
+   and only when canonically different, the canonical created directory, an
+   ancestor `.codex/config.toml` check per candidate, the managed paths
+   checked once a usable candidate is found, and every attempt directory
+   removed in `finally`. No second copy of that logic.
+2. **Planned configuration path.** The hosted call passes the canonical
+   `$CODEX_HOME/config.toml` as `plannedConfigPath`, whether or not the file
+   exists: a hosted `setup` may create it while the chosen directory is still
+   the working directory of later Codex calls (`setupInstalledCodex` receives
+   it). A candidate below `<dir>/.codex` with `CODEX_HOME=<dir>/.codex` is
+   therefore never chosen. With the default `/tmp`, nothing changes.
+3. **Same refusals.** No usable candidate → `codex_tmpdir`; a managed path
+   present → `codex_managed`; both raised as the same `SetupError` keys, with
+   the same messages, exit codes and precedence as 0.6.1 (`codex_tmpdir`
+   first). Only refusals produced by the parent selection are mapped; every
+   other error from the inspection body propagates unchanged.
+4. **Unchanged.** The control directory (`cairn-codex-control-`, used by
+   `disable`, `uninstall`, `pause`, `resume`, `prompt-recall-*`, `config`),
+   the validation home under `$CODEX_HOME`, the local inspection, routing
+   (§6.3), the status bookkeeping (§15.2 rule 6), every message
+   (`messages.mjs`), and `packages/setup/runtime/**`: 0.6.2 ships the 0.6.1
+   engine bundle and hosted runtime byte for byte.
+5. **Internal parameters.** The hosted inspection accepts the same internal
+   fallback parent and managed paths as the local one, with the production
+   defaults `/tmp` and the two `/etc/codex` files. They are not reachable
+   from argv or the environment. Tests never create files in the real `/tmp`
+   root or in `/etc`.
+6. **L24 exception (named, like §16).** L06 cells (`TMPDIR` outside `HOME`)
+   are unchanged and still equal 0.5.3. L24 is redefined: its 0.5.3 run uses
+   the fixture's neutral `TMPDIR`; the current hosted-only and routed runs
+   keep `TMPDIR=<HOME>/tmp`, `config.toml` present and a usable fallback
+   parent; output, exit code, prompts, native call order and file inventory
+   must be equal under the L06 normalization. Under `TMPDIR` inside `HOME`,
+   the hosted flow now matches 0.5.3 under a neutral `TMPDIR`, not 0.5.3's
+   refusal.
+
+Effect: with `TMPDIR` inside `HOME` and a usable `/tmp`, hosted Codex setup
+and `status` behave as with `TMPDIR=/tmp`. Only when both candidates are
+unusable, or a managed configuration exists, does the hosted flow refuse, by
+name, as before.
+
+### 17.3 Acceptance additions (Node 22.16.0 and 24.15.0)
+
+Every new or redefined case must fail with the 0.6.1 `packages/setup/lib`
+(`be2bc543`) and pass with 0.6.2. L24 runs with
+`CAIRN_SETUP_REQUIRE_BASELINE=1`.
+
+| ID | Case | Expected |
+| --- | --- | --- |
+| L33 | L24 redefined per rule 6 (same cells) | equal to 0.5.3 under a neutral `TMPDIR` |
+| L34 | hosted Codex `setup --client codex`, `setup --cloud` and `setup --dry-run` with `TMPDIR=<HOME>/tmp`, for a qualified Codex (a) with `config.toml` present and (b) without one | same exit code, normalized output, prompts, native mutating calls and HOME inventory as the same run with a neutral `TMPDIR`; the Codex calls' working directory is under the fallback parent in both (a) and (b) (rule 2); no `cairn-codex-inspect-*` left in either parent |
+| L35 | `status` and `status --client codex` with `TMPDIR=<HOME>/tmp` and `config.toml` present: local-only installed, cloud-installed, and both | exit code and output equal to the same state with a neutral `TMPDIR`; exit 0 for a healthy install; no `codex_tmpdir` line |
+| L36 | neither candidate usable; managed path present (internal parameter): hosted `setup --cloud`, `setup --client codex`, `status` | `codex_tmpdir` / `codex_managed` exactly as 0.6.1: exit code, output, nothing changed; each cause once in `status` (§15.2 rule 6) |
+| L37 | cleanup: a successful hosted run, and a hosted run whose `codex mcp add` fails after the directory was chosen | the attempt directory is removed in both; no other `cairn-codex-*` directory left |
+| L38 | regression: the rest of `test:setup` | unchanged, except L24 per rule 6 |
+| M03 | manual, setup session: the packed 0.6.2 with real Codex and Claude Code, temp homes, `TMPDIR` inside `HOME` with a Codex `config.toml`; no cloud account writes | `setup --local`, then `status` exits 0 without `codex_tmpdir`; the memory round trip of the 0.6.1 smoke still works |
+
+### 17.4 Packet, files and release
+
+One packet, **F2**, cut from `be2bc543` (the commit npm 0.6.1 was built
+from) so that the 0.6.1 engine bundle still passes `build-runtime.mjs
+--check`. Files: `packages/setup/lib/codex.mjs` (the hosted inspection
+directory, and the helper only if a parameter is missing), setup tests and
+fakes as the cases need (new test files must be reachable from `test:setup`),
+`packages/setup/package.json` version `0.6.2`, root `CHANGELOG.md` (a 0.6.2
+entry above 0.6.1), the release sentence in `packages/setup/README.md`, and
+`docs/npx-setup-release.md` (the release checklist, still written for
+0.6.0). The setup session edits this contract. Not edited:
+`packages/setup/runtime/**`, `packages/setup/lib/messages.mjs`, anything
+else outside `packages/setup/` except the three documents named here.
