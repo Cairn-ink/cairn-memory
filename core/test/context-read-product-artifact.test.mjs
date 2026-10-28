@@ -35,8 +35,8 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   const manifest = JSON.parse(readFileSync(join(root, 'packaging/artifact-files.json'), 'utf8'));
   const entries = ['core/context-product-reader.mjs', 'core/context-product-worker.mjs', 'core/context-product-pump.mjs', 'core/context-product-selection.mjs', 'core/context-read-supervisor.mjs'];
   const expected = closure(root, entries);
-  // P2c's 87-module closure, P2d's SQLite policy and maintenance admission.
-  assert.equal(expected.length, 89);
+  // Hosted P2e closure plus shared maintenance admission.
+  assert.equal(expected.length, 99);
   for (const file of expected) assert.ok(manifest.includes(file), 'missing artifact file: ' + file);
   for (const file of manifest) {
     const target = join(staged, file); mkdirSync(dirname(target), { recursive: true }); copyFileSync(join(root, file), target);
@@ -72,7 +72,7 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   assert.ok(installed.includes('core/context-product-sqlite.mjs')); // P2d Worker dependency.
 
   const staticFiles = closure(artifact, ['core/context-product-reader.mjs', 'core/context-read-supervisor.mjs'], false);
-  assert.equal(staticFiles.length, 23, 'selection adds no eager SQLite dependency');
+  assert.equal(staticFiles.length, 27, 'selection adds no eager SQLite dependency');
   t.diagnostic(`runtime/Worker closure cross-check: source=${expected.length}, installed=${installed.length}; static SQLite-free closure=${staticFiles.length}`);
   // Bootstrap code is supplied by the host, copied into the installed tree;
   // it imports no source-checkout module and has no network/provider dependency.

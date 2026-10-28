@@ -1,4 +1,5 @@
 // Run before the quiet window. This controller never loads SQLite.
+import { createHash } from 'node:crypto';
 import { readFileSync,writeFileSync,realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { resolve,dirname } from 'node:path';
@@ -18,11 +19,13 @@ export function segmentEstimates(registration) {
 }
 export function validateFilled(input) {
   if(/PLACEHOLDER|\$\{[^}]*\}/.test(JSON.stringify(input)))throw Error('unfilled_registration');
-  const frozen=JSON.parse(readFileSync(new URL('./registration.engine.template.json',import.meta.url),'utf8'));
+  const templateBytes=readFileSync(new URL('./registration.engine.template.json',import.meta.url));
+  if(readFileSync(new URL('./registration.engine.template.sha256',import.meta.url),'utf8')!==createHash('sha256').update(templateBytes).digest('hex')+'  registration.engine.template.json\n')throw Error('template_hash_changed');
+  const frozen=JSON.parse(templateBytes);
   for(const key of ['productionNode','counterId','deadlines','pump','productInputs','readCutoffReport','stateDeadlines'])if(!isDeepStrictEqual(input[key],frozen[key]))throw Error('product_input_changed:'+key);
   if(input.counterModule!==new URL('./counter.mjs',import.meta.url).href)throw Error('counter_module_must_be_registered');
   validateV4Registration(input,'engine');
-  validateRegistration({...input,protocolDefinition:V3_DEFINITION});
+  validateRegistration({...input,protocolDefinition:V3_DEFINITION},{engineProfile:true});
   writerProfile(input.writerProfile);
   for(const estimate of segmentEstimates(input)) {
     if(estimate.cells===0||estimate.estimateSeconds>24300)throw Error('segment_exceeds_single_night');
@@ -50,7 +53,7 @@ export async function fillRegistration(hostInput,profilePath) {
   input.writerProfile=writerProfile(JSON.parse(readFileSync(input.writerProfileFile,'utf8')));
   input=JSON.parse(JSON.stringify(input).replaceAll('${volumeRoot}',volumeRoot).replaceAll('${packageRoot}',packageRoot));
   for(const key of ['adapterModule','counterModule'])input[key]=pathToFileURL(input[key]).href;
-  input.inputFiles=[input.writerProfileFile,...counterAssets(input.counterConfiguration),...['manifest.json','corpus.mjs','labels.json','queries.json','schemas.mjs','registration.engine.template.json','registration.mjs','generate.mjs','generate-child.mjs','canonical-evidence.mjs','build-template.mjs','registration.constants.json','gold-rank.mjs','freeze.mjs','counter-deps/package.json','counter-deps/package-lock.json'].map(n=>resolve(packageRoot,n))];
+  input.inputFiles=[input.writerProfileFile,...counterAssets(input.counterConfiguration),...['manifest.json','corpus.mjs','labels.json','queries.json','schemas.mjs','registration.engine.template.json','registration.engine.template.sha256','registration.mjs','generate.mjs','generate-child.mjs','canonical-evidence.mjs','build-template.mjs','registration.constants.json','gold-rank.mjs','freeze.mjs','counter-deps/package.json','counter-deps/package-lock.json'].map(n=>resolve(packageRoot,n))];
   validateFilled(input);
   const counter=await (await import(input.counterModule)).createCounter(input.counterConfiguration);if(counter.id!==input.counterId||counter.countTokens('東京 海港 orchard')<1)throw Error('counter_unavailable');
   return input;

@@ -8,6 +8,11 @@ export function maintenanceQuantum({ now, cutoff, maxMs }) {
   return {
     cutoff, reserve,
     admit: (kind = 'item') => cutoff - now() > reserve + (estimates.get(kind) ?? 10),
+    async measureAsync(work, kind = 'item') {
+      const start = now();
+      try { return await work(); }
+      finally { estimates.set(kind, Math.max(estimates.get(kind) ?? 10, 2 * (now() - start))); }
+    },
     measure(work, kind = 'item') {
       const start = now();
       const result = work();

@@ -1,17 +1,16 @@
 # Context-read qualification inputs: preparation handoff
 
-**Round 3b:** the owner-approved four-change fixture patch is applied. Test-only
-preparation uses an isolated controlled clock; shortened verification is recorded
-in the round-3b section below. Qualification remains blocked by the engine F/A defect.
+**Round 3c:** the native Linux run is an explicitly authorized full-scale
+**diagnostic**, using the unchanged revision-1 engine definition and the existing
+364 + 364 segments back to back. A `native-linux-ext4` registration sets
+`qualifying:false`, `diagnostic:true` and an explicit revision-mismatch reason,
+even if every gate passes. It grants no qualification or production acceptance.
 
-**Qualification remains blocked. Do not start either long segment.** The authorized harness fixes and product registration are implemented.
-The tiny real session leaves all four first-eligible Memory/Card intent targets
-unobserved under same-projection capture/review writes. An earlier round-1 trial also retained
-a T preparation `read_timeout`; the final rehearsal completes all four T probes
-and preserves that earlier evidence below. An earlier session with
-the adapter quantum also exported a failed pump with `index_unavailable`. Requests, O, W/WM, B and all four T probes complete their functional checks in
-the final round-2 rehearsal. The pinned test dependencies were installed offline. No engine runtime
-change, qualification timing run, network access or commit was made.
+Qualification remains blocked pending the required qualifying evidence. Earlier
+F/A engine failures are retained below as historical evidence. Local main was
+integrated through Fix A and P2e; no engine runtime code was authored in this
+round. The current rehearsal and verification results are in "Fix round 3c".
+No long timing run was performed here. No network access or commit was made.
 
 ## Remaining blocker and evidence
 
@@ -126,9 +125,9 @@ The registration's `productInputs` labels every supplied value:
 | Measured request/read deadline | 5,000 ms; agreed with product | adapter request window |
 | Separately reported per-read default | 1,000 ms; unvalidated; never gated | adapter |
 | Hook | 3,000 ms; registration metadata only | proposed |
-| Quantum | 128 items / 1,000 ms | adapter |
-| Per-tick budget | 1,024 items / 8,000 ms | adapter |
-| Poll / renewal / cron | 25 ms / 10,000 ms / 60,000 ms | adapter |
+| Quantum | 32 items / 1,000 ms | adapter; reviewed, pending merge |
+| Per-owner 60 s window budget | 2,048 items / 60,000 ms | adapter; reviewed, pending merge |
+| Poll / renewal / in-process tick | 25 ms / 60,000 ms / 20,000 ms | adapter; reviewed, pending merge |
 | Maintainer open | 5,000 ms | adapter |
 | Reader open and state deadlines | 5,000 ms | engine default |
 | Sidecar journal | each cell's frozen protocol choice | adapter setting mapped per protocol |
@@ -147,7 +146,7 @@ No absolute operator paths or private product identities are committed.
 `--profile engine --rehearse` requires Node v24.22.1 and the registration/writer
 inputs. It runs the real request warmup/main/cold/initialized-reference paths,
 O overflow, one W reader/baseline pair, four WM references, a shared F/A session,
-B backup/restore/format-2 verification, and T post-catch-up status/candidates/
+B backup/restore/sidecar verification, and T post-catch-up status/candidates/
 fetch/assembly. All ten W method profiles must actually be attempted. Earlier
 exploratory rehearsals also exercised all absent/exhaustion/abort/crash manifests.
 
@@ -186,9 +185,12 @@ retains the protocol's 47,700-second reservation/observation ceiling.
 
 ## Exact preparation and run commands
 
-**Do not execute either run command until the F/A blocker is resolved and a full
-rehearsal succeeds.** No particular date or start time is reserved by this doc.
-All preparation precedes the later supervised quiet windows.
+**Qualification requires a successful rehearsal and the required acceptance.**
+The owner separately authorized the native revision-1 diagnostic despite the
+historical F/A blocker: run segment-1, then segment-2 with its resume input, on
+the same dedicated host/volume and frozen registration. This exception permits
+only a diagnostic, never qualification. The operator schedules the quiet window;
+the template does not prescribe a local start time.
 
 From the frozen repository checkout, set `RUN_VOLUME` to a new owned directory
 on the real run volume, `HOST_INPUT` to the primary's host JSON, and
@@ -200,7 +202,11 @@ contains `host:{id,cpu,ramBytes,os,owner}`, `volume:{id,mount,filesystem,product
 override is needed. The local pinned dependency root is the default. Node, counter,
 deadline, pump and other frozen product-fact keys are forbidden in host overrides,
 even when their values equal the template.
-`production-linux-ext4`, `wsl2-ext4` and `apfs` remain distinct roles.
+`production-linux-ext4`, `wsl2-ext4`, `apfs` and `native-linux-ext4` remain distinct
+roles. For the authorized diagnostic, fill `native-linux-ext4`, an ext4 volume,
+`volume.production:false`, and the exact Node patch. Native runtime/volume
+eligibility is checked independently; the internal production flag remains false.
+The native role is rejected for production and legacy-only profiles.
 
 ```sh
 . "$NVM_DIR/nvm.sh"
@@ -220,7 +226,7 @@ node tools/testing/measure-context-read-product.mjs --profile engine --rehearse 
   --writer-profile "$WRITER_PROFILE" --report "$RUN_VOLUME/rehearsal.jsonl"
 rehearsal_rc=$?
 test "$rehearsal_rc" -eq 1
-node -e 'const f=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8").trim().split("\n").at(-1)); if(f.status!=="inconclusive"||f.functionalPassed!==true||f.cleanup!==true||f.qualifying!==false||f.timingClaims!==false)process.exit(1)' "$RUN_VOLUME/rehearsal.jsonl"
+node -e 'const fs=require("node:fs"),reg=JSON.parse(fs.readFileSync(process.argv[1],"utf8")),rows=fs.readFileSync(process.argv[2],"utf8").trim().split("\n").map(JSON.parse),f=rows.at(-1),cells=rows.filter(r=>r.type==="cell"),bad=cells.filter(r=>r.decision.functionalPassed!==true); const knownFA=reg.platformRole==="native-linux-ext4"&&f.status==="failed"&&bad.length===1&&bad[0].cell.kind==="F/A session"&&bad[0].decision.errors.length>0&&bad[0].decision.errors.every(e=>e.startsWith("unobserved_target:")); if(cells.length!==6||f.cleanup!==true||f.qualifying!==false||f.timingClaims!==false||(!(f.status==="inconclusive"&&f.functionalPassed===true)&&!knownFA))process.exit(1); console.log(JSON.stringify({rehearsalStatus:f.status,functionalPassed:f.functionalPassed,knownFAAllowedForDiagnosticOnly:knownFA}));' "$RUN_VOLUME/registration.engine.json" "$RUN_VOLUME/rehearsal.jsonl"
 
 node tools/testing/measure-context-read-product.mjs --profile engine --estimate \
   --registration "$RUN_VOLUME/registration.engine.json" --segment segment-1
@@ -229,11 +235,15 @@ node tools/testing/measure-context-read-product.mjs --profile engine --estimate 
 ```
 
 Check each actual exit before continuing. A successful rehearsal intentionally
-exits 1; the following JSON assertion must exit 0. A failed rehearsal's exit 1
-alone must never be treated as success. Preparation refuses existing snapshots,
+exits 1; the following JSON assertion must exit 0. For qualification it still
+requires `inconclusive` with `functionalPassed:true`. Only the owner-authorized
+native diagnostic may proceed with the known F/A `unobserved_target` errors,
+confirmed cleanup and all other cell kinds successful. The assertion prints that
+exception explicitly; it never changes the failed rehearsal status or grants a
+qualification pass. A failed rehearsal's exit 1 alone is never success. Preparation refuses existing snapshots,
 registrations and reports; use fresh destinations after a changed preparation.
 
-In the first later supervised quiet window:
+For the first half of the authorized, actively supervised native diagnostic:
 
 ```sh
 test "$(node --version)" = v24.22.1
@@ -245,8 +255,13 @@ node tools/testing/summarize-context-read-product.mjs "$RUN_VOLUME/segment-1.jso
 printf 'segment-1 actual exit: %s\n' "$segment_1_rc"
 ```
 
-Preparation for the second later window reuses the **same** frozen source,
-registration, snapshots, writer profile, dependency bytes, Node, host and volume:
+Run the second half immediately after the first report closes, using the
+**same** frozen source, registration, snapshots, writer profile, dependency bytes,
+Node, host and volume. Check the first report's `segmentComplete`, cleanup and
+diagnostic flags before proceeding; an interrupted report needs an explicit
+continuation decision. A completed first segment can normally exit 1 because
+the other 364 cells are still absent. Preserve an observed failure if present:
+resuming does not clear it.
 
 ```sh
 . "$NVM_DIR/nvm.sh"
@@ -268,7 +283,12 @@ node tools/testing/measure-context-read-product.mjs --profile engine \
   --report "$RUN_VOLUME/combined.jsonl"
 ```
 
-A partial profile remains inconclusive. Preserve reports/journals even on failure;
+For native revision 1, the segment headers, final rows and merged result retain
+`qualifying:false`, `diagnostic:true` and the reason. Per-cell/per-gate decisions
+remain visible and use the exact registered Node patch; a diagnostic `passed`
+never constitutes qualification. WSL2/APFS engine and production behavior are
+unchanged. A partial profile remains inconclusive unless it retains failure.
+Preserve reports/journals even on failure;
 resume/merge retains failures and only accepts complete cells. Use a dedicated
 primary-owned session and actively observe progress, logs, child state and actual
 exits. This preparation establishes no unattended monitor or notification service
@@ -904,38 +924,254 @@ after this work window. The engine-owned F/A qualification blocker remains.
 All verification processes have exited; no background continuation is running.
 
 
+## Fix round 3c
+
+### Integration and retained guarantees
+
+The primary explicitly supplied the already-fetched local `origin/main` at
+`4fd18f1a`; no fetch or network access occurred. The required ancestor check
+exited **0**. `git merge --no-commit --no-ff origin/main` exited **0**, with **zero
+conflicts**. No generated file was hand-merged. The main-provided runtime bundles passed
+`packages/setup/build-runtime.mjs --check` with exit **0** (32 client files,
+330 engine files). The merge remains uncommitted;
+upstream integration supplies Fix A and P2e (`1024ff21`). Engine runtime changes
+in the delivery are exactly upstream changes, not authored fixes. The four
+approved v4fix1 replacements, preparation clock, Card oracle, no-read handling,
+exactly-one lane exit and healthy classifier controls are preserved.
+
+### Findings and regressions
+
+| Item | Change | Regression |
+| --- | --- | --- |
+| 1 — cross-segment resume | Carried cells retain `originSegmentId`. Replay separates current-origin complete cells from foreign carried evidence. Resume carries both, while merge counts only the current segment's cells. Inherited aggregate failures remain sticky, and new duplicate rows still reject. Legacy untagged cells use the registered partition to recover origin; undeclared cells still fail inventory validation. `segmentComplete` checks the selected segment's keys independently of carried cells. | `Q3c-01`: actual runner, reader and merger with the real 364 + 364 inventory: success, inherited failure and interrupted segment-2 continuation. The strengthened existing Q3 mirror control independently asserts foreign origin before exercising duplicate rejection. |
+| 2 — append errors | Before delegation/start, the report owner durably writes a session-open marker in the main partial report. Only a durable successful-cleanup marker resolves it. Failure-journal append errors cannot erase the already durable unresolved state. The workspace/interrupt safety guards remain. | `Q3c-02`: real coordinator and runner; header-only failure journal, later EACCES appends, renewal/close exceptions in qualification and rehearsal modes. Replay plus 728 successful retries remains failed. |
+| 3 — coverage sentinel | The exact emitted telemetry-only sentinel is a recognized incomplete-coverage shape and survives rehearsal filtering without timing fields. Coverage still invalidates the gate; malformed sentinel variants and observed failures remain failures. A separate baseline replay check records failed versus invalid directly. | `Q3c-03`: actual invalid WAL verdict plus sentinel, replay stays invalid. Wrong busy/protocol, missing records or extra fields fail closed. |
+| 4 — UTF-8 transport | Storage stdout and both stdin collectors decode from concatenated Buffers. Functional-check stdout/stderr use `setEncoding('utf8')`. Existing 64 MiB stdout and 1 MiB runner-configuration bounds count bytes; overflow is rejected independently of a racing successful child exit. | `Q3c-04`: a real child splits a CJK character between writes; the parent acknowledges receipt before allowing the suffix. Exact text survives. |
+| 6 — product pump | Template authoring uses the final reviewed in-process values, explicit provenance/date and representation limits. Builder regenerates JSON and a SHA-256 seal; filled registration checks and registers that seal. No fixed local start time is baked into the template. | `Q3c-06`: final exact values, byte regeneration, SHA-256 and explicit mapping limits; existing drift/frozen-input checks remain. |
+| 7 — native diagnostic | Engine platform eligibility is separate from production admission. Native exact-patch engine cells score normally with internal production false. Revision-1 native headers/finals/merges, CLI output and summaries are diagnostic and non-qualifying with a reason. Production/legacy reject the role. | `Q3c-07`: admission, real runner config/final flags, actual requestSeries main/cold/reference gate verdicts with independent eligibility, production rejection and unchanged WSL eligibility. |
+
+The source is **product PR #521 head 84f12e8d (scheduler values unchanged from
+7b4ef2ab), reviewed, pending merge**, dated **2026-10-28**, labelled adapter.
+The mapping uses merged Fix A's pump API: `cronMs:20000` is the in-process renewal
+tick, renewal 60,000 ms, poll 25 ms, quantum 32 / 1,000 ms, per-owner window
+2,048 / 60,000 ms, maintainer open 5,000 ms and two active intent selections.
+Its actual admission bound reserves the extra quantum (`N*S+Q <= 5000`).
+The 5,000 ms maintainer-open option is configured as registered; inside a pump,
+the merged engine clamps opening/refresh to the remaining 1,000 ms quantum,
+including dispatch/drain work. The product's exact-`1` flag parser and product
+wiring are not executed by this harness; the selected profile invokes the engine
+APIs explicitly.
+The product's stated 4,000 ms sweep arithmetic and the API's conservative
+3,000 ms two-selection bound both fit; neither is a measured timing claim.
+
+The harness cannot reproduce UTC-minute alignment (it anchors monotonic windows
+at pump start), the 3 s write nudge, four-owner resident admission, n>4
+round-robin slots or indefinite residency across cells. It does not simulate
+product refunds or pacing; engine accounting/pacing execute as merged. Protocol
+cells also select DELETE/WAL independently of the product's DELETE setting.
+These limits are recorded in `productInputs.pump.representationLimits` and
+preclude an exact product-scheduler claim; no silent approximation is made.
+F/A writer cadence, targets, probe lanes, window/sample counts and explicit tiny
+rehearsal allowances were not tuned.
+
+Two independent stream audits (ripgrep collector search and Python filesystem/
+source traversal) checked both requested trees. All four unsafe implementation
+collectors were fixed. Buffer forwarding, readline and spawnSync/execFile
+complete UTF-8 decoding were checked as safe. Two remaining matches are older
+sessions' test-only stdout/stderr collectors; they were left byte-exact under
+the explicit instruction not to edit older tests. No engine oracle reads use
+those test collectors.
+
+### Verification and operator handoff
+
+Three exclusively owned detached `8f336ea1` baseline worktrees were created and
+removed, including a final-source rerun: creation **0 / 0 / 0**, removal **0 / 0 / 0**. Each of `Q3c-01`, `-02`, `-03`, `-04`, `-06`, `-07` and the strengthened
+Q3 mirror process exited **1** in all three baseline passes. The fixed new file initially
+passed all **11** checks with exit **0**. The Q1 integration file passed all
+**19** checks with exit **0**. Initial development runs exposed a malformed test
+storage mock (fixed without relaxing classification) and a test-child IPC close
+issue (fixed in the new regression). Their red/debug processes exited **1**.
+The initial combined integration process exited **1** solely for new exact
+resource-access entries; its Q3 and functional cases passed. The standalone raw
+file guard exited **1**, then **0** after exact template/seal entries were updated;
+the guard source was not edited.
+
+Every table entry is an **actual process exit code**. File runs used the
+corresponding nvm Node/PATH with `node --experimental-vm-modules --test PATH`.
+Package runs used offline npm and the local pinned counter root. After the
+native-label regression was strengthened, the entire Q3c file and reduced script
+were repeated on all three Nodes; those repeat exits are shown for those rows.
+All **43 initial matrix processes** and **six final-source repeats** exited **0**.
+Both guards were additionally repeated together on final source on every Node: **0 / 0 / 0**.
+
+| File / command | Node 22.16.0 | Node 24.15.0 | Node 24.22.1 |
+| --- | ---: | ---: | ---: |
+| `evaluation/context-read-qualification/test/q3c.test.mjs` | 0 | 0 | 0 |
+| `evaluation/context-read-qualification/test/q3.test.mjs` | 0 | 0 | 0 |
+| `tools/testing/measure-context-read-product-fix1.test.mjs` | 0 | 0 | 0 |
+| `tools/testing/measure-context-read-product-fix2.test.mjs` | 0 | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4.test.mjs` | 0 | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4fix1.test.mjs` | 0 | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4fix3.test.mjs` | 0 | 0 | 0 |
+| `tools/testing/measure-context-read-product-v4fix4.test.mjs` | 0 | 0 | 0 |
+| `tools/testing/measure-context-read-product.test.mjs` | 0 | 0 | 0 |
+| `tools/testing/fixtures/context-product/functional-check.mjs` | 0 | 0 | 0 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 | 0 | 0 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 | 0 | 0 |
+| `npm run test:qualification-inputs` | 0 | 0 | 0 |
+| `npm run test:workspace-lifecycle` | 0 | 0 | 0 |
+
+`npm run test:qualification-inputs:full` ran **once** on Node **24.22.1**:
+**exit 0**, all **130** tests passed, **zero skips**, all six snapshot entries
+rebuilt/seal-checked. That physical rebuild preceded the final coverage-sentinel
+filter repair; corpus, generation and storage-transport code were unchanged,
+and the later reduced runs verify every regression after that repair.
+Every final reduced run passed **126** with the same **four
+intentional layout skips**. Each workspace-lifecycle run passed **241** tests.
+The new Q3c file has **11** passing cases per Node. The focused native gate probe
+and expanded native CLI/summary probe each also exited **0** on Node 24.22.1.
+
+A fourth, isolated final-source sentinel worktree was created and removed
+(**0 / 0**). Its actual replay produced `failed` instead of `invalid` on the
+baseline (**exit 1**); fixed replay and rehearsal-filter probes each exited **0**.
+
+Registration fill, validation and both segment estimates on Node 24.22.1 each
+exited **0**. Estimates remain **364 / 364**, **23,313.7 s / 23,313.7 s**; no
+measured timing claim was made. Template JSON and its SHA-256 seal were generated
+by the deterministic builder (both authoring runs **exit 0**), and byte/seal drift
+checks pass. Product values, mapping limits and pending-merge provenance are
+frozen; host/volume identities, truthful platform role, operator reservation,
+writer-profile registration input and final committed source IDs remain operator
+inputs. The preparation-only registration is not a reserved run registration.
+
+### Single engine rehearsal
+
+The engine `--rehearse` command ran **once** on Node **24.22.1**, actual exit **1**. Its final recorded flags are:
+
+```json
+{"status":"failed","functionalPassed":false,"cleanup":true,"qualifying":false,"timingClaims":false}
+```
+
+The real record audit and cell outcomes are:
+
+The audit inspected **193 real journal records**.
+
+- `requests`: functionalPassed **true**.
+- `overflow`: functionalPassed **true**.
+- `exposure/W+WM`: functionalPassed **true**.
+- `F/A session`: functionalPassed **false**; `unobserved_target:tiny-memory:current`, `unobserved_target:tiny-memory:history`, `unobserved_target:tiny-card:current`, `unobserved_target:tiny-card:history`.
+- `backup/B`: functionalPassed **true**.
+- `state/T/post-catch-up`: functionalPassed **true**.
+
+Final classifier audit: **0 non-F/A failure records**; **0 non-F/A functional failures**. Coverage-only sentinels retain their known shape through rehearsal filtering; incomplete coverage is not fabricated into an observed failure.
+
+No records, targets, writer pacing or pump-restart behavior were fabricated or
+tuned to clear the rehearsal. Full-scale native execution remains an authorized
+non-qualifying diagnostic. No long timing run, network access, key use or commit
+occurred in this round. The pending merge and authored fixes are left for the
+primary to review and commit. All started verification/rehearsal processes have
+exited; this handoff establishes no background continuation or notification job.
+
+
 ## Changed files, cross-checked two ways
 
-Relative to `4baefc3b`, Git diff plus untracked inventory was compared with an
-independent HEAD blob/mode comparison and `rg --files --hidden` disk discovery.
-Both routes agree at **20 paths**, across **2490 HEAD files**; exit **0**.
-There are zero engine runtime changes and zero database files in the delivery
-list. Card projection, no-read handling, exactly-once lane exits, the session pump
-wrapper, both guard test sources, writer implementations, pinned dependency
-manifests and the registration/template match the baseline exactly. The rehearsal
-file changes only failure-sink forwarding; removing that property reproduces its
-baseline bytes, so all F/A settings remain exact. The older v4fix1 suite has only
-the four owner-approved replacements. The guard allowlist changes only the IO
-child's new import and exact failure-journal descriptor site, with an explicit
-SQLite-free justification. No files were staged or committed.
+Relative to `8f336ea1`, Git's full HEAD diff (including the pending merge) plus
+untracked inventory was compared with an independent HEAD blob/mode comparison
+and filesystem discovery. Both routes agree at **82 paths**, across **2494 HEAD
+files**; exit **0**. A second comparison against the merged index separates the
+**24 authored paths** from **58 upstream integration paths**, comparing
+**2520 index entries** independently. No path was inferred from an earlier list.
+All **180 core runtime modules** match the integrated `4fd18f1a` main tree byte for byte.
+There are no authored engine runtime changes, database artifacts or older-session
+test edits. The upstream merge includes its own tests and generated files; those
+are integration, not authored changes. The main-provided runtime bundles verify
+with exit **0**; no authored bundle changes are needed. The qualification handoff
+and evaluation tooling are not entries in the shipped artifact inventory.
+
+### Authored paths
 
 - `core/test/fixtures/no-raw-db-fd-allowlist.json`
 - `docs/plans/context-read-qualification-inputs.md`
-- `evaluation/context-read-qualification/test/harness-fixes.test.mjs`
-- `evaluation/context-read-qualification/test/inputs.test.mjs`
-- `evaluation/context-read-qualification/test/preparation.test.mjs`
-- `evaluation/context-read-qualification/test/q1.test.mjs`
+- `evaluation/context-read-qualification/build-template.mjs`
+- `evaluation/context-read-qualification/registration.constants.json`
+- `evaluation/context-read-qualification/registration.engine.template.json`
+- `evaluation/context-read-qualification/registration.engine.template.sha256`
+- `evaluation/context-read-qualification/registration.mjs`
 - `evaluation/context-read-qualification/test/q3.test.mjs`
+- `evaluation/context-read-qualification/test/q3c.test.mjs`
 - `tools/testing/fixtures/context-product/functional-check.mjs`
-- `tools/testing/fixtures/context-product/io-child.mjs`
 - `tools/testing/fixtures/context-product/journal-failures.mjs`
+- `tools/testing/fixtures/context-product/protocol.mjs`
+- `tools/testing/fixtures/context-product/rehearsal-checks.mjs`
 - `tools/testing/fixtures/context-product/report.mjs`
+- `tools/testing/fixtures/context-product/runner-child.mjs`
 - `tools/testing/fixtures/context-product/series.mjs`
-- `tools/testing/fixtures/context-product/test-preparation-worker.mjs`
-- `tools/testing/fixtures/context-product/test-preparation.mjs`
+- `tools/testing/fixtures/context-product/storage-child.mjs`
 - `tools/testing/fixtures/context-product/v4-checkpoint-child.mjs`
+- `tools/testing/fixtures/context-product/v4-checkpoints.mjs`
 - `tools/testing/fixtures/context-product/v4-rehearsal.mjs`
 - `tools/testing/fixtures/context-product/v4-runner.mjs`
 - `tools/testing/fixtures/context-product/v4-session.mjs`
-- `tools/testing/measure-context-read-product-v4fix1.test.mjs`
 - `tools/testing/measure-context-read-product.mjs`
+- `tools/testing/summarize-context-read-product.mjs`
+
+### Upstream integration paths
+
+- `CHANGELOG.md`
+- `README.md`
+- `README.zh-TW.md`
+- `adapters/mcp/test/context-read-product-provider.test.mjs`
+- `adapters/openai/product-embedding.mjs`
+- `core/context-product-index.mjs`
+- `core/context-product-pump.mjs`
+- `core/context-product-quantum.mjs`
+- `core/context-product-reader.mjs`
+- `core/context-product-sidecar.mjs`
+- `core/context-product-sqlite.mjs`
+- `core/context-product-validation.mjs`
+- `core/context-product-vectors.mjs`
+- `core/context-product-worker.mjs`
+- `core/context-semantic-client.mjs`
+- `core/context-semantic-coordinator.mjs`
+- `core/context-semantic-gate.mjs`
+- `core/context-semantic-gates.mjs`
+- `core/context-semantic-input.mjs`
+- `core/context-semantic-ledger.mjs`
+- `core/context-semantic-maintenance.mjs`
+- `core/context-semantic-pump.mjs`
+- `core/context-semantic-worker.mjs`
+- `core/context-vector-validation.mjs`
+- `core/index.mjs`
+- `core/test/context-read-maintenance-convergence.test.mjs`
+- `core/test/context-read-product-artifact.test.mjs`
+- `core/test/context-read-product-footprint.test.mjs`
+- `core/test/context-read-product-format3.test.mjs`
+- `core/test/context-read-product-owner.test.mjs`
+- `core/test/context-read-product-pump.test.mjs`
+- `core/test/context-read-product-semantic-gates.test.mjs`
+- `core/test/context-read-product-semantic.test.mjs`
+- `core/test/fixtures/context-maintenance-race-worker.mjs`
+- `core/test/fixtures/context-maintenance-writer.mjs`
+- `core/test/fixtures/context-product-index-worker.mjs`
+- `core/testing/context-product-owner-fixture.mjs`
+- `core/testing/context-product-test-clock-worker.mjs`
+- `core/testing/context-product-test-clock.mjs`
+- `core/testing/context-semantic-host.mjs`
+- `core/testing/context-semantic-process.mjs`
+- `core/topic-reader-sqlite.mjs`
+- `docs/codex-setup.md`
+- `docs/context-read-product.md`
+- `docs/local-memory-introduction.md`
+- `docs/plans/context-read-maintenance-convergence.md`
+- `docs/plans/context-read-p2e-impl.md`
+- `docs/plans/context-read-product.md`
+- `docs/plans/context-read-sidecar-footprint-measurements.json`
+- `docs/plans/context-read-sidecar-footprint.md`
+- `docs/plans/setup-local-mode-contract.md`
+- `packages/setup/README.md`
+- `packages/setup/runtime/engine/cairn-memory-local-preview-0.0.0-preview.1.tgz`
+- `packages/setup/runtime/engine/manifest.json`
+- `packaging/artifact-files.json`
+- `packaging/test/topic-overview-raw29.test.mjs`
+- `tools/testing/context-product-freshness.diagnostic.mjs`
+- `tools/testing/p2e-eval.test.mjs`

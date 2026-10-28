@@ -12,10 +12,17 @@ export async function readSegments(paths) {
   return value.segments;
 }
 export function checkedSegments(header,segments) {
-  if(header.mode==='rehearse'||header.qualifying===false)throw Error('rehearsal_cannot_qualify');
+  if(header.mode==='rehearse'||header.qualifying===false&&header.diagnostic!==true)throw Error('rehearsal_cannot_qualify');
   const r=mergeSegments({hash:header.registrationHash,hostId:header.host.id,volumeId:header.volume.id,node:header.node,
     segmentIds:header.segments.map(s=>s.id),cellCount:header.cellCount},segments);
   const keys=new Set(header.inventory.map(c=>c.key));
   for(const s of segments)for(const c of s.cells)if(!keys.has(c.key)||!isDeepStrictEqual(c.cell,header.inventory.find(x=>x.key===c.key))||!header.segments.find(x=>x.id===s.id).cellKeys.includes(c.key))throw Error('v4_checkpoint_inventory');
-  return {...r,decision:aggregate([r.decision,...(r.complete?[]:['inconclusive'])])};
+  const carried=new Map();
+  for(const s of segments)for(const c of s.carriedCells??[]){
+    const origin=header.segments.find(x=>x.id===c.originSegmentId);
+    if(!origin?.cellKeys.includes(c.key)||!isDeepStrictEqual(c.cell,header.inventory.find(x=>x.key===c.key)))throw Error('v4_checkpoint_inventory');
+    if(carried.has(c.key)&&!isDeepStrictEqual(carried.get(c.key),c))throw Error('segment_conflicting_ancestry');
+    carried.set(c.key,c);
+  }
+  return {...r,...(header.diagnostic===true?{qualifying:false,diagnostic:true,diagnosticReason:header.diagnosticReason}:{}),carriedCells:[...carried.values()].filter(c=>!r.cells.some(r=>r.key===c.key)),decision:aggregate([r.decision,...(r.complete?[]:['inconclusive'])])};
 }

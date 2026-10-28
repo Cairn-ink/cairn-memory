@@ -17,6 +17,8 @@ export async function createReportSink(path,header) {
   await partial.writeFile(JSON.stringify({type:'registration',headerHash,header})+'\n');await partial.sync();
   let sequence=0,finished=false,delegated=false;
   return {
+    async sessionOpen(cell){await partial.writeFile(JSON.stringify({type:'session-open',cell})+'\n');await partial.sync();},
+    async sessionClosed(cell){await partial.writeFile(JSON.stringify({type:'session-cleanup-complete',cell})+'\n');await partial.sync();},
     async failure(cell,series,record){fileChild('failure-journal-append',path,JSON.stringify({type:'record',cell,series,record,...(journalFailure(series,record)?{failure:true}:{})}));},
     async delegate(){if(delegated)throw Error('journal_delegated');delegated=true;return {path,sequence};},
     async reclaim(next){if(!Number.isSafeInteger(next))next=fileChild('journal-sequence',path).value.sequence;if(next<sequence)throw Error('journal_sequence');sequence=next;delegated=false;},

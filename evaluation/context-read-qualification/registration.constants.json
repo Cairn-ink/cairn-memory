@@ -1045,16 +1045,16 @@
     "readMs": 5000
   },
   "pump": {
-    "cronMs": 60000,
+    "cronMs": 20000,
     "pollMs": 25,
-    "renewalMs": 10000,
+    "renewalMs": 60000,
     "quantum": {
-      "maxItems": 128,
+      "maxItems": 32,
       "maxMs": 1000
     },
     "budgets": {
-      "maxItems": 1024,
-      "maxMs": 8000
+      "maxItems": 2048,
+      "maxMs": 60000
     }
   },
   "telemetryCapacities": {
@@ -1137,19 +1137,43 @@
     },
     "pump": {
       "source": "adapter",
+      "provenance": "product PR #521 head 84f12e8d (scheduler values unchanged from 7b4ef2ab), reviewed, pending merge",
+      "date": "2026-10-28",
+      "tickMs": 20000,
+      "renewalMs": 60000,
+      "nudgeMs": 3000,
+      "windowMs": 60000,
+      "windowAlignment": "UTC minute boundaries; roll only after previous window ends",
+      "livePumpOwnerCap": 4,
+      "perOwnerWindow": {
+        "maxItems": 2048,
+        "maxMs": 60000
+      },
       "quantum": {
-        "maxItems": 128,
+        "maxItems": 32,
         "maxMs": 1000
       },
-      "perTick": {
-        "maxItems": 1024,
-        "maxMs": 8000
-      },
       "pollMs": 25,
-      "renewalMs": 10000,
-      "cronMs": 60000,
+      "activeSelections": 2,
+      "sweepAdmission": "2 * max(pollMs, quantum.maxMs) + quantum.maxMs <= 5000 (merged Fix A API)",
       "maintainerOpenMs": 5000,
-      "sidecarJournal": "per cell as protocol registers"
+      "productSidecarJournal": "DELETE",
+      "harnessSidecarJournal": "per cell as protocol registers",
+      "mapping": {
+        "cronMs": "20,000 ms in-process renewal tick; no external cron",
+        "budgets": "per-owner 60 s window quotas",
+        "quantum": "exact product quantum; engine accounts settled work under Fix A",
+        "renewalMs": "exact product authority renewal horizon",
+        "pollMs": "exact product minimum poll spacing"
+      },
+      "representationLimits": [
+        "Harness windows are monotonic 60 s windows anchored at pump start, not UTC-minute aligned; a late renewal can leave a duty gap.",
+        "No 3 s capture/review coalescing nudge is represented.",
+        "One owner is exercised per physical cell; the four-owner resident cap and n>4 fixed-window round-robin scheduler are not exercised.",
+        "Pumps remain resident only for the registered cell/session, then close for protocol cleanup; no cross-cell always-on residency is represented.",
+        "DELETE/WAL sidecar selection follows each protocol cell; the product adapter currently selects DELETE.",
+        "No product scheduler or host-side refunds/pacing are simulated; merged engine pump accounting and pacing execute as implemented."
+      ]
     },
     "telemetryCapacities": {
       "source": "engine default",

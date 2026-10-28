@@ -116,7 +116,7 @@ export async function requestSeries(config,{cell,sink,oracle,smoke=false},{attem
       readerCoverage:all.every(r=>r.telemetry==='complete')?'complete':'incomplete',maintainerCoverage:maintainerCoverage(maintenance,config.maintainerCoverage),
       writerCoverage:writerResult?.diagnostics.coverage??'complete',baselineCoverage:writerResult?.diagnostics.coverage??'complete',
       nativeBusy:all.reduce((n,r)=>n+r.nativeBusy,0)+(writerResult?.diagnostics.busy??0)+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:all.reduce((n,r)=>n+r.publicBusy,0),
-      writers:concurrency?writerResult?.calls:undefined,production:config.production});
+      writers:concurrency?writerResult?.calls:undefined,production:config.production,enginePlatformEligible:config.enginePlatformEligible});
     if(cell.protocol==='P2-product-v4')normalizeV4Decision(decision,[...readerLoops(all),...(writerResult?[writerResult.hostLoop]:[])]);
     return {decision,populations,languageCoverage:cell.language!=='language-rotation-v4'||Object.entries(records).filter(([s])=>s!=='warmups').every(([series,rs])=>rotationCoverage(rs,concurrency&&series!=='warm-reference')),writer:writerResult?{exit:writerResult.exit,coverage:writerResult.diagnostics.coverage}:null};
   }finally {
@@ -171,7 +171,7 @@ export async function pairedWindows(config,options,prepareClone) {
       writerCoverage:writer.diagnostics.coverage,baselineCoverage:base.writer.diagnostics.coverage,
       nativeBusy:records.reduce((n,r)=>n+r.nativeBusy,0)+writer.diagnostics.busy+base.writer.diagnostics.busy+[...reader.maintenance,...base.maintenance].reduce((n,d)=>n+(d.busy??0),0),
       publicBusy:records.reduce((n,r)=>n+r.publicBusy,0)+[...writer.calls,...base.writer.calls].filter(w=>w.code==='storage_busy').length,
-      writers:[...writer.calls,...base.writer.calls],production:config.production});
+      writers:[...writer.calls,...base.writer.calls],production:config.production,enginePlatformEligible:config.enginePlatformEligible});
     decisions.push(d);await options.sink.record(options.cell.id,'pair',{repetition:window.repetition,order:window.order,decision:d,
       exposure:exp,baselineExposure:base.exposure,throughputRatio:base.measured.commits?reader.measured.commits/base.measured.commits:null});
   }

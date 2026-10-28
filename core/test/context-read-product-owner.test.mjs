@@ -343,3 +343,18 @@ for(const size of [1,2,32])test(`P2c fix1 ${size}-namespace multi-term lookup us
   assert.equal(both.rows.length,24);assert.equal(new Set(both.rows.map(r=>r.ref.memoryId)).size,24);
   for(const plan of plans)assert.match(plan,/INDEX product_term .*generation=\? AND term=\? AND doc>\?/);
 });
+
+
+test('prebuild fixture drains a timed-out maintainer before reopening, and never replaces uncertain cleanup',async()=>{
+  const calls=[];let opens=0,drained=false;
+  const config={options:{readSet:[personal]},token:{synthetic:true},async open(){
+    const id=++opens;if(id>1)assert.equal(drained,true);
+    return {async refreshContextIndex(input){calls.push([id,input.intent]);return id===1?{ok:false,error:{code:'read_timeout'}}:{ok:true,value:{status:'complete'}};},
+      async close(){await Promise.resolve();drained=true;}};
+  }};
+  assert.equal((await prebuild(config,['memory'])).length,2);assert.equal(opens,2);
+  assert.deepEqual(calls,[[1,'current'],[2,'current'],[2,'history']]);
+  let uncertainOpens=0;
+  const uncertain={...config,async open(){uncertainOpens++;return {async refreshContextIndex(){return {ok:false,error:{code:'read_timeout'}};},async close(){throw Object.assign(Error('reader_failed'),{code:'reader_failed'});}};}};
+  await assert.rejects(prebuild(uncertain,['memory']),{code:'reader_failed'});assert.equal(uncertainOpens,1);
+});

@@ -1526,7 +1526,7 @@
   },
   {
     "path": "evaluation/context-read-qualification/build-template.mjs",
-    "source": "if(process.argv[1]===fileURLToPath(import.meta.url))writeFileSync(new URL('./registration.engine.template.json',import.meta.url),JSON.stringify(buildTemplate(),null,2)+'\\n');",
+    "source": "writeFileSync(new URL('./registration.engine.template.json',import.meta.url),bytes);",
     "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
   },
   {
@@ -1601,7 +1601,7 @@
   },
   {
     "path": "evaluation/context-read-qualification/registration.mjs",
-    "source": "const frozen=JSON.parse(readFileSync(new URL('./registration.engine.template.json',import.meta.url),'utf8'));",
+    "source": "const templateBytes=readFileSync(new URL('./registration.engine.template.json',import.meta.url));",
     "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
   },
   {
@@ -1633,5 +1633,15 @@
     "path": "tools/testing/fixtures/context-product/io-child.mjs",
     "source": "const fd=openSync(path,initial?'wx':constants.O_WRONLY|constants.O_APPEND|constants.O_NOFOLLOW,0o600);",
     "reason": "SQLite-free IO child exclusively creates or appends the independent harness failure journal and fsyncs before returning; it never imports SQLite or holds engine connections, including while the main journal remains delegated."
+  },
+  {
+    "path": "evaluation/context-read-qualification/build-template.mjs",
+    "source": "writeFileSync(new URL('./registration.engine.template.sha256',import.meta.url),createHash('sha256').update(bytes).digest('hex')+'  registration.engine.template.json\\n');",
+    "reason": "Fixed repository template SHA-256 resource only; never a database or companion. SQLite-free preparation/validation tooling."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "if(readFileSync(new URL('./registration.engine.template.sha256',import.meta.url),'utf8')!==createHash('sha256').update(templateBytes).digest('hex')+'  registration.engine.template.json\\n')throw Error('template_hash_changed');",
+    "reason": "Fixed repository template SHA-256 resource only; never a database or companion. SQLite-free preparation/validation tooling."
   }
 ]

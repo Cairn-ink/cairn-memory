@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { REPRESENTATION_VERSION } from '../../../../core/context-read-tokenize.mjs';
 import { canonicalEvidence } from '../../../../evaluation/context-read-qualification/canonical-evidence.mjs';
 import { observeLoop } from './engine.mjs';
-const kind=process.argv[2];let encoded=process.argv[3];if(encoded===undefined){encoded='';for await(const chunk of process.stdin)encoded+=chunk;}
+const kind=process.argv[2];let encoded=process.argv[3];if(encoded===undefined){const chunks=[];for await(const chunk of process.stdin)chunks.push(chunk);encoded=Buffer.concat(chunks).toString('utf8');}
 const c=JSON.parse(encoded),loop=observeLoop();
 const {DatabaseSync,backup}=await import('node:sqlite');
 let value;

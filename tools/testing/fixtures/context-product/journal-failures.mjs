@@ -15,7 +15,8 @@ const pumpState=v=>object(v)&&!Object.hasOwn(v,'kind')&&member(v.state,['active'
 const pump=v=>v.kind==='renew'?pumpState(v.status):!Object.hasOwn(v,'kind')&&pumpState(v);
 const attribution=v=>object(v)&&(v.supported===false||v.supported===true&&exit(v.exit)&&member(v.coverage,['complete','incomplete']));
 const loop=v=>object(v)&&Number.isFinite(v.maxMs)&&v.maxMs>=0&&integer(v.over100)&&Array.isArray(v.blocks);
-const drain=v=>Array.isArray(v)&&v.every(r=>object(r)&&r.state==='complete'&&r.workerStopped===true&&r.nativeDisposed===true);
+export const coverageSentinel=r=>object(r)&&Object.keys(r).length===1&&object(r.diagnostics)&&Object.keys(r.diagnostics).sort().join(',')==='busy,coverage,protocol,records'&&r.diagnostics.protocol==='context-native-v1'&&r.diagnostics.coverage==='incomplete'&&r.diagnostics.busy===0&&Array.isArray(r.diagnostics.records)&&r.diagnostics.records.length===0;
+const drain=v=>Array.isArray(v)&&v.every(r=>coverageSentinel(r)||object(r)&&r.state==='complete'&&r.workerStopped===true&&r.nativeDisposed===true);
 const writer=v=>object(v)&&exit(v.exit)&&Array.isArray(v.calls)&&v.calls.every(c=>object(c)&&member(c.operation,['capture','review'])&&(c.code===null||c.code==='storage_busy'));
 const target=v=>object(v)&&member(v.type,['memory','card'])&&text(v.id)&&member(v.intent,['current','history'])&&integer(v.revision)&&v.revision>0;
 const inherited=v=>object(v)&&Array.isArray(v.retainedDecisions)&&v.retainedDecisions.every(d=>member(d,decisions))&&

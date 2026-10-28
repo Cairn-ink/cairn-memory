@@ -188,6 +188,9 @@ test('Q3-02 mirrored inherited cells are idempotent while duplicate new cells st
   const w=createTestWorkspace(t),cell=inventory[0],prior={key:cell.key,cell,complete:true,decision:'passed',record:{decision:'passed',complete:true},summary:{}};
   const carried={inheritedFailure:false,cells:[prior],cellKeys:[cell.key],retainedDecisions:['passed']};
   const header={protocol:{version:'P2-product-v4'},inventory,cellCount:728,segmentId:'all',segments:[{id:'all',cellKeys:inventory.map(c=>c.key)}],registrationHash:'unit',host:{id:'host'},volume:{id:'volume'},node:'v24.22.1',resumedCheckpoint:carried};
+  const ancestryPath=join(w.path,'ancestry.jsonl'),ancestryHeader={...header,segmentId:'second',segments:[{id:'first',cellKeys:[cell.key]},{id:'second',cellKeys:inventory.filter(c=>c.key!==cell.key).map(c=>c.key)}]};
+  const ancestry=await createReportSink(ancestryPath,ancestryHeader);await ancestry.record(-1,'resumed-checkpoints',carried);await ancestry.interrupt();
+  const [restored]=await readSegments([ancestryPath+'.partial']);assert.equal(restored.cells.length,0);assert.equal(restored.carriedCells.length,1);assert.equal(restored.carriedCells[0].originSegmentId,'first');
   const path=join(w.path,'duplicates.jsonl'),sink=await createReportSink(path,header);await sink.record(-1,'resumed-checkpoints',carried);
   await sink.cell(cell,{decision:'passed',complete:true});await sink.cell(cell,{decision:'passed',complete:true});await sink.interrupt();
   const segments=await readSegments([path+'.partial']);assert.equal(segments[0].knownFailure,false);assert.equal(segments[0].cells.length,2);

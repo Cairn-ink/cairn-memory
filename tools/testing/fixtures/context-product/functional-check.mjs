@@ -19,6 +19,7 @@ const entry=fileURLToPath(new URL('../../measure-context-read-product.mjs',impor
 for(const namespaces of [1,2])test(`tiny DELETE ${namespaces} namespace functional CLI, journal/report, nonpass exit and cleanup`,async t=>{
   const w=createTestWorkspace(t),report=join(w.path,'report.jsonl');
   const child=spawn(process.execPath,[entry,'--functional-only','--namespaces',String(namespaces),'--report',report],{env:{},stdio:['ignore','pipe','pipe']});
+  child.stdout.setEncoding('utf8');child.stderr.setEncoding('utf8');
   let stdout='',stderr='';child.stdout.on('data',b=>{stdout+=b;});child.stderr.on('data',b=>{stderr+=b;});
   const exit=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',(code,signal)=>resolve({code,signal}));});
   assert.equal(exit.code,1,stderr);assert.equal(exit.signal,null);assert.equal(stdout.trim().split('\n').at(-1),'inconclusive',stderr);

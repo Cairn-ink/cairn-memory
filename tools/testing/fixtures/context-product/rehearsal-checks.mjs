@@ -1,3 +1,4 @@
+import { coverageSentinel } from './journal-failures.mjs';
 // Functional assertions only. These can never grant a qualification decision.
 export const rehearsalDecision=(errors=[])=>({decision:errors.length?'failed':'inconclusive',reason:'non_qualifying_rehearsal',functionalPassed:errors.length===0,errors});
 export function readWorks(r,allowUnavailable=false) {
@@ -30,6 +31,8 @@ export function rehearsalSession(session,e) {
 
 // Retain observed functional evidence; omit all duration/quantile/interval claims.
 export function functionalEvidence(value) {
+  // This exact sentinel contains no timings and must retain its coverage shape.
+  if(coverageSentinel(value))return {diagnostics:{...value.diagnostics,records:[]}};
   if(Array.isArray(value))return value.map(functionalEvidence);
   if(!value||typeof value!=='object')return value;
   return Object.fromEntries(Object.entries(value).filter(([k])=>!/(?:Ms|At|Mono|Ns|Seconds|Loop|^at$|^loop$|^gc$|resources|scheduling|samples|pacing|metrics|populations|readExceededAdapterDefault|writerDeadlineOverrun|lateSuccess|checks|observedFailure|cutoff|overshoot|peak|Bytes|trace|raw|diagnostics|maintenance)$/.test(k)).map(([k,v])=>[k,functionalEvidence(v)]));

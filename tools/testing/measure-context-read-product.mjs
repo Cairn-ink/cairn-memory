@@ -24,11 +24,12 @@ export { PROTOCOL, buildPlan, buildV4Plan, DEFINITIONS };
 const storageUrl=new URL('./fixtures/context-product/storage-child.mjs',import.meta.url);
 export async function storage(kind,configuration) {
   const child=spawn(process.execPath,[fileURLToPath(storageUrl),kind,JSON.stringify(configuration)],{env:{},stdio:['ignore','pipe','pipe']});
-  let stdout='',stderrBytes=0;child.stdout.on('data',b=>{stdout+=b;if(stdout.length>64*1024*1024)child.kill('SIGKILL');});child.stderr.on('data',b=>{stderrBytes+=b.length;});
+  const chunks=[];let stdoutBytes=0,stderrBytes=0;child.stdout.on('data',b=>{stdoutBytes+=b.length;if(stdoutBytes>64*1024*1024)child.kill('SIGKILL');else chunks.push(b);});child.stderr.on('data',b=>{stderrBytes+=b.length;});
   const timeout=configuration.protocol==='P2-product-v4'?null:setTimeout(()=>child.kill('SIGKILL'),30000);
   try {const exit=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',(code,signal)=>resolve({code,signal}));});
+    if(stdoutBytes>64*1024*1024)throw Error('storage_child_output_size');
     if(exit.code!==0||exit.signal)throw Object.assign(Error('storage_child_failed'),{code:'child_failed',exitCode:exit.code,signal:exit.signal,stderrBytes});
-    return {...JSON.parse(stdout),exit};
+    return {...JSON.parse(Buffer.concat(chunks).toString('utf8')),exit};
   }finally{clearTimeout(timeout);}
 }
 export function writerProfile(value) {
@@ -39,21 +40,22 @@ export function writerProfile(value) {
 function git(...args) {
   const r=spawnSync('git',args,{encoding:'utf8'});if(r.status!==0)throw Error('git_failed');return r.stdout.trim();
 }
-export function validateRegistration(input) {
+export function validateRegistration(input,{engineProfile=false}={}) {
+  if(input.platformRole==='native-linux-ext4'&&!engineProfile)throw Error('native_platform_engine_profile_only');
   if(input.rehearsal!==undefined)throw Error('rehearsal_cannot_qualify');
   if(input.protocolDefinition?.version===V3_DEFINITION.version&&!isDeepStrictEqual(input.protocolDefinition,V3_DEFINITION))throw Error('protocol_revision_required');
   validateDefinition(input.protocolDefinition??V3_DEFINITION);
   const positive=k=>Number.isSafeInteger(input[k])&&input[k]>0;
   if(new Set(input.fixtures?.map(f=>f.id)).size!==6||input.fixtures?.some(f=>typeof f.id!=='string'||!f.id))throw Error('fixture_ids');
-  if(!/^v24\.\d+\.\d+$/.test(input.productionNode)||!['production-linux-ext4','wsl2-ext4','apfs'].includes(input.platformRole)||
+  if(!/^v24\.\d+\.\d+$/.test(input.productionNode)||!['production-linux-ext4','wsl2-ext4','apfs','native-linux-ext4'].includes(input.platformRole)||
     !input.filesystem||!input.counterId||!Array.isArray(input.fixtures)||input.fixtures.length!==6||
     !['seriesCeilingMs','buildCeiling','freshnessObservationMs','availabilityWindows'].every(positive)||input.freshnessObservationMs<30000)throw Error('invalid_registration');
   for(const k of ['profileCommit','protocolCommit'])if(!/^[a-f0-9]{40}$/.test(input[k]))throw Error('commit_required');
   for(const k of ['openMs','requestMs','readMs'])if(!Number.isSafeInteger(input.deadlines?.[k])||input.deadlines[k]<2000||input.deadlines[k]>5000)throw Error('production_deadlines_required');
   const p=input.pump;
-  if(!p||p.cronMs!==60000||!Number.isSafeInteger(p.pollMs)||p.pollMs<1||p.pollMs>5000||!Number.isSafeInteger(p.renewalMs)||p.renewalMs<1||p.renewalMs>60000||
+  if(!p||![20000,60000].includes(p.cronMs)||!Number.isSafeInteger(p.pollMs)||p.pollMs<1||p.pollMs>5000||!Number.isSafeInteger(p.renewalMs)||p.renewalMs<1||p.renewalMs>60000||
     !Number.isSafeInteger(p.quantum?.maxItems)||p.quantum.maxItems<1||p.quantum.maxItems>1024||!Number.isSafeInteger(p.quantum?.maxMs)||p.quantum.maxMs<1||p.quantum.maxMs>2500||
-    2*Math.max(p.pollMs,p.quantum.maxMs)>5000||!Number.isSafeInteger(p.budgets?.maxItems)||p.budgets.maxItems<1||!Number.isSafeInteger(p.budgets?.maxMs)||p.budgets.maxMs<1)throw Error('pump_registration');
+    2*Math.max(p.pollMs,p.quantum.maxMs)+p.quantum.maxMs>5000||!Number.isSafeInteger(p.budgets?.maxItems)||p.budgets.maxItems<1||!Number.isSafeInteger(p.budgets?.maxMs)||p.budgets.maxMs<1)throw Error('pump_registration');
   for(const count of [1112,3336])for(const schema of [18,23,33]) {
     const f=input.fixtures.filter(f=>f.count===count&&f.schema===schema);if(f.length!==1)throw Error('fixture_inventory');
     if(f[0].consistency!=='closed-snapshot'||f[0].cards<(schema===18?0:1)||schema===18&&f[0].cards!==0||f[0].inventory?.length!==4||!f[0].overflowInventory||!f[0].otherOwnerNamespace)throw Error('fixture_metadata');
@@ -177,7 +179,7 @@ export async function availabilitySeries(config,cell,input,sink,oracle,{startPum
     const metrics=availability(records,{minimum:cell.sampleRules?.availability.minimum??PROTOCOL.availabilityMinimum});
     return {...decide(cell,{records,loops:[...readerLoops(records),result.hostLoop],availability:metrics,readerCoverage:records.every(r=>r.telemetry==='complete')?'complete':'incomplete',
       maintainerCoverage:maintainerCoverage(maintenance,config.maintainerCoverage),writerCoverage:result.diagnostics.coverage,baselineCoverage:result.diagnostics.coverage,
-      nativeBusy:records.reduce((n,r)=>n+r.nativeBusy,0)+result.diagnostics.busy+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:records.reduce((n,r)=>n+r.publicBusy,0),writers:result.calls,production:config.production}),availability:metrics};
+      nativeBusy:records.reduce((n,r)=>n+r.nativeBusy,0)+result.diagnostics.busy+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:records.reduce((n,r)=>n+r.publicBusy,0),writers:result.calls,production:config.production,enginePlatformEligible:config.enginePlatformEligible}),availability:metrics};
   }finally{try {if(writer&&!result)await writer.stop();}
     finally {if(pump&&!pumpDrain)await write('pump-drain',await pump.stop());}}
 }
@@ -209,7 +211,7 @@ export async function freshnessSeries(config,cell,input,sink,{startPump:makePump
     const metrics=freshness(targets,{minimum:cell.sampleRules?.freshness.minimum??PROTOCOL.freshnessMinimum});
     const decision=decide(cell,{records,loops:[...readerLoops(records),writerResult.hostLoop],freshness:metrics,readerCoverage:records.every(r=>r.telemetry==='complete')?'complete':'incomplete',
       maintainerCoverage:maintainerCoverage(maintenance,config.maintainerCoverage),writerCoverage:writerResult.diagnostics.coverage,baselineCoverage:writerResult.diagnostics.coverage,
-      nativeBusy:records.reduce((n,r)=>n+r.nativeBusy,0)+writerResult.diagnostics.busy+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:records.reduce((n,r)=>n+r.publicBusy,0),writers:writerResult.calls,production:config.production});
+      nativeBusy:records.reduce((n,r)=>n+r.nativeBusy,0)+writerResult.diagnostics.busy+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:records.reduce((n,r)=>n+r.publicBusy,0),writers:writerResult.calls,production:config.production,enginePlatformEligible:config.enginePlatformEligible});
     if(!intervalValid||targets.some(t=>now()-t.committedAt<PROTOCOL.freshnessMs))return {...decision,decision:'invalid',reason:'probe_cadence_or_writer_drain'};
     return {...decision,freshness:{...metrics,p50Ms:Number.isFinite(metrics.p50Ms)?metrics.p50Ms:null,p95Ms:Number.isFinite(metrics.p95Ms)?metrics.p95Ms:null,maxMs:Number.isFinite(metrics.maxMs)?metrics.maxMs:null,p95Infinite:metrics.p95Ms===Infinity,maxInfinite:metrics.maxMs===Infinity,finiteMaximumMs:Math.max(0,...targets.filter(t=>t.observedAt!==null).map(t=>t.observedAt-t.committedAt))}};
   }finally{try {if(writer&&!writerResult)await writer.stop();}
@@ -257,7 +259,7 @@ export async function backupSeries(config,cell,workspace,sink,oracle,{startSampl
     const decision=decide({...cell,method:config.method},{records:[read.record],...(config.protocol==='P2-product-v4'?{loops:[...readerLoops([read.record]),...verificationLoops]}:{}),populations:{restored:population([read.record],{rule:cell.sampleRules?.['restored-reader']??{minimum:1,ceiling:1}})},
       readerCoverage:read.record.telemetry,maintainerCoverage:maintainerCoverage(maintenance,rebuilt.coverage),rebuildCoverage:rebuilt.coverage,
       writerCoverage:'complete',baselineCoverage:'complete',nativeBusy:(read.record.nativeBusy??0)+maintenance.reduce((n,d)=>n+(d.busy??0),0),publicBusy:read.record.publicBusy,
-      production:config.production,reportOutputsComplete:output.sidecar.peak!==null&&output.peakSamplingCoverage==='complete'});
+      production:config.production,enginePlatformEligible:config.enginePlatformEligible,reportOutputsComplete:output.sidecar.peak!==null&&output.peakSamplingCoverage==='complete'});
     return {...decision,outputs:output};
   }finally{if(!attribution)await sampler.stop();}
 }
@@ -376,8 +378,8 @@ export async function main(args=process.argv.slice(2)) {
   if(rehearse&&(merge.length||resume.length||smoke||functional||estimate||plan||protocol!=='v4'||profile!=='engine'))throw Error('rehearsal_mode_conflict');
   if(merge.length){
     const segments=await readSegments(merge),header=segments[0].header,checked=checkedSegments(header,segments),sink=await createReportSink(reportPath,{...header,mergedSegments:segments.map(s=>s.id)});
-    for(const c of checked.cells)await sink.cell(c.cell,c.record,c.summary);await sink.finish(checked.decision,{complete:checked.complete,mergedCells:checked.cells.length});
-    console.log(checked.decision);if(checked.decision!=='passed')process.exitCode=1;return checked;
+    for(const c of checked.cells)await sink.cell(c.cell,c.record,c.summary);await sink.finish(checked.decision,{complete:checked.complete,mergedCells:checked.cells.length,...(checked.diagnostic?{qualifying:false,diagnostic:true,diagnosticReason:checked.diagnosticReason}:{})});
+    console.log(checked.diagnostic?JSON.stringify({status:checked.decision,qualifying:false,diagnostic:true,diagnosticReason:checked.diagnosticReason}):checked.decision);if(checked.decision!=='passed')process.exitCode=1;return checked;
   }
   if(estimate){
     if(protocol==='v4'&&!registrationPath){const value=estimateV4(profile);console.log(JSON.stringify(value));return value;}

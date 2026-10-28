@@ -82,25 +82,29 @@ async function readSegments(paths) {
   const segments=[];
   for(const path of paths){
     if(!path.endsWith('.jsonl')&&!path.endsWith('.jsonl.partial'))throw Error('v4_checkpoint_report_required');
-    let header,headerHash,failed=false;const cells=[],inherited=new Map();
+    let header,headerHash,failed=false;const cells=[],inherited=new Map(),openSessions=new Set();
     const restore=list=>{
       if(!Array.isArray(list)){failed=true;return;}
       const seen=new Set();
       for(const c of list){
         if(!c||c.complete!==true||typeof c.key!=='string'||!c.cell||!['passed','failed','invalid','inconclusive'].includes(c.decision)){failed=true;continue;}
         if(seen.has(c.key)){failed=true;continue;}seen.add(c.key);
-        if(inherited.has(c.key)&&!isDeepStrictEqual(inherited.get(c.key),c)){failed=true;continue;}
-        inherited.set(c.key,c);
+        const originSegmentId=c.originSegmentId??header.segments.find(s=>s.cellKeys.includes(c.key))?.id??header.segmentId;
+        if(inherited.has(c.key)&&!isDeepStrictEqual(inherited.get(c.key),{...c,originSegmentId})){failed=true;continue;}
+        inherited.set(c.key,{...c,originSegmentId});
       }
     };
     for await(const row of rows(path)){
       if(row.type==='registration'){header=row.header;headerHash=row.headerHash;if(digest(header)!==headerHash)throw Error('v4_checkpoint_header_hash');if(Object.hasOwn(header,'resumedCheckpoint')){failed||=journalFailure('resumed-checkpoints',header.resumedCheckpoint);restore(header.resumedCheckpoint?.cells);}}
+      if(row.type==='session-open'){if(!Number.isSafeInteger(row.cell)||openSessions.has(row.cell))failed=true;openSessions.add(row.cell);}
+      if(row.type==='session-cleanup-complete'){if(!openSessions.delete(row.cell))failed=true;}
       if(row.type==='cell'){
         failed||=journalFailure('checkpoint',{decision:row.decision})||typeof row.decision?.complete!=='boolean';
-        if(row.decision?.complete===true)cells.push({key:row.cell.key,complete:true,decision:row.decision.decision,cell:row.cell,record:row.decision,summary:row.summary});
+        if(row.decision?.complete===true)cells.push({originSegmentId:header.segmentId,key:row.cell.key,complete:true,decision:row.decision.decision,cell:row.cell,record:row.decision,summary:row.summary});
       }
       if(row.type==='final'&&!['passed','invalid','inconclusive'].includes(row.status))failed=true;
     }
+    if(openSessions.size)failed=true;
     if(header?.protocol?.version!=='P2-product-v4')throw Error('v4_checkpoint_header');
     const base=path.endsWith('.partial')?path.slice(0,-8):path,journal=base+'.records.jsonl';
     if(!await lstat(journal).then(()=>true,e=>{if(e.code==='ENOENT')return false;throw e;}))throw Error('v4_checkpoint_missing_journal');
@@ -134,7 +138,7 @@ async function readSegments(paths) {
       else if(row.type==='record'&&identified){if(row.failure===true||journalFailure(row.series,row.record)){failed=true;continue;}if(knownFailure(header.inventory.find(c=>c.id===row.cell),row.record,row.series))failed=true;}
       else throw Error('v4_checkpoint_failure_record');
     }if(!identified)throw Error('v4_checkpoint_failure_identity');}
-    segments.push({id:header.segmentId,registrationHash:header.registrationHash,hostId:header.host.id,volumeId:header.volume.id,node:header.node,header,cells:[...inherited.values()].filter(c=>!cells.some(r=>r.key===c.key)).concat(cells),knownFailure:failed});
+    segments.push({id:header.segmentId,registrationHash:header.registrationHash,hostId:header.host.id,volumeId:header.volume.id,node:header.node,header,cells:[...inherited.values()].filter(c=>c.originSegmentId===header.segmentId&&!cells.some(r=>r.key===c.key)).concat(cells),carriedCells:[...inherited.values()].filter(c=>c.originSegmentId!==header.segmentId),knownFailure:failed});
   }
   return segments;
 }

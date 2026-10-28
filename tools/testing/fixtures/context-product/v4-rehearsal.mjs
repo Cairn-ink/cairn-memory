@@ -17,7 +17,7 @@ export async function rehearseV4(input,{reportPath}) {
   await createCounter(input.counterConfiguration);
   const w=createTestWorkspace(null,{parent:input.volumeRoot,prefix:'product-rehearsal-'}),raw=await createReportSink(reportPath,{protocol:'P2-product-v4',mode:'rehearse',qualifying:false,timingGates:false,timingClaims:false,rehearsalSettings:{windowMs:5000,sessionMs:6000,pump:{pollMs:250,budgets:{maxItems:100000,maxMs:60000},sessionQuantum:{maxItems:1024,maxMs:1000},source:'test tooling; enlarged tiny-window allowance; production quotas remain registered separately'},sessionWorld:{memories:4,cards:1},samplesPerSeries:1,targetsPerType:1,probeLanes:2,availabilityLanes:1},node:process.version,inventory:[]});
   // Delegation carries the mode into the session child, which applies the same filter.
-  const sink={failure:(c,s,r)=>raw.failure(c,s,functionalEvidence(r)),record:(c,s,r)=>raw.record(c,s,functionalEvidence(r)),delegate:async()=>({...await raw.delegate(),rehearsal:true}),reclaim:n=>raw.reclaim(n)};
+  const sink={sessionOpen:c=>raw.sessionOpen(c),sessionClosed:c=>raw.sessionClosed(c),failure:(c,s,r)=>raw.failure(c,s,functionalEvidence(r)),record:(c,s,r)=>raw.record(c,s,functionalEvidence(r)),delegate:async()=>({...await raw.delegate(),rehearsal:true}),reclaim:n=>raw.reclaim(n)};
   const decisions=[];let cleanup=true;
   try {
     const path=join(w.path,'tiny.sqlite');generateSnapshot({schema:23,count:32,cards:4},path);

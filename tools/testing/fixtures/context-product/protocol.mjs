@@ -240,7 +240,7 @@ export function decide(cell, data) {
   }
   if (data.availability) checks.availability = data.availability.decision === 'failed' ? false : data.availability.decision === 'inconclusive' ? null : true;
   if (data.freshness) checks.freshness = data.freshness.decision === 'failed' ? false : data.freshness.decision === 'inconclusive' ? null : true;
-  if (data.reportOutputsComplete === false || data.production === false) unknown.push('required_outputs_or_platform');
+  if (data.reportOutputsComplete === false || (data.enginePlatformEligible ?? data.production) === false) unknown.push('required_outputs_or_platform');
   const failed = Object.values(checks).some(v => v === false);
   return { decision: invalid.length ? 'invalid' : failed ? 'failed' : unknown.length || Object.values(checks).some(v => v === null) ? 'inconclusive' : 'passed',
     checks, invalid, unknown, observedFailure: failed };

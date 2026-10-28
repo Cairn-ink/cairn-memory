@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.6.1 — 2026-10-28: installer fixes and engine update
+
+- Fix local Codex inspection when `TMPDIR` is inside `HOME` by falling back to
+  `/tmp` when the first location is unsafe.
+- Update embedded engine dependencies; see the
+  [MCP SDK 2.3.1 and Zod 4.6.7 security update](#unreleased--mcp-sdk-231-and-zod-467-security-update).
+  Existing local-mode users get the updated engine by rerunning
+  `npx @cairn-ink/memory setup`; saved memories are kept.
+- Fix a same-process SQLite lock hazard in the store-fence and context-read
+  paths by removing raw database file descriptors. Default local mode was not
+  affected.
+- Update the hosted Codex runtime with cancellation and protocol R16 unused-permit
+  restoration fixes. Existing cloud-mode Codex users must rerun
+  `npx @cairn-ink/memory setup` to install the updated runtime.
+- Known limitation: system-managed Codex configuration (`/etc/codex/config.toml`
+  or `/etc/codex/managed_config.toml`) is still refused as `codex_managed`.
+- Known limitation: when `TMPDIR` is inside `HOME` and `~/.codex/config.toml`
+  exists, cloud-mode Codex setup stops with `codex_tmpdir` ("TMPDIR has ancestor
+  project settings") and changes nothing, and `status` exits 1 with the same
+  message, also for local-mode users. Local-mode setup and the memory tools are
+  not affected. Use `TMPDIR=/tmp`, for example
+  `TMPDIR=/tmp npx @cairn-ink/memory status`.
+- The npm package was built from `be2bc543`. Engine changes merged after that
+  commit (context-read P2c, P2d and sidecar format 2) are not in 0.6.1.
+
 ## 0.3.3 — 2026-10-27: Claude plugin recall hook deadline
 
 Plugin and marketplace 0.3.3. Protocol stays 0.3.0; installer versions are

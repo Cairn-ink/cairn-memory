@@ -13,7 +13,14 @@ import { exposureCell } from './v4-windows.mjs';
 import { stateCell } from './v4-state.mjs';
 import { readSegments,checkedSegments } from './v4-checkpoints.mjs';
 import { sharedSession } from './v4-session.mjs';
+export function enginePlatform(input,profile,node=process.version) {
+  const native=input.platformRole==='native-linux-ext4';
+  if(native&&profile!=='engine')throw Error('v4_production_platform');
+  const eligible=profile==='engine'&&node===input.productionNode&&['wsl2-ext4','apfs','native-linux-ext4','production-linux-ext4'].includes(input.platformRole);
+  return {enginePlatformEligible:eligible,...(native?{production:false,qualifying:false,diagnostic:true,diagnosticReason:'native-linux-ext4 is registered only in revision 3; this execution uses revision 1'}:{})};
+}
 export function validateV4Registration(input,profile,plan=buildV4Plan(profile)) {
+  enginePlatform(input,profile,input.productionNode);
   if(input.rehearsal!==undefined)throw Error('rehearsal_cannot_qualify');
   if(!DEFINITIONS[profile])throw Error('v4_profile_required');
   if(input.protocolDefinition&&!isDeepStrictEqual(input.protocolDefinition,DEFINITIONS[profile]))throw Error('protocol_revision_required');
@@ -56,18 +63,20 @@ export function validateV4Registration(input,profile,plan=buildV4Plan(profile)) 
 }
 export async function runV4(input,{profile,segmentId,reportPath,registrationPath,resume=[]},deps) {
   const plan=buildV4Plan(profile);validateV4Registration(input,profile,plan);
-  deps.validateRegistration({...input,protocolDefinition:V3_DEFINITION,freshnessObservationMs:180000,availabilityWindows:1});
+  deps.validateRegistration({...input,protocolDefinition:V3_DEFINITION,freshnessObservationMs:180000,availabilityWindows:1},{engineProfile:profile==='engine'});
   const segment=input.segments.find(s=>s.id===segmentId);if(!segment)throw Error('v4_segment_required');
   const legacy=await deps.preregister({...input,protocolDefinition:V3_DEFINITION},input.writerProfile,[],registrationPath);
   if(process.version!==input.productionNode)throw Error('v4_registered_node_patch_required');
-  if(profile==='production'&&(platform()!=='linux'||/microsoft/i.test(release())||Number(legacy.filesystem.type)!==0xef53))throw Error('v4_production_runtime_or_volume');
+  if((profile==='production'||input.platformRole==='native-linux-ext4')&&(platform()!=='linux'||/microsoft/i.test(release())||Number(legacy.filesystem.type)!==0xef53))throw Error('v4_production_runtime_or_volume');
   const registrationHash=digest({input,node:process.version,implementationCommit:legacy.implementationCommit,hardware:{platform:legacy.hardware.platform,release:legacy.hardware.release,arch:legacy.hardware.arch,models:legacy.hardware.cpus.map(c=>c.model),memoryBytes:legacy.hardware.memoryBytes},filesystem:{type:legacy.filesystem.type,blockSize:legacy.filesystem.blockSize},source:legacy.sourceDiffHash,sourceHashes:legacy.changedSourceHashes,corpus:legacy.corpus,inputHashes:legacy.inputHashes});
-  const baseHeader=immutable({...legacy,protocol:{...PROTOCOL,version:V4.protocol,revision:1},platformProfile:V4.profiles[profile],protocolDefinition:DEFINITIONS[profile],
+  const eligibility=enginePlatform(input,profile);
+  const baseHeader=immutable({...legacy,...eligibility,protocol:{...PROTOCOL,version:V4.protocol,revision:1},platformProfile:V4.profiles[profile],protocolDefinition:DEFINITIONS[profile],
     estimate:estimateV4(profile,plan),inventory:plan,cellCount:plan.length,expandedInventory:undefined,expandedCellCount:undefined,
     minimumFixedWindowMs:estimateV4(profile).fixedWindows*30000,registrationHash,segmentId,segments:input.segments,
     productInputs:input.productInputs,readCutoffReport:input.readCutoffReport,host:input.host,volume:input.volume,reservation:input.reservation,observationBudgetMs:input.observationBudgetMs,supervision:input.supervision,
     sessionSchedules:input.sessions,claimsTable:claims.claimsTable,coverageTable:claims.coverageTable,unclaimed:claims.unclaimed});
   const previous=resume.length?checkedSegments(baseHeader,await readSegments(resume)):{cells:[]};
+  previous.cells=[...(previous.carriedCells??[]),...previous.cells];
   const carried={inheritedFailure:previous.decision==='failed',cells:previous.cells,cellKeys:previous.cells.map(c=>c.key),retainedDecisions:[...(previous.decision==='failed'?['failed']:[]),...previous.cells.map(c=>c.decision)]};
   // The first replayable registration frame must already carry its ancestry.
   // A process can stop before the later resumed-checkpoints record is written.
@@ -110,7 +119,7 @@ export async function runV4(input,{profile,segmentId,reportPath,registrationPath
         const fixture=input.fixtures.find(f=>f.count===c.count&&f.schema===c.schema);
         return {...config,protocol:V4.protocol,supervision:input.supervision,cell:c,sameNamespace:config.readSet[0],otherOwnerNamespace:fixture.otherOwnerNamespace,
           inspectLedger:async()=>(await deps.storage('inspect',{path:config.path})).value,
-          production:profile==='engine'?process.version===input.productionNode:config.production};
+          production:profile==='engine'&&input.platformRole!=='native-linux-ext4'?process.version===input.productionNode:input.platformRole==='native-linux-ext4'?false:config.production,enginePlatformEligible:profile==='engine'?eligibility.enginePlatformEligible:undefined};
       };
       const prepareInput=async(config,slot)=>({...await deps.prepareInput({...config,cell:slot,method:slot.method??config.method},adapter),oracle:adapter.validate});
       try {
@@ -162,7 +171,7 @@ export async function runV4(input,{profile,segmentId,reportPath,registrationPath
   }finally{
     clearInterval(monitor);delete globalThis[Symbol.for('product-qualification-actors')];process.off('SIGINT',stop);process.off('SIGTERM',stop);if(descendantsConfirmed)await workspace.cleanup();
     if(!descendantsConfirmed)await sink.interrupt();
-    else await sink.finish(status,{tally,complete:!stopped&&completed.size===plan.length,segmentComplete:!stopped&&completed.size===segment.cellKeys.length,completedCells:completed.size,requiredCells:plan.length,stopReason:stopped});
+    else await sink.finish(status,{...eligibility,tally,complete:!stopped&&completed.size===plan.length,segmentComplete:!stopped&&segment.cellKeys.every(key=>completed.has(key)),completedCells:completed.size,requiredCells:plan.length,stopReason:stopped});
   }
-  console.log(status);return {status,tally};
+  console.log(eligibility.diagnostic?JSON.stringify({status,...eligibility}):status);return {status,tally,...eligibility};
 }
