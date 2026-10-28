@@ -43,6 +43,55 @@ async function childCase({work,inspect=async()=>({value:{}})}){
     schedule:clock.schedule,cancel:clock.cancel,repeat:clock.repeat,clearRepeat:clock.clearRepeat});
   run.catch(()=>{});await settle();return {c,clock,rows,ctx,run};
 }
+async function parentCase({preparePump,makeSampler,autoExit=false,cleanupFails=false}={}){
+  const clock=timers(),c=native(71),actors=await load('actors.mjs'),child=actors.actor('control',null,{forkChild:()=>c,monitor:false});
+  const state={reclaimed:false,cleanupStarted:false,exported:false,ended:false,started:false,disposed:false};
+  child.stopTree=async()=>{state.cleanupStarted=true;if(cleanupFails)throw Error('descendants_unconfirmed');if(c.exitCode===null&&c.signalCode===null)c.kill('SIGKILL');};
+  c.send=m=>{if(m==='start'){state.started=true;c.emit('message',{type:'done'});}if(m==='export'){
+    state.exported=true;c.emit('message',{type:'result',sequence:0,value:'valid-result'});c.disconnect();
+    if(autoExit)c.emit('exit',0,null);
+  }};
+  c.emit('message',{type:'ready'});
+  const mod=await load('v4-session.mjs',{'./actors.mjs':actors,'./v4-session-work.mjs':{sessionPopulation(){},sessionDecision:(a,b,c,value)=>new Map([['result',value]])}});
+  const run=mod.sharedSession([],{},{config:{cell:{id:0}},sink:{delegate:async()=>({}),reclaim:async()=>{state.reclaimed=true;},record:async()=>{}}},{makeSession:()=>child,
+    schedule:clock.schedule,cancel:clock.cancel,preparePump:preparePump??(async()=>({start:()=>({stop:async()=>[]}),dispose:async()=>{state.disposed=true;},report:async()=>[]})),
+    makeSampler:makeSampler??(async()=>({stop:async()=>({samples:[]})})),loopFactory:()=>({finish:async()=>({blocks:[]})})});
+  run.then(()=>{state.ended=true;},()=>{state.ended=true;});await settle();return {run,c,child,clock,state};
+}
+test('round5 valid export then disconnect waits for exit 0 and succeeds',async()=>{
+  const f=await parentCase();
+  try{
+    assert.equal(f.state.exported,true);assert.equal(f.state.ended,false);assert.equal(f.state.cleanupStarted,false);assert.equal(f.state.reclaimed,false);assert.equal(f.clock.timeouts.size,1);
+    f.c.exitCode=0;f.c.emit('exit',0,null);
+    assert.equal((await f.run).get('result'),'valid-result');assert.equal(f.state.reclaimed,true);assert.equal(f.state.cleanupStarted,true);assert.equal(f.clock.timeouts.size,0);
+  }finally{f.c.kill('SIGKILL');await f.run.catch(()=>{});}
+});
+for(const [code,signal] of [[1,null],[null,'SIGTERM']])test(`round5 orderly disconnect still rejects exit ${code}/${signal}`,async()=>{
+  const f=await parentCase();f.c.exitCode=code;f.c.signalCode=signal;f.c.emit('exit',code,signal);
+  await assert.rejects(f.run,/session_child_failed/);assert.equal(f.state.cleanupStarted,true);assert.equal(f.clock.timeouts.size,0);
+});
+test('round5 disconnect before any result fails even with exit 0',async()=>{
+  let release;const f=await parentCase({preparePump:()=>new Promise(r=>{release=r;})});
+  f.c.disconnect();f.c.exitCode=0;f.c.emit('exit',0,null);await settle();
+  try{assert.equal(f.state.ended,true);assert.equal(f.state.cleanupStarted,true);await assert.rejects(f.run,/disconnect|shutdown_unconfirmed/);}
+  finally{release({dispose:async()=>{}});await f.run.catch(()=>{});}
+});
+test('round5 exported result without confirmed exit still hits the parent deadline',async()=>{
+  const f=await parentCase();for(const timer of [...f.clock.timeouts])f.clock.fire(timer);
+  await assert.rejects(f.run,/session_parent_timeout/);assert.equal(f.state.cleanupStarted,true);assert.equal(f.state.reclaimed,true);assert.equal(f.clock.timeouts.size,0);
+});
+for(const phase of ['preparation','stop','dispose'])test(`round5 parent deadline bounds unresolved pump ${phase} and retains the lease`,async()=>{
+  let release,entered=false,disposed=false;
+  const pending=()=>{entered=true;return new Promise(r=>{release=r;});};
+  const driver={start:()=>({stop:phase==='stop'?pending:async()=>[]}),dispose:phase==='dispose'?pending:async()=>{disposed=true;},report:async()=>[]};
+  const f=await parentCase({preparePump:phase==='preparation'?pending:async()=>driver,makeSampler:phase==='dispose'?async()=>{throw Error('sampler_startup_failed');}:undefined});
+  assert.equal(entered,true);for(const timer of [...f.clock.timeouts])f.clock.fire(timer);await settle();
+  try{
+    assert.equal(f.state.cleanupStarted,true);assert.equal(f.state.ended,true);assert.equal(f.state.reclaimed,false);assert.equal(f.clock.timeouts.size,0);
+    await assert.rejects(f.run,e=>e.cleanup?.descendantsUnconfirmed===true&&e.cleanup.pumpUnconfirmed===true&&/workspace_retained/.test(e.message));
+  }finally{release(phase==='preparation'?driver:[]);await f.run.catch(()=>{});await settle();}
+  if(phase==='preparation'){assert.equal(f.state.started,false);assert.equal(disposed,true);assert.equal(f.state.reclaimed,false);}
+});
 test('round4 stall preserves healthy lane settlement and writer telemetry until bounded drain',async()=>{
   let finish,actors;
   const stalled=native(11),healthy=native(12),writer=native(13),events=[];

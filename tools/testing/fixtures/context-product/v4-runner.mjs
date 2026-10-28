@@ -130,8 +130,11 @@ export async function runV4(input,{profile,segmentId,reportPath,registrationPath
             if(Date.now()+input.supervision.drainAllowanceMs>startedAt+Math.min(input.reservation.seconds*1000,input.observationBudgetMs))stopped??='projected_overrun';
             monitor=setInterval(supervise,monitorEvery);
           }
+          // Returned evidence survives a budget stop, but the overrun cannot
+          // supply a complete checkpoint or promote the profile to passed.
+          for(const c of group){const returned=ds.get(c.key);if(!completed.has(c.key)||returned.decision==='failed'||returned.observedFailure)await complete(c,returned,!stopped);}
           if(stopped){await sink.record(-1,'admission-stopped',{reason:stopped,remaining:plan.length-completed.size});break;}
-          for(const c of group)if(!completed.has(c.key))await complete(c,ds.get(c.key));continue;
+          continue;
         }else if(cell.kind==='injection')decision=await stateCell(cell,{sink,input,prepare:(c,s)=>prepare(c,s),prepareInput,build:buildCell});
         else {
           config=await buildCell(config);config=await prepareInput(config,rotatingCell(cell,0));
@@ -147,7 +150,7 @@ export async function runV4(input,{profile,segmentId,reportPath,registrationPath
         }
         if(!['injection','exposure'].includes(cell.kind)){const final=await config.inspectLedger();await sink.record(cell.id,'population',{initial:config.initialCounts,final:{memories:final.memories,cards:final.cardCount,schema:final.schema}});}
         await complete(cell,decision);
-      }catch(e){if(e.cleanup?.descendantsUnconfirmed){descendantsConfirmed=false;throw e;}await sink.record(cell.id,'failure',{code:e.code??e.message,exitCode:e.exitCode??null,signal:e.signal??null,...(e.cleanup?{cleanup:e.cleanup}:{}),...(e.diagnostics?{diagnostics:e.diagnostics}:{})});await complete(cell,{decision:'failed',reason:'harness_failed'},false);stopped='harness_failed';}
+      }catch(e){if(e.cleanup?.descendantsUnconfirmed){descendantsConfirmed=false;console.error(JSON.stringify({status:'failed',reason:e.code??e.message,workspaceRetained:true,cleanup:e.cleanup}));throw e;}await sink.record(cell.id,'failure',{code:e.code??e.message,exitCode:e.exitCode??null,signal:e.signal??null,...(e.cleanup?{cleanup:e.cleanup}:{}),...(e.diagnostics?{diagnostics:e.diagnostics}:{})});await complete(cell,{decision:'failed',reason:'harness_failed'},false);stopped='harness_failed';}
       finally{if(descendantsConfirmed)await cellWorkspace.cleanup();observedCosts.set(cell.kind,Math.max(observedCosts.get(cell.kind)??0,Date.now()-began));}
     }
     status=stopped?(decisions.includes('failed')?'failed':'inconclusive'):aggregate([...decisions,...(completed.size===plan.length?[]:['inconclusive'])]);

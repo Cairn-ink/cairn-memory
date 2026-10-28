@@ -62,16 +62,16 @@ function registration(plan){
     segments:[{id:'first',cellKeys:plan.map(c=>c.key)}],stateProbes:Object.fromEntries(plan.filter(c=>c.kind==='injection'&&c.injection==='post-catch-up').flatMap(c=>c.subprobes.map(p=>[c.key+':'+p.id,'unique'+c.id+p.id]))),
     adapterModule:'data:text/javascript,export const validate=()=>true;'};
 }
-async function runner(t,{reason,exception=false,priorFailure=false,resumed=[],sessionCell=false,cleanupLost=false}={}){
+async function runner(t,{reason,exception=false,priorFailure=false,resumed=[],sessionCell=false,cleanupLost=false,sessionDecision={decision:'passed'},sessionFailureOnResumed=false}={}){
   const plan=buildV4Plan('engine'),cell=sessionCell?plan.find(c=>c.kind==='availability'):exception?plan.find(c=>c.kind==='injection'&&c.injection==='post-catch-up'):plan.find(c=>c.kind==='requests');
-  const report=output(),w=createTestWorkspace(t);let clock=0,supervise,runs=0,monitorActive=false;
-  const context=vm.createContext({process:{version:'v24.15.0',once(){},off(){}},console:{log(){},error(){}},Date:{now:()=>clock},setInterval:fn=>{supervise=fn;monitorActive=true;return 1;},clearInterval(){monitorActive=false;}});
+  const report=output(),w=createTestWorkspace(t),errors=[];let clock=0,supervise,runs=0,monitorActive=false;
+  const context=vm.createContext({process:{version:'v24.15.0',once(){},off(){}},console:{log(){},error:r=>errors.push(r)},Date:{now:()=>clock},setInterval:fn=>{supervise=fn;monitorActive=true;return 1;},clearInterval(){monitorActive=false;}});
   const prior=plan.filter(c=>c!==cell).map(c=>({key:c.key,cell:c,complete:true,decision:'passed'}));
   const actualReport=await import('./fixtures/context-product/report.mjs');
   const mod=await load('v4-runner.mjs',{
     './report.mjs':{...actualReport,createReportSink:async()=>report},
     './v4-checkpoints.mjs':{readSegments:async()=>resumed,checkedSegments:()=>({cells:[...prior,...resumed.flatMap(s=>s.cells)],decision:priorFailure||resumed.some(s=>s.knownFailure)?'failed':'inconclusive'})},
-    './v4-session.mjs':{sharedSession:async(group,session,{sink})=>{runs++;assert.equal(monitorActive,false);if(cleanupLost)throw Object.assign(Error('descendants_unconfirmed'),{cleanup:{descendantsUnconfirmed:true}});if(reason==='projected_overrun')clock=47700001;await sink.record(cell.id,'session-test',{});return new Map(group.map(c=>[c.key,{decision:'passed'}]));}},
+    './v4-session.mjs':{sharedSession:async(group,session,{sink})=>{runs++;assert.equal(monitorActive,false);if(cleanupLost)throw Object.assign(Error(cleanupLost==='pump'?'session_pump_shutdown_unconfirmed_workspace_retained':'descendants_unconfirmed'),{cleanup:{descendantsUnconfirmed:true,...(cleanupLost==='pump'?{pumpUnconfirmed:true}:{})}});if(reason==='projected_overrun')clock=47700001;await sink.record(cell.id,'session-test',{});const target=sessionFailureOnResumed?group.find(c=>c.key!==cell.key).key:cell.key;return new Map(group.map(c=>[c.key,c.key===target?sessionDecision:{decision:'passed'}]));}},
     './v4-state.mjs':{stateCell:async()=>{runs++;await report.record(cell.id,'subprobe',{id:'status',code:null,expected:true});throw Error('interrupted');}},
     './series.mjs':{build:async()=>({coverage:'complete',diagnostics:[]}),requestSeries:async()=>{
       runs++;if(reason){clock=reason==='projected_overrun'?47700001:reason==='stalled_activity'?101:201;
@@ -84,10 +84,26 @@ async function runner(t,{reason,exception=false,priorFailure=false,resumed=[],se
   const execution=mod.runV4(input,{profile:'engine',segmentId:'first',reportPath:'unused',resume:['checkpoint.jsonl']},{validateRegistration(){},preregister:async()=>({node:'v24.15.0',hardware:{cpus:[]},filesystem:{},corpus:[]}),idleBaseline:async()=>({}),
     prepareCell:async()=>({readSet:[namespace],inspectLedger:async()=>({})}),probeDependencies:async()=>({ready:true}),prepareInput:async c=>c,storage:async()=>({value:{}})});
   if(cleanupLost)await assert.rejects(execution,e=>e.cleanup?.descendantsUnconfirmed===true);else await execution;
-  return {report,cell,runs,plan,workspace:w.path};
+  return {report,cell,runs,plan,workspace:w.path,errors};
 }
 test('round4 unconfirmed cleanup retains both workspace levels and interrupts the leased report',async t=>{const r=await runner(t,{sessionCell:true,cleanupLost:true});const paths=await readdir(r.workspace);assert.equal(paths.length,1);assert.equal((await readdir(join(r.workspace,paths[0]))).length,1);assert.equal(r.report.interrupted,true);assert.equal(r.report.final,undefined);});
 test('round4 final session rechecks reservation with every other cell complete',async t=>{const {report}=await runner(t,{sessionCell:true,reason:'projected_overrun'});assert.equal(report.final.stopReason,'projected_overrun');assert.equal(report.final.complete,false);assert.equal(report.final.status,'inconclusive');});
+for(const sessionDecision of [{decision:'failed',observedFailure:true},{decision:'failed'},{decision:'invalid',observedFailure:true}])test(`round5 over-budget session retains ${JSON.stringify(sessionDecision)}`,async t=>{
+  const {report,cell,plan}=await runner(t,{sessionCell:true,reason:'projected_overrun',sessionDecision});
+  assert.equal(report.final.status,'failed');assert.equal(report.final.tally.failed,1);
+  assert.equal(report.final.stopReason,'projected_overrun');assert.equal(report.final.complete,false);assert.equal(report.final.segmentComplete,false);assert.equal(report.final.completedCells,plan.length-1);
+  const row=report.rows.find(r=>r.type==='cell'&&r.cell.key===cell.key);assert.equal(row.decision.decision,'failed');assert.equal(row.decision.complete,false);
+  assert.ok(report.rows.some(r=>r.series==='checkpoint'&&r.record.cellKey===cell.key&&r.record.complete===false&&r.record.decision.decision==='failed'));
+});
+test('round5 over-budget session retains a new failure for a resumed sibling',async t=>{
+  const {report}=await runner(t,{sessionCell:true,reason:'projected_overrun',sessionDecision:{decision:'failed',observedFailure:true},sessionFailureOnResumed:true});
+  assert.equal(report.final.status,'failed');assert.equal(report.final.tally.failed,1);assert.equal(report.final.complete,false);
+});
+test('round5 unconfirmed pump shutdown retains both workspace levels and reports retention',async t=>{
+  const r=await runner(t,{sessionCell:true,cleanupLost:'pump'}),paths=await readdir(r.workspace);
+  assert.equal(paths.length,1);assert.equal((await readdir(join(r.workspace,paths[0]))).length,1);assert.equal(r.report.interrupted,true);assert.equal(r.report.final,undefined);
+  const failure=r.errors.map(JSON.parse).find(r=>r.workspaceRetained);assert.equal(failure.status,'failed');assert.equal(failure.cleanup.pumpUnconfirmed,true);assert.match(failure.reason,/workspace_retained/);
+});
 test('round3 runner suspends parent harness supervision while the session owns the journal',async t=>{const {report,runs}=await runner(t,{sessionCell:true});assert.equal(runs,1);assert.equal(report.final.status,'passed');assert.equal(report.final.complete,true);});
 for(const reason of ['projected_overrun','stalled_activity','missing_progress'])test(`final-cell supervision ${reason} cannot pass despite all cells finishing`,async t=>{
   const {report,plan}=await runner(t,{reason});assert.equal(report.final.completedCells,plan.length);assert.equal(report.final.stopReason,reason);assert.equal(report.final.status,'inconclusive');assert.equal(report.final.complete,false);
