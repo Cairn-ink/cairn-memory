@@ -131,6 +131,23 @@ export function diagnosticControl(directory) {
   visit(join(root, 'core/memory-reader.mjs')); visit(join(root, 'core/topic-overview-worker.mjs'));
   return { readerUrl: pathToFileURL(join(directory, 'core/memory-reader.mjs')).href, inventory };
 }
+// Shared independent-writer lifecycle. Instrumentation is supplied by the
+// opt-in product observer; ordinary writer policy and public methods stay intact.
+export async function measureWriterLifecycle({core,lifecycle,open,write,inspect,close,clock=Date.now}) {
+  const startedAt=clock(),start=performance.now();
+  let value,error,disposed=lifecycle==='fresh'?false:null,writeStartedAt,writeFinishedAt,writeElapsedMs,closeStartedAt;
+  try {
+    core??=await open();writeStartedAt=clock();const writeStart=performance.now();
+    try{value=await write(core);}finally{writeFinishedAt=clock();writeElapsedMs=performance.now()-writeStart;}
+    if(inspect)await inspect(core,value);
+  }catch(failure){error=failure;}
+  finally {
+    if(lifecycle==='fresh') {
+      closeStartedAt=clock();try{await close(core);disposed=true;}catch(failure){error??=failure;disposed=false;}core=undefined;
+    }
+  }
+  return {core,value,error,disposed,call:{startedAt,finishedAt:clock(),elapsedMs:performance.now()-start,writeStartedAt,writeFinishedAt,writeElapsedMs,closeStartedAt}};
+}
 async function writerProcess(config) {
   // There is deliberately NO keeper connection, including during startup.
   const { DatabaseSync } = await import('node:sqlite');
@@ -148,21 +165,13 @@ async function writerProcess(config) {
     await delay(Math.max(0, startAt - Date.now()));
     let sequence = 0, lastProgress = Date.now();
     while (Date.now() < endAt) {
-      const startedAt = Date.now(), start = performance.now();
-      let writeStartedAt, writeFinishedAt, writeElapsedMs, closeStartedAt, failure;
-      try {
-        core ??= await openWriter(config.path, 'same-owner');
-        writeStartedAt = Date.now(); active = true;
-        const writeStart = performance.now();
-        try { await publicWrite(core, 'same-owner', sequence++); }
-        finally { writeElapsedMs = performance.now() - writeStart; writeFinishedAt = Date.now(); active = false; }
-      } catch (error) { failure = { code: error.code ?? 'writer_failed', errcode: error.errcode ?? null }; }
-      finally {
-        if (config.lifecycle === 'fresh') { closeStartedAt = Date.now(); core?.close(); core = undefined; }
-        active = false;
-      }
-      calls.push({ startedAt, finishedAt: Date.now(), elapsedMs: performance.now() - start,
-        writeStartedAt, writeFinishedAt, writeElapsedMs, closeStartedAt, walAfterClose: existsSync(config.path + '-wal'), ...(failure ? { failure } : {}) });
+      const measured=await measureWriterLifecycle({core,lifecycle:config.lifecycle,
+        open:()=>openWriter(config.path,'same-owner'),
+        async write(handle){active=true;try{return await publicWrite(handle,'same-owner',sequence++);}finally{active=false;}},
+        close:handle=>handle?.close()});
+      core=measured.core;
+      const failure=measured.error?{code:measured.error.code??'writer_failed',errcode:measured.error.errcode??null}:null;
+      calls.push({...measured.call,walAfterClose:existsSync(config.path+'-wal'),...(failure?{failure}:{})});
       if (failure) break;
       if (Date.now() - lastProgress >= 1000) {
         process.send({ type: 'progress', calls: calls.length, commits: commits.length }); lastProgress = Date.now();

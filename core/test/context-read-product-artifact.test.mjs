@@ -35,8 +35,8 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   const manifest = JSON.parse(readFileSync(join(root, 'packaging/artifact-files.json'), 'utf8'));
   const entries = ['core/context-product-reader.mjs', 'core/context-product-worker.mjs', 'core/context-product-pump.mjs', 'core/context-product-selection.mjs', 'core/context-read-supervisor.mjs'];
   const expected = closure(root, entries);
-  // P2e adds the hosted coordinator, maintenance and certificate closure.
-  assert.equal(expected.length, 98);
+  // Hosted P2e closure plus shared maintenance admission.
+  assert.equal(expected.length, 99);
   for (const file of expected) assert.ok(manifest.includes(file), 'missing artifact file: ' + file);
   for (const file of manifest) {
     const target = join(staged, file); mkdirSync(dirname(target), { recursive: true }); copyFileSync(join(root, file), target);

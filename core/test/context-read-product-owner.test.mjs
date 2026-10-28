@@ -209,11 +209,12 @@ for (const version of [23, 33]) test(`P2-05/07/11/12 pooled oracle and mixed equ
       const eligible = intent==='history'?[...documents,historyDoc]:documents;
       assert.deepEqual(record.counts.byType, {card:{eligible:4,indexed:4},memory:{eligible:eligible.length-4,indexed:eligible.length-4}});
       assert.equal(record.counts.totalTokenLength, intent==='history'?32:30);
-      const totals = side.prepare("SELECT n,total_length FROM statistics WHERE generation=? AND term='' ").get(record.generation.id);
+      const generation = side.prepare('SELECT storage_id FROM generations WHERE id=?').get(record.generation.id).storage_id;
+      const totals = side.prepare("SELECT n,total_length FROM statistics WHERE generation=? AND term='' ").get(generation);
       assert.deepEqual({...totals},{n:eligible.length,total_length:intent==='history'?32:30});
       for (const term of ['快取','cache','東京','キャッシュ']) {
         const expectedDf = eligible.filter(d => d.tokens.includes(term)).length;
-        assert.equal(side.prepare('SELECT df FROM statistics WHERE generation=? AND term=?').get(record.generation.id,term).df, expectedDf);
+        assert.equal(side.prepare('SELECT df FROM statistics WHERE generation=? AND term=?').get(generation,term).df, expectedDf);
       }
     }
   } finally { side.close(); }
@@ -323,24 +324,24 @@ for(const size of [1,2,32])test(`P2c fix1 ${size}-namespace multi-term lookup us
   const prepare=DatabaseSync.prototype.prepare,plans=[];
   t.mock.method(DatabaseSync.prototype,'prepare',function(sql){
     const stmt=prepare.call(this,sql);
-    if(!/FROM postings p\b/.test(sql))return stmt;
+    if(!/FROM postings p INDEXED BY product_term\b/.test(sql))return stmt;
     return new Proxy(stmt,{get:(target,key)=>key==='all'?((...args)=>{
       plans.push(prepare.call(this,'EXPLAIN QUERY PLAN '+sql).all(...args).map(r=>r.detail).join('\n'));
-      assert.match(sql,/ORDER BY p.identity LIMIT 128$/);
+      assert.match(sql,/ORDER BY p.doc LIMIT 128$/);
       const rows=target.all(...args);assert.ok(rows.length<=128);return rows;
     }):Reflect.get(target,key,target)});
   });
   assert.deepEqual(storage.lexical(p,publication,'missingalpha missingbeta'),{rows:[],matched:0});
   assert.equal(plans.length,2,'one indexed probe per missing term');
   for(const plan of plans){
-    assert.match(plan,/USING (?:COVERING )?INDEX product_term .*generation=\? AND term=\? AND identity>\?/);
+    assert.match(plan,/USING (?:COVERING )?INDEX product_term .*generation=\? AND term=\? AND doc>\?/);
     assert.doesNotMatch(plan,/SCAN|TEMP B-TREE/);
   }
   plans.length=0;
   const both=storage.lexical(p,publication,'cache 東京'),single=storage.lexical(p,publication,'cache');
   assert.equal(both.matched,133+size-1);assert.equal(single.matched,both.matched);
   assert.equal(both.rows.length,24);assert.equal(new Set(both.rows.map(r=>r.ref.memoryId)).size,24);
-  for(const plan of plans)assert.match(plan,/INDEX product_term .*generation=\? AND term=\? AND identity>\?/);
+  for(const plan of plans)assert.match(plan,/INDEX product_term .*generation=\? AND term=\? AND doc>\?/);
 });
 
 

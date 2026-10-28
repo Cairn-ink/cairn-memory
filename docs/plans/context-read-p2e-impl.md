@@ -804,3 +804,245 @@ changes. No commit or staging operation.
 - `core/test/context-read-product-semantic.test.mjs`
 - `core/testing/context-semantic-host.mjs`
 - `docs/plans/context-read-p2e-impl.md`
+
+## Integration with sidecar format 2
+
+Integrates approved P2e at `ea71baf4` with `origin/main` at `be5698fa` by
+merge. The incoming changes include #493, #494, #495 and #486. No frozen
+contract text is edited. The accepted format-2 handoff and all preceding P2e
+report sections are preserved byte-for-byte; the format-3 revision is appended
+to the handoff as `context-read-product-v1.1/sidecar-format-3-vectors-yield-v1`.
+
+### Conflicts and semantic resolution
+
+The merge command exited **1**, with exactly four content conflicts:
+
+- `core/context-product-index.mjs`: combined P2e's semantic configuration,
+  coordinator dispatch and single-horizon assembly with main's injected clock,
+  storage test seam and original parent cutoff. Embedding refresh uses the same
+  maintenance quantum as lexical refresh, starting before opening. Evidence
+  materialization, asynchronous provider settlement and vector persistence share
+  a doubled high-water work estimate. Provider admission ends before the shared
+  reserve and original parent cutoff; integer USD accounting, captured prices,
+  durable reservation/settlement and one-query limits remain independent.
+- `core/context-product-sidecar.mjs`: retained main's compact integer layout,
+  dictionary, WITHOUT ROWID tables, positive-key CHECKs, exact schema attestation,
+  incremental vacuum, selection retention, verified cursors and bounded GC;
+  incorporated P2e vector access and final lexical fencing. All hosts initialize
+  one complete format-3 schema. No semantic-dependent schema exception remains.
+- `core/context-product-worker.mjs`: retained P2e's awaited asynchronous dispatch
+  and main's conversion of the immutable parent cutoff to the performance-clock
+  domain. SQLite remains behind the existing Worker/lazy-import boundary.
+- `core/test/context-read-product-artifact.test.mjs`: the exported closure is
+  **99 modules**, combining the hosted P2e closure with shared quantum admission.
+  The executable manifest/archive/installed-files cross-check remains intact.
+
+The runtime archive arrived through the clean merge and was then regenerated
+from source; no bundle bytes were hand-merged. The clean documentation merge was
+reviewed and its obsolete optional-vector/automatic-upgrade guidance corrected.
+The evaluation runner's pre-P2e test expected the public semantic API to be
+absent. With P2e integrated, the existing sealed run correctly blocks instead on
+`sealed_public_engine_host_binding_required`. Its assertion now checks that
+reason plus unchanged unconfigured capabilities, zero observations and unrun
+safety cells. The runner, sealed registration, safety gates and frozen fake
+report are unchanged. The initial Node 22 `p2e-*` group exited **1** (35/36);
+the complete corrected group is rerun below.
+
+Layout-specific inherited assertions now expect format 3 and resolve opaque
+vector IDs to integer storage keys before SQL access; their independent logical
+manifest, HMAC, fusion and purge oracles are retained.
+
+### Format-3 storage, lifecycle and verification
+
+`PRAGMA user_version=3`, exact table/index SQL attestation, lexical and vector
+validation `format:3`, and signed `{format:3,...sidecarIdentity}` progress bind
+the new physical identity. Both lexical-only and configured semantic hosts
+refuse deployed format-1/format-2 files during observation and maintenance,
+without conversion or replacement. Wrong-store precedence and P2d's DELETE/WAL
+repair, lock, native-admission and resource-drain rules remain intact. Rebuild
+requires stopped admissions and clients, supervised drain, explicit quiescent
+derived-cache discard, then independent maintenance of both intents. Canonical
+storage and the lifecycle lock are retained.
+
+Vector generations use integer `storage_id` and `lexical_generation` references
+while certificates retain their opaque generation IDs and lexical binding.
+Cached vectors and publication rows carry positive integer document keys;
+cache reuse across intents resolves and validates the original document.
+Format 2's constant document representation is reconstructed for vector tuples.
+Owner purge deletes by integer keys without creating tombstone documents.
+
+GC keeps main's protections for published lexical generations and active bases,
+including its read-only candidate hint before entering a write transaction.
+Owner-filtered slices delete at most 128 data rows: postings, documents and
+statistics first, then cached vectors and vector publication rows. Vector rows
+are removed before their matching validation/progress/generation metadata;
+selection retirement invalidates its pointers atomically. Superseded vector
+certificates on an otherwise current lexical generation are also collected.
+Keyed pointer deletion cannot erase a replacement publication. Other owners,
+intents and active selections remain protected.
+
+Vector construction, ordered manifest verification and the independent physical
+cache audit admit bounded pages and individual rows. Every processed row is
+validated before its cursor/hash/count advances, and partial checkpoints commit
+only completed rows. Initial scans have no lower-bound shortcut that could skip
+a nonpositive key or empty malformed ordering key. Positive document domains,
+exact keyed document references, revision/representation, canonical vector
+bytes, sort keys and complete row counts are checked. BLOB reads are bounded to
+the fixed 6,144-byte vector domain. The lexical `verifyPage` implementation is
+byte-identical to main's three reviewed fix rounds.
+
+### Regressions and verification evidence
+
+The new `context-read-product-format3` suite covers refusal of both deployed
+formats without semantic configuration, fake vector certification/ranking,
+nonpositive CHECK enforcement, exact vector index SQL attestation, orphan and
+nonpositive publication/cache rows,
+130-item partial verification checkpoints, missing-payload count rejection,
+orphan cache-origin generation rejection, retired/superseded vector GC and
+other-intent preservation, and deterministic embedding quanta including open,
+provider reserve, durable received vectors and later certification without
+resending. The public hosted-semantic suite adds a fresh format-3 lexical build,
+vector refresh, semantic read and one-item-slice owner purge with fake providers.
+
+The format-3/artifact focused command on Node 22.16.0 exited **0**, **13 passing,
+zero skips**. The focused public end-to-end and pooled owner-wide oracle command
+exited **0**, **2 passing, zero skips**. Runtime generation and check on Node
+24.15.0 each exited **0** (32 client files, 330 engine files).
+
+Development evidence is retained honestly: the initial footprint/semantic run
+exited **1** (105 pass, two failures): a stale rebuild assertion expected format
+2, and one pooled-oracle query did not dispatch (the original assertion did not
+capture its degradation reason). The rebuild assertion was updated; the diagnostic-enhanced complete pooled oracle passed
+unchanged on its focused rerun. The first format-3-only run exited **1** because
+its 130-item fixture populated only one 64-item provider batch; the fixture now
+fills all batches. The next run exited **1** because the injected-clock planning
+seam still compared the real performance clock; planning now uses the supplied
+quantum clock. Its focused deterministic rerun exited **0**. No production
+budget, timeout, golden output or provider policy was relaxed. One developmental
+sizing run was intentionally stopped with **143** after final physical index
+constraints changed, so sizing could restart against the final schema.
+
+### Final footprint measurement
+
+The unchanged `core/testing/measure-context-product-footprint.mjs` ran with
+semantic configuration absent on **Node 24.15.0**, exit **0**. It built both
+owner-wide intents over 1,642 Memories and 164 Cards in four namespaces.
+Canonical allocation is **5,197,824 B**; sidecar allocation is **11,968,512 B**,
+with **0 free bytes**, for **2.3026004728×** (≤5×). Current/history completed in
+182/149 quanta; these are observations, not timing or throughput gates. Every
+table/index/internal structure plus free space independently reconciles to the
+page allocation, and recomputing the ratio from both byte totals exits **0**.
+Complete structure bytes are appended as `integrationFormat3` to
+`context-read-sidecar-footprint-measurements.json`; all seven earlier entries
+are preserved unchanged.
+
+Vector payload planning estimate: 1,536 float32 dimensions = **6,144 B/vector**.
+A reusable cache plus one intent costs **12,288 raw B/embedded item**; two
+immutable intent projections sharing the cache cost **18,432 raw B/item**.
+These estimates exclude SQLite page/index/identity overhead, staging,
+superseded generations and journals. Semantics-off sizing includes the complete
+empty vector schema but no embedding payloads.
+
+The first full Node 22 context run exposed an additional integration regression:
+GC had dropped main's read-only candidate hint and opened an empty write batch,
+triggering the unchanged `Fix2 repair refuses while an ordinary batch holds its
+lock` assertion. The hint is restored and extended to vector candidates, with
+both decisions rechecked under BEGIN IMMEDIATE. The focused GC/repair-lock
+command exits **0**, **4 passing**; a complete Node 22 context rerun and affected
+guard/adapter groups validate the final implementation. No journal assertion or
+lock policy is weakened.
+
+The same initial context run also logged `read_timeout` in the existing
+off-owner pump probe, whose quanta are 500 ms. Its unchanged focused rerun exits
+**0**, one passing case; the complete final context runs remain the acceptance
+evidence. No timeout, budget or timing threshold was changed.
+
+### Required commands and actual exit codes
+
+Both runtime binaries were invoked by explicit absolute path and checked with
+`--version`: **v22.16.0 / v24.15.0**, probe exits **0 / 0**. `$NODE22` and
+`$NODE24` below denote those exact binaries, with each runtime's npm toolchain
+first on PATH and offline mode enforced. Adapter and tokenizer dependencies
+were already available; no dependency installation or lockfile edit was needed.
+
+```sh
+"$NODE22" tools/testing/run.mjs --test-reporter=tap --test-concurrency=1 <expanded files>
+"$NODE24" tools/testing/run.mjs --test-reporter=tap --test-concurrency=1 <expanded files>
+```
+
+Glob expansion and independent directory enumeration agree on **68 required
+files, zero differences**. Table globs abbreviate the actual explicit argument
+arrays. Child return codes were captured directly, without a stdout pipeline.
+
+| Expanded files | Files | Node 22.16.0 exit (pass) | Node 24.15.0 exit (pass) |
+| --- | ---: | ---: | ---: |
+| `core/test/context-read*.test.mjs` | 37 | 0 (794) | 0 (794) |
+| `core/test/topic-*.test.mjs` | 17 | 0 (238) | 0 (238) |
+| `core/test/no-raw-db-fd.test.mjs + sqlite-lock-safety.test.mjs + sqlite-journal-probe.test.mjs` | 3 | 0 (44) | 0 (44) |
+| `adapters/mcp/test/context-read*.test.mjs` | 6 | 0 (97) | 0 (97) |
+| `packaging/test/topic-overview-raw29.test.mjs` | 1 | 0 (3) | 0 (3) |
+| `tools/testing/p2e-*.test.mjs` | 4 | 0 (36) | 0 (36) |
+
+Every final required group has **zero failures, cancellations and skips**:
+**1212 / 1212 passing tests** across the required union.
+The final format-3 file has **15 passing cases** on both runtimes, included in
+these context totals. Its complete-file Node 22 rerun also exited **0**, 15/15.
+
+The first full Node 22 context command exited **1** (791 pass, two failures):
+the empty-GC-batch lock regression and the 500 ms off-owner pump timeout recorded
+above. The complete context rerun exits **0**. Its final guard and adapter groups
+were also rerun, exits **0 / 0**. The initial Node 22 evaluation group exited
+**1** (35/36); its corrected complete-file group exits **0** on both runtimes.
+Earlier nonzero development exits are preserved above rather than relabeled.
+
+Other final commands/checks:
+
+| Command/check | Runtime | Actual exit |
+| --- | --- | ---: |
+| `git merge origin/main` | Git | 1 (four conflicts, resolved) |
+| `node core/testing/measure-context-product-footprint.mjs` through the managed script runner | 24.15.0 | 0 |
+| Independent structure/page/ratio reconciliation | Python | 0 |
+| `node packages/setup/build-runtime.mjs` | 24.15.0 | 0 |
+| `node packages/setup/build-runtime.mjs --check` | 24.15.0 | 0 |
+| Individual `node --check` on all 13 changed JavaScript files | 22.16.0 + 24.15.0 | 26 exits 0 |
+| `git diff --check` | Git | 0 |
+
+The final regenerated bundle is checked after this report is complete, so its
+included report copy agrees with the source. Independent manifest/filesystem
+and manifest/tar inventories agree on **32 client / 330 engine files**, zero
+differences; the archive SHA-256 matches its manifest. There was no hand merge
+of generated content. The lexical deep verifier and both accepted report/note
+prefixes are independently byte-compared and preserved. Final fingerprints cover
+**1,532 JavaScript modules**. No canonical migration, external provider traffic, keys,
+timing threshold change or raw-fd allowlist change was introduced by the
+resolution. All supervised verification completes and drains before handoff.
+
+### Changed files of the resolution
+
+Relative to the automatic merge tree `ec93fe5bf870676487f4bb29bcc940a79469e618`,
+`git diff --name-only` plus nonignored untracked enumeration is compared with
+independent Git tree/blob hashes and `rg --files --hidden` filesystem enumeration:
+**19 files, zero differences**, cross-check exit **0**. Incoming clean changes
+from main remain part of the merge; this inventory identifies the resolution
+and integration edits. The four original conflict paths are independently
+recovered from conflict markers in that automatic merge tree.
+
+- `core/context-product-index.mjs`
+- `core/context-product-quantum.mjs`
+- `core/context-product-sidecar.mjs`
+- `core/context-product-validation.mjs`
+- `core/context-product-vectors.mjs`
+- `core/context-product-worker.mjs`
+- `core/context-semantic-maintenance.mjs`
+- `core/context-vector-validation.mjs`
+- `core/test/context-read-product-artifact.test.mjs`
+- `core/test/context-read-product-footprint.test.mjs`
+- `core/test/context-read-product-format3.test.mjs`
+- `core/test/context-read-product-semantic.test.mjs`
+- `docs/context-read-product.md`
+- `docs/plans/context-read-p2e-impl.md`
+- `docs/plans/context-read-sidecar-footprint-measurements.json`
+- `docs/plans/context-read-sidecar-footprint.md`
+- `packages/setup/runtime/engine/cairn-memory-local-preview-0.0.0-preview.1.tgz`
+- `packages/setup/runtime/engine/manifest.json`
+- `tools/testing/p2e-eval.test.mjs`

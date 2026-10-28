@@ -171,7 +171,7 @@ const create = `
             const format=init.attestation;
             const rows=incumbent.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name").all();
             damaged=incumbent.prepare('PRAGMA application_id').get().application_id!==format.applicationId ||
-              incumbent.prepare('PRAGMA user_version').get().user_version!==1 || JSON.stringify(rows)!==JSON.stringify(format.schema);
+              incumbent.prepare('PRAGMA user_version').get().user_version!==(format.userVersion ?? 1) || JSON.stringify(rows)!==JSON.stringify(format.schema);
             if(!damaged){
               const metadata=incumbent.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
               damaged=!metadata || metadata.store_id!==init.storeId || metadata.profile!==init.profile;
@@ -205,6 +205,10 @@ const create = `
       const db = await database(temporary,undefined,'initialize');
       let initializationError;
       try {
+        if (init.autoVacuum !== undefined) {
+          if (init.autoVacuum !== 'INCREMENTAL') throw Error('unsafe_auto_vacuum');
+          db.exec('PRAGMA auto_vacuum=INCREMENTAL');
+        }
         if (init.journalMode !== undefined) {
           if (!['DELETE','WAL'].includes(init.journalMode)) throw Error('unsafe_journal_mode');
           db.exec('PRAGMA journal_mode=' + init.journalMode);

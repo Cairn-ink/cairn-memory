@@ -230,9 +230,9 @@ test('P2e-09/21 bounded owner purge preserves lexical bytes, other owner, latch 
   const s=await setup(t);await prepared(s);const db=sidecar(s);
   const lexicalBefore=db.prepare('SELECT record FROM validation_records ORDER BY publication').all();
   const copied=db.prepare('SELECT * FROM semantic_vectors LIMIT 1').get();
-  db.prepare('INSERT INTO semantic_vectors VALUES(?,?,?,?,?,?,?,?,?)').run('other-owner',copied.identity,copied.epoch,copied.item,copied.revision,copied.body_revision,copied.representation,copied.vector,copied.sort_key);
+  db.prepare('INSERT INTO semantic_vectors VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(copied.generation,copied.doc,'other-owner',copied.identity,copied.epoch,copied.item,copied.revision,copied.body_revision,copied.representation,copied.vector,copied.sort_key);
   const expected=db.prepare('SELECT count(*) n FROM semantic_vectors WHERE owner=?').get(ns.ownerId).n+
-    db.prepare('SELECT count(*) n FROM vector_rows r JOIN vector_generations g ON g.id=r.generation WHERE g.owner=? AND vector IS NOT NULL').get(ns.ownerId).n;
+    db.prepare('SELECT count(*) n FROM vector_rows r JOIN vector_generations g ON g.storage_id=r.generation WHERE g.owner=? AND vector IS NOT NULL').get(ns.ownerId).n;
   const before=s.view[4];
   ok(await s.coordinator.setOwnerSemantic({ownerId:ns.ownerId,semantic:false,expectedRevision:1},s.token));
   assert.deepEqual(await s.coordinator.setOwnerSemantic({ownerId:ns.ownerId,semantic:true,expectedRevision:2},s.token),bare('read_in_progress'));
@@ -241,8 +241,8 @@ test('P2e-09/21 bounded owner purge preserves lexical bytes, other owner, latch 
   await s.coordinator.close();const next=await openContextSemanticCoordinator(s.options);s.f.workspace.defer(()=>next.close());
   for(let n=0;n<20&&result.status!=='complete';n++)result=ok(await next.purgeOwnerVectors({ownerId:ns.ownerId,budget:{maxItems:1,maxMs:5000}},s.token));
   assert.equal(result.status,'complete');assert.equal(result.purge.deletedVectors,expected);assert.equal(result.purge.remainingVectors,0);
-  const routeA=db.prepare('SELECT item FROM semantic_vectors WHERE owner=? UNION ALL SELECT r.item FROM vector_rows r JOIN vector_generations g ON g.id=r.generation WHERE g.owner=?').all(ns.ownerId,ns.ownerId);
-  const routeB=[...db.prepare('SELECT owner FROM semantic_vectors').all().filter(r=>r.owner===ns.ownerId),...db.prepare('SELECT r.generation,g.owner FROM vector_rows r LEFT JOIN vector_generations g ON g.id=r.generation').all().filter(r=>r.owner===ns.ownerId)];
+  const routeA=db.prepare('SELECT item FROM semantic_vectors WHERE owner=? UNION ALL SELECT r.item FROM vector_rows r JOIN vector_generations g ON g.storage_id=r.generation WHERE g.owner=?').all(ns.ownerId,ns.ownerId);
+  const routeB=[...db.prepare('SELECT owner FROM semantic_vectors').all().filter(r=>r.owner===ns.ownerId),...db.prepare('SELECT r.generation,g.owner FROM vector_rows r LEFT JOIN vector_generations g ON g.storage_id=r.generation').all().filter(r=>r.owner===ns.ownerId)];
   assert.deepEqual(routeA,routeB);assert.equal(routeA.length,0,'two independent inventories: 0 owner vectors');
   assert.equal(db.prepare('SELECT count(*) n FROM semantic_vectors WHERE owner=?').get('other-owner').n,1);
   assert.deepEqual(db.prepare('SELECT record FROM validation_records ORDER BY publication').all(),lexicalBefore);assert.equal(s.view[4],before);
@@ -259,7 +259,7 @@ test('P2e-04/10/18 independent canonical manifest, HMAC and pointer oracle; inva
     const {mac,...body}=JSON.parse(row.record);
     const expected=createHmac('sha256',secret).update('context-read-product-v1.1/context-vector-validation-p2e-v1\0').update(independentCanonical(body)).digest('base64url');
     assert.equal(mac,expected);assert.equal(row.record,independentCanonical({...body,mac}));
-    const rows=db.prepare('SELECT * FROM vector_rows WHERE generation=? ORDER BY sort_key').all(body.generation.id).map(r=>{
+    const rows=db.prepare('SELECT * FROM vector_rows WHERE generation=? ORDER BY sort_key').all(db.prepare('SELECT storage_id FROM vector_generations WHERE id=?').get(body.generation.id).storage_id).map(r=>{
       const [ownerId,scope,projectId,type,id]=JSON.parse(r.item),bytes=Buffer.from(r.vector);
       assert.equal(bytes.length,6144);assert.equal([...new Float32Array(bytes.buffer,bytes.byteOffset,1536)].filter(n=>n!==0).length,1);
       return {item:{ownerId,scope,projectId:projectId||null,type,id},revision:r.revision,bodyRevision:type==='memory'?null:r.body_revision,representation:r.representation,vector:{encoding:'f32le',dimensions:1536,bytes:bytes.toString('base64url')}};
@@ -342,7 +342,7 @@ test('P2e-02/11/12 one pooled four-namespace semantic list and independent k10 n
   const permutations=rows=>rows.length?rows.flatMap((row,i)=>permutations(rows.filter((_,j)=>i!==j)).map(rest=>[row,...rest])):[[]];
   for(const intent of ['current','history'])for(const selected of permutations(readSet)) {
     const r=s.configure(false,selected),reader=await openContextProductReader(r.options);s.f.workspace.defer(()=>reader.close());
-    const before=s.view[4],value=ok(await reader.findCandidates({...query,readSet:selected,types:s.types,intent,limit:24},r.credential));assert.equal(s.view[4],before+1);
+    const before=s.view[4],value=ok(await reader.findCandidates({...query,readSet:selected,types:s.types,intent,limit:24},r.credential));assert.equal(s.view[4],before+1,JSON.stringify(value.trace));
     assert.equal(value.trace.effective,'hybrid');assert.equal(value.trace.preset,'rrf-k10');
     const key=ref=>[ref.namespace.ownerId,ref.namespace.scope,ref.namespace.projectId??'',ref.type,ref.memoryId??ref.cardId].join('\0');
     const eligible=s.f.db.prepare("SELECT owner_id,scope,project_id,id,content,'memory' type FROM memories UNION ALL SELECT owner_id,scope,project_id,id,title||char(10)||body content,'card' type FROM private_cards WHERE state='confirmed'").all().map(r=>({key:[r.owner_id,r.scope,r.project_id,r.type,r.id].join('\0'),semantic:/語意|semantic/.test(r.content)?1:0,lexical:r.content.includes('semantic')}));
@@ -757,4 +757,26 @@ for(const failure of ['counter','termination'])test(`Fix2 assembly publication g
   assert.equal(Atomics.load(new BigInt64Array(semanticHandle(s.coordinator).ownerState),5),0n);
   const value=ok(await m.h.refreshContextIndex(refreshInput(ns),m.credential));assert.equal(value.progress.embeddingAttempts,0);assert.equal(value.status,'complete');
   assert.notDeepEqual(db.prepare('SELECT pointer FROM vector_publications ORDER BY projection').all(),before);
+});
+
+test('format 3 fresh public lexical build, vector refresh, semantic read and integer-key owner purge',async t=>{
+  const s=await setup(t);await prepared(s);
+  const db=sidecar(s);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version,3);
+  for(const table of ['semantic_vectors','vector_rows']) {
+    const rows=db.prepare(`PRAGMA table_info(${table})`).all();
+    assert.equal(rows.find(r=>r.name==='generation').type,'INTEGER');
+    assert.equal(rows.find(r=>r.name==='doc').type,'INTEGER');
+    assert.match(db.prepare('SELECT sql FROM sqlite_schema WHERE name=?').get(table).sql,/CHECK\(doc > 0\)/);
+  }
+  assert.equal(ok((await candidate(s)).result).trace.effective,'hybrid');
+  ok(await s.coordinator.setOwnerSemantic({ownerId:ns.ownerId,semantic:false,expectedRevision:1},s.token));
+  let result;
+  for(let i=0;i<20;i++) {
+    result=ok(await s.coordinator.purgeOwnerVectors({ownerId:ns.ownerId,budget:{maxItems:1,maxMs:5000}},s.token));
+    if(result.status==='complete')break;
+  }
+  assert.equal(result.status,'complete');
+  for(const table of ['semantic_vectors','vector_rows','vector_generations','vector_validation_records','vector_publications','vector_work'])assert.equal(db.prepare(`SELECT count(*) n FROM ${table}`).get().n,0);
+  assert.equal(db.prepare('PRAGMA foreign_key_check').get(),undefined);
 });

@@ -15,12 +15,14 @@ carries the holder pid for stale recovery (§7.2), and `--cloud` with local
 ownership plus unknown is `mode_unknown` (§6.3). v0.10 adds the L06
 version-normalization rule S3 needs when the package version becomes 0.6.0.
 v0.11 (2026-10-26, for installer 0.6.1) adds §15 on Codex inspection
-environment refusals. v0.12 answers its audit (`setup_21`: one P0, three
-P1, two P2): the local inspection falls back to `/tmp` instead of assuming
+environment refusals. v0.12 answers its audit (one P0, three P1, two P2):
+the local inspection falls back to `/tmp` instead of assuming
 absence, managed configuration stays refused, and refusals are named.
 v0.13 answers the re-check (four P1, one P2): candidates are re-evaluated
 per inspection, dry-run planning and uninstall completion are explicit,
 status deduplicates per cause, and L27–L32 are sharpened.
+v0.14 (2026-10-28, for installer 0.6.1) records the implemented, per-file
+hosted runtime exception to L06/L24 in §16.
 
 Base: `main` at `b2513501` (PR #469 local V1 Raw chain and PR #470 unified
 memory V1 are merged). Branch `feat/setup-local-mode`.
@@ -810,7 +812,7 @@ Registration and detach verification both swallow the cause
 (`local-codex.mjs` registration and `detachCodex`). Unsafe or unreadable
 `config.toml` fails earlier, in the snapshot, and is not part of this defect.
 
-### 15.2 Rules (v0.12, after audit `setup_21`)
+### 15.2 Rules (v0.12, after audit)
 
 The audit found that letting the cloud flow proceed on an environment
 refusal would treat "no observed local ownership" as "no local ownership":
@@ -941,3 +943,60 @@ section and the release sentence in `packages/setup/README.md`. Not edited:
 `packages/setup/runtime/**`, `packages/setup/lib/messages.mjs`, hosted flow
 files other than the `setup.mjs` bookkeeping, anything outside
 `packages/setup/`.
+
+## 16. 0.6.1 amendment: hosted runtime exception to L06/L24
+
+L06 and L24 were 0.6.0-era guards that adding local mode did not change the
+hosted flow, not a permanent freeze of the hosted runtime. This amendment
+records the exception already implemented for #454 on main at `9a8f6fb7`;
+it does not broaden the local-mode scope. The rules below refer to
+`packages/setup/test/local-cloud-unchanged.test.mjs` at that commit.
+
+1. **Named, per-file exceptions.** An intended hosted runtime change requires
+   a named exception with its reason. The first is the constant
+   `hostedRuntimeExceptions`, whose comment cites #454's hosted cancellation
+   and protocol R16 permit restoration fixes. It contains exactly
+   `integrations/client/control-state.mjs`,
+   `integrations/client/file-lock.mjs`, `integrations/client/pairing.mjs` and
+   `integrations/client/transport-hosted.mjs` (test:84–94).
+2. **The same guard applies to L06 and L24.** Both matrices use one test body
+   and the immutable 0.5.3 installer from `b2513501`; L24 requires that
+   baseline rather than skipping when it is unavailable (test:25–44,
+   325–332). The exception changes only the four runtime-file comparisons
+   and their manifest hash fields (test:124–130, 148–173).
+3. **Excepted files are checked, not skipped.** For each current installed
+   copy of an excepted file, assert byte equality with its current packaged
+   source under `packages/setup/runtime` before substituting packaged bytes
+   into the historical comparison. Multiple generations must still have
+   the same complete inventory and compared bytes; an older generation
+   cannot fill a missing file in a newer one (test:92–94, 148–173).
+4. **All other comparisons retain the 0.5.3 baseline.** Other runtime files,
+   `hooks.json`, `installation.json`, `config.toml`, output, exit codes,
+   prompts and native mutation order remain under the existing L06
+   comparison and its narrow version/runtime-path normalization. Existing
+   native probe order is also preserved, allowing only the additional
+   read-only detection probes already specified by L06 (test:58–82,
+   99–145, 371–408). The normalization regression checks preserve unrelated
+   bytes and complete runtime generations (test:192–236).
+5. **Manifest placeholder rule.** First assert that every current installed
+   runtime `manifest.json` equals the packaged manifest byte for byte.
+   Then, in both current and historical manifests, replace only the four
+   excepted paths' hash values with the fixed placeholder
+   `"<PR-454-runtime-hash>"`. The resulting bytes must match 0.5.3 exactly:
+   paths, order, other hashes, whitespace and every other manifest byte
+   remain significant (test:99–130, 142–160, 373–374, 393–404).
+6. **Regression coverage preserves the boundary.** A changed non-excepted
+   runtime file, a changed non-excepted hash, or another manifest byte
+   change must fail. The regression also rejects damaged excepted copies,
+   missing files, incomplete generations and an installed manifest that
+   differs from the packaged manifest even only in an excepted hash
+   (test:237–281).
+7. **Future exception procedure.** A PR must add an explicitly named
+   per-file entry and a comment giving the reason, retain the installed
+   byte-equality assertion against the packaged source, and extend the
+   boundary regression coverage (test:84–94, 148–173, 237–281). Regenerate
+   with `node packages/setup/build-runtime.mjs`, then run
+   `node packages/setup/build-runtime.mjs --check` and the full
+   `CAIRN_SETUP_REQUIRE_BASELINE=1 npm run test:setup`; the baseline must
+   not silently skip (test:37–52, 325–332). These commands are PR validation
+   requirements; the comparison test does not itself rebuild the runtime.

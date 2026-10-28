@@ -16,7 +16,7 @@ export function semanticMaintenance({c,sqlite,identity,secretState}) {
     const facade=openContextProductFacade(path,{sqlite});
     try {
       const storage=productSidecar({path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,sqlite,writable,
-        semantic:true,sidecarJournalMode:journalMode});
+        sidecarJournalMode:journalMode});
       view={path,facade,storage,vectors:productVectors({storage,facade})};views.set(key,view);return view;
     }catch(error){facade.close();throw error;}
   }
@@ -127,17 +127,17 @@ export function semanticMaintenance({c,sqlite,identity,secretState}) {
         if(prior){const p=JSON.parse(prior);if(p.mac!==sign(p.body)||!same({...binding,epoch:p.body.epoch,deleted:p.body.deleted,complete:p.body.complete},p.body))fail('index_unavailable');if(p.body.epoch===epoch)previous=p.body;}
         let used=0,deleted=previous.deleted;
         const cached=db.prepare('SELECT * FROM semantic_vectors WHERE owner=? ORDER BY sort_key,identity,epoch,revision,body_revision,representation LIMIT ?').all(s.ownerId,remaining);
-        for(const r of cached){db.prepare('DELETE FROM semantic_vectors WHERE owner=? AND identity=? AND epoch=? AND item=? AND revision=? AND body_revision=? AND representation=?').run(r.owner,r.identity,r.epoch,r.item,r.revision,r.body_revision,r.representation);used++;deleted++;}
-        const rows=db.prepare('SELECT r.* FROM vector_rows r JOIN vector_generations g ON g.id=r.generation WHERE g.owner=? ORDER BY r.sort_key,r.generation LIMIT ?').all(s.ownerId,remaining-used);
-        for(const r of rows){db.prepare('DELETE FROM vector_rows WHERE generation=? AND item=?').run(r.generation,r.item);used++;if(r.vector!==null)deleted++;}
+        for(const r of cached){db.prepare('DELETE FROM semantic_vectors WHERE generation=? AND doc=? AND identity=? AND epoch=? AND owner=?').run(r.generation,r.doc,r.identity,r.epoch,r.owner);used++;deleted++;}
+        const rows=db.prepare('SELECT r.* FROM vector_rows r JOIN vector_generations g ON g.storage_id=r.generation WHERE g.owner=? ORDER BY r.sort_key,r.generation LIMIT ?').all(s.ownerId,remaining-used);
+        for(const r of rows){db.prepare('DELETE FROM vector_rows WHERE generation=? AND doc=?').run(r.generation,r.doc);used++;if(r.vector!==null)deleted++;}
         // Epoch invalidation already bars all pointers. Each physical batch
         // invalidates its matching records in the same native transaction.
         const pointers=db.prepare('SELECT projection FROM vector_publications WHERE owner=? ORDER BY projection LIMIT 128').all(s.ownerId);
         for(const r of pointers)db.prepare('DELETE FROM vector_publications WHERE projection=? AND owner=?').run(r.projection,s.ownerId);
         const records=db.prepare('SELECT publication FROM vector_validation_records WHERE owner=? ORDER BY publication LIMIT 128').all(s.ownerId);
         for(const r of records)db.prepare('DELETE FROM vector_validation_records WHERE publication=? AND owner=?').run(r.publication,s.ownerId);
-        const generations=db.prepare('SELECT id,projection FROM vector_generations WHERE owner=? AND NOT EXISTS(SELECT 1 FROM vector_rows WHERE generation=vector_generations.id) ORDER BY id LIMIT 128').all(s.ownerId);
-        for(const r of generations){db.prepare('DELETE FROM vector_work WHERE generation=?').run(r.id);db.prepare('DELETE FROM vector_generations WHERE id=? AND owner=?').run(r.id,s.ownerId);}
+        const generations=db.prepare('SELECT storage_id,id,projection FROM vector_generations WHERE owner=? AND NOT EXISTS(SELECT 1 FROM vector_rows WHERE generation=vector_generations.storage_id) ORDER BY id LIMIT 128').all(s.ownerId);
+        for(const r of generations){db.prepare('DELETE FROM vector_work WHERE generation=?').run(r.storage_id);db.prepare('DELETE FROM vector_generations WHERE id=? AND owner=?').run(r.id,s.ownerId);}
         const exhausted=!db.prepare('SELECT 1 FROM semantic_vectors WHERE owner=? LIMIT 1').get(s.ownerId)&&!db.prepare('SELECT 1 FROM vector_generations WHERE owner=? LIMIT 1').get(s.ownerId)&&
           !db.prepare('SELECT 1 FROM vector_publications WHERE owner=? LIMIT 1').get(s.ownerId)&&!db.prepare('SELECT 1 FROM vector_validation_records WHERE owner=? LIMIT 1').get(s.ownerId);
         const body={...binding,epoch,deleted,complete:exhausted};db.prepare('INSERT OR REPLACE INTO vector_purge_checkpoints VALUES(?,?,?)').run(s.ownerId,epoch,canonicalJson({body,mac:sign(body)}));

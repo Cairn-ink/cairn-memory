@@ -13,6 +13,7 @@ import { fail } from './validation.mjs';
 import { productVectors } from './context-product-vectors.mjs';
 import { canonicalProductIdentity, productFile, PRODUCT_SIDECAR_SUFFIX } from './context-product-sidecar.mjs';
 import { mono } from './context-product-control.mjs';
+import { maintenanceQuantum } from './context-product-quantum.mjs';
 import { usd, dollars, queryEmbeddingCutoff } from './context-semantic-input.mjs';
 
 const success = value => ({ok:true,value});
@@ -22,9 +23,9 @@ const channels = ready => ({lexical:{state:ready?'ready':'unavailable',causes:re
 const trace = semantic => ({requested:semantic?'hybrid':'lexical',effective:'lexical',family:'local',preset:'rrf-k60-d12',embedder:null,
   tokenizer:TOKENIZER_VERSION,representation:REPRESENTATION_VERSION,
   timings:{maintenanceMs:0,lexicalMs:0,semanticPreflightMs:0,embeddingMs:0,fusionMs:0}});
-export function openProductIndex({ path, facade, authorize, ownerCoverage, observer, sqlite, sidecarJournalMode, maintenance, counter, semantic, operation }) {
+export function openProductIndex({ path, facade, authorize, ownerCoverage, observer, sqlite, sidecarJournalMode, maintenance, counter, semantic, operation, now = () => performance.now(), storageOptions = {} }) {
   const { db,read,evidence,bind,encode,identity,features,canonicalFence } = facade.port;
-  const storage = productSidecar({path,db,identity,features,observer,sqlite,sidecarJournalMode,writable:maintenance,semantic:Boolean(semantic)}), rankings=new Map();
+  const storage = productSidecar({path,db,identity,features,observer,sqlite,sidecarJournalMode,writable:maintenance,now,...storageOptions}), rankings=new Map();
   const vectors=semantic?productVectors({storage,facade}):null;
   const types=facade.capabilities.types;
   // Selection provenance is request coverage, never part of lexical identity.
@@ -145,14 +146,14 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     };
     return prepareOnly?{complete,result}:final(p,access,c.observed.publication,complete,'snapshot_stale');
   }
-  function run(method,original,credential) {
-    if(semantic&&(method==='getContextIndexStatus'||method==='refreshContextIndex'&&original.mode==='embeddings'||['findCandidates','contextRead'].includes(method)&&original.semantic===true&&original.cursor===undefined))return runSemantic(method,original,credential);
+  function run(method,original,credential,cutoff=Infinity) {
+    if(semantic&&(method==='getContextIndexStatus'||method==='refreshContextIndex'&&original.mode==='embeddings'||['findCandidates','contextRead'].includes(method)&&original.semantic===true&&original.cursor===undefined))return runSemantic(method,original,credential,cutoff);
     let access;
     try {
       facade.port.ready();
       const {payload,input}=validate(method,original);
       access=authorize(method,payload,credential);
-      const p={...input,ownerCoverage,deadlineAt:performance.now()+ (input.deadlineMs??input.budget?.maxMs??1000)};
+      const p={...input,ownerCoverage,deadlineAt:Math.min(cutoff,now()+ (input.deadlineMs??input.budget?.maxMs??1000))};
       if(method==='getContextIndexStatus') {
         const knownFailure=storage.prepareObservation();access.check(); return read(()=>{
           db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();
@@ -218,12 +219,12 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     for(const t of p.types)dto.coverage.byType[t].embedded=byType[t].embedded;
     return dto;
   }
-  async function runSemantic(method,original,credential) {
+  async function runSemantic(method,original,credential,parentCutoff) {
     let access;
     try {
       facade.port.ready();const {payload,input}=validate(method,original);access=authorize(method,payload,credential);
       const cutoff=mono(operation().operationCutoffMonoNs),remaining=()=>Number(cutoff-process.hrtime.bigint())/1e6;
-      const p={...input,ownerCoverage,deadlineAt:performance.now()+remaining()};
+      const p={...input,ownerCoverage,deadlineAt:Math.min(parentCutoff,now()+remaining())};
       if(method==='getContextIndexStatus') {
         const snapshot=await semantic.snapshot(),knownFailure=storage.prepareObservation();access.check();
         return read(()=>{db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();return success(scopedStatus(p,storage.observe(p,access.accessGenerations,{knownFailure}),snapshot));});
@@ -314,6 +315,12 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     }catch(error){return failure(error.code==='ERR_SQLITE_ERROR'?[5,6].includes(error.errcode&255)?'storage_busy':'storage_error':error.code??'storage_error');}
   }
   async function embeddingRefresh(p,access,cutoff) {
+    // Start before opening or any authority/provider work; the parent window
+    // cannot be reset by dispatch, expensive open or asynchronous settlement.
+    const quantum=maintenanceQuantum({now,cutoff:Math.min(p.deadlineAt,now()+p.budget.maxMs),maxMs:p.budget.maxMs});
+    const localProviderCutoff=process.hrtime.bigint()+BigInt(Math.max(0,Math.floor((quantum.cutoff-now()-quantum.reserve)*1e6)));
+    const parentProviderCutoff=cutoff-BigInt(Math.ceil(quantum.reserve*1e6));
+    const providerCutoff=localProviderCutoff<parentProviderCutoff?localProviderCutoff:parentProviderCutoff;
     const observed=read(()=>storage.observe(p,access.accessGenerations)),snapshot=await semantic.snapshot();
     const ready=observed.dto.lexical.state==='ready';let reason=semanticReason(snapshot,ready),attempts=0,embedded=0,spent=0n;
     const physical=read(()=>canonicalProductIdentity(path,db));
@@ -322,26 +329,28 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       const catalog={catalogId:digest({storeId:identity.storeId,canonicalIdentity:physical,sidecarIdentity}),ownerId:p.readSet[0].ownerId,storeId:identity.storeId,canonicalPath:path,canonicalIdentity:physical,sidecarIdentity,sidecarJournalMode:sidecarJournalMode??'DELETE'};
       try{await semantic.call('catalog',catalog);}catch(error){if(!['not_enabled','purge_pending','ledger_unavailable','timeout'].includes(error.code))throw error;reason=error.code;}
       let maximum=Math.min(p.budget.maxItems,semantic.configuration.selection.maxBatchDocuments,64);
-      while(!reason&&attempts<p.budget.maxItems&&process.hrtime.bigint()+20000000n<cutoff) {
-        let rows=vectors.plan(p,observed.publication,snapshot,Math.min(maximum,p.budget.maxItems-attempts));if(!rows.length)break;
-        const texts=read(()=>rows.map(r=>{const item=evidence.itemsInside(r.ref.namespace,[r.ref],p.intent,p.readSet)[0];return item.type==='memory'?item.content:item.title+'\n'+item.body;}));
-        while(texts.length>1&&Buffer.byteLength(JSON.stringify(texts))>240000){texts.pop();rows.pop();}
+      while(!reason&&attempts<p.budget.maxItems&&quantum.admit('embedding-item')&&quantum.admit('vector-scan')) {
+        let rows=vectors.plan(p,observed.publication,snapshot,Math.min(maximum,p.budget.maxItems-attempts),quantum);if(!rows.length||!quantum.admit('embedding-item'))break;
         try {
-          const result=await semantic.call('embed',{texts,kind:'refresh',expected:snapshot.policy,projection:{readSet:p.readSet,types:p.types,intent:p.intent,accessDigest:observed.publication.accessDigest,lexicalValidationDigest:digest(observed.publication)},maxUsd:dollars(usd(p.budget.maxUsd)-spent)},cutoff-20000000n);
-          attempts+=rows.length;spent+=usd(result.chargedUsd);
-          const guard=await semantic.snapshot();
-          if(guard.policy?.purgeEpoch!==snapshot.policy.purgeEpoch||!guard.policy?.semantic){reason='purge_pending';break;}
-          read(()=>{const current=storage.observe(p,access.accessGenerations);if(current.dto.lexical.state!=='ready'||current.publication.publicationId!==observed.publication.publicationId)fail('index_unavailable');});
-          const release=semantic.gate.enter(snapshot.policy);
-          try{vectors.put(p,observed.publication,snapshot,rows,result.vectors);}finally{release();}embedded+=rows.length;
+          await quantum.measureAsync(async()=>{
+            const texts=read(()=>rows.map(r=>{const item=evidence.itemsInside(r.ref.namespace,[r.ref],p.intent,p.readSet)[0];return item.type==='memory'?item.content:item.title+'\n'+item.body;}));
+            while(texts.length>1&&Buffer.byteLength(JSON.stringify(texts))>240000){texts.pop();rows.pop();}
+            const result=await semantic.call('embed',{texts,kind:'refresh',expected:snapshot.policy,projection:{readSet:p.readSet,types:p.types,intent:p.intent,accessDigest:observed.publication.accessDigest,lexicalValidationDigest:digest(observed.publication)},maxUsd:dollars(usd(p.budget.maxUsd)-spent)},providerCutoff);
+            attempts+=rows.length;spent+=usd(result.chargedUsd);
+            const guard=await semantic.snapshot();
+            if(guard.policy?.purgeEpoch!==snapshot.policy.purgeEpoch||!guard.policy?.semantic){reason='purge_pending';return;}
+            read(()=>{const current=storage.observe(p,access.accessGenerations);if(current.dto.lexical.state!=='ready'||current.publication.publicationId!==observed.publication.publicationId)fail('index_unavailable');});
+            const release=semantic.gate.enter(snapshot.policy);
+            try{vectors.put(p,observed.publication,snapshot,rows,result.vectors);}finally{release();}embedded+=rows.length;
+          },'embedding-item');
         }catch(error) {
           if(error.code==='budget_denied'&&!error.attempts&&rows.length>1){maximum=Math.max(1,Math.floor(rows.length/2));continue;}
           attempts+=(error.attempts??0)?rows.length:0;reason=error.code;break;
         }
       }
-      if((!reason||attempts>0)&&process.hrtime.bigint()+20000000n<cutoff&&(!vectors.plan(p,observed.publication,snapshot,1).length||reason)) {
+      if((!reason||attempts>0)&&quantum.admit('vector-scan')&&quantum.admit('vector-verification')) {
         let release;
-        try{release=semantic.gate.enter(snapshot.policy);vectors.certify({...p,deadlineAt:performance.now()+Number(cutoff-process.hrtime.bigint())/1e6-20},observed.publication,snapshot);}catch(error){reason=error.reason==='validation_invalid'||error.code==='index_unavailable'?'validation_invalid':error.code==='read_timeout'?'timeout':error.code;}finally{release?.();}
+        try{release=semantic.gate.enter(snapshot.policy);vectors.certify(p,observed.publication,snapshot,quantum);}catch(error){reason=error.reason==='validation_invalid'||error.code==='index_unavailable'?'validation_invalid':error.code==='read_timeout'?'timeout':error.code;}finally{release?.();}
       }
     }
     if(!snapshot.unavailable) {

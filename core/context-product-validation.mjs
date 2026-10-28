@@ -37,7 +37,7 @@ export function verifiedRecord(secret, purpose, text) {
           (value.kind === 'delta') !== (value.progress.baseSequence > 0)) fail('invalid_input');
     } else {
       if (!keys(value, 'version,profile,format,storeId,canonical,sidecar,projectionDigest,accessDigest,canonicalFenceDigest,dependencyFenceDigest,tokenizer,representation,generation,publicationId,manifestDigest,counts,mac') ||
-          value.version !== 'context-index-validation-v1' || value.format !== 1 || !opaque(value.publicationId) || !hash(value.manifestDigest) ||
+          value.version !== 'context-index-validation-v1' || value.format !== 3 || !opaque(value.publicationId) || !hash(value.manifestDigest) ||
           !keys(value.canonical,'device,inode,applicationId,userVersion,schemaVersion') || !file(value.canonical) ||
           !integer(value.canonical.applicationId) || !integer(value.canonical.userVersion) ||
           !keys(value.sidecar,'device,inode,incarnation,schemaVersion') || !file(value.sidecar) || !opaque(value.sidecar.incarnation) ||

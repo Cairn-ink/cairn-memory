@@ -290,6 +290,56 @@ optional ownerGeneration reuse certificates. Issuance IDs and coverage selection
 revision do not enter lexical statistics identity. A changed ownerGeneration
 makes an old certificate access-stale for a newly valid credential.
 
+### Product cache format 3 and sizing
+
+The product cache now uses physical **format 3** (`PRAGMA user_version=3`),
+under the same product profile and cache suffix. Validation certificates bind
+`format:3`; signed progress binds the format in its sidecar identity digest.
+Formats 1 and 2 are refused as `unavailable/incompatible`, including during refresh.
+There is no in-place conversion. To rebuild, close admissions, stop clients and
+maintenance, await all supervisor drains, and use the host's explicit cache
+discard procedure on the quiescent product sidecar and its companions. Keep
+canonical storage and the lifecycle lock intact. Reopen independently
+authorized maintenance and complete both intents before exposing search.
+Never unlink a live cache or its WAL/SHM to resolve this refusal.
+
+Use **one owner-wide selection per intent**, with the exact physical type set:
+personal plus the selected authorized projects, pooled in one projection.
+Do not prebuild personal-plus-each-project combinations for owner-wide search.
+Format 3 retains the most recently maintained selection for each owner/type
+set/intent; maintaining a changed selection retires the previous selection for
+that slot. Old handles may consequently report unavailable and require the
+host's selection cutover. The other intent remains independent. Superseded
+generations, abandoned work and retired selections are deleted in resumable
+bounded maintenance slices; published generations and active staging bases
+remain protected. Continue explicit maintenance after publication to finish
+cleanup. Free pages are reused, with incremental vacuum returning tail pages.
+
+The synthetic 1,642-Memory plus 164-Card measurement covers both owner-wide
+intents and mixed Chinese/Japanese/English text. Its before/after table and
+index page counts are in
+[the footprint handoff](plans/context-read-sidecar-footprint.md). Treat the
+measured ratio as sizing evidence for that corpus, rather than a universal
+capacity guarantee. The merged format-3 run with semantics off uses 11,968,512 B
+of sidecar against 5,197,824 B canonical storage: **2.3026×**, below the ≤5×
+lexical sizing target. Budget additional room for staging, pending GC, pinned
+reader snapshots and SQLite journals/WAL/SHM. Format 3 includes the vector
+schema even when semantics is unconfigured; its exact tables and index SQL are
+attested as one physical product format. Configuration is still required for
+text egress. The lexical integer dictionary and positive document-key domain
+remain unchanged. Vector generations have integer storage keys plus opaque IDs
+for certificate bindings; vector rows and cached embeddings reference integer
+document keys. Vector validation and signed progress bind format 3.
+
+Each enabled 1,536-dimensional embedding contributes 6,144 raw float32 bytes.
+The reusable cache and each published vector projection keep their own copy:
+roughly 12,288 raw bytes per embedded item for one intent, or 18,432 across two
+intents with cache reuse, before SQLite page/index/identity overhead. Reserve
+additional space for immutable staging, superseded certificates and pending GC.
+These are payload estimates, not measured total vector allocations. Measure the
+host's representative text, enabled vectors and namespace selection before
+setting volume limits.
+
 `maxItems` is 1–1,024 transformation attempts and `maxMs` is 1–5,000 including
 call overhead, scans, validation and publication. Batches contain at most 128
 rows and 2,000,000 text units. Unchanged text is reused without tokenization;
@@ -302,6 +352,28 @@ nor an earlier complete response authorizes a later search. `mode:'embeddings'`
 performs no lexical build or inference and reports disabled semantic coverage.
 `semantic:true` keeps the validated lexical result with a disabled semantic
 channel; it cannot enable a provider. All these calls make zero provider calls.
+
+A successful `rebuilding` or `partial` response is durable progress: schedule
+another explicit quantum with the same service binding and projection. Stop
+the initial prebuild loop only at `complete` for each intent. Time admission
+uses the parent cutoff, including opening and dispatch overhead. It reserves
+50–250 ms (15% of the quantum, clamped to that range) for checkpoint commit,
+publication and final delivery, and stops admitting items when the remainder
+cannot cover that reserve plus the conservative observed item cost. The
+estimate for each kind of work starts at 10 ms and retains twice its largest
+observed cost in that quantum; item work includes tokenization and posting
+writes. Metadata batches have their own estimate so an expensive scan cannot
+block a cheap first item forever. Verification and GC yield too. This is cooperative admission, so an unexpectedly expensive
+indivisible operation can still reach the hard cutoff.
+
+On `read_timeout`, retain the cutoff outcome, await supervised cleanup and
+inspect durable status on a later authorized call before resuming. Do not
+assume rollback or completion, and do not let a timeout stop all future cron
+renewals indefinitely. The host's bounded retry/reschedule policy should
+distinguish a successful yield from an actual error; do not spin immediately on
+storage/authority failures or extend an existing call's deadline. The owned
+pump still stops and reports an error through its completion promise so the
+host can apply that policy.
 
 Without `wal:true`, `sidecarJournalMode:'WAL'` still refuses `index_unavailable`
 before opening. Default capabilities retain `journals:['DELETE']`,
@@ -609,10 +681,11 @@ legacy no-argument capabilities retain their old public shape.
 ## Coverage and refresh scheduling
 
 First complete the exact lexical projection for both intents using the existing
-explicit maintenance mode. Configured lexical maintenance creates the optional
-vector schema. An old DELETE cache may be rebuilt by that coordinated writer;
-for an old WAL cache, stop/drain clients and discard/rebuild under P2d's
-quiescence rules. Readers never create or upgrade storage.
+explicit maintenance mode. Every fresh product cache creates the complete
+format-3 schema, including vectors, regardless of semantic configuration.
+Format-1 and format-2 caches require the stopped-client rebuild described above
+in both DELETE and WAL modes; maintenance refuses an in-place format upgrade.
+Readers never create or upgrade storage.
 
 Then use explicit bounded quanta:
 

@@ -1,3 +1,4 @@
+import { performance } from 'node:perf_hooks';
 import { parentPort, workerData } from 'node:worker_threads';
 import { serviceIssuance } from './context-product-service.mjs';
 import { requestAuthority } from './context-product-authority.mjs';
@@ -124,7 +125,8 @@ parentPort.on('message', async message => {
       response = facade.fetchCandidateEvidence(fetchInput, message.credential, payload);
     } else {
       if (workerData.maintenance && !['getContextIndexStatus','refreshContextIndex'].includes(message.method)) fail('authority_required');
-      response = await index.run(message.method, boundedData(message.input), message.credential);
+      response = await index.run(message.method, boundedData(message.input), message.credential,
+        performance.now() + Number(mono(operation.operationCutoffMonoNs)-process.hrtime.bigint())/1e6);
     }
     within(operation); sealNative(frame); result(operation, response);
   } catch (error) { sealNative(frame); result(operation, nativeFailure(error)); }

@@ -37,7 +37,7 @@ export function verifyVectorRecord(secret,text,lexical,identity,epoch) {
     hash(mac);
     if(canonicalJson(value)!==text||!timingSafeEqual(Buffer.from(mac),Buffer.from(signature(secret,body))))invalid();
     exact(value,'version,profile,format,storeId,canonical,sidecar,projectionDigest,accessDigest,canonicalFenceDigest,dependencyFenceDigest,tokenizer,representation,lexical,identity,purgeEpoch,generation,publicationId,manifestDigest,counts,mac');
-    if(value.version!==VECTOR_VERSION||value.profile!==PRODUCT_PROFILE||value.format!==1)invalid();
+    if(value.version!==VECTOR_VERSION||value.profile!==PRODUCT_PROFILE||value.format!==3||lexical.format!==3)invalid();
     opaque(value.storeId);opaque(value.publicationId);file(value.canonical,true);file(value.sidecar,false);generation(value.generation);
     for(const k of ['projectionDigest','accessDigest','canonicalFenceDigest','dependencyFenceDigest','manifestDigest'])hash(value[k]);
     opaque(value.tokenizer);opaque(value.representation);integer(value.purgeEpoch);vectorIdentity(value.identity);
