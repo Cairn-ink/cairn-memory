@@ -342,7 +342,8 @@ test('Fix round 1 changed canonical text between metadata and transformation rol
       receipt:{client:'synthetic',sessionId:'checkpoint',eventId:'revision-two',role:'user',excerpt:'revisiontwo'}});
     assert.equal(result.ok,true,JSON.stringify(result));
   }}});
-  assert.throws(()=>a.storage.refresh(a.p,a.access,budget),{code:'index_unavailable',reason:'fence_changed'});
+  assert.equal(a.storage.refresh(a.p,a.access,budget).transformed,1);
+  assert.equal(a.storage.observe(a.p,a.access).dto.lexical.state,'stale');
   const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX,{readOnly:true});t.after(()=>side.close());
   assert.equal(side.prepare('SELECT count(*) AS n FROM documents').get().n,0);
   assert.equal(side.prepare('SELECT count(*) AS n FROM postings').get().n,0);

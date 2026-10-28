@@ -9,7 +9,7 @@ import { fixture, ok } from '../testing/context-read-fixture.mjs';
 import { four, personal, project, configured, descriptor } from '../testing/context-product-owner-fixture.mjs';
 
 function setup(t,patch={},faults={}) {
-  let now=0,serial=0;const timers=new Map(),calls=[],opened=[],closed=[],live=new Set();
+  let now=0,serial=0;const timers=new Map(),calls=[],opened=[],closed=[],live=new Set(),observations=[];
   const supervisor=createContextReadSupervisor();t.after(()=>supervisor.close().catch(e=>{if(!faults.close)throw e;}));
   const credential={service:randomUUID()},readSet=[{ownerId:'pump',scope:'personal',projectId:null}];
   const ownerCoverage={policy:'recent-projects-v1',selectionRevision:'fixture',requestedNamespaces:1,selectedNamespaces:1,omittedNamespaces:0};
@@ -21,8 +21,8 @@ function setup(t,patch={},faults={}) {
     projections:[{options,types:['memory']},{options:{...options,readSet:[{ownerId:'pump',scope:'project',projectId:'p'}],ownerCoverage,
       host:{...options.host,configuration:{serviceBinding:{...serviceBinding,namespaces:{readSet:[{ownerId:'pump',scope:'project',projectId:'p'}],ownerCoverage}}}}},types:['memory']}],...patch};
   const renew=createMaintenancePumpRuntime({now:()=>now,setTimer:(f,ms)=>{const id=++serial;timers.set(id,{f,at:now+ms});return id;},clearTimer:id=>timers.delete(id),
-    open:async opts=>{const writer=JSON.stringify([opts.path,opts.readSet]);if(faults.exclusive)assert.equal(live.has(writer),false,'drain the previous writer before opening');live.add(writer);opened.push(opts);return {async refreshContextIndex(input,token){calls.push([input,token]);if(faults.refresh)throw Error('refresh failed');return {ok:true,value:{status:'complete'}};},async close(){closed.push(opts);live.delete(writer);if(faults.close)throw Error('close failed');}};}});
-  return {renew,c,calls,opened,closed,timers,setTime:n=>{now=n;},async next(){const [id,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];timers.delete(id);now=timer.at;await timer.f();}};
+    open:async opts=>{const writer=JSON.stringify([opts.path,opts.readSet]);if(faults.exclusive)assert.equal(live.has(writer),false,'drain the previous writer before opening');live.add(writer);opened.push(opts);now+=faults.openMs??0;return {async refreshContextIndex(input,token){calls.push([input,token]);observations.push({at:now,input});if(faults.refresh)throw Error('refresh failed');now+=faults.workMs??0;return faults.result?faults.result(input):{ok:true,value:{status:'complete'}};},async close(){closed.push(opts);live.delete(writer);if(faults.close)throw Error('close failed');}};}});
+  return {renew,c,calls,opened,closed,timers,observations,setTime:n=>{now=n;},async next(){const [id,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];timers.delete(id);now=timer.at;await timer.f();}};
 }
 
 test('pump round-robins both intents and active projections, renewal retains pump identity, restart preserves exhaustion',async t=>{
@@ -292,4 +292,87 @@ test(`P2c/P2d pump identity combines canonical coverage with ${difference}`,asyn
     {...p,types:p.types.includes('card')?['memory']:['memory','card']})};
   assert.throws(()=>s.renew(typesOnly),{code:'read_in_progress'});
   await pump.close();assert.equal(s.closed.length,8);
+});
+
+const settled = (transformed=0,status='complete') => ({ok:true,value:{status,progress:{transformed}}});
+
+test('Fix A known usage refunds unused items and elapsed time including opening, preserving renewal/restart charges',async t=>{
+  const s=setup(t,{}, {openMs:7,workMs:11,result:()=>settled(0,'rebuilding')}),p=s.renew(s.c);
+  await s.next();assert.equal(p.getStatus().usedItems,0);assert.equal(p.getStatus().usedMs,18);
+  s.renew(s.c);assert.equal(p.getStatus().usedMs,18);
+  await p.close();
+  const restarted=s.renew({...s.c,id:randomUUID()});assert.equal(restarted.getStatus().usedMs,18);
+  await s.next();assert.equal(restarted.getStatus().usedItems,0);assert.equal(restarted.getStatus().usedMs,36);
+  await restarted.close();
+});
+
+for(const usage of ['missing','invalid','crashed','failed','overrun'])test(`Fix A ${usage} usage retains the full reservation across renewal and restart`,async t=>{
+  const faults={refresh:usage==='crashed',workMs:usage==='overrun'?101:0,result:()=>usage==='failed'?{ok:false,error:{code:'storage_error'}}:
+    usage==='missing'?{ok:true,value:{status:'complete'}}:settled(usage==='invalid'?-1:0)};
+  const s=setup(t,{},faults),p=s.renew(s.c);await s.next();
+  if(['crashed','failed'].includes(usage))await p.completion;
+  assert.equal(p.getStatus().usedItems,1);assert.equal(p.getStatus().usedMs,100);
+  if(!['crashed','failed'].includes(usage))s.renew(s.c);
+  await p.close();
+  const restarted=s.renew({...s.c,id:randomUUID()});
+  assert.equal(restarted.getStatus().usedItems,1);assert.equal(restarted.getStatus().usedMs,100);await restarted.close();
+});
+
+test('Fix A known partial usage returns only unused attempts and respects host cumulative floors',async t=>{
+  const s=setup(t,{quantum:{maxItems:4,maxMs:100}}, {workMs:13,result:()=>settled(2)}),p=s.renew(s.c);
+  await s.next();assert.equal(p.getStatus().usedItems,2);assert.equal(p.getStatus().usedMs,13);
+  s.renew({...s.c,window:{...s.c.window,usedItems:5,usedMs:200}});
+  await s.next();assert.equal(p.getStatus().usedItems,7);assert.equal(p.getStatus().usedMs,213);
+  await p.close();
+});
+
+test('Fix A low-quota no-op scheduling spans the minute with every projection/intent observed within five seconds',async t=>{
+  const s=setup(t,{pollMs:25,budgets:{maxItems:8,maxMs:8000}}, {result:()=>settled()}),p=s.renew(s.c);
+  for(let i=0;i<60&&s.timers.size;i++)await s.next();
+  assert.equal(p.getStatus().error,null);assert.equal((await p.completion).state,'budget_exhausted');
+  assert.equal(s.calls.length,47);assert.equal(p.getStatus().usedItems,0);assert.equal(p.getStatus().usedMs,0);
+  assert.equal(s.observations[0].at,1250,'pace the first admission too');
+  for(const scope of ['personal','project'])for(const intent of ['current','history']){
+    const times=[0,...s.observations.filter(o=>o.input.readSet[0].scope===scope&&o.input.intent===intent).map(o=>o.at),60000];
+    for(let i=1;i<times.length;i++)assert.ok(times[i]-times[i-1]<=5000,JSON.stringify(times));
+  }
+  assert.deepEqual(s.calls.slice(0,4).map(([i])=>[i.readSet[0].scope,i.intent]),[
+    ['personal','current'],['personal','history'],['project','current'],['project','history']]);
+  await p.close();
+});
+
+test('Fix A full known usage is paced while quota lasts and stops at exhaustion',async t=>{
+  const s=setup(t,{pollMs:25}, {workMs:100,result:()=>settled(1)}),p=s.renew(s.c);
+  for(let i=0;i<8;i++)await s.next();
+  assert.deepEqual(s.observations.map(o=>o.at),[1250,2500,3750,5000,6250,7500,8750,10000]);
+  assert.equal((await p.completion).state,'budget_exhausted');assert.equal(s.timers.size,0);
+  assert.equal(p.getStatus().usedItems,8);assert.equal(p.getStatus().usedMs,800);await p.close();
+});
+
+for(const code of ['index_unavailable','authority_required','scope_changed','storage_error','storage_busy','reader_failed','store_closed'])
+test(`Fix A genuine ${code} refusal stops scheduling, retains reservation and drains`,async t=>{
+  // index_unavailable models a corruption refusal, never the private fence
+  // rollback. The pump must not blanket-retry that sanitized public code.
+  const s=setup(t,{}, {result:()=>({ok:false,error:{code}})}),p=s.renew(s.c);
+  await s.next();const final=await p.completion;
+  assert.equal(final.state,'failed');assert.equal(final.error,code);assert.equal(s.timers.size,0);
+  assert.equal(s.calls.length,1);assert.equal(s.closed.length,1);
+  assert.equal(final.usedItems,1);assert.equal(final.usedMs,100);await p.close();
+});
+
+test('Fix A in-flight renewal floors survive a later known-usage refund',async t=>{
+  let release,entered;
+  const dispatched=new Promise(resolve=>{entered=resolve;});
+  const s=setup(t,{}, {result:()=>{entered();return new Promise(resolve=>{release=resolve;});}}),p=s.renew(s.c);
+  const pending=s.next();await dispatched;
+  s.renew({...s.c,window:{...s.c.window,usedItems:5,usedMs:200}});
+  release(settled());await pending;
+  assert.equal(p.getStatus().usedItems,5);assert.equal(p.getStatus().usedMs,200);await p.close();
+});
+
+for(const status of ['rebuilding','partial','complete'])test(`Fix A successful ${status} outcomes continue scheduling`,async t=>{
+  const s=setup(t,{}, {result:()=>settled(0,status)}),p=s.renew(s.c);
+  for(let i=0;i<9;i++)await s.next();
+  assert.equal(p.getStatus().state,'active');assert.equal(p.getStatus().error,null);
+  assert.equal(s.calls.length,9);assert.equal(s.timers.size,1);await p.close();
 });

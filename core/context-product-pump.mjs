@@ -70,7 +70,10 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
         return {key,ledger:existing??{domain,endsAt:w.endsAtMonoMs,maxItems:b.maxItems,maxMs:b.maxMs,items:w.usedItems,ms:w.usedMs}};
       });
       if(all.ledgers.size+candidates.filter(x=>!all.ledgers.has(x.key)).length>1024)fail('read_in_progress');
-      for(const {key,ledger} of candidates){ledger.items=Math.max(ledger.items,w.usedItems);ledger.ms=Math.max(ledger.ms,w.usedMs);all.ledgers.set(key,ledger);}
+      for(const {key,ledger} of candidates){
+        ledger.floorItems=Math.max(ledger.floorItems??0,w.usedItems);ledger.floorMs=Math.max(ledger.floorMs??0,w.usedMs);
+        ledger.items=Math.max(ledger.items,ledger.floorItems);ledger.ms=Math.max(ledger.ms,ledger.floorMs);all.ledgers.set(key,ledger);
+      }
       return new Map(candidates.map(({ledger})=>[ledger.domain,ledger]));
     }
     let ledgers=admit(window,budgets);
@@ -99,7 +102,18 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       return closing;
     }
     record.stop=()=>{void stop();};
-    function schedule(){if(!stopped&&!error&&!exhausted()&&now()<renewedUntil)timer=setTimer(tick,Math.max(0,c.pollMs-(now()-lastTick)));}
+    function interval(){
+      // Spread nominal full reservations over a minute, capped by the
+      // five-second round-robin sweep. Small host budgets may still exhaust
+      // before the minute ends; pacing cannot manufacture quota.
+      const turns=Math.min(...[...ledgers.values()].map(l=>{
+        const lanes=projections.filter(p=>domainOf(p)===l.domain).length;
+        const slots=Math.min(l.maxItems/quantum.maxItems,l.maxMs/quantum.maxMs);
+        return slots*projections.length/lanes;
+      }));
+      return Math.max(c.pollMs,quantum.maxMs,Math.min(5000/projections.length,60000/Math.max(1,turns)));
+    }
+    function schedule(){if(!stopped&&!error&&!exhausted()&&now()<renewedUntil)timer=setTimer(tick,Math.max(0,Math.min(lastTick+interval(),renewedUntil,window.endsAtMonoMs)-now()));}
     function tick(){
       if(stopped||error)return;
       if(exhausted()||now()>=renewedUntil){report(observation());return;}
@@ -127,6 +141,15 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           if(remainingMs<1){error='read_timeout';return;}
           const result=await h.refreshContextIndex({readSet:p.options.readSet,types:p.types,intent:p.intent,mode:'lexical',budget:{maxItems,maxMs:remainingMs}},grant);
           if(!result.ok){error=result.error.code;return;}
+          // A successful settled quantum reports all transformation attempts,
+          // including rolled-back work. Elapsed time includes opening/draining
+          // and delivery. Missing/invalid usage or any failed settlement keeps
+          // the full reservation. Host floors applied during renewal also stay.
+          const items=result.value?.progress?.transformed,elapsed=Math.ceil(now()-lastTick);
+          if(Number.isSafeInteger(items)&&items>=0&&items<=maxItems&&Number.isSafeInteger(elapsed)&&elapsed>=0&&elapsed<=maxMs){
+            ledger.items=Math.max(ledger.items-maxItems+items,ledger.floorItems);
+            ledger.ms=Math.max(ledger.ms-maxMs+elapsed,ledger.floorMs);
+          }
         } catch(e){error=e.code??'reader_failed';}
       })().finally(()=>{running=null;if(error){void stop();return;}if(exhausted() || now()>=renewedUntil)report(observation());schedule();});
     }

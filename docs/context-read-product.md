@@ -477,12 +477,42 @@ Per-window items are a positive safe integer, milliseconds are 1–60,000;
 quantum bounds are 1–1,024 and 1–5,000. `pollMs` is 1–5,000 and `renewalMs` is
 1–60,000. The full round-robin sweep must satisfy
 `2 * activeSelections * max(pollMs, quantum.maxMs) <= 5000`; configurations
-that cannot meet that observation cadence refuse before dispatch. Scheduling
-and native overhead still require the deployment qualification. Freeze these
-settings before qualification. Quanta reserve their full
-item/time allowance before opening/dispatch, including unknown usage after
-failure. This conservative accounting can exhaust a window before all reserved
-work is used; counters never refund unknown work.
+that cannot meet that observation cadence refuse before dispatch. Freeze these
+settings before qualification. Dispatches are paced using the configured minute
+allowance and full quantum sizes, with a five-second maximum round-robin sweep
+and `max(pollMs, quantum.maxMs)` as the minimum dispatch spacing. The first
+admission is paced too. Both intents and selections retain round-robin order;
+renewals do not restart that order or create a burst. Timer delivery and native
+overhead still need deployment qualification. No additional host input is needed.
+
+Quanta reserve their full item/time allowance before opening/dispatch. After a
+successful settled quantum with a valid transformation-attempt count and known
+elapsed time, unused items and milliseconds are returned to that minute window.
+Elapsed time is rounded up and includes handle disposal/opening and result
+delivery. Attempts in a rolled-back fence-race batch remain charged. Missing or
+invalid usage, failure, timeout, crash or uncertain settlement retains the full
+reservation. Host-supplied cumulative usage remains a conservative floor, even
+if renewal occurs during dispatch; neither renewal nor restart erases charges.
+Persist the full outstanding reservation before process replacement whenever
+settlement is uncertain. Counters never refund unknown work.
+
+A recognized canonical/dependency fence change during a batch rolls back that
+batch and returns successful `rebuilding` progress. Earlier committed batches
+survive. The pump schedules another quantum; storage, corruption, authority and
+lifecycle refusals still fail and drain. This does not certify mixed generations
+or make stale publications ready.
+
+Renewal must remain valid through the next cron invocation and its handoff
+margin. For a 60-second cron, a 10-second renewal leaves a 50-second authority
+gap: renew more frequently, or arrange overlapping renewals within the existing
+60-second renewal bound. Keep service credential authority valid as well.
+Minute budgets are cumulative, not fresh per poll. An allowance of eight full
+quanta cannot fund the minimum 24 observations per minute for two intents if
+those quanta use their full reservations. Reconciliation helps cheap/no-op
+work; pacing cannot create quota or guarantee freshness under insufficient
+capacity. Provision for both intents, scanning, verification, races and writes,
+then qualify the actual registered workload. Continuous writes may still
+abandon staged work and require full-corpus catch-up.
 
 Each of 1–32 active selections supplies validated maintainer options with the
 same supervisor and explicit physical types. Both intents are included
@@ -496,7 +526,8 @@ replacement, maps new-process monotonic windows, and controls cross-process
 ownership. HTTP credentials cannot open the pump.
 
 Status exposes `active`, `budget_exhausted`, `renewal_expired`, `failed` or
-`stopped`, along with cumulative reservations and a sanitized error code. The
+`stopped`, along with settled usage plus outstanding/unknown reservations and a
+sanitized error code. The
 completion promise reports exhaustion/renewal expiry or failure; the product
 must observe the promise returned after each renewal, export cumulative
 usage, and apply its configured reschedule/failure policy. Failure stops further
