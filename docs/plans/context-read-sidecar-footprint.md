@@ -367,3 +367,81 @@ The missing ignored test dependency was supplied as an independent copy of the a
 - `core/test/context-read-product-footprint.test.mjs`
 - `docs/plans/context-read-sidecar-footprint-measurements.json`
 - `docs/plans/context-read-sidecar-footprint.md`
+
+## Fix round 3
+
+This round addresses the linked nonpositive-document-key P1 in both re-reviews of `26d2c5d8`. All earlier sections and measurement entries remain intact. Format 2 is unreleased; its valid document-key domain is now **positive integers**. Both STRICT `documents.doc` and `postings.doc` declarations include `CHECK(doc > 0)`. Physical schema attestation and initialization attestation derive from the same DDL, so both now require these checks. Readers refuse the earlier unchecked format-2 schema as incompatible. Existing explicit DELETE repair and quiescent host rebuild requirements for WAL remain unchanged.
+
+Deep verification independently rejects nonpositive document keys in the document scan, ordered posting/document-completion stream and physical referential audit. It therefore refuses tampered rows even when an external SQLite connection bypasses CHECK constraints. Domain validation precedes the affected row's hash/count/cursor advancement. Lookup's existing `doc > 0` first-page boundary now enumerates the entire accepted domain; subsequent pages remain exclusive positive-key seeks. The referential audit retains its unbounded first page, both left reference probes and final posting-count comparison.
+
+### Dictionary and storage ID audit
+
+Dictionary term IDs and generation storage IDs have no corresponding positive-only enumeration boundary. Dictionary reset starts without an ID bound and resumes after the last processed ID; term validation scans by text. Posting verification, query enumeration and scoring resolve dictionary IDs by equality. The empty-term sentinel is identified by `term=''`, rather than a hard-coded zero ID during verification or retrieval. Storage IDs use keyed equality in lookup/base-copy paths; GC starts without a storage-ID bound. Ordinary allocators continue to produce positive document/nonempty-term IDs and AUTOINCREMENT storage IDs, with zero reserved by construction for the empty-term sentinel.
+
+Two regressions remap dictionary and storage IDs to `-1` or `0`, relocating the sentinel to `-2` before assigning zero to the nonempty term. Both certify a positive document, retrieve it, reopen a new handle and retrieve byte-identical results. These accepted signed IDs remain reachable, so they need no new domain restriction. The earlier allocator and GC protections are unchanged.
+
+### Linked-key regressions and baseline replay
+
+Four corruption cases cross document keys `-1` and `0` with dictionary IDs `1` and `-1`. Each checkpoints a staged `badtoken` document, remaps its linked document/posting pair in a transaction with CHECK enforcement disabled, confirms a clean foreign-key check and a matching dictionary reference, then requires `index_unavailable/corrupt`, no publication and no validation certificate. The admitted maintenance connection remains open, so these tests exercise deep verification rather than repair or an opening quick-check. The earlier copied-orphan regression also explicitly bypasses the new CHECK to keep exercising its original referential-audit failure.
+
+The final tests were overlaid without implementation changes on disposable snapshots. Each row below has the same exit code on **Node 22.16.0 and 24.15.0**:
+
+| Document key | Dictionary ID | Fixed exit | `26d2c5d8` exit | `b3a74eb5` exit |
+| --- | --- | --- | --- | --- |
+| -1 | 1 | 0 | 1 | 0 |
+| -1 | -1 | 0 | 1 | 0 |
+| 0 | 1 | 0 | 1 | **1** |
+| 0 | -1 | 0 | 1 | 0 |
+
+Both signed-dictionary boundary regressions meet the requested replay expectation together: **1/1** on `26d2c5d8`, **0/0** on `b3a74eb5`. The ordinary-dictionary zero case exposes an additional historical defect: `b3a74eb5` already accepts `(doc=0, term=1)`, because its initial audit bound is `(0,-1)`. Consequently, claiming that ordinary zero-key regression passes there would be incorrect. It is retained as extra coverage; the four-case baseline replay exits **1/1** with exactly this one failure on `b3a74eb5`, and **1/1** with all four failing on `26d2c5d8`.
+
+A separate DDL regression requires both tables to reject `-1`, `0` and fractional document keys, then removes the CHECK declarations from physical schema metadata and requires incompatible attestation. Its tampering connection explicitly disables Node 24 defensive mode where that API exists; production connections retain their existing settings.
+
+### Byte compatibility and bounded work
+
+On each Node patch, the same canonical fixture and query sequence were evaluated against `26d2c5d8` and this fix. Initial and actual delta-build current/history manifests, counts and **480 query outputs** compare byte-for-byte, exit **0/0**. Queries cover Memory/Card selections, Chinese/Japanese/English, equal bodies, scores, ranks and ties. Every handle is closed before swapping the quiescent DELETE caches between implementations.
+
+Production SQL statements and page bounds are unchanged. The deterministic VM probe retains exactly the Fix round 2 counts at both 1,000 and 19,000 dictionary rows: ordered postings **1,934**, scoring **50**, reset **7,194**, documents **2,058**, statistics **1,805**, initial audit **2,825** and resumed audit **3,737** instructions. Page operations return 128 rows and scoring returns one. New domain checks add only constant work per verified row. Runtime source outside the DDL and `verifyPage` remains byte-identical to `26d2c5d8`.
+
+### Updated footprint
+
+The unchanged sizing harness ran on **Node 24.15.0**, exit **0**, with 1,642 Memories, 164 Cards and four namespaces. Both intents retain 1,806 documents, 1,712 terms and 127,863 tokens. Current/history each used 73 explicit quanta; these are report-only observations, with no timing gate.
+
+| Both intents, one owner-wide selection | Fix round 3 |
+| --- | ---: |
+| Canonical main file | 5,193,728 B |
+| Sidecar main file | 11,849,728 B |
+| Sidecar / canonical | **2.2815×** |
+| Sidecar B/Memory, including Cards | 7,216.64 |
+| Sidecar free pages | 0 B |
+
+The **≤5× target remains satisfied**. Table/index/internal structure bytes plus free bytes independently reconcile with each database's page allocation, and the ratio is checked against both byte totals, exit **0**. Complete structure/per-Memory figures are appended as `fixRound3` in [the measurements](context-read-sidecar-footprint-measurements.json), preserving every earlier entry.
+
+### Required verification and exit codes
+
+The exact runtime binaries report **v22.16.0** and **v24.15.0**. Each required group ran with explicit file arguments, TAP reporting and file concurrency 1; glob expansion and independent directory enumeration agree on **60 required paths, 0 differences**. Child return codes were captured directly. Table globs abbreviate those expanded arrays.
+
+| Files after `node --test --test-reporter=tap --test-concurrency=1` | Files | Node 22.16.0 exit | Node 24.15.0 exit | Passing tests, 22 / 24 |
+| --- | ---: | ---: | ---: | ---: |
+| `core/test/context-read*.test.mjs` | 34 | 0 | 0 | 700 / 700 |
+| `core/test/topic-*.test.mjs` | 17 | 0 | 0 | 238 / 238 |
+| `core/test/no-raw-db-fd.test.mjs core/test/sqlite-lock-safety.test.mjs core/test/sqlite-journal-probe.test.mjs` | 3 | 0 | 0 | 44 / 44 |
+| `adapters/mcp/test/context-read*.test.mjs` | 5 | 0 | 0 | 88 / 88 |
+| `packaging/test/topic-overview-raw29.test.mjs` | 1 | 0 | 1 → 0 | 3 / 3 |
+
+The initial Node 24 required-matrix process exited **1** because the installed `layouts/claude-code` packaging child reached its existing **30,000 ms** subprocess timeout (`ETIMEDOUT`): two cases passed and one failed. Inspection found this fixture exercises legacy topic-reader layouts, with no product sidecar build or lookup. Re-running only the unchanged three-case packaging group with the same timeout and offline settings exited **0**, all three passing. The table preserves both packaging exit codes; no timeout or test threshold was changed.
+
+Every final required group has **0 failures, 0 cancellations and 0 skips**. The full context prefix includes all **37 footprint cases**, with the seven new cases also run separately using `--test-name-pattern='Fix round 3'`, exit **0/0**, seven passing each. Healthy-output comparisons exit **0/0**; sizing on Node 24.15.0 and independent structure/page/ratio reconciliation each exit **0**. The expected baseline replay failures and their exact cases are recorded above.
+
+Initial targeted fixture-development runs exited **1** while foreign-key bypass, new-handle reopening and the Node 24 defensive-mode setting were corrected. Final targeted runs use the completed fixture on both runtimes. No production lock, journal or timeout setting was relaxed. Tests used each named runtime's normal npm toolchain, its existing offline cache with offline mode enforced, and the already available ignored tokenizer dependency; no network install or dependency/lockfile change occurred.
+
+`git diff --check`: **0**. Runtime source outside the DDL and `verifyPage`, the entire previous plan prefix and all previous measurement entries were independently compared with HEAD and remain unchanged. The frozen contract, frozen-v1 sidecar, raw-fd allowlist and setup runtime have no diff. No timing gates, provider calls or commits were introduced. All supervised runs completed; no running verification is handed off.
+
+### Changed files, independently cross-checked
+
+`git diff --name-only -z HEAD` plus nonignored untracked files was compared with independent Git tree/blob hashes plus `rg --files --hidden` filesystem enumeration. Both inventories agree: **4 files, 0 differences**, cross-check exit **0**.
+
+- `core/context-product-sidecar.mjs`
+- `core/test/context-read-product-footprint.test.mjs`
+- `docs/plans/context-read-sidecar-footprint-measurements.json`
+- `docs/plans/context-read-sidecar-footprint.md`

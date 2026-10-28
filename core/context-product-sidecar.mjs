@@ -49,8 +49,8 @@ CREATE TABLE work(projection TEXT PRIMARY KEY,generation TEXT NOT NULL) STRICT;
 CREATE TABLE validation_records(publication TEXT PRIMARY KEY,generation TEXT NOT NULL UNIQUE,record TEXT NOT NULL) STRICT;
 CREATE TABLE progress_records(generation TEXT PRIMARY KEY,record TEXT NOT NULL) STRICT;
 CREATE TABLE selections(projection TEXT PRIMARY KEY,owner TEXT NOT NULL,types TEXT NOT NULL,intent TEXT NOT NULL) STRICT;
-CREATE TABLE documents(generation INTEGER NOT NULL,doc INTEGER NOT NULL,stream INTEGER NOT NULL,id TEXT NOT NULL,identity TEXT NOT NULL,revision INTEGER NOT NULL,body_revision INTEGER NOT NULL,eligible INTEGER NOT NULL CHECK(eligible IN(0,1)),token_length INTEGER NOT NULL CHECK(token_length>=0),PRIMARY KEY(generation,doc),UNIQUE(generation,stream,id),UNIQUE(generation,identity)) STRICT, WITHOUT ROWID;
-CREATE TABLE postings(generation INTEGER NOT NULL,doc INTEGER NOT NULL,term INTEGER NOT NULL,frequency INTEGER NOT NULL CHECK(frequency>0),position INTEGER NOT NULL CHECK(position>0),PRIMARY KEY(generation,doc,term),FOREIGN KEY(generation,doc) REFERENCES documents(generation,doc)) STRICT, WITHOUT ROWID;
+CREATE TABLE documents(generation INTEGER NOT NULL,doc INTEGER NOT NULL CHECK(doc > 0),stream INTEGER NOT NULL,id TEXT NOT NULL,identity TEXT NOT NULL,revision INTEGER NOT NULL,body_revision INTEGER NOT NULL,eligible INTEGER NOT NULL CHECK(eligible IN(0,1)),token_length INTEGER NOT NULL CHECK(token_length>=0),PRIMARY KEY(generation,doc),UNIQUE(generation,stream,id),UNIQUE(generation,identity)) STRICT, WITHOUT ROWID;
+CREATE TABLE postings(generation INTEGER NOT NULL,doc INTEGER NOT NULL CHECK(doc > 0),term INTEGER NOT NULL,frequency INTEGER NOT NULL CHECK(frequency>0),position INTEGER NOT NULL CHECK(position>0),PRIMARY KEY(generation,doc,term),FOREIGN KEY(generation,doc) REFERENCES documents(generation,doc)) STRICT, WITHOUT ROWID;
 CREATE INDEX product_term ON postings(generation,term,doc);
 CREATE INDEX product_document_order ON postings(generation,doc,position,term,frequency);
 CREATE TABLE statistics(generation INTEGER NOT NULL,term_id INTEGER NOT NULL,term TEXT NOT NULL,df INTEGER NOT NULL,n INTEGER NOT NULL,total_length INTEGER NOT NULL,verified_df INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(generation,term_id),UNIQUE(generation,term)) STRICT, WITHOUT ROWID;
@@ -416,11 +416,15 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       quantum.measure(()=>{
         let tuple;
         if(phase===0) {
+          // Lookup starts after zero. Check the same domain even when a
+          // tampered file bypassed the attested DDL's CHECK constraints.
+          if(r.doc<=0)unavailable('corrupt');
           tuple=['document',JSON.parse(r.identity),r.revision,r.body_revision,r.eligible,REPRESENTATION_VERSION,r.token_length];
           v.counts.documents++;v.counts.totalTokenLength+=r.token_length;
           const type=g.streams[r.stream].type;v.counts.byType[type].eligible+=r.eligible;v.counts.byType[type].indexed+=r.eligible;
           v.last=[r.identity];
         } else if(phase===1) {
+          if(r.document.doc<=0)unavailable('corrupt');
           if(r.complete) {
             if(v.documentIdentity!==undefined && v.documentIdentity!==r.document.identity)unavailable('corrupt');
             const length=v.documentIdentity===r.document.identity ? v.documentLength : 0;
@@ -443,7 +447,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
             : r.df<=0 || r.df!==r.verified_df || r.n!==0 || r.total_length!==0)unavailable('corrupt');
           tuple=['statistics',r.term,r.df,r.n,r.total_length];if(r.term)v.counts.terms++;v.last=[r.term];
         } else {
-          if(r.eligible!==1 || !r.text)unavailable('corrupt');
+          if(r.doc<=0 || r.eligible!==1 || !r.text)unavailable('corrupt');
           v.last=[r.doc,r.term];v.checkedPostings=(v.checkedPostings ?? 0)+1;
         }
         if(tuple)hash.update(JSON.stringify(tuple)+'\n');m.verifiedRows++;processed++;

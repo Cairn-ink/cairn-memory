@@ -198,13 +198,73 @@ test('Fix round 2 rejects a copied posting with negative document key',t=>{
   const f=fixture(t);f.admit('badtoken',four[0]);const a=local(t,f);
   a.storage.refresh(a.p,a.access,{maxItems:1,maxMs:5000});
   const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX);t.after(()=>side.close());
-  side.exec('PRAGMA foreign_keys=OFF');
+  side.exec('PRAGMA foreign_keys=OFF; PRAGMA ignore_check_constraints=ON');
   const row=side.prepare('SELECT * FROM postings LIMIT 1').get();
   side.prepare(`INSERT INTO postings(${Object.keys(row).join(',')}) VALUES(${Object.keys(row).map(()=>'?').join(',')})`).run(...Object.values({...row,doc:-1}));
   assert.equal(side.prepare('SELECT count(*) AS n FROM postings').get().n,2);
   assert.equal(side.prepare('PRAGMA foreign_key_check').all().length,1);
   assert.throws(()=>build(a),{code:'index_unavailable',reason:'corrupt'});
   assert.equal(side.prepare('SELECT count(*) AS n FROM publications').get().n,0);
+});
+
+for(const doc of [-1,0])for(const term of [1,-1])test(`Fix round 3 rejects linked document/posting key ${doc} (term ${term})`,t=>{
+  const f=fixture(t);f.admit('badtoken',four[0]);const a=local(t,f);
+  a.storage.refresh(a.p,a.access,{maxItems:1,maxMs:5000});
+  const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX);t.after(()=>side.close());
+  // Bypass DDL to model a tampered file. Keep the admitted maintenance
+  // connection open so refusal must come from deep verification, not reopen.
+  side.exec('PRAGMA foreign_keys=OFF; PRAGMA ignore_check_constraints=ON; BEGIN');
+  side.prepare('UPDATE documents SET doc=?').run(doc);
+  side.prepare('UPDATE postings SET doc=?,term=?').run(doc,term);
+  side.prepare("UPDATE statistics SET term_id=? WHERE term='badtoken'").run(term);
+  side.exec('COMMIT');
+  assert.deepEqual(side.prepare('PRAGMA foreign_key_check').all(),[]);
+  const pair=side.prepare(`SELECT d.doc,p.doc AS posting_doc,s.term FROM documents d
+    JOIN postings p ON p.generation=d.generation AND p.doc=d.doc
+    JOIN statistics s ON s.generation=p.generation AND s.term_id=p.term`).all();
+  assert.deepEqual(pair.map(r=>[r.doc,r.posting_doc,r.term]),[[doc,doc,'badtoken']]);
+  assert.throws(()=>build(a),{code:'index_unavailable',reason:'corrupt'});
+  assert.equal(side.prepare('SELECT count(*) AS n FROM publications').get().n,0);
+  assert.equal(side.prepare('SELECT count(*) AS n FROM validation_records').get().n,0);
+});
+
+test('Fix round 3 attested document and posting DDL requires positive integer keys',t=>{
+  const f=fixture(t);f.admit('badtoken',four[0]);const a=local(t,f);build(a);
+  const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX);t.after(()=>side.close());
+  side.exec('PRAGMA foreign_keys=OFF');
+  for(const table of ['documents','postings'])for(const doc of [-1,0,0.5]) {
+    assert.throws(()=>side.prepare(`UPDATE ${table} SET doc=?`).run(doc),doc<=0 ? /CHECK constraint failed/ : /cannot store REAL/);
+  }
+  // Reader attestation rejects the older format-2 DDL too, even with the
+  // same format number and otherwise valid publication.
+  side.enableDefensive?.(false);
+  side.exec('PRAGMA writable_schema=ON');
+  side.prepare("UPDATE sqlite_schema SET sql=replace(sql,' CHECK(doc > 0)','') WHERE name IN ('documents','postings')").run();
+  side.exec('PRAGMA writable_schema=OFF');
+  assert.equal(a.storage.observe(a.p,a.access).dto.lexical.reason,'incompatible');
+});
+
+for(const key of [-1,0])test(`Fix round 3 dictionary and storage key ${key} remain reachable by equality lookup`,t=>{
+  const f=fixture(t);f.admit('badtoken',four[0]);const a=local(t,f);
+  a.storage.refresh(a.p,a.access,{maxItems:1,maxMs:5000});
+  const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX);t.after(()=>side.close());
+  side.exec('PRAGMA foreign_keys=OFF; BEGIN');
+  // Zero is normally the empty-term sentinel. Relocate it before giving
+  // its key to a nonempty term; verification uses term text, not its ID.
+  side.prepare("UPDATE statistics SET term_id=-2 WHERE term=''").run();
+  side.prepare("UPDATE statistics SET term_id=? WHERE term='badtoken'").run(key);
+  side.prepare('UPDATE postings SET term=?').run(key);
+  side.prepare('UPDATE generations SET storage_id=?').run(key);
+  for(const table of ['documents','postings','statistics'])side.prepare(`UPDATE ${table} SET generation=?`).run(key);
+  side.exec('COMMIT');
+  assert.deepEqual(side.prepare('PRAGMA foreign_key_check').all(),[]);
+  const publication=build(a),result=a.storage.lexical(a.p,publication,'badtoken');
+  assert.equal(publication.counts.documents,1);assert.equal(publication.counts.terms,1);
+  assert.equal(result.matched,1);assert.equal(result.rows.length,1);
+  a.storage.close();
+  const reopened=local(t,f);
+  assert.equal(reopened.storage.observe(reopened.p,reopened.access).dto.lexical.state,'ready');
+  assert.deepEqual(reopened.storage.lexical(reopened.p,publication,'badtoken'),result);
 });
 
 test('Fix round 2 document, posting and statistics cursors resume partial pages with identical results',t=>{
