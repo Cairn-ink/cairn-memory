@@ -101,6 +101,7 @@ parentPort.on('message', async message => {
     within(operation);
     if (frame && (frame.operationId !== operation.operationId || frame.workerEpoch !== operation.workerEpoch)) fail('reader_failed');
     let response;
+    const observation = {};
     if (message.method === 'getContextReadCapabilities') response = capabilities();
     else if (message.method === 'fetchCandidateEvidence') {
       if (workerData.maintenance) fail('authority_required');
@@ -110,9 +111,10 @@ parentPort.on('message', async message => {
     } else {
       if (workerData.maintenance && !['getContextIndexStatus','refreshContextIndex'].includes(message.method)) fail('authority_required');
       response = index.run(message.method, boundedData(message.input), message.credential,
-        performance.now() + Number(mono(operation.operationCutoffMonoNs)-process.hrtime.bigint())/1e6);
+        performance.now() + Number(mono(operation.operationCutoffMonoNs)-process.hrtime.bigint())/1e6, observation);
     }
-    within(operation); sealNative(frame); result(operation, response);
+    within(operation); sealNative(frame); result(operation, response,
+      observation.at === undefined ? {} : { observedAtMonoMs: observation.at });
   } catch (error) { sealNative(frame); result(operation, nativeFailure(error)); }
   finally { active = false; }
 });

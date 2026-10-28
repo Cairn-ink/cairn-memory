@@ -14,6 +14,11 @@ import { PRODUCT_PROFILE, boundedData, hostConfiguration, requestRecord, operati
   credentialDigest, deadline, mono, operationMessage } from './context-product-control.mjs';
 import { fail } from './validation.mjs';
 
+// Private Worker timing, kept outside the public result DTO. Pump and reader
+// share the process hrtime domain; no namespace, authority or count is exposed.
+const maintenanceObservations = new WeakMap();
+export const maintenanceObservation = result => maintenanceObservations.get(result);
+
 const codes = new Set(['invalid_input', 'invalid_read_set', 'authority_required', 'scope_changed', 'invalid_snapshot', 'snapshot_stale', 'invalid_cursor', 'cursor_stale', 'token_count_unavailable',
   'revision_conflict', 'evidence_unavailable', 'context_item_too_large', 'index_unavailable', 'storage_busy', 'storage_error',
   'read_timeout', 'read_cancelled', 'read_in_progress', 'reader_failed', 'store_closed', 'invalid_path', 'database_not_found', 'unsafe_database_file', 'unsupported_database']);
@@ -150,6 +155,13 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
       if (signalCancelled(slot.signal)) result = productFailure('read_cancelled');
       if (slot.open && !result.ok) { shutdown(result.error.code); return; }
+      if (maintenance && !slot.open && result.ok && message.observedAtMonoMs !== undefined) {
+        const at = message.observedAtMonoMs;
+        if (!Number.isFinite(at) || at < Number(mono(slot.operation.enteredMonoNs)) / 1e6 || at > Number(now()) / 1e6) {
+          shutdown('reader_failed'); return;
+        }
+        maintenanceObservations.set(result, at);
+      }
       lifecycle.finish(slot, result);
       instance.unref(); idle = setTimer(() => shutdown('store_closed'), 60000); idle.unref?.(); lifecycle.idle = idle;
     }

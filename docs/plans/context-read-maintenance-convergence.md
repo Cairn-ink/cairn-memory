@@ -319,12 +319,16 @@ format-2 schema, SQL, certificates, scoring and WAL/locking policies are unchang
   monotonic through in-flight renewal. Process-ledger charges survive pump
   close/reopen, same-window renewal and selection changes; host persistence
   remains required for process replacement.
-* Scheduling spaces admissions using nominal minute capacity, bounded by the
-  existing poll/quantum minimum spacing and five-second round-robin sweep.
-  Pacing applies to the first quantum and uses the existing mock-clock seams.
-  Both intents and projection fairness remain unchanged. No new configuration
-  or contract field is introduced. An underfunded selection can still exhaust
-  before the minute ends; the five-second cap does not manufacture capacity.
+* Scheduling spaces admissions using nominal minute capacity, then advances
+  them as necessary to meet deadlines from each projection's actual epoch
+  observation. A full quantum reserves time for disposal/opening, dispatch and
+  the next observation; intervening round-robin turns retain the poll/quantum
+  minimum spacing. See the round-1 correction below: a nominal five-second
+  admission sweep was insufficient. Pacing applies to the first quantum and
+  uses the mock-clock seams. Both intents and projection fairness remain
+  unchanged. No new configuration or contract field is introduced. An
+  underfunded selection can still exhaust before the minute ends; scheduling
+  does not manufacture capacity.
 
 The six diagnosis tests now have these meanings:
 
@@ -375,7 +379,7 @@ The 20-ms alternating writer workload remains an owner protocol/capacity decisio
 no writer cadence, registration or qualification gate is changed here.
 
 
-### Fix A verification receipts
+### Fix A initial verification receipts (before round 1)
 
 Each exact Node binary's `--version` was asserted before dispatch. All commands
 used `--test --test-reporter=tap --test-concurrency=1` with explicit file arrays;
@@ -423,3 +427,163 @@ paths, independently checked against hashes/modes of **2,461 HEAD blobs** plus
 inventory diff **exit 0**, including both fixtures, three test files, two engine
 files and both docs. Tracked diff whitespace and all four untracked text files
 also pass checks with **exit 0**. All changes remain uncommitted for the primary.
+
+
+### Fix A round 1: observation deadlines and latency headroom
+
+Both non-author reviews of `ca2540a4` found the same P1. With two selections
+and both intents, a 1,000-ms poll and 100-ms quantum, the nominal 1,250-ms
+spacing allowed variable opening latency to move observations from 1,260 to
+6,310 ms (5,050 ms), or from 1,250 to 6,340 ms (5,090 ms). Punctual timers,
+available quota and quanta individually within budget did not prevent this.
+The old mock tests measured admission or assumed invariant latency.
+
+The correction preserves §6.2 and the closed public DTOs:
+
+* Entry to the fresh final Worker canonical snapshot read (§6.1.2) records
+  a process-monotonic timestamp, before acquisition/native-read costs, epoch
+  comparisons and delivery. This lower bound on the actual observation is
+  conservative: native latency cannot postpone the next deadline.
+  It travels beside the result on the internal operation-bound Worker frame;
+  the reader validates that it lies within that operation and retains it in a
+  private WeakMap. The public refresh result remains byte-identical. There is
+  no host callback or await in the final canonical transaction.
+* Let `N` be the number of projection/intent turns, `Q = quantum.maxMs` and
+  `S = max(pollMs, Q)`. Admission now requires `N * S + Q <= 5000`.
+  Otherwise `invalid_input` refuses before timers, handles or ledger charges.
+  This follows the existing sweep admission rule, with explicit latency
+  headroom; it requires no new public configuration or contract change.
+* For each upcoming turn at round-robin distance `d`, its latest safe next
+  admission is `lastActualObservation + 5000 - Q - d * S`. The next timer uses
+  the earliest such deadline or the nominal paced admission, whichever is
+  earlier, still bounded by authority and window expiry. This reserves a full
+  quantum before the actual read and enough spacing for every intervening
+  turn. Round-robin order is unchanged, with no priority starvation.
+* Initial observation deadlines start at activation. Continuous renewal
+  preserves them, including handoff exactly at an authority or minute-window
+  boundary; an actual authority/quota gap starts a new duty interval.
+  Missing timing, an unexpected quantum overrun or an observed cadence miss
+  fails visibly with the existing `read_timeout`, stops and drains. Failed or
+  uncertain work keeps its full reservation. A parent quantum timer exposes
+  timeout even while disposal is pending; after disposal settles, no successor
+  open/refresh is dispatched and the supervisor finishes the drain. Successful
+  valid settlements keep the existing refunds, host floors and process-ledger
+  persistence.
+
+Admission refusal extends the existing §6.2 sweep check to include bounded
+latency costs. Runtime failure also makes unexpected costs or delayed timers
+honest; a shared host cannot guarantee punctual execution under arbitrary
+stalls. Format 2,
+SQL, certificates, authority checks, result payloads, WAL policy and fix B's
+remaining scope are unchanged.
+
+Thirteen new regressions cover the two exact reviewer scenarios, two further
+variable disposal/dispatch/refresh/delivery scenarios, impossible headroom,
+continuous authority/window handoffs, an unexpected >5-second refresh cost,
+missing/future timing, overdue timer delivery, private native Worker timing,
+and a pending disposal that outlasts its quantum. Mock observations are recorded
+at the simulated epoch snapshot, separately from admission and result delivery.
+Each cadence case visits every selection and intent three times, checks every
+gap and initial sweep against 5,000 ms, and checks fairness, minimum admission
+spacing and complete handle disposal. The
+native timing assertion is a causal before/after check, not a performance
+acceptance threshold. The existing native cutover fixture uses a 1,600-ms
+rather than 2,500-ms quantum to leave the
+now-required headroom; its corpus, authority and readiness assertions remain.
+
+
+The scheduler preserves minimum spacing analytically: after an admission at
+`t`, each unvisited turn's distance decreases by one, moving its latest safe
+admission forward by `S`. The just-visited turn moves to distance `N-1` and
+its observation is at or after `t`; admission's `N*S+Q <= 5000` constraint
+therefore puts its next latest safe admission at or after `t+S` as well.
+With punctual timers and each full quantum completing within `Q <= S`, the
+next admission both fits every observation deadline and retains minimum
+spacing. A late timer or unexpected cost is supervised and fails visibly
+instead of silently extending the observation interval.
+
+The timestamp brackets actual observation conservatively: if its read-entry
+sample is `L` and snapshot acquisition is `A >= L`, reserving the full next
+quantum ensures `next A <= L + 5000 <= A + 5000`. Sampling after the native
+read instead could shift deadlines later by that read's variable latency.
+
+
+A separate deterministic arithmetic check exercised 125,000 variable-cost
+turns across admitted projection counts and poll/quantum bounds; every turn
+kept both observation and spacing invariants (**exit 0**). This supplements
+the engine regressions and is not a deployment timing measurement.
+
+
+The existing renewal-expiry mock now makes its intended inactive gap explicit:
+its short renewed authority expires before the synthetic jump to the next
+minute. Leaving authority active across that unserviced jump would instead
+be an overdue-observation failure; exact continuous handoff has separate
+regressions and must preserve deadlines.
+
+
+### Fix A round 1 verification receipts
+
+Both exact Node binaries' `--version` outputs were asserted before dispatch.
+Commands used the named binary with `--test --test-reporter=tap
+--test-concurrency=1` and explicit file arrays; the table abbreviates those
+arrays with globs. Glob expansion, independent directory enumeration and the
+actual argument arrays agree on **61 required paths**, inventory diff **exit 0**.
+Runs were sequential, with the matching binary first in `PATH`, npm offline,
+audit/fund disabled. No checkout dependency installation, external network,
+provider/key access, qualification run, timing benchmark or commit occurred.
+Every test process exit below is its actual child return code.
+
+| File arguments after Node test flags | Files | Node 22.16.0 exit / pass | Node 24.15.0 exit / pass |
+| --- | ---: | --- | --- |
+| `core/test/context-read*.test.mjs` | 35 | **0 / 739** | **0 / 739** |
+| `core/test/topic-*.test.mjs` | 17 | **0 / 238** | **0 / 238** |
+| `core/test/no-raw-db-fd.test.mjs core/test/sqlite-lock-safety.test.mjs core/test/sqlite-journal-probe.test.mjs` | 3 | **0 / 44** | **0 / 44** |
+| `adapters/mcp/test/context-read*.test.mjs` | 5 | **0 / 88** | **0 / 88** |
+| `packaging/test/topic-overview-raw29.test.mjs` | 1 | **0 / 3** | **0 / 3** |
+| `core/test/context-read-maintenance-convergence.test.mjs core/test/context-read-product-pump.test.mjs` | 2 | **0 / 63** | **0 / 63** |
+
+The final required union contains **1,112 passing cases per runtime**, with
+zero failures, cancellations or skips. The focused 63-case rerun is a subset.
+All six modified source/test hashes stayed unchanged across these final runs.
+
+The final pump test file was overlaid on an isolated `git archive ca2540a4`
+snapshot, with no runtime changes. On **both Node patches**, running
+`--test --test-reporter=tap --test-concurrency=1 --test-name-pattern='Fix A1'
+core/test/context-read-product-pump.test.mjs` exits **1**: **all 13 regressions
+fail**, zero pass, zero cancellations/skips. The first two failures reproduce
+the reviewers' exact 5,050-ms and 5,090-ms gaps. The failures also cover the
+other variable-cost scenarios, impossible headroom, exact continuous handoff,
+overrun/missing timing/late timer visibility, actual Worker timing transport,
+and supervision of pending disposal. Final full and focused fixed runs pass
+all 13 on each runtime.
+
+Earlier nonzero development receipts are retained separately from the final
+green runs: the initial Node 22 focused run exited **1** (57/58 passed; the
+native fence-race wrapper had no result at its assertion), followed by its
+isolated test exiting **0**. An early full Node 22 context group exited **1**
+(738/739 passed) on the mock that kept authority active while jumping over
+almost a minute of timer service; its diagnostic single-test run also exited
+**1**. Making that test's intended inactive interval explicit yielded the final
+739/739 and 63/63 runs above. The first Node 22 packaging run exited **1**
+(2/3 passed): its layouts child hit the unchanged 30-second `spawnSync`
+`ETIMEDOUT`. No packaging or runtime edits followed; the standalone group
+rerun exited **0**, 3/3 passed. Node 24 packaging also exited **0**, 3/3 passed.
+No required failure is omitted from the final accounting.
+
+Delivery inventory uses `git diff --name-only -z HEAD` plus nonignored
+untracked paths, independently compared with hashes/modes of **2,465 HEAD
+blobs** and filesystem enumeration. The routes agree on these **8 files**,
+inventory diff **exit 0**:
+
+* `core/context-product-index.mjs`
+* `core/context-product-pump.mjs`
+* `core/context-product-reader.mjs`
+* `core/context-product-worker.mjs`
+* `core/test/context-read-maintenance-convergence.test.mjs`
+* `core/test/context-read-product-pump.test.mjs`
+* `docs/context-read-product.md`
+* `docs/plans/context-read-maintenance-convergence.md`
+
+Final tracked whitespace and unchanged source/test hash checks both exit
+**0**. All test processes have completed; no unattended work remains. Changes
+remain uncommitted for the primary.

@@ -475,15 +475,36 @@ millisecond domain, strictly future and no more than 60,000 ms away. Supply
 nonnegative safe `usedItems`/`usedMs` from the host's cumulative ledger.
 Per-window items are a positive safe integer, milliseconds are 1–60,000;
 quantum bounds are 1–1,024 and 1–5,000. `pollMs` is 1–5,000 and `renewalMs` is
-1–60,000. The full round-robin sweep must satisfy
-`2 * activeSelections * max(pollMs, quantum.maxMs) <= 5000`; configurations
-that cannot meet that observation cadence refuse before dispatch. Freeze these
-settings before qualification. Dispatches are paced using the configured minute
-allowance and full quantum sizes, with a five-second maximum round-robin sweep
-and `max(pollMs, quantum.maxMs)` as the minimum dispatch spacing. The first
-admission is paced too. Both intents and selections retain round-robin order;
-renewals do not restart that order or create a burst. Timer delivery and native
-overhead still need deployment qualification. No additional host input is needed.
+1–60,000. Let `N = 2 * activeSelections` and
+`S = max(pollMs, quantum.maxMs)`. Admission requires
+`N * S + quantum.maxMs <= 5000`; otherwise it refuses `invalid_input` before
+reserving quota or scheduling work. The additional quantum reserves headroom
+for disposal, opening, Worker dispatch and the actual epoch observation.
+A nominal five-second admission sweep alone cannot guarantee five-second reads.
+Freeze these settings before qualification.
+
+Dispatches are paced using the configured minute allowance and full quantum
+sizes, with `S` as the minimum admission spacing. Each projection's next read
+is due no later than 5,000 ms after its last actual epoch observation. The
+scheduler looks ahead through the round-robin order and advances admissions
+to leave a full quantum for the next observation and `S` for each intervening
+turn. The Worker samples the monotonic clock at entry to the fresh final
+canonical snapshot read (§6.1.2). This conservatively bounds the actual
+observation time: acquisition/native-read costs cannot postpone its next
+deadline. The parent retains this timing privately, outside public results.
+
+The first sweep is due within five seconds of activation. Continuous renewal
+preserves observation deadlines and order, including renewal exactly at an
+authority/window boundary; renewal after an authority/quota gap starts a new
+observation interval.
+
+If timing is missing, a quantum exceeds its reserved time, or an observation
+misses its deadline while authority and quota last, the pump reports
+`failed` with `read_timeout`, stops scheduling and drains. The failed quantum
+keeps its full reservation. A parent deadline timer also exposes failure while
+disposal is still pending; supervision continues to own the drain. Provision
+and qualify timer delivery and native capacity. A failed cadence is visible in
+status. No additional host input is needed.
 
 Quanta reserve their full item/time allowance before opening/dispatch. After a
 successful settled quantum with a valid transformation-attempt count and known

@@ -1,4 +1,4 @@
-import { openContextIndexMaintainer } from './context-product-reader.mjs';
+import { openContextIndexMaintainer, maintenanceObservation } from './context-product-reader.mjs';
 import { supervisorOwner } from './context-read-supervisor.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { boundedData, hostConfiguration, coverage, PRODUCT_PROFILE } from './context-product-control.mjs';
@@ -16,7 +16,7 @@ const integer=(n,max)=>{if(!Number.isSafeInteger(n)||n<1||n>max)fail('invalid_in
 // beyond handle shutdown; a host persists the same monotonic window/quota state
 // across process restarts before reopening admission (see the product guide).
 export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigint())/1e6,setTimer=setTimeout,clearTimer=clearTimeout,
-  open=openContextIndexMaintainer}={}) {
+  open=openContextIndexMaintainer,observedAt=maintenanceObservation}={}) {
   return function renewContextMaintenancePump(original) {
     const c=ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential']);
     const {owner,registry}=supervisorOwner(c.supervisor);
@@ -47,9 +47,10 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       if(!selected.length||selected.length>2||new Set(selected).size!==selected.length||selected.some(t=>!['memory','card'].includes(t)))fail('invalid_input');
       return ['current','history'].map(intent=>({options,types:selected,intent}));
     });
-    // A configuration whose nominal round-robin sweep exceeds the required
-    // five-second observation interval is invalid before any service work.
-    if(projections.length*Math.max(c.pollMs,quantum.maxMs)>5000)fail('invalid_input');
+    // Reserve one entire quantum for drain/open/dispatch and the epoch read,
+    // beyond the minimum admission sweep. Latency is variable, not free.
+    const spacing=Math.max(c.pollMs,quantum.maxMs);
+    if(projections.length*spacing+quantum.maxMs>5000)fail('invalid_input');
     const projectionKey=p=>JSON.stringify([p.options.path,p.options.readSet,canonicalJson(p.options.ownerCoverage),p.types,p.intent,p.options.host.moduleUrl,p.options.wal===true,p.options.sidecarJournalMode]);
     const fingerprint=JSON.stringify(projections.map(projectionKey));
     const domainOf=p=>JSON.stringify([resolve(p.options.path),p.options.readSet[0].ownerId,p.options.host.moduleUrl]);
@@ -82,6 +83,9 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     let report,completion,settled=false;
     function cycle(){settled=false;completion=new Promise(resolve=>{report=value=>{settled=true;resolve(value);};});}cycle();
     const handles=new Map(),writers=new Map();
+    // Initial observations are due within five seconds of activation. Expired
+    // authority/quota starts a new duty interval when explicitly renewed.
+    const observations=projections.map(()=>lastTick);
     function observation(){return Object.freeze({id:c.id,state:error?'failed':stopped?'stopped':exhausted()?'budget_exhausted':now()>=renewedUntil?'renewal_expired':'active',
       windowId:window.id,usedItems:Math.max(...[...ledgers.values()].map(l=>l.items)),usedMs:Math.max(...[...ledgers.values()].map(l=>l.ms)),maxItems:budgets.maxItems,maxMs:budgets.maxMs,error});}
     // Stop this selection conservatively at its first exhausted domain; a new
@@ -111,21 +115,36 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
         const slots=Math.min(l.maxItems/quantum.maxItems,l.maxMs/quantum.maxMs);
         return slots*projections.length/lanes;
       }));
-      return Math.max(c.pollMs,quantum.maxMs,Math.min(5000/projections.length,60000/Math.max(1,turns)));
+      return Math.max(spacing,Math.min(5000/projections.length,60000/Math.max(1,turns)));
     }
-    function schedule(){if(!stopped&&!error&&!exhausted()&&now()<renewedUntil)timer=setTimer(tick,Math.max(0,Math.min(lastTick+interval(),renewedUntil,window.endsAtMonoMs)-now()));}
+    function schedule(){
+      if(stopped||error||exhausted()||now()>=renewedUntil)return;
+      // Look ahead through the unchanged round-robin order. Each future turn
+      // needs its full pre-observation quantum plus minimum admission spacing
+      // for intervening turns. A fixed admission period cannot bound reads.
+      // N*S+Q <= 5000 makes this deadline at least lastTick+S after each
+      // punctual, in-budget turn, so advancing it preserves minimum spacing.
+      const due=Math.min(...observations.map((time,i)=>time+5000-quantum.maxMs-
+        ((i-at%projections.length+projections.length)%projections.length)*spacing));
+      timer=setTimer(tick,Math.max(0,Math.min(lastTick+interval(),due,renewedUntil,window.endsAtMonoMs)-now()));
+    }
     function tick(){
       if(stopped||error)return;
       if(exhausted()||now()>=renewedUntil){report(observation());return;}
+      if(observations.some(time=>now()-time>5000)){error='read_timeout';void stop();return;}
       lastTick=now();
+      let quantumTimer;
       return running=(async()=>{
         try {
-          const p=projections[at++%projections.length],key=JSON.stringify([projectionKey(p),p.options.host]),ledger=ledgers.get(domainOf(p));
+          const index=at++%projections.length,p=projections[index],key=JSON.stringify([projectionKey(p),p.options.host]),ledger=ledgers.get(domainOf(p));
           const maxItems=Math.min(quantum.maxItems,ledger.maxItems-ledger.items),maxMs=Math.min(quantum.maxMs,ledger.maxMs-ledger.ms,Math.floor(ledger.endsAt-now()),Math.floor(renewedUntil-now()));
           if(maxItems<1||maxMs<1)return;
           // Reserve the full quantum before dispatch. Unknown usage remains
           // charged after crash/timeout; restarting or renewing cannot refund it.
           ledger.items+=maxItems;ledger.ms+=maxMs;
+          // Disposal can await a Worker/host resource. Expose timeout even if
+          // that await has not settled; supervision still owns the drain.
+          quantumTimer=setTimer(()=>{error='read_timeout';void stop();},Math.max(0,maxMs-(now()-lastTick)));
           let h=handles.get(key);
           if(!h){
             // Native admission permits one maintainer per physical selection,
@@ -133,14 +152,28 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             // full-key handle; never weaken admission to populate this cache.
             const writer=JSON.stringify([resolve(p.options.path),p.options.readSet]),previous=writers.get(writer);
             if(previous!==undefined){await handles.get(previous).close();handles.delete(previous);writers.delete(writer);}
+            if(stopped||error)return;
             const openingMs=Math.min(maxMs,Math.floor(maxMs-(now()-lastTick)));
             if(openingMs<1){error='read_timeout';return;}
             h=await open({...p.options,deadlineMs:openingMs});handles.set(key,h);writers.set(writer,key);
           }
+          if(stopped||error)return;
           const remainingMs=Math.min(maxMs,Math.floor(maxMs-(now()-lastTick)));
           if(remainingMs<1){error='read_timeout';return;}
           const result=await h.refreshContextIndex({readSet:p.options.readSet,types:p.types,intent:p.intent,mode:'lexical',budget:{maxItems,maxMs:remainingMs}},grant);
+          if(error)return;
           if(!result.ok){error=result.error.code;return;}
+          const time=observedAt(result),finished=now();
+          // Missing timing is uncertain, never an invented observation at
+          // admission/delivery. A quantum overrun retains its full reservation.
+          if(!Number.isFinite(time)||time<lastTick||time>finished||finished-lastTick>maxMs||
+            (time-observations[index]>5000 && time<renewedUntil && time<ledger.endsAt)){
+            error='read_timeout';return;
+          }
+          observations[index]=time;
+          if(finished<renewedUntil&&finished<ledger.endsAt&&observations.some(time=>finished-time>5000)){
+            error='read_timeout';return;
+          }
           // A successful settled quantum reports all transformation attempts,
           // including rolled-back work. Elapsed time includes opening/draining
           // and delivery. Missing/invalid usage or any failed settlement keeps
@@ -151,11 +184,16 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             ledger.ms=Math.max(ledger.ms-maxMs+elapsed,ledger.floorMs);
           }
         } catch(e){error=e.code??'reader_failed';}
-      })().finally(()=>{running=null;if(error){void stop();return;}if(exhausted() || now()>=renewedUntil)report(observation());schedule();});
+      })().finally(()=>{clearTimer(quantumTimer);running=null;if(error){void stop();return;}if(exhausted() || now()>=renewedUntil)report(observation());schedule();});
     }
     const api=Object.freeze({getStatus:observation,get completion(){return completion;},close:stop});
     const entry={api,supervisor:c.supervisor,fingerprint,renew(next,w,b,g){
       if(stopped)fail('store_closed');
+      // Renewal exactly at expiry is a continuous handoff. Only an elapsed
+      // authority/window gap or settled spent quota resets observation duty;
+      // an in-flight reservation alone is not exhausted actual usage.
+      const inactive=now()>renewedUntil||[...ledgers.values()].some(l=>now()>l.endsAt||
+        (!running&&(l.items>=l.maxItems||l.ms>=l.maxMs)));
       if(next.pollMs!==c.pollMs||JSON.stringify(next.quantum)!==JSON.stringify(c.quantum))fail('invalid_input');
       if(w.id!==window.id){
         if([...ledgers.values()].some(l=>now()<l.endsAt))fail('invalid_input');
@@ -165,6 +203,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       } else ledgers=admit(w,b);
       // A settled observer cannot report renewed usage, even at exhaustion.
       if(settled)cycle();
+      if(inactive)observations.fill(now());
       renewedUntil=now()+next.renewalMs;grant=g;clearTimer(timer);if(exhausted())report(observation());else if(!running)schedule();
     }};
     all.entries.set(c.id,entry);if(exhausted())report(observation());schedule();return api;

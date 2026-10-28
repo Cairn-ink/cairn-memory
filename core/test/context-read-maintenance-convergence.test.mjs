@@ -47,7 +47,7 @@ function staged(f) {
 function scheduler(open) {
   let now = 0, serial = 0;
   const timers = new Map();
-  const renew = createMaintenancePumpRuntime({ now: () => now, open,
+  const renew = createMaintenancePumpRuntime({ now: () => now, observedAt: () => now, open,
     setTimer: (f, ms) => { const id = ++serial; timers.set(id, { f, at: now + ms }); return id; },
     clearTimer: id => timers.delete(id) });
   return { renew, timers, setTime: value => { now = value; }, async next() {
