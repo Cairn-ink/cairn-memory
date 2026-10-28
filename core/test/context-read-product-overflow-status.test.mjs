@@ -63,7 +63,7 @@ for(const omitted of [0,1])test(`P2c fix1 P2-18 selected/omitted=${omitted} dura
   try{
     const row=side.prepare('SELECT g.phase,g.checkpoint,g.sequence,g.base_sequence FROM generations g JOIN work w ON w.generation=g.id').get();
     assert.deepEqual({...row},{phase:durable.phase,checkpoint:durable.checkpoint,sequence:2,base_sequence:1});
-    const ids=side.prepare('SELECT d.id FROM documents d JOIN work w ON w.generation=d.generation').all().map(r=>r.id);
+    const ids=side.prepare('SELECT d.id FROM documents d JOIN generations g ON g.storage_id=d.generation JOIN work w ON w.generation=g.id').all().map(r=>r.id);
     assert.equal(delta.filter(m=>ids.includes(m.id)).length,1);
   }finally{side.close();}
   const expected=golden(namespaces,'catching_up','resume_pending',durable,'unavailable','stale');

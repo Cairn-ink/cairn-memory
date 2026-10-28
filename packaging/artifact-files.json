@@ -302,6 +302,7 @@
   "core/context-product-manifest.mjs",
   "core/context-product-service.mjs",
   "core/context-product-sidecar.mjs",
+  "core/context-product-quantum.mjs",
   "core/context-product-sqlite.mjs",
   "core/context-product-index.mjs",
   "core/context-product-pump.mjs",

@@ -11,9 +11,11 @@ import { scoreBM25, rankScores } from './context-read-bm25.mjs';
 import { PRODUCT_PROFILE } from './context-product-control.mjs';
 import { contextReadSet } from './context-read-input.mjs';
 import { canonicalJson, digest, projectionDigest, signedRecord, verifiedRecord } from './context-product-validation.mjs';
+import { maintenanceQuantum } from './context-product-quantum.mjs';
 import { ManifestHash } from './context-product-manifest.mjs';
 import { fail } from './validation.mjs';
 
+export const PRODUCT_SIDECAR_FORMAT = 2;
 export const PRODUCT_SIDECAR_SUFFIX = '.context-read-product-v1.1.sqlite';
 const APPLICATION_ID = 0x43525032;
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
@@ -41,15 +43,17 @@ function projection(p) {
 }
 const ddl = `
 CREATE TABLE product_metadata(singleton INTEGER PRIMARY KEY CHECK(singleton=1),store_id TEXT NOT NULL,profile TEXT NOT NULL,incarnation TEXT NOT NULL,kind TEXT NOT NULL) STRICT;
-CREATE TABLE generations(id TEXT PRIMARY KEY,projection TEXT NOT NULL,incarnation TEXT NOT NULL,sequence INTEGER NOT NULL,base_sequence INTEGER NOT NULL,checkpoint INTEGER NOT NULL,kind TEXT NOT NULL,fences TEXT NOT NULL,access TEXT NOT NULL,phase INTEGER NOT NULL,last_key TEXT NOT NULL,base_id TEXT,verify TEXT NOT NULL,manifest TEXT,published INTEGER NOT NULL,seed TEXT NOT NULL) STRICT;
+CREATE TABLE generations(storage_id INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL UNIQUE,owner TEXT NOT NULL,projection TEXT NOT NULL,incarnation TEXT NOT NULL,sequence INTEGER NOT NULL,base_sequence INTEGER NOT NULL,checkpoint INTEGER NOT NULL,kind TEXT NOT NULL,fences TEXT NOT NULL,access TEXT NOT NULL,phase INTEGER NOT NULL,last_key TEXT NOT NULL,base_id TEXT,verify TEXT NOT NULL,manifest TEXT,published INTEGER NOT NULL,seed TEXT NOT NULL) STRICT;
 CREATE TABLE publications(projection TEXT PRIMARY KEY,generation TEXT NOT NULL,publication TEXT NOT NULL) STRICT;
 CREATE TABLE work(projection TEXT PRIMARY KEY,generation TEXT NOT NULL) STRICT;
-CREATE TABLE validation_records(publication TEXT PRIMARY KEY,record TEXT NOT NULL) STRICT;
+CREATE TABLE validation_records(publication TEXT PRIMARY KEY,generation TEXT NOT NULL UNIQUE,record TEXT NOT NULL) STRICT;
 CREATE TABLE progress_records(generation TEXT PRIMARY KEY,record TEXT NOT NULL) STRICT;
-CREATE TABLE documents(generation TEXT NOT NULL,stream INTEGER NOT NULL,id TEXT NOT NULL,identity TEXT NOT NULL,revision INTEGER NOT NULL,body_revision INTEGER NOT NULL,eligible INTEGER NOT NULL CHECK(eligible IN(0,1)),representation TEXT NOT NULL,token_length INTEGER NOT NULL CHECK(token_length>=0),PRIMARY KEY(generation,stream,id),UNIQUE(generation,identity)) STRICT;
-CREATE TABLE postings(generation TEXT NOT NULL,stream INTEGER NOT NULL,id TEXT NOT NULL,identity TEXT NOT NULL,term TEXT NOT NULL,frequency INTEGER NOT NULL CHECK(frequency>0),PRIMARY KEY(generation,identity,term),FOREIGN KEY(generation,stream,id) REFERENCES documents(generation,stream,id)) STRICT;
-CREATE INDEX product_term ON postings(generation,term,identity);
-CREATE TABLE statistics(generation TEXT NOT NULL,term TEXT NOT NULL,df INTEGER NOT NULL,n INTEGER NOT NULL,total_length INTEGER NOT NULL,PRIMARY KEY(generation,term)) STRICT;
+CREATE TABLE selections(projection TEXT PRIMARY KEY,owner TEXT NOT NULL,types TEXT NOT NULL,intent TEXT NOT NULL) STRICT;
+CREATE TABLE documents(generation INTEGER NOT NULL,doc INTEGER NOT NULL CHECK(doc > 0),stream INTEGER NOT NULL,id TEXT NOT NULL,identity TEXT NOT NULL,revision INTEGER NOT NULL,body_revision INTEGER NOT NULL,eligible INTEGER NOT NULL CHECK(eligible IN(0,1)),token_length INTEGER NOT NULL CHECK(token_length>=0),PRIMARY KEY(generation,doc),UNIQUE(generation,stream,id),UNIQUE(generation,identity)) STRICT, WITHOUT ROWID;
+CREATE TABLE postings(generation INTEGER NOT NULL,doc INTEGER NOT NULL CHECK(doc > 0),term INTEGER NOT NULL,frequency INTEGER NOT NULL CHECK(frequency>0),position INTEGER NOT NULL CHECK(position>0),PRIMARY KEY(generation,doc,term),FOREIGN KEY(generation,doc) REFERENCES documents(generation,doc)) STRICT, WITHOUT ROWID;
+CREATE INDEX product_term ON postings(generation,term,doc);
+CREATE INDEX product_document_order ON postings(generation,doc,position,term,frequency);
+CREATE TABLE statistics(generation INTEGER NOT NULL,term_id INTEGER NOT NULL,term TEXT NOT NULL,df INTEGER NOT NULL,n INTEGER NOT NULL,total_length INTEGER NOT NULL,verified_df INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(generation,term_id),UNIQUE(generation,term)) STRICT, WITHOUT ROWID;
 `;
 // Compare constant-size physical metadata, including actual index definitions.
 // Never infer a format from user_version alone, or scan a content table here.
@@ -62,7 +66,7 @@ const expectedSchema = ddl.trim().split(';').filter(sql => sql.trim()).map(sql =
 }).sort((a,b) => Buffer.compare(Buffer.from(a.type),Buffer.from(b.type)) || Buffer.compare(Buffer.from(a.name),Buffer.from(b.name)));
 function attest(db) {
   if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID ||
-      db.prepare('PRAGMA user_version').get().user_version !== 1 || !same(schema(db), expectedSchema)) unavailable('incompatible');
+      db.prepare('PRAGMA user_version').get().user_version !== PRODUCT_SIDECAR_FORMAT || !same(schema(db), expectedSchema)) unavailable('incompatible');
 }
 export function productFile(path, optional = false) {
   let s;
@@ -104,7 +108,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   now = () => performance.now(), rendezvous = () => {} }) {
   features={...features,reviews:features.cards,receipts:features.cards};
   const sidePath = path + PRODUCT_SIDECAR_SUFFIX;
-  let side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0;
+  let sideFormat, side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0;
   const lockPath=sidePath+'.lifecycle-lock.sqlite';
   const stamp=()=>{const s=sqliteFileStat(sidePath);return [s.dev,s.ino,s.size,s.mtimeNs,s.ctimeNs].join(':');};
   function acquire(createLock=false) {
@@ -175,6 +179,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         } catch(error) {try{close();}catch{}throw error;}
       } else auxiliaries(sidePath, wantsWrite);
       if (create) read(() => {
+        sideFormat=side.prepare('PRAGMA user_version').get().user_version;
         metadata=side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
         if (!metadata || metadata.store_id!==identity.storeId) unavailable('wrong_store');
         attest(side);
@@ -197,7 +202,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     }
     const admittedIdentity=productFile(sidePath), files=sqlite?.files(sidePath);
     let candidate=openNative(wantsWrite), admittedMetadata;
-    sideMode=undefined;
+    sideMode=undefined;sideFormat=undefined;
     try {
       if(sqlite){
         const native=candidate;candidate=null; // open() disposes a refused native handle.
@@ -211,8 +216,10 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         candidate.prepare('PRAGMA schema_version').get();files?.();
         if(!same(admittedIdentity,productFile(sidePath)))unavailable('storage_unavailable');
         rendezvous('snapshot');
+        sideFormat=candidate.prepare('PRAGMA user_version').get().user_version;
         admittedMetadata=candidate.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
         if(!admittedMetadata || admittedMetadata.store_id!==identity.storeId)unavailable('wrong_store');
+        if (sideFormat === 1) unavailable('incompatible');
         attest(candidate);
         if(admittedMetadata.profile!==PRODUCT_PROFILE)unavailable('incompatible');
         if(wantsWrite && (candidate.prepare('PRAGMA quick_check').get().quick_check!=='ok' || candidate.prepare('PRAGMA foreign_key_check').get()))unavailable('corrupt');
@@ -221,9 +228,9 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     side=candidate;sideWritable=wantsWrite;sideFiles=files;openedIdentity=admittedIdentity;metadata=admittedMetadata;
     return true;
   }
-  const initialization=()=>({...(sqlite ? {journalMode:sidecarJournalMode} : {}),sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=1; ${ddl}`,
+  const initialization=()=>({autoVacuum:'INCREMENTAL',...(sqlite ? {journalMode:sidecarJournalMode} : {}),sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=${PRODUCT_SIDECAR_FORMAT}; ${ddl}`,
     storeId:identity.storeId,profile:PRODUCT_PROFILE,incarnation:randomUUID(),
-    attestation:{applicationId:APPLICATION_ID,schema:expectedSchema}});
+    attestation:{applicationId:APPLICATION_ID,userVersion:PRODUCT_SIDECAR_FORMAT,schema:expectedSchema}});
   const sideIdentity = () => ({ ...productFile(sidePath), incarnation: metadata.incarnation,
     schemaVersion: side.prepare('PRAGMA schema_version').get().schema_version });
   function target(p, access) {
@@ -234,7 +241,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   function recordBindings(r, t, progress = false) {
     if (r.storeId !== identity.storeId) return 'wrong_store';
     if (r.projectionDigest !== t.projectionDigest) return 'validation_invalid';
-    if (progress ? r.canonicalIdentityDigest !== digest(t.canonical) || r.sidecarIdentityDigest !== digest(t.sidecar)
+    if (progress ? r.canonicalIdentityDigest !== digest(t.canonical) || r.sidecarIdentityDigest !== digest({format:PRODUCT_SIDECAR_FORMAT,...t.sidecar})
       : !same(r.canonical,t.canonical) || !same(r.sidecar,t.sidecar) || r.tokenizer !== TOKENIZER_VERSION || r.representation !== REPRESENTATION_VERSION) return 'validation_invalid';
     if (r.accessDigest !== t.accessDigest) return 'access_changed';
     if (r.dependencyFenceDigest !== t.dependencyFenceDigest) return 'dependency_changed';
@@ -308,7 +315,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     // A changed verification checkpoint cannot be used to mint a certificate.
     g.incarnation=incarnationOf(g);
     const record = signedRecord(identity.cursorSecret,'progress',{ version:'context-index-progress-v1',profile:PRODUCT_PROFILE,storeId:identity.storeId,
-      canonicalIdentityDigest:digest(t.canonical),sidecarIdentityDigest:digest(t.sidecar),projectionDigest:g.projection,accessDigest:g.access,
+      canonicalIdentityDigest:digest(t.canonical),sidecarIdentityDigest:digest({format:PRODUCT_SIDECAR_FORMAT,...t.sidecar}),projectionDigest:g.projection,accessDigest:g.access,
       ...JSON.parse(g.fences),generation:{ id:g.id,incarnation:g.incarnation },kind:g.kind,progress:progressOf(g) });
     if (Buffer.byteLength(record)>4096) fail('context_item_too_large');
     side.prepare('INSERT OR REPLACE INTO progress_records VALUES(?,?)').run(g.id,record);
@@ -332,58 +339,198 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       eligible:Number(s.type === 'memory' ? !row.deleted && (p.intent === 'history' || row.currentness === 'current' && row.review_state !== 'awaiting')
         : contextCardEligible(support,identity,features,s.ns,row,p.intent,{ readSet:p.readSet })) }));
   }
+  const storageKey = id => {
+    const key=side.prepare('SELECT storage_id FROM generations WHERE id=?').get(id)?.storage_id;
+    if(key===undefined)unavailable('validation_missing');
+    return key;
+  };
   function put(g,stream,row,tokens,source) {
-    const s = g.streams[stream], key = JSON.stringify([...boundary(s.ns),s.type,row.id]);
-    side.prepare('INSERT INTO documents VALUES(?,?,?,?,?,?,?,?,?)').run(g.id,stream,row.id,key,row.revision,row.body_revision,row.eligible,REPRESENTATION_VERSION,tokens.length);
-    const terms = source ? side.prepare('SELECT term,frequency FROM postings WHERE generation=? AND identity=? ORDER BY term').all(source,key)
-      : [...tokens.frequencies].map(([term,frequency]) => ({ term,frequency }));
-    for (const {term,frequency} of terms) {
-      side.prepare('INSERT INTO postings VALUES(?,?,?,?,?,?)').run(g.id,stream,row.id,key,term,frequency);
-      side.prepare('INSERT INTO statistics VALUES(?,?,1,0,0) ON CONFLICT(generation,term) DO UPDATE SET df=df+1').run(g.id,term);
+    const s=g.streams[stream], key=JSON.stringify([...boundary(s.ns),s.type,row.id]);
+    const doc=side.prepare('SELECT coalesce(max(doc),0)+1 AS id FROM documents WHERE generation=?').get(g.storage_id).id;
+    side.prepare('INSERT INTO documents VALUES(?,?,?,?,?,?,?,?,?)').run(g.storage_id,doc,stream,row.id,key,row.revision,row.body_revision,row.eligible,tokens.length);
+    const terms=source ? side.prepare(`SELECT s.term,p.frequency FROM postings p JOIN statistics s
+      ON s.generation=p.generation AND s.term_id=p.term JOIN documents d ON d.generation=p.generation AND d.doc=p.doc
+      WHERE p.generation=? AND d.identity=? ORDER BY s.term`).all(storageKey(source),key)
+      : [...tokens.frequencies].map(([term,frequency])=>({term,frequency}));
+    let next=side.prepare('SELECT coalesce(max(term_id),0)+1 AS id FROM statistics WHERE generation=?').get(g.storage_id).id;
+    let position=0;
+    terms.sort((a,b)=>Buffer.compare(Buffer.from(a.term),Buffer.from(b.term)));
+    for(const {term,frequency} of terms) {
+      const termId=side.prepare('INSERT INTO statistics(generation,term_id,term,df,n,total_length) VALUES(?,?,?,1,0,0) ON CONFLICT(generation,term) DO UPDATE SET df=df+1 RETURNING term_id').get(g.storage_id,next++,term).term_id;
+      side.prepare('INSERT INTO postings VALUES(?,?,?,?,?)').run(g.storage_id,doc,termId,frequency,++position);
     }
-    side.prepare("UPDATE statistics SET n=n+?,total_length=total_length+? WHERE generation=? AND term=''").run(row.eligible,tokens.length,g.id);
+    side.prepare("UPDATE statistics SET n=n+?,total_length=total_length+? WHERE generation=? AND term='' ").run(row.eligible,tokens.length,g.storage_id);
   }
-  function verifyPage(g, p, m) {
-    const v = g.verify, hash = new ManifestHash(v.hash), phase = v.phase, last = v.last;
-    let rows;
-    if (phase === 0) rows = side.prepare('SELECT * FROM documents WHERE generation=? AND identity>? ORDER BY identity LIMIT 128').all(g.id,last[0] ?? '');
-    else if (phase === 1) rows = side.prepare('SELECT * FROM postings WHERE generation=? AND (identity,term)>(?,?) ORDER BY identity,term LIMIT 128').all(g.id,last[0] ?? '',last[1] ?? '');
-    else rows = side.prepare('SELECT * FROM statistics WHERE generation=? AND term>=? ORDER BY term LIMIT 128 OFFSET ?').all(g.id,last[0] ?? '',last.length ? 1 : 0);
-    for (const r of rows) {
-      let tuple;
-      if (phase === 0) {
-        const sum = side.prepare('SELECT coalesce(sum(frequency),0) AS n FROM postings WHERE generation=? AND identity=?').get(g.id,r.identity).n;
-        if (sum !== r.token_length || !r.eligible && sum || r.representation !== REPRESENTATION_VERSION) unavailable('corrupt');
-        tuple = ['document',JSON.parse(r.identity),r.revision,r.body_revision,r.eligible,r.representation,r.token_length];
-        v.counts.documents++; v.counts.totalTokenLength += r.token_length;
-        const type = g.streams[r.stream].type; v.counts.byType[type].eligible += r.eligible; v.counts.byType[type].indexed += r.eligible;
-        v.last = [r.identity];
-      } else if (phase === 1) {
-        if (!r.term || !side.prepare('SELECT 1 FROM documents WHERE generation=? AND stream=? AND id=? AND eligible=1').get(g.id,r.stream,r.id) ||
-            !side.prepare('SELECT 1 FROM statistics WHERE generation=? AND term=?').get(g.id,r.term)) unavailable('corrupt');
-        tuple = ['posting',JSON.parse(r.identity),r.term,r.frequency]; v.last = [r.identity,r.term];
+  function verifyPage(g, p, m, quantum) {
+    const v=g.verify;
+    if(v.phase===1 && !v.resetDone) {
+      // Counters are derived verification state, never unchecked input. Reset
+      // them in bounded primary-key ranges before counting any postings.
+      const reset=quantum.measure(()=>side.prepare(`UPDATE statistics SET verified_df=0 WHERE generation=? AND term_id IN
+        (SELECT term_id FROM statistics WHERE generation=? ${v.resetLast===undefined?'':'AND term_id>?'} ORDER BY term_id LIMIT 128)
+        RETURNING term_id`).all(g.storage_id,g.storage_id,...(v.resetLast===undefined?[]:[v.resetLast])),'verification-reset');
+      m.verifiedRows+=reset.length;
+      if(reset.length)v.resetLast=Math.max(...reset.map(row=>row.term_id));
+      if(reset.length===128)return;
+      v.resetDone=true;
+      if(!quantum.admit('verify-scan') || !quantum.admit('verification'))return;
+    }
+    const hash=new ManifestHash(v.hash), phase=v.statisticsDone ? 3 : v.phase, last=v.last;
+    let rows, exhausted=false;
+    quantum.measure(()=>{
+      if(phase===0) rows=side.prepare(`SELECT * FROM documents WHERE generation=? ${last.length?'AND identity>?':''} ORDER BY identity LIMIT 128`).all(g.storage_id,...last);
+      else if(phase===1) {
+        // Fill the same 128 logical posting rows as the manifest stream,
+        // using bounded covering integer ranges for each document. Empty
+        // documents count against a separate 128-document scan bound. Each
+        // completed document is an ordered verification item too: even an
+        // empty document must be checked before the durable cursor passes it.
+        rows=[];
+        let document=side.prepare(`SELECT * FROM documents WHERE generation=? ${last.length?`AND identity${v.documentDone?'>':'>='}?`:''} ORDER BY identity LIMIT 1`).get(g.storage_id,...(last.length?[last[0]]:[]));
+        let visited=0,postings=0;
+        while(document && postings<128 && visited++<128) {
+          const page=side.prepare(`SELECT p.term AS term_id,p.position,p.frequency,s.term FROM postings p INDEXED BY product_document_order
+            LEFT JOIN statistics s ON s.generation=p.generation AND s.term_id=p.term
+            WHERE p.generation=? AND p.doc=? AND p.position>? ORDER BY p.position LIMIT 128`).all(g.storage_id,document.doc,document.identity===last[0] ? last[1] ?? 0 : 0);
+          const selected=page.slice(0,128-postings);
+          rows.push(...selected.map(row=>({...row,document})));
+          postings+=selected.length;
+          if(postings===128)break;
+          rows.push({document,complete:true});
+          document=side.prepare('SELECT * FROM documents WHERE generation=? AND identity>? ORDER BY identity LIMIT 1').get(g.storage_id,document.identity);
+        }
+        exhausted=!document;
+      } else if(phase===2) rows=side.prepare(`SELECT * FROM statistics WHERE generation=? ${last.length?'AND term>?':''} ORDER BY term LIMIT 128`).all(g.storage_id,...last);
+      else rows=side.prepare(`SELECT p.doc,p.term,d.eligible,s.term AS text FROM postings p
+        LEFT JOIN documents d ON d.generation=p.generation AND d.doc=p.doc
+        LEFT JOIN statistics s ON s.generation=p.generation AND s.term_id=p.term
+        WHERE p.generation=? ${last.length?'AND (p.doc,p.term)>(?,?)':''} ORDER BY p.doc,p.term LIMIT 128`).all(g.storage_id,...last);
+      rendezvous('verify-scan');
+    },'verify-scan');
+    let processed=0;
+    for(const r of rows) {
+      // Scanning and the first returned row form one admission unit. A scan
+      // that used its estimate must never commit a successful empty checkpoint.
+      if(processed && !quantum.admit('verification'))break;
+      if(now()>=quantum.cutoff)fail('read_timeout');
+      quantum.measure(()=>{
+        let tuple;
+        if(phase===0) {
+          // Lookup starts after zero. Check the same domain even when a
+          // tampered file bypassed the attested DDL's CHECK constraints.
+          if(r.doc<=0)unavailable('corrupt');
+          tuple=['document',JSON.parse(r.identity),r.revision,r.body_revision,r.eligible,REPRESENTATION_VERSION,r.token_length];
+          v.counts.documents++;v.counts.totalTokenLength+=r.token_length;
+          const type=g.streams[r.stream].type;v.counts.byType[type].eligible+=r.eligible;v.counts.byType[type].indexed+=r.eligible;
+          v.last=[r.identity];
+        } else if(phase===1) {
+          if(r.document.doc<=0)unavailable('corrupt');
+          if(r.complete) {
+            if(v.documentIdentity!==undefined && v.documentIdentity!==r.document.identity)unavailable('corrupt');
+            const length=v.documentIdentity===r.document.identity ? v.documentLength : 0;
+            if(length!==r.document.token_length)unavailable('corrupt');
+            delete v.documentIdentity;delete v.documentLength;delete v.expectedLength;delete v.previousTerm;
+            v.last=[r.document.identity,0];v.documentDone=true;
+          } else {
+            if(v.documentIdentity!==r.document.identity) {
+              if(v.documentIdentity!==undefined)unavailable('corrupt');
+              v.documentIdentity=r.document.identity;v.documentLength=0;v.previousTerm='';
+            }
+            if(!r.term || !r.document.eligible || (v.previousTerm && Buffer.compare(Buffer.from(v.previousTerm),Buffer.from(r.term))>=0))unavailable('corrupt');
+            v.documentLength+=r.frequency;v.previousTerm=r.term;v.postings=(v.postings ?? 0)+1;
+            side.prepare('UPDATE statistics SET verified_df=verified_df+1 WHERE generation=? AND term_id=?').run(g.storage_id,r.term_id);
+            tuple=['posting',JSON.parse(r.document.identity),r.term,r.frequency];v.last=[r.document.identity,r.position];delete v.documentDone;
+          }
+        } else if(phase===2) {
+          const n=Object.values(v.counts.byType).reduce((sum,c)=>sum+c.eligible,0);
+          if(r.term==='' ? r.n!==n || r.total_length!==v.counts.totalTokenLength || r.df!==0 || r.verified_df!==0
+            : r.df<=0 || r.df!==r.verified_df || r.n!==0 || r.total_length!==0)unavailable('corrupt');
+          tuple=['statistics',r.term,r.df,r.n,r.total_length];if(r.term)v.counts.terms++;v.last=[r.term];
+        } else {
+          if(r.doc<=0 || r.eligible!==1 || !r.text)unavailable('corrupt');
+          v.last=[r.doc,r.term];v.checkedPostings=(v.checkedPostings ?? 0)+1;
+        }
+        if(tuple)hash.update(JSON.stringify(tuple)+'\n');m.verifiedRows++;processed++;
+        rendezvous('verify-item');
+      },'verification');
+    }
+    v.hash=hash.state();
+    if(phase===1) {
+      if(processed===rows.length && exhausted){v.phase++;v.last=[];delete v.documentDone;}
+    } else if(processed===rows.length && rows.length<128) {
+      if(phase===2) {
+        v.statisticsDone=true;v.last=[];
+        // Fold the bounded referential audit into this checkpoint when it
+        // fits. Its cursor resumes durably without adding a public phase.
+        if(quantum.admit('verify-scan') && quantum.admit('verification')) {verifyPage(g,p,m,quantum);return;}
       } else {
-        const n = Object.values(v.counts.byType).reduce((sum,c) => sum + c.eligible,0);
-        if (r.term === '' ? r.n !== n || r.total_length !== v.counts.totalTokenLength || r.df !== 0
-          : r.df !== side.prepare('SELECT count(*) AS n FROM postings WHERE generation=? AND term=?').get(g.id,r.term).n || r.n !== 0 || r.total_length !== 0) unavailable('corrupt');
-        tuple = ['statistics',r.term,r.df,r.n,r.total_length]; if (r.term) v.counts.terms++; v.last = [r.term];
+        if(phase===3 && (v.checkedPostings ?? 0)!==(v.postings ?? 0))unavailable('corrupt');
+        v.phase++;v.last=[];
       }
-      hash.update(JSON.stringify(tuple)+'\n'); m.verifiedRows++;
     }
-    v.hash = hash.state();
-    if (rows.length < 128) { v.phase++; v.last=[]; }
-    g.phase = g.streams.length + v.phase;
+    g.phase=g.streams.length+v.phase;
   }
-  function refresh(p,access,budget) {
+  // Derived retention: one most recently maintained selection per owner,
+  // exact type set and intent. Never discard the other intent or a staging
+  // generation's immutable base. All deletion slices are replayable SQLite
+  // transactions under the same lifecycle lock and service operation.
+  function selectProjection(p,t) {
+    const owner=p.readSet[0].ownerId, types=canonicalJson([...p.types].sort());
+    const old=side.prepare('SELECT projection FROM selections WHERE owner=? AND types=? AND intent=? AND projection<>? LIMIT 1').get(owner,types,p.intent,t.projectionDigest);
+    if(!old && side.prepare('SELECT 1 FROM selections WHERE projection=?').get(t.projectionDigest))return;
+    write(()=>{
+      side.prepare('INSERT OR IGNORE INTO selections VALUES(?,?,?,?)').run(t.projectionDigest,owner,types,p.intent);
+      if(old) {
+        side.prepare('DELETE FROM publications WHERE projection=?').run(old.projection);
+        side.prepare('DELETE FROM work WHERE projection=?').run(old.projection);
+        side.prepare('DELETE FROM selections WHERE projection=?').run(old.projection);
+      }
+    });
+  }
+  function collect(quantum,owner,maximum=128) {
+    let slices=0;
+    while(quantum.admit('gc') && slices++<maximum) {
+      // A read-only hint avoids empty write transactions. Only the selection
+      // repeated under BEGIN IMMEDIATE below authorizes a deletion.
+      if(!side.prepare(`SELECT 1 FROM generations g WHERE g.owner=? AND
+        NOT EXISTS(SELECT 1 FROM publications WHERE generation=g.id) AND
+        NOT EXISTS(SELECT 1 FROM work WHERE generation=g.id) AND
+        NOT EXISTS(SELECT 1 FROM generations b JOIN work w ON w.generation=b.id WHERE b.base_id=g.id) LIMIT 1`).get(owner))break;
+      rendezvous('gc-candidate');
+      let found=false;
+      quantum.measure(()=>{write(()=>{
+        const g=side.prepare(`SELECT storage_id,id FROM generations g WHERE g.owner=? AND
+        NOT EXISTS(SELECT 1 FROM publications WHERE generation=g.id) AND
+        NOT EXISTS(SELECT 1 FROM work WHERE generation=g.id) AND
+        NOT EXISTS(SELECT 1 FROM generations b JOIN work w ON w.generation=b.id WHERE b.base_id=g.id)
+        ORDER BY storage_id LIMIT 1`).get(owner);
+        if(!g)return;
+        found=true;
+        for(const [table,key] of [['postings','doc,term'],['documents','doc'],['statistics','term_id']]) {
+          const result=side.prepare(`DELETE FROM ${table} WHERE generation=? AND (${key}) IN (SELECT ${key} FROM ${table} WHERE generation=? LIMIT 128)`).run(g.storage_id,g.storage_id);
+          if(result.changes)return;
+        }
+        side.prepare('DELETE FROM validation_records WHERE generation=?').run(g.id);
+        side.prepare('DELETE FROM progress_records WHERE generation=?').run(g.id);
+        side.prepare('DELETE FROM generations WHERE id=?').run(g.id);
+      });if(found)rendezvous('gc');},'gc');
+      if(!found)break;
+    }
+    // Incremental auto-vacuum returns a bounded number of free tail pages to
+    // the volume; other free pages remain reusable by the next staging build.
+    if(quantum.admit('gc'))quantum.measure(()=>side.exec('PRAGMA incremental_vacuum(32)'),'gc');
+  }
+  function refresh(p,access,budget,quantum) {
     if (!writable) fail('invalid_input');
-    const started = now(), m = { transformed:0,canonicalRows:0,metadataBytes:0,textRows:0,textBytes:0,supportLookups:0,supportBytes:0,verifiedRows:0 };
+    const m = { transformed:0,canonicalRows:0,metadataBytes:0,textRows:0,textBytes:0,supportLookups:0,supportBytes:0,verifiedRows:0 };
     // Retain the identity whose validation failed. A different selection may
     // repair the cache before this maintainer reaches its own repair branch.
     const repairIdentity=productFile(sidePath,true),repairStamp=repairIdentity && stamp();
     try { connection(true); }
     catch(e) {
       if (!['wrong_store','incompatible','corrupt'].includes(e.reason) && !(e.code==='ERR_SQLITE_ERROR' && [1,11,26].includes(e.errcode&255))) throw e;
-      close();
+      const oldFormat = sideFormat > 0 && sideFormat !== PRODUCT_SIDECAR_FORMAT; close();
+      if (oldFormat) unavailable(e.reason==='wrong_store'?'wrong_store':'incompatible');
       // A WAL cache (or an indeterminate mode) cannot enter the legacy nolock
       // replacement protocol. Quiesce and rebuild it explicitly at the host.
       if(sqlite && sideMode!=='DELETE')unavailable('storage_unavailable');
@@ -401,9 +548,14 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       }
       connection(true);
     }
+    rendezvous('opened');
     let t = readTransaction(canonical,() => target(p,access));
+    selectProjection(p,t);
+    // Cleanup also advances during a long build or repeated target changes;
+    // it does not depend on having time left after corpus admission.
+    collect(quantum,p.readSet[0].ownerId,1);
     const observed = readTransaction(canonical,() => observe(p,access,{forWrite:true}));
-    if (observed.dto.lexical.state === 'ready') { rendezvous('noop'); return m; }
+    if (observed.dto.lexical.state === 'ready') { collect(quantum,p.readSet[0].ownerId);rendezvous('noop'); return m; }
     const w = side.prepare('SELECT generation FROM work WHERE projection=?').get(t.projectionDigest);
     let g = w && side.prepare('SELECT * FROM generations WHERE id=?').get(w.generation);
     const resumable=readTransaction(canonical,()=>observe(p,access,{forWrite:true,workOnly:true})).resumable===g?.id;
@@ -420,59 +572,67 @@ export function productSidecar({ path, db: canonical, identity, features, observ
           counts:{ byType:Object.fromEntries(['memory','card'].filter(t => p.types.includes(t)).map(t => [t,{eligible:0,indexed:0}])),documents:0,terms:0,totalTokenLength:0 } } };
       g.id=generationId(g);g.incarnation=incarnationOf(g);
       write(() => {
-        if(w && side.prepare('SELECT 1 FROM generations WHERE id=? AND projection=? AND published=0 AND NOT EXISTS(SELECT 1 FROM publications WHERE generation=generations.id)').get(w.generation,t.projectionDigest)){
-          for(const table of ['postings','documents','statistics','progress_records'])side.prepare('DELETE FROM '+table+' WHERE generation=?').run(w.generation);
-          side.prepare('DELETE FROM generations WHERE id=? AND published=0').run(w.generation);
-        }
-        side.prepare('INSERT INTO generations VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)').run(g.id,g.projection,g.incarnation,g.sequence,g.base_sequence,0,g.kind,g.fences,g.access,0,'',g.base_id,JSON.stringify(g.verify),null,g.seed);
-        side.prepare("INSERT INTO statistics VALUES(?,'',0,0,0)").run(g.id); save(g,t);
+        side.prepare('INSERT INTO generations(id,owner,projection,incarnation,sequence,base_sequence,checkpoint,kind,fences,access,phase,last_key,base_id,verify,manifest,published,seed) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)').run(g.id,p.readSet[0].ownerId,g.projection,g.incarnation,g.sequence,g.base_sequence,0,g.kind,g.fences,g.access,0,'',g.base_id,JSON.stringify(g.verify),null,g.seed);
+        g.storage_id=side.prepare('SELECT storage_id FROM generations WHERE id=?').get(g.id).storage_id;
+        side.prepare("INSERT INTO statistics(generation,term_id,term,df,n,total_length) VALUES(?,0,'',0,0,0)").run(g.storage_id); save(g,t);
       });
     } else g.verify = JSON.parse(g.verify);
     g.streams = streams(p);
-    const until = started + budget.maxMs;
-    while (now()<until && g.phase < g.streams.length && m.transformed<budget.maxItems) {
+    while (quantum.admit('scan') && quantum.admit('item') && g.phase < g.streams.length && m.transformed<budget.maxItems) {
       if (!fresh(t,p,access)) return m;
       const stream = g.streams[g.phase], maximum = stream.type === 'card' ? 1 : 128;
-      const rows = readTransaction(canonical,() => metadataRows(stream,g.last_key,maximum,p,m));
-      let units=0, pending=[], last=g.last_key;
-      for (const row of rows) {
-        if (now()>=until || m.transformed>=budget.maxItems) break;
-        const old = g.base_id && side.prepare('SELECT * FROM documents WHERE generation=? AND stream=? AND id=?').get(g.base_id,g.phase,row.id);
-        let tokens, source;
-        if (old && old.revision===row.revision && old.body_revision===row.body_revision && old.eligible===row.eligible) {
-          tokens={ length:old.token_length }; source=g.base_id;
-        } else {
-          m.transformed++;
-          const text = row.eligible ? readTransaction(canonical,() => canonical.prepare(stream.type==='memory'
-            ? `SELECT content AS text FROM memories WHERE ${where} AND id=?` : `SELECT title||char(10)||body AS text FROM private_cards WHERE ${where} AND id=?`).get(...boundary(stream.ns),row.id)?.text) : '';
-          if (typeof text !== 'string' || text.length>2000000) fail('context_item_too_large');
-          if (pending.length && units+text.length>2000000) { m.transformed--; break; }
-          units+=text.length; m.textRows+=Number(Boolean(row.eligible)); m.textBytes+=Buffer.byteLength(text); tokens=termFrequencies(text);
-        }
-        pending.push({row,tokens,source}); last=row.id;
-      }
-      const completed = pending.length===rows.length && rows.length<maximum;
-      if (!fresh(t,p,access)) return m;
+      const rows = quantum.measure(()=>{
+        const result=readTransaction(canonical,() => metadataRows(stream,g.last_key,maximum,p,m));
+        rendezvous('scan');return result;
+      },'scan');
+      if(now()>=quantum.cutoff)fail('read_timeout');
+      let units=0, processed=0, last=g.last_key;
+      // Include postings/dictionary writes in the observed item cost. Staging
+      // rows and their checkpoint commit together, even when admission yields.
       write(() => {
-        for (const item of pending) put(g,g.phase,item.row,item.tokens,item.source);
-        g.last_key=last; if (completed) {g.phase++;g.last_key='';} g.checkpoint++; save(g,t);
+        for (const row of rows) {
+          if (processed && !quantum.admit() || m.transformed>=budget.maxItems) break;
+          if(now()>=quantum.cutoff)fail('read_timeout');
+          const kept=quantum.measure(()=>{
+            const old=g.base_id && side.prepare('SELECT * FROM documents WHERE generation=? AND stream=? AND id=?').get(storageKey(g.base_id),g.phase,row.id);
+            let tokens,source;
+            if(old && old.revision===row.revision && old.body_revision===row.body_revision && old.eligible===row.eligible) {
+              tokens={length:old.token_length};source=g.base_id;
+            } else {
+              const text=row.eligible ? readTransaction(canonical,()=>canonical.prepare(stream.type==='memory'
+                ? `SELECT content AS text FROM memories WHERE ${where} AND id=?` : `SELECT title||char(10)||body AS text FROM private_cards WHERE ${where} AND id=?`).get(...boundary(stream.ns),row.id)?.text) : '';
+              if(typeof text!=='string' || text.length>2000000)fail('context_item_too_large');
+              if(processed && units+text.length>2000000)return false;
+              units+=text.length;m.transformed++;m.textRows+=Number(Boolean(row.eligible));m.textBytes+=Buffer.byteLength(text);tokens=termFrequencies(text);
+            }
+            put(g,g.phase,row,tokens,source);last=row.id;processed++;
+            rendezvous('item');return true;
+          });
+          if (!kept) break;
+        }
+        rendezvous('transformed');
+        if(!fresh(t,p,access))unavailable('fence_changed');
+        g.last_key=last;
+        if(processed===rows.length && rows.length<maximum){g.phase++;g.last_key='';}
+        g.checkpoint++;save(g,t);
       });
       rendezvous('checkpoint');
     }
-    while (g.phase>=g.streams.length && g.verify.phase<3 && now()<until) {
+    while (g.phase>=g.streams.length && g.verify.phase<3 && quantum.admit('verify-scan') && quantum.admit('verification') &&
+      (g.verify.phase!==1 || g.verify.resetDone || quantum.admit('verification-reset'))) {
       if (!fresh(t,p,access)) return m;
-      write(() => { verifyPage(g,p,m); g.checkpoint++; save(g,t); });
+      write(() => { verifyPage(g,p,m,quantum); g.checkpoint++; save(g,t); });
       rendezvous('verification');
     }
-    if (g.verify.phase===3 && now()<until && fresh(t,p,access)) {
-      if(!side.prepare("SELECT 1 FROM statistics WHERE generation=? AND term=''").get(g.id))unavailable('corrupt');
+    if (g.verify.phase===3 && quantum.admit('publication') && fresh(t,p,access)) {
+      if(!side.prepare("SELECT 1 FROM statistics WHERE generation=? AND term=''").get(g.storage_id))unavailable('corrupt');
       const publicationId=randomUUID(), manifestDigest=new ManifestHash(g.verify.hash).digest();
       // Last pre-commit canonical snapshot ends here. The independent writer
       // may commit after this check; the certificate still attests captured E.
       rendezvous('precommit');
       write(() => {
         g.checkpoint++;
-        const body={ version:'context-index-validation-v1',profile:PRODUCT_PROFILE,format:1,storeId:identity.storeId,
+        const body={ version:'context-index-validation-v1',profile:PRODUCT_PROFILE,format:PRODUCT_SIDECAR_FORMAT,storeId:identity.storeId,
           canonical:t.canonical,sidecar:t.sidecar,projectionDigest:g.projection,accessDigest:access,...JSON.parse(g.fences),
           tokenizer:TOKENIZER_VERSION,representation:REPRESENTATION_VERSION,
           generation:{id:g.id,sequence:g.sequence,checkpoint:g.checkpoint,incarnation:g.incarnation},publicationId,manifestDigest,counts:g.verify.counts };
@@ -480,46 +640,50 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         if (Buffer.byteLength(record)>16384) fail('context_item_too_large');
         verifiedRecord(identity.cursorSecret,'validation',record);
         side.prepare('UPDATE generations SET published=1,checkpoint=?,manifest=? WHERE id=?').run(g.checkpoint,manifestDigest,g.id);
-        side.prepare('INSERT INTO validation_records VALUES(?,?)').run(publicationId,record);
+        side.prepare('INSERT INTO validation_records VALUES(?,?,?)').run(publicationId,g.id,record);
         side.prepare('INSERT OR REPLACE INTO publications VALUES(?,?,?)').run(g.projection,g.id,publicationId);
         side.prepare('DELETE FROM work WHERE projection=?').run(g.projection);
       });
       rendezvous('published');
     }
+    collect(quantum,p.readSet[0].ownerId);
     return m;
   }
   function lexical(p, publication, query, limit=24) {
     if (!publication || !connection()) unavailable('missing');
+    rendezvous('lexical');
     return read(() => {
       const terms=[...new Set(tokenizeT1(query))], total=publication.counts, df=new Map(), ranked=[];
       if(!terms.length)return {rows:[],matched:0};
-      const placeholders=terms.map(()=>'?').join(','),generation=publication.generation.id,ss=streams(p);
+      const placeholders=terms.map(()=>'?').join(','),generation=storageKey(publication.generation.id),ss=streams(p);
       const N=Object.values(total.byType).reduce((n,c)=>n+c.eligible,0);
       for(const term of terms)df.set(term,side.prepare('SELECT df FROM statistics WHERE generation=? AND term=?').get(generation,term)?.df??0);
       let matched=0;
       for(const term of terms) {
-        let after='';
+        let after=0;
         while(true){
           if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
           // A native statement visits at most 128 postings from one term's
           // index range. Missing terms never walk the generation's postings;
           // eligibility and scoring happen after the bounded enumeration.
-          const rows=side.prepare(`SELECT p.identity,p.stream,p.id FROM postings p INDEXED BY product_term
-            WHERE p.generation=? AND p.term=? AND p.identity>? ORDER BY p.identity LIMIT 128`).all(generation,term,after);
+          const rows=side.prepare(`SELECT p.doc FROM postings p INDEXED BY product_term
+            WHERE p.generation=? AND p.term=(SELECT term_id FROM statistics WHERE generation=? AND term=?) AND p.doc>? ORDER BY p.doc LIMIT 128`).all(generation,generation,term,after);
           for(const row of rows){
             if(now()>=(p.deadlineAt??Infinity))fail('read_timeout');
-            const frequencies=new Map(side.prepare(`SELECT term,frequency FROM postings WHERE generation=? AND identity=? AND term IN (${placeholders})`).all(generation,row.identity,...terms).map(r=>[r.term,r.frequency]));
+            const frequencies=new Map(side.prepare(`SELECT s.term,p.frequency FROM statistics s INDEXED BY sqlite_autoindex_statistics_2 CROSS JOIN postings p
+              ON p.generation=s.generation AND p.term=s.term_id AND p.doc=?
+              WHERE s.generation=? AND s.term IN (${placeholders})`).all(row.doc,generation,...terms).map(r=>[r.term,r.frequency]));
             // Score an identity exactly once, on its first matching query term.
             // Keep the original term order for byte-identical BM25 arithmetic.
             if(terms.find(t=>frequencies.has(t))!==term)continue;
-            const document=side.prepare('SELECT revision,body_revision,token_length,eligible FROM documents WHERE generation=? AND stream=? AND id=?').get(generation,row.stream,row.id);
+            const document=side.prepare('SELECT stream,id,revision,body_revision,token_length,eligible FROM documents WHERE generation=? AND doc=?').get(generation,row.doc);
             if(!document?.eligible)continue;
             const score=scoreBM25(terms,{frequencies,length:document.token_length},{N,totalLength:total.totalTokenLength,df});
-            ranked.push({score,ref:{type:ss[row.stream].type,namespace:ss[row.stream].ns,
-              [ss[row.stream].type==='memory'?'memoryId':'cardId']:row.id,revision:document.revision,...(ss[row.stream].type==='card'?{bodyRevision:document.body_revision}:{})}});
+            ranked.push({score,ref:{type:ss[document.stream].type,namespace:ss[document.stream].ns,
+              [ss[document.stream].type==='memory'?'memoryId':'cardId']:document.id,revision:document.revision,...(ss[document.stream].type==='card'?{bodyRevision:document.body_revision}:{})}});
             rankScores(ranked);if(ranked.length>limit)ranked.pop();matched++;
           }
-          if(rows.length<128)break;after=rows.at(-1).identity;
+          if(rows.length<128)break;after=rows.at(-1).doc;
         }
       }
       return {rows:ranked,matched};
@@ -532,7 +696,12 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       try {return guarded(()=>observe(p,...args));}
       catch(e) {if(e.code==='index_unavailable')return invalid(p,e.reason);throw e;}
     },
-    refresh:(p,...args)=>{p=projection(p);return guarded(()=>refresh(p,...args),true);},
+    refresh:(p,access,budget)=>{
+      const started=now();p=projection(p);
+      const cutoff=Math.min(p.deadlineAt ?? Infinity,started+budget.maxMs);
+      const quantum=maintenanceQuantum({now,cutoff,maxMs:budget.maxMs});
+      return guarded(()=>refresh(p,access,budget,quantum),true);
+    },
     lexical:(p,...args)=>{p=projection(p);return guarded(()=>lexical(p,...args));},
     prepareObservation() {
     try {return guarded(()=>{ connection(false);return null; }); }
@@ -550,7 +719,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       if (!writable) fail('invalid_input');
       if (!connection(true)) return;
       write(() => {
-        side.exec('DELETE FROM publications; DELETE FROM work; DELETE FROM validation_records; DELETE FROM progress_records; DELETE FROM postings; DELETE FROM documents; DELETE FROM statistics; DELETE FROM generations;');
+        side.exec('DELETE FROM publications; DELETE FROM work; DELETE FROM validation_records; DELETE FROM progress_records; DELETE FROM postings; DELETE FROM documents; DELETE FROM statistics; DELETE FROM generations; DELETE FROM selections;');
         side.prepare('UPDATE product_metadata SET incarnation=?,kind=? WHERE singleton=1').run(randomUUID(),'rebuild');
       });
       metadata = side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
