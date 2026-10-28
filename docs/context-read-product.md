@@ -549,6 +549,13 @@ if renewal occurs during dispatch; neither renewal nor restart erases charges.
 Persist the full outstanding reservation before process replacement whenever
 settlement is uncertain. Counters never refund unknown work.
 
+The admission, cadence, observation-timing, miss-recovery, quantum-watchdog
+and known-usage refund rules above apply to the lexical maintenance pump. An
+embedding-enabled pump (below) does not yet implement them: it schedules a
+nominal sweep from its own ticks, treats any unsuccessful turn as terminal and
+settles USD only. Bring it to parity before qualifying or enabling semantic
+maintenance in production.
+
 A recognized canonical/dependency fence change during a batch rolls back that
 batch and returns successful `rebuilding` progress. Earlier committed batches
 survive. The pump schedules another quantum; storage, corruption, authority and
@@ -803,7 +810,8 @@ An embedding-enabled pump adds `semanticConfig`, the separate
 `semanticServiceCredential`, `firstCoverageValidation:{maxTargets,maxMs}`,
 `projections[].modes:['lexical','embeddings']`, and `maxUsd` to budgets/quantum
 plus `usedUsd` to its window. The nominal full observation sweep, including
-startup status and validation turns, must fit five seconds. Validation retains
+startup status and validation turns, must fit five seconds. This nominal sweep
+is not the lexical pump's cadence guarantee (see the scope note above). Validation retains
 time capacity after paid item/USD exhaustion; lexical turns continue when
 embedding turns are skipped for off/block/USD constraints. Window reservations
 are durable; another pump ID cannot recharge an unexpired window. Observe each
