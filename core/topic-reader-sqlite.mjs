@@ -77,20 +77,21 @@ function label(sql) {
 /** One request budget, including all opening, cached statements and fences.
  * Native waiting stays inside SQLite. No retry of a traversal or transaction;
  * a native BUSY keeps its original stage/code. */
-export function createTopicSqlitePolicy({ diagnostics = false, now = () => performance.now() } = {}) {
+export function createTopicSqlitePolicy({ diagnostics = false, now = () => performance.now(), state } = {}) {
   let until = -Infinity;
   return {
     start(deadlineAt) {
       // One absolute cutoff: reserve four normal 5ms quanta for cleanup/reply.
       // Worker startup already consumed the host's absolute request deadline.
-      until = Math.min(deadlineAt, now() + TOPIC_WAL_WAIT_MS) - TOPIC_WAL_REPLY_RESERVE_MS;
+      const cutoff = Math.min(deadlineAt, now() + TOPIC_WAL_WAIT_MS) - TOPIC_WAL_REPLY_RESERVE_MS;
+      if(state)state().until=cutoff;else until=cutoff;
     },
     database(native, wal) {
       if (!wal && !diagnostics) return native;
       let installed = 0;
       function invoke(object, method, args, stage, statement) {
         if (wal && stage !== 'close') {
-          const remaining = Math.max(0, Math.floor(until - now()));
+          const remaining = Math.max(0, Math.floor((state ? state()?.until ?? -Infinity : until) - now()));
           if (installed !== remaining) {
             try { native.exec('PRAGMA busy_timeout=' + remaining); }
             catch (error) { throw recordSqliteFailure(error, 'configure', 'reader_configuration'); }

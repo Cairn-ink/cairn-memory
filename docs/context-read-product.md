@@ -1,4 +1,4 @@
-# Product adapter: P2a, P2b, P2c and P2d
+# Product adapter: P2a–P2e
 
 Select `profile:'context-read-product-v1.1'` and `version:'context-read-v1'`
 with `openContextProductReader` from the core entry. P2a releases capabilities
@@ -7,8 +7,8 @@ v18/v20–v33 and Cards on v23–v33. P2b adds lexical candidates,
 representation-v2 assembly, index status and explicit service maintenance.
 P2c extends that path to one owner with up to 32 selected namespaces: at most
 one personal namespace and 31 projects. Reader requests use certified product
-indexes only. Semantic search remains unavailable; no provider is
-constructed. P2d adds explicitly opted-in WAL handling for the same owner-wide
+indexes only. Defaults remain lexical and construct no provider. P2e adds
+explicit hosted semantic configuration, described below. P2d adds explicitly opted-in WAL handling for the same owner-wide
 selection, subject to deployment qualification below. The legacy profile and
 sidecar remain unchanged.
 
@@ -290,12 +290,12 @@ optional ownerGeneration reuse certificates. Issuance IDs and coverage selection
 revision do not enter lexical statistics identity. A changed ownerGeneration
 makes an old certificate access-stale for a newly valid credential.
 
-### Product cache format 2 and sizing
+### Product cache format 3 and sizing
 
-The product cache now uses physical **format 2** (`PRAGMA user_version=2`),
+The product cache now uses physical **format 3** (`PRAGMA user_version=3`),
 under the same product profile and cache suffix. Validation certificates bind
-`format:2`; signed progress binds the format in its sidecar identity digest.
-Format 1 is refused as `unavailable/incompatible`, including during refresh.
+`format:3`; signed progress binds the format in its sidecar identity digest.
+Formats 1 and 2 are refused as `unavailable/incompatible`, including during refresh.
 There is no in-place conversion. To rebuild, close admissions, stop clients and
 maintenance, await all supervisor drains, and use the host's explicit cache
 discard procedure on the quiescent product sidecar and its companions. Keep
@@ -306,7 +306,7 @@ Never unlink a live cache or its WAL/SHM to resolve this refusal.
 Use **one owner-wide selection per intent**, with the exact physical type set:
 personal plus the selected authorized projects, pooled in one projection.
 Do not prebuild personal-plus-each-project combinations for owner-wide search.
-Format 2 retains the most recently maintained selection for each owner/type
+Format 3 retains the most recently maintained selection for each owner/type
 set/intent; maintaining a changed selection retires the previous selection for
 that slot. Old handles may consequently report unavailable and require the
 host's selection cutover. The other intent remains independent. Superseded
@@ -320,9 +320,24 @@ intents and mixed Chinese/Japanese/English text. Its before/after table and
 index page counts are in
 [the footprint handoff](plans/context-read-sidecar-footprint.md). Treat the
 measured ratio as sizing evidence for that corpus, rather than a universal
-capacity guarantee. Budget additional room for staging, pending GC, pinned
-reader snapshots and SQLite journals/WAL/SHM. Vector storage is separate future
-work. Measure the host's own representative text and namespace selection before
+capacity guarantee. The merged format-3 run with semantics off uses 11,968,512 B
+of sidecar against 5,197,824 B canonical storage: **2.3026×**, below the ≤5×
+lexical sizing target. Budget additional room for staging, pending GC, pinned
+reader snapshots and SQLite journals/WAL/SHM. Format 3 includes the vector
+schema even when semantics is unconfigured; its exact tables and index SQL are
+attested as one physical product format. Configuration is still required for
+text egress. The lexical integer dictionary and positive document-key domain
+remain unchanged. Vector generations have integer storage keys plus opaque IDs
+for certificate bindings; vector rows and cached embeddings reference integer
+document keys. Vector validation and signed progress bind format 3.
+
+Each enabled 1,536-dimensional embedding contributes 6,144 raw float32 bytes.
+The reusable cache and each published vector projection keep their own copy:
+roughly 12,288 raw bytes per embedded item for one intent, or 18,432 across two
+intents with cache reuse, before SQLite page/index/identity overhead. Reserve
+additional space for immutable staging, superseded certificates and pending GC.
+These are payload estimates, not measured total vector allocations. Measure the
+host's representative text, enabled vectors and namespace selection before
 setting volume limits.
 
 `maxItems` is 1–1,024 transformation attempts and `maxMs` is 1–5,000 including
@@ -605,3 +620,224 @@ certificates. Keep optional ownerGeneration in current host state.
 Record the contract's separate backup, canonical verification, sidecar rebuild,
 deep verification and fresh-reader verification times and disk sizes during
 qualification. These are report-only outputs, with no invented time gate.
+
+## Explicit hosted semantics (P2e)
+
+The additive selection is `context-read-product-p2e-v1`; it keeps the profile,
+version and representation above. Omit `semanticConfig` to retain the existing
+lexical capabilities, status, serializer and execution paths. A provider alone
+never enables an owner. A configured handle still defaults each read to
+`semantic:false`. That flag performs no semantic RPC, preflight or provider
+invocation and adds no semantic trace. Fetch and continuation never embed.
+
+For the product, Revision 2 permits only this closed provider selection:
+
+```js
+const provider = {
+  provider: 'openai', model: 'text-embedding-3-small',
+  dimensions: 1536, normalization: 'l2',
+  requestTimeoutMs: 3000, maxBatchDocuments: 64,
+};
+const coordinator = await openContextSemanticCoordinator({
+  version: 'context-read-product-p2e-v1', supervisor,
+  ledgerPath, ledgerIdentity, host: semanticServiceHost, provider,
+  refreshCaps: {
+    steady: { maxItemsPerUtcDay: 2000, maxUsdPerUtcDay: '0.05' },
+    backfill: {
+      maxItemsPerUtcDay: 20000, maxUsdPerUtcDay: '0.50', maxUsdTotal: '5',
+    },
+  },
+  backfillTargets, priceTable, deadlineMs: 5000,
+});
+// Supply this only after the host's separately recorded owner approval.
+await coordinator.setOwnerSemantic({
+  ownerId, semantic: true, expectedRevision: 0,
+}, ownerSemanticCredential);
+```
+
+`ledgerPath`, identities, host wiring, targets and the reviewed price table are
+host inputs. No credential or provider key belongs in these configuration
+objects. The Worker-local host factory constructs the injected
+`contextEmbedding:{embedder,policy}` runtime port; the hosted policy retains
+`maxRequests`, `maxConcurrent`, `maxUsd` and its hosted family. The engine
+computes conservative token/cost bounds from the reviewed price table. The
+optional transport at `adapters/openai/product-embedding.mjs` exposes
+`createProductOpenAIEmbedder`; construct it inside that factory with a runtime
+credential closure and the validated selection. Its endpoint is fixed, redirects
+are refused, requests are guarded, and there are no retries or provider fallbacks.
+The transport reports validated input-token usage through `settleInputTokens`.
+
+Product-profile local selection and a local runtime with `localStatus` refuse
+`invalid_input`; no product local observer or pack is invoked. Explicit local
+`bge-m3` remains on the existing `context-read-v1` local engine and adapters under
+frozen unified §20. P2e does not alter that path.
+
+Attach the branded coordinator to maintainer options as
+`semanticConfig:{version:'context-read-product-p2e-v1',coordinator}`. Reader options
+also require `queryEmbeddingMaxMs` and `finalizeReserveMs`; both are positive,
+their sum must fit `requestControl.requestMaxMs`, and the reserve is below 5,000.
+Opening time and earlier request, method and credential cutoffs still count.
+A covered read sends exactly one query string, within the earliest provider or
+query deadline and with its finalization reserve retained. Pool the selected
+namespaces in the engine; never fuse or merge per-project results in the host.
+Hosted fusion is `rrf-k10`, depth24, equal lexical/semantic weights.
+
+## Durable ledger and independent authorities
+
+`ledgerIdentity:{accountingDomainId,ledgerId}` is a stable logical identity,
+independent of path spelling. Bind all owners using the same hosted identity to
+the same accounting ledger. The process refuses a second logical ledger for
+that identity when shared enforcement cannot be established. A SQLite ownership
+file beside the ledger serializes an owner's service incarnations across
+processes; contention refuses admission. It contains no accounting state.
+
+Before ordinary coordinator opening, the host's separate enrollment authority
+must establish durable never-bound history and provision a zero owner row and
+sequence-0 independent anchor. The internal control-plane helper
+`provisionSemanticOwner` accepts that authority; it is not a request, set-owner,
+projection-maintenance or MCP method. Keep the independent anchor registry and
+its enrollment/tombstone history outside the accounting file and vector cache.
+The runtime `semanticLedgerAuthority` supplies `load(ownerId)`,
+`compareAndSwap(expected,next)` and `listOwners({accountingDomainId,ledgerId})`.
+`listOwners` returns the complete, nonempty, duplicate-free array of owner IDs
+enrolled in that accounting domain and ledger. It must come from the same
+independently durable enrollment authority as the anchors, never from rows in
+the accounting file: shared-identity limits are enforced over this inventory,
+so a missing, restored or deleted owner row is detected instead of silently
+dropping that owner's spent exposure. An inventory that is unavailable,
+malformed or inconsistent with the ledger leaves semantic admission
+unavailable. A host without `listOwners` is refused with `invalid_input`.
+Its storage/transactions must obey the same
+SQLite file safety and bounded native-wait rules; the host receives
+`resourceOwner.sqlitePolicy` and registers owned resources for disposal.
+
+Every mutation prepares the exact next digest in the registry, commits that
+state in SQLite, then seals the anchor before dependent transmission or vector
+publication. The digest binds the owner state and physical accounting file.
+Missing anchors, empty/copied/replaced files, backward restores and mismatched
+sequence/digests cannot initialize another allowance. Pending preparations bar
+admission. After independently confirmed resource disposal, the trusted
+`confirmDisposed` recovery decision may finish an exact committed preparation
+or cancel an exact uncommitted one. A timeout or PID observation supplies no
+such proof. Failed opening returns a supervised `cleanupId`; await its drain
+before replacing the service. Loss/migration recovery requires the host's
+separate authenticated reconciliation procedure, preserving or increasing
+unknown/spent exposure, latch and epoch barriers and rotating binding/ledger
+fences. Unknown history stays lexical. There is no allowance-reset API.
+
+The host also supplies synchronous
+`semanticPriceAuthority.current({authorityId,model,utcMs})`, returning the exact
+reviewed revision, sequence, table digest and effective window. `PriceTable`
+contains those revision/window fields and
+`usdPerMillionInputTokens:{'text-embedding-3-small':Usd}`. Windows are at most one
+UTC day and are exclusive at their end. Rates and monetary budgets are decimal
+strings with at most 12 fractional digits; no live rate lookup or default rate
+exists. Admission and the immediate transmission guard both check currentness.
+Persisted authority high-water marks reject rollback. Reservations pin their
+original rate; validated cheaper usage can settle only once after actual
+execution ends. Missing/untrusted usage retains the full reservation. Over-bound
+usage blocks that provider identity. Queries share identity limits but do not
+consume the owner's refresh item/day/backfill USD pot.
+
+The host must issue an independent owner-wide `semantic-service` binding,
+allowlisting each coordinator method and binding its owner, logical ledger,
+ledger epoch and binding revision. Request and projection service credentials
+cannot read owner totals, validate first coverage, set policy or purge. Ordinary
+projection status exposes only its selected semantic counts. Configured
+capabilities require `getContextReadCapabilities({deadlineMs},credential)`;
+legacy no-argument capabilities retain their old public shape.
+
+## Coverage and refresh scheduling
+
+First complete the exact lexical projection for both intents using the existing
+explicit maintenance mode. Every fresh product cache creates the complete
+format-3 schema, including vectors, regardless of semantic configuration.
+Format-1 and format-2 caches require the stopped-client rebuild described above
+in both DELETE and WAL modes; maintenance refuses an in-place format upgrade.
+Readers never create or upgrade storage.
+
+Then use explicit bounded quanta:
+
+```js
+await maintainer.refreshContextIndex({
+  readSet, types, intent: 'current', mode: 'embeddings',
+  budget: { maxItems: 64, maxMs: 1000, maxUsd: '0.01' },
+}, projectionServiceCredential);
+```
+
+Items are 1–1,024, milliseconds 1–5,000, quantum USD 0–0.50. Zero USD permits
+no paid dispatch. A provider batch is at most 64 whole documents, with the
+configured tighter limit, UTF-8/token bounds and every applicable owner,
+identity and window limit. Smaller final batches preserve canonical order.
+Refresh never repairs missing lexical storage. Certificate publication is
+checkpointed, independently HMAC-authenticated and bound to the complete
+lexical publication, selected six-field vector identity and owner purge epoch.
+Partial staging cannot authorize hybrid reads.
+
+The initial 1–32 target descriptors expand into both intents. They freeze before
+first dispatch and cannot be dropped to obtain completion. Every embedding
+refresh records a provisional hint before its final sample. Once all targets
+hint complete, the durable pending-validation barrier blocks further backfill
+sends. Invoke the public owner-wide operation, even when item/USD budgets are
+exhausted:
+
+```js
+const ownerStatus = await coordinator.getOwnerSemanticStatus(
+  { ownerId }, ownerSemanticCredential,
+);
+await coordinator.validateOwnerSemanticCoverage({
+  ownerId, expectedTargetDigest: ownerStatus.value.firstCoverage.targetSetDigest,
+  budget: { maxTargets: 1, maxMs: 1000 },
+}, ownerSemanticCredential);
+```
+
+Repeat bounded validation quanta until complete or an explicit invalid target
+requires maintenance. Receipts survive restart; only a fresh final pass over
+all targets can latch steady mode. Validation has no provider/item/USD charge.
+Its final pass contains no callback or await; the prepared latch's anchor seal
+occurs at the next service admission. Steady limits apply to all subsequent
+work, counting the same day's earlier backfill exposure. UTC rollover cannot
+release unknown old-day charges, undo the one-way latch or reset lifetime spend.
+
+An embedding-enabled pump adds `semanticConfig`, the separate
+`semanticServiceCredential`, `firstCoverageValidation:{maxTargets,maxMs}`,
+`projections[].modes:['lexical','embeddings']`, and `maxUsd` to budgets/quantum
+plus `usedUsd` to its window. The nominal full observation sweep, including
+startup status and validation turns, must fit five seconds. Validation retains
+time capacity after paid item/USD exhaustion; lexical turns continue when
+embedding turns are skipped for off/block/USD constraints. Window reservations
+are durable; another pump ID cannot recharge an unexpired window. Observe each
+completion notification and await pump/coordinator/supervisor disposal.
+
+## Off switch, purge and degradation
+
+Disabling uses `setOwnerSemantic({ownerId,semantic:false,expectedRevision},...)`.
+It durably increments the purge epoch, bars old vector publications and new
+semantic sends, and cancels active work while preserving charges and ownership
+until actual settlement. It queues deletion rather than deleting on a read.
+While off, call `purgeOwnerVectors({ownerId,budget:{maxItems,maxMs}},...)` with
+separate owner-wide purge authority. Bounded batches cover every cataloged
+projection, intent, identity and staging/obsolete generation. Each batch commits
+its authenticated progress with deletion and pointer invalidation, so retries
+reconcile without double counting. Inaccessible entries cannot be declared
+complete. Other owners, lexical certificates and canonical data remain intact.
+Re-enable only after complete purge; refresh then restores missing vectors under
+the existing phase/day/lifetime limits. Cache purge makes no claim about hosted
+provider retention or physical media erasure.
+
+Complete exact-projection coverage and resident capacity are prerequisites to a
+query attempt. Missing/invalid/stale vectors cause zero query dispatches. With
+ready lexical storage and sufficient finalization time, provider failures,
+timeouts, price or budget denials preserve lexical identities, order, assembly
+bytes and token accounting. `trace.semantic` records coverage, attempts0/1,
+admitted query sub-budget, actual attempt time and a sanitized degradation enum.
+Authority, canonical fences, native storage and the outer deadline retain their
+existing errors. No provider body, input text, credential, vector or path enters
+these diagnostics. Default, fetch, continuation and semantic:false paths gain no
+new P2e trace. Projection status never includes refresh, purge or first-coverage
+owner progress; retrieve those only from the owner-wide coordinator.
+
+The host owns consent and privacy integration: **hosted embeddings need owner approval and the host's consent/privacy surface**. This code and fake-provider
+tests authorize no transmission or rollout. E.9 registration, real hosted
+quality/latency evidence, deployment gates and the owner's enablement decision
+remain separate from implementation.

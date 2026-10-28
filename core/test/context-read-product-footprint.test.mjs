@@ -29,7 +29,7 @@ function build(a,p=a.p) {
   assert.fail('build must finish');
 }
 
-test('format 2 uses integer postings, reconstructs identical current/history manifests and binds certificates',t=>{
+test('format 3 uses integer postings, reconstructs identical current/history manifests and binds certificates',t=>{
   const f=fixture(t),documents=[];
   for(let i=0;i<12;i++) {
     const ns=four[i%4],m=f.admit('東京 索引 orchard '+i,ns);
@@ -48,9 +48,9 @@ test('format 2 uses integer postings, reconstructs identical current/history man
   tuples.push(['statistics','',0,12,48]);
   for(const term of [...df.keys()].sort(bytes))tuples.push(['statistics',term,df.get(term),0,0]);
   assert.equal(current.manifestDigest,createHash('sha256').update(tuples.map(t=>JSON.stringify(t)+'\n').join('')).digest('base64url'));
-  assert.equal(current.format,2);
+  assert.equal(current.format,3);
   const side=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX);t.after(()=>side.close());
-  assert.equal(side.prepare('PRAGMA user_version').get().user_version,2);
+  assert.equal(side.prepare('PRAGMA user_version').get().user_version,3);
   assert.equal(side.prepare('PRAGMA auto_vacuum').get().auto_vacuum,2);
   assert.deepEqual(side.prepare('PRAGMA table_info(postings)').all().map(r=>[r.name,r.type]),
     [['generation','INTEGER'],['doc','INTEGER'],['term','INTEGER'],['frequency','INTEGER'],['position','INTEGER']]);
@@ -59,7 +59,7 @@ test('format 2 uses integer postings, reconstructs identical current/history man
   const {mac,...body}=current;
   const old=signedRecord(a.facade.port.identity.cursorSecret,'validation',{...body,format:1});
   assert.throws(()=>verifiedRecord(a.facade.port.identity.cursorSecret,'validation',old),{reason:'validation_invalid'});
-  assert.equal(verifiedRecord(a.facade.port.identity.cursorSecret,'validation',canonicalJson(current)).format,2);
+  assert.equal(verifiedRecord(a.facade.port.identity.cursorSecret,'validation',canonicalJson(current)).format,3);
   const changed=signedRecord(a.facade.port.identity.cursorSecret,'validation',{...body,representation:'unexpected'});
   side.prepare('UPDATE validation_records SET record=? WHERE publication=?').run(changed,current.publicationId);
   assert.equal(a.storage.observe(a.p,a.access).dto.lexical.reason,'validation_invalid');
@@ -99,7 +99,7 @@ test('format 1 refuses both observation and refresh without replacement; explici
   // All product/cache connections are stopped and drained. The fixture writer
   // is quiescent; explicit host discard retains the lifecycle lock.
   a.storage.close();a.facade.close();unlinkSync(f.path+PRODUCT_SIDECAR_SUFFIX);
-  assert.equal(build(local(t,f)).format,2);
+  assert.equal(build(local(t,f)).format,3);
 });
 
 test('superseded generations and old selections are collected, other intent and active delta base survive',t=>{

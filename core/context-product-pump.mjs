@@ -8,6 +8,7 @@ import { resolve } from 'node:path';
 import { serviceIssuance } from './context-product-service.mjs';
 import { credentialDigest } from './context-product-control.mjs';
 import { canonicalJson } from './context-product-validation.mjs';
+import { semanticPump } from './context-semantic-pump.mjs';
 
 const processKey=Symbol.for('context-read-product-v1.1/pumps');
 const state=()=>globalThis[processKey]??={entries:new Map(),ledgers:new Map()};
@@ -23,6 +24,7 @@ export const maintenancePumpDiagnostic=observation=>pumpDiagnostics.get(observat
 export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigint())/1e6,setTimer=setTimeout,clearTimer=clearTimeout,
   open=openContextIndexMaintainer,observedAt=maintenanceObservation}={}) {
   return function renewContextMaintenancePump(original) {
+    if(ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential','semanticConfig','semanticServiceCredential','firstCoverageValidation']).semanticConfig!==undefined)return semanticPump(original,{now,setTimer,clearTimer,open});
     const c=ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential']);
     const {owner,registry}=supervisorOwner(c.supervisor);
     if(owner.closed)fail('store_closed');

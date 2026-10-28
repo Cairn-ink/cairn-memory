@@ -445,3 +445,38 @@ Initial targeted fixture-development runs exited **1** while foreign-key bypass,
 - `core/test/context-read-product-footprint.test.mjs`
 - `docs/plans/context-read-sidecar-footprint-measurements.json`
 - `docs/plans/context-read-sidecar-footprint.md`
+
+
+## Additive format-3 integration revision
+
+**`context-read-product-v1.1/sidecar-format-3-vectors-yield-v1`**, additive to
+`context-read-product-v1.1/sidecar-format-2-yield-v1`. All accepted format-2
+text above and the frozen contract remain unchanged.
+
+The physical product identity advances to **format 3** (`user_version=3`) for
+all product hosts. Its exact schema attestation includes vector tables and index
+SQL even when semantics is unconfigured. Lexical and vector validation records
+require `format:3`; signed progress binds `{format:3,...sidecarIdentity}`.
+Format 1, format 2 and unknown positive versions refuse observation and refresh,
+with wrong-store precedence preserved. Rebuild only by the existing explicit
+stopped-client, drained, quiescent derived-cache discard procedure; neither
+DELETE nor WAL caches are migrated in place.
+
+The lexical integer layout, positive document-key CHECKs, dictionary,
+WITHOUT ROWID structures, logical manifest and one-selection retention remain.
+Vector generations retain opaque certificate IDs and use private integer storage
+keys; cached and publication vectors carry integer lexical generation/document
+references. Deep vector verification checks positive document keys and complete
+references in bounded pages, validates every completed row before advancing its
+signed cursor, and never skips an initial nonpositive or malformed key. Bounded,
+owner-filtered maintenance deletes postings and documents before vector data,
+and vector rows before their certificate/progress/generation metadata. Owner
+purge uses the same integer keys and never allocates invalid tombstone documents.
+
+Embeddings use the shared maintenance admission seam, honoring the parent cutoff
+including open, the checkpoint/finalization reserve and doubled high-water cost
+estimates. Received admitted vectors and verification progress commit on yield.
+Provider settlement and `maxUsd` accounting retain their independent controls.
+No provider is enabled by the physical schema. The integration report and its
+verification/measurement evidence are in
+[the P2e implementation report](context-read-p2e-impl.md#integration-with-sidecar-format-2).

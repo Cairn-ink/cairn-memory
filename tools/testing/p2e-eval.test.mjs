@@ -190,7 +190,10 @@ test('analysis macro weights primary strata equally, independent of their query 
 test('runner uses actual public product capabilities and returns blocked_dependency without a provider', async () => {
   const report = await main(['--provider','fake'], {});
   assert.equal(report.status, 'blocked_dependency'); assert.equal(report.probe.capabilities.execution, 'worker');
-  assert.equal(report.probe.reason, 'public_product_semantic_api_unavailable');
+  // P2e exports the API; the unchanged sealed run still has no host binding.
+  assert.equal(report.probe.reason, 'sealed_public_engine_host_binding_required');
+  assert.ok(report.probe.capabilities.unsupported.includes('semantic'));
+  assert.equal(report.probe.capabilities.semanticExtension, undefined);
   assert.equal(report.observations.length, 0); assert.equal(report.decision.enablement, 'pending');
   assert.ok(Object.values(report.safety).every(s => s.status === 'not_run'));
   const missingKey = await main(['--provider','hosted','--price-usd-per-million','1','--max-usd','1'], {});

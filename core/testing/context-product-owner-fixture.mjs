@@ -26,14 +26,18 @@ export function configured(t, path, readSet = four, { service = false, ownerCove
   } };
 }
 export async function prebuild(config, types = ['memory', 'card']) {
-  const h = await config.open(), results = [];
+  let h = await config.open(); const results = [];
   try {
     for (const intent of ['current', 'history']) {
       let complete = false;
       for (let i = 0; i < 100; i++) {
         const raw = await h.refreshContextIndex({ readSet: config.options.readSet, types, intent, mode: 'lexical', budget: { maxItems: 1024, maxMs: 5000 } }, config.token);
         // A loaded host can overrun one quantum's cutoff; committed checkpoints let the next quantum resume.
-        if (!raw.ok && raw.error?.code === 'read_timeout') continue;
+        if (!raw.ok && raw.error?.code === 'read_timeout') {
+          // Parent timeout terminates that handle. Confirm its disposal before
+          // a fresh maintainer resumes the already committed checkpoint.
+          await h.close(); h = await config.open(); continue;
+        }
         const result = ok(raw);
         if (result.status === 'complete') { results.push(result); complete = true; break; }
       }
