@@ -1073,105 +1073,73 @@ primary to review and commit. All started verification/rehearsal processes have
 exited; this handoff establishes no background continuation or notification job.
 
 
+## Fix round 3d
+
+The native engine diagnostic now uses one shared, SQLite-free
+`validateNativeVolume` rule in the harness protocol module. Before measurement,
+`validateRegistration`, `enginePlatform` (also called by
+`validateV4Registration`), `validateFilled` and `fillRegistration` require
+`volume.filesystem:"ext4"`, `volume.nonWSL:true` and
+`volume.production:false`. A present top-level `filesystem` must equal the
+volume declaration. Contradictory mirrors and production-volume declarations
+are rejected with `native_volume_declaration`, as is an explicit
+`volume.productionEquivalent:true` claim required to be rejected by R3.6.
+Runtime Linux/non-WSL/ext4 corroboration remains byte-exact; WSL2, APFS and production-role admission rules
+are unchanged. A truthful native revision-1 registration still has
+`qualifying:false`, `diagnostic:true` and its revision-mismatch reason.
+
+The existing author's `q3c.test.mjs` now contains `Q3d native volume declarations
+are checked at every admission point`: five positive controls and **30 rejection
+controls** (all five admission functions × production true, nonWSL false,
+nonWSL missing, non-ext4 filesystem, contradictory top-level mirror and the
+R3.6 equivalence-claim control).
+Additional controls exercise an absent optional mirror, diagnostic flags and
+unchanged WSL2/APFS admission. No older-session test was edited.
+
+Two exclusively owned detached `fad2c39d` worktrees received only the updated
+test, first for the four requested violation types and then including the
+explicit R3.6 equivalence claim. Creation exited **0 / 0**, their focused
+regressions exited **1 / 1**, and removal exited **0 / 0**. In the final baseline
+all 30 rejection controls failed because admission accepted the declarations.
+Both fixed focused runs exited **0** (31 tests initially, all **36** after the
+equivalence control). Counter dependencies were reused offline; no dependency
+installation, network, fetch, engine runtime edit, key use or commit occurred.
+
+Every entry below is an actual process exit code. File runs used the matching
+nvm Node/PATH with `node --experimental-vm-modules --test PATH`; package runs
+used offline npm and the default local pinned counter dependencies.
+
+| File / command | Node 22.16.0 | Node 24.15.0 | Node 24.22.1 |
+| --- | ---: | ---: | ---: |
+| `evaluation/context-read-qualification/test/q3c.test.mjs` | 0 | 0 | 0 |
+| `evaluation/context-read-qualification/test/q3.test.mjs` | 0 | 0 | 0 |
+| `core/test/no-raw-db-fd.test.mjs` | 0 | 0 | 0 |
+| `core/test/sqlite-lock-safety.test.mjs` | 0 | 0 | 0 |
+| `npm run test:qualification-inputs` | 0 | 0 | 0 |
+
+All **15** initial matrix processes and the **three** final-source Q3c repeats
+exited **0**. The table uses the repeat exits for Q3c. Its first runs began
+before the final equivalence-claim control; all reduced runs and Q3c repeats
+use the final source. Each final Q3c repeat passed all **47** tests. Each reduced
+package run passed
+**162 of 166 tests**, with **four intentional layout skips** and no failures.
+The focused fixed regression also exited **0**; its baseline exited **1**, with
+all five truthful controls passing and all 30 rejection controls failing.
+No full snapshot run, rehearsal or timing measurement was requested or run in
+this round. All started verification processes have exited; no background
+continuation remains. The initial handoff authoring finalizer exited **1** for
+an extra blank line at EOF; after correction its final audit exited **0**.
+
 ## Changed files, cross-checked two ways
 
-Relative to `8f336ea1`, Git's full HEAD diff (including the pending merge) plus
-untracked inventory was compared with an independent HEAD blob/mode comparison
-and filesystem discovery. Both routes agree at **82 paths**, across **2494 HEAD
-files**; exit **0**. A second comparison against the merged index separates the
-**24 authored paths** from **58 upstream integration paths**, comparing
-**2520 index entries** independently. No path was inferred from an earlier list.
-All **180 core runtime modules** match the integrated `4fd18f1a` main tree byte for byte.
-There are no authored engine runtime changes, database artifacts or older-session
-test edits. The upstream merge includes its own tests and generated files; those
-are integration, not authored changes. The main-provided runtime bundles verify
-with exit **0**; no authored bundle changes are needed. The qualification handoff
-and evaluation tooling are not entries in the shipped artifact inventory.
+Relative to `fad2c39d`, Git diff plus untracked inventory and an independent
+HEAD blob/mode comparison plus filesystem discovery agree on **6 paths**,
+checking **2522 HEAD files** (cross-check exit **0**). No engine runtime,
+older-session test, guard source, template or dependency file changed.
 
-### Authored paths
-
-- `core/test/fixtures/no-raw-db-fd-allowlist.json`
 - `docs/plans/context-read-qualification-inputs.md`
-- `evaluation/context-read-qualification/build-template.mjs`
-- `evaluation/context-read-qualification/registration.constants.json`
-- `evaluation/context-read-qualification/registration.engine.template.json`
-- `evaluation/context-read-qualification/registration.engine.template.sha256`
 - `evaluation/context-read-qualification/registration.mjs`
-- `evaluation/context-read-qualification/test/q3.test.mjs`
 - `evaluation/context-read-qualification/test/q3c.test.mjs`
-- `tools/testing/fixtures/context-product/functional-check.mjs`
-- `tools/testing/fixtures/context-product/journal-failures.mjs`
 - `tools/testing/fixtures/context-product/protocol.mjs`
-- `tools/testing/fixtures/context-product/rehearsal-checks.mjs`
-- `tools/testing/fixtures/context-product/report.mjs`
-- `tools/testing/fixtures/context-product/runner-child.mjs`
-- `tools/testing/fixtures/context-product/series.mjs`
-- `tools/testing/fixtures/context-product/storage-child.mjs`
-- `tools/testing/fixtures/context-product/v4-checkpoint-child.mjs`
-- `tools/testing/fixtures/context-product/v4-checkpoints.mjs`
-- `tools/testing/fixtures/context-product/v4-rehearsal.mjs`
 - `tools/testing/fixtures/context-product/v4-runner.mjs`
-- `tools/testing/fixtures/context-product/v4-session.mjs`
 - `tools/testing/measure-context-read-product.mjs`
-- `tools/testing/summarize-context-read-product.mjs`
-
-### Upstream integration paths
-
-- `CHANGELOG.md`
-- `README.md`
-- `README.zh-TW.md`
-- `adapters/mcp/test/context-read-product-provider.test.mjs`
-- `adapters/openai/product-embedding.mjs`
-- `core/context-product-index.mjs`
-- `core/context-product-pump.mjs`
-- `core/context-product-quantum.mjs`
-- `core/context-product-reader.mjs`
-- `core/context-product-sidecar.mjs`
-- `core/context-product-sqlite.mjs`
-- `core/context-product-validation.mjs`
-- `core/context-product-vectors.mjs`
-- `core/context-product-worker.mjs`
-- `core/context-semantic-client.mjs`
-- `core/context-semantic-coordinator.mjs`
-- `core/context-semantic-gate.mjs`
-- `core/context-semantic-gates.mjs`
-- `core/context-semantic-input.mjs`
-- `core/context-semantic-ledger.mjs`
-- `core/context-semantic-maintenance.mjs`
-- `core/context-semantic-pump.mjs`
-- `core/context-semantic-worker.mjs`
-- `core/context-vector-validation.mjs`
-- `core/index.mjs`
-- `core/test/context-read-maintenance-convergence.test.mjs`
-- `core/test/context-read-product-artifact.test.mjs`
-- `core/test/context-read-product-footprint.test.mjs`
-- `core/test/context-read-product-format3.test.mjs`
-- `core/test/context-read-product-owner.test.mjs`
-- `core/test/context-read-product-pump.test.mjs`
-- `core/test/context-read-product-semantic-gates.test.mjs`
-- `core/test/context-read-product-semantic.test.mjs`
-- `core/test/fixtures/context-maintenance-race-worker.mjs`
-- `core/test/fixtures/context-maintenance-writer.mjs`
-- `core/test/fixtures/context-product-index-worker.mjs`
-- `core/testing/context-product-owner-fixture.mjs`
-- `core/testing/context-product-test-clock-worker.mjs`
-- `core/testing/context-product-test-clock.mjs`
-- `core/testing/context-semantic-host.mjs`
-- `core/testing/context-semantic-process.mjs`
-- `core/topic-reader-sqlite.mjs`
-- `docs/codex-setup.md`
-- `docs/context-read-product.md`
-- `docs/local-memory-introduction.md`
-- `docs/plans/context-read-maintenance-convergence.md`
-- `docs/plans/context-read-p2e-impl.md`
-- `docs/plans/context-read-product.md`
-- `docs/plans/context-read-sidecar-footprint-measurements.json`
-- `docs/plans/context-read-sidecar-footprint.md`
-- `docs/plans/setup-local-mode-contract.md`
-- `packages/setup/README.md`
-- `packages/setup/runtime/engine/cairn-memory-local-preview-0.0.0-preview.1.tgz`
-- `packages/setup/runtime/engine/manifest.json`
-- `packaging/artifact-files.json`
-- `packaging/test/topic-overview-raw29.test.mjs`
-- `tools/testing/context-product-freshness.diagnostic.mjs`
-- `tools/testing/p2e-eval.test.mjs`

@@ -14,7 +14,7 @@ import { rehearseV4 } from './fixtures/context-product/v4-rehearsal.mjs';
 import { runV4,validateV4Registration } from './fixtures/context-product/v4-runner.mjs';
 import { readSegments,checkedSegments } from './fixtures/context-product/v4-checkpoints.mjs';
 import { createTestWorkspace } from './workspace.mjs';
-import { PROTOCOL, buildPlan, expandPlan, aggregate, decide, availability, freshness, population, estimatePlan, V3_DEFINITION, readerLoops, maintainerCoverage, validateDefinition } from './fixtures/context-product/protocol.mjs';
+import { PROTOCOL, buildPlan, expandPlan, aggregate, decide, availability, freshness, population, estimatePlan, V3_DEFINITION, readerLoops, maintainerCoverage, validateDefinition, validateNativeVolume } from './fixtures/context-product/protocol.mjs';
 import { configure, drain, attempt, observeLoop, probeDependencies, selectReadSet } from './fixtures/context-product/engine.mjs';
 import { fileChild, terminate, startSampler, actor } from './fixtures/context-product/actors.mjs';
 import { startWriter, recordedWriter } from './fixtures/context-product/controller.mjs';
@@ -41,6 +41,7 @@ function git(...args) {
   const r=spawnSync('git',args,{encoding:'utf8'});if(r.status!==0)throw Error('git_failed');return r.stdout.trim();
 }
 export function validateRegistration(input,{engineProfile=false}={}) {
+  validateNativeVolume(input);
   if(input.platformRole==='native-linux-ext4'&&!engineProfile)throw Error('native_platform_engine_profile_only');
   if(input.rehearsal!==undefined)throw Error('rehearsal_cannot_qualify');
   if(input.protocolDefinition?.version===V3_DEFINITION.version&&!isDeepStrictEqual(input.protocolDefinition,V3_DEFINITION))throw Error('protocol_revision_required');

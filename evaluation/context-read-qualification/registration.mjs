@@ -7,7 +7,7 @@ import { fileURLToPath,pathToFileURL } from 'node:url';
 import { validateRegistration,writerProfile } from '../../tools/testing/measure-context-read-product.mjs';
 import { validateV4Registration } from '../../tools/testing/fixtures/context-product/v4-runner.mjs';
 import { estimateV4Segment } from '../../tools/testing/fixtures/context-product/v4-plan.mjs';
-import { V3_DEFINITION } from '../../tools/testing/fixtures/context-product/protocol.mjs';
+import { V3_DEFINITION,validateNativeVolume } from '../../tools/testing/fixtures/context-product/protocol.mjs';
 import { isDeepStrictEqual } from 'node:util';
 import { counterAssets,counterConfiguration } from './counter.mjs';
 const packageRoot=dirname(fileURLToPath(import.meta.url));
@@ -18,6 +18,7 @@ export function segmentEstimates(registration) {
   });
 }
 export function validateFilled(input) {
+  validateNativeVolume(input);
   if(/PLACEHOLDER|\$\{[^}]*\}/.test(JSON.stringify(input)))throw Error('unfilled_registration');
   const templateBytes=readFileSync(new URL('./registration.engine.template.json',import.meta.url));
   if(readFileSync(new URL('./registration.engine.template.sha256',import.meta.url),'utf8')!==createHash('sha256').update(templateBytes).digest('hex')+'  registration.engine.template.json\n')throw Error('template_hash_changed');
@@ -37,6 +38,7 @@ export function validateFilled(input) {
 }
 function gitHead() {const r=spawnSync('git',['rev-parse','HEAD'],{encoding:'utf8'});if(r.status!==0)throw Error('git_exit:'+r.status);return r.stdout.trim();}
 export async function fillRegistration(hostInput,profilePath) {
+  validateNativeVolume(hostInput);
   let input=JSON.parse(readFileSync(new URL('./registration.engine.template.json',import.meta.url),'utf8'));
   const allowed=new Set(['host','volume','volumeRoot','platformRole','filesystem','profileCommit','protocolCommit','counterConfiguration']);
   for(const field of Object.keys(hostInput))if(!allowed.has(field))throw Error('host_field_not_fillable:'+field);

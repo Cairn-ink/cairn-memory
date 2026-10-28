@@ -22,7 +22,7 @@ async function load(name,overrides={},context,transform=s=>s) {
   const m=new vm.SourceTextModule(transform(readFileSync(url,'utf8')),{context,identifier:url.href,initializeImportMeta:m=>m.url=url.href,importModuleDynamically:dependency});await m.link(dependency);await m.evaluate();return m.namespace;
 }
 function registration(root,role='wsl2-ext4'){
-  const input=structuredClone(template);input.volumeRoot=root;input.platformRole=role;input.volume={id:'volume',mount:root,filesystem:'ext4',production:false};input.host={id:'host',cpu:'cpu',ramBytes:1,os:'os',owner:'operator'};
+  const input=structuredClone(template);input.volumeRoot=root;input.platformRole=role;input.volume={id:'volume',mount:root,filesystem:'ext4',production:false,...(role==='native-linux-ext4'?{nonWSL:true}:{})};input.filesystem='ext4';input.host={id:'host',cpu:'cpu',ramBytes:1,os:'os',owner:'operator'};
   input.adapterModule='data:text/javascript,export const validate=()=>true;export const validateProbe=()=>true;';return input;
 }
 async function runner(t,input,{failed=false,interrupt=Infinity}={}) {
@@ -118,4 +118,36 @@ test('Q3c-07 native revision-1 engine scores gates but stays non-qualifying; pro
   const display=JSON.parse(printed.at(-1));assert.equal(display.status,'passed');assert.equal(display.qualifying,false);assert.equal(display.diagnostic,true);
   const mergedSummary=await summarize(mergedPath,()=>{});assert.equal(mergedSummary.status,'passed');assert.equal(mergedSummary.qualifying,false);assert.equal(mergedSummary.diagnostic,true);
 
+});
+
+
+test('Q3d native volume declarations are checked at every admission point',async t=>{
+  const {validateRegistration}=await import('../../../tools/testing/measure-context-read-product.mjs');
+  const {V3_DEFINITION}=await import(new URL('protocol.mjs',harness));
+  const {enginePlatform,validateV4Registration}=await import(new URL('v4-runner.mjs',harness));
+  const {fillRegistration,validateFilled}=await import('../registration.mjs');
+  const w=createTestWorkspace(t),profile=join(w.path,'writer.json');
+  writeFileSync(profile,JSON.stringify({captureMs:25000,reviewMs:5000,provenance:'synthetic admission test'}));
+  const host={host:{id:'host',cpu:'cpu',ramBytes:1024,os:'test',owner:'operator'},volume:{id:'volume',mount:w.path,filesystem:'ext4',nonWSL:true,production:false},volumeRoot:w.path,platformRole:'native-linux-ext4'};
+  const input=await fillRegistration(host,profile);
+  const admission={
+    validateRegistration:x=>validateRegistration({...x,protocolDefinition:V3_DEFINITION},{engineProfile:true}),
+    enginePlatform:x=>enginePlatform(x,'engine','v24.22.1'),
+    validateV4Registration:x=>validateV4Registration(x,'engine'),
+    validateFilled,
+    fillRegistration:x=>fillRegistration({host:x.host,volume:x.volume,volumeRoot:x.volumeRoot,platformRole:x.platformRole,...(Object.hasOwn(x,'filesystem')?{filesystem:x.filesystem}:{})},profile),
+  };
+  for(const [name,admit] of Object.entries(admission))await t.test(name+' admits a truthful native declaration',async()=>{await admit(structuredClone(input));});
+  assert.equal(enginePlatform(input,'engine','v24.22.1').qualifying,false);assert.equal(enginePlatform(input,'engine','v24.22.1').diagnostic,true);
+  const violations={production:x=>{x.volume.production=true;},equivalence:x=>{x.volume.productionEquivalent=true;},nonWSLFalse:x=>{x.volume.nonWSL=false;},nonWSLMissing:x=>{delete x.volume.nonWSL;},filesystem:x=>{x.volume.filesystem='apfs';x.filesystem='apfs';},contradictoryMirror:x=>{x.filesystem='apfs';}};
+  for(const [name,admit] of Object.entries(admission))for(const [violation,mutate] of Object.entries(violations))await t.test(name+' rejects '+violation,async()=>{
+    const bad=structuredClone(input);mutate(bad);await assert.rejects(async()=>admit(bad),/native_volume_declaration/);
+  });
+  const noMirror=structuredClone(input);delete noMirror.filesystem;
+  assert.doesNotThrow(()=>enginePlatform(noMirror,'engine','v24.22.1'));assert.doesNotThrow(()=>validateV4Registration(noMirror,'engine'));await admission.fillRegistration(noMirror);
+  // The native-only rule leaves the earlier platform admission controls intact.
+  for(const role of ['wsl2-ext4','apfs']){
+    const other={...input,platformRole:role,volume:{...input.volume,production:true,nonWSL:false,filesystem:'apfs'},filesystem:'ext4'};
+    assert.doesNotThrow(()=>validateRegistration({...other,protocolDefinition:V3_DEFINITION},{engineProfile:true}));assert.doesNotThrow(()=>validateV4Registration(other,'engine'));
+  }
 });

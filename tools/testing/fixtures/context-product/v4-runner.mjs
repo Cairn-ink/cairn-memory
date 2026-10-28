@@ -5,7 +5,7 @@ import { createTestWorkspace } from '../../workspace.mjs';
 import claims from './v4-claims.json' with {type:'json'};
 import { V4,DEFINITIONS,buildV4Plan,estimateV4,rotatingCell } from './v4-plan.mjs';
 import { validateSessionRegistration,admissionBudget,rotationCoverage } from './v4-validation.mjs';
-import { V3_DEFINITION,PROTOCOL,aggregate } from './protocol.mjs';
+import { V3_DEFINITION,PROTOCOL,aggregate,validateNativeVolume } from './protocol.mjs';
 import { createReportSink,digest,immutable,persistFailure } from './report.mjs';
 import { selectReadSet } from './engine.mjs';
 import { build,requestSeries } from './series.mjs';
@@ -14,6 +14,7 @@ import { stateCell } from './v4-state.mjs';
 import { readSegments,checkedSegments } from './v4-checkpoints.mjs';
 import { sharedSession } from './v4-session.mjs';
 export function enginePlatform(input,profile,node=process.version) {
+  validateNativeVolume(input);
   const native=input.platformRole==='native-linux-ext4';
   if(native&&profile!=='engine')throw Error('v4_production_platform');
   const eligible=profile==='engine'&&node===input.productionNode&&['wsl2-ext4','apfs','native-linux-ext4','production-linux-ext4'].includes(input.platformRole);
