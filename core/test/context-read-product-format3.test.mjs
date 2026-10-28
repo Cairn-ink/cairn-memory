@@ -1,3 +1,4 @@
+import { testClock } from '../testing/context-product-test-clock.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
@@ -24,7 +25,7 @@ function setup(t,count=3) {
   const lexical=build(),db=new DatabaseSync(f.path+PRODUCT_SIDECAR_SUFFIX);
   t.after(()=>{db.close();storage.close();facade.close();});
   const vectors=productVectors({storage,facade});
-  const quantum=()=>maintenanceQuantum({now:()=>0,cutoff:5000,maxMs:5000});
+  const quantum=()=>maintenanceQuantum({now:testClock.now,cutoff:testClock.now()+5000,maxMs:5000});
   const put=(publication=lexical,selection=p)=>{for(let i=0;i<100;i++){const rows=vectors.plan(selection,publication,snapshot,64);if(!rows.length)return;vectors.put(selection,publication,snapshot,rows,rows.map(()=>{const v=Array(1536).fill(0);v[0]=1;return v;}));}assert.fail('vector planning must finish');};
   return {f,facade,storage,p,access,build,lexical,db,vectors,put,quantum};
 }
@@ -50,17 +51,17 @@ test('format 3 certifies integer-key vectors, preserves lexical manifest and ran
 
 // One transaction per deterministic quantum exposes the production checkpoint
 // between construction and verification, without a timing gate or fake state.
-function staged(a) {
-  let clock=0;
+function staged(a,t) {
+  let clock=0;testClock.bind(t,()=>clock);
   const storage={...a.storage,vectors(work,mutation){const result=a.storage.vectors(work,mutation);if(mutation)clock=900;return result;}};
   const vectors=productVectors({storage,facade:a.facade});
-  const step=()=>{clock=0;return vectors.certify(a.p,a.lexical,snapshot,maintenanceQuantum({now:()=>clock,cutoff:1000,maxMs:1000}));};
+  const step=()=>{clock=0;return vectors.certify(a.p,a.lexical,snapshot,maintenanceQuantum({now:testClock.now,cutoff:testClock.now()+1000-clock,maxMs:1000}));};
   a.put();assert.equal(step(),false);
   assert.equal(JSON.parse(a.db.prepare('SELECT state FROM vector_generations').get().state).body.phase,1);
   return {vectors,step};
 }
 for(const doc of [-1,0,999999])test(`format 3 deep vector verification rejects ${doc<=0?'nonpositive':'orphan'} document key ${doc}`,t=>{
-  const a=setup(t),s=staged(a);
+  const a=setup(t),s=staged(a,t);
   a.db.exec('PRAGMA ignore_check_constraints=ON');
   a.db.prepare('UPDATE vector_rows SET doc=? WHERE doc=(SELECT min(doc) FROM vector_rows)').run(doc);
   assert.throws(()=>s.step(),{code:'index_unavailable'});
@@ -68,16 +69,16 @@ for(const doc of [-1,0,999999])test(`format 3 deep vector verification rejects $
   assert.equal(a.db.prepare('SELECT count(*) n FROM vector_publications').get().n,0);
 });
 for(const doc of [-1,0,999999])test(`format 3 deep cache audit rejects physical document key ${doc}`,t=>{
-  const a=setup(t),s=staged(a);a.db.exec('PRAGMA ignore_check_constraints=ON');
+  const a=setup(t),s=staged(a,t);a.db.exec('PRAGMA ignore_check_constraints=ON');
   a.db.prepare('UPDATE semantic_vectors SET doc=? WHERE doc=(SELECT min(doc) FROM semantic_vectors)').run(doc);
   assert.equal(s.step(),false);assert.throws(()=>s.step(),{code:'index_unavailable'});
   assert.equal(a.db.prepare('SELECT count(*) n FROM vector_validation_records').get().n,0);
 });
 
 test('format 3 vector verification commits every admitted row before advancing a partial cursor',t=>{
-  const a=setup(t,130);a.put();let clock=600,checked=0;
+  const a=setup(t,130);a.put();let clock=600,checked=0;testClock.bind(t,()=>clock);
   const q=()=>{
-    const quantum=maintenanceQuantum({now:()=>clock,cutoff:1000,maxMs:1000});
+    const quantum=maintenanceQuantum({now:testClock.now,cutoff:testClock.now()+1000-clock,maxMs:1000});
     return {...quantum,measure(work,kind){return quantum.measure(()=>{const r=work();if(kind==='vector-scan')clock+=100;if(kind==='vector-verification'){clock+=70;checked++;}return r;},kind);}};
   };
   let done=false,prior=0;
@@ -114,7 +115,7 @@ test('format 3 embedding quanta include open, reserve settlement, and commit rec
   const {openProductIndex}=await import('../context-product-index.mjs');
   const f=fixture(t);for(let i=0;i<5;i++)f.admit('semantic orchard '+i,four[0]);
   const facade=openContextProductFacade(f.path,{}),readSet=[four[0]],ownerCoverage=descriptor(readSet);
-  let clock=0,slow=false,sends=0,cutoffSeen,operationCutoff;
+  let clock=0,slow=false,sends=0,cutoffSeen,operationCutoff;testClock.bind(t,()=>clock);
   const access=accessDigest({ownerId:four[0].ownerId,namespaces:{readSet}});
   const semantic={configuration:{selection:{maxBatchDocuments:1}},snapshot:async()=>snapshot,gate:{enter:()=>()=>{}},async call(method,input,cutoff){
     if(method==='embed') {
@@ -129,8 +130,8 @@ test('format 3 embedding quanta include open, reserve settlement, and commit rec
     if(key==='prepare')return sql=>{const stmt=target.prepare(sql);return new Proxy(stmt,{get(s,m){const value=Reflect.get(s,m,s);return typeof value==='function'?(...args)=>{const result=Reflect.apply(value,s,args);if(slow&&m==='all'&&/SELECT \* FROM documents WHERE generation=\? AND stream=\?/.test(sql))clock+=100;return result;}:value;}});};
     const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
   }});}};
-  const options={path:f.path,facade,ownerCoverage,maintenance:true,semantic,now:()=>clock,observer,
-    operation:()=>({operationCutoffMonoNs:String(operationCutoff=process.hrtime.bigint()+1000000000n)}),
+  const options={path:f.path,facade,ownerCoverage,maintenance:true,semantic,now:testClock.now,observer,
+    operation:()=>{const operationCutoffMonoNs=String(operationCutoff=process.hrtime.bigint()+1000000000n);testClock.stall();return {operationCutoffMonoNs};},
     authorize:()=>({accessGenerations:access,check(){},envelope:fn=>fn()})};
   let index=openProductIndex(options);t.after(()=>{index.close();facade.close();});
   const base={readSet,types:['memory'],intent:'current'};
@@ -140,7 +141,7 @@ test('format 3 embedding quanta include open, reserve settlement, and commit rec
   for(let i=0;i<5;i++) {
     clock=0;index=openProductIndex(options);
     const before=sends;
-    const result=await index.run('refreshContextIndex',{...base,mode:'embeddings',budget:{maxItems:1024,maxMs:1000,maxUsd:'0.50'}},{},1000);
+    const result=await index.run('refreshContextIndex',{...base,mode:'embeddings',budget:{maxItems:1024,maxMs:1000,maxUsd:'0.50'}},{},testClock.now()+1000);
     assert.equal(result.ok,true,JSON.stringify(result));assert.equal(result.value.status,'partial');
     assert.equal(sends,before+1);assert.equal(result.value.progress.embedded,1);
     assert.ok(cutoffSeen<=operationCutoff-150000000n,'provider cutoff leaves the shared 150ms reserve');
@@ -149,7 +150,7 @@ test('format 3 embedding quanta include open, reserve settlement, and commit rec
   }
   // A later ordinary quantum certifies all received vectors without sending.
   slow=false;clock=0;index=openProductIndex(options);
-  const before=sends,result=await index.run('refreshContextIndex',{...base,mode:'embeddings',budget:{maxItems:1024,maxMs:5000,maxUsd:'0.50'}},{},5000);
+  const before=sends,result=await index.run('refreshContextIndex',{...base,mode:'embeddings',budget:{maxItems:1024,maxMs:5000,maxUsd:'0.50'}},{},testClock.now()+5000);
   assert.equal(result.ok,true,JSON.stringify(result));assert.equal(result.value.status,'complete');assert.equal(sends,before);
 });
 
@@ -163,7 +164,7 @@ test('format 3 lexical-only opening attests exact vector index SQL',t=>{
 
 
 test('format 3 deep vector verification rejects removed payloads before issuing complete coverage',t=>{
-  const a=setup(t),s=staged(a);
+  const a=setup(t),s=staged(a,t);
   a.db.exec('UPDATE vector_rows SET vector=NULL WHERE doc=(SELECT min(doc) FROM vector_rows)');
   assert.throws(()=>s.step(),{code:'index_unavailable'});
   assert.equal(a.db.prepare('SELECT count(*) n FROM vector_validation_records').get().n,0);
@@ -181,7 +182,7 @@ test('format 3 cross-intent cache reuse rejects an orphan storage generation',t=
 
 test('Integration fix round 1: 600ms open and 250ms scans commit strictly increasing embedding progress and certify',async t=>{
   const {openProductIndex}=await import('../context-product-index.mjs');
-  const a=setup(t,4);let clock=0,sends=0,scans=0,index,opened=false;
+  const a=setup(t,4);let clock=0,sends=0,scans=0,index,opened=false;testClock.bind(t,()=>clock);
   const semantic={configuration:{selection:{maxBatchDocuments:64}},snapshot:async()=>snapshot,gate:{enter:()=>()=>{}},async call(method,input){
     if(method!=='embed')return;
     sends++;clock+=20;
@@ -191,13 +192,13 @@ test('Integration fix round 1: 600ms open and 250ms scans commit strictly increa
     if(key==='prepare')return sql=>{const stmt=target.prepare(sql);return new Proxy(stmt,{get(s,m){const value=Reflect.get(s,m,s);return typeof value==='function'?(...args)=>{const r=Reflect.apply(value,s,args);if(m==='all'&&/\bFROM (documents|vector_rows|semantic_vectors)\b/.test(sql)&&/LIMIT 128/.test(sql)){clock+=250;scans++;}return r;}:value;}});};
     const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
   }});}};
-  const db=a.db,options={path:a.f.path,facade:a.facade,ownerCoverage:a.p.ownerCoverage,maintenance:true,semantic,observer,now:()=>clock,
-    operation:()=>({operationCutoffMonoNs:String(process.hrtime.bigint()+1000000000n)}),authorize:()=>({accessGenerations:a.access,check(){},envelope:fn=>fn()})};
+  const db=a.db,options={path:a.f.path,facade:a.facade,ownerCoverage:a.p.ownerCoverage,maintenance:true,semantic,observer,now:testClock.now,
+    operation:()=>{const operationCutoffMonoNs=String(process.hrtime.bigint()+1000000000n);testClock.stall();return {operationCutoffMonoNs};},authorize:()=>({accessGenerations:a.access,check(){},envelope:fn=>fn()})};
   t.after(()=>index?.close());
   let previous=null,done=false;
   for(let turn=0;turn<40&&!done;turn++) {
     clock=0;opened=false;index=openProductIndex(options);
-    const result=await index.run('refreshContextIndex',{readSet:four,types:['memory'],intent:'current',mode:'embeddings',budget:{maxItems:1024,maxMs:1000,maxUsd:'0.50'}},{},1000);
+    const result=await index.run('refreshContextIndex',{readSet:four,types:['memory'],intent:'current',mode:'embeddings',budget:{maxItems:1024,maxMs:1000,maxUsd:'0.50'}},{},testClock.now()+1000);
     assert.equal(result.ok,true,JSON.stringify(result));
     const cache=db.prepare('SELECT count(*) n FROM semantic_vectors').get().n;
     const state=db.prepare('SELECT g.state FROM vector_work w JOIN vector_generations g ON g.storage_id=w.generation').get()?.state;

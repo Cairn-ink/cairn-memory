@@ -1,3 +1,4 @@
+import { testClock } from '../testing/context-product-test-clock.mjs';
 import test,{after} from 'node:test';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import assert from 'node:assert/strict';
@@ -287,7 +288,7 @@ test('P2e-04/10/18 independent canonical manifest, HMAC and pointer oracle; inva
 test('P2e-05/13 SQLite-managed ledger, authority and owner-lock probes preserve cross-process locks',async t=>{
   const s=await setup(t);
   const locked=(path,sql)=>{
-    const run=spawnSync(process.execPath,['--input-type=module','-e',`import {DatabaseSync} from 'node:sqlite';const db=new DatabaseSync(process.argv[1]);try{db.exec(process.argv[2]);console.log('unexpected');}catch(e){console.log(e.errcode&255);}finally{if(db.isTransaction)db.exec('ROLLBACK');db.close();}`,path,sql],{encoding:'utf8',timeout:10000});
+    const run=spawnSync(process.execPath,['--input-type=module','-e',`import {DatabaseSync} from 'node:sqlite';const db=new DatabaseSync(process.argv[1]);try{db.exec(process.argv[2]);console.log('unexpected');}catch(e){console.log(e.errcode&255);}finally{if(db.isTransaction)db.exec('ROLLBACK');db.close();}`,path,sql],{encoding:'utf8'});
     assert.equal(run.status,0,run.stderr);assert.equal(run.signal,null);assert.equal(run.stdout.trim(),'5');
   };
   const authority=s.authority;authority.exec('BEGIN IMMEDIATE');
@@ -303,7 +304,7 @@ test('P2e-05/13 SQLite-managed ledger, authority and owner-lock probes preserve 
 });
 
 test('P2e-06/07/08 daily cap shrinks batch, unknown charges survive UTC rollover and steady latch',async t=>{
-  const clock=new SharedArrayBuffer(8),utc=new BigInt64Array(clock);utc[0]=BigInt(Math.floor(Date.now()/86400000)*86400000+86399500);
+  const clock=new SharedArrayBuffer(8),utc=new BigInt64Array(clock);utc[0]=BigInt(Date.UTC(2030,0,1,23,59,59,500));
   const caps={steady:{maxItemsPerUtcDay:1,maxUsdPerUtcDay:'0.0001'},backfill:{maxItemsPerUtcDay:1,maxUsdPerUtcDay:'0.0001',maxUsdTotal:'0.001'}};
   const s=await setup(t,{host:{utcClock:clock},caps});s.view[7]=3;const m=await prepared(s,{latch:false});
   assert.equal(s.view[5],1);const first=ok(await s.coordinator.getOwnerSemanticStatus({ownerId:ns.ownerId},s.token));assert.equal(first.refresh.itemsCharged,1);
@@ -363,7 +364,7 @@ test('P2e-02/11/12 one pooled four-namespace semantic list and independent k10 n
 for(const phase of ['prepare','seal'])for(const stage of ['before','after'])
 test(`P2e-05/16 actual process crash ${stage} ${phase} CAS recovers only exact anchored state`,async t=>{
   const s=await setup(t,{open:false}),options={...s.options,supervisor:undefined};
-  const child=spawnSync(process.execPath,[new URL('../testing/context-semantic-process.mjs',import.meta.url).pathname],{input:JSON.stringify({options,token:s.token,crash:{killCAS:{stage,phase,sequence:1}}}),encoding:'utf8',timeout:15000});
+  const child=spawnSync(process.execPath,[new URL('../testing/context-semantic-process.mjs',import.meta.url).pathname],{input:JSON.stringify({options,token:s.token,crash:{killCAS:{stage,phase,sequence:1}}}),encoding:'utf8'});
   assert.equal(child.error,undefined,child.stderr);assert.equal(child.status,null,child.stderr);assert.equal(child.signal,'SIGKILL');
   if(stage==='after'&&phase==='prepare'||stage==='before'&&phase==='seal')await refusedOpen(s,'index_unavailable');
   const next=await openContextSemanticCoordinator({...s.options,host:{...s.options.host,configuration:{...s.options.host.configuration,recovery:true}}});s.f.workspace.defer(()=>next.close());
@@ -373,7 +374,7 @@ test(`P2e-05/16 actual process crash ${stage} ${phase} CAS recovers only exact a
 
 test('P2e-05/08 crash after possible send retains unknown charge and never replays provider execution',async t=>{
   const s=await setup(t,{open:false}),m=s.configure(true);delete m.options.semanticConfig;
-  const child=spawnSync(process.execPath,[new URL('../testing/context-semantic-process.mjs',import.meta.url).pathname],{input:JSON.stringify({options:{...s.options,supervisor:undefined},token:s.token,maintainer:m,crash:{killAfterSend:true}}),encoding:'utf8',timeout:15000});
+  const child=spawnSync(process.execPath,[new URL('../testing/context-semantic-process.mjs',import.meta.url).pathname],{input:JSON.stringify({options:{...s.options,supervisor:undefined},token:s.token,maintainer:m,crash:{killAfterSend:true}}),encoding:'utf8'});
   assert.equal(child.error,undefined,child.stderr);assert.equal(child.signal,'SIGKILL');assert.equal(child.status,null);
   await refusedOpen(s,'read_in_progress');
   const next=await openContextSemanticCoordinator({...s.options,host:{...s.options.host,configuration:{...s.options.host.configuration,recovery:true}}});s.f.workspace.defer(()=>next.close());
@@ -397,6 +398,7 @@ test('P2e-02/05/20 query subdeadline degrades while actual provider ownership re
   // A rendezvous, rather than elapsed timing, establishes the underlying send.
   const pending=reader.findCandidates(query,r.credential);
   while(Atomics.load(s.view,10)===0)await Promise.race([Atomics.waitAsync(s.view,10,0).value,pending.then(()=>assert.equal(Atomics.load(s.view,10),1,'provider must have entered'))]);
+  await testClock.advance(2000);
   const value=ok(await pending);assert.equal(value.trace.effective,'lexical');assert.equal(value.trace.semantic.degradedReason,'timeout');assert.equal(value.trace.semantic.queryEmbeddingAttempts,1);
   const {owner}=supervisorOwner(s.supervisor),record=[...owner.records].find(r=>r.domain==='context-read-product-p2e-v1/coordinator'&&r.expiresAt===null);
   const closing=s.coordinator.close();assert.equal(s.supervisor.getCleanupStatus(record.id).providersSettled,false);
@@ -447,7 +449,7 @@ test('P2e-13/21 canonical forget during query settlement cannot return the forbi
 for(const stage of ['before','after'])test(`P2e-09 actual ${stage} sidecar purge COMMIT crash resumes authenticated checkpoint exactly once`,async t=>{
   const s=await setup(t);await prepared(s);await s.coordinator.close();
   const db=sidecar(s),expected=db.prepare('SELECT count(*) n FROM semantic_vectors').get().n+db.prepare('SELECT count(*) n FROM vector_rows').get().n;
-  const child=spawnSync(process.execPath,[new URL('../testing/context-semantic-process.mjs',import.meta.url).pathname],{input:JSON.stringify({options:{...s.options,supervisor:undefined},token:s.token,purge:true,crash:{killCommit:{stage,ordinal:1}}}),encoding:'utf8',timeout:15000});
+  const child=spawnSync(process.execPath,[new URL('../testing/context-semantic-process.mjs',import.meta.url).pathname],{input:JSON.stringify({options:{...s.options,supervisor:undefined},token:s.token,purge:true,crash:{killCommit:{stage,ordinal:1}}}),encoding:'utf8'});
   assert.equal(child.error,undefined,child.stderr);assert.equal(child.status,null,child.stderr);assert.equal(child.signal,'SIGKILL');
   const next=await openContextSemanticCoordinator({...s.options,host:{...s.options.host,configuration:{...s.options.host.configuration,recovery:true}}});s.f.workspace.defer(()=>next.close());
   let result;for(let n=0;n<20;n++){result=ok(await next.purgeOwnerVectors({ownerId:ns.ownerId,budget:{maxItems:1,maxMs:5000}},s.token));if(result.status==='complete')break;}

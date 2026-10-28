@@ -1149,3 +1149,133 @@ with baseline-tree blob hashes, filesystem bytes and an ignore-aware file walk:
 manifest/archive/source-byte inventories independently agree at **32 / 330
 files**, zero differences; the archive SHA-256 matches its manifest. All
 generated content comes from the runtime builder. No commit was created.
+
+## Integration fix round 2
+
+This round changes tests and test fixtures only. The production modules,
+operation budgets, reserves, native SQLite policy and generated bundles remain
+byte-identical to `db57fdd8`.
+
+The shared test clock is imported before product modules, since the existing
+reader factories capture their default timers during module evaluation. It
+controls `process.hrtime.bigint()`, `performance.now()`, UTC and timeout queues.
+A test-only Worker bootstrap installs that same shared monotonic domain and
+controlled timers before importing either production Worker entry point. This
+covers parent admission and acceptance, Worker bootstrap and dispatch, SQLite
+admission, coordinator/client transport, provider deadlines and cleanup. No
+production injection seam or production source change is needed.
+
+The UTC-rollover test starts at a fixed UTC instant and retains its independent
+accounting clock. Its setup, preparation and refresh now use the controlled
+monotonic domain. The progress regression binds its existing 600 ms opening,
+250 ms scan and 20 ms provider work model to every monotonic sampler, including
+the operation cutoff. Absolute cutoffs and quantum clocks use the same origin;
+restarting a quantum's elapsed-cost model preserves monotonic continuity. The
+strict committed-state assertion, 1,000 ms quantum, provider reserve and final
+certification assertions are retained.
+
+The timing audit also covers every other format-3 test, the complete public P2e
+semantic suite, the hosted-provider adapter tests, crash subprocesses and the
+competing maintenance subprocess. These use the same controlled clocks rather
+than real operation windows. This includes the 500 ms off-owner pump probe,
+ledger provisioning, purge selection and the earlier embedding reserve test.
+The query-subdeadline test advances the shared clock by 2,000 ms only after its
+provider-send rendezvous; controlled Worker timer queues then produce the
+existing timeout and ownership assertions. Crash and lock subprocesses no longer
+have machine-speed-dependent 10/15-second kill windows. Pump unit tests already
+inject clocks and timers; semantic gate and `p2e-*` evaluation tests use supplied
+numeric evidence rather than elapsed-time operation gates.
+
+### Scheduling-delay and baseline evidence
+
+The test-only `CAIRN_TEST_SCHEDULING_DELAY_MS` setting accepts 0, 300 or 2000.
+It injects an actual scheduler stall after capturing the format-3 operation
+cutoff, and before parent Worker creation and Worker entry-point import. The
+stall uses a native wait solely to simulate scheduling delay; it neither
+advances virtual time nor asserts real elapsed time. All operation timers stay
+under test control.
+
+The focused command is reproducible with either exact runtime:
+
+```sh
+CAIRN_TEST_SCHEDULING_DELAY_MS=300 "$NODE" tools/testing/run.mjs \
+  --test-reporter=tap --test-concurrency=1 \
+  --test-name-pattern='daily cap shrinks|600ms open' \
+  core/test/context-read-product-semantic.test.mjs \
+  core/test/context-read-product-format3.test.mjs
+```
+
+Repeat with `2000` for the two-second stall. Baseline checks export `e0822184`
+with `git archive` into disposable scratch, overlay only the revised tests and
+test fixtures, and run the same commands. The exported index, vector and
+semantic-maintenance production blobs were independently compared with
+`git show e0822184:<path>`: all three match exactly.
+
+On both Node 22.16.0 and 24.15.0, the baseline progress regression exits **1**
+with both injected delays: the successful partial response repeats the same
+committed state. The full nine-case integration regression matrix plus UTC case
+also exits **1** on both runtimes: **5 pass / 5 fail**, with no cancellations or
+skips. The expected failures are progress, retired/collected planning, public
+collected-generation recovery, and purge VM work. The four `put`/`certify` cases
+and UTC accounting case already pass on the baseline. UTC accounting is existing
+functional coverage, so no corresponding production red/green claim applies to
+it. No assertion was weakened to obtain either result.
+
+| Focused pair | Node 22.16.0 exit (pass) | Node 24.15.0 exit (pass) |
+| --- | ---: | ---: |
+| 300 ms injected scheduling stall | 0 (2/2) | 0 (2/2) |
+| 2,000 ms injected scheduling stall | 0 (2/2) | 0 (2/2) |
+
+All four final delay runs have zero failures, skips or cancellations. Independent
+parent/Worker probes also exit **0 / 0**: millisecond and nanosecond samples
+agree, original `workerData` survives bootstrap, and both realms' timers remain
+pending at 49 ms and fire exactly at the controlled 50 ms boundary. The focused
+work-cost/embedding-reserve/strict-progress command exits **0** on Node 22.16.0,
+**3/3 passing**. An earlier complete format-3/semantic/provider run also exits
+**0**, **104/104 passing**; the required final union below is the acceptance run.
+
+### Required verification and scope checks
+
+The exact runtime version probes exit **0 / 0**, reporting **v22.16.0 /
+v24.15.0**. Required groups use each runtime's toolchain first on PATH, npm
+offline mode, and direct child exit-code capture:
+
+```sh
+"$NODE" tools/testing/run.mjs --test-reporter=tap --test-concurrency=1 <expanded paths>
+```
+
+Glob expansion is independently compared with ignore-aware `rg --files`
+enumeration: **68 required files, zero differences**. No tests were added to or
+removed from that union. The changed inventory is independently derived from
+Git diff plus untracked files and from HEAD blob hashes plus a filesystem walk:
+**8 changed paths, zero differences**. It includes both new clock fixtures,
+the semantic crash fixture, the competing maintenance fixture, the two test
+files, the provider adapter test and this plan appendix.
+
+All **180 tracked production core modules** are byte-identical to `db57fdd8`.
+The frozen engine manifest still matches **327 source hashes**; its sole
+source difference is this implementation-plan appendix. Production code and
+bundle bytes are unchanged. The runtime builder is deliberately not run in
+this test-only round; the archived plan copy remains the earlier report.
+Individual syntax checks on the **7 changed JavaScript files** exit **0** on
+both runtimes: **14 commands, 14 exits 0**. The independent inventory/source
+comparison and `git diff --check` each exit **0**. No network request, production
+clock/deadline edit, timing gate, credential, local installation path or commit
+was introduced.
+
+### Final required group exits
+
+| Expanded group | Files | Node 22.16.0 exit (pass/total) | Node 24.15.0 exit (pass/total) |
+| --- | ---: | ---: | ---: |
+| `core/test/context-read*.test.mjs` | 37 | 0 (803/803) | 0 (803/803) |
+| `core/test/topic-*.test.mjs` | 17 | 0 (238/238) | 0 (238/238) |
+| Raw-fd, SQLite lock-safety and journal-probe guards | 3 | 0 (44/44) | 0 (44/44) |
+| `adapters/mcp/test/context-read*.test.mjs` | 6 | 0 (97/97) | 0 (97/97) |
+| `packaging/test/topic-overview-raw29.test.mjs` | 1 | 0 (3/3) | 0 (3/3) |
+| `tools/testing/p2e-*.test.mjs` | 4 | 0 (36/36) | 0 (36/36) |
+
+Every final required group exits **0** on both runtimes: **1,221/1,221 passing
+cases per runtime**, with zero failures, cancellations or skips. Child statuses
+were captured directly; no pipeline or final stdout lines were used to infer
+success. All supervised runs, subprocesses and Workers finish before handoff.
+No commit was created.

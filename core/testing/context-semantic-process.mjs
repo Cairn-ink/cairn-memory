@@ -1,3 +1,4 @@
+import './context-product-test-clock.mjs';
 // An owned throwaway process: deterministic kills cannot affect the test runner.
 import { readFileSync } from 'node:fs';
 import { createContextReadSupervisor,openContextSemanticCoordinator,openContextIndexMaintainer } from '../index.mjs';
