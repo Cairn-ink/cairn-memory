@@ -16,6 +16,20 @@ const grouping = (rows, key) => {
   return map;
 };
 const actionKey = row => JSON.stringify([...boundary(row), row.action_id]);
+const sqlEffectId = value => typeof value === 'string' && /^[0-9a-f]{32}$/.test(value);
+const apiEffectId = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
+const cardTargetStates = { createCardDraft: 'draft', editCardDraft: 'draft', confirmCardDraft: 'confirmed',
+  cancelCardDraft: 'cancelled', editKnowledgeCard: 'confirmed', deleteKnowledgeCard: 'deleted' };
+// Body-target results have fixed engine semantics. Project them once; never
+// recursively interpret result fields or an organization action/target id.
+function cardHistory(operation) {
+  const result = operation.parsed, revision = result.revision, bodyRevision = result.bodyRevision;
+  if (!Object.hasOwn(cardTargetStates, operation.method) || result.id !== operation.target_id ||
+      result.state !== cardTargetStates[operation.method] || !Number.isSafeInteger(revision) || revision < 1 ||
+      !(bodyRevision === null || Number.isSafeInteger(bodyRevision) && bodyRevision > 0) ||
+      result.effectCount !== (['editCardDraft', 'editKnowledgeCard', 'cancelCardDraft', 'deleteKnowledgeCard'].includes(operation.method) ? 1 : 0)) return null;
+  return { revision, bodyRevision };
+}
 
 // A read-only, budgeted facade also bounds the existing ancestry helpers' reads.
 // No live cursor escapes; even .all is iterated/charged before materialization.
@@ -86,20 +100,32 @@ export function contentSafetyObservations(native, limits, check) {
   const operations = scan('card_operations').map(row => ({ ...row, parsed: JSON.parse(row.result) }));
   const effects = scan('card_effects'), cardEffects = grouping(effects.filter(row => row.entity_type === 'card'), row => row.entity_id);
   const actionEffects = grouping(effects, actionKey), actionOperations = grouping(operations, actionKey);
-  const cardOperations = grouping(operations, row => row.target_id);
+  const cardOperations = grouping(operations.flatMap(operation => {
+    check();
+    const history = cardHistory(operation);
+    return history ? [db.charge({ ...history, owner_id: operation.owner_id, scope: operation.scope,
+      project_id: operation.project_id, target_id: operation.target_id })] : [];
+  }), row => row.target_id);
   let rawBindings = new Map(), conversations = new Map(), exclusions = new Map(), rawDeletions = new Map();
   let sourceMaps = new Map(), mappedMessages = new Set(), messages = new Map(), fences = new Map();
-  let episodeSecret;
+  let episodeSecret, episodeLinks = new Map(), episodes = new Map(), episodeDeletions = new Map();
+  const rawCallerActions = new Set();
   if (schemaBase === 33) {
     rawBindings = grouping(scan('card_raw_bindings'), row => row.card_id);
     conversations = new Map(scan('raw_conversations').map(row => [row.id, row]));
     exclusions = grouping(scan('raw_source_exclusions'), row => JSON.stringify([row.conversation_id, row.message_id]));
     const removed = scan('raw_deletion_effects');
+    // A retained Raw writer receipt still owns its action when its operation
+    // row or root proof is lost. This is a veto, never contributor evidence.
+    for (const row of removed) if (apiEffectId(row.effect_id)) rawCallerActions.add(actionKey(row));
     const deletionKey = row => JSON.stringify([actionKey(row), row.source_type, row.source_id]);
-    const rootsDeleted = new Set(removed.filter(row => row.entity_type === row.source_type && row.entity_id === row.source_id).map(deletionKey));
+    const rootsDeleted = new Set(removed.filter(row => apiEffectId(row.effect_id) && row.entity_type === row.source_type && row.entity_id === row.source_id).map(deletionKey));
     // These joins stay inside the engine's Raw effect ledger and require its
     // typed root identity. Caller-selected Card action strings are not evidence.
-    const verified = removed.filter(row => rootsDeleted.has(deletionKey(row)));
+    const verified = removed.filter(row => apiEffectId(row.effect_id) && rootsDeleted.has(deletionKey(row)));
+    const deletionMemories = grouping(verified.filter(row => row.entity_type === 'memory'), deletionKey);
+    episodeDeletions = grouping(verified.filter(row => row.entity_type === 'episode').map(effect => ({ effect,
+      memoryIds: new Set((deletionMemories.get(deletionKey(effect)) ?? []).map(item => item.entity_id)) })), row => row.effect.entity_id);
     rawDeletions = grouping(verified.filter(row => row.source_type === 'conversation'), row => row.source_id);
     const maps = scan('raw_source_maps');
     sourceMaps = grouping(maps, row => JSON.stringify([row.conversation_id, row.message_id, row.source_key]));
@@ -109,9 +135,22 @@ export function contentSafetyObservations(native, limits, check) {
     episodeSecret = db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get().secret;
     // Examine every retained canonical source/tombstone provider, including
     // memory-only namespaces, without decrypting Raw text or invoking a writer.
-    for (const table of ['raw_receipt_lineage', 'raw_receipt_origins', 'raw_job_sources', 'raw_closed_jobs', 'episode_memory_links',
-      'episode_keep_actions', 'episode_sources', 'session_episodes']) scan(table);
-    for (const row of scan('raw_deletion_actions')) JSON.parse(row.result);
+    episodes = new Map(scan('session_episodes').map(row => [row.id, row]));
+    const links = [];
+    for (const row of scan('episode_memory_links')) {
+      const ids = JSON.parse(row.receipt_ids);
+      if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw Error();
+      for (const receiptId of new Set(ids)) links.push(db.charge({ ...row, receiptId }));
+    }
+    episodeLinks = grouping(links, row => JSON.stringify([row.memory_id, row.admission_revision, row.receiptId]));
+    for (const table of ['raw_receipt_lineage', 'raw_receipt_origins', 'raw_job_sources', 'raw_closed_jobs',
+      'episode_keep_actions', 'episode_sources']) scan(table);
+    for (const row of scan('raw_deletion_actions')) {
+      JSON.parse(row.result);
+      // Even a same-key genuine trigger is ambiguous: never authenticate a
+      // producer by a caller's string, including across separate ledgers.
+      rawCallerActions.add(actionKey(row));
+    }
     db.prepare('SELECT conversation_id,message_id,part_index,start,end,saved,digest,length(sealed) AS sealed_length FROM raw_parts').all();
   }
   const roots = schemaBase === 33 ? createRawSourceRoots(db) : null;
@@ -123,10 +162,11 @@ export function contentSafetyObservations(native, limits, check) {
     const stored = db.prepare('SELECT * FROM raw_receipt_lineage WHERE receipt_id=?').all(receipt.id);
     for (const entry of stored) spans.push({ ref: { conversationId: entry.conversation_id, messageId: entry.message_id,
       span: { start: entry.start, end: entry.end, precision: entry.precision } }, origin: 'raw_receipt_lineage', row: entry });
-    const sessions = [...authority.roots, ...(authority.possibleRoots ?? [])];
+    // Possible keep roots are candidates, never an authenticated contributor.
+    const sessions = [...authority.roots];
     // Match assertSession: expand each original identity once, never its aliases.
     if (authority.independent) sessions.push({ client: receipt.client, sessionKey: receipt.session_id });
-    if (!stored.length) for (const root of [...authority.roots, ...(authority.possibleRoots ?? [])]) {
+    if (!stored.length) for (const root of authority.roots) {
       const conversationId = root.conversationId ?? root.conversation_id;
       if (!conversationId) continue;
       const sourceKey = createHmac('sha256', Buffer.from(episodeSecret, 'hex'))
@@ -210,6 +250,20 @@ export function contentSafetyObservations(native, limits, check) {
         // retired revision nor the removed receipt ids. It cannot attribute a
         // later missing receipt to that deletion. Without retained exact Raw
         // ancestry, the missing contributor remains unknown.
+        if (!kept) for (const link of episodeLinks.get(JSON.stringify([memoryId, boundRevision, receiptId])) ?? []) {
+          check();
+          const episode = episodes.get(link.episode_id);
+          if (!episode || !sameNamespace(episode, card) || episode.deleted !== 1) continue;
+          const matched = fences.get(JSON.stringify([...boundary(card), episode.client, episode.session_key])) ?? [];
+          if (!matched.length) continue;
+          for (const removed of episodeDeletions.get(episode.id) ?? []) {
+            check();
+            if (sameNamespace(removed.effect, card) && removed.memoryIds.has(memoryId)) {
+              fact(id, 'purge', 'episode_memory_links', link);
+              fact(id, 'purge', 'raw_deletion_effects', removed.effect);
+            }
+          }
+        }
         // A newer revision and lost receipts alone also result from Raw erasure.
         // Require retained identity-linked old fingerprint evidence as well.
         if (exists && !kept && memory.revision > boundRevision) for (const old of corrections.get(memoryId) ?? []) {
@@ -249,74 +303,59 @@ export function contentSafetyObservations(native, limits, check) {
       if (exists && note.state === 'deleted') fact(id, 'purge', 'card_notes', note);
       return id;
     }
-    function refs(value, origin, row, depth = 0) {
-      check();
-      if (!value || typeof value !== 'object') return;
-      if (depth > 32) throw Error();
-      db.charge(null);
-      if (['receipt', 'memory', 'submitted-note', 'raw', 'card'].includes(value.type) && value.namespace &&
-          (value.namespace.ownerId !== card.owner_id || value.namespace.scope !== card.scope ||
-            (value.namespace.projectId ?? '') !== card.project_id)) throw Error();
-      if (value.type === 'receipt' && typeof value.memoryId === 'string' && typeof value.receiptId === 'string') memoryEdge(value.memoryId, value.memoryRevision, value.receiptId, origin, value);
-      else if (value.type === 'memory' && typeof value.memoryId === 'string') memoryEdge(value.memoryId, value.revision, null, origin, value);
-      else if (value.type === 'submitted-note' && typeof value.sourceId === 'string') noteEdge(value.sourceId, value.revision, origin, value);
-      else if (value.type === 'raw' && typeof value.conversationId === 'string') rawEdge(value, origin, value);
-      else if (value.type === 'card' && typeof value.cardId === 'string') {
-        const source = cards.find(item => item.id === value.cardId && sameNamespace(item, card));
-        const id = add('card', value.cardId, ['card-body-v1', value.bodyRevision], origin, row, { exists: Boolean(source) });
-        if (source?.state === 'deleted' || source?.state === 'cancelled') fact(id, 'purge', 'private_cards', source);
-      }
-      for (const item of Object.values(value)) if (item && typeof item === 'object') refs(item, origin, row, depth + 1);
+    function bindingRef(row, type) {
+      const ref = JSON.parse(row.source_ref), ns = ref?.namespace;
+      if (ref?.type !== type || !ns || ns.ownerId !== card.owner_id || ns.scope !== card.scope ||
+          (ns.projectId ?? '') !== card.project_id) throw Error();
+      if (type === 'receipt' && (ref.memoryId !== row.memory_id || ref.memoryRevision !== row.memory_revision ||
+          ref.receiptId !== row.receipt_id)) throw Error();
+      if (type === 'submitted-note' && (ref.sourceId !== row.source_id || !Number.isSafeInteger(ref.revision) || ref.revision < 1)) throw Error();
+      if (type === 'raw' && (ref.conversationId !== row.conversation_id || ref.messageId !== row.message_id ||
+          ref.span?.start !== row.start || ref.span?.end !== row.end)) throw Error();
+      return ref;
     }
-    for (const row of bindings.get(card.id) ?? []) { noteEdge(row.source_id, null, 'card_bindings', row); refs(JSON.parse(row.source_ref), 'card_bindings', row); }
-    for (const row of memoryBindings.get(card.id) ?? []) { memoryEdge(row.memory_id, row.memory_revision, row.receipt_id, 'card_memory_bindings', row); refs(JSON.parse(row.source_ref), 'card_memory_bindings', row); }
-    for (const row of rawBindings.get(card.id) ?? []) { rawEdge({ conversationId: row.conversation_id, messageId: row.message_id,
-      span: { start: row.start, end: row.end } }, 'card_raw_bindings', row); refs(JSON.parse(row.source_ref), 'card_raw_bindings', row); }
-    // Only these methods return the target Card. Organization result ids are
-    // action/mapping/topic identities, even when a caller chooses a Card id.
-    const cardTargetMethods = ['createCardDraft', 'editCardDraft', 'confirmCardDraft', 'cancelCardDraft', 'editKnowledgeCard', 'deleteKnowledgeCard'];
-    for (const operation of cardOperations.get(card.id) ?? []) if (sameNamespace(operation, card) &&
-        cardTargetMethods.includes(operation.method) && operation.parsed.id === card.id) refs(operation.parsed, 'card_operations', operation);
-    for (const effect of cardEffects.get(card.id) ?? []) if (sameNamespace(effect, card)) {
-      if (effect.kind !== 'evidence_invalidated') continue;
-      // The SQL revision trigger is the only producer of an unowned Card
-      // invalidation with this identity format. A caller operation owns its
-      // exact entity/revision effect (or the authenticated note batch below);
-      // its chosen action text must never be parsed as a Memory association.
-      const matchingOperations = actionOperations.get(actionKey(effect)) ?? [];
-      const callerOwned = matchingOperations.some(operation => {
-        if (['editCardDraft', 'editKnowledgeCard', 'cancelCardDraft'].includes(operation.method)) return operation.target_id === effect.entity_id && operation.parsed.id === effect.entity_id &&
-          operation.parsed.revision === effect.revision && operation.parsed.effectCount === 1;
-        if (operation.method !== 'deleteSourceNote' || operation.parsed.id !== operation.target_id || operation.parsed.state !== 'deleted') return false;
-        const terminal = (actionEffects.get(actionKey(effect)) ?? []).find(item => item.kind === 'evidence_invalidated' &&
-          item.entity_type === 'submitted-note' && item.entity_id === operation.target_id && item.revision === operation.parsed.revision);
-        return terminal && Number.isSafeInteger(operation.parsed.effectCount) && effect.ordinal < terminal.ordinal &&
-          terminal.ordinal - effect.ordinal < operation.parsed.effectCount;
-      });
-      const atBody = (cardOperations.get(card.id) ?? []).filter(operation => sameNamespace(operation, card) &&
-        cardTargetMethods.includes(operation.method) && operation.parsed.id === card.id && operation.parsed.revision < effect.revision)
-        .sort((a, b) => b.parsed.revision - a.parsed.revision)[0];
-      if (atBody?.parsed.bodyRevision !== card.body_revision) continue;
+    for (const row of bindings.get(card.id) ?? []) {
+      const ref = bindingRef(row, 'submitted-note'); noteEdge(ref.sourceId, ref.revision, 'card_bindings', row);
+    }
+    for (const row of memoryBindings.get(card.id) ?? []) {
+      const ref = bindingRef(row, 'receipt'); memoryEdge(ref.memoryId, ref.memoryRevision, ref.receiptId, 'card_memory_bindings', ref);
+    }
+    for (const row of rawBindings.get(card.id) ?? []) rawEdge(bindingRef(row, 'raw'), 'card_raw_bindings', row);
+    // Index body history once, then merge monotonically with effect revisions.
+    const history = (cardOperations.get(card.id) ?? []).filter(row => sameNamespace(row, card))
+      .sort((a, b) => a.revision - b.revision);
+    let historyPosition = 0, atBody;
+    const orderedEffects = (cardEffects.get(card.id) ?? []).slice().sort((a, b) => a.revision - b.revision || a.ordinal - b.ordinal);
+    for (const effect of orderedEffects) {
+      check();
+      db.charge(effect.ordinal);
+      if (!sameNamespace(effect, card) || effect.kind !== 'evidence_invalidated' ||
+          !Number.isSafeInteger(effect.revision) || effect.revision < 1 || effect.revision > card.revision || !Number.isSafeInteger(effect.ordinal) || effect.ordinal < 1) continue;
+      while (historyPosition < history.length && history[historyPosition].revision < effect.revision) {
+        check(); atBody = history[historyPosition++];
+      }
+      if (atBody?.bodyRevision !== card.body_revision) continue;
       const revisionEffect = /^memory-revision-(.+)-([1-9][0-9]*)$/.exec(effect.action_id);
-      if (revisionEffect && !callerOwned) {
+      if (revisionEffect && sqlEffectId(effect.effect_id) && !rawCallerActions.has(actionKey(effect))) {
         const memory = memories.get(revisionEffect[1]), revision = Number(revisionEffect[2]);
         if (memory && sameNamespace(memory, card) && Number.isSafeInteger(revision) && revision > 1 && memory.revision >= revision) {
           memoryEdge(memory.id, revision - 1, null, 'card_effects', effect);
         }
       }
+      if (!apiEffectId(effect.effect_id)) continue;
       // Only the recorded method/target and its typed source effect establish
       // note-deletion causality. An action string by itself never adds an edge.
       for (const operation of actionOperations.get(actionKey(effect)) ?? []) {
         if (operation.method !== 'deleteSourceNote' || operation.parsed.id !== operation.target_id || operation.parsed.state !== 'deleted') continue;
         const sourceEffect = (actionEffects.get(actionKey(effect)) ?? []).find(item =>
-          item.kind === 'evidence_invalidated' && item.entity_type === 'submitted-note' &&
+          apiEffectId(item.effect_id) && item.kind === 'evidence_invalidated' && item.entity_type === 'submitted-note' &&
           item.entity_id === operation.target_id && item.revision === operation.parsed.revision);
         // deleteSourceNote emits its dependent Card effects immediately before
         // the terminal note effect and records their exact batch size. This
         // excludes automatic effects from another ledger reusing the string.
         if (!sourceEffect || !Number.isSafeInteger(operation.parsed.effectCount) ||
             effect.ordinal >= sourceEffect.ordinal || sourceEffect.ordinal - effect.ordinal >= operation.parsed.effectCount) continue;
-        const id = noteEdge(operation.target_id, null, 'card_operations', operation);
+        const id = noteEdge(operation.target_id, sourceEffect.revision - 1, 'card_operations', operation);
         fact(id, 'purge', 'card_effects', sourceEffect);
       }
     }
