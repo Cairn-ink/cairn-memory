@@ -1,12 +1,12 @@
-# Complete canonical comparison delta, revision 2
+# Complete canonical comparison delta, revision 3
 
 Status: revised design for review; no runtime implementation is authorized by this document.
 Evidence baseline: main `c1019314`; S1 `pr/504` at `f17f0d96`; cutoff at `f4077b62`.
 These are inspected Git revisions, not runtime qualification results.
 **P** means `docs/plans/context-read-incremental-catchup.md`; unqualified source anchors
 refer to the evidence baseline. Explicit ref prefixes identify other inspected revisions.
-This revision records the coordinating owner's staged safety and legacy-cell policy choices.
-It supersedes revision 1's pending choice, generic Memory interface and output/budget rules.
+This revision amends the agreed Memory suppression interface and its equality input.
+All other rules from revision 2, including staged safety and legacy-cell policy, remain unchanged.
 
 ## Amendment boundary and conflicts
 
@@ -109,14 +109,23 @@ in the manifest. A fence change always requires recapture even if document contr
 
 | Outcome | Exact agreed shape |
 | --- | --- |
-| Complete | `{complete:true, suppressed, matchedCount, matchedEpoch, factId, reason}` |
+| Complete | `{complete:true, suppressed, matchedCount, matchedEpoch, factId, reason, matchedSetDigest}` |
 | Incomplete | `{complete:false, cause:'unavailable'\|'budget'}` |
 | Attested legacy | `{complete:true, suppressed:false, capability:'none'}` |
 
 `matchedEpoch`, `factId` and `reason` are nullable; preserve the agreed returned values.
-The pair `(matchedCount, matchedEpoch)` changes exactly when this Memory's matching fact set
-changes. Compare that pair and the returned facts; different records sharing a reason must
-not compare equal. Return values and incarnation/domain are bound into the manifest.
+The agreed amendment defines `matchedSetDigest` as SHA-256 (base64url) over the matched facts
+in canonical order: sort by `(epoch_hi, epoch_lo)` and contribute `[epoch_hi, epoch_lo, fact_id]`
+for each fact. Per-owner epochs are unique and facts immutable; the empty match uses the fixed
+digest of the empty list. The safety track computes this from the matched facts with no extra reads.
+Matching uses the safety-owned Memory predicate, including mutable Raw ancestry on Raw-capable
+bases. The digest covers matched **facts**, not ancestry itself: unchanged matched sets compare
+equal only if everything else is equal; altered matched sets change the digest.
+B3's per-Memory suppression equality input is `(suppressed, matchedSetDigest)`, together with
+the owner fence and incarnation/domain. `matchedCount`, `matchedEpoch`, `factId` and `reason`
+are diagnostic/supporting fields, outside equality records and equality-root inputs.
+A missing digest in a non-legacy complete observation is a contract violation: return incomplete.
+The attested legacy and incomplete shapes above remain unchanged.
 The charged `reader` **must forward `isTransaction`** and enforce the shared preflight account.
 Use S1's snapshot-local `memo`, never a cross-attempt cache of denials or missing results
 (`pr/504:core/content-safety.mjs:33–40`;
@@ -262,7 +271,7 @@ earlier manifests rather than reinterpret them. Bind store/canonical identity, s
 intent/access, capability/policy/resource revision, ordered item observations and all fences.
 Order item keys by namespace/type/stored identity bytes, independently of Card state streams;
 include every selected state and terminal counts. Memory tuples include metadata/content
-identity and the agreed suppression observation, **no receipt observation**. Card facts use path C.
+identity and the agreed suppression equality input, **no receipt observation**. Card facts use path C.
 Item/manifest records contain no body/source text; captured text/binary is separate payload.
 Comparison ID, base checkpoint and sample are envelope bindings, not equality-root inputs.
 
@@ -312,6 +321,8 @@ when implementing (`core/test/context-read-product-artifact.test.mjs:33–71`;
 | Plain output/envelope bounds | P-output; `core/database.mjs:276–295,328–330`: successful strings, Buffer rejection, bounded binary encoding; frame/chunk count, envelope node/byte and aggregate limits independently exhaust. |
 | Restore/legacy admission | P:869–889: every stage/layout denies direct service from pre-forget backup; comparison/rebuild/B4 cannot bypass. Failed layout attestation is incomplete; legacy capability `none` is the explicit B policy choice. |
 | Matching facts and Memory-only scope | Agreed interface: insert different matching fact with same reason; matching stamp changes. No per-receipt Memory observation; read-time S1 receipt checks remain. |
+| Matching-set collision | Agreed interface amendment: equal count and maximum epoch, different matched fact sets must compare different; safety also tests different digests. Missing required digest is incomplete. |
+| Ancestry with identical matched facts | Agreed interface amendment: mutate Raw ancestry while preserving the matched fact set; compare equal only when all other equality inputs, including the owner fence, are equal. |
 | No mixed snapshot/renewal | P:1661–1667,1687–1689: insert behind cursor, partial scans, newer bodies, capture/sample separation. |
 | Captured-E equivalence/provenance/recovery | P:1539–1558,1671–1680: independent frozen-E oracle, immutable old E, former contributors for path C, exact-artifact restart, tampered manifest and lost-commit outcomes. |
 
