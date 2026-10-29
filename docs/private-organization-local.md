@@ -38,8 +38,9 @@ Card topic titles bind 1–5 exact supporting Card revision/body-revision pairs.
 Changed or unavailable support produces a null title; stale Card membership is
 hidden. Empty Card topics and their valid hierarchy edges remain inspectable in
 both purposes with null stale titles. Card navigation returns no authored bodies
-or note/receipt text. History inspection of unsupported authored Cards remains
-available through common evidence reads.
+or note/receipt text. History inspection through common evidence reads requires
+intact contributors; Cards with forgotten, corrected, deleted or excluded
+contributors are withheld.
 
 Limits default to 20/max 50 items. Card pages consume at most 256 physical
 candidates before returning an explicit partial marker; stale/skipped rows also

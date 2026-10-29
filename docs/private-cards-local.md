@@ -144,8 +144,9 @@ confirmation/rejection and episode forgetting where those paths revise a
 Memory. Filing-only invalidation is deliberately conservative; no unchanged-
 meaning equivalence is claimed. The schema trigger runs even through a
 feature-off or legacy opener. Drafts cancel once and lose title/body/all bindings.
-Confirmed authored current bodies remain private and report unavailable support;
-their prior applicability review no longer applies to the changed revision.
+Confirmed authored bodies remain in canonical storage; correction or forgetting
+of a contributor withholds the Card from inspection and current and history
+reads, and the prior applicability review no longer applies to the changed revision.
 Original successful actions replay their original
 content-free receipts without reviving cancelled content. A failed enclosing
 Memory mutation rolls back its dependent Card/effect changes too.
@@ -192,11 +193,12 @@ historical, conflict or unknown applicability for the resulting exact revision.
 resets the effective review to unknown/null. Availability never overrides it.
 Available canonical required sources yield support `eligible`; this describes
 retained evidence only. Current common reads require eligible support plus an
-explicit current review; unsupported authored artifacts remain qualified history.
+explicit current review; history requires confirmed state and intact contributors.
 Deleting a note purges its active logical text/bytes, cancels every bound draft
-once at r+1 and purges that draft's title/body/bindings. Confirmed authored current
-bodies remain private, with original note-reference metadata and support
-`unavailable`; no deleted note text is copied into a side table. Confirmed edits
+once at r+1 and purges that draft's title/body/bindings. Confirmed authored
+bodies remain in canonical storage, but Cards bound to the deleted note are
+withheld from inspection and current and history reads; no deleted note text is
+copied into a side table. Confirmed edits
 can retain an existing unavailable note ref while keeping support unavailable;
 reviewed replacement refs must actually resolve. Editing never retains prior
 bodies. Cancelled/deleted tombstones have no title/body/bindings and never revive.

@@ -1020,8 +1020,9 @@ and reserved bytes once, purges Raw rows/maps/exclusions, and records replay and
 withdrawal metadata. Existing `forgetEpisode` delegates to this same cascade on
 27, even for actual pre-Raw/empty episodes and option-off writers. It retains its
 old DTO and compares the episode revision, not the conversation revision.
-Confirmed authored Card bodies/host records remain retained while their current
-receipt-backed evidence becomes unavailable and bound drafts are cancelled.
+Confirmed authored Card bodies/host records remain retained in canonical storage,
+but Cards with suppressed contributors are withheld from inspection and current
+and history reads, and bound drafts are cancelled.
 
 Real ordinary/staged/ordered/episode/keep transactions persist core-owned source
 session bindings before provider dispatch. Tombstones refuse late legacy and Raw
@@ -1107,9 +1108,9 @@ may depend on one conversation across all spans; cancellation/deletion frees roo
 
 D5/D6 source mutations invalidate bound Cards in the same transaction, including
 already-open option-off writers. Drafts purge body/bindings; confirmed authored
-body and bounded typed metadata remain private while current evidence becomes
-unavailable. Multiple affected spans do not multiply Card invalidation. Exact
-create replay remains its original content-free receipt, not a resurrected draft.
+bodies remain in canonical storage, but deleted or excluded contributors withhold
+the Card from inspection and current and history reads. Multiple affected spans
+do not multiply Card invalidation. Exact create replay remains its original content-free receipt, not a resurrected draft.
 The shared canonical checks also cover evidence, snapshots and typed Card MOCs.
 Raw-only provenance uses `selected-raw-span`; mixed sources including Raw use
 `mixed-sources`, with `corroboration:'not-assessed'`. Old note/receipt output and

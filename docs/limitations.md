@@ -475,8 +475,9 @@ conversation aggregates; bounded pages do not imply constant-time large-history
 latency. Resolve only inspected saved spans. Explicit author text and separate
 real-TTY exact-revision confirmation are required; a long message does not become
 a Card automatically, and source support is not truth or adoption. Source
-deletion cancels bound drafts while confirmed authored text can remain with
-support unavailable. Logical deletion does not erase SQLite/WAL/free pages/backups.
+deletion cancels bound drafts and withholds confirmed Cards from inspection and
+current and history reads while their authored bodies remain in canonical storage.
+Logical deletion does not erase SQLite/WAL/free pages/backups.
 
 Retained author reds were fixture issues: an SDK constant imported from the wrong
 export, a synthetic seed decoder stripping BOM, and missing expected revision.
@@ -769,9 +770,10 @@ these additions. Memory writes never automatically promote a Card.
 
 Receipt sources remain excerpt-only with unknown conversation coverage. Required
 Memory revisions invalidate dependents transactionally, including feature-off
-writers: drafts cancel and purge; confirmed authored bodies remain private with
-unavailable support and no carried-forward current review. Targeted synthetic
-installed source/Card and H/R/M stdio/TTY lifecycle checks passed on Node 22.16
+writers: drafts cancel and purge; confirmed authored bodies remain in canonical
+storage with no carried-forward current review, and correction or forgetting of
+a contributor withholds the Card from inspection and current and history reads.
+Targeted synthetic installed source/Card and H/R/M stdio/TTY lifecycle checks passed on Node 22.16
 and 24.15 with actual exit 0. Final combined full-core/MCP/artifact checks,
 independent dual review and latest-head CI are still underway; the delivery PR
 will record final evidence. These checks establish mechanics, not semantic
@@ -2457,9 +2459,10 @@ repair; no backfill, independence inference or broad cleanup is offered. New
 ordinary stores are not silently upgraded. The actual frozen v26 opener refuses
 27; current option-off writers honor selected rules, including late migration.
 
-Existing receipt-backed Card drafts/current evidence invalidate, but confirmed
-authored bodies and host records remain. The finite content-free Raw outbox is
-not evidence that a host withdrew an ask/preview, consumed an effect or received
+Existing receipt-backed Card drafts/current evidence invalidate, and confirmed
+Cards with suppressed contributors are withheld from inspection and history
+while their authored bodies and host records remain in canonical storage. The
+finite content-free Raw outbox is not evidence that a host withdrew an ask/preview, consumed an effect or received
 an acknowledgement. RawSourceRef resolution/bare Raw-to-Card remain P3c;
 installed Raw/client lifecycle and consumption remain P4. No paid-model,
 semantic-quality, production encryption or operational-data claim is made.

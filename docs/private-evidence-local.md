@@ -76,7 +76,8 @@ canonical support is eligible and whose exact revision was explicitly reviewed
 current. It excludes awaiting/historical/forgotten Memories and drafts or
 unsupported/unknown/historical/conflict Cards. History includes retained
 nondeleted Memories, including awaiting and historical records, and confirmed
-authored Cards with explicit qualifications. It cannot recover purged bodies.
+authored Cards with intact contributors and explicit qualifications. It cannot
+recover purged bodies.
 
 ## Fetch and final revalidation
 
@@ -115,8 +116,9 @@ receipt excerpts or submitted-note text. Source text uses the separately bounded
 `getSource` API. Historical/awaiting Memory provenance retains bounded actual
 receipt IDs but has `sourceAccess:'unavailable-for-noncurrent-memory'` and no
 readable source refs, because this bounded source resolver requires current
-visible Memories. An unsupported historical Card returns its retained authored
-body and unavailable support without returning missing source text.
+visible Memories. A Card with a forgotten, corrected, deleted or excluded
+contributor is withheld from both current and history reads; its authored body
+remains in canonical storage.
 
 The opaque snapshot is a bounded signed token with typed refs, content/source
 HMAC fences and namespace/access generations; it contains no Memory/Card/source
