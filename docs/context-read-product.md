@@ -290,6 +290,16 @@ optional ownerGeneration reuse certificates. Issuance IDs and coverage selection
 revision do not enter lexical statistics identity. A changed ownerGeneration
 makes an old certificate access-stale for a newly valid credential.
 
+A canonical or dependency fence change can retarget authenticated private work
+in place. Its generation sequence stays the same and its checkpoint advances;
+the comparison phase/cursor can return to the first stream. Treat `phase` as a
+resumable stage, not a monotonic completion percentage. The complete ordered
+comparison reuses exact contributions and reconciles replacements and absences.
+Verification resumes at its saved cursor when that comparison changes nothing,
+and restarts on the first contribution change. Access changes or invalid work
+records start a new generation. These preparation checkpoints do not certify
+readiness; the usual fresh post-commit status check still controls it.
+
 ### Product cache format 3 and sizing
 
 The product cache now uses physical **format 3** (`PRAGMA user_version=3`),

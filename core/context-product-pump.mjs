@@ -232,8 +232,8 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             recordPhase(lane.phases.dispatch,detail.dispatchMs);
             recordPhase(lane.phases.epochObservation,detail.epochObservationMs);
             if(Number.isFinite(detail.deliveryMs)&&detail.deliveryMs>=0)deliveryMs=detail.deliveryMs;
-            for(const name of ['transformed','canonicalRows','metadataBytes','textRows','textBytes','supportLookups','supportBytes','verifiedRows']){
-              const n=detail[name];if(Number.isSafeInteger(n)&&n>=0)lane.work[name]=(lane.work[name]??0)+n;
+            for(const name of ['transformed','canonicalRows','metadataBytes','textRows','textBytes','supportLookups','supportBytes','verifiedRows','reused','replaced','removed','copied','tokenized','retargets','verificationRestarts','verificationKept']){
+              const n=detail[name];if(Number.isSafeInteger(n)&&n>=0)lane.work[name]=Math.min(Number.MAX_SAFE_INTEGER,(lane.work[name]??0)+n);
             }
           }
           if(error)return;

@@ -162,7 +162,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       }
       if(method==='refreshContextIndex') {
         const m=p.mode==='lexical'?storage.refresh(p,access.accessGenerations,p.budget):{transformed:0};
-        if(observation)for(const name of ['transformed','canonicalRows','metadataBytes','textRows','textBytes','supportLookups','supportBytes','verifiedRows']){
+        if(observation)for(const name of ['transformed','canonicalRows','metadataBytes','textRows','textBytes','supportLookups','supportBytes','verifiedRows','reused','replaced','removed','copied','tokenized','retargets','verificationRestarts','verificationKept']){
           if(Number.isSafeInteger(m[name])&&m[name]>=0)observation[name]=m[name];
         }
         const knownFailure=storage.prepareObservation();access.check();

@@ -26,6 +26,10 @@ const unavailable = reason => { throw Object.assign(Error('index_unavailable'), 
 // Never classify storage/corruption/authority errors by their public code.
 const fenceChanged = Symbol('maintenance fence changed');
 const same = (a,b) => canonicalJson(a) === canonicalJson(b);
+// Identical provenance predicate for private reuse and immutable-base copying.
+const exactDocument = (old, row) => old && old.revision===row.revision && old.body_revision===row.body_revision && old.eligible===row.eligible;
+const initialVerification = p => ({ phase:0,last:[],hash:new ManifestHash().state(),
+  counts:{ byType:Object.fromEntries(['memory','card'].filter(t => p.types.includes(t)).map(t => [t,{eligible:0,indexed:0}])),documents:0,terms:0,totalTokenLength:0 } });
 // Cleanup must not replace a native failure already committed to telemetry.
 function cleaned(work, cleanup) {
   let result;
@@ -282,14 +286,18 @@ export function productSidecar({ path, db: canonical, identity, features, observ
           const text = side.prepare('SELECT record FROM progress_records WHERE generation=?').get(work.generation)?.record;
           if (!g || !text) return invalid(p,'validation_missing');
           const r = verifiedRecord(identity.cursorSecret,'progress',text);
-          if (g.id!==generationId(g) || g.incarnation!==incarnationOf(g) || !same(r.generation,{ id:g.id,incarnation:g.incarnation }) || !same(r.progress,progressOf(g)) ||
+          if (g.published || pointer?.generation===g.id || side.prepare('SELECT 1 FROM validation_records WHERE generation=?').get(g.id) ||
+              g.id!==generationId(g) || g.incarnation!==incarnationOf(g) || !same(r.generation,{ id:g.id,incarnation:g.incarnation }) || !same(r.progress,progressOf(g)) ||
               r.kind !== g.kind || r.projectionDigest !== g.projection || r.accessDigest !== g.access ||
               !same(JSON.parse(g.fences), { canonicalFenceDigest:r.canonicalFenceDigest,dependencyFenceDigest:r.dependencyFenceDigest })) return invalid(p,'validation_invalid');
           const mismatch = recordBindings(r,t,true);
           if (mismatch && !['access_changed','dependency_changed','fence_changed'].includes(mismatch)) return invalid(p,mismatch);
           checkpoint = { mismatch,baseSequence:g.base_sequence,kind:g.kind,progress:r.progress };
         }
-        if(workOnly)return {resumable:checkpoint && !checkpoint.mismatch ? work.generation : null};
+        if(workOnly)return {
+          resumable:checkpoint && !checkpoint.mismatch ? work.generation : null,
+          retargetable:checkpoint && ['dependency_changed','fence_changed'].includes(checkpoint.mismatch) ? work.generation : null
+        };
         if (!pointer) return checkpoint ? checkpoint.mismatch ? { dto:status(p,'stale',checkpoint.mismatch),publication:null } : incomplete() : { dto:status(p,'absent','missing'),publication:null };
         const g = side.prepare('SELECT * FROM generations WHERE id=?').get(pointer.generation);
         const text = side.prepare('SELECT record FROM validation_records WHERE publication=?').get(pointer.publication)?.record;
@@ -323,7 +331,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       ...JSON.parse(g.fences),generation:{ id:g.id,incarnation:g.incarnation },kind:g.kind,progress:progressOf(g) });
     if (Buffer.byteLength(record)>4096) fail('context_item_too_large');
     side.prepare('INSERT OR REPLACE INTO progress_records VALUES(?,?)').run(g.id,record);
-    side.prepare('UPDATE generations SET incarnation=?,phase=?,last_key=?,checkpoint=?,verify=? WHERE id=?').run(g.incarnation,g.phase,g.last_key,g.checkpoint,JSON.stringify(g.verify),g.id);
+    side.prepare('UPDATE generations SET incarnation=?,fences=?,phase=?,last_key=?,checkpoint=?,verify=? WHERE id=?').run(g.incarnation,g.fences,g.phase,g.last_key,g.checkpoint,JSON.stringify(g.verify),g.id);
     side.prepare('INSERT OR REPLACE INTO work VALUES(?,?)').run(g.projection,g.id);
   }
   function fresh(t,p,access) {
@@ -364,6 +372,16 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       side.prepare('INSERT INTO postings VALUES(?,?,?,?,?)').run(g.storage_id,doc,termId,frequency,++position);
     }
     side.prepare("UPDATE statistics SET n=n+?,total_length=total_length+? WHERE generation=? AND term='' ").run(row.eligible,tokens.length,g.storage_id);
+  }
+  // Only authenticated, unpublished work reaches this path. Integer keys need
+  // not be dense: verification hashes identities/term text and audits references.
+  function remove(g, old) {
+    const terms=side.prepare(`UPDATE statistics SET df=df-1 WHERE generation=? AND term_id IN
+      (SELECT term FROM postings WHERE generation=? AND doc=?) RETURNING term_id,df`).all(g.storage_id,g.storage_id,old.doc);
+    side.prepare('DELETE FROM postings WHERE generation=? AND doc=?').run(g.storage_id,old.doc);
+    for(const term of terms)if(term.df===0)side.prepare('DELETE FROM statistics WHERE generation=? AND term_id=?').run(g.storage_id,term.term_id);
+    side.prepare("UPDATE statistics SET n=n-?,total_length=total_length-? WHERE generation=? AND term=''").run(old.eligible,old.token_length,g.storage_id);
+    side.prepare('DELETE FROM documents WHERE generation=? AND doc=?').run(g.storage_id,old.doc);
   }
   function verifyPage(g, p, m, quantum) {
     const v=g.verify;
@@ -552,7 +570,8 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   }
   function refresh(p,access,budget,quantum) {
     if (!writable) fail('invalid_input');
-    const m = { transformed:0,canonicalRows:0,metadataBytes:0,textRows:0,textBytes:0,supportLookups:0,supportBytes:0,verifiedRows:0 };
+    const m = { transformed:0,canonicalRows:0,metadataBytes:0,textRows:0,textBytes:0,supportLookups:0,supportBytes:0,verifiedRows:0,
+      reused:0,replaced:0,removed:0,copied:0,tokenized:0,retargets:0,verificationRestarts:0,verificationKept:0 };
     // Retain the identity whose validation failed. A different selection may
     // repair the cache before this maintainer reaches its own repair branch.
     const repairIdentity=productFile(sidePath,true),repairStamp=repairIdentity && stamp();
@@ -588,54 +607,94 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     if (observed.dto.lexical.state === 'ready') { collect(quantum,p.readSet[0].ownerId);rendezvous('noop'); return m; }
     const w = side.prepare('SELECT generation FROM work WHERE projection=?').get(t.projectionDigest);
     let g = w && side.prepare('SELECT * FROM generations WHERE id=?').get(w.generation);
-    const resumable=readTransaction(canonical,()=>observe(p,access,{forWrite:true,workOnly:true})).resumable===g?.id;
+    const workStatus=readTransaction(canonical,()=>observe(p,access,{forWrite:true,workOnly:true}));
+    const resumable=g && (workStatus.resumable===g.id || workStatus.retargetable===g.id);
+    let rebinding=false;
     // Invalid publication evidence still controls status. Independently signed
     // rebuild work can resume; delta work must first abandon the invalid base.
-    if (!resumable || !g || g.access !== access || !same(JSON.parse(g.fences), { canonicalFenceDigest:t.canonicalFenceDigest,dependencyFenceDigest:t.dependencyFenceDigest }) || (observed.dto.lexical.state === 'unavailable' && g.base_sequence!==0)) {
+    if (!resumable || !g || g.access !== access || (observed.dto.lexical.state === 'unavailable' && g.base_sequence!==0)) {
       const pointer = side.prepare('SELECT generation FROM publications WHERE projection=?').get(t.projectionDigest);
       const base = observed.dto.lexical.state !== 'unavailable' && pointer && side.prepare('SELECT * FROM generations WHERE id=?').get(pointer.generation);
       const baseSequence = base?.sequence ?? 0;
       g = { id:null,incarnation:null,seed:randomUUID(),projection:t.projectionDigest,sequence:Math.max(baseSequence,g?.sequence ?? 0)+1,
         base_sequence:baseSequence,checkpoint:0,kind:baseSequence ? 'delta' : pointer || w ? 'rebuild' : metadata.kind,
         fences:canonicalJson({ canonicalFenceDigest:t.canonicalFenceDigest,dependencyFenceDigest:t.dependencyFenceDigest }),access,
-        phase:0,last_key:'',base_id:base?.id ?? null,verify:{ phase:0,last:[],hash:new ManifestHash().state(),
-          counts:{ byType:Object.fromEntries(['memory','card'].filter(t => p.types.includes(t)).map(t => [t,{eligible:0,indexed:0}])),documents:0,terms:0,totalTokenLength:0 } } };
+        phase:0,last_key:'',base_id:base?.id ?? null,verify:initialVerification(p) };
       g.id=generationId(g);g.incarnation=incarnationOf(g);
       write(() => {
         side.prepare('INSERT INTO generations(id,owner,projection,incarnation,sequence,base_sequence,checkpoint,kind,fences,access,phase,last_key,base_id,verify,manifest,published,seed) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)').run(g.id,p.readSet[0].ownerId,g.projection,g.incarnation,g.sequence,g.base_sequence,0,g.kind,g.fences,g.access,0,'',g.base_id,JSON.stringify(g.verify),null,g.seed);
         g.storage_id=side.prepare('SELECT storage_id FROM generations WHERE id=?').get(g.id).storage_id;
         side.prepare("INSERT INTO statistics(generation,term_id,term,df,n,total_length) VALUES(?,0,'',0,0,0)").run(g.storage_id); save(g,t);
       });
-    } else g.verify = JSON.parse(g.verify);
+    } else {
+      g.verify=JSON.parse(g.verify);
+      if(workStatus.retargetable===g.id) {
+        // Rebinding is provisional until a real comparison batch commits. A
+        // cutoff/race before that commit leaves the old signed checkpoint intact.
+        g.fences=canonicalJson({canonicalFenceDigest:t.canonicalFenceDigest,dependencyFenceDigest:t.dependencyFenceDigest});
+        g.phase=0;g.last_key='';g.verify.reconciling=true;rebinding=true;
+      }
+    }
     g.streams = streams(p);
     while (quantum.admit('scan') && quantum.admit('item') && g.phase < g.streams.length && m.transformed<budget.maxItems) {
       if (!fresh(t,p,access)) return m;
       const stream = g.streams[g.phase], maximum = stream.type === 'card' ? 1 : 128;
-      const rows = quantum.measure(()=>{
-        const result=readTransaction(canonical,() => metadataRows(stream,g.last_key,maximum,p,m));
-        rendezvous('scan');return result;
+      const { rows, exhausted } = quantum.measure(()=>{
+        const canonicalRows=readTransaction(canonical,() => metadataRows(stream,g.last_key,maximum,p,m));
+        const workRows=side.prepare('SELECT * FROM documents WHERE generation=? AND stream=? AND id>? ORDER BY id LIMIT ?')
+          .all(g.storage_id,g.phase,g.last_key,maximum);
+        const rows=[];let c=0,w=0;
+        // Merge at most one page of keys. A full input page can never run out
+        // before this output bound; absence is proved only in its scanned range.
+        while(rows.length<maximum && (c<canonicalRows.length || w<workRows.length)) {
+          const row=canonicalRows[c],old=workRows[w];
+          const order=!row ? 1 : !old ? -1 : Buffer.compare(Buffer.from(row.id),Buffer.from(old.id));
+          rows.push({row:order<=0 ? canonicalRows[c++] : null,old:order>=0 ? workRows[w++] : null});
+        }
+        rendezvous('scan');return {rows,exhausted:c===canonicalRows.length && w===workRows.length && canonicalRows.length<maximum && workRows.length<maximum};
       },'scan');
       if(now()>=quantum.cutoff)fail('read_timeout');
       let units=0, processed=0, last=g.last_key;
       // Include postings/dictionary writes in the observed item cost. Staging
       // rows and their checkpoint commit together, even when admission yields.
       try { write(() => {
-        for (const row of rows) {
+        const changing=()=>{
+          if(g.verify.reconciling || g.verify.hash.bytes || g.verify.phase) {
+            g.verify=initialVerification(p);m.verificationRestarts++;
+          }
+        };
+        for (const {row,old} of rows) {
           if (processed && !quantum.admit() || m.transformed>=budget.maxItems) break;
           if(now()>=quantum.cutoff)fail('read_timeout');
           const kept=quantum.measure(()=>{
-            const old=g.base_id && side.prepare('SELECT * FROM documents WHERE generation=? AND stream=? AND id=?').get(storageKey(g.base_id),g.phase,row.id);
-            let tokens,source;
-            if(old && old.revision===row.revision && old.body_revision===row.body_revision && old.eligible===row.eligible) {
-              tokens={length:old.token_length};source=g.base_id;
-            } else {
-              const text=row.eligible ? readTransaction(canonical,()=>canonical.prepare(stream.type==='memory'
-                ? `SELECT content AS text FROM memories WHERE ${where} AND id=?` : `SELECT title||char(10)||body AS text FROM private_cards WHERE ${where} AND id=?`).get(...boundary(stream.ns),row.id)?.text) : '';
-              if(typeof text!=='string' || text.length>2000000)fail('context_item_too_large');
-              if(processed && units+text.length>2000000)return false;
-              units+=text.length;m.transformed++;m.textRows+=Number(Boolean(row.eligible));m.textBytes+=Buffer.byteLength(text);tokens=termFrequencies(text);
+            if(row && exactDocument(old,row))m.reused++;
+            else if(!row) {changing();remove(g,old);m.removed++;}
+            else {
+              const base=g.base_id && side.prepare('SELECT * FROM documents WHERE generation=? AND stream=? AND id=?').get(storageKey(g.base_id),g.phase,row.id);
+              let tokens,source;
+              if(exactDocument(base,row)) {tokens={length:base.token_length};source=g.base_id;}
+              else {
+                const text=row.eligible ? readTransaction(canonical,()=>canonical.prepare(stream.type==='memory'
+                  ? `SELECT content AS text FROM memories WHERE ${where} AND id=?` : `SELECT title||char(10)||body AS text FROM private_cards WHERE ${where} AND id=?`).get(...boundary(stream.ns),row.id)?.text) : '';
+                if(typeof text!=='string' || text.length>2000000) {
+                  // A deletion/forget can invalidate the observed body before
+                  // this read. Preserve the same batch-only fence-race outcome.
+                  if(!fresh(t,p,access))throw fenceChanged;
+                  fail('context_item_too_large');
+                }
+                if(processed && units+text.length>2000000)return false;
+                units+=text.length;m.transformed++;m.tokenized++;m.textRows+=Number(Boolean(row.eligible));m.textBytes+=Buffer.byteLength(text);tokens=termFrequencies(text);
+              }
+              changing();
+              // Cards can move to an earlier state stream. Remove the old
+              // identity before inserting there; the later stream then sees absence.
+              const displaced=old || side.prepare('SELECT * FROM documents WHERE generation=? AND identity=?')
+                .get(g.storage_id,JSON.stringify([...boundary(stream.ns),stream.type,row.id]));
+              if(displaced){remove(g,displaced);if(displaced.stream===g.phase)m.replaced++;else m.removed++;}
+              if(source)m.copied++;
+              put(g,g.phase,row,tokens,source);
             }
-            put(g,g.phase,row,tokens,source);last=row.id;processed++;
+            last=(row || old).id;processed++;
             rendezvous('item');return true;
           });
           if (!kept) break;
@@ -643,7 +702,12 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         rendezvous('transformed');
         if(!fresh(t,p,access))throw fenceChanged;
         g.last_key=last;
-        if(processed===rows.length && rows.length<maximum){g.phase++;g.last_key='';}
+        if(processed===rows.length && exhausted){g.phase++;g.last_key='';}
+        if(g.phase===g.streams.length) {
+          if(g.verify.reconciling){delete g.verify.reconciling;m.verificationKept++;}
+          g.phase+=g.verify.phase;
+        }
+        if(rebinding){m.retargets++;rebinding=false;}
         g.checkpoint++;save(g,t);
       }); } catch(e) { if(e===fenceChanged)return m;throw e; }
       rendezvous('checkpoint');
@@ -654,7 +718,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       write(() => { verifyPage(g,p,m,quantum); g.checkpoint++; save(g,t); });
       rendezvous('verification');
     }
-    if (g.verify.phase===3 && quantum.admit('publication') && fresh(t,p,access)) {
+    if (g.phase>=g.streams.length && g.verify.phase===3 && quantum.admit('publication') && fresh(t,p,access)) {
       if(!side.prepare("SELECT 1 FROM statistics WHERE generation=? AND term=''").get(g.storage_id))unavailable('corrupt');
       const publicationId=randomUUID(), manifestDigest=new ManifestHash(g.verify.hash).digest();
       // Last pre-commit canonical snapshot ends here. The independent writer
