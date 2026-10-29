@@ -1,6 +1,6 @@
 import { maintenanceFailureCounts, maintenanceFailureRecord, maintenanceFailureKind, maintenanceErrorName } from './context-product-attribution.mjs';
 import { attributionFields, maintenanceWorkFields, maintenanceKinds, add, maintenanceDispatchControl, maintenanceControlState } from './context-product-attribution.mjs';
-import { openContextIndexMaintainer, disposeProductReader, maintenanceObservation, maintenancePhaseDiagnostic, maintenanceStallDiagnostic, maintenanceCutoffQualified, authorizeMaintenanceCutoff, snapshotMaintenanceCutoff, maintenanceFailureDiagnostic } from './context-product-reader.mjs';
+import { openContextIndexMaintainer, disposeProductReader, maintenanceObservation, maintenancePhaseDiagnostic, maintenanceStallDiagnostic, maintenanceCutoffQualified, authorizeMaintenanceCutoff, snapshotMaintenanceCutoff, maintenanceFailureDiagnostic, maintenanceReaderFailureDiagnostic } from './context-product-reader.mjs';
 import { supervisorOwner } from './context-read-supervisor.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { boundedData, hostConfiguration, coverage, PRODUCT_PROFILE } from './context-product-control.mjs';
@@ -127,23 +127,53 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     let report,completion,settled=false;
     function cycle(){settled=false;completion=new Promise(resolve=>{report=value=>{settled=true;resolve(value);};});}cycle();
     const handles=new Map(),writers=new Map(),handleLanes=new Map();
-    let cutoffDiagnostic,cancelRecovery,lastFailure=null;const failureCounts=maintenanceFailureCounts();
-    const pendingDrains=new Map();
+    let cutoffDiagnostic,cancelRecovery,lastFailure=null;const failureCounts=maintenanceFailureCounts(),secondaryFailureCounts=maintenanceFailureCounts();let secondaryFailure=null;
+    const pendingDrains=new Map(),failedDrains=new Map(),drainErrors=new WeakSet(),seenReaderFailures=new WeakSet(),readerSecondaryCounts=new WeakMap(),readerSources=new WeakMap();
     // Fixed 10-ms elapsed counters (last bucket is >5000 ms), never samples.
     // At most 64 lanes; no identities, paths, grants or content enter snapshots.
     let quantumNumber=0,residentEpoch=0;
     const phases=projections.map(()=>({phases:Object.fromEntries(phaseNames.map(k=>[k,phaseCounter()])),
-      opens:0,quanta:0,first:null,latest:null,worstElapsedMs:0,elapsedBuckets:Array(502).fill(0),work:{},attribution:Object.fromEntries(attributionFields.map(k=>[k,fieldCounter()])),lastFailure:null,failureCounts:maintenanceFailureCounts(),lastStall:null,stallCounts:Array(maintenanceKinds.length).fill(0)}));
+      opens:0,quanta:0,first:null,latest:null,worstElapsedMs:0,elapsedBuckets:Array(502).fill(0),work:{},attribution:Object.fromEntries(attributionFields.map(k=>[k,fieldCounter()])),lastFailure:null,failureCounts:maintenanceFailureCounts(),secondaryFailure:null,secondaryFailureCounts:maintenanceFailureCounts(),lastStall:null,stallCounts:Array(maintenanceKinds.length).fill(0)}));
     function saveFailure(index,failure){
       if(!failure||!phases[index])return;
       const kind=maintenanceFailureKind(failure);if(!Object.hasOwn(failureCounts,kind))return;
       lastFailure=Object.freeze({...failure,lane:index});phases[index].lastFailure=lastFailure;
       phases[index].failureCounts[kind]=add(phases[index].failureCounts[kind],1);failureCounts[kind]=add(failureCounts[kind],1);
     }
-    async function drain(key,index=handleLanes.get(key)){
+    function saveSecondary(index,failure,counts){
+      if(!failure||!phases[index])return;
+      secondaryFailure=Object.freeze({...failure,lane:index});phases[index].secondaryFailure=secondaryFailure;
+      for(const kind of Object.keys(secondaryFailureCounts)){
+        const n=counts?.[kind]??(kind===maintenanceFailureKind(failure)?1:0);
+        if(Number.isSafeInteger(n)&&n>0){phases[index].secondaryFailureCounts[kind]=add(phases[index].secondaryFailureCounts[kind],n);secondaryFailureCounts[kind]=add(secondaryFailureCounts[kind],n);}
+      }
+    }
+    function readerSecondary(index,value,number){
+      const diagnostic=maintenanceReaderFailureDiagnostic(value),identity=maintenanceFailureDiagnostic(value);
+      if(!diagnostic?.secondaryFailure||!identity)return;
+      const previous=readerSecondaryCounts.get(identity),counts={};let changed=false;
+      for(const kind of Object.keys(secondaryFailureCounts)){counts[kind]=Math.max(0,diagnostic.secondaryFailureCounts[kind]-(previous?.[kind]??0));changed ||= counts[kind]>0;}
+      readerSecondaryCounts.set(identity,diagnostic.secondaryFailureCounts);
+      if(changed)saveSecondary(index,{...diagnostic.secondaryFailure,...(number===undefined?{}:{number})},counts);
+    }
+    async function drain(key,index=handleLanes.get(key),number){
+      // Attribution follows the resident being disposed, not its replacement.
+      const failureLane=handleLanes.get(key)??index;
       const started=now();
-      try{await disposeProductReader(handles.get(key),error==='read_timeout'?error:'store_closed',disposalCutoff);handles.delete(key);handleLanes.delete(key);}
-      catch(error){if(phases[index]&&phases[index].lastFailure?.cause!=='disposal_proof')saveFailure(index,maintenanceFailureDiagnostic(error)??maintenanceFailureRecord('cleanup',{stage:'close'}));throw error;}
+      try{const handle=handles.get(key);await disposeProductReader(handle,error==='read_timeout'?error:'store_closed',disposalCutoff);readerSecondary(failureLane,maintenanceFailureDiagnostic(handle)?handle:readerSources.get(handle),number);handles.delete(key);handleLanes.delete(key);}
+      catch(error){
+        if(error&&typeof error==='object')drainErrors.add(error);
+        if(!failedDrains.has(key)){
+          failedDrains.set(key,true);
+          const found=maintenanceFailureDiagnostic(error),failure={...(found??maintenanceFailureRecord('cleanup',{stage:'close'})),...(number===undefined?{}:{number})};
+          const primary=number!==undefined&&lastFailure?.number===number?lastFailure:undefined;
+          const samePrimary=found&&primary&&['cause','ordinal','engineCode','errorName','step','stage'].every(field=>found[field]===primary[field]);
+          if(!found||!seenReaderFailures.has(found)&&!samePrimary){if(primary)saveSecondary(failureLane,failure);else saveFailure(failureLane,failure);}
+          if(found)seenReaderFailures.add(found);
+          readerSecondary(failureLane,error,number);
+        }
+        throw error;
+      }
       finally{recordPhase(phases[index].phases.drain,now()-started);}
     }
     // Initial observations are due within five seconds of activation. Expired
@@ -164,7 +194,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     function observation(){
       const value=Object.freeze({id:c.id,state:error?'failed':stopped?'stopped':exhausted()?'budget_exhausted':now()>=renewedUntil?'renewal_expired':'active',
         windowId:window.id,usedItems:Math.max(...[...ledgers.values()].map(l=>l.items)),usedMs:Math.max(...[...ledgers.values()].map(l=>l.ms)),maxItems:budgets.maxItems,maxMs:budgets.maxMs,error});
-      pumpDiagnostics.set(value,Object.freeze({cadenceMisses,worstGapMs,observation:lastObservation,lastFailure,failureCounts:Object.freeze({...failureCounts})}));
+      pumpDiagnostics.set(value,Object.freeze({cadenceMisses,worstGapMs,observation:lastObservation,lastFailure,failureCounts:Object.freeze({...failureCounts}),secondaryFailure,secondaryFailureCounts:Object.freeze({...secondaryFailureCounts})}));
       phaseDiagnostics.set(value,freezeTree(structuredClone({elapsedBucketMs:10,projections:phases})));
       snapshotMaintenanceCutoff(value,cutoffDiagnostic);
       return value;
@@ -177,7 +207,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       stopped=true;clearTimer(timer);cancelRecovery?.();registry.cleanup(record);
       closing=(async()=>{
         await running;
-        const disposed=await Promise.allSettled([...handles.keys()].map(key=>pendingDrains.get(key)??drain(key)));
+        const disposed=await Promise.allSettled([...handles.keys()].map(key=>pendingDrains.get(key)??drain(key,undefined,error?lastFailure?.number:undefined)));
         if(disposed.some(r=>r.status==='rejected'))throw Error('reader_failed');
         registry.finish(record);all.entries.delete(c.id);report(observation());
       })();
@@ -231,13 +261,17 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       if(Math.min(window.endsAtMonoMs,renewedUntil)-now()<quantum.maxMs){schedule();return;}
       if(recoveryEnabled && projections.every((_,i)=>cooling(i))){schedule();return;}
       lastTick=now();
-      let quantumTimer,lane,sequence,settleStarted,deliveryMs=0,activeHandle,activeControl,ordinal,openingOrdinal,quantumDetail={},stallRecorded=false,capability,recovery;
+      let quantumTimer,lane,sequence,settleStarted,deliveryMs=0,activeHandle,activeControl,ordinal,openingOrdinal,quantumDetail={},stallRecorded=false,capability,recovery,activeStage='open';
       const recordedFailures=new Set();
       function recordFailure(value,kind='engine',detail={}){
-        if(!lane)return;
+        if(!lane||value&&typeof value==='object'&&drainErrors.has(value))return;
         const found=maintenanceFailureDiagnostic(value),captured=kind!=='disposal_proof'&&(found?.ordinal===undefined||found.ordinal===ordinal)?found:undefined,stamp=now(),source=captured??maintenanceFailureRecord(kind,{...detail,ordinal,stall:stallOf(value,stamp)??stallOf(activeHandle??activeControl,stamp)});
-        const key=maintenanceFailureKind(source);if(recordedFailures.has(key))return;recordedFailures.add(key);
-        saveFailure(phases.indexOf(lane),Object.freeze({...source,number:sequence}));
+        const key=maintenanceFailureKind(source);if(recordedFailures.has(key))return;
+        const secondary=recordedFailures.size>0;recordedFailures.add(key);
+        const index=phases.indexOf(lane),failure=Object.freeze({...source,stage:source.stage??activeStage,number:sequence});
+        if(secondary)saveSecondary(index,failure);else saveFailure(index,failure);
+        if(captured){seenReaderFailures.add(captured);if(activeHandle)readerSources.set(activeHandle,value);}
+        readerSecondary(index,value,sequence);
       }
       function recordStall(value){
         if(stallRecorded||!lane)return;
@@ -274,7 +308,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             domainRecovery.pending++;domainRecovery.pendingUntil=Math.max(domainRecovery.pendingUntil,proofDeadline);
             let confirmationTimer;describeCutoff(0);
             try {
-              const drainPromise=drain(key,index);pendingDrains.set(key,drainPromise);
+              const drainPromise=drain(key,index,sequence);pendingDrains.set(key,drainPromise);
               const forget=()=>{if(pendingDrains.get(key)===drainPromise)pendingDrains.delete(key);};
               drainPromise.then(forget,forget);
               const disposal=drainPromise.then(()=>capability.proof());
@@ -307,7 +341,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             // across intents/types/journal policies. Drain before replacing its
             // full-key handle; never weaken admission to populate this cache.
             const writer=JSON.stringify([resolve(p.options.path),p.options.readSet]),previous=writers.get(writer);
-            if(previous!==undefined){await drain(previous,index);writers.delete(writer);}
+            if(previous!==undefined){activeStage='close';await drain(previous,index,sequence);writers.delete(writer);activeStage='open';}
             if(stopped||error)return;
             const openingMs=Math.min(maxMs,Math.floor(maxMs-(now()-lastTick)));
             if(openingMs<1){recordFailure(activeControl,'engine',{engineCode:'read_timeout',stage:'open'});error='read_timeout';return;}
@@ -315,7 +349,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             try{h=await open({...p.options,deadlineMs:openingMs},activeControl);openedHere=true;lane.opens=add(lane.opens,1);handles.set(key,h);handleLanes.set(key,index);writers.set(writer,key);}
             finally{recordPhase(lane.phases.open,now()-opening);}
           }
-          activeHandle=h;
+          activeHandle=h;activeStage='refresh';
           if(stopped||error)return;
           const remainingMs=Math.min(maxMs,Math.floor(maxMs-(now()-lastTick)));
           if(remainingMs<1){recordStall(h);recordFailure(h,'engine',{engineCode:'read_timeout'});error='read_timeout';return;}

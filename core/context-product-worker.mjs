@@ -32,36 +32,38 @@ const sqlite = workerData.wal ? createProductSqlitePolicy({ observer }) : null;
 const startSqlite = op => sqlite?.start(Number(mono(op.operationCutoffMonoNs)) / 1e6);
 
 // Match the legacy native mapping without linking SQLite into bootstrap.
-let failureDetail;
-const noteFailure=(kind,engineCode,error)=>{if(workerData.maintenance)failureDetail??={kind,...(kind==='engine'||kind==='unmapped'?{engineCode:maintenanceFailureCode(engineCode)}:{}),...(kind==='exception'?{errorName:maintenanceErrorName(error),step:attribution?.stepKind??0}:{})};};
+let failureDetail,secondaryFailureDetail;
+const noteFailure=(kind,engineCode,error,secondary=false)=>{if(!workerData.maintenance)return;const detail={kind,...(kind==='engine'||kind==='unmapped'?{engineCode:maintenanceFailureCode(engineCode)}:{}),...(kind==='exception'?{errorName:maintenanceErrorName(error),step:attribution?.stepKind??0}:{})};if(!failureDetail)failureDetail=detail;else if(secondary)secondaryFailureDetail=detail;};
 const nativeFailure = error => {
   const code=error?.code === 'ERR_SQLITE_ERROR'
     ? Number.isInteger(error.errcode) && [5,6].includes(error.errcode&255) ? 'storage_busy':'storage_error' : error?.code;
   const response=productFailure(code);
-  noteFailure(code===undefined?'exception':code===response.error.code?'engine':'unmapped',code,error);
+  if(!(closing&&code==='store_closed'))noteFailure(code===undefined?'exception':code===response.error.code?'engine':'unmapped',code,error);
   return response;
 };
 const within = op => { if (closing) fail('store_closed'); if (process.hrtime.bigint() >= mono(op.operationCutoffMonoNs)) fail('read_timeout'); };
 function result(operation, result, extra = {}) {
-  const failure=workerData.maintenance&&!result.ok?(attribution?.failure()??failureDetail):undefined;
-  parentPort.postMessage({ operation, result, ...extra,...(failure?{maintenanceFailure:failure}:{}) });
+  const failure=workerData.maintenance&&!result.ok&&!(closing&&result.error?.code==='store_closed')?(attribution?.failure()??failureDetail):undefined;
+  parentPort.postMessage({ operation, result, ...extra,...(failure?{maintenanceFailure:failure,...(secondaryFailureDetail?{maintenanceSecondaryFailure:secondaryFailureDetail}:{})}:{}) });
 }
 function dispose() {
   return disposing ??= (async () => {
     let failed = false;
-    try { semantic?.close(); index?.close(); facade?.close(); } catch(error) {attribution?.captureFailure(error);failed = true;}
+    const failedDisposal=error=>{if(workerData.maintenance&&!failed&&!failureDetail){attribution?.captureFailure(error);attribution?.selectFailure(error);nativeFailure(error);}failed=true;};
+    try { semantic?.close(); index?.close(); facade?.close(); } catch(error) {failedDisposal(error);}
     for (const resource of owned.reverse()) {
-      try { await resource.close(); Atomics.add(resources, resource.at + 1, 1); } catch(error) {attribution?.captureFailure(error);failed = true;}
+      try { await resource.close(); Atomics.add(resources, resource.at + 1, 1); } catch(error) {failedDisposal(error);}
     }
-    if (failed){noteFailure('cleanup');fail('reader_failed');}
+    if (failed){noteFailure('cleanup',undefined,undefined,true);fail('reader_failed');}
   })();
 }
 // Close never races bootstrap acquisition or an outstanding asynchronous call.
 function exitWhenIdle() {
   return exiting ??= (async () => {
+    if(workerData.maintenance){attribution?.resetFailure();failureDetail=undefined;secondaryFailureDetail=undefined;}
     observer.select(workerData.frame);
     try { await dispose(); sealNative(workerData.frame); phase?.mark('disposed'); }
-    catch { process.exitCode = 1; }
+    catch { if(workerData.maintenance)parentPort.postMessage({kind:'maintenance-close-failure',maintenanceFailure:attribution?.failure()??failureDetail,...(secondaryFailureDetail?{maintenanceSecondaryFailure:secondaryFailureDetail}:{})});process.exitCode = 1; }
     parentPort.close();
   })();
 }
@@ -92,7 +94,7 @@ try {
   phase?.mark('fileIdentified');
   const permission = new Promise((resolve, reject) => { rejectPermission = reject; parentPort.once('message', message => {
     try {
-      if (message.kind !== 'identity-ack'){noteFailure('protocol');fail('reader_failed');}
+      if (message.kind !== 'identity-ack'){if(!closing)noteFailure('protocol');fail('reader_failed');}
       verifyRecords(request, message.operation, request, opening); resolve();
     } catch (error) { reject(error); }
   }); });
@@ -126,16 +128,17 @@ try {
   phase?.mark('openSent');
   result(opening, { ok: true, value: null }, { fileIdentity: facade.fileIdentity });
 } catch (error) {attribution?.captureFailure(error);attribution?.selectFailure(error);
+  const response=workerData.maintenance?nativeFailure(error):undefined;
   try { await dispose(); sealNative(workerData.frame); } catch { /* No seal: diagnostic coverage is incomplete. */ }
-  result(opening, nativeFailure(error));
+  result(opening, response??nativeFailure(error));
 } finally {
   booting = false;
   if (closing) await exitWhenIdle();
 }
 parentPort.on('message', async message => {
   if (closing || message?.method === 'close') return;
-  if (active || !facade) {failureDetail=undefined;noteFailure('worker_state');result(message.operation, productFailure('reader_failed')); return;}
-  active = true;failureDetail=undefined;
+  if (active || !facade) {failureDetail=undefined;secondaryFailureDetail=undefined;noteFailure('worker_state');result(message.operation, productFailure('reader_failed')); return;}
+  active = true;failureDetail=undefined;secondaryFailureDetail=undefined;
   attribution?.reset(message.maintenanceOrdinal);
   const receivedAt=Number(process.hrtime.bigint())/1e6;
   if (message.method === 'fetchCandidateEvidence') phase?.mark('readReceived');

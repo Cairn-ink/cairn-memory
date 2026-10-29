@@ -6,14 +6,14 @@ import { randomUUID } from 'node:crypto';
 import * as reader from '../context-product-reader.mjs';
 import * as pump from '../context-product-pump.mjs';
 import * as attribution from '../context-product-attribution.mjs';
-import { createContextReadSupervisor } from '../context-read-supervisor.mjs';
+import { createContextReadSupervisor,createSupervisorRegistry } from '../context-read-supervisor.mjs';
 import { credentialDigest,PRODUCT_PROFILE } from '../context-product-control.mjs';
 import { personal,descriptor } from '../testing/context-product-owner-fixture.mjs';
 
 const publicReaderFailure='{"ok":false,"error":{"code":"reader_failed","retryable":false}}';
-function setup(t,mode,{maintenance=true,fake,observation,refreshThrows=false,closeThrows=false}={}){
+function setup(t,mode,{maintenance=true,fake,observation,refreshThrows=false,closeThrows=false,isolated=false}={}){
   let clock=100,serial=0,handle,lastResult,opening;
-  const timers=new Map(),supervisor=createContextReadSupervisor(),token={service:'failure-test'};
+  const timers=new Map(),supervisor=isolated?createSupervisorRegistry().supervisor():createContextReadSupervisor(),token={service:'failure-test'};
   t.after(()=>supervisor.close().catch(()=>{}));
   const readSet=[personal],ownerCoverage=descriptor(readSet),control={requestId:randomUUID(),handleId:randomUUID(),credentialBindingId:randomUUID(),credentialExpiresUtcMs:null,requestMaxMs:5000};
   const binding={kind:maintenance?'service':'request',...(maintenance?{serviceId:'failure-service',credentialBindingId:control.credentialBindingId,credentialExpiresUtcMs:null}:control),
@@ -150,4 +150,43 @@ test('failure cause: an undefined thrown value retains its bounded fallback and 
   try {meter.measure('verify',()=>{throw undefined;});}catch{caught=true;}
   assert.equal(caught,true);
   assert.deepEqual(meter.failure?.(),{kind:'exception',errorName:'other',step:3},'uncoded non-Error private fallback and step');
+});
+
+
+test('K1 reader close preserves error before exit and registry cleanup',async t=>{
+  const s=setup(t,'combined_close',{isolated:true,fake:data=>{
+    const worker=fakeWorker(data),send=worker.postMessage;
+    worker.postMessage=message=>{if(message.method!=='close')return send(message);
+      worker.emit('error',new TypeError('private initiating close text'));worker.emit('exit',7);
+    };return worker;
+  }});
+  const h=await s.open(s.options),error=await h.close().catch(error=>error);
+  assert.equal(error.code,'reader_failed','combined close public code equals the base');
+  assert.deepEqual(Object.keys(error),['code','cleanup','diagnostics'],'combined close public Error shape equals the base');
+  const diagnostic=reader.maintenanceReaderFailureDiagnostic(h),primary=reader.maintenanceFailureDiagnostic(error);
+  assert.equal(primary?.cause,'worker_error','close primary survives exit and registry cleanup');
+  assert.equal(primary.errorName,'TypeError');assert.equal(primary.stage,'close');assert.equal(Object.hasOwn(primary,'ordinal'),false);assert.equal(Object.hasOwn(primary,'stall'),false);
+  assert.deepEqual(diagnostic.lastFailure,primary,'eventual rejection retains the latched primary');
+  assert.equal(diagnostic.failureCounts.worker_error,1);assert.equal(diagnostic.failureCounts.worker_exit,0);assert.equal(diagnostic.failureCounts.cleanup,0);
+  assert.equal(diagnostic.secondaryFailure.cause,'cleanup');assert.equal(diagnostic.secondaryFailureCounts.worker_exit,1);assert.equal(diagnostic.secondaryFailureCounts.cleanup,1);
+});
+
+test('K1 pump drain preserves the initiating call and its join snapshot',async t=>{
+  const s=setup(t,'engine',{closeThrows:true,isolated:true}),p=s.renew(s.config);await s.step();const final=await p.completion;
+  const primary=reader.maintenanceFailureDiagnostic(s.result),diagnostic=pump.maintenancePumpDiagnostic(final),lane=pump.maintenancePumpPhaseDiagnostic(final).projections[0];
+  assert.equal(final.error,'reader_failed','combined call and drain retain base public disposition');
+  assert.equal(diagnostic.lastFailure?.cause,'engine','drain preserves the initiating call failure');
+  assert.equal(diagnostic.lastFailure.engineCode,'storage_busy');assert.equal(diagnostic.lastFailure.ordinal,primary.ordinal);assert.deepEqual(diagnostic.lastFailure.stall,primary.stall);
+  assert.equal(diagnostic.failureCounts.engine,1);assert.equal(diagnostic.failureCounts.cleanup,0);assert.equal(diagnostic.secondaryFailureCounts.cleanup,1);
+  assert.equal(lane.secondaryFailure.cause,'cleanup');assert.equal(lane.secondaryFailure.number,0);
+});
+
+
+test('K1 supervisor disposal preserves the last failed call before shutdown',async t=>{
+  const s=setup(t,'engine',{isolated:true}),h=await s.open(s.options);
+  const result=await h.refreshContextIndex({readSet:[personal],types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:1,maxMs:1000}},s.token);
+  const primary=reader.maintenanceFailureDiagnostic(result);assert.equal(primary.engineCode,'storage_busy');
+  await s.config.supervisor.close();
+  assert.equal(reader.maintenanceReaderFailureDiagnostic(h).lastFailure.engineCode,'storage_busy','supervisor disposal preserves the initiating engine code');
+  assert.deepEqual(reader.maintenanceReaderFailureDiagnostic(h).lastFailure,primary);assert.equal(reader.maintenanceReaderFailureDiagnostic(h).failureCounts.engine,1);
 });

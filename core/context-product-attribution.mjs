@@ -56,7 +56,7 @@ export function serializationDiagnostic(buffer, nowNs=process.hrtime.bigint()) {
 export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrtime.bigint())/1e6,hrtime=()=>process.hrtime.bigint(),rendezvous}={}) {
   const v=view(buffer),fields=new Float64Array(attributionFields.length);
   const operationStarts=new Float64Array(8),operationKinds=new Uint8Array(8),operationPrevious=new BigUint64Array(8);
-  let operationDepth=0,failureNameAtStep,failureStep,failureError,failureSelected=false;
+  let operationDepth=0,failureStep,failureError,rawFailureError,failureCaptured=false,failureSelected=false,failureResolved=false,failureDetail;
   let current=0n,elapsed=0,readState=0,readStart=0,readElapsed=0,readPrevious=0n;
   const publish=value=>{current=value;if(v)Atomics.store(v,0,value);};
   const restore=previous=>publish((previous&15n)===0n ? hrtime()/1000n<<4n : previous);
@@ -72,20 +72,33 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
   };
   const api={
     reset(ordinal=v?Atomics.load(v,4):0){
-      if(v)Atomics.store(v,5,0n);fields.fill(0);readState=0;operationDepth=0;failureNameAtStep=undefined;failureStep=undefined;failureError=undefined;failureSelected=false;
+      if(v)Atomics.store(v,5,0n);fields.fill(0);readState=0;operationDepth=0;api.resetFailure();
       if(v){Atomics.store(v,1,0n);Atomics.store(v,2,0n);Atomics.store(v,3,0n);}publish(hrtime()/1000n<<4n);
       if(v)Atomics.store(v,5,markerOrdinal(ordinal));
     },
+    resetFailure(){failureStep=undefined;failureError=undefined;rawFailureError=undefined;failureCaptured=false;failureSelected=false;failureResolved=false;failureDetail=undefined;},
     start(kind){
       if(operationDepth===operationStarts.length)return -1;
       const at=operationDepth++;operationStarts[at]=now();operationKinds[at]=maintenanceKinds.indexOf(kind);operationPrevious[at]=enter(kind);return at;
     },
     end(at){if(at<0)return;record(maintenanceKinds[operationKinds[at]],saturate(now()-operationStarts[at]));restore(operationPrevious[at]);operationDepth=at;},
     checkpoint(kind){try{rendezvous?.(kind);}catch(error){api.captureFailure(error);throw error;}},
-    captureFailure(error){if(failureSelected||failureNameAtStep!==undefined&&error===failureError)return;try{for(let object=Object(error);object;object=Object.getPrototypeOf(object)){const code=Object.getOwnPropertyDescriptor(object,'code');if(code){if(!Object.hasOwn(code,'value')||code.value!==undefined)return;break;}}}catch{return;}failureError=error;failureNameAtStep=maintenanceErrorName(error);failureStep=Number(current&15n);},
-    mapFailure(error,mapped){if(failureError===error)failureError=mapped;return mapped;},
-    selectFailure(error){if(failureError!==error){failureNameAtStep=undefined;failureStep=undefined;}failureError=undefined;failureSelected=true;},
-    failure:()=>failureNameAtStep===undefined?undefined:{kind:'exception',errorName:failureNameAtStep,step:failureStep},
+    // These slots can be written under a SQLite lock. Never inspect the error
+    // until failure() is called after the transaction has unwound.
+    captureFailure(error){if(failureSelected||failureCaptured&&error===failureError)return;failureError=error;rawFailureError=error;failureStep=Number(current&15n);failureCaptured=true;failureResolved=false;failureDetail=undefined;},
+    mapFailure(error,mapped){if(failureCaptured&&failureError===error)failureError=mapped;return mapped;},
+    selectFailure(error){if(!failureCaptured||failureError!==error){failureCaptured=false;rawFailureError=undefined;failureStep=undefined;failureResolved=false;failureDetail=undefined;}failureError=undefined;failureSelected=true;},
+    failure(){
+      if(failureResolved)return failureDetail;
+      failureResolved=true;
+      if(!failureCaptured)return undefined;
+      const error=rawFailureError;rawFailureError=undefined;failureError=undefined;
+      try{for(let object=Object(error);object;object=Object.getPrototypeOf(object)){
+        const code=Object.getOwnPropertyDescriptor(object,'code');
+        if(code){if(!Object.hasOwn(code,'value')||code.value!==undefined)return undefined;break;}
+      }}catch{return undefined;}
+      return failureDetail={kind:'exception',errorName:maintenanceErrorName(error),step:failureStep};
+    },
     get stepKind(){return Number(current&15n);},
     snapshot:()=>Object.fromEntries(attributionFields.map((name,i)=>[name,fields[i]])),
     add(name,n){const slot=slots[name];fields[slot]=add(fields[slot],n);},
