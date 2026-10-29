@@ -53,10 +53,11 @@ not itself the decision or a claim that Q4 is met.
 
 ### Immediate removals and corrections: what is already safe, what must change
 
-An as-of read **must not return a Memory forgotten, hard-deleted, privacy-purged,
-superseded or made access-ineligible after E**, nor an excerpt containing that
-content. An item corrected after E must have canonical's current text or be
-omitted. Use omission on exact-revision mismatch in the first implementation.
+An as-of read **must not return a Memory forgotten, hard-deleted, privacy-purged
+or made access-ineligible after E**, nor an excerpt containing that content. A
+`current` read also must not return a Memory superseded after E; a `history` read
+may, labelled historical (owner decision 2026-10-29, §2.2). An item corrected
+after E must have canonical's current text or be omitted on every intent. Use omission on exact-revision mismatch in the first implementation.
 The next read begun after forget commits must exclude the content on every
 surface, including history, candidates, assembly, exact evidence, cached pages,
 the optional tail and the hosted product's fallback. X never applies here.
@@ -66,8 +67,8 @@ the optional tail and the hosted product's fallback. X never applies here.
 | Memory forget | Ordinary forget leaves a revised tombstone, nulls content and removes receipts (`core/runtime.mjs:305`). `memoryRow` selects `deleted=0`; exact evidence then checks eligibility/revision (`core/private-evidence-storage.mjs:41`, `:73`). Assembly skips unavailable/conflicting refs, then refetches delivered items (`core/context-product-index.mjs:114`, `:139`). | Existing final exact fetch drops it. Retain this check even when E is accepted; never assemble text/excerpts from snapshot rows. Apply it to every returned candidate/page, not only assembled text. |
 | Hard delete | No canonical row means evidence unavailable under the same lookup, even if no epoch advanced. Independent hard deletion is a real test mutation (`core/test/context-read-assembly-races.test.mjs:42`). | Final lookup drops it immediately. Every catch-up completely enumerates canonical metadata and diffs identities to remove stale index membership and certify completeness (§3); discovery latency is separate from immediate safety. |
 | Correction | Canonical correction changes text, increments revision and replaces receipts (`core/runtime.mjs:275`). Evidence rejects a snapshot ref's old revision (`core/private-evidence-storage.mjs:75`; Cards `:62`). | Omit mismatched refs, including all old excerpts and cached candidate metadata. Do not silently keep an old score/ref while substituting new text. Current-text reranking is separate work. |
-| Card deleted or ineligible | Detail refuses cancelled/deleted Cards (`core/private-card-storage.mjs:127`). Current-intent evidence reevaluates support/applicability/dependencies (`core/private-evidence-storage.mjs:54`, `:59`); support resolves live bindings (`core/private-card-storage.mjs:109`), method state is compared live (`core/card-current-storage.mjs:34`). | Require full confirmed/current retrieval eligibility for both intents; today history bypasses it. Authenticated draft inspection uses §2.2's draft policy, with the same suppression and lineage requirements. Add durable body lineage (§2.3) so lost bindings cannot hide erased contributors. Keep stricter live confirmation checks initially. |
-| Supersession or privacy loss in history | History deliberately admits undeleted historical Memories and confirmed Cards with lost support (`core/private-evidence-storage.mjs:54`, `:56`; `core/context-read-sidecar.mjs:671`). Supersession has an ordinary history surface (`core/runtime.mjs:497`). Thus current evidence checks alone are **not** the required any-surface exclusion. | Add a common live safety predicate for supersession, privacy tombstones and source lineage, independent of intent. History may retain other allowed history, but cannot bypass this exclusion. Withdraw/revise the historical-content contract in revision 4 where it conflicts. |
+| Card deleted or ineligible | Detail refuses cancelled/deleted Cards (`core/private-card-storage.mjs:127`). Current-intent evidence reevaluates support/applicability/dependencies (`core/private-evidence-storage.mjs:54`, `:59`); support resolves live bindings (`core/private-card-storage.mjs:109`), method state is compared live (`core/card-current-storage.mjs:34`). | Require confirmed state and the common safety predicate (suppression, existence/deletion, exact identity, live intact contributors and lineage) for both intents; today history bypasses the contributor checks. Full current support/applicability/dependency eligibility is required for `current` only (owner decision 2026-10-29). Authenticated draft inspection uses §2.2's draft policy, with the same suppression and lineage requirements. Add durable body lineage (§2.3) so lost bindings cannot hide erased contributors. Keep stricter live confirmation checks initially. |
+| Supersession or privacy loss in history | History deliberately admits undeleted historical Memories and confirmed Cards with lost support (`core/private-evidence-storage.mjs:54`, `:56`; `core/context-read-sidecar.mjs:671`). Supersession has an ordinary history surface (`core/runtime.mjs:497`). Thus current evidence checks alone are **not** the required any-surface exclusion. | Add a common live safety predicate for privacy tombstones, deletion, exact revision and source lineage, independent of intent; history cannot bypass it. **Owner decision 2026-10-29:** supersession is not suppression. A superseded (not corrected) Memory, and a confirmed Card whose intact contributors were superseded or which lost current support, applicability or dependency eligibility, stay readable under `history`, labelled historical with content-free supersession metadata; `current` excludes them as today. Forgotten, deleted, purged, privacy-erased and inaccessible content, and text from before a correction, never appear on any intent. |
 | Owner purge/privacy deletion or access revocation | The semantic gate checks vector policy/purge epoch (`core/context-semantic-gate.mjs:9`); lexical finalization checks request access (`core/context-product-index.mjs:67`) but does not consult an owner content-purge tombstone. Vector purge is **not** canonical content deletion. Raw deletion has a canonical cascade (`core/raw-deletion-storage.mjs:117`), but that is not proof of complete owner-wide suppression. | Add a durable canonical owner/item/source suppression check shared by lexical, exact, history and fallback paths. A privacy delete must commit suppression before acknowledging success, then clean content/derived artifacts. Pending/failed purge remains suppressed. Product checks collection ACL at request time and supplies current authority; engine retains both request checks and final namespace/item authorization. |
 
 This requires an engine-wide safety seam, not only relaxing
@@ -234,20 +235,26 @@ publications. Keep the unchanged final pointer identity rule initially.
 For each outgoing ref, text, title, snippet, source excerpt and metadata object:
 
 * Check live owner/namespace/caller access and durable owner/item/source privacy
-  suppression, existence, deletion and supersession. Suppressed or unresolved
+  suppression, existence and deletion, plus supersession for `current`.
+  Suppressed or unresolved
   lineage means omit/refuse, even for history and empty-query/cached surfaces,
   except for the pending, owner-only recovery inspection defined below. Known
   suppressed content never qualifies for that exception.
 * Refetch canonical evidence, evaluate purpose-aware Card eligibility and compare
   exact revision/body revision and source identities. If corrected, omit it.
   Do not expose snapshot title/body/excerpt or cached metadata from that item.
-  **Confirmed state and current Card support, applicability and dependency
-  eligibility are mandatory for retrieval under both `current` and `history`.**
-  The history shortcut at
-  `core/private-evidence-storage.mjs:54` and the early return at
-  `core/context-read-sidecar.mjs:671` must not bypass it; privacy-only filtering
-  is insufficient. History may retain other permitted historical Memory states
-  only after intent-independent supersession/privacy checks.
+  **Confirmed state, the common predicate and live intact contributors are
+  mandatory for Card retrieval under both `current` and `history`.** The history
+  shortcut at `core/private-evidence-storage.mjs:54` and the early return at
+  `core/context-read-sidecar.mjs:671` must not bypass them. **Owner decision
+  2026-10-29:** current support, applicability and dependency eligibility, and
+  exclusion of superseded Memories, apply to `current` only. Under `history`, a
+  superseded (not corrected) Memory or a confirmed Card that lost current
+  eligibility stays readable, labelled historical with content-free supersession
+  metadata. A contributor is intact when its row still exists, is not deleted,
+  forgotten, excluded or purged, and its bytes still match the bound content
+  identity at the bound version; supersession alone does not break that, while
+  correction, receipt removal, note deletion and Raw exclusion do.
 * Revalidate live receipts and sources for excerpts; if bytes/provenance changed
   between preparation and completion, omit or refuse atomically, never deliver
   a partly stale assembly. A bounded retry may refill from the certified ranking;
@@ -264,11 +271,12 @@ The hosted product owns its request-time collection ACL check and stopped-client
 cache erasure; engine controls must fail closed on changed authority.
 
 **Purpose-aware eligibility.** All owner reads require access + restore admission
-(§3.4) + owner/item/source suppression + existence/deletion/supersession + exact
+(§3.4) + owner/item/source suppression + existence/deletion + exact
 identities. Proven complete body lineage is additionally mandatory except for
 the narrowly defined fourth purpose below. Retrieval (`current` or `history`)
-additionally requires confirmed state and full current support/applicability/dependency
-eligibility. Authenticated draft inspection uses a separate draft-state policy:
+additionally requires confirmed state for Cards; `current` also requires full
+current support/applicability/dependency eligibility and excludes superseded
+Memories, while `history` does not (owner decision 2026-10-29). Authenticated draft inspection uses a separate draft-state policy:
 verified owner authoring authority, extant `draft` state, exact draft revision/body
 identity, complete lineage and live unsuppressed contributors. It does not require
 confirmation or confirmation-time applicability/dependency declarations. Purpose
@@ -650,15 +658,16 @@ eligibility map. Run regardless of unchanged scalar epochs. Include namespace/
 type identity; Memory revision, deleted/currentness/review state; Card revision,
 body revision, state, durable provenance fingerprint and exact live dependency/
 support fingerprints used by the certificate. Unconditionally evaluate
-all selected Cards, including previously ineligible Cards, using current support,
-applicability, method dependencies and §2.3 lineage/suppression for **both intents**.
+all selected Cards, including previously ineligible Cards, using §2.3
+lineage/suppression for **both intents** and current support, applicability and
+method dependencies for `current` (owner decision 2026-10-29, §2.2).
 Compare Raw, namespace and method fences even if no document contribution changes.
 
 The metadata queries already exist (`core/context-product-sidecar.mjs:332`,
 `core/context-product-sidecar.mjs:334`, `core/context-product-sidecar.mjs:335`).
 Their current eligibility mapping (`core/context-product-sidecar.mjs:344`) must
-use the new intent-independent safety/current-Card evaluation rather than
-history's early return (`core/context-read-sidecar.mjs:671`). Existing scalar
+use the new intent-independent safety evaluation, plus current-Card eligibility
+for `current`, rather than history's early return (`core/context-read-sidecar.mjs:671`). Existing scalar
 namespace/Card/method epochs are only hints (`core/database.mjs:49`,
 `core/database.mjs:91`, `core/private-card-schema.mjs:38`,
 `core/method-package-schema.mjs:79`). No writer announcement is required to detect
