@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "612945cb01a5efe04f3bab3530cabf21fa629c76fe70e6204f0e2efbc5f19308",
-  "bytes": 962697,
+  "sha256": "8fee1776d7960eea2c38bd2f71a0b886994d4853170d6bbbf2d0898a42b175dd",
+  "bytes": 962380,
   "files": [
     "LICENSE",
     "README.md",
@@ -670,8 +670,8 @@
     "docs/plans/context-read-p2e-impl.md": "daf884b2995458d7d0d61832bbd163e51066cfc4e00f66e3f01c144eaeb89028",
     "core/content-safety-classifier.mjs": "60cf43447d6c39d10301a39a9cb1b67b9b4b55cb4ce9a1162b711022a325fb58",
     "core/content-safety-files-child.mjs": "1003ed0c93108b0664c5cd3b388adcffa77ba7707512a2870ddca907e16f1745",
-    "core/content-safety-observations.mjs": "4d9e73d979bb2d058b486945f8ad16a3b767098dc0e8b1c64c91535170b2320e",
-    "core/content-safety-preflight.mjs": "68ced72b9531c8b82a1ae45ea603eaef1d1b20585fe8fc38a1c43c9b6454b91d",
+    "core/content-safety-observations.mjs": "5fe3ca74f8db00ab3477a322b76c70f735e6e03a01e6502a0b654e7ee2ab45d1",
+    "core/content-safety-preflight.mjs": "e338e43a21182f94c5b46f8378c07ad44a60bb9b40aee53eb3cac33f010bf83b",
     "adapters/mcp/safety-command.mjs": "9aada99bb9663e086307e11a51ac44930642b3b93c905062de9c3ca19d23e145",
     "bin/cairn-memory.mjs": "7c24872a106de8d06c0a66499002f46aa8894b588b005ac9d39a50df4e586981",
     "README.md": "dcfd6be7a1a90d7016dbce352dbd06516443d6760e0dbfd74e6049632ec36891",

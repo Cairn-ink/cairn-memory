@@ -108,7 +108,7 @@ export function contentSafetyObservations(native, limits, check) {
   }), row => row.target_id);
   let rawBindings = new Map(), conversations = new Map(), exclusions = new Map(), rawDeletions = new Map();
   let sourceMaps = new Map(), mappedMessages = new Set(), messages = new Map(), fences = new Map();
-  let episodeSecret, episodeLinks = new Map(), episodes = new Map(), episodeDeletions = new Map();
+  let episodeSecret;
   const rawCallerActions = new Set();
   if (schemaBase === 33) {
     rawBindings = grouping(scan('card_raw_bindings'), row => row.card_id);
@@ -123,9 +123,6 @@ export function contentSafetyObservations(native, limits, check) {
     // These joins stay inside the engine's Raw effect ledger and require its
     // typed root identity. Caller-selected Card action strings are not evidence.
     const verified = removed.filter(row => apiEffectId(row.effect_id) && rootsDeleted.has(deletionKey(row)));
-    const deletionMemories = grouping(verified.filter(row => row.entity_type === 'memory'), deletionKey);
-    episodeDeletions = grouping(verified.filter(row => row.entity_type === 'episode').map(effect => ({ effect,
-      memoryIds: new Set((deletionMemories.get(deletionKey(effect)) ?? []).map(item => item.entity_id)) })), row => row.effect.entity_id);
     rawDeletions = grouping(verified.filter(row => row.source_type === 'conversation'), row => row.source_id);
     const maps = scan('raw_source_maps');
     sourceMaps = grouping(maps, row => JSON.stringify([row.conversation_id, row.message_id, row.source_key]));
@@ -135,14 +132,6 @@ export function contentSafetyObservations(native, limits, check) {
     episodeSecret = db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get().secret;
     // Examine every retained canonical source/tombstone provider, including
     // memory-only namespaces, without decrypting Raw text or invoking a writer.
-    episodes = new Map(scan('session_episodes').map(row => [row.id, row]));
-    const links = [];
-    for (const row of scan('episode_memory_links')) {
-      const ids = JSON.parse(row.receipt_ids);
-      if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw Error();
-      for (const receiptId of new Set(ids)) links.push(db.charge({ ...row, receiptId }));
-    }
-    episodeLinks = grouping(links, row => JSON.stringify([row.memory_id, row.admission_revision, row.receiptId]));
     for (const table of ['raw_receipt_lineage', 'raw_receipt_origins', 'raw_job_sources', 'raw_closed_jobs',
       'episode_keep_actions', 'episode_sources']) scan(table);
     for (const row of scan('raw_deletion_actions')) {
@@ -250,20 +239,6 @@ export function contentSafetyObservations(native, limits, check) {
         // retired revision nor the removed receipt ids. It cannot attribute a
         // later missing receipt to that deletion. Without retained exact Raw
         // ancestry, the missing contributor remains unknown.
-        if (!kept) for (const link of episodeLinks.get(JSON.stringify([memoryId, boundRevision, receiptId])) ?? []) {
-          check();
-          const episode = episodes.get(link.episode_id);
-          if (!episode || !sameNamespace(episode, card) || episode.deleted !== 1) continue;
-          const matched = fences.get(JSON.stringify([...boundary(card), episode.client, episode.session_key])) ?? [];
-          if (!matched.length) continue;
-          for (const removed of episodeDeletions.get(episode.id) ?? []) {
-            check();
-            if (sameNamespace(removed.effect, card) && removed.memoryIds.has(memoryId)) {
-              fact(id, 'purge', 'episode_memory_links', link);
-              fact(id, 'purge', 'raw_deletion_effects', removed.effect);
-            }
-          }
-        }
         // A newer revision and lost receipts alone also result from Raw erasure.
         // Require retained identity-linked old fingerprint evidence as well.
         if (exists && !kept && memory.revision > boundRevision) for (const old of corrections.get(memoryId) ?? []) {

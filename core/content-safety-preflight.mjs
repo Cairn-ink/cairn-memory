@@ -54,6 +54,9 @@ export async function preflightContentSafetyV1({ path, budget = {} } = {}) {
       }
       if (Object.values(counts).reduce((sum, count) => sum + count, 0) !== snapshot.observations.length) throw Error();
       return { enumerated: snapshot.observations.length, ...counts,
+        // Episode-derived receipts removed by Raw deletion count as unknown;
+        // the complete count is unaffected.
+        knownSuppressedScope: 'single-producer-v1',
         owners: Object.fromEntries(Object.entries(owners).map(([key, set]) => [key, set.size])),
         ownersAffected: affected.size, mode: 'first-install', schemaBase: snapshot.schemaBase, unchangedFiles: true };
     });

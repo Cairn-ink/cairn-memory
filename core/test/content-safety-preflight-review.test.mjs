@@ -161,7 +161,7 @@ test('R5 scale: default budget reconciles 121 Cards, 1650 Memories, 26 namespace
   const elapsedMs = performance.now() - start;
   assert.deepEqual(report, { enumerated: 121, complete: 0, unknown: 121, knownSuppressed: 0,
     owners: { complete: 0, unknown: 26, knownSuppressed: 0 }, ownersAffected: 26,
-    mode: 'first-install', schemaBase: 33, unchangedFiles: true });
+    knownSuppressedScope: 'single-producer-v1', mode: 'first-install', schemaBase: 33, unchangedFiles: true });
   const prepare = DatabaseSync.prototype.prepare, preparations = new Map();
   DatabaseSync.prototype.prepare = function(sql) { preparations.set(sql, (preparations.get(sql) ?? 0) + 1); return prepare.call(this, sql); };
   let snapshot;

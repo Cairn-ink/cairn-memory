@@ -22,7 +22,7 @@ test('safety preflight CLI emits only reconciled counts with no private material
   t.diagnostic('Synthetic preflight example: ' + JSON.stringify(result.value));
   assert.deepEqual(result.value, { enumerated: 2, complete: 0, unknown: 2, knownSuppressed: 0,
     owners: { complete: 0, unknown: 1, knownSuppressed: 0 }, ownersAffected: 1,
-    mode: 'first-install', schemaBase: 23, unchangedFiles: true });
+    knownSuppressedScope: 'single-producer-v1', mode: 'first-install', schemaBase: 23, unchangedFiles: true });
   for (const secret of leaks) assert.equal(result.stdout.includes(secret), false);
   assert.deepEqual(independentFiles(f.path), before);
 });

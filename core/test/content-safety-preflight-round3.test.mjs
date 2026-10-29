@@ -53,8 +53,8 @@ for (const variant of ['exact', 'revision', 'receipt', 'live-episode', 'effect-a
     if (variant === 'effect-action') f.db.prepare("UPDATE raw_deletion_effects SET action_id='unrelated-action' WHERE entity_type='episode'").run();
     if (variant === 'no-fence') f.db.exec('DELETE FROM raw_session_fences');
     if (variant === 'namespace') f.db.prepare("UPDATE session_episodes SET owner_id='synthetic-other-owner' WHERE id=?").run(link.episode_id);
-    assert.deepEqual(classify(f, card.id), variant === 'exact'
-      ? { status: 'known-suppressed', reasons: ['purge'] } : { status: 'unknown', reasons: ['source_missing'] });
+    // e9 option A: missing episode-derived receipts are outside single-producer-v1.
+    assert.deepEqual(classify(f, card.id), { status: 'unknown', reasons: ['source_missing'] });
   });
 }
 

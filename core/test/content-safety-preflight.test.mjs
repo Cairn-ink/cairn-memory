@@ -32,7 +32,7 @@ for (const version of [23, 33]) {
     const result = await preflightContentSafetyV1({ path: f.path });
     assert.deepEqual(result, { enumerated: 3, complete: 0, unknown: 2, knownSuppressed: 1,
       owners: { complete: 0, unknown: 2, knownSuppressed: 1 }, ownersAffected: 2,
-      mode: 'first-install', schemaBase: version, unchangedFiles: true });
+      knownSuppressedScope: 'single-producer-v1', mode: 'first-install', schemaBase: version, unchangedFiles: true });
     assert.equal(result.complete + result.unknown + result.knownSuppressed, result.enumerated);
     assert.deepEqual(independentFiles(f.path), before);
   });
@@ -74,7 +74,7 @@ test('physical 18: populated Memory-only store succeeds with zero bodies', async
   ok(f.core.forget({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision }));
   f.close(); const before = independentFiles(f.path);
   assert.deepEqual(await preflightContentSafetyV1({ path: f.path }), { enumerated: 0, complete: 0, unknown: 0, knownSuppressed: 0,
-    owners: { complete: 0, unknown: 0, knownSuppressed: 0 }, ownersAffected: 0, mode: 'first-install', schemaBase: 18, unchangedFiles: true });
+    owners: { complete: 0, unknown: 0, knownSuppressed: 0 }, ownersAffected: 0, knownSuppressedScope: 'single-producer-v1', mode: 'first-install', schemaBase: 18, unchangedFiles: true });
   assert.deepEqual(independentFiles(f.path), before);
 });
 
