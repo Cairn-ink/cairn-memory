@@ -301,11 +301,24 @@ records start a new generation. These preparation checkpoints do not certify
 readiness; the usual fresh post-commit status check still controls it.
 
 Other database encodings use the append-only builder and start a new generation
-on a fence change. Non-UTF-8 work/certificates without the authenticated
-append-only marker require an explicit maintenance rebuild. IDs whose stored
-bytes cannot round-trip through the native string interface are refused as
-corrupt, rather than used as lossy cursors or identities. The sidecar remains
-format 3 with the same attested DDL.
+on a fence change. Both keyset predicates and ordering explicitly use BINARY.
+IDs must reproduce their stored bytes when bound through SQLite on the same
+connection; lossy decoding or native parameter conversion is refused as corrupt
+before the ID is used as a cursor, identity, or body lookup. Cache inserts also
+read back the stored ID and identity before their batch commits, refusing native
+conversion that changes either value.
+
+New generations carry an authenticated byte-safety marker in their existing
+verification state. Unmarked work starts over, and unmarked bases are never
+copied. An unmarked published certificate remains available under the existing
+serving rules while maintenance builds a marked replacement from canonical
+text. Maintenance does not treat that legacy certificate as a ready noop. Refresh
+reports `rebuilding` until the marked publication is ready, while read channels
+and coverage continue to describe the available legacy publication.
+Until the first marked publication, a B0-era certificate on a store with lossy
+or aliasing IDs is served as B0 served it. Invalid canonical IDs must be repaired
+before a marked replacement can publish. The sidecar remains format 3 with the
+same attested DDL.
 
 ### Product cache format 3 and sizing
 

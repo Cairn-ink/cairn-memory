@@ -28,7 +28,7 @@ const fenceChanged = Symbol('maintenance fence changed');
 const same = (a,b) => canonicalJson(a) === canonicalJson(b);
 // Identical provenance predicate for private reuse and immutable-base copying.
 const exactDocument = (old, row) => old && old.revision===row.revision && old.body_revision===row.body_revision && old.eligible===row.eligible;
-const initialVerification = p => ({ phase:0,last:[],hash:new ManifestHash().state(),
+const initialVerification = p => ({ byteSafe:1,phase:0,last:[],hash:new ManifestHash().state(),
   counts:{ byType:Object.fromEntries(['memory','card'].filter(t => p.types.includes(t)).map(t => [t,{eligible:0,indexed:0}])),documents:0,terms:0,totalTokenLength:0 } });
 // Cleanup must not replace a native failure already committed to telemetry.
 function cleaned(work, cleanup) {
@@ -287,13 +287,15 @@ export function productSidecar({ path, db: canonical, identity, features, observ
           const text = side.prepare('SELECT record FROM progress_records WHERE generation=?').get(work.generation)?.record;
           if (!g || !text) return invalid(p,'validation_missing');
           const r = verifiedRecord(identity.cursorSecret,'progress',text);
-          if ((!canMerge() && JSON.parse(g.verify)?.appendOnly!==true) || g.published || pointer?.generation===g.id || side.prepare('SELECT 1 FROM validation_records WHERE generation=?').get(g.id) ||
+          if ((JSON.parse(g.verify)?.byteSafe===1 && !canMerge() && JSON.parse(g.verify)?.appendOnly!==true) || g.published || pointer?.generation===g.id || side.prepare('SELECT 1 FROM validation_records WHERE generation=?').get(g.id) ||
               g.id!==generationId(g) || g.incarnation!==incarnationOf(g) || !same(r.generation,{ id:g.id,incarnation:g.incarnation }) || !same(r.progress,progressOf(g)) ||
               r.kind !== g.kind || r.projectionDigest !== g.projection || r.accessDigest !== g.access ||
               !same(JSON.parse(g.fences), { canonicalFenceDigest:r.canonicalFenceDigest,dependencyFenceDigest:r.dependencyFenceDigest })) return invalid(p,'validation_invalid');
           const mismatch = recordBindings(r,t,true);
           if (mismatch && !['access_changed','dependency_changed','fence_changed'].includes(mismatch)) return invalid(p,mismatch);
-          checkpoint = { mismatch,baseSequence:g.base_sequence,kind:g.kind,progress:r.progress };
+          // Legacy work is authenticated but cannot attest byte-safe scanning.
+          // Ignore it for resumption without hiding an existing publication.
+          if(JSON.parse(g.verify).byteSafe===1)checkpoint = { mismatch,baseSequence:g.base_sequence,kind:g.kind,progress:r.progress };
         }
         if(workOnly)return {
           resumable:checkpoint && !checkpoint.mismatch ? work.generation : null,
@@ -305,14 +307,16 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         if (!g || !text) return invalid(p,'validation_missing');
         const r = verifiedRecord(identity.cursorSecret,'validation',text);
         const expectedTypes = ['memory','card'].filter(type => p.types.includes(type));
-        if ((!canMerge() && JSON.parse(g.verify)?.appendOnly!==true) || g.id !== generationId(g) || g.incarnation !== incarnationOf(g) || g.phase !== streams(p).length+3 || !g.published || r.publicationId !== pointer.publication || !same(r.generation, { id:g.id,sequence:g.sequence,checkpoint:g.checkpoint,incarnation:g.incarnation }) ||
+        if ((JSON.parse(g.verify)?.byteSafe===1 && !canMerge() && JSON.parse(g.verify)?.appendOnly!==true) || g.id !== generationId(g) || g.incarnation !== incarnationOf(g) || g.phase !== streams(p).length+3 || !g.published || r.publicationId !== pointer.publication || !same(r.generation, { id:g.id,sequence:g.sequence,checkpoint:g.checkpoint,incarnation:g.incarnation }) ||
             g.projection !== r.projectionDigest || g.access !== r.accessDigest || g.manifest !== r.manifestDigest ||
             !same(JSON.parse(g.fences),{ canonicalFenceDigest:r.canonicalFenceDigest,dependencyFenceDigest:r.dependencyFenceDigest }) ||
             !same(r.counts,JSON.parse(g.verify).counts) || !same(Object.keys(r.counts.byType).sort(),expectedTypes.sort())) return invalid(p,'validation_invalid');
         const mismatch = recordBindings(r,t);
         if (mismatch && !['access_changed','dependency_changed','fence_changed'].includes(mismatch)) return invalid(p,mismatch);
-        if(checkpoint && !checkpoint.mismatch)return incomplete();
-        return { dto:status(p,mismatch ? 'stale' : 'ready',mismatch,progressOf(g),r.counts), publication:r };
+        const byteSafe=JSON.parse(g.verify).byteSafe===1;
+        // A legacy publication stays available while its replacement is private.
+        if(byteSafe && checkpoint && !checkpoint.mismatch)return incomplete();
+        return { dto:status(p,mismatch ? 'stale' : 'ready',mismatch,progressOf(g),r.counts), publication:r,byteSafe };
       });
     } catch (e) {
       if (e instanceof SyntaxError) return invalid(p,'validation_invalid');
@@ -338,19 +342,18 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   function fresh(t,p,access) {
     return same(t,readTransaction(canonical,() => target(p,access)));
   }
-  function metadataRows(s, after, maximum, p, m, encoding) {
+  function metadataRows(s, after, maximum, p, m) {
+    // Column collations are not attested. Both the cursor and ordering must
+    // explicitly match the stored-byte merge; INDEXED BY never changes SQL order.
     const rows = canonical.prepare(s.type === 'memory'
-      ? `SELECT id,hex(CAST(id AS BLOB)) AS id_bytes,revision,0 AS body_revision,deleted,currentness,review_state FROM memories INDEXED BY index_memory_keyset WHERE ${where} AND id>? ORDER BY id LIMIT ?`
-      : `SELECT id,hex(CAST(id AS BLOB)) AS id_bytes,revision,coalesce(body_revision,0) AS body_revision,state FROM private_cards INDEXED BY private_card_scope WHERE ${where} AND state=? AND id>? ORDER BY id LIMIT ?`)
+      ? `SELECT id,hex(CAST(id AS BLOB)) AS id_bytes,revision,0 AS body_revision,deleted,currentness,review_state FROM memories INDEXED BY index_memory_keyset WHERE ${where} AND id COLLATE BINARY>? ORDER BY id COLLATE BINARY LIMIT ?`
+      : `SELECT id,hex(CAST(id AS BLOB)) AS id_bytes,revision,coalesce(body_revision,0) AS body_revision,state FROM private_cards INDEXED BY private_card_scope WHERE ${where} AND state=? AND id COLLATE BINARY>? ORDER BY id COLLATE BINARY LIMIT ?`)
       .all(...boundary(s.ns),...(s.type === 'card' ? [s.state] : []),after,maximum);
     m.canonicalRows += rows.length; m.metadataBytes += Buffer.byteLength(JSON.stringify(rows.map(({id_bytes,...row})=>row)));
-    for(const row of rows) {
-      let bytes=Buffer.from(row.id,encoding==='UTF-8'?'utf8':'utf16le');
-      if(encoding==='UTF-16be')bytes.swap16();
-      // Lossy native string decoding cannot supply a safe indexed cursor or
-      // identity. Refuse rather than certify a skipped/aliased canonical row.
-      if(!bytes.equals(Buffer.from(row.id_bytes,'hex')))unavailable('corrupt');
-    }
+    // Round-trip through the same native BINARY lookup used for body reads.
+    // UTF-16 conversion can rewrite values Buffer accepts (such as U+FFFE).
+    const rebound=canonical.prepare(`SELECT hex(CAST(id AS BLOB)) AS bytes FROM ${s.type==='memory'?'memories':'private_cards'} WHERE ${where} AND id COLLATE BINARY=?`);
+    for(const row of rows)if(rebound.get(...boundary(s.ns),row.id)?.bytes!==row.id_bytes)unavailable('corrupt');
     // Count and meter support independently of transformation attempts.
     const support = { prepare(sql) { const stmt = canonical.prepare(sql); return Object.fromEntries(['get','all'].map(method => [method,(...args) => {
       m.supportLookups++; const r = stmt[method](...args); m.supportBytes += Buffer.byteLength(JSON.stringify(r ?? null)); return r;
@@ -368,6 +371,8 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     const s=g.streams[stream], key=JSON.stringify([...boundary(s.ns),s.type,row.id]);
     const doc=side.prepare('SELECT coalesce(max(doc),0)+1 AS id FROM documents WHERE generation=?').get(g.storage_id).id;
     side.prepare('INSERT INTO documents VALUES(?,?,?,?,?,?,?,?,?)').run(g.storage_id,doc,stream,row.id,key,row.revision,row.body_revision,row.eligible,tokens.length);
+    const stored=side.prepare('SELECT id,identity FROM documents WHERE generation=? AND doc=?').get(g.storage_id,doc);
+    if(stored.id!==row.id || stored.identity!==key)unavailable('corrupt');
     const terms=source ? side.prepare(`SELECT s.term,p.frequency FROM postings p JOIN statistics s
       ON s.generation=p.generation AND s.term_id=p.term JOIN documents d ON d.generation=p.generation AND d.doc=p.doc
       WHERE p.generation=? AND d.identity=? ORDER BY s.term`).all(storageKey(source),key)
@@ -608,14 +613,14 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     rendezvous('opened');
     // The merge's byte comparator and both indexed TEXT cursors must have
     // identical BINARY order. Other encodings retain the append-only builder.
-    const canonicalEncoding=canonical.prepare('PRAGMA encoding').get().encoding,mergeOrder=canMerge();
+    const mergeOrder=canMerge();
     let t = readTransaction(canonical,() => target(p,access));
     selectProjection(p,t);
     // Cleanup also advances during a long build or repeated target changes;
     // it does not depend on having time left after corpus admission.
     collect(quantum,p.readSet[0].ownerId,1);
     const observed = readTransaction(canonical,() => observe(p,access,{forWrite:true}));
-    if (observed.dto.lexical.state === 'ready') { collect(quantum,p.readSet[0].ownerId);rendezvous('noop'); return m; }
+    if (observed.dto.lexical.state === 'ready' && observed.byteSafe) { collect(quantum,p.readSet[0].ownerId);rendezvous('noop'); return m; }
     const w = side.prepare('SELECT generation FROM work WHERE projection=?').get(t.projectionDigest);
     let g = w && side.prepare('SELECT * FROM generations WHERE id=?').get(w.generation);
     const workStatus=readTransaction(canonical,()=>observe(p,access,{forWrite:true,workOnly:true}));
@@ -625,9 +630,10 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     // rebuild work can resume; delta work must first abandon the invalid base.
     if (!resumable || !g || g.access !== access || (observed.dto.lexical.state === 'unavailable' && g.base_sequence!==0)) {
       const pointer = side.prepare('SELECT generation FROM publications WHERE projection=?').get(t.projectionDigest);
-      const base = observed.dto.lexical.state !== 'unavailable' && pointer && side.prepare('SELECT * FROM generations WHERE id=?').get(pointer.generation);
+      const published = observed.dto.lexical.state !== 'unavailable' && pointer && side.prepare('SELECT * FROM generations WHERE id=?').get(pointer.generation);
+      const base = observed.byteSafe && published;
       const baseSequence = base?.sequence ?? 0;
-      g = { id:null,incarnation:null,seed:randomUUID(),projection:t.projectionDigest,sequence:Math.max(baseSequence,g?.sequence ?? 0)+1,
+      g = { id:null,incarnation:null,seed:randomUUID(),projection:t.projectionDigest,sequence:Math.max(published?.sequence ?? 0,g?.sequence ?? 0)+1,
         base_sequence:baseSequence,checkpoint:0,kind:baseSequence ? 'delta' : pointer || w ? 'rebuild' : metadata.kind,
         fences:canonicalJson({ canonicalFenceDigest:t.canonicalFenceDigest,dependencyFenceDigest:t.dependencyFenceDigest }),access,
         phase:0,last_key:'',base_id:base?.id ?? null,verify:initialVerification(p) };
@@ -652,13 +658,14 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       if (!fresh(t,p,access)) return m;
       const stream = g.streams[g.phase], maximum = stream.type === 'card' ? 1 : 128;
       const { rows, exhausted } = quantum.measure(()=>{
-        const canonicalRows=readTransaction(canonical,() => metadataRows(stream,g.last_key,maximum,p,m,canonicalEncoding));
+        const canonicalRows=readTransaction(canonical,() => metadataRows(stream,g.last_key,maximum,p,m));
         if(!mergeOrder) {
           rendezvous('scan');return {rows:canonicalRows.map(row=>({row,old:null})),exhausted:canonicalRows.length<maximum};
         }
-        const workRows=side.prepare('SELECT *,hex(CAST(id AS BLOB)) AS id_bytes FROM documents WHERE generation=? AND stream=? AND id>? ORDER BY id LIMIT ?')
+        const workRows=side.prepare('SELECT *,hex(CAST(id AS BLOB)) AS id_bytes FROM documents WHERE generation=? AND stream=? AND id COLLATE BINARY>? ORDER BY id COLLATE BINARY LIMIT ?')
           .all(g.storage_id,g.phase,g.last_key,maximum);
-        for(const old of workRows)if(!Buffer.from(old.id).equals(Buffer.from(old.id_bytes,'hex')))unavailable('corrupt');
+        const rebound=side.prepare('SELECT hex(CAST(id AS BLOB)) AS bytes FROM documents WHERE generation=? AND stream=? AND id COLLATE BINARY=?');
+        for(const old of workRows)if(rebound.get(g.storage_id,g.phase,old.id)?.bytes!==old.id_bytes)unavailable('corrupt');
         const rows=[];let c=0,w=0;
         // Merge at most one page of keys. A full input page can never run out
         // before this output bound; absence is proved only in its scanned range.
@@ -691,7 +698,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
               if(exactDocument(base,row)) {tokens={length:base.token_length};source=g.base_id;}
               else {
                 const text=row.eligible ? readTransaction(canonical,()=>canonical.prepare(stream.type==='memory'
-                  ? `SELECT content AS text FROM memories WHERE ${where} AND id=?` : `SELECT title||char(10)||body AS text FROM private_cards WHERE ${where} AND id=?`).get(...boundary(stream.ns),row.id)?.text) : '';
+                  ? `SELECT content AS text FROM memories WHERE ${where} AND id COLLATE BINARY=?` : `SELECT title||char(10)||body AS text FROM private_cards WHERE ${where} AND id COLLATE BINARY=?`).get(...boundary(stream.ns),row.id)?.text) : '';
                 if(typeof text!=='string' || text.length>2000000) {
                   // A deletion/forget can invalidate the observed body before
                   // this read. Preserve the same batch-only fence-race outcome.
