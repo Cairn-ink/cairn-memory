@@ -17,6 +17,39 @@ import { fail } from './validation.mjs';
 import { semanticConfiguration } from './context-semantic-coordinator.mjs';
 import { openDiagnosticBuffer, openDiagnosticClock, openDiagnosticSnapshot } from './context-product-open-diagnostic.mjs';
 
+// Engine-internal only. A patch is added only after native and quiet-window
+// qualification. Neither public configuration nor environment can enable this.
+const qualifiedRuntimePatches = new Set();
+export const maintenanceCutoffQualified = () => qualifiedRuntimePatches.has(process.versions.node);
+const capabilities = new WeakMap(), diagnostics = new WeakMap();
+export const maintenancePumpCutoffDiagnostic = observation => diagnostics.get(observation);
+export const snapshotMaintenanceCutoff = (observation, value) => {
+  if (value) diagnostics.set(observation, Object.freeze({ ...value }));
+};
+export function authorizeMaintenanceCutoff(control, identity) {
+  if (!Number.isSafeInteger(identity.ordinal) || identity.ordinal < 1) return undefined;
+  const capability = { ...identity, attested: false };
+  capabilities.set(control, capability);
+  return capability;
+}
+// Only a control issued by the owned pump can acquire this private bridge.
+function bindMaintenanceCutoff(control, ordinal, operation, resource, record, lifecycle, expire, released) {
+  const capability = capabilities.get(control);
+  if (!capability || capability.ordinal !== ordinal || capability.operation) return undefined;
+  capability.operation = operation;
+  capability.expire = expire;
+  capability.proof = async () => {
+    await lifecycle.termination;
+    const records = await Promise.all([resource.delivery, record.delivery]);
+    if (!released() || records.some(r => r.state !== 'complete' ||
+      !['workerStopped','nativeDisposed','leasesReleased','providersSettled'].every(k => r[k] === true))) {
+      throw Object.assign(Error('reader_failed'), { code: 'reader_failed' });
+    }
+    return records;
+  };
+  return capability;
+}
+
 // Private Worker timing, kept outside the public result DTO. Pump and reader
 // share the process hrtime domain; only timings and fixed work counts are kept.
 const maintenanceObservations = new WeakMap(), maintenancePhases = new WeakMap(), maintenanceMarkers = new WeakMap(), maintenanceStalls = new WeakMap();
@@ -124,7 +157,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     if (!maintenance && (!types.isSharedArrayBuffer(reservation) || Reflect.apply(sharedLength, reservation, []) !== 4 ||
         Atomics.compareExchange(new Int32Array(reservation), 0, 0, 1) !== 0)) fail('authority_required');
     const resource = registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, request: maintenance ? undefined : request, frame, resources });
-    let closed = false, terminal, idle, closePromise, ready = false, releaseWriter;
+    let closed = false, terminal, idle, closePromise, ready = false, releaseWriter, writerReleased = false;
     const epoch = 1;
     const lifecycle = createReaderWorkerLifecycle({ clearTimer, onStop(termination) {
       registry.cleanup(resource);
@@ -139,6 +172,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     function shutdown(code) {
       closed = true; terminal ??= code; clearTimer(idle);
       const slot = lifecycle.pending;
+      if (slot?.cutoff && code === 'read_timeout' && terminal === code && now() >= mono(slot.operation.operationCutoffMonoNs)) slot.cutoff.attested = true;
       const stall=maintenance && code==='read_timeout' ? readMaintenanceMarker(marker,now()) : undefined;
       if(semantic){Atomics.store(new Int32Array(semantic.configuration.cancellation),0,1);if(slot)semantic.handle.cancel(slot.operation.operationId);}
       const stopped = lifecycle.stop();
@@ -165,7 +199,10 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         try {
           if (typeof message.fileIdentity !== 'string' || !/^[0-9]+:[0-9]+$/.test(message.fileIdentity)) fail('reader_failed');
           registry.bind(resource, message.fileIdentity);
-          if (maintenance) releaseWriter = claimMaintenanceWriter(message.fileIdentity,readSet);
+          if (maintenance) {
+            const release = claimMaintenanceWriter(message.fileIdentity,readSet);
+            releaseWriter = () => { release(); writerReleased = true; };
+          }
           instance.postMessage({ kind: 'identity-ack', operation: slot.operation });
         } catch (error) { shutdown(error.code ?? 'reader_failed'); }
         return;
@@ -261,6 +298,12 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       };
       return new Promise(resolve => {
         const slot = { resolve, operation, record, signal, open: opening, method, detach, ordinal }; lifecycle.pending = slot;
+        if (maintenance && !semantic && method === 'refreshContextIndex') {
+          slot.cutoff = bindMaintenanceCutoff(control, ordinal, operation, resource, record, lifecycle, () => {
+            if (lifecycle.pending !== slot || now() < mono(operation.operationCutoffMonoNs)) return false;
+            shutdown('read_timeout'); return slot.cutoff.attested;
+          }, () => writerReleased);
+        }
         const abort = () => shutdown('read_cancelled');
         try {
           clearTimer(idle);
