@@ -113,8 +113,10 @@ export function canonicalProductIdentity(path, db) {
 
 // Construction acquires no sidecar. Only a separately authorized operation
 // invokes observe/refresh, including when the file is missing or malformed.
-export function productSidecar({ path, db: canonical, identity, features, observer, sqlite, sidecarJournalMode = 'DELETE', writable = false,
-  now = () => performance.now(), rendezvous = () => {} }) {
+export function productSidecar({ path, db: canonicalDatabase, identity, features, observer, sqlite, sidecarJournalMode = 'DELETE', writable = false,
+  now = () => performance.now(), rendezvous = () => {}, attribution }) {
+  const canonical=canonicalDatabase;
+  const canonicalRead=work=>attribution ? attribution.transaction(canonicalDatabase,work,readTransaction) : readTransaction(canonicalDatabase,work);
   features={...features,reviews:features.cards,receipts:features.cards};
   const sidePath = path + PRODUCT_SIDECAR_SUFFIX;
   let sideFormat, side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0;
@@ -171,8 +173,14 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   function close() { if (side?.isOpen) side.close(); side = null; metadata = null; sideFiles = null; }
   function write(work) {
     sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});
-    side.exec('BEGIN IMMEDIATE');
-    try { verifyOpened();const result = work();rendezvous('batch');side.exec('COMMIT'); return result; }
+    const beginning=attribution?.start('begin');
+    try {attribution?.checkpoint('begin');side.exec('BEGIN IMMEDIATE');}finally{attribution?.end(beginning);}
+    try {
+      verifyOpened();const result=work();rendezvous('batch');
+      const committing=attribution?.start('commit');
+      try {attribution?.checkpoint('commit');side.exec('COMMIT');}finally{attribution?.end(committing);}
+      return result;
+    }
     catch (e) { if (side.isTransaction) side.exec('ROLLBACK'); if(e.reason==='storage_unavailable')close();throw e; }
   }
   function connection(create = false) {
@@ -243,7 +251,11 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   const sideIdentity = () => ({ ...productFile(sidePath), incarnation: metadata.incarnation,
     schemaVersion: side.prepare('PRAGMA schema_version').get().schema_version });
   function target(p, access) {
-    if(canonical.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id!==identity.storeId)unavailable('wrong_store');
+    attribution?.step();
+    let storeId;
+    try {storeId=canonical.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id;}
+    finally {attribution?.acquired();}
+    if(storeId!==identity.storeId)unavailable('wrong_store');
     return { projectionDigest: projectionDigest(p), accessDigest: access, ...canonicalProductFences(canonical,p),
       canonical: canonicalProductIdentity(path,canonical), sidecar: sideIdentity() };
   }
@@ -331,25 +343,31 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   function save(g,t) {
     // The signed incarnation commits to resumable hash/count/scan state too.
     // A changed verification checkpoint cannot be used to mint a certificate.
-    g.incarnation=incarnationOf(g);
-    const record = signedRecord(identity.cursorSecret,'progress',{ version:'context-index-progress-v1',profile:PRODUCT_PROFILE,storeId:identity.storeId,
+    const signing=attribution?.start('save');let record;
+    try {
+      attribution?.checkpoint('save');g.incarnation=incarnationOf(g);
+      record=signedRecord(identity.cursorSecret,'progress',{ version:'context-index-progress-v1',profile:PRODUCT_PROFILE,storeId:identity.storeId,
       canonicalIdentityDigest:digest(t.canonical),sidecarIdentityDigest:digest({format:PRODUCT_SIDECAR_FORMAT,...t.sidecar}),projectionDigest:g.projection,accessDigest:g.access,
       ...JSON.parse(g.fences),generation:{ id:g.id,incarnation:g.incarnation },kind:g.kind,progress:progressOf(g) });
+    }finally{attribution?.end(signing);}
     if (Buffer.byteLength(record)>4096) fail('context_item_too_large');
     side.prepare('INSERT OR REPLACE INTO progress_records VALUES(?,?)').run(g.id,record);
     side.prepare('UPDATE generations SET incarnation=?,fences=?,phase=?,last_key=?,checkpoint=?,verify=? WHERE id=?').run(g.incarnation,g.fences,g.phase,g.last_key,g.checkpoint,JSON.stringify(g.verify),g.id);
     side.prepare('INSERT OR REPLACE INTO work VALUES(?,?)').run(g.projection,g.id);
   }
   function fresh(t,p,access) {
-    return same(t,readTransaction(canonical,() => target(p,access)));
+    return same(t,canonicalRead(() => target(p,access)));
   }
   function metadataRows(s, after, maximum, p, m, canonicalUtf8) {
     // Column collations are not attested. Both the cursor and ordering must
     // explicitly match the stored-byte merge; INDEXED BY never changes SQL order.
-    const rows = canonical.prepare(s.type === 'memory'
+    attribution?.step();
+    let rows;
+    try {rows = canonical.prepare(s.type === 'memory'
       ? `SELECT id,hex(CAST(id AS BLOB)) AS id_bytes,revision,0 AS body_revision,deleted,currentness,review_state FROM memories INDEXED BY index_memory_keyset WHERE ${where} AND id COLLATE BINARY>? ORDER BY id COLLATE BINARY LIMIT ?`
       : `SELECT id,hex(CAST(id AS BLOB)) AS id_bytes,revision,coalesce(body_revision,0) AS body_revision,state FROM private_cards INDEXED BY private_card_scope WHERE ${where} AND state=? AND id COLLATE BINARY>? ORDER BY id COLLATE BINARY LIMIT ?`)
-      .all(...boundary(s.ns),...(s.type === 'card' ? [s.state] : []),after,maximum);
+      .all(...boundary(s.ns),...(s.type === 'card' ? [s.state] : []),after,maximum);}
+    finally {attribution?.acquired();}
     m.canonicalRows += rows.length; m.metadataBytes += Buffer.byteLength(JSON.stringify(rows.map(({id_bytes,...row})=>row)));
     // UTF-8 binding agrees with Buffer encoding; only UTF-16 needs a native
     // round trip (its conversion can rewrite values such as U+FFFE).
@@ -412,7 +430,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       const reset=quantum.measure(()=>side.prepare(`UPDATE statistics SET verified_df=0 WHERE generation=? AND term_id IN
         (SELECT term_id FROM statistics WHERE generation=? ${v.resetLast===undefined?'':'AND term_id>?'} ORDER BY term_id LIMIT 128)
         RETURNING term_id`).all(g.storage_id,g.storage_id,...(v.resetLast===undefined?[]:[v.resetLast])),'verification-reset');
-      m.verifiedRows+=reset.length;
+      m.verifiedRows+=reset.length;attribution?.add('verificationRows',reset.length);
       if(reset.length)v.resetLast=Math.max(...reset.map(row=>row.term_id));
       if(reset.length===128)return;
       v.resetDone=true;
@@ -448,7 +466,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         LEFT JOIN documents d ON d.generation=p.generation AND d.doc=p.doc
         LEFT JOIN statistics s ON s.generation=p.generation AND s.term_id=p.term
         WHERE p.generation=? ${last.length?'AND (p.doc,p.term)>(?,?)':''} ORDER BY p.doc,p.term LIMIT 128`).all(g.storage_id,...last);
-      rendezvous('verify-scan');
+      attribution?.add('scanRows',rows.length);rendezvous('verify-scan');
     },'verify-scan');
     let processed=0;
     for(const r of rows) {
@@ -494,7 +512,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
           v.last=[r.doc,r.term];v.checkedPostings=(v.checkedPostings ?? 0)+1;
         }
         if(tuple)hash.update(JSON.stringify(tuple)+'\n');m.verifiedRows++;processed++;
-        rendezvous('verify-item');
+        attribution?.add('verificationRows',1);rendezvous('verify-item');
       },'verification');
     }
     v.hash=hash.state();
@@ -540,20 +558,21 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   }
   // Remove rows before their signed metadata. A slice advances exactly one
   // bounded range; an interrupted deletion resumes from the remaining rows.
+  const gcChanges=result=>{attribution?.add('gcRows',result.changes);return result;};
   function collectVector(owner,lexicalGeneration) {
     if(lexicalGeneration!==undefined) {
-      const cached=side.prepare(`DELETE FROM semantic_vectors WHERE owner=? AND generation=? AND (doc,identity,epoch) IN
-        (SELECT doc,identity,epoch FROM semantic_vectors WHERE owner=? AND generation=? LIMIT 128)`).run(owner,lexicalGeneration,owner,lexicalGeneration);
+      const cached=gcChanges(side.prepare(`DELETE FROM semantic_vectors WHERE owner=? AND generation=? AND (doc,identity,epoch) IN
+        (SELECT doc,identity,epoch FROM semantic_vectors WHERE owner=? AND generation=? LIMIT 128)`).run(owner,lexicalGeneration,owner,lexicalGeneration));
       if(cached.changes)return true;
     }
     const g=vectorCandidate(owner,lexicalGeneration);
     if(!g)return false;
-    const rows=side.prepare('DELETE FROM vector_rows WHERE generation=? AND doc IN (SELECT doc FROM vector_rows WHERE generation=? LIMIT 128)').run(g.storage_id,g.storage_id);
+    const rows=gcChanges(side.prepare('DELETE FROM vector_rows WHERE generation=? AND doc IN (SELECT doc FROM vector_rows WHERE generation=? LIMIT 128)').run(g.storage_id,g.storage_id));
     if(rows.changes)return true;
-    side.prepare('DELETE FROM vector_publications WHERE generation=? AND owner=?').run(g.storage_id,owner);
-    side.prepare('DELETE FROM vector_work WHERE generation=?').run(g.storage_id);
-    side.prepare('DELETE FROM vector_validation_records WHERE generation=? AND owner=?').run(g.storage_id,owner);
-    side.prepare('DELETE FROM vector_generations WHERE storage_id=? AND owner=?').run(g.storage_id,owner);
+    gcChanges(side.prepare('DELETE FROM vector_publications WHERE generation=? AND owner=?').run(g.storage_id,owner));
+    gcChanges(side.prepare('DELETE FROM vector_work WHERE generation=?').run(g.storage_id));
+    gcChanges(side.prepare('DELETE FROM vector_validation_records WHERE generation=? AND owner=?').run(g.storage_id,owner));
+    gcChanges(side.prepare('DELETE FROM vector_generations WHERE storage_id=? AND owner=?').run(g.storage_id,owner));
     return true;
   }
   function collect(quantum,owner,maximum=128) {
@@ -577,17 +596,17 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         if(!g){found=collectVector(owner);return;}
         found=true;
         for(const [table,key] of [['postings','doc,term'],['documents','doc'],['statistics','term_id']]) {
-          const result=side.prepare(`DELETE FROM ${table} WHERE generation=? AND (${key}) IN (SELECT ${key} FROM ${table} WHERE generation=? LIMIT 128)`).run(g.storage_id,g.storage_id);
+          const result=gcChanges(side.prepare(`DELETE FROM ${table} WHERE generation=? AND (${key}) IN (SELECT ${key} FROM ${table} WHERE generation=? LIMIT 128)`).run(g.storage_id,g.storage_id));
           if(result.changes)return;
         }
         if(collectVector(owner,g.storage_id))return;
-        side.prepare('DELETE FROM validation_records WHERE generation=?').run(g.id);
-        side.prepare('DELETE FROM progress_records WHERE generation=?').run(g.id);
-        side.prepare('DELETE FROM generations WHERE id=?').run(g.id);
+        gcChanges(side.prepare('DELETE FROM validation_records WHERE generation=?').run(g.id));
+        gcChanges(side.prepare('DELETE FROM progress_records WHERE generation=?').run(g.id));
+        gcChanges(side.prepare('DELETE FROM generations WHERE id=?').run(g.id));
       });if(found)rendezvous('gc');},'gc');
       if(!found)break;
     }
-    if(quantum.admit('gc'))quantum.measure(()=>side.exec('PRAGMA incremental_vacuum(32)'),'gc');
+    if(quantum.admit('gc'))quantum.measure(()=>side.exec('PRAGMA incremental_vacuum(32)'),'gc','vacuum');
   }
   function refresh(p,access,budget,quantum) {
     if (!writable) fail('invalid_input');
@@ -623,16 +642,16 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     // identical BINARY order. Other encodings retain the append-only builder.
     const canonicalUtf8=canonical.prepare('PRAGMA encoding').get().encoding==='UTF-8',
       cacheUtf8=side.prepare('PRAGMA encoding').get().encoding==='UTF-8',mergeOrder=canonicalUtf8&&cacheUtf8;
-    let t = readTransaction(canonical,() => target(p,access));
+    let t = canonicalRead(() => target(p,access));
     selectProjection(p,t);
     // Cleanup also advances during a long build or repeated target changes;
     // it does not depend on having time left after corpus admission.
     collect(quantum,p.readSet[0].ownerId,1);
-    const observed = readTransaction(canonical,() => observe(p,access,{forWrite:true,mergeOrder}));
+    const observed = canonicalRead(() => observe(p,access,{forWrite:true,mergeOrder}));
     if (observed.dto.lexical.state === 'ready' && observed.byteSafe) { collect(quantum,p.readSet[0].ownerId);rendezvous('noop'); return m; }
     const w = side.prepare('SELECT generation FROM work WHERE projection=?').get(t.projectionDigest);
     let g = w && side.prepare('SELECT * FROM generations WHERE id=?').get(w.generation);
-    const workStatus=readTransaction(canonical,()=>observe(p,access,{forWrite:true,workOnly:true,mergeOrder}));
+    const workStatus=canonicalRead(()=>observe(p,access,{forWrite:true,workOnly:true,mergeOrder}));
     const resumable=g && (workStatus.resumable===g.id || mergeOrder && workStatus.retargetable===g.id);
     let rebinding=false;
     // Invalid publication evidence still controls status. Independently signed
@@ -667,8 +686,9 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       if (!fresh(t,p,access)) return m;
       const stream = g.streams[g.phase], maximum = stream.type === 'card' ? 1 : 128;
       const { rows, exhausted } = quantum.measure(()=>{
-        const canonicalRows=readTransaction(canonical,() => metadataRows(stream,g.last_key,maximum,p,m,canonicalUtf8));
+        const canonicalRows=canonicalRead(() => metadataRows(stream,g.last_key,maximum,p,m,canonicalUtf8));
         if(!mergeOrder) {
+          attribution?.add('scanRows',canonicalRows.length);
           rendezvous('scan');return {rows:canonicalRows.map(row=>({row,old:null})),exhausted:canonicalRows.length<maximum};
         }
         const workRows=side.prepare('SELECT *,hex(CAST(id AS BLOB)) AS id_bytes FROM documents WHERE generation=? AND stream=? AND id COLLATE BINARY>? ORDER BY id COLLATE BINARY LIMIT ?')
@@ -687,7 +707,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
           const order=!row ? 1 : !old ? -1 : Buffer.compare(Buffer.from(row.id_bytes,'hex'),Buffer.from(old.id_bytes,'hex'));
           rows.push({row:order<=0 ? canonicalRows[c++] : null,old:order>=0 ? workRows[w++] : null});
         }
-        rendezvous('scan');return {rows,exhausted:c===canonicalRows.length && w===workRows.length && canonicalRows.length<maximum && workRows.length<maximum};
+        attribution?.add('scanRows',rows.length);rendezvous('scan');return {rows,exhausted:c===canonicalRows.length && w===workRows.length && canonicalRows.length<maximum && workRows.length<maximum};
       },'scan');
       if(now()>=quantum.cutoff)fail('read_timeout');
       let units=0, processed=0, last=g.last_key;
@@ -710,8 +730,13 @@ export function productSidecar({ path, db: canonical, identity, features, observ
               let tokens,source;
               if(exactDocument(base,row)) {tokens={length:base.token_length};source=g.base_id;}
               else {
-                const text=row.eligible ? readTransaction(canonical,()=>canonical.prepare(stream.type==='memory'
-                  ? `SELECT content AS text FROM memories WHERE ${where} AND id COLLATE BINARY=?` : `SELECT title||char(10)||body AS text FROM private_cards WHERE ${where} AND id COLLATE BINARY=?`).get(...boundary(stream.ns),row.id)?.text) : '';
+                const text=row.eligible ? canonicalRead(()=>{
+                  attribution?.step();
+                  let found;
+                  try {found=canonical.prepare(stream.type==='memory'
+                    ? `SELECT content AS text FROM memories WHERE ${where} AND id COLLATE BINARY=?` : `SELECT title||char(10)||body AS text FROM private_cards WHERE ${where} AND id COLLATE BINARY=?`).get(...boundary(stream.ns),row.id);}
+                  finally {attribution?.acquired();}return found?.text;
+                }) : '';
                 if(typeof text!=='string' || text.length>2000000) {
                   // A deletion/forget can invalidate the observed body before
                   // this read. Preserve the same batch-only fence-race outcome.
@@ -731,7 +756,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
               put(g,g.phase,row,tokens,source,cacheUtf8);
             }
             last=(row || old).id;processed++;
-            rendezvous('item');return true;
+            attribution?.add('itemRows',1);rendezvous('item');return true;
           });
           if (!kept) break;
         }
@@ -755,26 +780,28 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       rendezvous('verification');
     }
     if (g.phase>=g.streams.length && g.verify.phase===3 && quantum.admit('publication') && fresh(t,p,access)) {
-      if(!side.prepare("SELECT 1 FROM statistics WHERE generation=? AND term=''").get(g.storage_id))unavailable('corrupt');
-      const publicationId=randomUUID(), manifestDigest=new ManifestHash(g.verify.hash).digest();
-      // Last pre-commit canonical snapshot ends here. The independent writer
-      // may commit after this check; the certificate still attests captured E.
-      rendezvous('precommit');
-      write(() => {
-        g.checkpoint++;
-        const body={ version:'context-index-validation-v1',profile:PRODUCT_PROFILE,format:PRODUCT_SIDECAR_FORMAT,storeId:identity.storeId,
-          canonical:t.canonical,sidecar:t.sidecar,projectionDigest:g.projection,accessDigest:access,...JSON.parse(g.fences),
-          tokenizer:TOKENIZER_VERSION,representation:REPRESENTATION_VERSION,
-          generation:{id:g.id,sequence:g.sequence,checkpoint:g.checkpoint,incarnation:g.incarnation},publicationId,manifestDigest,counts:g.verify.counts };
-        const record=signedRecord(identity.cursorSecret,'validation',body);
-        if (Buffer.byteLength(record)>16384) fail('context_item_too_large');
-        verifiedRecord(identity.cursorSecret,'validation',record);
-        side.prepare('UPDATE generations SET published=1,checkpoint=?,manifest=? WHERE id=?').run(g.checkpoint,manifestDigest,g.id);
-        side.prepare('INSERT INTO validation_records VALUES(?,?,?)').run(publicationId,g.id,record);
-        side.prepare('INSERT OR REPLACE INTO publications VALUES(?,?,?)').run(g.projection,g.id,publicationId);
-        side.prepare('DELETE FROM work WHERE projection=?').run(g.projection);
-      });
-      rendezvous('published');
+      quantum.measure(()=>{
+        if(!side.prepare("SELECT 1 FROM statistics WHERE generation=? AND term=''").get(g.storage_id))unavailable('corrupt');
+        const publicationId=randomUUID(), manifestDigest=new ManifestHash(g.verify.hash).digest();
+        // Last pre-commit canonical snapshot ends here. The independent writer
+        // may commit after this check; the certificate still attests captured E.
+        rendezvous('precommit');
+        write(() => {
+          g.checkpoint++;
+          const body={ version:'context-index-validation-v1',profile:PRODUCT_PROFILE,format:PRODUCT_SIDECAR_FORMAT,storeId:identity.storeId,
+            canonical:t.canonical,sidecar:t.sidecar,projectionDigest:g.projection,accessDigest:access,...JSON.parse(g.fences),
+            tokenizer:TOKENIZER_VERSION,representation:REPRESENTATION_VERSION,
+            generation:{id:g.id,sequence:g.sequence,checkpoint:g.checkpoint,incarnation:g.incarnation},publicationId,manifestDigest,counts:g.verify.counts };
+          const record=signedRecord(identity.cursorSecret,'validation',body);
+          if (Buffer.byteLength(record)>16384) fail('context_item_too_large');
+          verifiedRecord(identity.cursorSecret,'validation',record);
+          side.prepare('UPDATE generations SET published=1,checkpoint=?,manifest=? WHERE id=?').run(g.checkpoint,manifestDigest,g.id);
+          side.prepare('INSERT INTO validation_records VALUES(?,?,?)').run(publicationId,g.id,record);
+          side.prepare('INSERT OR REPLACE INTO publications VALUES(?,?,?)').run(g.projection,g.id,publicationId);
+          side.prepare('DELETE FROM work WHERE projection=?').run(g.projection);
+        });
+        attribution?.add('publicationRows',1);rendezvous('published');
+      },'publication');
     }
     collect(quantum,p.readSet[0].ownerId);
     return m;
@@ -840,7 +867,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     refresh:(p,access,budget)=>{
       const started=now();p=projection(p);
       const cutoff=Math.min(p.deadlineAt ?? Infinity,started+budget.maxMs);
-      const quantum=maintenanceQuantum({now,cutoff,maxMs:budget.maxMs});
+      const quantum=maintenanceQuantum({now,cutoff,maxMs:budget.maxMs,attribution});
       return guarded(()=>refresh(p,access,budget,quantum),true);
     },
     lexical:(p,...args)=>{p=projection(p);return guarded(()=>lexical(p,...args));},

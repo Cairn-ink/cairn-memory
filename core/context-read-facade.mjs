@@ -114,7 +114,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     if (closed || db && (!db.isOpen || isConnectionDiscarded(db))) fail('store_closed');
     if (database) { database.assertFile(); guardAuxiliaries(); }
   }
-  const read = work => { ready(); return readTransaction(db, work); };
+  const read = (work, acquisition) => { ready(); return acquisition ? acquisition.transaction(db, work, readTransaction) : readTransaction(db, work); };
   const info = memoryOnly ? { storeId: null, cursorSecret: null, cards: false, raw: false } : read(() => {
     const row = db.prepare('SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1').get();
     if (!row) fail('unsupported_database');

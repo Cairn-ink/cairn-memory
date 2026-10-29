@@ -304,6 +304,7 @@
   "core/context-product-service.mjs",
   "core/context-product-sidecar.mjs",
   "core/context-product-quantum.mjs",
+  "core/context-product-attribution.mjs",
   "core/context-product-sqlite.mjs",
   "core/content-safety.mjs",
   "core/context-product-index.mjs",
@@ -324,5 +325,10 @@
   "core/context-semantic-pump.mjs",
   "core/context-semantic-worker.mjs",
   "core/context-vector-validation.mjs",
-  "docs/plans/context-read-p2e-impl.md"
+  "docs/plans/context-read-p2e-impl.md",
+  "core/content-safety-classifier.mjs",
+  "core/content-safety-files-child.mjs",
+  "core/content-safety-observations.mjs",
+  "core/content-safety-preflight.mjs",
+  "adapters/mcp/safety-command.mjs"
 ]
