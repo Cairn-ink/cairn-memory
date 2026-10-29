@@ -1,4 +1,4 @@
-import { attributionFields, maintenanceWorkFields, maintenanceKinds, add } from './context-product-attribution.mjs';
+import { attributionFields, maintenanceWorkFields, maintenanceKinds, add, maintenanceDispatchControl, maintenanceControlState } from './context-product-attribution.mjs';
 import { openContextIndexMaintainer, maintenanceObservation, maintenancePhaseDiagnostic, maintenanceStallDiagnostic } from './context-product-reader.mjs';
 import { supervisorOwner } from './context-read-supervisor.mjs';
 import { ownData } from './local-authority-input.mjs';
@@ -194,12 +194,13 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       checkCadence(now());
       if(exhausted()||now()>=renewedUntil){report(observation());return;}
       lastTick=now();
-      let quantumTimer,lane,sequence,settleStarted,deliveryMs=0,activeHandle,quantumDetail={},stallRecorded=false;
+      let quantumTimer,lane,sequence,settleStarted,deliveryMs=0,activeHandle,activeControl,ordinal,openingOrdinal,quantumDetail={},stallRecorded=false;
       function recordStall(value){
         if(stallRecorded||!lane)return;
-        const stall=stallOf(value,now());
+        const stall=stallOf(value??activeControl,now());
+        if(stall?.ordinal!==undefined&&stall.ordinal!==ordinal)return;
         if(!stall||!Number.isInteger(stall.kind)||!maintenanceKinds[stall.kind]||!Number.isFinite(stall.runningMs)||stall.runningMs<0||!Number.isSafeInteger(stall.unitCount)||stall.unitCount<0)return;
-        lane.lastStall={number:sequence,kind:stall.kind,runningMs:Math.min(Number.MAX_SAFE_INTEGER,stall.runningMs),unitCount:stall.unitCount};
+        lane.lastStall={number:sequence,ordinal,kind:stall.kind,runningMs:Math.min(Number.MAX_SAFE_INTEGER,stall.runningMs),unitCount:stall.unitCount,...(stall.pendingDispatch===undefined?{}:{pendingDispatch:stall.pendingDispatch})};
         lane.stallCounts[stall.kind]=add(lane.stallCounts[stall.kind],1);stallRecorded=true;
       }
       return running=(async()=>{
@@ -213,8 +214,9 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           lane=phases[index];sequence=quantumNumber;quantumNumber=add(quantumNumber,1);
           // Disposal can await a Worker/host resource. Expose timeout even if
           // that await has not settled; supervision still owns the drain.
+          activeControl=maintenanceDispatchControl();ordinal=maintenanceControlState(activeControl).ordinal;
           quantumTimer=setTimer(()=>{recordStall(activeHandle);error='read_timeout';void stop();},Math.max(0,maxMs-(now()-lastTick)));
-          let h=handles.get(key);
+          let h=handles.get(key),openedHere=false;
           if(!h){
             // Native admission permits one maintainer per physical selection,
             // across intents/types/journal policies. Drain before replacing its
@@ -224,16 +226,19 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             if(stopped||error)return;
             const openingMs=Math.min(maxMs,Math.floor(maxMs-(now()-lastTick)));
             if(openingMs<1){error='read_timeout';return;}
-            const opening=now();
-            try{h=await open({...p.options,deadlineMs:openingMs});lane.opens=add(lane.opens,1);handles.set(key,h);handleLanes.set(key,index);writers.set(writer,key);}
+            const opening=now();openingOrdinal=ordinal;
+            try{h=await open({...p.options,deadlineMs:openingMs},activeControl);openedHere=true;lane.opens=add(lane.opens,1);handles.set(key,h);handleLanes.set(key,index);writers.set(writer,key);}
             finally{recordPhase(lane.phases.open,now()-opening);}
           }
           activeHandle=h;
           if(stopped||error)return;
           const remainingMs=Math.min(maxMs,Math.floor(maxMs-(now()-lastTick)));
           if(remainingMs<1){recordStall(h);error='read_timeout';return;}
+          if(openedHere){
+            activeControl=maintenanceDispatchControl();ordinal=maintenanceControlState(activeControl).ordinal;
+          }
           const refreshing=now();let result;
-          try{result=await h.refreshContextIndex({readSet:p.options.readSet,types:p.types,intent:p.intent,mode:'lexical',budget:{maxItems,maxMs:remainingMs}},grant);}
+          try{result=await h.refreshContextIndex({readSet:p.options.readSet,types:p.types,intent:p.intent,mode:'lexical',budget:{maxItems,maxMs:remainingMs}},grant,activeControl);}
           finally{settleStarted=now();recordPhase(lane.phases.refreshCall,settleStarted-refreshing);}
           // dispatch: call entry to Worker receipt; epochObservation: the final
           // fresh snapshot transaction. refreshCall includes both. settle adds
@@ -271,12 +276,12 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             ledger.items=Math.max(ledger.items-maxItems+items,ledger.floorItems);
             ledger.ms=Math.max(ledger.ms-maxMs+elapsed,ledger.floorMs);
           }
-        } catch(e){error=e.code??'reader_failed';}
+        } catch(e){if(e.code==='read_timeout')recordStall(e);error=e.code??'reader_failed';}
       })().finally(()=>{
         if(lane){
           if(settleStarted!==undefined)recordPhase(lane.phases.settle,deliveryMs+now()-settleStarted);
           const elapsedMs=now()-lastTick;
-          const sample={number:sequence,elapsedMs,attribution:quantumDetail};
+          const sample={number:sequence,...(ordinal===undefined?{}:{ordinal}),...(openingOrdinal===undefined?{}:{openingOrdinal}),elapsedMs,attribution:quantumDetail};
           lane.quanta=add(lane.quanta,1);lane.first??=sample;lane.latest=sample;
           lane.worstElapsedMs=Math.max(lane.worstElapsedMs,elapsedMs);
           const bucket=Math.min(501,Math.ceil(elapsedMs/10));lane.elapsedBuckets[bucket]=add(lane.elapsedBuckets[bucket],1);

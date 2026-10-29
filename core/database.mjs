@@ -294,7 +294,7 @@ function materializedRead(value, seen = new Set()) {
     materializedRead(descriptor.value, seen);
   }
 }
-export function readTransaction(db, work) {
+export function readTransaction(db, work, acquisition) {
   if (discardedConnections.has(db) || !db.isOpen) fail('store_closed');
   if (activeReads.has(db) || db.isTransaction || typeof work !== 'function' ||
       types.isAsyncFunction(work) || types.isGeneratorFunction(work)) fail('storage_error');
@@ -306,6 +306,8 @@ export function readTransaction(db, work) {
     attempted = true;
     db.exec('BEGIN');
     began = true;
+    // Private maintenance hook; request readers leave it unset.
+    acquisition?.readReady();
     value = work();
     try { materializedRead(value); } catch (failure) { unsafeResult = true; throw failure; }
     if (!db.isTransaction) fail('storage_error');

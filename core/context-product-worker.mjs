@@ -114,7 +114,7 @@ parentPort.on('message', async message => {
   }
   if (active || !facade) { result(message.operation, productFailure('reader_failed')); return; }
   active = true;
-  attribution?.reset();
+  attribution?.reset(message.maintenanceOrdinal);
   const receivedAt=Number(process.hrtime.bigint())/1e6;
   if (message.method === 'fetchCandidateEvidence') phase?.mark('readReceived');
   const { operation, frame } = message;
@@ -157,11 +157,11 @@ parentPort.on('message', async message => {
     if(attribution) {
       const preparationStarted=Number(process.hrtime.bigint())/1e6;
       within(operation);sealNative(frame);
-      const {at,...detail}=observation;
+      const {at,...detail}=observation,metrics=attribution.snapshot();
       attribution.serialize(()=>result(operation,response,{...(at===undefined?{}:{observedAtMonoMs:at}),
-        maintenancePhases:{...detail,...attribution.snapshot(),
+        maintenancePhases:{...detail,...metrics,ordinal:message.maintenanceOrdinal,
           dispatchMs:receivedAt-Number(mono(operation.enteredMonoNs))/1e6,
-          resultPreparationMs:attribution.snapshot().resultPreparationMs+Number(process.hrtime.bigint())/1e6-preparationStarted,finishedAtMonoMs:Number(process.hrtime.bigint())/1e6}}));
+          resultPreparationMs:metrics.resultPreparationMs+Number(process.hrtime.bigint())/1e6-preparationStarted,finishedAtMonoMs:Number(process.hrtime.bigint())/1e6}}));
     } else {
       within(operation);sealNative(frame);
       if (message.method === 'fetchCandidateEvidence') phase?.mark('readResultSent');

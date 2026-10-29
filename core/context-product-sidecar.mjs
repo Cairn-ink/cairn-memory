@@ -115,8 +115,7 @@ export function canonicalProductIdentity(path, db) {
 export function productSidecar({ path, db: canonicalDatabase, identity, features, observer, sqlite, sidecarJournalMode = 'DELETE', writable = false,
   now = () => performance.now(), rendezvous = () => {}, attribution }) {
   const canonical=canonicalDatabase;
-  const canonicalRead=work=>attribution ? attribution.read(()=>readTransaction(canonicalDatabase,work)) : readTransaction(canonicalDatabase,work);
-  const measured=(kind,work)=>attribution ? attribution.measure(kind,work) : work();
+  const canonicalRead=work=>attribution ? attribution.transaction(canonicalDatabase,work,readTransaction) : readTransaction(canonicalDatabase,work);
   features={...features,reviews:features.cards,receipts:features.cards};
   const sidePath = path + PRODUCT_SIDECAR_SUFFIX;
   let sideFormat, side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0;
@@ -173,8 +172,14 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   function close() { if (side?.isOpen) side.close(); side = null; metadata = null; sideFiles = null; }
   function write(work) {
     sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});
-    measured('begin',()=>side.exec('BEGIN IMMEDIATE'));
-    try { verifyOpened();const result = work();rendezvous('batch');measured('commit',()=>side.exec('COMMIT')); return result; }
+    const beginning=attribution?.start('begin');
+    try {attribution?.checkpoint('begin');side.exec('BEGIN IMMEDIATE');}finally{attribution?.end(beginning);}
+    try {
+      verifyOpened();const result=work();rendezvous('batch');
+      const committing=attribution?.start('commit');
+      try {attribution?.checkpoint('commit');side.exec('COMMIT');}finally{attribution?.end(committing);}
+      return result;
+    }
     catch (e) { if (side.isTransaction) side.exec('ROLLBACK'); if(e.reason==='storage_unavailable')close();throw e; }
   }
   function connection(create = false) {
@@ -245,8 +250,10 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   const sideIdentity = () => ({ ...productFile(sidePath), incarnation: metadata.incarnation,
     schemaVersion: side.prepare('PRAGMA schema_version').get().schema_version });
   function target(p, access) {
-    const storeId=canonical.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id;
-    attribution?.acquired();
+    attribution?.step();
+    let storeId;
+    try {storeId=canonical.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id;}
+    finally {attribution?.acquired();}
     if(storeId!==identity.storeId)unavailable('wrong_store');
     return { projectionDigest: projectionDigest(p), accessDigest: access, ...canonicalProductFences(canonical,p),
       canonical: canonicalProductIdentity(path,canonical), sidecar: sideIdentity() };
@@ -335,12 +342,13 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   function save(g,t) {
     // The signed incarnation commits to resumable hash/count/scan state too.
     // A changed verification checkpoint cannot be used to mint a certificate.
-    const record = measured('save',()=>{
-      g.incarnation=incarnationOf(g);
-      return signedRecord(identity.cursorSecret,'progress',{ version:'context-index-progress-v1',profile:PRODUCT_PROFILE,storeId:identity.storeId,
+    const signing=attribution?.start('save');let record;
+    try {
+      attribution?.checkpoint('save');g.incarnation=incarnationOf(g);
+      record=signedRecord(identity.cursorSecret,'progress',{ version:'context-index-progress-v1',profile:PRODUCT_PROFILE,storeId:identity.storeId,
       canonicalIdentityDigest:digest(t.canonical),sidecarIdentityDigest:digest({format:PRODUCT_SIDECAR_FORMAT,...t.sidecar}),projectionDigest:g.projection,accessDigest:g.access,
       ...JSON.parse(g.fences),generation:{ id:g.id,incarnation:g.incarnation },kind:g.kind,progress:progressOf(g) });
-    });
+    }finally{attribution?.end(signing);}
     if (Buffer.byteLength(record)>4096) fail('context_item_too_large');
     side.prepare('INSERT OR REPLACE INTO progress_records VALUES(?,?)').run(g.id,record);
     side.prepare('UPDATE generations SET incarnation=?,fences=?,phase=?,last_key=?,checkpoint=?,verify=? WHERE id=?').run(g.incarnation,g.fences,g.phase,g.last_key,g.checkpoint,JSON.stringify(g.verify),g.id);
@@ -352,11 +360,13 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   function metadataRows(s, after, maximum, p, m, canonicalUtf8) {
     // Column collations are not attested. Both the cursor and ordering must
     // explicitly match the stored-byte merge; INDEXED BY never changes SQL order.
-    const rows = canonical.prepare(s.type === 'memory'
+    attribution?.step();
+    let rows;
+    try {rows = canonical.prepare(s.type === 'memory'
       ? `SELECT id,hex(CAST(id AS BLOB)) AS id_bytes,revision,0 AS body_revision,deleted,currentness,review_state FROM memories INDEXED BY index_memory_keyset WHERE ${where} AND id COLLATE BINARY>? ORDER BY id COLLATE BINARY LIMIT ?`
       : `SELECT id,hex(CAST(id AS BLOB)) AS id_bytes,revision,coalesce(body_revision,0) AS body_revision,state FROM private_cards INDEXED BY private_card_scope WHERE ${where} AND state=? AND id COLLATE BINARY>? ORDER BY id COLLATE BINARY LIMIT ?`)
-      .all(...boundary(s.ns),...(s.type === 'card' ? [s.state] : []),after,maximum);
-    attribution?.acquired();
+      .all(...boundary(s.ns),...(s.type === 'card' ? [s.state] : []),after,maximum);}
+    finally {attribution?.acquired();}
     m.canonicalRows += rows.length; m.metadataBytes += Buffer.byteLength(JSON.stringify(rows.map(({id_bytes,...row})=>row)));
     // UTF-8 binding agrees with Buffer encoding; only UTF-16 needs a native
     // round trip (its conversion can rewrite values such as U+FFFE).
@@ -719,9 +729,11 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
               if(exactDocument(base,row)) {tokens={length:base.token_length};source=g.base_id;}
               else {
                 const text=row.eligible ? canonicalRead(()=>{
-                  const found=canonical.prepare(stream.type==='memory'
-                    ? `SELECT content AS text FROM memories WHERE ${where} AND id COLLATE BINARY=?` : `SELECT title||char(10)||body AS text FROM private_cards WHERE ${where} AND id COLLATE BINARY=?`).get(...boundary(stream.ns),row.id);
-                  attribution?.acquired();return found?.text;
+                  attribution?.step();
+                  let found;
+                  try {found=canonical.prepare(stream.type==='memory'
+                    ? `SELECT content AS text FROM memories WHERE ${where} AND id COLLATE BINARY=?` : `SELECT title||char(10)||body AS text FROM private_cards WHERE ${where} AND id COLLATE BINARY=?`).get(...boundary(stream.ns),row.id);}
+                  finally {attribution?.acquired();}return found?.text;
                 }) : '';
                 if(typeof text!=='string' || text.length>2000000) {
                   // A deletion/forget can invalidate the observed body before

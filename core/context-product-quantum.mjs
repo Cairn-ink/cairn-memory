@@ -16,10 +16,10 @@ export function maintenanceQuantum({ now, cutoff, maxMs, attribution }) {
     measure(work, kind = 'item', diagnosticKind) {
       const start = now();
       const operation = diagnosticKind ?? (kind==='verification' || kind==='verification-reset' ? 'verify' : kind==='verify-scan' ? 'scan' : kind);
-      const result = attribution ? attribution.measure(operation,work,true) : work();
+      const result = attribution ? attribution.measure(operation,work,true,start,now) : work();
       // High-water mark, doubled rather than averaged: cheap rows cannot hide
       // the cost of an expensive row already observed in the same quantum.
-      estimates.set(kind, Math.max(estimates.get(kind) ?? 10, 2 * (now() - start)));
+      estimates.set(kind, Math.max(estimates.get(kind) ?? 10, 2 * (attribution ? attribution.elapsed : now() - start)));
       return result;
     }
   };

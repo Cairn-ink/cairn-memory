@@ -26,7 +26,7 @@ const trace = semantic => ({requested:semantic?'hybrid':'lexical',effective:'lex
 export function openProductIndex({ path, facade, authorize, ownerCoverage, observer, sqlite, sidecarJournalMode, maintenance, counter, semantic, operation, now = () => performance.now(), storageOptions = {}, attribution }) {
   const { db:canonicalDatabase,read:canonicalRead,evidence,bind,encode,identity,features,canonicalFence } = facade.port;
   const db=canonicalDatabase;
-  const read=attribution ? work=>attribution.read(()=>canonicalRead(work)) : canonicalRead;
+  const read=attribution ? work=>canonicalRead(work,attribution) : canonicalRead;
   const storage = productSidecar({path,db,identity,features,observer,sqlite,sidecarJournalMode,writable:maintenance,now,attribution,...storageOptions}), rankings=new Map();
   const vectors=semantic?productVectors({storage,facade}):null;
   const types=facade.capabilities.types;
@@ -158,7 +158,8 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       const p={...input,ownerCoverage,deadlineAt:Math.min(cutoff,now()+ (input.deadlineMs??input.budget?.maxMs??1000))};
       if(method==='getContextIndexStatus') {
         const knownFailure=storage.prepareObservation();access.check(); return read(()=>{
-          db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();attribution?.acquired();
+          attribution?.step();
+          try {db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();}finally{attribution?.acquired();}
           return success(storage.observe(p,access.accessGenerations,{knownFailure}).dto);
         });
       }
@@ -176,14 +177,12 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
           // bound on the actual snapshot time, not admission or result delivery.
           // No host callback or await; only successful comparisons transport it.
           if(observation)observation.at=Number(process.hrtime.bigint())/1e6;
-          db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();attribution?.acquired();
+          attribution?.step();
+          try {db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();}finally{attribution?.acquired();}
           const observed=storage.observe(p,access.accessGenerations,{knownFailure}),ready=observed.dto.lexical.state==='ready';
-          const prepare=()=>{
-            const covered=coverage(observed.dto);covered.stops.budget=m.transformed>=p.budget.maxItems;
-            return success({status:ready&&observed.byteSafe?p.mode==='embeddings'?'partial':'complete':'rebuilding',
-              progress:{lexical:observed.dto.lexical.progress,transformed:m.transformed,embeddingAttempts:0,embedded:0},coverage:covered,channels:channels(ready)});
-          };
-          return attribution ? attribution.measure('serialize',prepare) : prepare();
+          const covered=coverage(observed.dto);covered.stops.budget=m.transformed>=p.budget.maxItems;
+          return success({status:ready&&observed.byteSafe?p.mode==='embeddings'?'partial':'complete':'rebuilding',
+            progress:{lexical:observed.dto.lexical.progress,transformed:m.transformed,embeddingAttempts:0,embedded:0},coverage:covered,channels:channels(ready)});
         });}finally{if(observation)observation.epochObservationMs=Number(process.hrtime.bigint())/1e6-epochStarted;}
       }
       const binding=digest({readSet:p.readSet,types:p.types,intent:p.intent,query:p.query,semantic:p.semantic,access:access.accessGenerations});
