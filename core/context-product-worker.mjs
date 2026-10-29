@@ -93,6 +93,7 @@ parentPort.on('message', async message => {
   }
   if (active || !facade) { result(message.operation, productFailure('reader_failed')); return; }
   active = true;
+  const receivedAt=Number(process.hrtime.bigint())/1e6;
   const { operation, frame } = message;
   observer.select(frame);
   try {
@@ -130,7 +131,8 @@ parentPort.on('message', async message => {
         performance.now() + Number(mono(operation.operationCutoffMonoNs)-process.hrtime.bigint())/1e6, observation);
     }
     within(operation); sealNative(frame); result(operation, response,
-      observation.at === undefined ? {} : { observedAtMonoMs: observation.at });
+      observation.at === undefined ? {} : { observedAtMonoMs: observation.at,
+        maintenancePhases: { ...observation, at:undefined, dispatchMs:receivedAt-Number(mono(operation.enteredMonoNs))/1e6, finishedAtMonoMs:Number(process.hrtime.bigint())/1e6 } });
   } catch (error) { sealNative(frame); result(operation, nativeFailure(error)); }
   finally { active = false; }
 });

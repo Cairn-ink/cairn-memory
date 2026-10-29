@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import * as productReader from '../context-product-reader.mjs';
 const { openContextIndexMaintainer } = productReader;
 import * as productPump from '../context-product-pump.mjs';
-const { createMaintenancePumpRuntime, maintenancePumpDiagnostic } = productPump;
+const { createMaintenancePumpRuntime, maintenancePumpDiagnostic, maintenancePumpPhaseDiagnostic } = productPump;
 import { createContextReadSupervisor } from '../context-read-supervisor.mjs';
 import { credentialDigest } from '../context-product-control.mjs';
 import { fixture, ok } from '../testing/context-read-fixture.mjs';
@@ -23,7 +23,7 @@ function setup(t,patch={},faults={}) {
     projections:[{options,types:['memory']},{options:{...options,readSet:[{ownerId:'pump',scope:'project',projectId:'p'}],ownerCoverage,
       host:{...options.host,configuration:{serviceBinding:{...serviceBinding,namespaces:{readSet:[{ownerId:'pump',scope:'project',projectId:'p'}],ownerCoverage}}}}},types:['memory']}],...patch};
   const cost=(name,n)=>typeof faults[name]==='function'?faults[name](n):faults[name]??0;
-  const renew=createMaintenancePumpRuntime({now:()=>now,observedAt:()=>faults.observedAt?faults.observedAt(observations.at(-1)?.at):observations.at(-1)?.at,setTimer:(f,ms)=>{const id=++serial;timers.set(id,{f,at:now+ms});return id;},clearTimer:id=>timers.delete(id),
+  const renew=createMaintenancePumpRuntime({phasesOf:faults.phasesOf,now:()=>now,observedAt:()=>faults.observedAt?faults.observedAt(observations.at(-1)?.at):observations.at(-1)?.at,setTimer:(f,ms)=>{const id=++serial;timers.set(id,{f,at:now+ms});return id;},clearTimer:id=>timers.delete(id),
     open:async opts=>{const writer=JSON.stringify([opts.path,opts.readSet]);if(faults.exclusive)assert.equal(live.has(writer),false,'drain the previous writer before opening');live.add(writer);opened.push(opts);now+=cost('openMs',opened.length);return {async refreshContextIndex(input,token){calls.push([input,token]);if(faults.refresh)throw Error('refresh failed');now+=cost('dispatchMs',calls.length)+cost('workMs',calls.length);observations.push({at:now,input});now+=cost('deliveryMs',calls.length);return faults.result?faults.result(input):{ok:true,value:{status:'complete'}};},async close(){closed.push(opts);now+=cost('disposeMs',closed.length);if(faults.dispose)await faults.dispose(closed.length);live.delete(writer);if(faults.close)throw Error('close failed');}};}});
   return {renew,c,calls,opened,closed,timers,observations,admissions,setTime:n=>{now=n;},async next(){const [id,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];timers.delete(id);now=timer.at;admissions.push(now);await timer.f();}};
 }
@@ -34,7 +34,7 @@ test('pump round-robins both intents and active projections, renewal retains pum
   assert.deepEqual(s.calls.map(([i])=>[i.readSet[0].scope,i.intent]),[
     ['personal','current'],['personal','history'],['project','current'],['project','history'],
     ['personal','current'],['personal','history'],['project','current'],['project','history']]);
-  assert.equal(s.opened.length,8);assert.equal(pump.getStatus().state,'budget_exhausted');assert.equal(s.timers.size,0);
+  assert.equal(s.opened.length,2);assert.equal(pump.getStatus().state,'budget_exhausted');assert.equal(s.timers.size,0);
   assert.equal((await pump.completion).usedItems,8);
   await pump.close();assert.equal(s.closed.length,s.opened.length);
   const restarted=s.renew({...s.c,id:randomUUID()});assert.equal(restarted.getStatus().state,'budget_exhausted');assert.equal(s.timers.size,0);await restarted.close();
@@ -178,7 +178,7 @@ test('P2d fix round 1 pump uses opted-out constructor for an otherwise identical
   s.c.projections=[{...base,options:{...base.options,wal:true,sidecarJournalMode:'WAL'}},
     {...base,options:{...base.options,wal:false,sidecarJournalMode:'DELETE'}}];
   const pump=s.renew(s.c);for(let i=0;i<4;i++)await s.next();
-  assert.deepEqual(s.opened.map(o=>[o.wal,o.sidecarJournalMode]),[[true,'WAL'],[true,'WAL'],[false,'DELETE'],[false,'DELETE']]);
+  assert.deepEqual(s.opened.map(o=>[o.wal,o.sidecarJournalMode]),[[true,'WAL'],[false,'DELETE']]);
   assert.deepEqual(s.calls.map(([i])=>i.intent),['current','history','current','history']);
   await pump.close();assert.equal(s.closed.length,s.opened.length);
 });
@@ -267,7 +267,7 @@ test('P2c fix1 pump renewal canonicalizes coverage key order and rejects a diffe
 });
 
 // The merged identity is shared by renewal and native-handle lookup. Property
-// order is irrelevant; every journal policy, type selection and intent is bound.
+// order is irrelevant; journal policy and types bind residency, intent binds calls.
 for(const difference of ['wal','sidecarJournalMode','ownerCoverage order','types'])
 test(`P2c/P2d pump identity combines canonical coverage with ${difference}`,async t=>{
   const s=setup(t,{}, {exclusive:true}),base=s.c.projections[0];
@@ -285,9 +285,9 @@ test(`P2c/P2d pump identity combines canonical coverage with ${difference}`,asyn
   assert.equal(s.renew(canonicalRenewal),pump);
   assert.equal(s.opened.length,openedBeforeRenewal);
   for(let i=0;i<4;i++)await s.next();
-  // Eight dispatches alternate intent under one admitted native writer slot.
-  // Every incompatible handle drains before its successor opens.
-  assert.equal(s.opened.length,8);assert.equal(s.closed.length,7);
+  // Intent alternation reuses; incompatible constructor selections still drain.
+  const expected=difference==='ownerCoverage order'?1:4;
+  assert.equal(s.opened.length,expected);assert.equal(s.closed.length,expected-1);
   assert.deepEqual(s.calls.map(([i])=>i.intent),['current','history','current','history','current','history','current','history']);
   for(const patch of [{wal:false},{sidecarJournalMode:'WAL'}]){
     const changed={...canonicalRenewal,projections:canonicalRenewal.projections.map((p,i)=>i?p:{...p,options:{...p.options,...patch}})};
@@ -297,7 +297,7 @@ test(`P2c/P2d pump identity combines canonical coverage with ${difference}`,asyn
   const typesOnly={...canonicalRenewal,projections:canonicalRenewal.projections.map((p,i)=>i?p:
     {...p,types:p.types.includes('card')?['memory']:['memory','card']})};
   assert.throws(()=>s.renew(typesOnly),{code:'read_in_progress'});
-  await pump.close();assert.equal(s.closed.length,8);
+  await pump.close();assert.equal(s.closed.length,expected);
 });
 
 const settled = (transformed=0,status='complete') => ({ok:true,value:{status,progress:{transformed}}});
@@ -383,14 +383,16 @@ for(const status of ['rebuilding','partial','complete'])test(`Fix A successful $
   assert.equal(s.calls.length,9);assert.equal(s.timers.size,1);await p.close();
 });
 
-// The first two reproduce each review's exact observation times on ca2540a4.
-// The latter two vary draining, transport and refresh work as well as opening.
+// Preserve the reviewers' quantum-5 latency stress after resident reuse removes
+// their fifth open. Inject that cost into refresh instead; the third case also
+// carries the former 12-ms drain + 60-ms open + 15-ms work into its 87-ms work.
+// Actual incompatible-handle disposal/watchdog coverage remains below.
 for(const [name,faults] of [
-  ['spec reviewer',{openMs:n=>n===5?60:10,deliveryMs:10}],
-  ['standards reviewer',{openMs:n=>n===5?90:0}],
-  ['varying dispose and refresh',{openMs:n=>n===5?60:10,disposeMs:n=>n===4?12:n%3,
-    dispatchMs:n=>n===5?6:1,workMs:n=>n===5?15:n%4,deliveryMs:n=>n%3}],
-  ['varying refresh and delivery',{openMs:5,disposeMs:n=>n%2,dispatchMs:2,
+  ['spec reviewer',{openMs:10,workMs:n=>n===5?60:0,deliveryMs:10}],
+  ['standards reviewer',{workMs:n=>n===5?90:0}],
+  ['varying dispatch and refresh',{openMs:10,
+    dispatchMs:n=>n===5?6:1,workMs:n=>n===5?87:n%4,deliveryMs:n=>n%3}],
+  ['varying refresh and delivery',{openMs:5,dispatchMs:2,
     workMs:n=>n===5?70:3,deliveryMs:n=>n===4?50:2}],
 ])test(`Fix A1 actual observation cadence: ${name}`,async t=>{
   const s=setup(t,{}, {...faults,result:()=>settled()}),p=s.renew(s.c);
@@ -567,13 +569,15 @@ test('Fix A1 pending disposal reports timeout before it settles and never dispat
   let entered,release;
   const disposing=new Promise(resolve=>{entered=resolve;});
   const s=setup(t,{}, {result:()=>settled(),dispose:n=>n===1?new Promise(resolve=>{release=resolve;entered();}):undefined});
-  const p=s.renew(s.c);await s.next();
+  // A real constructor change on the same physical selection triggers disposal.
+  s.c.projections=[s.c.projections[0],{...s.c.projections[0],types:['memory','card']}];
+  const p=s.renew(s.c);await s.next();await s.next();
   const pending=s.next();await disposing;
   try{
     assert.equal(s.timers.size,1,'parent deadline supervises pending disposal');
     const [id,deadline]=[...s.timers][0];s.timers.delete(id);s.setTime(deadline.at);await deadline.f();
     assert.equal(p.getStatus().state,'failed');assert.equal(p.getStatus().error,'read_timeout');
-    assert.equal(s.calls.length,1);assert.equal(s.opened.length,1);
+    assert.equal(s.calls.length,2);assert.equal(s.opened.length,1);
   }finally{release();await pending;}
   const final=await p.completion;assert.equal(final.error,'read_timeout');
   assert.equal(final.usedItems,1);assert.equal(final.usedMs,100);assert.equal(s.timers.size,0);
@@ -643,4 +647,145 @@ test(`Fix A3 product configuration admits ${residents} resident owner pumps with
     assert.equal(p.getStatus().usedItems,0);assert.equal(p.getStatus().usedMs,0);
     await p.close();
   }
+});
+
+
+for(const residents of [1,4])test(`B0 ${residents} owner split reuses one maintainer across intents and preserves reservations`,async t=>{
+  const pumps=[];
+  for(let owner=0;owner<residents;owner++){
+    let pump,attempt=0;
+    const s=setup(t,{quantum:{maxItems:32,maxMs:1000},budgets:{maxItems:2048,maxMs:60000},pollMs:25},
+      {exclusive:true,openMs:7,workMs:11,result:()=>{
+        const status=pump.getStatus();
+        assert.equal(status.usedItems,32,'full item reservation before every dispatch');
+        assert.equal(status.usedMs,1000+(attempt++?18:0),'full time reservation before dispatch');
+        return settled();
+      }});
+    const options=s.c.projections[0].options,readSet=four.map(ns=>({...ns,ownerId:'resident-'+owner})),ownerCoverage=descriptor(readSet);
+    const serviceBinding={...options.host.configuration.serviceBinding,ownerId:readSet[0].ownerId,namespaces:{readSet,ownerCoverage}};
+    s.c.projections=[{types:['memory','card'],options:{...options,readSet,ownerCoverage,host:{...options.host,configuration:{serviceBinding}}}}];
+    pump=s.renew(s.c);pumps.push({s,pump});
+    await s.next();assert.equal(pump.getStatus().usedMs,18);
+    await s.next();assert.equal(pump.getStatus().usedMs,29);
+    assert.equal(pump.getStatus().usedItems,0);
+    assert.deepEqual(s.calls.map(([input])=>input.intent),['current','history']);
+    assert.equal(s.opened.length,1);assert.equal(s.closed.length,0);
+  }
+  for(const {s,pump} of pumps){await pump.close();assert.equal(s.closed.length,1);}
+});
+
+test('B0 bounded phase counters include opening in quantum zero, remain private and immutable',async t=>{
+  const s=setup(t,{budgets:{maxItems:2048,maxMs:60000}},
+    {openMs:7,workMs:11,deliveryMs:2,result:()=>settled(),phasesOf:()=>({dispatchMs:1,epochObservationMs:2,deliveryMs:3,canonicalRows:4,metadataBytes:5,path:'private-diagnostic-probe',credential:'private-diagnostic-probe'})});
+  s.c.projections=[s.c.projections[0]];
+  const p=s.renew(s.c);await s.next();const before=p.getStatus(),first=maintenancePumpPhaseDiagnostic(before);
+  const shape=JSON.stringify(first).length;
+  for(let i=0;i<20;i++)await s.next();
+  const status=p.getStatus(),detail=maintenancePumpPhaseDiagnostic(status),[current,history]=detail.projections;
+  assert.equal(current.first.number,0);assert.equal(current.first.elapsedMs,20);
+  assert.equal(history.first.elapsedMs,13,'resident history has no open cost');
+  assert.equal(current.phases.open.count,1);assert.equal(history.phases.open.count,0);
+  assert.equal(current.phases.refreshCall.latestMs,13);
+  assert.equal(current.phases.dispatch.latestMs,1);assert.equal(current.phases.epochObservation.latestMs,2);
+  assert.equal(current.phases.settle.latestMs,3);assert.equal(current.phases.settle.count,11);
+  assert.equal(current.work.canonicalRows,44);assert.equal(current.work.metadataBytes,55);
+  assert.equal(JSON.stringify(detail).includes('private-diagnostic-probe'),false);
+  assert.equal(current.quanta,11);assert.equal(history.quanta,10);
+  assert.equal(current.elapsedBuckets.length,502);assert.equal(history.elapsedBuckets.length,502);
+  assert.equal(current.elapsedBuckets.reduce((a,b)=>a+b),11);
+  assert.equal(detail.projections.length,2);assert.ok(JSON.stringify(detail).length<shape+500,'fixed counters, no sample history');
+  assert.equal(first.projections[0].quanta,1);assert.ok(Object.isFrozen(current.elapsedBuckets));
+  assert.equal(JSON.stringify(detail).includes(s.c.projections[0].options.path),false);
+  assert.equal(JSON.stringify(detail).includes(s.c.serviceCredential.service),false);
+  assert.equal(JSON.stringify(status).includes('phases'),false);
+  const publicEntry=await import('../index.mjs');
+  assert.equal(publicEntry.maintenancePumpPhaseDiagnostic,undefined);
+  assert.equal(publicEntry.maintenancePhaseDiagnostic,undefined);
+  await p.close();
+  assert.equal(maintenancePumpPhaseDiagnostic(await p.completion).projections[0].phases.drain.count,1);
+});
+
+test('B0 fresh native calls on a resident maintainer alternate intents, retain admission and reject foreign scope',async t=>{
+  const f=fixture(t),service=configured(t,f.path,[personal],{service:true});f.admit('resident lexical evidence',personal);
+  const h=await openContextIndexMaintainer(service.options);t.after(()=>h.close());
+  await assert.rejects(openContextIndexMaintainer(service.options),{code:'read_in_progress'});
+  await service.supervisor.drain(); // Failed admission quarantines until disposal is acknowledged.
+  for(const intent of ['current','history','current','history']){
+    const raw=await h.refreshContextIndex({readSet:[personal],types:['memory'],intent,mode:'lexical',budget:{maxItems:32,maxMs:1000}},service.token);
+    assert.equal(raw.ok,true,JSON.stringify(raw));
+    const d=productReader.maintenancePhaseDiagnostic(raw);
+    for(const name of ['dispatchMs','epochObservationMs','deliveryMs'])assert.ok(Number.isFinite(d[name])&&d[name]>=0,name);
+    assert.ok(Number.isSafeInteger(d.canonicalRows));assert.ok(Number.isSafeInteger(d.metadataBytes));
+    assert.equal(JSON.stringify(raw).includes('dispatchMs'),false);
+  }
+  const foreign=configured(t,f.path,[project('foreign')],{service:true});
+  const raw=await h.refreshContextIndex({readSet:[project('foreign')],types:['memory'],intent:'history',mode:'lexical',budget:{maxItems:32,maxMs:1000}},foreign.token);
+  assert.equal(raw.error.code,'authority_required');
+  service.view[0]=0;
+  const revoked=await h.refreshContextIndex({readSet:[personal],types:['memory'],intent:'history',mode:'lexical',budget:{maxItems:32,maxMs:1000}},service.token);
+  assert.equal(revoked.error.code,'authority_required');
+  await h.close();const replacement=await openContextIndexMaintainer(service.options);await replacement.close();
+});
+
+
+for(const change of ['binding','shared state','diagnostics','deadline'])
+test(`B0 changed ${change} drains the incompatible resident before replacement`,async t=>{
+  const s=setup(t,{}, {exclusive:true,result:()=>settled()}),base=s.c.projections[0];
+  const options={...base.options,diagnostics:true,deadlineMs:5000,
+    host:{...base.options.host,configuration:{...base.options.host.configuration,state:new SharedArrayBuffer(4)}}};
+  const next={...options,
+    ...(change==='diagnostics'?{diagnostics:false}:change==='deadline'?{deadlineMs:4000}:{}),
+    host:{...options.host,configuration:{...options.host.configuration,
+      ...(change==='binding'?{serviceBinding:{...options.host.configuration.serviceBinding,credentialBindingId:'other-binding'}}:{}),
+      ...(change==='shared state'?{state:new SharedArrayBuffer(4)}:{})}}};
+  s.c.projections=[{...base,options},{...base,options:next}];
+  const p=s.renew(s.c);
+  await s.next();await s.next();assert.equal(s.opened.length,1);assert.equal(s.closed.length,0);
+  await s.next();assert.equal(s.opened.length,2);assert.equal(s.closed.length,1);
+  await s.next();assert.equal(s.opened.length,2);assert.equal(s.closed.length,1);
+  assert.equal(p.getStatus().error,null);
+  const renewal={...s.c,projections:[s.c.projections[0],{...base,options}]};
+  assert.throws(()=>s.renew(renewal),{code:'read_in_progress'});
+  await p.close();assert.equal(s.closed.length,2);
+});
+
+for(const ending of ['stop','failure','supervisor'])test(`B0 ${ending} drains the resident after intent reuse`,async t=>{
+  let attempt=0;
+  const s=setup(t,{}, {result:()=>++attempt===3&&ending==='failure'?{ok:false,error:{code:'storage_error'}}:settled()});
+  s.c.projections=[s.c.projections[0]];
+  const p=s.renew(s.c);await s.next();await s.next();
+  assert.equal(s.opened.length,1);assert.equal(s.closed.length,0);
+  if(ending==='failure'){
+    await s.next();const final=await p.completion;assert.equal(final.error,'storage_error');
+    assert.equal(final.usedItems,1);assert.equal(final.usedMs,100,'failed reused call keeps its full reservation');
+  }else if(ending==='supervisor')await s.c.supervisor.close();else await p.close();
+  assert.equal(s.opened.length,1);assert.equal(s.closed.length,1);assert.equal(s.timers.size,0);
+  await p.close();
+});
+
+
+test('B0 continuous handoff retains residency; an inactive renewal replaces the possibly idle reader',async t=>{
+  const s=setup(t,{renewalMs:4000},{exclusive:true,result:()=>settled()});
+  s.c.projections=[s.c.projections[0]];
+  const p=s.renew(s.c);await s.next();await s.next();
+  assert.equal(s.opened.length,1);
+  s.setTime(4000);s.renew(s.c);await s.next();
+  assert.equal(s.opened.length,1,'continuous authority handoff preserves the resident');
+  s.setTime(10000);s.renew({...s.c,renewalMs:60000});await s.next();
+  assert.equal(p.getStatus().state,'active');assert.equal(s.opened.length,2);assert.equal(s.closed.length,1);
+  await p.close();assert.equal(s.closed.length,2);
+});
+
+test('B0 mutable shared host state retains identity while a new buffer replaces it',async t=>{
+  const s=setup(t,{}, {exclusive:true,result:()=>settled()}),base=s.c.projections[0];
+  const state=new SharedArrayBuffer(4);
+  s.c.projections=[{...base,options:{...base.options,host:{...base.options.host,
+    configuration:{...base.options.host.configuration,state}}}}];
+  const p=s.renew(s.c);await s.next();
+  Atomics.store(new Int32Array(state),0,1);
+  assert.equal(s.renew(s.c),p);await s.next();assert.equal(s.opened.length,1);assert.equal(s.closed.length,0);
+  const changed={...s.c,projections:s.c.projections.map(projection=>({...projection,options:{...projection.options,
+    host:{...projection.options.host,configuration:{...projection.options.host.configuration,state:new SharedArrayBuffer(4)}}}}))};
+  assert.throws(()=>s.renew(changed),{code:'read_in_progress'});
+  await p.close();
 });

@@ -162,8 +162,12 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       }
       if(method==='refreshContextIndex') {
         const m=p.mode==='lexical'?storage.refresh(p,access.accessGenerations,p.budget):{transformed:0};
+        if(observation)for(const name of ['transformed','canonicalRows','metadataBytes','textRows','textBytes','supportLookups','supportBytes','verifiedRows']){
+          if(Number.isSafeInteger(m[name])&&m[name]>=0)observation[name]=m[name];
+        }
         const knownFailure=storage.prepareObservation();access.check();
-        return read(()=>{
+        const epochStarted=Number(process.hrtime.bigint())/1e6;
+        try{return read(()=>{
           // This first canonical read acquires the fresh snapshot (§6.1.2).
           // Sample at its entry so acquisition/native-read latency cannot move
           // the previous observation's deadline later. This is a conservative
@@ -175,7 +179,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
           const covered=coverage(observed.dto);covered.stops.budget=m.transformed>=p.budget.maxItems;
           return success({status:ready?p.mode==='embeddings'?'partial':'complete':'rebuilding',
             progress:{lexical:observed.dto.lexical.progress,transformed:m.transformed,embeddingAttempts:0,embedded:0},coverage:covered,channels:channels(ready)});
-        });
+        });}finally{if(observation)observation.epochObservationMs=Number(process.hrtime.bigint())/1e6-epochStarted;}
       }
       const binding=digest({readSet:p.readSet,types:p.types,intent:p.intent,query:p.query,semantic:p.semantic,access:access.accessGenerations});
       if(p.cursor!==undefined) {
