@@ -1,6 +1,10 @@
 # Context-read incremental catch-up design (fix B)
 
-Status: **fourth design revision, 2026-10-29; implementation not authorized**.
+Status: **sixth design revision, 2026-10-29; implementation not authorized**.
+Rounds 1–5 were approved by two non-author reviewers. This revision adds the
+hosted product's B3S interface requirements. The narrow owner-only lineage-recovery
+inspection exception in §2.2 is **pending project-owner confirmation**; prior
+review approvals and the confirmed lineage semantics (c) do not authorize it.
 The as-of contract decision was recorded 2026-10-28.
 The project owner selected **(A)**: target p95 staleness ≤30 s, hard bound
 **X = 60 s**, partial fallback beyond X, with immediate removal/correction/access
@@ -15,11 +19,10 @@ All repository `file:line` citations below refer to the merged fix A + P2e
 convergence base **`25abe2d4`**, inspected read-only. Earlier draft citations to
 separate branches are superseded. The authoritative contract is
 `docs/plans/context-read-product.md`, not the shorter host guide.
-Both non-author re-reviews of round 3 were read in full: soundness is
-**REQUEST CHANGES** (one P1, two P2s); scope is **APPROVE WITH CHANGES**
-(four P2s). Their dispositions are recorded in §11 without private locations.
-Earlier findings remain closed at the design level; these receipts supersede
-the third revision's review summary. No implementation approval is implied.
+The historical round-3 re-reviews requested changes: soundness had one P1 and
+two P2s; scope had four P2s. Their dispositions remain recorded in §11 without
+private locations. Rounds 1–5 are now approved by two non-author reviewers;
+those approvals do not cover this sixth revision or grant implementation approval.
 
 The checked-in §6.1.2 and §10.4 still require strict currentness
 (`docs/plans/context-read-product.md:421`, `:657`). They are historical constraints
@@ -37,7 +40,7 @@ comparison records the basis of the decision rather than reopening it.
 | Question | (S) strict currentness — not selected | (A) bounded as-of — selected |
 | --- | --- | --- |
 | Q4 reachability | Revision-3 planning schedules need mean repair lag about **35 ms on v18, 20 ms on mixed schemas** for 1% stale time; overlap locally allows about 16.7 ms. At 100 ms, whole-session stale time is already 2.79–2.87% / 4.86–4.96%. There is no measured basis to expect the required lag, especially for organizer fan-out and DELETE contention. These time fractions are not scheduled-A qualification. | New target: **p95 staleness ≤30 s; ≤1% of scheduled requests beyond 60 s or not ready**. Reads can use an intact certified E while catch-up runs. This buys a seconds-scale repair budget, not permission to stop advancing E. Feasibility still requires measurement. |
-| Minimum engine work and honest size | B0–B3, the lexical reconciliation/audit portion of B4, B5 and B6 with the strict oracle; omit A-only clock witnesses/bounded status. Roughly **6,000–12,000 changed lines**, plus strict-current dispatch/admission and measurement work (**+800–1,800**). Selective watches may be needed (**+900–1,800**). Even this has no Q4 guarantee. | Use **B0 → B1 → B3S complete safety → B3 → B4 common/copy-verify → final architecture gate → B2/B4 delta work if needed → B5 → B6**. Preliminary B1 evidence may defer B2; only the fully accounted gate may permanently skip it. **6,750–12,800 changed lines** with deltas, **5,500–10,450** with copy/verify, including meaningful tests/docs; separate qualification harness prerequisite **1,000–2,200**. Optional tail, vectors, Merkle trees and general watches are excluded. |
+| Minimum engine work and honest size | B0–B3, the lexical reconciliation/audit portion of B4, B5 and B6 with the strict oracle; omit A-only clock witnesses/bounded status. Roughly **6,000–12,000 changed lines**, plus strict-current dispatch/admission and measurement work (**+800–1,800**). Selective watches may be needed (**+900–1,800**). Even this has no Q4 guarantee. | Use **B0 → B1 → B3S complete safety → B3 → B4 common/copy-verify → final architecture gate → B2/B4 delta work if needed → B5 → B6**. Preliminary B1 evidence may defer B2; only the fully accounted gate may permanently skip it. **7,200–13,700 changed lines** with deltas, **5,950–11,350** with copy/verify, including meaningful tests/docs; separate qualification harness prerequisite **1,000–2,200**. Optional tail, vectors, Merkle trees and general watches are excluded. |
 | Contract changes | §6.1.2 exact-current final comparison and §10.4 exact-new-ref/strict-not-ready gates stay. P2-21 E publication is certified but refused after E+1. Fallback still counts not ready. | Revision 4 must permit E after newer canonical writes, define proven staleness and final safety checks (§2), replace the §10.4 Q4 freshness/availability predicate, and change P2-21 reader/service expectations. It must also permit installing an already closed E when the final check sees E+1. E is never relabeled. Beyond-bound fallback remains a failed engine freshness/availability attempt. |
 | User-visible effects | Frequent index-unavailable responses during ordinary writes; new content waits for exact-current publication. | New items may be absent until coverage advances, for at most the 60-s accepted bound; aim for p95 ≤30 s. Confirmation/pinning and ranking may lag. Removals, corrected old text and inaccessible content have **zero** allowance. Freshness metadata identifies E and its proven age. |
 
@@ -232,7 +235,9 @@ For each outgoing ref, text, title, snippet, source excerpt and metadata object:
 
 * Check live owner/namespace/caller access and durable owner/item/source privacy
   suppression, existence, deletion and supersession. Suppressed or unresolved
-  lineage means omit/refuse, even for history and empty-query/cached surfaces.
+  lineage means omit/refuse, even for history and empty-query/cached surfaces,
+  except for the pending, owner-only recovery inspection defined below. Known
+  suppressed content never qualifies for that exception.
 * Refetch canonical evidence, evaluate purpose-aware Card eligibility and compare
   exact revision/body revision and source identities. If corrected, omit it.
   Do not expose snapshot title/body/excerpt or cached metadata from that item.
@@ -258,11 +263,11 @@ acknowledging erasure if a stronger after-ack guarantee is promised. Existing
 The hosted product owns its request-time collection ACL check and stopped-client
 cache erasure; engine controls must fail closed on changed authority.
 
-**Purpose-aware eligibility.** The common predicate is access + restore admission
-(§3.4) + owner/item/source suppression + existence/deletion/supersession + proven
-body lineage and exact identities. It applies to **all owner reads**, including
-authenticated authoring reads. Retrieval (`current` or `history`) additionally
-requires confirmed state and full current support/applicability/dependency
+**Purpose-aware eligibility.** All owner reads require access + restore admission
+(§3.4) + owner/item/source suppression + existence/deletion/supersession + exact
+identities. Proven complete body lineage is additionally mandatory except for
+the narrowly defined fourth purpose below. Retrieval (`current` or `history`)
+additionally requires confirmed state and full current support/applicability/dependency
 eligibility. Authenticated draft inspection uses a separate draft-state policy:
 verified owner authoring authority, extant `draft` state, exact draft revision/body
 identity, complete lineage and live unsuppressed contributors. It does not require
@@ -293,6 +298,48 @@ confirmed-Card review, therefore requires:
 It does not require current dependency or applicability eligibility, and its
 result is never a retrieval result. Suppression still hides the Card from review.
 
+**Fourth purpose: authenticated lineage-recovery inspection — pending
+project-owner confirmation.** This is a **narrow, owner-only exception to the
+zero-tolerance read rule**, for legacy bodies whose lineage cannot be proven.
+The project owner must explicitly confirm this exception before it is enabled;
+until then, unknown-lineage title/body reads remain denied. It requires verified
+owner authoring authority, an extant draft or confirmed Card, exact current body/
+revision identity, and `unknown` lineage with **no known suppressed contributor**
+under §2.3's full recoverable-evidence check. All other common safety checks still
+apply. It returns the title and body so the owner can choose keep-as-own, rewrite,
+regenerate or delete; inspection itself neither changes provenance nor makes the
+body retrievable. A recovery that retains a body must create the complete new
+revision in §2.3; deletion requires no new readable body.
+
+**Residual risk the project owner is asked to accept.** "No known suppressed
+contributor" cannot prove absence. If a Card's text was derived from a
+contributor that was later forgotten, and every recoverable association between
+that Card and the forgotten contributor has disappeared, the evidence check finds
+no match and recovery inspection can show the owner text derived from content
+they forgot. This is the only exposure the exception permits. It is distinct
+from evidence that is unavailable, unexamined, ambiguous or over budget, which
+continues to refuse.
+
+This purpose is selected only by a dedicated trusted owner-authoring method and
+authority mapping, never a caller `purpose`, `inspect` or other flag. AI callers,
+assembly, candidates, fallback, tail, search/recall and ordinary retrieval/detail
+cannot reach it, inherit its credentials or consume its result. It is not an
+alternative policy for complete-lineage Cards. Recheck authority, exact body and
+all recoverable suppression evidence at final delivery; missing checks, unavailable
+required evidence or exhausted validation budgets deny inspection.
+
+**Known-forgotten bodies remain hidden, title included.** Any known suppressed
+contributor, even in an `unknown` body, denies title, body, snippets and excerpts
+on every purpose. A separate authenticated owner recovery-metadata response may
+expose only created time, collection/namespace and surviving-source count, plus
+the actions **regenerate from remaining sources** and **delete**. No source names,
+source text, title-derived labels or keep-as-own/rewrite inspection is exposed.
+The count is of known surviving sources validated live, not a claim of complete
+lineage. This metadata exception does not bypass owner/item suppression, access,
+deletion or restore admission; an owner-wide erasure still denies everything.
+It is never a retrieval result. Action targeting uses an authority-bound opaque
+handle without content, not a discoverable content identifier or title.
+
 Every entry point must invoke this common predicate plus its purpose policy,
 including paths outside the product index's `final`:
 
@@ -307,7 +354,7 @@ including paths outside the product index's `final`:
 | Source/receipt resolution — `core/private-card-storage.mjs:43`, `core/private-card-storage.mjs:251`, `core/card-receipt-sources.mjs:19` | Suppression before source dereference; verify source identities again at delivery, including Raw's asynchronous finish at `core/private-card-facade.mjs:58`. |
 | Legacy Memory `fetch` — `core/runtime.mjs:492`, historical lookup `core/runtime.mjs:497`, ordinary completion `core/fetch.mjs:54` | Enforce suppression and exact item/receipt identity on current and historical bodies, receipt pages and cursor resume. After the final token-counter callback, refetch/revalidate all outgoing fields in a fresh canonical snapshot; the epoch assertion at `core/fetch.mjs:54`–`:55` cannot substitute for final suppression/item validation, including mutations without an epoch bump. |
 | Complete source snapshots — `core/runtime.mjs:514` | Apply admission/suppression and item/source validation to the complete enumerated source set and final delivery. Never serialize suppressed bodies or excerpts; if filtering invalidates a promised complete snapshot, refuse or explicitly use a contract-approved filtered population, never silently claim completeness. Repeat validation after caller callbacks. |
-| Card detail/list/organization callbacks — `core/private-card-storage.mjs:228`, `core/private-card-storage.mjs:273`, `core/private-card-storage.mjs:295` | Apply the trusted purpose policy: authenticated draft detail/list inspection remains available where method/authority grants it; authenticated confirmed-Card review (the repair workflow) uses §2.2's review purpose; retrieval and ordinary confirmed detail require confirmed/current eligibility, as do evidence and organization consumers. Organization callbacks cannot bypass suppression or that purpose mapping. Suppressed bodies and metadata never escape. |
+| Card detail/list/organization callbacks — `core/private-card-storage.mjs:228`, `core/private-card-storage.mjs:273`, `core/private-card-storage.mjs:295` | Apply the trusted purpose policy: safe draft inspection and confirmed-Card review use their respective authoring policies; retrieval, ordinary confirmed detail, evidence and organization consumers require confirmed/current eligibility. Only dedicated owner recovery methods may use the pending fourth purpose or the restricted recovery-metadata response above. Ordinary lists/callbacks cannot inherit either exception; suppressed titles/bodies never escape. |
 | Role evidence — `core/role-context-evidence.mjs:22` | Both current/history consumers inherit the shared predicate, including receipt excerpts. |
 | Optional tail (not implemented) — reuse exact-fetch seam `core/context-read-facade.mjs:703` | Every tail ref passes the same predicate; no unvalidated session bytes. |
 | Fallback — canonical selection/refetch `core/context-read-facade.mjs:603`, `core/context-read-facade.mjs:665`; private evidence `core/private-evidence-storage.mjs:179`; recall `core/runtime.mjs:546` | Engine seams enforce safety. The hosted product's Card search, recall, fallback and caches must demonstrate equivalent final checks; their implementations are outside this checkout. B3S host acceptance is a prerequisite to widening beyond the owner canary; B5 rechecks it for the new sidecar format. |
@@ -342,9 +389,17 @@ source digest fixes that loss of history.
 
 | Proposed table / key | Required stored fields and invariants |
 | --- | --- |
-| `card_body_provenance` keyed by `(owner, namespace, cardIncarnation, bodyRevision)` | Exact title/body digest, provenance revision/digest, state `complete` or `unknown`, and origin (`derived` or explicit `user-authored`). Missing/mismatched/unknown header denies visibility. Every readable body, including a body-bearing draft, needs an allocated revision/provenance identity. |
+| `card_body_provenance` keyed by `(owner, namespace, cardIncarnation, bodyRevision)` | Exact title/body digest, provenance revision/digest, state `complete` or `unknown`, and origin (`derived` or explicit `user-authored`). Missing/mismatched headers deny; `unknown` denies title/body visibility except for §2.2's pending fourth purpose. Every readable body, including a body-bearing draft, needs an allocated revision/provenance identity. |
 | `card_body_sources` keyed by the body key plus `(sourceNamespace, sourceKind, sourceKey, sourceIncarnation, sourceVersion)` | Append-only complete contributor set, with ancestor erasure identities and exact source-content identities. Receipt contributors include their parent Memory incarnation; Raw contributors include relevant conversation/message/span ancestry. Derived-Card inputs, if supported, flatten their complete transitive sets; unresolved/cyclic ancestry fails closed. No source text is stored. Index source erasure identities for suppression/cleanup. |
 | `content_suppressions` keyed by `(owner, scope, sourceKind, stableKey, incarnation)` | Monotone privacy epoch, reason and cleanup status; owner-wide rows checked before item lookup. Pending, failed and complete cleanup states all deny. Source tombstones survive source/child-row deletion and sidecar rebuild; completed cleanup never lifts suppression. |
+
+`content_suppressions.reason` distinguishes at least `user_forget`,
+`correction_supersession`, `purge`, `privacy_erase` and `account_erasure`.
+Preserve the reason in external-ledger append/replay and suppression pull results;
+cleanup status is separate and never changes a denial into permission. Multiple
+applicable reasons retain their denial facts rather than overwriting history.
+Correction/supersession denials identify the retired source version where needed,
+so they exclude old derived bytes without denying a valid new corrected version.
 
 Source keys/incarnations are canonical durable identities. Reserve identities
 referenced by provenance or tombstones against reuse; legacy keys receive a
@@ -385,8 +440,10 @@ resetting lineage. The existing unconditional assignment to revision 1 at
 `core/private-card-storage.mjs:208` must be replaced. The binding replacement and
 byte-based revision seam at `core/private-card-storage.mjs:214` must handle draft
 edits, source additions and identical-byte authorized recovery consistently. A
-forgotten contributor or unknown lineage blocks inspection and confirmation;
-confirmation is never an implicit recovery action. A new actual body revision
+forgotten contributor blocks title/body inspection and confirmation. Unknown
+lineage blocks draft inspection, confirmed review and confirmation; only the
+pending fourth purpose may inspect it under §2.2. Confirmation is never an
+implicit recovery action. A new actual body revision
 must establish complete provenance; binding edits cannot erase prior edges.
 
 **Visibility.** Before returning a Card on any owner surface, load the header
@@ -397,12 +454,45 @@ derived text visible through a removed binding. If any has been forgotten,
 purged or privacy-deleted, suppress the **entire Card**, not just its citations,
 on current, history, exact fetch, Card search/recall, assembly, tail and fallback.
 This is zero tolerance independent of X, even when other surviving bindings
-remain valid. Historical exact refs cannot resurrect an old body. Unknown lineage
-or incomplete bounded validation refuses; an empty surviving binding list is not
-proof of user authorship. Apply §2.2's purpose policy in addition: confirmed/current
-eligibility for retrieval and ordinary confirmed detail, draft-state eligibility
+remain valid. Historical exact refs cannot resurrect an old body. Incomplete
+bounded validation always refuses. Unknown lineage refuses title/body reads
+except for §2.2's pending owner recovery-inspection purpose; known-forgotten
+bodies permit only its restricted content-free recovery metadata/actions. An empty
+surviving binding list is not proof of user authorship. Apply §2.2's purpose policy
+in addition: confirmed/current eligibility for retrieval and ordinary confirmed
+detail, draft-state eligibility
 for authenticated draft inspection, and the review policy for authenticated
-confirmed-Card review.
+confirmed-Card review. Those three purposes still require complete lineage.
+
+**Recoverable evidence for the fourth purpose.** “No known suppressed contributor”
+means no match across the union of **all recoverable canonical evidence** tied
+to this Card incarnation and body revision, not just surviving bindings. Examine
+current bindings and receipts (including parent Memory and Raw ancestry), retained
+body/source/provenance records, authenticated operation-ledger payload bindings
+(`core/private-operation-helpers.mjs:18`), recovered external-ledger seeds (§3.4),
+and any other canonical trace, including recoverable historical associations and
+trustworthy retained backup evidence. A backup inadmissible for serving under
+§3.4 may still supply a verified positive contributor link; examining it never
+admits that backup for reads. Any trace that establishes a
+contributor or ancestor identity is positive evidence even when it cannot prove
+the complete source set. Conservatively union plausible associations when their
+revision mapping cannot exclude the current body; do not discard a known link
+merely because its binding/receipt was deleted.
+
+Payload bindings are commitments, not recoverable source lists: the Card payload
+binding is keyed (`core/private-card-storage.mjs:302`,
+`core/private-card-input.mjs:92`). Examine retained candidate operation payloads
+and source associations where their binding can be verified; do not claim to
+invert a digest, infer absence from an opaque binding, or treat the stored result
+alone as complete history. Recovered ledger seeds supply denial identities;
+cross-match them with every recovered contributor/ancestor association, including
+owner-wide and namespace-wide scopes. A match in **any** evidence source denies
+inspection, title included, regardless of other live bindings or an `unknown`
+header. Unknown completeness alone is the proposed exception; unavailable or
+unexamined recoverable evidence, uncertain identity mapping and incomplete bounded
+validation are not evidence of no match and must refuse. Persist the recovered
+known edges/evidence origin during migration so reads do not ignore a lost trace;
+new evidence and suppressions invalidate prior inspection authorization.
 
 **Recovery.** Only a **new body revision** with a complete source set excluding
 the removed item can reappear: a user rewrite, system regeneration from remaining
@@ -412,6 +502,12 @@ authorized action, not an empty implicit set). Recovery must allocate a new
 `body_revision` even if the chosen title/body bytes are identical; ordinary
 byte-change-based revision logic is insufficient. The keep-as-own action must be
 an explicit authorized provenance reset, never inferred from removing a binding or copying stored text.
+The content-free `user-authored` marker records the **authorizing actor**, trusted
+**authorization time** and **host action id**, bound to owner, Card incarnation,
+new body revision and digest. It stores no title, body, excerpts or source text.
+Retries with the same owner/host action id and identical authorization/body binding
+return the same revision/marker; conflicting reuse refuses. Persist the marker
+atomically with that revision and preserve it through backup/restore for audit.
 For this explicit user-authored mode, support is eligible only when its canonical
 authorization marker matches the current body digest and no external contributor
 is declared; validate that marker rather than dereferencing a nonexistent source.
@@ -428,8 +524,12 @@ records, authenticated operation/provenance history and trustworthy backups if
 available). Record evidence origin and completeness. Current bindings alone are
 a **lower bound**, never proof that no binding disappeared. Mark `complete` only
 when evidence proves the entire contributor set, or proves original user authorship.
-Otherwise seed known edges but set `unknown` and suppress that body on every owner
-read, including legacy/fallback routes, until a new complete revision is created.
+Otherwise seed known edges but set `unknown` and suppress that body on every
+retrieval, legacy/fallback and ordinary authoring route until a new complete
+revision is created. Only §2.2's pending owner-only fourth purpose may expose its
+title/body after the full recoverable-evidence check; known suppressed contributors
+always restrict it to the permitted recovery metadata/actions. The project owner
+must confirm that narrow exception separately from legacy-seeding/DDL review.
 Do not grandfather unverifiable bodies or silently classify them as user-authored.
 A new rewrite/regeneration does not require historical certainty about the old
 body, but must establish complete provenance for the new one. The product owner
@@ -706,7 +806,9 @@ bases; wider migration is deferred. Update write/read/topic/product/method/backu
 openers where safety capability compatibility actually requires it. Quiesce
 admissions/writers, back up canonical/accounting state, install tables/guards and
 seed lineage transactionally or in a resumable denied phase. Unknown legacy bodies
-remain suppressed. Read-only opens do no DDL. Old binaries must refuse migrated
+remain suppressed on retrieval and ordinary authoring routes; only §2.2's gated
+owner recovery purpose can inspect eligible unknown bodies. Read-only opens do no
+DDL. Old binaries must refuse migrated
 stores so an untracked body rewrite cannot reopen the hole. Restore preserves
 canonical provenance/tombstones, rejects incompatible derived sidecars and must
 reconcile later suppressions using the external ledger below. Restoring an old
@@ -819,6 +921,70 @@ at `docs/plans/context-read-product.md:218`, erasure/restore adapter obligation 
 apply; their fallback/exact-read permissions begin only after replay admission.
 This design does not edit that contract file.
 
+**Owner-scoped suppression pull interface (B3S).** The engine exposes both
+read-only operations below, authorized like other service/owner calls: verified
+service authority bound to the requested owner and current namespace grants, or
+the owner's authenticated authority. An `owner` argument is never authority;
+cross-owner requests, revoked authority and inaccessible namespaces refuse. Both
+operations require restore admission and recheck authority at page delivery.
+Owner-wide denial facts may be read only by an explicitly authorized erasure
+service for reconciliation; they never reopen erased content or grant authoring
+access. Ordinary denied-owner calls remain denied.
+
+```text
+listSuppressionsSince(owner, epoch, { cursor?, limit })
+  -> { items: [{ key, reason, epoch }], throughEpoch, nextCursor }
+isSuppressed(owner, sourceIdentities, { cursor?, limit })
+  -> { results: [{ inputIndex, suppressed, reasons, matchedEpoch }], observedEpoch, nextCursor }
+```
+
+`key` is a content-free typed owner/scope/namespace/source identity with incarnation
+and version scope where applicable, including owner-wide denials. Input source
+identities use the same canonical representation and relevant ancestor identities;
+batch evaluation includes applicable ancestor, namespace and owner denials.
+Responses contain no titles, bodies, excerpts, source names or operation payloads.
+These are suppression-state queries, **not a mutation feed or a discovery
+journal**: no captures, ordinary edits, bindings, ranking changes or cleanup events
+are emitted, and neither query certifies complete Card lineage or index coverage.
+
+Epochs are exact, non-wrapping unsigned 64-bit values encoded as decimal strings,
+monotone within the authenticated owner/suppression domain. New committed denial
+or additional reason facts receive increasing epochs; cleanup cannot remove a
+fact or lower its epoch. Freeze a durable epoch/ledger mapping so restore/replay
+never reuses or regresses an externally observed epoch; domain mismatch or a
+requested future/unverifiable epoch refuses rather than silently resetting to zero.
+This owner epoch need not equal the external ledger's global sequence.
+
+`listSuppressionsSince` captures a high-water `throughEpoch` on its first page
+and returns facts in ascending `(epoch, typed key)` order for
+`inputEpoch < epoch <= throughEpoch`. A continuation binds that fixed window,
+owner/domain/store identity, authority scope, original epoch, limit and last key.
+Retain immutable denial/reason facts (or equivalent authenticated versions) to
+make every page complete; no current-row overwrite may silently skip an earlier
+fact. The hosted product advances its checkpoint to `throughEpoch` only after
+the terminal page. Concurrent newer denials appear in the next pull. Expired or
+unverifiable continuity refuses and requires restarting from the original
+checkpoint; no success response may advance over a missing fact.
+
+The batch `isSuppressed` accepts **1–256** source identities, and pages results in
+input-index order under one fixed `observedEpoch`; its cursor also binds the
+entire input digest and fixed evaluation snapshot. An invalidated snapshot
+requires a full batch restart, never mixed-epoch pages. `suppressed: false` means
+no applicable denial at that epoch, not proof of provenance or future safety;
+uncertainty returns refusal, not false. Both operations have **1–100** entries
+per page, request/response limits of **64 KiB**, an opaque authenticated cursor of
+at most **2 KiB** and a **15-minute** continuation lifetime. Oversize input or
+invalid limit/cursor refuses; bounded execution exhaustion reports explicit
+incompletion/refusal without claiming a complete page. Recheck live safety at
+content delivery independently of any cached pull or batch result.
+
+The hosted product keeps **its own per-revision source sets for its own shared
+Cards**, reconciles them against these interfaces and drives its notify/unpublish
+flow. Those revision sets, polling/checkpoint state, notifications and unpublish
+decisions stay product-side. Engine-owned body lineage remains authoritative for
+engine Cards; the pull interface neither stores product Card source sets nor
+implements product recovery UI or shared-Card lifecycle.
+
 ### 3.5 B3S design prerequisites
 
 Before B3S implementation, review and freeze a physical safety design satisfying
@@ -849,13 +1015,38 @@ complete migration specification. This work is included in B3S's allowance.
   all affected owner reads and ordinary writes; only denied migration/replay
   maintenance may resume. Reader opens never install DDL; old binaries refuse the
   new physical version. No unsafe legacy/fallback opener may escape these checks.
-* **Legacy preflight:** under quiescence, mechanically count all body-bearing
-  drafts/confirmed/historical bodies by base layout and namespace: provably
-  complete lineage versus unknown, with evidence source and count totals that
-  reconcile to the entire population. Current bindings and stored operation
-  results are insufficient history (`core/private-operation-helpers.mjs:18`).
-  Report unknown/denied content to product policy review; do not remediate or
-  silently declare it authored. Counts and deny policy precede rollout.
+* **Read-only preflight count, per environment before rollout:** under quiescence,
+  enumerate canonical engine Card bodies (body-bearing drafts, confirmed bodies
+  and any retained historical body revisions), not sidecar memberships or product
+  shared Cards. Use the migration classifier against canonical bindings/receipts,
+  retained provenance, verified operation-payload associations, recovered ledger
+  seeds and all other recoverable evidence specified in §2.3; evaluate current
+  denials through the authenticated ledger head. Run in a coherent **read-only**
+  snapshot with no DDL, seeding, marker creation, remediation or cleanup. Use an
+  in-memory proposed classification for unmigrated stores.
+
+  **First-install mode (before S).** On an unmigrated store with neither safety
+  tables nor an initialized ledger, derive the proposed recovered denials in
+  memory from canonical evidence instead of reading ledger seeds, and evaluate
+  against them. If an authenticated ledger already exists, consult it as well.
+  Distinguish an intentionally uninitialized ledger (first install: allowed, and
+  the report says so) from an unavailable required ledger (refuse). This mode
+  writes nothing and grants no serving or restore admission. Acceptance: an
+  unmigrated store with no safety tables and no ledger yields reconciled counts
+  with zero writes, verified by unchanged file identity and content digests.
+
+  Report three disjoint
+  counts: **complete** (proven complete and no known suppression), **unknown**
+  (unproven and no known suppression), **known-suppressed** (any known suppressed
+  contributor, regardless of lineage completeness). Known suppression takes
+  precedence; totals reconcile to all enumerated bodies. Report distinct owners
+  in each class and the deduplicated **number of owners affected** by unknown or
+  known-suppressed bodies; do not sum overlapping owner counts. Output **counts
+  only, no ids or content**, including no namespace names, evidence payloads or
+  per-owner rows. The public design records no exact production counts. If a
+  store/evidence source cannot be read or the population is incomplete, refuse a
+  completed preflight report and block rollout rather than undercount. Deliver
+  environment-local counts and deny policy to product review before rollout.
 * **Restore reconciliation:** freeze the external ledger identities, durable append
   acknowledgement, watermark/control storage, continuity/head verification,
   quiescence/handoff and idempotent replay from §3.4, plus the coverage-start,
@@ -866,6 +1057,18 @@ complete migration specification. This work is included in B3S's allowance.
   mapping, atomic confirmation and complete contributor preservation from §2.3.
   Cover creation (`core/private-card-storage.mjs:170`), confirmation (`:208`) and
   editing (`:214`); no transition rebuilds history from surviving bindings.
+* **Recovery interface and audit:** obtain the project owner's explicit confirmation
+  of §2.2's narrow unknown-lineage exception before enabling it; absent confirmation,
+  leave title/body inspection disabled. Freeze dedicated owner methods, authority
+  isolation from AI/retrieval, full evidence-union validation and final checks,
+  restricted known-forgotten metadata/actions, and the content-free actor/time/host
+  action id marker with atomic idempotent recovery. Product UI is not included.
+* **Suppression pull contract:** freeze reason codes, typed/versioned identities,
+  owner authorization, epoch persistence/restore mapping, indexes and stable
+  bounded pagination for both §3.4 operations. Accept the hosted product's
+  reconciliation using product-owned revision source sets; it is not discovery
+  capture or an engine-hosted shared-Card registry. Include installed API and
+  refusal/continuation acceptance with the rest of complete B3S safety.
 
 B3S is an **independently deployable complete safety delivery**: canonical storage,
 writers/migration, the common predicate, **all §2.2 read integrations**, restore
@@ -873,8 +1076,11 @@ admission and minimum installed compatibility acceptance ship together. Its
 strict-current readers can retain existing publication/storage rules; it depends
 on neither B3 discovery optimization, B2 deltas, format 4 nor bounded-as-of clocks.
 Widening beyond the owner canary requires complete engine safety enforcement and
-relevant hosted product acceptance (search/recall/fallback/caches/ACL, ledger and
-restore). A storage-only merge is groundwork and does not satisfy that gate.
+relevant hosted product acceptance (search/recall/fallback/caches/ACL, ledger,
+restore, recovery authority isolation and suppression pull reconciliation), plus
+the read-only preflight in each environment. The recovery-inspection exception
+has its separate pending project-owner confirmation gate. A storage-only merge
+is groundwork and does not satisfy these gates.
 
 ## 4. Flat-table incremental publication, and alternatives
 
@@ -1377,6 +1583,59 @@ B3S's minimum safety acceptance also includes:
   Card's dependency status becomes `needs-review`. Retrieval refuses it; authenticated review inspects
   it and revalidates its dependencies; retrieval then admits it again. Forgetting
   one of its contributors hides it from review as well.
+* **Unknown-lineage recovery inspection:** without project-owner confirmation,
+  inspection refuses. After explicit confirmation, an unknown-lineage body with
+  no known suppressed contributor across all recoverable evidence exposes title
+  and body only to its authenticated owner authoring method. It remains absent
+  from current/history retrieval, AI, candidates, assembly, exact retrieval,
+  fallback and tail. Inspection does not change the unknown header. A non-owner,
+  retrieval credential, caller `purpose`/`inspect` flag or organization callback
+  cannot select this purpose, even for the same Card ref.
+* **Evidence-union denial:** remove A's binding from an unknown A+B body and
+  suppress A. Recover its association separately from a retained receipt, a
+  verified operation payload binding (`core/private-operation-helpers.mjs:18`),
+  a recovered ledger seed matched to a historical association, and another
+  canonical trace. Each positive match alone hides title/body under the fourth
+  purpose. Live B bindings, absent operation result sources and an opaque digest
+  cannot override the match. Unavailable evidence, ambiguous identities or budget
+  exhaustion refuse. A new suppression or recovered edge before final delivery
+  invalidates a prepared inspection response.
+* **Known-forgotten metadata only:** for complete and unknown bodies with a known
+  forgotten contributor, assert the entire owner response contains only created
+  time, collection/namespace, live surviving-source count and regenerate/delete
+  actions with an opaque action handle. No title, body, snippets, source labels
+  or keep-as-own/rewrite inspection escapes. Regeneration reads only validated
+  remaining sources and allocates complete new provenance; deletion does not
+  require reading the hidden body. Owner/item suppression, revoked access and
+  failed restore admission also deny this metadata route.
+* **User-authored authorization audit:** keep-as-own recovery records actor,
+  trusted time and host action id without content, atomically bound to the new
+  revision/digest. Identical retries return that same revision; changed payload,
+  actor/owner mismatch or conflicting action id refuses. Backup/restore preserves
+  the marker and prior immutable contributor sets. Identical bytes still need a
+  new revision and ordinary binding removal never creates an authored marker.
+* **Reason and suppression pulls:** exercise user forget, correction/supersession,
+  purge, privacy erase and account erasure through append, canonical installation,
+  replay, both pull operations and cleanup; reasons remain distinguishable and
+  cleanup never clears a denial. Compare complete paged results with an independent
+  canonical denial enumeration, including owner/namespace/ancestor/version scopes.
+  Interleave new denials and reason facts between pages: fixed high-water ordering
+  has no omission, next pull includes later facts and checkpoints advance only
+  after terminal pages. Replay/restore cannot regress/reuse epochs. Batch results
+  preserve input order and one snapshot; a negative result grants no read access.
+  Cross-owner/revoked calls, altered/expired/oversize cursors, changed batch inputs,
+  limits outside 1–100, more than 256 identities, byte-budget and continuity failures
+  refuse or explicitly report incompletion without a false complete checkpoint.
+  The hosted product demonstrates reconciliation against its own per-revision
+  shared-Card source sets; engine outputs contain no content or mutation journal.
+* **Per-environment read-only preflight:** independently reconcile the canonical
+  body population with complete/unknown/known-suppressed counts, giving known
+  suppression precedence even for unknown headers. Cover drafts, retained history,
+  evidence surviving binding deletion, Memory-only bases and owners appearing in
+  several classes. Verify the affected-owner union is deduplicated, output contains
+  only counts and canonical bytes/state are unchanged. Incomplete evidence/population
+  blocks a completed report and rollout. This case specifies future acceptance;
+  no environment preflight is executed by this design revision.
 * **Idempotent replay:** replay twice and interrupt between append, canonical
   suppression install and watermark commit. Denials/source reservations do not
   change or duplicate, and the watermark never passes a missing denial. Crash
@@ -1430,7 +1689,8 @@ These are B3S acceptance cases, independent of later B4 as-of/clock qualificatio
   bodies cannot certify older E. Exhausted capture budgets refuse honestly.
   Deferred-feed tests, if reintroduced, must include every §3.3 retention barrier.
 * Migration/cutover: attested deployed base and v18/v23/v33 × safety capability,
-  old binary refusal, legacy unknown-lineage suppression, preserved source sets
+  old binary refusal, legacy unknown-lineage retrieval suppression and the gated
+  owner recovery exception, preserved source sets
   after binding/child deletion and rebuild/restore, both old sidecar formats,
   installed artifact/import closure, no reader DDL or optional features inferred
   from numeric version. No semantic format accepted without explicit support.
@@ -1505,7 +1765,7 @@ activation and cannot bypass complete B3S or either final gate.
 | --- | --- | --- | ---: |
 | **B0** | Resident maintainer across intents; phase/byte/open/drain telemetry. Preserve authorization, exclusive writer, fix A reservations/refunds/cadence. | Real-reader diagnostic, lifecycle/accounting regressions, actual exits and 1/4-owner split. | **350–700** |
 | **B1** | Exact-provenance artifact reuse across retargets using current copy/verify storage; separately reobserve metadata/dependencies. Early scanner accounting. | Preliminary campaigns retain failures and copy/verify cost; may defer B2, cannot permanently skip it. | **500–1,000** |
-| **B3S** | **Complete independently deployable safety:** storage/writers/migration, monotone draft/confirmed provenance and recovery revisions, suppression and external-ledger append/replay admission; shared purpose-aware predicate and every §2.2 read consumer; minimum installed opener/Worker/legacy-fallback compatibility. | §3.5 physical prerequisites, product DDL/legacy policy review, all §8.1 safety cases, incomplete migration/old binary refusal, installed deployed and qualification-base safety cells. **Complete safety + relevant host acceptance before widening beyond owner canary.** No delta/clock/format-4 dependency. | **1,900–3,700**, comprising storage/writer/migration **1,300–2,600**, moved consumers **450–850**, moved minimum installed checks **150–250** |
+| **B3S** | **Complete independently deployable safety:** storage/writers/migration, monotone draft/confirmed provenance and recovery revisions, suppression and external-ledger append/replay admission; shared purpose-aware predicate and every §2.2 read consumer; minimum installed opener/Worker/legacy-fallback compatibility. Adds owner-only recovery inspection/evidence checks and restricted metadata, reason taxonomy, actor/time/host-action audit marker, both bounded suppression pull APIs and read-only preflight counts. | §3.5 physical prerequisites, product DDL/legacy policy review, all §8.1 safety/interface cases, per-environment preflight, incomplete migration/old binary refusal, installed deployed and qualification-base safety cells. **Complete safety + relevant host acceptance before widening beyond owner canary; recovery title/body inspection separately awaits project-owner confirmation.** No delta/clock/format-4 dependency. | **2,350–4,600**, comprising existing storage/writer/migration **1,300–2,600**, moved consumers **450–850**, moved minimum installed checks **150–250**, sixth-revision interface/safety increment **450–900** |
 | **B3** | Production complete canonical metadata comparison on every catch-up; identity/revision/eligibility map, unconditional Card reevaluation, Raw/namespace/method fences, coherent snapshot input. No discovery DDL/feed. Reuse early scanner code and B3S predicate. | Delete without epoch, eligibility without revision, fence-only and capture-budget cases; charged scan/support/lock costs and no mixed-snapshot closure/renewal. | **500–900** |
 | **B4 common/copy-verify** | Production reconciliation/retarget/closure using B1 storage, authenticated work and audit/GC; actual CLOCK_BOOTTIME/domain provider, witness renewal and (A) status/readiness. Consume already delivered B3S safety. | Captured-E equivalence, P2-09/21, suspend/restarts, admitted-reader revocation/crash recovery. Run §7.2 final gate with actual B3/B3S/clock/ledger costs, real namespace/source shapes and largest corpus. | **1,100–2,000** |
 | **Final architecture gate** | Decision boundary, charged to B4 common above. Passing retains copy/verify and permanently skips both conditional rows below. | Every frozen cell passes; unknowns and debt remain accounted. | **0 additional** |
@@ -1514,10 +1774,10 @@ activation and cannot bypass complete B3S or either final gate.
 | **B5** | Format-2/3→4 sidecar cutover and remaining packaging/import/host-guide handoff, native-clock installed packaging and paid accounting identity preservation. Re-attest already installed B3S capability. | New-format installed runtime checks and host reacceptance; minimum canonical safety compatibility already delivered in B3S. No reader DDL or discovery feed. | **250–450** |
 | **B6** | Regression/diagnostic integration with reviewed revision-4 Q4 oracle, all-attempt accounting, coverage-age reports and registration handoff. Only measured scheduling refinements. | Diagnostic integration is useful independently; formal qualification separately authorized/supervised after QH/R4. | **900–1,700** |
 
-**Conditional delta engine total: 6,750–12,800 lines.** The selected copy/verify
-branch, skipping **both B2 and B4 delta**, totals **5,500–10,450**. External
+**Conditional delta engine total: 7,200–13,700 lines.** The selected copy/verify
+branch, skipping **both B2 and B4 delta**, totals **5,950–11,350**. External
 **QH/R4 harness: 1,000–2,200**, separately owned; combined totals are respectively
-**7,750–15,000** and **6,500–12,650**. No optional increments are included.
+**8,200–15,900** and **6,950–13,550**. No optional increments are included.
 
 Accounting bridge from round 3: B3S storage/writer/migration grows from
 600–1,000 to **1,300–2,600**, adding **700–1,600** overall. Move **450–850** of
@@ -1525,13 +1785,21 @@ common safety consumers from old B4 and **150–250** of minimum installed
 compatibility from old B5 into B3S; these are transfers, **zero net addition**.
 B4 therefore falls from 1,800–3,400 to **1,350–2,550**, split above into common
 1,100–2,000 and conditional delta 250–550. B5 falls from 400–700 to 250–450.
-The old total 6,050–11,200 becomes 6,750–12,800. Subtracting only B2 gives a
-conservative **5,750–11,000** reservation, but a real no-delta branch also omits
-B4 delta's 250–550, producing the **5,500–10,450** selected-branch total above.
-No storage, consumer, compatibility or gate work is counted twice.
+That bridge produced the approved earlier totals: delta **6,750–12,800** and
+copy/verify **5,500–10,450**, from the round-3 delta total **6,050–11,200**.
+This sixth revision adds **450–900** entirely to B3S for the new engine recovery/
+evidence and metadata interfaces, reason/audit records, suppression pull pagination
+and preflight classifier/report, including meaningful acceptance and handoff docs.
+It raises B3S from **1,900–3,700 to 2,350–4,600**, and each engine branch by the
+same **450–900**, yielding the totals above. B4/B5 and QH/R4 are unchanged; no
+storage, consumer, compatibility or gate work is counted twice.
 
-**Excluded external product work:** product recovery UX, legacy-content remediation
-and shared-collection notify/unpublish. The hosted product must supply/verify the
+**Excluded external product work:** product recovery UI/UX and workflow, actual
+legacy-content remediation, and shared-collection notify/unpublish. Product-owned
+per-revision shared-Card source sets, suppression polling/checkpoints, reconciliation
+and notification/unpublish state remain external. Engine recovery/metadata and
+suppression pull interfaces, audit markers and read-only preflight count support
+are included in B3S; running remediation is not. The hosted product must supply/verify the
 external erasure ledger and host safety integration; building that host service
 is an external product prerequisite, not silently included in engine line totals.
 So are the host's ledger bootstrap at S, recording the ledger watermark in every
@@ -1548,8 +1816,10 @@ Strict-current millisecond scheduler **800–1,800** is S-only and deferred.
 Lower ends assume reviewed crypto reuse if deltas are needed, adequate tokenizer
 bounds, complete short-source scans fitting bounded snapshots, straightforward
 native-clock packaging and reviewed physical safety storage on the first bases.
-Broader legacy evidence recovery, new crypto ports, streaming Unicode tokenization,
-broader layouts or additional platform clocks require new estimates. Fail-closed
+The required examination of all recoverable canonical traces is included;
+forensic reconstruction of unavailable historical evidence, new crypto ports,
+streaming Unicode tokenization, broader layouts or additional platform clocks
+require new estimates. Fail-closed
 unknown lineage may reduce content availability; do not relax it to meet a budget.
 These ranges are not deadlines or bounds on a tree/vector rewrite.
 
@@ -1557,8 +1827,9 @@ These ranges are not deadlines or bounds on a tree/vector rewrite.
 
 The S/A decision is closed; complete scans are selected discovery. Remaining
 choices are product DDL and legacy-seeding policy review (lineage semantics (c)
-are confirmed), attested deployed layout, capability version and
-cutover window, final pump provenance/fairness, revision-4 DTO/accounting details,
+are confirmed), **project-owner confirmation of the narrow fourth-purpose
+recovery-inspection exception (pending)**, attested deployed layout, capability
+version and cutover window, final pump provenance/fairness, revision-4 DTO/accounting details,
 clock platform enablement, host safety coverage and the storage branch after the
 fully accounted gate. Product UX and shared collection behavior remain outside
 engine scope. No migration or provider transmission is authorized by this edit.
@@ -1572,15 +1843,15 @@ incompatibility refuses explicitly rather than weakening privacy/accounting.
 
 ## 11. Re-review findings and disposition
 
-| Round-3 re-review finding | Disposition in this fourth revision |
+| Round-3 re-review finding | Retained disposition, updated through this sixth revision |
 | --- | --- |
-| Soundness **P1**, restore loses later suppression | **Addressed (§2.3/§3.4/§8.1):** host-supplied append-only erasure ledger outside canonical/backups, durable append before acknowledgement, canonical watermark and replay through the ledger head observed under restore quiescence before any read. Unavailable/incomplete/unverifiable ledger denies the owner. Post-backup forget, owner denial and idempotent replay acceptance are explicit; existing product erasure/restore rules are mapped. Host capability is unconfirmed and must satisfy the requirement either way. |
-| Soundness **P2**, draft inspection versus retrieval | **Addressed (§2.2/§2.3/§3.5):** all owner reads require suppression and proven lineage; authenticated draft inspection has a draft-state policy while both retrieval intents require confirmed/current eligibility. Forgotten-source drafts stay hidden. Creation allocates provenance and confirmation preserves the accumulated contributor set atomically, never reconstructing surviving bindings. |
+| Soundness **P1**, restore loses later suppression | **Addressed (§2.3/§3.4/§8.1):** host-supplied append-only erasure ledger outside canonical/backups, durable append before acknowledgement, canonical watermark and replay through the ledger head observed under restore quiescence before any read. Unavailable/incomplete/unverifiable ledger denies the owner. Post-backup forget, owner denial and idempotent replay acceptance are explicit; existing product erasure/restore rules are mapped. Host obligations are agreed in §3.4; implementation/admission evidence is still required. |
+| Soundness **P2**, draft inspection versus retrieval | **Addressed (§2.2/§2.3/§3.5):** retrieval, draft inspection and confirmed review require complete lineage and unsuppressed contributors. The separate narrow unknown-lineage recovery inspection awaits project-owner confirmation and cannot expose known-forgotten titles/bodies. Creation allocates provenance and confirmation preserves the accumulated contributor set atomically, never reconstructing surviving bindings. |
 | Soundness **P2**, legacy fetch/source snapshot inventory | **Addressed (§2.2/§8.1):** runtime legacy fetch including history/receipts and complete source snapshots join the common predicate. Final token-counter callbacks require fresh suppression/item/source validation even without epoch change; epoch assertion alone cannot authorize delivery. Explicit acceptance includes restore and complete-snapshot refusal. |
 | Scope **P2-1**, B3S deployability / widening | **Addressed (§3.5/§9):** B3S ships storage, writers/migration, common predicate, all read integrations and minimum installed compatibility together. Widening requires complete safety plus relevant host acceptance. Reviewer order is adopted; B3S has no delta, discovery, clock or format-4 dependency. |
 | Scope **P2-2**, B2 deferral versus skip / frozen gate | **Addressed (§7.2/§9 diagram):** preliminary B1 evidence only defers B2; permanent skip follows B3S/B3/B4 common and the fully accounted gate. Population retains unknown/unavailable ages as +infinity; duration, seeds, namespace/source profiles and numerical debt bounds are frozen. A justified delta branch repeats the same gate. |
-| Scope **P2-3**, B3S size / exclusions / arithmetic | **Addressed (§9):** storage/writer/migration 1,300–2,600 before transferred consumers; complete B3S 1,900–3,700. Transfers from B4/B5 are explicit and not counted twice; conditional engine 6,750–12,800 and copy/verify 5,500–10,450, with external totals separately stated. Product recovery UX, legacy-content remediation, shared-collection notify/unpublish and host ledger service construction are excluded. |
-| Scope **P2-4**, physical identity/capability/migration contract | **Addressed as explicit pre-implementation prerequisites (§3.4/§3.5):** freeze immutable-ID/incarnation representation, reservation/no-reuse guards and old bare-ref refusal; physical-version/base-layout/safety-revision/opener mapping with incomplete migration denied; reconcile preflight complete/unknown body counts; external-ledger restore and draft transitions. This revision does not claim DDL review or deployed evidence is complete. |
+| Scope **P2-3**, B3S size / exclusions / arithmetic | **Addressed (§9):** base storage/writer/migration 1,300–2,600 before transferred consumers and the new 450–900 interface increment; complete B3S 2,350–4,600. Transfers from B4/B5 remain counted once; conditional engine 7,200–13,700 and copy/verify 5,950–11,350, with external totals separately stated. Product recovery UI, remediation, shared-Card revision sets/reconciliation/notify/unpublish and host ledger service construction remain excluded. |
+| Scope **P2-4**, physical identity/capability/migration contract | **Addressed as explicit pre-implementation prerequisites (§3.4/§3.5):** freeze immutable-ID/incarnation representation, reservation/no-reuse guards and old bare-ref refusal; physical-version/base-layout/safety-revision/opener mapping with incomplete migration denied; reconcile read-only per-environment complete/unknown/known-suppressed body and affected-owner counts; external-ledger restore, draft transitions and bounded suppression interfaces. This revision does not claim DDL review or deployed evidence is complete. |
 
 The scope review's measurement evidence is also incorporated (§3.1/§7.2): the
 16-/26-namespace in-memory probe table, balanced/concentrated placement, assumed
@@ -1592,28 +1863,31 @@ Previously accepted findings remain closed in the design: complete comparison
 on every catch-up, privacy independent of discovery, monotone durable source sets,
 coherent-snapshot closure and renewal, concrete clock/provider gate, schedule
 accounting, final/resume audit revocation and deferred journal/watch retention
-barriers. No review finding is disagreed with. Addressing the two re-reviews does
-not convert their verdicts into approval. Physical DDL/legacy policy, host ledger
-acceptance, any crypto adaptation, safety/clock integration and revision-4 contract
+barriers. No review finding is disagreed with. Rounds 1–5 have two non-author
+approvals; this sixth revision requires its own review and the explicit owner
+confirmation above. Physical DDL/legacy policy, host ledger acceptance, any crypto
+adaptation, safety/clock integration and revision-4 contract
 still require their respective reviews; measured feasibility remains unproven.
 
 ## Design-only revision receipts
 
 Only this design document is edited and left uncommitted. No implementation,
-test suite, benchmark, migration or contract-file edit is part of this revision.
-Reviewer scan timings and schedule figures are attributed evidence, not new runs.
-Mechanical design checks (not test suites): whitespace diff check **exit 0**;
-required-content/public-content scan, fenced-block balance, all seven finding
-rows and **102 unique explicit source coordinates** checked for existing,
-nonblank anchors at `25abe2d4`, **exit 0**. Package arithmetic independently sums
-**nine non-overlapping cost rows**: delta **6,750–12,800**, copy/verify
-**5,500–10,450**, with QH/R4 respectively **7,750–15,000** and **6,500–12,650**;
-B3S transfers and B4 split also reconcile, **exit 0**. Coordinate checks establish
-anchor validity, not implemented correctness or reviewer approval.
+test suite, benchmark, preflight execution, migration or contract-file edit is
+part of this sixth revision. Prior measurements and approvals are attributed
+historical evidence; the new recovery-inspection exception is pending explicit
+project-owner confirmation.
 
-Git's HEAD diff plus ignored-aware untracked inventory was independently compared
-with direct HEAD blob/mode checks across **2,462 tracked entries**, plus filesystem
-`rg --files --hidden` enumeration: **one changed file, zero inventory differences,
-exit 0**. The file is this document. Nothing is staged or committed; branch and
-HEAD remain unchanged, and the inspected code checkout remains clean. No engine
-verification, benchmark or qualification is claimed.
+Mechanical authoring checks (not test suites): whitespace diff check **exit 0**;
+seven requirement groups, public-content scan and fenced-block balance **exit 0**;
+**105 unique explicit source coordinates** checked for existing nonblank anchors
+at `25abe2d4`, **exit 0**. Nine non-overlapping package cost rows independently
+summed and cross-checked against prior totals plus the **450–900** increment:
+B3S **2,350–4,600**, delta **7,200–13,700**, copy/verify **5,950–11,350**;
+with QH/R4 **8,200–15,900** and **6,950–13,550**, **exit 0**.
+
+Git's HEAD diff plus untracked/ignored inventories was independently compared
+with direct HEAD blob/mode checks across **2,462 tracked entries** and filesystem
+enumeration: **one changed file, zero inventory differences, exit 0**. The file
+is this document. Nothing is staged or committed; branch/HEAD remain unchanged
+and the inspected code checkout remains clean. These checks establish document
+consistency and scope, not implemented correctness or release readiness.
