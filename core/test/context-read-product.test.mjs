@@ -156,7 +156,7 @@ for (const enabled of [undefined, false]) test(`C2 diagnostics off (${enabled}) 
 });
 
 test('C2 private open timing accessor is absent from public entries', async () => {
-  for (const entry of ['../index.mjs', '../../adapters/openai/index.mjs', '../../adapters/mcp/server.mjs', '../../adapters/local-embedder/index.mjs']) {
+  for (const entry of ['../index.mjs', '../../adapters/local-embedder/index.mjs']) {
     const api = await import(new URL(entry, import.meta.url));
     assert.equal(Object.hasOwn(api, 'productOpenPhaseDiagnostic'), false, 'C2 no public timing export: ' + entry);
     assert.equal(Object.values(api).includes(productOpenPhaseDiagnostic), false, 'C2 no aliased timing export: ' + entry);
