@@ -493,7 +493,7 @@ for(const [name,delivered,workMs] of [
   assert.equal(diagnostic.cadenceMisses,1);assert.equal(diagnostic.worstGapMs,gap);
   assert.deepEqual(diagnostic.observation,{projection:0,atMonoMs:delivered+workMs,gapMs:gap,cadenceMiss:true});
   assert.deepEqual(maintenancePumpDiagnostic(before),{cadenceMisses:0,worstGapMs:0,
-    observation:{projection:3,atMonoMs:4900,gapMs:4900,cadenceMiss:false}},'old status is an immutable snapshot');
+    observation:{projection:3,atMonoMs:4900,gapMs:4900,cadenceMiss:false},lastFailure:null,failureCounts:attribution.maintenanceFailureCounts()},'old status is an immutable snapshot');
   assert.deepEqual(Reflect.ownKeys(status).sort(),['error','id','maxItems','maxMs','state','usedItems','usedMs','windowId']);
   assert.equal(JSON.stringify(status).includes('cadence'),false,'internal diagnostic never enters public JSON');
   assert.ok(Object.isFrozen(diagnostic));assert.ok(Object.isFrozen(diagnostic.observation));

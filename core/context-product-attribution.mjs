@@ -56,7 +56,7 @@ export function serializationDiagnostic(buffer, nowNs=process.hrtime.bigint()) {
 export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrtime.bigint())/1e6,hrtime=()=>process.hrtime.bigint(),rendezvous}={}) {
   const v=view(buffer),fields=new Float64Array(attributionFields.length);
   const operationStarts=new Float64Array(8),operationKinds=new Uint8Array(8),operationPrevious=new BigUint64Array(8);
-  let operationDepth=0;
+  let operationDepth=0,failureNameAtStep,failureStep,failureError,failureSelected=false;
   let current=0n,elapsed=0,readState=0,readStart=0,readElapsed=0,readPrevious=0n;
   const publish=value=>{current=value;if(v)Atomics.store(v,0,value);};
   const restore=previous=>publish((previous&15n)===0n ? hrtime()/1000n<<4n : previous);
@@ -72,7 +72,7 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
   };
   const api={
     reset(ordinal=v?Atomics.load(v,4):0){
-      if(v)Atomics.store(v,5,0n);fields.fill(0);readState=0;operationDepth=0;
+      if(v)Atomics.store(v,5,0n);fields.fill(0);readState=0;operationDepth=0;failureNameAtStep=undefined;failureStep=undefined;failureError=undefined;failureSelected=false;
       if(v){Atomics.store(v,1,0n);Atomics.store(v,2,0n);Atomics.store(v,3,0n);}publish(hrtime()/1000n<<4n);
       if(v)Atomics.store(v,5,markerOrdinal(ordinal));
     },
@@ -81,7 +81,12 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
       const at=operationDepth++;operationStarts[at]=now();operationKinds[at]=maintenanceKinds.indexOf(kind);operationPrevious[at]=enter(kind);return at;
     },
     end(at){if(at<0)return;record(maintenanceKinds[operationKinds[at]],saturate(now()-operationStarts[at]));restore(operationPrevious[at]);operationDepth=at;},
-    checkpoint(kind){rendezvous?.(kind);},
+    checkpoint(kind){try{rendezvous?.(kind);}catch(error){api.captureFailure(error);throw error;}},
+    captureFailure(error){if(failureSelected||failureNameAtStep!==undefined&&error===failureError)return;try{for(let object=Object(error);object;object=Object.getPrototypeOf(object)){const code=Object.getOwnPropertyDescriptor(object,'code');if(code){if(!Object.hasOwn(code,'value')||code.value!==undefined)return;break;}}}catch{return;}failureError=error;failureNameAtStep=maintenanceErrorName(error);failureStep=Number(current&15n);},
+    mapFailure(error,mapped){if(failureError===error)failureError=mapped;return mapped;},
+    selectFailure(error){if(failureError!==error){failureNameAtStep=undefined;failureStep=undefined;}failureError=undefined;failureSelected=true;},
+    failure:()=>failureNameAtStep===undefined?undefined:{kind:'exception',errorName:failureNameAtStep,step:failureStep},
+    get stepKind(){return Number(current&15n);},
     snapshot:()=>Object.fromEntries(attributionFields.map((name,i)=>[name,fields[i]])),
     add(name,n){const slot=slots[name];fields[slot]=add(fields[slot],n);},
     get elapsed(){return elapsed;},
@@ -91,6 +96,7 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
         const slot=unitSlots[kind];if(slot!==undefined)fields[slot]=add(fields[slot],1);}
       const previous=enter(kind);
       try {rendezvous?.(kind);return work();}
+      catch(error){api.captureFailure(error);throw error;}
       finally {
         const ms=saturate(clock()-start);record(kind,ms);
         if(unit){fields[slots.lastUnitKind]=maintenanceKinds.indexOf(kind);fields[slots.lastUnitMs]=ms;
@@ -100,7 +106,7 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
     },
     transaction(db,work,run){
       readPrevious=enter('canonical-read');readStart=now();readElapsed=0;readState=1;
-      try {rendezvous?.('canonical-read');return run(db,work,api);}finally{acquired();readState=0;}
+      try {rendezvous?.('canonical-read');return run(db,work,api);}catch(error){api.captureFailure(error);throw error;}finally{acquired();readState=0;}
     },
     readReady(){
       if(readState!==1)return;
@@ -111,8 +117,35 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
     acquired,
     serialize(work){
       const previous=enter('serialize');if(v)Atomics.store(v,2,hrtime());
-      try {rendezvous?.('serialize');return work();}finally{if(v)Atomics.store(v,3,hrtime());restore(previous);}
+      try {rendezvous?.('serialize');return work();}catch(error){api.captureFailure(error);throw error;}finally{if(v)Atomics.store(v,3,hrtime());restore(previous);}
     }
   };
   api.reset();return api;
+}
+
+// Private failure metadata is separate from the numeric phase/stall contract.
+export const maintenanceFailureKinds=Object.freeze(['none','worker_heap_limit','worker_exit','worker_error','protocol','unmapped','exception','observation_timing','engine','spawn','dispatch','call_error','identity','worker_state','cleanup','disposal_proof']);
+const failureCode=/^[a-z][a-z0-9_]{0,47}$/,failureName=/^[A-Za-z][A-Za-z0-9_]{0,47}$/;
+export const maintenanceFailureCode=value=>typeof value==='string'&&failureCode.test(value)?value:'other';
+export const maintenanceFailureCounts=()=>Object.fromEntries(maintenanceFailureKinds.slice(1).map(kind=>[kind,0]));
+export function maintenanceErrorName(error){
+  try {const constructor=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(error),'constructor')?.value,name=constructor&&Object.getOwnPropertyDescriptor(constructor,'name')?.value;return typeof name==='string'&&failureName.test(name)?name:'other';}catch{return 'other';}
+}
+export function maintenanceFailureRecord(kind,{engineCode,errorName,exitCode,ordinal,stage,stall,step}={}) {
+  if(!maintenanceFailureKinds.includes(kind)||kind==='none')kind='call_error';
+  const code=maintenanceFailureCode(engineCode);
+  return Object.freeze({cause:kind==='unmapped'?'unmapped:'+code:kind==='exception'?'exception:'+(typeof errorName==='string'&&failureName.test(errorName)?errorName:'other'):kind,
+    ...(Number.isInteger(step)&&step>=0&&step<maintenanceKinds.length?{step}:{}),
+    ...(kind==='engine'?{engineCode:code}:{}),
+    ...(kind==='worker_error'||kind==='spawn'||kind==='dispatch'||kind==='call_error'?{errorName:typeof errorName==='string'&&failureName.test(errorName)?errorName:'other'}:{}),
+    ...(kind==='worker_exit'&&Number.isSafeInteger(exitCode)?{exitCode}:{}),
+    ...(Number.isSafeInteger(ordinal)&&ordinal>0?{ordinal}:{}),
+    ...(['open','refresh','call','idle','close','observation','disposal'].includes(stage)?{stage}:{}),...(stall?{stall}:{})});
+}
+export const maintenanceFailureKind=record=>record.cause.startsWith('unmapped:')?'unmapped':record.cause.startsWith('exception:')?'exception':record.cause;
+export function readMaintenanceFailure(value){
+  if(!value||typeof value!=='object'||!maintenanceFailureKinds.includes(value.kind)||value.kind==='none')return undefined;
+  const safe=maintenanceFailureRecord(value.kind,{engineCode:value.engineCode,errorName:value.errorName,step:value.step});
+  return {kind:value.kind,...(value.kind==='unmapped'?{engineCode:maintenanceFailureCode(value.engineCode)}:{}),
+    ...(safe.engineCode?{engineCode:safe.engineCode}:{}),...(value.kind==='exception'?{errorName:safe.cause.slice(10)}:{}),...(safe.step===undefined?{}:{step:safe.step})};
 }

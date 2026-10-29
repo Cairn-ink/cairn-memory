@@ -1,5 +1,6 @@
 import { setTimeout as safetyDelay } from 'node:timers/promises';
 import { hrtime } from 'node:process';
+import { maintenanceFailureCounts, maintenanceFailureRecord, maintenanceFailureKind, readMaintenanceFailure, maintenanceErrorName } from './context-product-attribution.mjs';
 import { maintenanceMarker, readMaintenanceMarker, prepareMaintenanceMarker, claimMaintenanceOrdinal, maintenanceControlState, bindMaintenanceControl, serializationDiagnostic, attributionFields, maintenanceWorkFields } from './context-product-attribution.mjs';
 import { types } from 'node:util';
 import { randomUUID } from 'node:crypto';
@@ -63,6 +64,9 @@ const maintenanceObservations = new WeakMap(), maintenancePhases = new WeakMap()
 export const maintenanceStallDiagnostic = (value, atMs) => maintenanceStalls.get(value) ?? readMaintenanceMarker(maintenanceMarkers.get(value)??maintenanceControlState(value)?.buffer, atMs===undefined?undefined:BigInt(Math.floor(atMs*1e6)));
 export const maintenancePhaseDiagnostic = result => maintenancePhases.get(result);
 export const maintenanceObservation = result => maintenanceObservations.get(result);
+const maintenanceFailures=new WeakMap(),maintenanceReaderFailures=new WeakMap();
+export const maintenanceFailureDiagnostic=value=>maintenanceFailures.get(value)??maintenanceReaderFailures.get(value)?.lastFailure;
+export const maintenanceReaderFailureDiagnostic=value=>{const state=maintenanceReaderFailures.get(value);return state?Object.freeze({lastFailure:state.lastFailure,failureCounts:Object.freeze({...state.failureCounts})}):undefined;};
 const openPhases = new WeakMap();
 // Internal accessor only; never a property of a public handle or result DTO.
 export const productOpenPhaseDiagnostic = reader => {
@@ -149,6 +153,8 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     const frame = options.diagnostics ? nativeTelemetry(first.operationId, 1) : null;
     const resources = new SharedArrayBuffer(16);
     const marker=maintenance ? maintenanceMarker() : undefined;
+    const failureState=maintenance?{lastFailure:null,failureCounts:maintenanceFailureCounts()}:undefined;
+    let terminalFailure;
     const openingData = { path: options.path, readSet, ownerCoverage, request, binding: issuedBinding, maintenance,
       wal: options.wal === true, ...(maintenance ? { sidecarJournalMode: options.sidecarJournalMode } : {}),
       host: { moduleUrl: host.moduleUrl, configuration }, operation: first, frame, resources, deadlineMs: openDeadline };
@@ -224,9 +230,24 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       }, () => registry.finish(resource, false));
     } });
     resource.stop = code => closePromise ?? shutdown(code);
-    function shutdown(code, parentDeadline) {
+    function noteFailure(value,kind,detail={},slot=lifecycle.pending){
+      if(!maintenance)return;
+      let failure=slot?.failure;
+      if(!failure){
+        failure=maintenanceFailureRecord(kind,{...detail,ordinal:slot?.ordinal,stage:detail.stage??(slot?slot.open?'open':'refresh':'idle'),
+          ...(slot?{stall:readMaintenanceMarker(marker,now())}:{})});
+        if(slot){slot.failure=failure;if(slot.control&&typeof slot.control==='object'){maintenanceFailures.set(slot.control,failure);maintenanceReaderFailures.set(slot.control,failureState);}}
+        failureState.lastFailure=failure;const key=maintenanceFailureKind(failure);
+        failureState.failureCounts[key]=Math.min(Number.MAX_SAFE_INTEGER,failureState.failureCounts[key]+1);
+      }
+      if(value&&typeof value==='object'){maintenanceFailures.set(value,failure);maintenanceReaderFailures.set(value,failureState);}
+      return failure;
+    }
+    function failureFor(code){return {kind:codes.has(code)?'engine':'unmapped',engineCode:code};}
+    function shutdown(code, parentDeadline, cause) {
       closed = true; terminal ??= code; clearTimer(idle);
       const slot = lifecycle.pending;
+      if(maintenance&&!terminalFailure){const detail=cause??failureFor(code);terminalFailure=noteFailure(undefined,detail.kind,detail,slot);}
       if (slot?.cutoff && code === 'read_timeout' && terminal === code && (now() >= mono(slot.operation.operationCutoffMonoNs) ||
           parentDeadline === slot.cutoff && Number(now()) / 1e6 >= slot.cutoff.cutoffAt)) slot.cutoff.attested = true;
       const stall=maintenance && code==='read_timeout' ? readMaintenanceMarker(marker,now()) : undefined;
@@ -240,6 +261,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         }
         const failure=productFailure(terminal);
         if(stall)maintenanceStalls.set(failure,stall);
+        if(maintenance){maintenanceFailures.set(failure,terminalFailure);maintenanceReaderFailures.set(failure,failureState);}
         lifecycle.finish(slot, failure);
       }
       return stopped;
@@ -249,44 +271,45 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       const slot = lifecycle.pending;
       // Old/duplicate frames are ignored. Conflicting current frames fail closed.
       if (message?.operation?.operationId !== slot.operation.operationId || message?.operation?.workerEpoch !== epoch) return;
-      if (JSON.stringify(message.operation) !== JSON.stringify(slot.operation)) { shutdown('reader_failed'); return; }
+      if (JSON.stringify(message.operation) !== JSON.stringify(slot.operation)) { shutdown('reader_failed',undefined,{kind:'protocol'}); return; }
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
       if (message.kind === 'identity') {
         try {
-          if (typeof message.fileIdentity !== 'string' || !/^[0-9]+:[0-9]+$/.test(message.fileIdentity)) fail('reader_failed');
+          if (typeof message.fileIdentity !== 'string' || !/^[0-9]+:[0-9]+$/.test(message.fileIdentity)){shutdown('reader_failed',undefined,{kind:'protocol'});return;}
           registry.bind(resource, message.fileIdentity);
           if (maintenance) {
             const release = claimMaintenanceWriter(message.fileIdentity,readSet);
             releaseWriter = () => { release(); writerReleased = true; };
           }
           instance.postMessage({ kind: 'identity-ack', operation: slot.operation });
-        } catch (error) { shutdown(error.code ?? 'reader_failed'); }
+        } catch (error) { shutdown(error.code ?? 'reader_failed',undefined,{kind:'identity'}); }
         return;
       }
       if (slot.open) phase?.mark('openReceived');
       else if (slot.method === 'fetchCandidateEvidence') phase?.mark('readDelivered');
-      let result;
+      let result,invalidCause={kind:'protocol'};
       try {
         boundedData(message.result, 65536);
         result = structuredClone(message.result);
+        if(result?.ok===false&&!codes.has(result.error?.code))invalidCause={kind:'unmapped',engineCode:result.error?.code};
         if (typeof result.ok !== 'boolean' || result.ok && !Object.hasOwn(result, 'value') || !result.ok && !codes.has(result.error?.code)) fail('reader_failed');
         if (slot.open && result.ok) {
-          if (typeof message.fileIdentity !== 'string' || !/^[0-9]+:[0-9]+$/.test(message.fileIdentity)) fail('reader_failed');
+          if (typeof message.fileIdentity !== 'string' || !/^[0-9]+:[0-9]+$/.test(message.fileIdentity)){shutdown('reader_failed',undefined,{kind:'protocol'});return;}
           registry.bind(resource, message.fileIdentity); ready = true;
         }
-      } catch { shutdown('reader_failed'); return; }
+      } catch { shutdown('reader_failed',undefined,invalidCause); return; }
       // Acceptance is checked again after bounded response validation.
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
       if (signalCancelled(slot.signal)) result = productFailure('read_cancelled');
       if (!slot.open) registry.finish(slot.record);
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
       if (signalCancelled(slot.signal)) result = productFailure('read_cancelled');
-      if (slot.open && !result.ok) { shutdown(result.error.code); return; }
+      if (slot.open && !result.ok) { shutdown(result.error.code,undefined,readMaintenanceFailure(message.maintenanceFailure)??failureFor(result.error.code)); return; }
       if (maintenance && !slot.open) {
         if(result.ok && message.observedAtMonoMs !== undefined) {
           const at = message.observedAtMonoMs;
           if (!Number.isFinite(at) || at < Number(mono(slot.operation.enteredMonoNs)) / 1e6 || at > Number(now()) / 1e6) {
-            shutdown('reader_failed'); return;
+            shutdown('reader_failed',undefined,{kind:'observation_timing'}); return;
           }
           maintenanceObservations.set(result, at);
         }
@@ -307,13 +330,14 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         }
       }
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
+      if(maintenance&&!result.ok){const detail=readMaintenanceFailure(message.maintenanceFailure)??failureFor(result.error.code);noteFailure(result,detail.kind,detail,slot);}
       if (slot.open) phase?.mark('openAccepted');
       else if (slot.method === 'fetchCandidateEvidence') phase?.mark('readAccepted');
       lifecycle.finish(slot, result);
       instance.unref(); idle = setTimer(() => shutdown('store_closed'), 60000); idle.unref?.(); lifecycle.idle = idle;
     }
     function dispatch(method, payload, credential, control, entered, opening = false) {
-      if (closed) return Promise.resolve(productFailure(terminal === 'read_timeout' || terminal === 'read_cancelled' ? 'store_closed' : terminal ?? 'store_closed'));
+      if (closed){const result=productFailure(terminal === 'read_timeout' || terminal === 'read_cancelled' ? 'store_closed' : terminal ?? 'store_closed');if(maintenance&&terminalFailure){maintenanceFailures.set(result,terminalFailure);maintenanceReaderFailures.set(result,failureState);}return Promise.resolve(result);}
       let input, token, signal, duration;
       try {
         ({ signal } = ownData(control ?? {}, ['signal']));
@@ -334,9 +358,9 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         } else duration = openDeadline;
       } catch (error) {
         if (opening) shutdown(error.code ?? 'reader_failed');
-        return Promise.resolve(productFailure(error.code));
+        const result=productFailure(error.code);if(maintenance){const detail=failureFor(error.code);noteFailure(result,detail.kind,detail,null);}return Promise.resolve(result);
       }
-      if (lifecycle.pending) return Promise.resolve(productFailure('read_in_progress'));
+      if (lifecycle.pending){const result=productFailure('read_in_progress');noteFailure(result,'engine',{engineCode:'read_in_progress'},null);return Promise.resolve(result);}
       const callRequest = !opening && maintenance ? requestRecord(serviceControl(), entered, utc()) : request;
       const operation = opening ? first : operationRecord(callRequest, entered, duration, epoch);
       const callFrame = opening ? frame : options.diagnostics ? nativeTelemetry(operation.operationId, epoch) : null;
@@ -353,7 +377,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         previous?.[Symbol.dispose]();
       };
       return new Promise(resolve => {
-        const slot = { resolve, operation, record, signal, open: opening, method, detach, ordinal }; lifecycle.pending = slot;
+        const slot = { resolve, operation, record, signal, open: opening, method, detach, ordinal, control }; lifecycle.pending = slot;
         if (maintenance && !semantic && method === 'refreshContextIndex') {
           slot.cutoff = bindMaintenanceCutoff(control, ordinal, operation, resource, record, lifecycle, () => {
             if (lifecycle.pending !== slot || Number(now()) / 1e6 < slot.cutoff.cutoffAt) return false;
@@ -380,14 +404,14 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
             lifecycle.worker = instance;
             instance.stdout?.resume(); instance.stderr?.resume();
             instance.on('message', data => message(instance, data));
-            instance.on('error', () => { if (!closed && lifecycle.worker === instance) shutdown('reader_failed'); });
-            instance.on('exit', () => { if (!closed && lifecycle.worker === instance) shutdown('reader_failed'); });
+            instance.on('error', error => { if (!closed && lifecycle.worker === instance) shutdown('reader_failed',undefined,{kind:error?.code==='ERR_WORKER_OUT_OF_MEMORY'?'worker_heap_limit':'worker_error',errorName:maintenanceErrorName(error)}); });
+            instance.on('exit', exitCode => { if (!closed && lifecycle.worker === instance) shutdown('reader_failed',undefined,{kind:'worker_exit',exitCode}); });
           } else {
             lifecycle.worker.ref();
             if (method === 'fetchCandidateEvidence') phase?.mark('readSent');
             lifecycle.worker.postMessage(outbound);
           }
-        } catch { shutdown('reader_failed'); }
+        } catch(error) { shutdown('reader_failed',undefined,{kind:opening?'spawn':'dispatch',errorName:maintenanceErrorName(error)}); }
       }).finally(() => {
         // Also disposes a handle returned after synchronous registration reentry.
         try { detach(); } catch { /* Public settlement is already terminal. */ }
@@ -396,13 +420,14 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     const opened = await dispatch('open', null, null, controls, admitted, true);
     if (!opened.ok || !ready) {
       const error=coded(opened.error?.code??'reader_failed',resource.id),stall=maintenanceStalls.get(opened);
-      if(stall)maintenanceStalls.set(error,stall);throw error;
+      if(stall)maintenanceStalls.set(error,stall);
+      if(maintenance){const failure=maintenanceFailures.get(opened);if(failure)maintenanceFailures.set(error,failure);maintenanceReaderFailures.set(error,failureState);}throw error;
     }
     const call = (method, input, credential, control) => {
       const entered = now();
       if (method === 'fetchCandidateEvidence') phase?.mark('readEntered');
       try { return dispatch(method, input, credential, control, entered); }
-      catch (error) { return Promise.resolve(productFailure(error.code)); }
+      catch (error) {const result=productFailure(error.code);const detail=error.code===undefined?{kind:'call_error',errorName:maintenanceErrorName(error)}:failureFor(error.code);noteFailure(result,detail.kind,detail,null);return Promise.resolve(result);}
     };
     function dispose(code = 'store_closed', cutoffAt) {
       // Every call can shorten in-flight cleanup, including an idempotent close.
@@ -419,7 +444,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         phase?.mark('closeExited');
         await resource.delivery;
         phase?.mark('closeFinished');
-      })();
+      })().catch(error=>{if(maintenance&&!maintenanceFailures.has(error))noteFailure(error,'cleanup',{stage:'close'},null);throw error;});
     }
     const handle=Object.freeze({
       getContextReadCapabilities(input = {},credential,control) {
@@ -439,7 +464,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     });
     disposals.set(handle.close, dispose);
     if (phaseBuffer) openPhases.set(handle, phaseBuffer);
-    if(maintenance)maintenanceMarkers.set(handle,marker);
+    if(maintenance){maintenanceMarkers.set(handle,marker);maintenanceReaderFailures.set(handle,failureState);}
     return handle;
   };
 }
