@@ -192,6 +192,9 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     }
     function schedule(){
       if(stopped||error||exhausted()||now()>=renewedUntil)return;
+      if(Math.min(window.endsAtMonoMs,renewedUntil)-now()<quantum.maxMs){
+        timer=setTimer(tick,Math.max(1,Math.min(window.endsAtMonoMs,renewedUntil)-now()));return;
+      }
       // Look ahead through the unchanged round-robin order. Each future turn
       // needs its full pre-observation quantum plus minimum admission spacing
       // for intervening turns. A fixed admission period cannot bound reads.
@@ -217,6 +220,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       if(stopped||error)return;
       checkCadence(now());
       if(exhausted()||now()>=renewedUntil){report(observation());return;}
+      if(Math.min(window.endsAtMonoMs,renewedUntil)-now()<quantum.maxMs){schedule();return;}
       if(recoveryEnabled && projections.every((_,i)=>cooling(i))){schedule();return;}
       lastTick=now();
       let quantumTimer,lane,sequence,settleStarted,deliveryMs=0,activeHandle,activeControl,ordinal,openingOrdinal,quantumDetail={},stallRecorded=false,capability,recovery;
@@ -346,7 +350,11 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             ledger.items=Math.max(ledger.items-maxItems+items,ledger.floorItems);
             ledger.ms=Math.max(ledger.ms-maxMs+elapsed,ledger.floorMs);
           }
-        } catch(e){if(e.code==='read_timeout')recordStall(e);error=e.code??'reader_failed';}
+        } catch(e){
+          if(e.code==='read_timeout')recordStall(e);error=e.code??'reader_failed';
+          // An opening failure returns no handle; its cleanup ID still owns disposal.
+          if(e.cleanupId)try{await c.supervisor.drain(e.cleanupId);}catch{ /* Keep the opening error; its failed record retains quarantine. */ }
+        }
       })().finally(()=>{
         if(lane){
           if(settleStarted!==undefined)recordPhase(lane.phases.settle,deliveryMs+now()-settleStarted);

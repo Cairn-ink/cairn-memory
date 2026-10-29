@@ -628,6 +628,27 @@ A counter sampled concurrently with a transition can include the next admitted
 unit. Marker timestamps have microsecond resolution. Request readers allocate
 no marker and send no additional transport.
 
+A quantum is admitted only when both window and renewal time have at least
+`quantum.maxMs` remaining. A shorter tail waits for expiry or authorized renewal,
+without reserving items/ms, opening a maintainer or advancing round-robin position.
+The window-tail utilization cost is less than one configured quantum per window;
+skips charge zero budget. Cadence accounting continues, including nonterminal misses.
+Opening/drain cost within an admitted turn still consumes its reservation.
+
+A hard `read_timeout`, for maintenance or a request reader, detaches and settles
+the call promptly. The parent first sends the existing close command, with up to
+500 ms of grace and never beyond 1,000 ms after the triggering cutoff. The Worker
+stops accepting work, waits for bootstrap/current work to finish, then closes native
+resources and registered host leases/providers before exiting. The writer claim
+remains held until confirmed disposal. Late replies are rejected; an executing
+commit may finish, so existing authenticated SQLite recovery decides durable state.
+If grace expires, forced termination retains the existing cleanup/quarantine rules.
+A failed close, exit or unbalanced resource count never clears quarantine; changing
+supervisors does not bypass the process-wide registry. Confirmed disposal leaves
+pump completion `read_timeout`, permitting ordinary authorized reopening after drain,
+instead of the `reader_failed` caused by failed disposal. Request calls retain their
+existing error DTO and terminal handle semantics. No public shapes or exports change.
+
 A genuine quantum cutoff reports `failed` with `read_timeout`, stops scheduling
 and drains. Missing or invalid internal observation timing reports
 `reader_failed`; authority, storage, corruption and lifecycle failures also

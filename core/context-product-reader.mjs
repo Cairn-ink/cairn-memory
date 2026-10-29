@@ -159,7 +159,28 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     const resource = registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, request: maintenance ? undefined : request, frame, resources });
     let closed = false, terminal, idle, closePromise, ready = false, releaseWriter, writerReleased = false;
     const epoch = 1;
-    const lifecycle = createReaderWorkerLifecycle({ clearTimer, onStop(termination) {
+    // Timeout delivery remains prompt; disposal owns a separate bounded grace.
+    function stopWorker(instance) {
+      if (terminal !== 'read_timeout') return instance.terminate();
+      const slot = lifecycle.pending;
+      const cutoff = slot ? Math.min(Number(mono(slot.operation.operationCutoffMonoNs)) / 1e6, slot.cutoff?.cutoffAt ?? Infinity) : Number(now()) / 1e6;
+      const graceMs = Math.max(0, Math.min(500, cutoff + 1000 - Number(now()) / 1e6));
+      return new Promise((resolve, reject) => {
+        let timer;
+        const detach = () => { clearTimer(timer); instance.off('exit', exited); instance.off('error', failed); };
+        const force = cause => {
+          detach();
+          try { Promise.resolve(instance.terminate()).then(value => cause ? reject(cause) : resolve(value), reject); }
+          catch (error) { reject(error); }
+        };
+        const exited = code => { detach(); code === 0 ? resolve(code) : reject(coded('reader_failed')); };
+        const failed = error => force(error);
+        instance.once('exit', exited); instance.once('error', failed);
+        timer = setTimer(() => force(), graceMs);
+        try { instance.ref(); instance.postMessage({ method: 'close' }); } catch (error) { force(error); }
+      });
+    }
+    const lifecycle = createReaderWorkerLifecycle({ clearTimer, stopWorker, onStop(termination) {
       registry.cleanup(resource);
       termination.then(() => {
         releaseSemanticWriter();

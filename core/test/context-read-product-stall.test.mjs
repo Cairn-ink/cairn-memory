@@ -179,7 +179,7 @@ for(const alternating of [false,true])test(`round 1 A1 ${alternating?'alternatin
   io.set(6000);io.fire();const result=await pending,stall=reader.maintenanceStallDiagnostic(result);
   assert.equal(stall.unitCount,0,'pending dispatch never accepts previous-call units');
   assert.equal(stall.runningMs,1000,'pending dispatch age starts at this call');
-  assert.equal(stall.pendingDispatch,1);assert.equal(stall.ordinal,io.outbound.at(-1).maintenanceOrdinal);
+  assert.equal(stall.pendingDispatch,1);assert.equal(stall.ordinal,io.outbound.findLast(m=>m.method==='refreshContextIndex').maintenanceOrdinal);
   await h.close();
 });
 
