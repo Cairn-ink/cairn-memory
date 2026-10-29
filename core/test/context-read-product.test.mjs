@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
-import { createProductReaderRuntime } from '../context-product-reader.mjs';
+import { createProductReaderRuntime, productOpenPhaseDiagnostic } from '../context-product-reader.mjs';
 import { existsSync, statSync, renameSync, chmodSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { openContextProductReader, createContextReadSupervisor } from '../index.mjs';
@@ -33,6 +33,73 @@ function configured(t, path, patch = {}, readSet = [ns], credential = { nonce: r
 }
 const fetchInput = memory => ({ readSet: [ns], refs: [{ type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision }], intent: 'current' });
 const denied = (result, code) => assert.deepEqual(result, { ok: false, error: { code, retryable: false } });
+
+test('open phase diagnostics are opt-in, private and preserve real reader results', async t => {
+  const f = fixture(t), memory = f.admit('synthetic diagnostic evidence');
+  const results = [], keys = [];
+  let measuredBootstrap;
+  for (const enabled of [undefined, false, true]) {
+    const config = configured(t, f.path);
+    if (enabled === undefined) delete config.options.diagnostics;
+    else config.options.diagnostics = enabled;
+    let bootstrap;
+    const open = createProductReaderRuntime({ spawnWorker(data) {
+      bootstrap = data;
+      return new Worker(new URL('../context-product-worker.mjs', import.meta.url), {
+        workerData: data, env: {}, execArgv: [], stdout: true, stderr: true,
+      });
+    } });
+    const reader = await open(config.options); t.after(() => reader.close());
+    if (enabled === true) measuredBootstrap = bootstrap;
+    keys.push(Reflect.ownKeys(reader));
+    const result = await reader.fetchCandidateEvidence(fetchInput(memory), config.credential);
+    results.push(result);
+    assert.equal(productOpenPhaseDiagnostic(result), undefined);
+    await reader.close();
+    const diagnostic = productOpenPhaseDiagnostic(reader);
+    if (enabled === true) {
+      assert.ok(bootstrap.openPhases instanceof SharedArrayBuffer);
+      assert.ok(Object.isFrozen(diagnostic));
+      for (const key of ['parentValidationIssuanceMs', 'workerStartStaticGraphMs', 'readDatabaseImportMs',
+        'canonicalPreflightMs', 'canonicalProductLayoutMs', 'productIndexOpenMs', 'fetchWorkerMs', 'closeDisposeMs', 'lifecycleTotalMs']) {
+        assert.ok(Number.isFinite(diagnostic[key]) && diagnostic[key] >= 0, key);
+      }
+      assert.ok(Object.values(diagnostic).every(n => typeof n === 'number' && Number.isFinite(n)));
+      assert.ok(diagnostic.openTotalMs >= diagnostic.workerStartStaticGraphMs);
+      assert.ok(diagnostic.closeTotalMs >= diagnostic.closeDisposeMs);
+      assert.ok(diagnostic.lifecycleTotalMs >= diagnostic.openTotalMs + diagnostic.fetchTotalMs + diagnostic.closeTotalMs);
+      assert.ok(Object.keys(diagnostic).every(key => !JSON.stringify(result).includes(key)));
+    } else {
+      assert.equal(Object.hasOwn(bootstrap, 'openPhases'), false);
+      assert.equal(diagnostic, undefined);
+    }
+    assert.deepEqual(Object.keys(result), ['ok', 'value']);
+    assert.equal(JSON.stringify(reader), '{}');
+  }
+  assert.deepEqual(keys[0], keys[1]); assert.deepEqual(keys[1], keys[2]);
+  assert.deepEqual(results[0], results[1]); assert.deepEqual(results[1], results[2]);
+  // Bootstrap capacity includes JSON as well as shared bytes. Leave 128 bytes
+  // for changing clock digit lengths: less than the internal timing buffer.
+  const { openPhases, ...boundedBootstrap } = measuredBootstrap;
+  const withPadding = { ...boundedBootstrap, host: { ...boundedBootstrap.host,
+    configuration: { ...boundedBootstrap.host.configuration, padding: new SharedArrayBuffer(0) } } };
+  const buffers = data => [data.resources, data.frame.buffer, data.host.configuration.state,
+    data.host.configuration.requestReservation, data.host.configuration.padding].reduce((n, b) => n + b.byteLength, 0);
+  const padding = 262144 - buffers(withPadding) - Buffer.byteLength(JSON.stringify(withPadding)) - 128;
+  assert.ok(padding > 0 && openPhases.byteLength > 128);
+  const config = configured(t, f.path);
+  config.options.host.configuration.padding = new SharedArrayBuffer(padding);
+  const open = createProductReaderRuntime({ spawnWorker(data) {
+    const { openPhases: internal, ...bounded } = data;
+    const bytes = buffers(bounded) + Buffer.byteLength(JSON.stringify(bounded));
+    assert.ok(bytes <= 262144 && bytes + internal.byteLength > 262144);
+    return new Worker(new URL('../context-product-worker.mjs', import.meta.url), {
+      workerData: data, env: {}, execArgv: [], stdout: true, stderr: true,
+    });
+  } });
+  const reader = await open(config.options); t.after(() => reader.close());
+  await reader.close();
+});
 // SQLite owns all database descriptors. Fingerprint logical schema/data and
 // file metadata without opening/closing a raw descriptor that drops POSIX locks.
 const fingerprint = path => {
