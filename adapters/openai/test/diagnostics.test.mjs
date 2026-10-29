@@ -1,3 +1,5 @@
+import * as publicEntry from '../index.mjs';
+import { productOpenPhaseDiagnostic } from '../../../core/context-product-reader.mjs';
 import assert from 'node:assert/strict';
 import test, { after, mock } from 'node:test';
 import { setImmediate } from 'node:timers/promises';
@@ -7,6 +9,11 @@ import { openMemoryCore } from '../../../core/contract.mjs';
 import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+
+test('C2 OpenAI public entry does not export the private open timing accessor', () => {
+  assert.equal(Object.hasOwn(publicEntry, 'productOpenPhaseDiagnostic'), false, 'C2 no public timing export');
+  assert.equal(Object.values(publicEntry).includes(productOpenPhaseDiagnostic), false, 'C2 no aliased timing export');
+});
 
 const guard = mock.method(globalThis, 'fetch', () => assert.fail('Native network forbidden'));
 after(() => guard.mock.restore());

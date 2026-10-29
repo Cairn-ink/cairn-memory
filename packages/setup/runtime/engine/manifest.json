@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "2cbf758fb810abf36d431522d1dd56c7dfc4bfeba7d1f80b0c02115e411e27fa",
-  "bytes": 953254,
+  "sha256": "20aead1f3dae73016cf00069838f03bd2796799ca3648c772134db2ebb954f7b",
+  "bytes": 955155,
   "files": [
     "LICENSE",
     "README.md",
@@ -99,6 +99,7 @@
     "core/context-product-control.mjs",
     "core/context-product-index.mjs",
     "core/context-product-manifest.mjs",
+    "core/context-product-open-diagnostic.mjs",
     "core/context-product-pump.mjs",
     "core/context-product-quantum.mjs",
     "core/context-product-reader.mjs",
@@ -439,7 +440,7 @@
     "core/index-storage.mjs": "1d84092cccb3c0d8abd7ce630a383718c036c117abc13c662aad8cd98e480dea",
     "core/index.mjs": "f89acaa1d9352e8c798cf1157e369b4eb89534a79468f92449d4c638649f03ba",
     "core/memory-reader.mjs": "382fb75c51df312842a1cd29dcdb4c18654042ba10d2a7d3ee3bc700a6a7624f",
-    "core/read-database.mjs": "8ef87e8fecffd8fdb0636f52ee84c39a57015c4d61e10ab07512e3f06f37a411",
+    "core/read-database.mjs": "c9ef14217ac3b96543fae015e2d329063e16579bee01b0cd489ff65832bd0748",
     "core/topic-overview-input.mjs": "7c20bfe7e2e8d6c50f19a7610c046408d9ffd0faff0dd5e12b3188789a149ab2",
     "core/topic-overview-storage.mjs": "ee712daccf3d70d17cbb1731d27fa52d7e69cb99418ced73bb61bfbcb0171498",
     "core/topic-overview-worker.mjs": "a84b8c22f802b5e04ac0a64168b0aa76cb4ba2913ac655273d3b1a1cbfe35955",
@@ -630,10 +631,11 @@
     "docs/plans/topic-reader-wal-fix.md": "ff375d11f558b7c60245ee44a65020f1888a2fdc24e8def7d68dd4b47c3b57f0",
     "core/context-product-authority.mjs": "8eda367985cfbcfcb52a3c7f3300e162b47cd7077bad921632106739eb5de765",
     "core/context-product-control.mjs": "83f036d20faa2515ba98d270d88a92b641c778f124dd51bbfbee7a931a9c7744",
-    "core/context-product-reader.mjs": "35892c1cbbcb09df60fff84a44bc29687e3e5c8b5303d5235ed1e7d8ebf1b786",
+    "core/context-product-reader.mjs": "dfcb3f711ed9f30bceebccf77359263045dd1811e1192ab77dd766e2455d115e",
+    "core/context-product-open-diagnostic.mjs": "fcf436e5219a45ee91f629a33515e44b35523e638aaea65e326eb4853a6c0bf8",
     "core/context-product-schema.mjs": "052048d1c8300ae349778428f7d430e6a70b16a96502ac89d7efe56de494e076",
     "core/context-product-telemetry.mjs": "4601cfc76379b7daf3d26a4f9690689469687685e7289d05ddf7773ee6959f85",
-    "core/context-product-worker.mjs": "70309484fb5c3ca81e05c4a87295e8259a566e0e3076981a57732a498e2a83f2",
+    "core/context-product-worker.mjs": "889a56eece4affc698271c139a396dcf9ecb0695d6dbac6187ac6866d80c14ac",
     "core/context-read-supervisor.mjs": "8e0d3ecd984ac5b916515b8be0438ca0c1f3479e9dfa4bdab2317aff4e0f7e75",
     "core/reader-worker-lifecycle.mjs": "48b3281db845fad58cd653639bbff5894d3c65c2aea14fb5d36530c0beaf42d5",
     "docs/context-read-product.md": "ae55120a87b1da997655282850d2f89c8027be7e331159987e4d6fab8bd5d602",
@@ -669,7 +671,7 @@
     "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b"
   },
   "generatedHashes": {
-    "package.json": "0b7f74be7755818ca67bfc73a8841a7cb4116883fd05e3b4e2ae2770c4976c4c",
+    "package.json": "098e6f0d1daacc6a2b3d0830d22e5edf66d04567fec7772021fc15dd211ef69b",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8"
   }
 }

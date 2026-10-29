@@ -26,7 +26,9 @@ export function contextProductFileIdentity(path) {
 export function openReadDatabase(path, { contextRead = false, topicMembers = false, deferTopicValidation = false, topicPolicy, nativeObserver, preflight, validateProduct, productSqlite } = {}) {
   const initial = identity(path);
   nativeObserver?.identity?.(`${initial.dev}:${initial.ino}`);
+  nativeObserver?.openDiagnostic?.mark('canonicalIdentity');
   preflight?.();
+  nativeObserver?.openDiagnostic?.mark('canonicalPreflight');
   const productFiles = productSqlite?.files(path);
   let native;
   try { native = nativeObserver ? nativeObserver.invoke('open', 'connection', () => new DatabaseSync(path, { readOnly: true })) : new DatabaseSync(path, { readOnly: true }); }
@@ -36,6 +38,7 @@ export function openReadDatabase(path, { contextRead = false, topicMembers = fal
     throw error;
   }
   let db = native;
+  nativeObserver?.openDiagnostic?.mark('canonicalNative');
   try {
     if (productSqlite) {
       db = productSqlite.open(native, path).db;
@@ -51,8 +54,10 @@ export function openReadDatabase(path, { contextRead = false, topicMembers = fal
     if (!nativeObserver && topicPolicy) db = topicPolicy.database(native, wal);
     const current = identity(path);
     if (initial.dev !== current.dev || initial.ino !== current.ino) fail('unsafe_database_file');
+    nativeObserver?.openDiagnostic?.mark('canonicalConfigured');
     const validate = () => {
     validateProduct?.(db);
+    nativeObserver?.openDiagnostic?.mark('productLayout');
     if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID ||
         !(contextRead ? CONTEXT_READ_SCHEMA_VERSIONS : READ_SCHEMA_VERSIONS).includes(db.prepare('PRAGMA user_version').get().user_version)) fail('unsupported_database');
     // Member reads validate only consumed Memory metadata and seek paths below;
@@ -109,6 +114,7 @@ export function openReadDatabase(path, { contextRead = false, topicMembers = fal
     if (!(topicMembers && deferTopicValidation)) {
       if (contextRead) readTransaction(db, validate); else validate();
     }
+    nativeObserver?.openDiagnostic?.mark('canonicalValidated');
     return { db, fileIdentity: `${initial.dev}:${initial.ino}`, assertFile() {
       const stat = identity(path);
       if (stat.dev !== initial.dev || stat.ino !== initial.ino) fail('cursor_stale');

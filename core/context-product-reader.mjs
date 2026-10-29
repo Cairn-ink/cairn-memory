@@ -14,12 +14,19 @@ import { PRODUCT_PROFILE, boundedData, hostConfiguration, requestRecord, operati
   credentialDigest, deadline, mono, operationMessage } from './context-product-control.mjs';
 import { fail } from './validation.mjs';
 import { semanticConfiguration } from './context-semantic-coordinator.mjs';
+import { openDiagnosticBuffer, openDiagnosticClock, openDiagnosticSnapshot } from './context-product-open-diagnostic.mjs';
 
 // Private Worker timing, kept outside the public result DTO. Pump and reader
 // share the process hrtime domain; only timings and fixed work counts are kept.
 const maintenanceObservations = new WeakMap(), maintenancePhases = new WeakMap();
 export const maintenancePhaseDiagnostic = result => maintenancePhases.get(result);
 export const maintenanceObservation = result => maintenanceObservations.get(result);
+const openPhases = new WeakMap();
+// Internal accessor only; never a property of a public handle or result DTO.
+export const productOpenPhaseDiagnostic = reader => {
+  const buffer = openPhases.get(reader);
+  return buffer ? openDiagnosticSnapshot(buffer) : undefined;
+};
 
 const codes = new Set(['invalid_input', 'invalid_read_set', 'authority_required', 'scope_changed', 'invalid_snapshot', 'snapshot_stale', 'invalid_cursor', 'cursor_stale', 'token_count_unavailable',
   'revision_conflict', 'evidence_unavailable', 'context_item_too_large', 'index_unavailable', 'storage_busy', 'storage_error',
@@ -88,6 +95,9 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       credentialExpiresUtcMs: binding.credentialExpiresUtcMs, requestMaxMs: 5000 });
     const request = requestRecord(maintenance ? serviceControl() : options.requestControl, admitted, admissionUtc);
     const issuedBinding = maintenance ? binding : issuance(configuration.requestBinding, request, readSet, ownerCoverage);
+    const phaseBuffer = options.diagnostics === true ? openDiagnosticBuffer(admitted) : null;
+    const phase = openDiagnosticClock(phaseBuffer);
+    phase?.mark('issued');
     const openDeadline = deadline(options.deadlineMs ?? 5000);
     // Bound complete bootstrap/control transport before reserving or dispatching.
     const bootstrap = { path: options.path, readSet, ownerCoverage, request, host: { moduleUrl: host.moduleUrl, configuration }, binding: issuedBinding };
@@ -99,6 +109,8 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       wal: options.wal === true, ...(maintenance ? { sidecarJournalMode: options.sidecarJournalMode } : {}),
       host: { moduleUrl: host.moduleUrl, configuration }, operation: first, frame, resources, deadlineMs: openDeadline };
     hostConfiguration(openingData);
+    // Internal fixed storage does not consume the caller's bootstrap allowance.
+    if (phaseBuffer) openingData.openPhases = phaseBuffer;
     if(semantic) {
       openingData.semanticConfig=semantic.configuration;
       openingData.semanticPort=semantic.handle.attach({ownerId:readSet[0].ownerId,path:options.path,readSet,maintenance,bindingId:issuedBinding.credentialBindingId,cancellation:semantic.configuration.cancellation});
@@ -150,6 +162,8 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         } catch (error) { shutdown(error.code ?? 'reader_failed'); }
         return;
       }
+      if (slot.open) phase?.mark('openReceived');
+      else if (slot.method === 'fetchCandidateEvidence') phase?.mark('readDelivered');
       let result;
       try {
         boundedData(message.result, 65536);
@@ -184,6 +198,8 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         maintenancePhases.set(result,Object.freeze(safe));
       }
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
+      if (slot.open) phase?.mark('openAccepted');
+      else if (slot.method === 'fetchCandidateEvidence') phase?.mark('readAccepted');
       lifecycle.finish(slot, result);
       instance.unref(); idle = setTimer(() => shutdown('store_closed'), 60000); idle.unref?.(); lifecycle.idle = idle;
     }
@@ -216,7 +232,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       const operation = opening ? first : operationRecord(callRequest, entered, duration, epoch);
       const callFrame = opening ? frame : options.diagnostics ? nativeTelemetry(operation.operationId, epoch) : null;
       const outbound = opening ? openingData : { method, input, credential: token, request: callRequest, operation, frame: callFrame };
-      if(opening && semantic) {const {semanticPort,...data}=outbound;operationMessage(data);}else operationMessage(outbound);
+      if(opening && (semantic || phaseBuffer)) {const {semanticPort,openPhases,...data}=outbound;operationMessage(data);}else operationMessage(outbound);
       const record = opening ? resource : registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, parent: resource, frame: callFrame });
       let subscription;
       const detach = () => {
@@ -224,7 +240,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         previous?.[Symbol.dispose]();
       };
       return new Promise(resolve => {
-        const slot = { resolve, operation, record, signal, open: opening, detach }; lifecycle.pending = slot;
+        const slot = { resolve, operation, record, signal, open: opening, method, detach }; lifecycle.pending = slot;
         const abort = () => shutdown('read_cancelled');
         try {
           clearTimer(idle);
@@ -240,6 +256,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
           if (remaining <= 0n) { shutdown('read_timeout'); return; }
           if (opening) {
             resource.workerStopped = false; resource.nativeDisposed = false;
+            phase?.mark('spawn');
             const instance = spawnWorker(openingData);
             lifecycle.worker = instance;
             instance.stdout?.resume(); instance.stderr?.resume();
@@ -248,6 +265,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
             instance.on('exit', () => { if (!closed && lifecycle.worker === instance) shutdown('reader_failed'); });
           } else {
             lifecycle.worker.ref();
+            if (method === 'fetchCandidateEvidence') phase?.mark('readSent');
             lifecycle.worker.postMessage(outbound);
           }
         } catch { shutdown('reader_failed'); }
@@ -260,10 +278,11 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     if (!opened.ok || !ready) throw coded(opened.error?.code ?? 'reader_failed', resource.id);
     const call = (method, input, credential, control) => {
       const entered = now();
+      if (method === 'fetchCandidateEvidence') phase?.mark('readEntered');
       try { return dispatch(method, input, credential, control, entered); }
       catch (error) { return Promise.resolve(productFailure(error.code)); }
     };
-    return Object.freeze({
+    const reader = Object.freeze({
       getContextReadCapabilities(input = {},credential,control) {
         if(semantic) {
           try {const data=ownData(input,['deadlineMs']);return call('getContextReadCapabilities',{readSet,deadlineMs:deadline(data.deadlineMs)},credential,control);}
@@ -280,22 +299,26 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       close() {
         if(semantic)Atomics.store(new Int32Array(semantic.configuration.cancellation),0,1);
         return closePromise ??= (async () => {
+          phase?.mark('closeEntered');
           if (!closed && !lifecycle.pending && lifecycle.worker) {
             // Graceful native close receives an independent cleanup acknowledgement.
             closed = true; clearTimer(idle); registry.cleanup(resource);
             const instance = lifecycle.worker;
             await new Promise((resolve, reject) => {
               instance.ref();
-              instance.once('exit', code => code === 0 ? resolve() : reject(coded('reader_failed')));
+              instance.once('exit', code => { phase?.mark('closeExited'); code === 0 ? resolve() : reject(coded('reader_failed')); });
               instance.once('error', reject);
               instance.postMessage({ method: 'close' });
             }).then(() => { releaseSemanticWriter();registry.finish(resource); if (resource.state === 'complete') releaseWriter?.(); }, () => registry.finish(resource, false));
             lifecycle.worker = undefined;
           } else await shutdown('store_closed');
           await resource.delivery;
+          phase?.mark('closeFinished');
         })();
       },
     });
+    if (phaseBuffer) openPhases.set(reader, phaseBuffer);
+    return reader;
   };
 }
 export const openContextProductReader = createProductReaderRuntime();
