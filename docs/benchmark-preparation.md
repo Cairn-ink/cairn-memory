@@ -105,12 +105,17 @@ the evaluator or manifest into an agent workspace/context. Source histories may
 still contain personal content; private file modes do not make them publishable.
 
 The manifest reports UTF-16 character counts, UTF-8 byte counts and source turns
-over the core's 4,000-character per-message boundary, with no silent truncation.
+over the core's 4,000-UTF-16-code-unit per-message boundary, with no silent truncation.
 These are conservative raw-source measurements, not exact post-normalization
 admission failures, token counts or cost estimates. No core limit is raised. A compatible
 ingestion adapter must still handle full sessions, the per-call message/total
 size bounds, source mappings and model token constraints. A preparation success
 can therefore coexist with ingestion blockers; it does not mean ready to run.
+
+Core measures each field after NFKC, secret redaction, whitespace collapse and
+trim. Segmenters can use the exported `normalizedTextLength` and
+`normalizeBoundedText` per field; concatenated lengths are not additive. See
+[bounded text lengths](capture.md#bounded-text-lengths).
 
 ## Verification and next gate
 

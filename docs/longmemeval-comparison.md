@@ -83,6 +83,10 @@ the 800-UTF-16-unit boundary. The comparator derives that single stored form
 with the same two bounded operations. It does not accept prefixes, substrings,
 whitespace-insensitive matches or alternate normalizations, and its existing
 event, session, role and namespace checks remain unchanged.
+Each bounded operation measures UTF-16 code units after per-field NFKC, secret
+redaction, whitespace collapse and trim. The exported `normalizedTextLength`
+and `normalizeBoundedText` expose that path for segmenters; concatenated lengths
+are not additive. See [bounded text lengths](capture.md#bounded-text-lengths).
 
 Lexical ranking counts unique overlapping question/turn tokens after NFKC,
 lowercasing and Unicode letter/number tokenization. Zero-overlap turns are not

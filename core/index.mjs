@@ -3,7 +3,7 @@ import {
   fail, identifier, limit, memoryInput, namespace, object, revision,
 } from "./validation.mjs";
 
-export { MemoryStoreError } from "./validation.mjs";
+export { MemoryStoreError, normalizeBoundedText, normalizedTextLength } from "./validation.mjs";
 export { openMemoryCore } from "./contract.mjs";
 export { openMemoryReader } from './memory-reader.mjs';
 export { openContextReader } from './context-reader.mjs';

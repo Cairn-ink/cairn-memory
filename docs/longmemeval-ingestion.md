@@ -29,12 +29,16 @@ original corpus. Keep source maps private like the original histories. Never
 hand evaluator answers/labels or the preparation manifest to the extractor.
 
 Each planned batch is checked against the actual capture input validator:
-at most 24 messages, 4,000 normalized UTF-16 units per message and 20,000 total,
+at most 24 messages, 4,000 UTF-16 code units per message after per-field NFKC,
+secret redaction, whitespace collapse and trim, and 20,000 of those units total,
 while respecting the separate raw-input bound. A blocker prevents the entire
 case from executing; no invalid turn is silently dropped to obtain a pass.
 These are structural limits, not token counts. The model context check can
 still reject a batch, and splitting may lose cross-chunk reasoning context.
 The adapter does not raise limits or claim unchanged semantic quality.
+Client segmenters can use the exported `normalizedTextLength` and
+`normalizeBoundedText` on each proposed field; concatenated lengths are not
+additive. See [bounded text lengths](capture.md#bounded-text-lengths).
 
 A credential split across chunks could evade a per-message redactor. If a turn
 needs redaction and cannot fit in one capture message, the conservative policy

@@ -657,6 +657,12 @@ v2 responses add retainedSourceWindow with an 800 UTF-16-unit per-message limit
 and original indices whose normalized source tails are omitted. This exposes
 retention limits, not the execution version of an old duplicate, a complete
 conversation, source sufficiency or truth. No caller window override is accepted.
+The capture-message limit (4,000), extracted-content limit (600) and receipt-prefix
+limit (800) measure UTF-16 code units after NFKC, secret redaction, whitespace
+collapse and trim per field. Receipt prefixes truncate at code-point boundaries.
+Segmenters can use the exported `normalizedTextLength` and `normalizeBoundedText`
+per field; concatenated lengths are not additive. See
+[bounded text lengths](capture.md#bounded-text-lengths).
 The extra model stage sees canonical receipt excerpts and bounded extracted text,
 not namespace/client/session/event IDs. Role and qualifier labels remain
 unverified assertions. This tool does not decide currentness or retire memories;
