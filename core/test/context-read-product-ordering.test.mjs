@@ -9,6 +9,7 @@ import { openContextProductFacade } from '../context-read-facade.mjs';
 import { productSidecar, PRODUCT_SIDECAR_SUFFIX } from '../context-product-sidecar.mjs';
 import { createProductSqlitePolicy } from '../context-product-sqlite.mjs';
 import { accessDigest, digest, signedRecord } from '../context-product-validation.mjs';
+import { createMaintenanceAttribution } from '../context-product-attribution.mjs';
 import { termFrequencies } from '../context-read-tokenize.mjs';
 
 let oracleSequence=0;
@@ -399,4 +400,21 @@ test('G2 independent Card body oracle detects swaps with unchanged membership',t
   assert.throws(()=>ownTerms(a,result.publication,'each eligible Card indexes its own canonical title and body'),
     e=>e.code==='ERR_ASSERTION'&&e.message.startsWith('each eligible Card indexes its own canonical title and body'),
     'Card body oracle must detect a swap with unchanged membership');
+});
+
+
+for(const encoding of ['UTF-16le','UTF-16be'])test(`fallback scan row attribution: ${encoding} counts every returned row`,t=>{
+  const {f}=seed(t),path=join(f.workspace.path,'attributed.sqlite');reencode(f.path,path,encoding);
+  const facade=openContextProductFacade(path,{});t.after(()=>facade.close());
+  let clock=0;
+  const attribution=createMaintenanceAttribution({now:()=>clock,hrtime:()=>BigInt(clock)*1000000n});
+  const storage=productSidecar({path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,writable:true,now:()=>clock,attribution,
+    rendezvous(point){if(point==='scan')clock=900;}});t.after(()=>storage.close());
+  const p={readSet:[four[0]],types:['memory'],intent:'current',ownerCoverage:descriptor([four[0]])};
+  const access=accessDigest({ownerId:four[0].ownerId,namespaces:{readSet:p.readSet}});
+  const result=storage.refresh(p,access,{maxItems:32,maxMs:1000}),detail=attribution.snapshot();
+  assert.equal(facade.port.db.prepare('PRAGMA encoding').get().encoding,encoding);
+  assert.equal(result.canonicalRows,2,'UTF-16 canonical scan returns both seeded rows');
+  assert.equal(detail.scanUnits,1,'one fallback scan was admitted');
+  assert.equal(detail.scanRows,result.canonicalRows,'fallback scanRows equals the rows returned');
 });

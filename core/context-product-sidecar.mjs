@@ -687,6 +687,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       const { rows, exhausted } = quantum.measure(()=>{
         const canonicalRows=canonicalRead(() => metadataRows(stream,g.last_key,maximum,p,m,canonicalUtf8));
         if(!mergeOrder) {
+          attribution?.add('scanRows',canonicalRows.length);
           rendezvous('scan');return {rows:canonicalRows.map(row=>({row,old:null})),exhausted:canonicalRows.length<maximum};
         }
         const workRows=side.prepare('SELECT *,hex(CAST(id AS BLOB)) AS id_bytes FROM documents WHERE generation=? AND stream=? AND id COLLATE BINARY>? ORDER BY id COLLATE BINARY LIMIT ?')
