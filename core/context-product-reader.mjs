@@ -162,17 +162,17 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     if (!maintenance && (!types.isSharedArrayBuffer(reservation) || Reflect.apply(sharedLength, reservation, []) !== 4 ||
         Atomics.compareExchange(new Int32Array(reservation), 0, 0, 1) !== 0)) fail('authority_required');
     const resource = registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, request: maintenance ? undefined : request, frame, resources });
-    let closed = false, terminal, idle, closePromise, ready = false, releaseWriter, writerReleased = false, gracefulClose = false, disposalCutoff;
+    let closed = false, terminal, idle, closePromise, ready = false, releaseWriter, writerReleased = false, gracefulClose = false, disposalCutoff, tightenGrace;
     const epoch = 1;
     // Timeout delivery remains prompt; disposal owns a separate bounded grace.
     function stopWorker(instance) {
       if (terminal !== 'read_timeout' && !gracefulClose) return instance.terminate();
       const slot = lifecycle.pending;
       const cutoff = Math.min(disposalCutoff ?? Infinity, slot ? Math.min(Number(mono(slot.operation.operationCutoffMonoNs)) / 1e6, slot.cutoff?.cutoffAt ?? Infinity) : Number(now()) / 1e6);
-      const graceMs = Math.max(0, Math.min(500, cutoff + 1000 - Number(now()) / 1e6));
+      let until = Math.min(Number(now()) / 1e6 + 500, cutoff + 1000);
       return new Promise((resolve, reject) => {
         let timer;
-        const detach = () => { clearTimer(timer); instance.off('exit', exited); instance.off('error', failed); };
+        const detach = () => { clearTimer(timer); tightenGrace = undefined; instance.off('exit', exited); instance.off('error', failed); };
         const force = cause => {
           detach();
           try { Promise.resolve(instance.terminate()).then(value => cause ? reject(cause) : resolve(value), reject); }
@@ -181,8 +181,18 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         const exited = code => { detach(); code === 0 ? resolve(code) : reject(coded('reader_failed')); };
         const failed = error => force(error);
         instance.once('exit', exited); instance.once('error', failed);
+        tightenGrace = earlier => {
+          const next = Math.min(until, earlier + 1000);
+          if (next >= until) return;
+          until = next; clearTimer(timer);
+          try {
+            const remaining = until - Number(now()) / 1e6;
+            if (remaining <= 0) force();
+            else timer = setTimer(() => force(), remaining);
+          } catch (error) { force(error); }
+        };
         try {
-          timer = setTimer(() => force(), graceMs);
+          timer = setTimer(() => force(), Math.max(0, until - Number(now()) / 1e6));
           instance.ref(); instance.postMessage({ method: 'close' });
         } catch (error) { force(error); }
       });
@@ -378,12 +388,16 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       catch (error) { return Promise.resolve(productFailure(error.code)); }
     };
     function dispose(code = 'store_closed', cutoffAt) {
+      // Every call can shorten in-flight cleanup, including an idempotent close.
+      if (code === 'read_timeout' && Number.isFinite(cutoffAt)) {
+        disposalCutoff = Math.min(disposalCutoff ?? Infinity, cutoffAt);
+        tightenGrace?.(disposalCutoff);
+      }
       if(semantic)Atomics.store(new Int32Array(semantic.configuration.cancellation),0,1);
       return closePromise ??= (async () => {
         phase?.mark('closeEntered');
         // Idle close uses the same bounded acknowledgement as timeout disposal.
         gracefulClose = !lifecycle.pending;
-        if (code === 'read_timeout' && Number.isFinite(cutoffAt)) disposalCutoff = cutoffAt;
         await shutdown(code).catch(() => {});
         phase?.mark('closeExited');
         await resource.delivery;

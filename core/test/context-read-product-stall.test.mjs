@@ -1,3 +1,4 @@
+import { testClock } from '../testing/context-product-test-clock.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -90,10 +91,13 @@ test('stall attribution: reader delivery cutoff captures the marker before disca
   await h.close();
 });
 
-test('stall attribution: successful native refresh fields stay in the fixed private channel',async t=>{
+test('stall attribution: successful native refresh fields stay in the fixed private channel',{timeout:30000},async t=>{
+  // Freeze the shared parent/Worker clock so scheduling cannot omit later phases.
+  const started=testClock.now();
   const f=fixture(t);f.admit('orchard evidence',personal);const service=configured(t,f.path,[personal],{service:true});
   const h=await reader.openContextIndexMaintainer(service.options);t.after(()=>h.close());
   const result=await h.refreshContextIndex({readSet:[personal],types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:32,maxMs:1000}},service.token);
+  assert.equal(testClock.now(),started,'native_attribution_uses_injected_time_not_execution_speed');
   assert.equal(result.ok,true,JSON.stringify(result));const detail=reader.maintenancePhaseDiagnostic(result);
   for(const field of fields)assert.ok(Number.isFinite(detail[field])&&detail[field]>=0,`${field} private numeric field`);
   assert.ok(Number.isSafeInteger(detail.ordinal)&&detail.ordinal>0,'native refresh has private join ordinal');

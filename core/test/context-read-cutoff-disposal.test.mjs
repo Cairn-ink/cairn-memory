@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { fixture } from '../testing/context-read-fixture.mjs';
 import { personal,configured } from '../testing/context-product-owner-fixture.mjs';
 import { createContextReadSupervisor } from '../index.mjs';
-import { createProductReaderRuntime } from '../context-product-reader.mjs';
+import { createProductReaderRuntime,disposeProductReader } from '../context-product-reader.mjs';
 import { createMaintenancePumpRuntime } from '../context-product-pump.mjs';
 const retained=[];after(async()=>{for(const cleanup of retained)await cleanup();});
 const hostUrl=new URL('../testing/context-product-disposal-host.mjs',import.meta.url).href;
@@ -17,22 +17,22 @@ function nativeTest(name,body){test(name,async t=>{
   try{await Promise.race([body(t),realDelay(30000,undefined,{signal:abort.signal}).then(async()=>{await testClock.advance(10000,{waitForWorkers:false});assert.fail('disposal_test_watchdog');})]);}
   finally{abort.abort();}
 });}
-function setup(t,{stage='open',mode='normal',request=false,tail,parentGap=false}={}) {
+function setup(t,{stage='open',mode='normal',request=false,tail,parentGap=false,delayedGrace}={}) {
   // Pin canonical identities until all process-wide quarantine probes finish.
   const f=fixture({after:fn=>retained.push(fn)}),memory=f.admit('Synthetic lease disposal memory.',personal),supervisors=[],pumps=[];
   // Failed cleanup is asserted explicitly, rather than hidden by an after hook.
   const owner={after:fn=>t.after(()=>Promise.resolve(fn()).catch(()=>{}))};
   const s=configured(owner,f.path,[personal],{service:!request}),disposalState=new SharedArrayBuffer(32),state=new Int32Array(disposalState);
-  supervisors.push(s.supervisor);let injected=false,responses=0,spawned=0,injectEnabled=true,acceptedBetweenDeadlines=false,forced=0;const resources=[],workers=[],exits=[];
+  supervisors.push(s.supervisor);let injected=false,responses=0,spawned=0,injectEnabled=true,acceptedBetweenDeadlines=false,forced=0,readerCutoff;const resources=[],workers=[],exits=[];
   const spawnWorker=data=>{
     spawned++;const w=new Worker(new URL('../context-product-worker.mjs',import.meta.url),{workerData:data,env:{},execArgv:[],stdout:true,stderr:true});
     const terminate=w.terminate.bind(w);w.terminate=()=>{forced++;return terminate();};
     workers.push(w);resources.push(new Int32Array(data.resources));exits.push(new Promise(resolve=>w.once('exit',resolve)));
     w.on('message',m=>{
       if(m.result?.ok && m.result.value!==null)responses++;
-      const selected=stage==='open'?m.result?.ok && m.result.value===null:m.result?.ok && m.result.value!==null && responses===(request?1:2);
-      if(injectEnabled && !injected && selected){injected=true;const cutoff=Number(BigInt(m.operation.operationCutoffMonoNs))/1e6;
-        void testClock.advance(Math.max(1,Math.ceil(cutoff-testClock.now()+(parentGap?-1:1))),{waitForWorkers:false});
+      const selected=stage==='open'?m.result?.ok && m.result.value===null:m.result?.ok && m.result.value!==null && responses===(request||delayedGrace?1:2);
+      if(injectEnabled && !injected && selected){injected=true;const cutoff=Number(BigInt(m.operation.operationCutoffMonoNs))/1e6;readerCutoff=cutoff;
+        void testClock.advance(Math.max(1,Math.ceil(cutoff-testClock.now()+(delayedGrace?delayedGrace.delay-delayedGrace.gap:parentGap?-1:1))),{waitForWorkers:false});
         if(parentGap){const due=[...timers].find(([,timer])=>timer.at<=testClock.now());assert.ok(due,'parent_deadline_precedes_accepted_response');timers.delete(due[0]);due[1].fn();}}
     });return w;
   };
@@ -57,7 +57,7 @@ function setup(t,{stage='open',mode='normal',request=false,tail,parentGap=false}
   }
   f.workspace.defer(async()=>{Atomics.store(state,1,1);Atomics.notify(state,1);
     for(const p of pumps)await p.close().catch(()=>{});for(const supervisor of supervisors)await supervisor.close().catch(()=>{});});
-  return {f,s,memory,options,open,config,renew,state,resources,workers,exits,timers,tick,retries,pumps,disableCutoff(){injectEnabled=false;},get spawned(){return spawned;},get injected(){return injected;},get acceptedBetweenDeadlines(){return acceptedBetweenDeadlines;},get forced(){return forced;}};
+  return {f,s,memory,options,open,config,renew,state,resources,workers,exits,timers,tick,retries,pumps,disableCutoff(){injectEnabled=false;},get spawned(){return spawned;},get injected(){return injected;},get acceptedBetweenDeadlines(){return acceptedBetweenDeadlines;},get forced(){return forced;},get readerCutoff(){return readerCutoff;}};
 }
 async function failedLeaseRepro(x,records){
   assert.ok(records.some(r=>r.state==='failed'&&r.workerStopped&&r.nativeDisposed&&!r.leasesReleased&&r.providersSettled));
@@ -151,4 +151,21 @@ for(const mode of ['reject','block'])nativeTest(`disposal opening ${mode}: faile
   await testClock.advance(500,{waitForWorkers:false});await turn.pending;
   assert.equal((await p.completion).error,'reader_failed','failed_opening_disposal_has_reader_failed_precedence');
   const records=await x.s.supervisor.drain();assert.ok(records.some(r=>r.state==='failed'));await x.retries(true);
+});
+
+for(const delayedGrace of [{gap:2,delay:850},{gap:900,delay:900}])nativeTest(`disposal delayed callbacks: earlier cutoff tightens running grace (${delayedGrace.gap} ms gap)`,async t=>{
+  const x=setup(t,{stage:'refresh',mode:'block',delayedGrace}),h=await x.open(x.options);
+  const result=await h.refreshContextIndex({readSet:[personal],types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:1,maxMs:1000}},x.s.token);
+  assert.equal(result.error.code,'read_timeout');while(!x.state[0])await realDelay(1);
+  const parentCutoff=x.readerCutoff-delayedGrace.gap;
+  const first=disposeProductReader(h,'read_timeout',delayedGrace.gap===2?parentCutoff:x.readerCutoff);
+  const closed=first.catch(e=>e);
+  assert.strictEqual(disposeProductReader(h,'read_timeout',parentCutoff),first,'repeated_disposal_keeps_the_owned_cleanup_promise');
+  assert.strictEqual(disposeProductReader(h,'read_timeout',x.readerCutoff+1000),first);
+  await testClock.advance(parentCutoff+999-testClock.now(),{waitForWorkers:false});assert.equal(x.forced,0);
+  await testClock.advance(1,{waitForWorkers:false});
+  try{assert.equal(x.forced,1,'earlier_cutoff_tightens_running_grace_by_earliest_proof_boundary');}
+  finally{if(!x.forced){Atomics.store(x.state,1,1);Atomics.notify(x.state,1);}}
+  await x.exits[0];assert.equal(x.workers[0].threadId,-1);assert.equal((await closed).code,'reader_failed');
+  await x.retries(true);
 });
