@@ -21,8 +21,10 @@ export function contentReadPurpose(method, row) {
 }
 export const memoryReadEligible = (row, intent = 'current') => Boolean(row && !row.deleted &&
   (intent === 'history' || row.currentness === 'current' && row.review_state !== 'awaiting'));
+const legacyRetrieval = new Set(['fetch', 'get', 'list', 'search', 'map', 'sessionStartContext', 'listMemoriesByTime']);
 const policies = {
-  retrieval: { admits: (row, type, intent) => type === 'memory' ? memoryReadEligible(row, intent) : row.state === 'confirmed',
+  retrieval: { admits: (row, type, intent, method) => type === 'memory' ? memoryReadEligible(row, intent) &&
+    (!legacyRetrieval.has(method) || row.review_state !== 'awaiting') : row.state === 'confirmed',
     current: intent => intent === 'current' },
   'draft-inspection': { admits: row => row.state === 'draft' },
   'confirmed-review': { admits: row => row.state === 'confirmed' },
@@ -35,7 +37,7 @@ export function createContentReadMemo(db) {
     if (!statements.has(sql)) statements.set(sql, db.prepare(sql));
     return statements.get(sql);
   } };
-  return { db: read, sources: new Map(), memories: new Map(), receipts: new Map(), contributors: new Map(), lineage: createRawLineageStorage(read) };
+  return { db: read, sources: new Map(), memories: new Map(), receipts: new Map(), contributors: new Map(), lineage: createRawLineageStorage(read, { readMemo: new Map() }) };
 }
 export function receiptReadSafety(db, { namespace, receipt, memo }) {
   const key = JSON.stringify([namespace, receipt]);
@@ -182,7 +184,7 @@ export function contentReadSafety(db, { identity, namespace: ns, ref, method = '
       return denied('identity_mismatch');
   }
   const policy = policies[contentReadPurpose(method, row)];
-  if (!policy.admits(row, type, intent)) return denied('ineligible');
+  if (!policy.admits(row, type, intent, method)) return denied('ineligible');
   if (type === 'card') {
     let contributors;
     try { contributors = cardContributorsInside(db, row.id, memo); }

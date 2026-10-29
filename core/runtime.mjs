@@ -517,8 +517,8 @@ export function createMemoryRuntime(input, internal) {
     return evidence;
   }
 
-  function safeMemory(ns, row, intent = 'current', expectedMemoryIdentity) {
-    return row && contentReadSafety(db, { identity, namespace: ns, intent, expectedMemoryIdentity, ref: { type: 'memory', namespace: ns,
+  function safeMemory(ns, row, intent = 'current', expectedMemoryIdentity, method = 'retrieval') {
+    return row && contentReadSafety(db, { identity, namespace: ns, intent, method, expectedMemoryIdentity, ref: { type: 'memory', namespace: ns,
       memoryId: row.id, revision: row.revision } }).allowed;
   }
 
@@ -530,7 +530,7 @@ export function createMemoryRuntime(input, internal) {
       if (expectedEpoch !== undefined && currentEpoch !== expectedEpoch) fail('cursor_stale');
       const candidate = view === 'historical' ? activeRow(ns, ref.memoryId) : currentRow(ns, ref.memoryId);
       const row = candidate?.currentness === view ? candidate : undefined;
-      const reason = !safeMemory(ns, row, view === 'historical' ? 'history' : 'current', expectedPage && fetchPageIdentities.get(expectedPage)) ? 'not_found' : row.revision !== ref.revision ? 'stale' : null;
+      const reason = !safeMemory(ns, row, view === 'historical' ? 'history' : 'current', expectedPage && fetchPageIdentities.get(expectedPage), 'fetch') ? 'not_found' : row.revision !== ref.revision ? 'stale' : null;
       if (reason) return { invalidRef: { memoryId: ref.memoryId, reason }, epoch: currentEpoch };
       if (isSourceContext(contextMode)) {
         const page = { source: readUsageEvidence(ns, row, contextMode), epoch: currentEpoch };

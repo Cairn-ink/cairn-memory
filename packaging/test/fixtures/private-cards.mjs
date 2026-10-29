@@ -22,6 +22,7 @@ for (const name of ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'NODE_OPTIONS', 'npm_
 
 const importedCore = join(installed, 'core/index.mjs');
 const { openMemoryCore } = await import(pathToFileURL(importedCore).href);
+const { STORAGE_BUSY_TIMEOUT_MS } = await import(pathToFileURL(join(installed, 'core/database.mjs')).href);
 const namespace = { ownerId: 'synthetic-installed-private-card', scope: 'personal', projectId: null };
 const otherNamespace = { ...namespace, scope: 'project', projectId: 'synthetic-other-project' };
 const text = 'Synthetic provided note: I chose to inspect receipts before confirming a Card.';
@@ -31,8 +32,9 @@ const memoryExcerpts = ['Synthetic retained Memory receipt one.', 'Synthetic ret
 const memoryReceipt = (eventId, excerpt) => ({ client: 'synthetic-installed', sessionId: 'memory-card', eventId,
   role: 'user', excerpt });
 function retainedCard(id) {
-  const db = new DatabaseSync(databasePath, { readOnly: true });
+  const db = new DatabaseSync(databasePath, { readOnly: true, timeout: STORAGE_BUSY_TIMEOUT_MS });
   try {
+    assert.equal(db.prepare('PRAGMA busy_timeout').get().timeout, STORAGE_BUSY_TIMEOUT_MS);
     const row = db.prepare('SELECT *,body_revision AS bodyRevision FROM private_cards WHERE id=?').get(id);
     row.bindings = [...db.prepare('SELECT source_ref FROM card_bindings WHERE card_id=? ORDER BY position').all(id),
       ...db.prepare('SELECT source_ref FROM card_memory_bindings WHERE card_id=? ORDER BY position').all(id)]

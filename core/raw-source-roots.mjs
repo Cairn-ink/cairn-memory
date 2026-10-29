@@ -7,7 +7,7 @@ const receiptValue = row => ({ client: row.client, sessionId: row.session_id,
   eventId: row.event_id, role: row.role, excerpt: row.excerpt });
 
 /** Source-session authority shared by deletion, admission and option-off writers. */
-export function createRawSourceRoots(db) {
+export function createRawSourceRoots(db, { readMemo } = {}) {
   let available;
   let episodeMutation, fences, jobs;
   const hasFences = () => fences === true || (fences = Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_session_fences'").get()));
@@ -20,9 +20,24 @@ export function createRawSourceRoots(db) {
   const keys = (ns, client, value) => [value, hashSession(ns, client, value)];
   function assertSession(ns, client, value, readExisting = false) {
     if (readExisting ? !hasFences() : !enabled()) return;
+    const key = JSON.stringify(['session-fence', ...boundary(ns), client, value]);
+    if (readExisting && readMemo?.has(key)) return;
     for (const session of keys(ns, client, value)) if (db.prepare(
       `SELECT 1 FROM raw_session_fences WHERE ${where} AND client=? AND session_key=?`)
       .get(...boundary(ns), client, session)) fail('conversation_deleted');
+    if (readExisting) readMemo?.set(key, true);
+  }
+  function emptySession(ns, row) {
+    if (!readMemo) return false;
+    const key = JSON.stringify(['empty-session', ...boundary(ns), row.client, row.session_id]);
+    if (readMemo.has(key)) return readMemo.get(key);
+    const args = [...boundary(ns), row.client, ...keys(ns, row.client, row.session_id)];
+    const jobs = hasJobs();
+    const found = db.prepare(`SELECT 1 FROM raw_conversations WHERE ${where} AND client=? AND session_key IN (?,?)
+      UNION ALL SELECT 1 FROM session_episodes WHERE ${where} AND client=? AND session_key IN (?,?)
+      ${jobs ? `UNION ALL SELECT 1 FROM raw_job_sources WHERE ${where} AND source_client=? AND session_key IN (?,?)` : ''} LIMIT 1`)
+      .get(...args, ...args, ...(jobs ? args : []));
+    readMemo.set(key, !found); return !found;
   }
   function resolve(ns, value, readExisting = false) {
     if (!readExisting && !enabled()) return [];
@@ -225,5 +240,5 @@ export function createRawSourceRoots(db) {
     return null;
   }
   return { enabled, hashSession, keys, resolve, receipt, memoryRoots, touchMemory, mutateSources,
-    mutateEpisodeSources, bindJob, jobGuard, assertSession };
+    mutateEpisodeSources, bindJob, jobGuard, assertSession, emptySession };
 }

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
+import { STORAGE_BUSY_TIMEOUT_MS } from '../../core/database.mjs';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -109,8 +110,9 @@ test('installed retained MCP uses public discovery, real TTY, cold identity and 
   assert.equal(ok(await call(local.client, 'inspect_private_card', { cardId: pending.card.id })).card, null);
   card = ok(await call(local.client, 'inspect_private_card', { cardId: saved.card.id })).card;
   assert.equal(card, null);
-  const retainedDb = new DatabaseSync(database, { readOnly: true });
-  try { assert.equal(retainedDb.prepare('SELECT body FROM private_cards WHERE id=?').get(saved.card.id).body, 'Synthetic owner-authored plan.'); }
+  const retainedDb = new DatabaseSync(database, { readOnly: true, timeout: STORAGE_BUSY_TIMEOUT_MS });
+  try { assert.equal(retainedDb.prepare('PRAGMA busy_timeout').get().timeout, STORAGE_BUSY_TIMEOUT_MS);
+    assert.equal(retainedDb.prepare('SELECT body FROM private_cards WHERE id=?').get(saved.card.id).body, 'Synthetic owner-authored plan.'); }
   finally { retainedDb.close(); }
   assert.equal((await call(local.client, 'read_private_card_source', { source: saved.sources[0] })).ok, false);
   await local.client.close(); local = await host(workspace, executable, ['--retained-raw-profile', profilePath]);

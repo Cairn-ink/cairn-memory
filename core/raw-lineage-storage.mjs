@@ -5,8 +5,8 @@ import { createRawCardInvalidation } from './card-raw-sources.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId || ''];
 /** Schema-presence driven: current option-off writers enforce retained fences. */
-export function createRawLineageStorage(db) {
-  const roots = createRawSourceRoots(db);
+export function createRawLineageStorage(db, { readMemo } = {}) {
+  const roots = createRawSourceRoots(db, { readMemo });
   const rawCards = createRawCardInvalidation(db);
   let available;
   const enabled = () => available === true || (available = Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_source_maps'").get()));
@@ -60,8 +60,9 @@ export function createRawLineageStorage(db) {
       'raw_receipt_origins','raw_source_exclusions','raw_deletion_actions','raw_session_fences',
       'raw_job_sources','episode_identity','session_episodes','episode_messages','episode_sources',
       'episode_memory_links','episode_keep_actions'];
-    const tables = new Set(db.prepare(`SELECT name FROM sqlite_master WHERE type='table'
+    const tables = readExisting && readMemo?.get('lineage-tables') || new Set(db.prepare(`SELECT name FROM sqlite_master WHERE type='table'
       AND name IN (${required.map(() => '?').join(',')})`).all(...required).map(row => row.name));
+    if (readExisting) readMemo?.set('lineage-tables', tables);
     if (!['raw_conversations','raw_source_maps','raw_receipt_lineage','raw_deletion_actions'].some(name => tables.has(name))) return;
     const deletion = tables.has('raw_deletion_actions') || tables.has('raw_job_sources');
     const inspected = readExisting && !deletion ? required.filter(name => !['raw_deletion_actions','raw_job_sources'].includes(name)) : required;
@@ -82,6 +83,15 @@ export function createRawLineageStorage(db) {
         roots.assertSession(ns, anchor.client, anchor.session_key, readExisting);
       }
       assertAnchors(stored);
+      // A proven empty source session and absent keep links are reusable root facts.
+      if (readExisting && readMemo && !stored.length) {
+        const key = JSON.stringify(['memory-links', receipt.memory_id]);
+        if (!readMemo.has(key)) readMemo.set(key, Boolean(db.prepare('SELECT 1 FROM episode_memory_links WHERE memory_id=? LIMIT 1').get(receipt.memory_id)));
+        if (!readMemo.get(key) && roots.emptySession(ns, receipt) &&
+            db.prepare('SELECT kind FROM raw_receipt_origins WHERE receipt_id=?').get(receipt.id)?.kind !== 'derived') {
+          roots.assertSession(ns, receipt.client, receipt.session_id, true); continue;
+        }
+      }
       const authority = roots.receipt(ns, receipt, readExisting);
       // Pre-Raw receipts retain their ordinary read contract; this does not classify them.
       if (readExisting && authority.unknown && !authority.legacyKeep && !stored.length &&

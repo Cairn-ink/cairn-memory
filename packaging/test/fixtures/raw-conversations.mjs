@@ -40,6 +40,7 @@ appendFileSync(data.trace,JSON.stringify({kind:'module',path})+'\\n');}return re
 register('data:text/javascript,'+encodeURIComponent(loader),{ parentURL:import.meta.url,data:{ allowed:dirname(installed),trace } });
 const importedCore = join(installed,'core/index.mjs');
 const { openMemoryCore } = await import(pathToFileURL(importedCore).href);
+const { STORAGE_BUSY_TIMEOUT_MS } = await import(pathToFileURL(join(installed,'core/database.mjs')).href);
 const namespace = { ownerId:'synthetic-installed-raw',scope:'personal',projectId:null };
 const text = 'Synthetic Raw prefix:\n'+'  Ａ🙂\t\n'.repeat(5000), body = 'Synthetic independently authored Card body.';
 function parts() {
@@ -114,7 +115,7 @@ try {
     const draft=ok(call('createCardDraft',{ ...draftInput,actionId:'draft' }));
     const confirmed=ok(call('confirmCardDraft',{ cardId:draft.id,expectedRevision:draft.revision,actionId:'confirm' }));
     const pending=ok(call('createCardDraft',{ ...draftInput,actionId:'dependent' }));
-    const db=new DatabaseSync(path,{ readOnly:true });
+    const db=new DatabaseSync(path,{ readOnly:true,timeout:STORAGE_BUSY_TIMEOUT_MS });
     try { assert.equal(db.prepare('SELECT count(*) n FROM memories').get().n,0); } finally { db.close(); }
     fs.writeFileSync(statePath,JSON.stringify({ ...state,source,confirmed,pending,usage:usage(),
       deletion:{ namespace,conversationId,expectedRevision:view.conversation.revision,actionId:'delete' } }));
@@ -130,8 +131,8 @@ try {
     assert.equal(usage().savedBytes,0); assert.equal(usage().reservedBytes,0);
     assert.equal(ok(call('getCard',{ cardId:state.pending.id })).card,null);
     assert.equal(ok(call('getCard',{ cardId:state.confirmed.id })).card,null);
-    const retainedDb=new DatabaseSync(path,{readOnly:true});
-    try { assert.equal(retainedDb.prepare('SELECT body FROM private_cards WHERE id=?').get(state.confirmed.id).body,body); } finally { retainedDb.close(); }
+    const retainedDb=new DatabaseSync(path,{readOnly:true,timeout:STORAGE_BUSY_TIMEOUT_MS});
+    try { assert.equal(retainedDb.prepare('PRAGMA busy_timeout').get().timeout,STORAGE_BUSY_TIMEOUT_MS); assert.equal(retainedDb.prepare('SELECT body FROM private_cards WHERE id=?').get(state.confirmed.id).body,body); } finally { retainedDb.close(); }
     denied(await call('getSource',{ source:state.source }),'source_unavailable');
     assert.equal(policyCalls,0);
     fs.writeFileSync(statePath,JSON.stringify({ ...state,deleted }));
@@ -141,8 +142,8 @@ try {
     assert.deepEqual(ok(core.deleteConversation(state.deletion)),state.deleted);
     assert.equal(ok(await core.getConversation({ namespace,conversationId:state.deletion.conversationId })).conversation,null);
     assert.equal(ok(call('getCard',{ cardId:state.confirmed.id })).card,null);
-    const retainedDb=new DatabaseSync(path,{readOnly:true});
-    try { assert.equal(retainedDb.prepare('SELECT body FROM private_cards WHERE id=?').get(state.confirmed.id).body,body); } finally { retainedDb.close(); }
+    const retainedDb=new DatabaseSync(path,{readOnly:true,timeout:STORAGE_BUSY_TIMEOUT_MS});
+    try { assert.equal(retainedDb.prepare('PRAGMA busy_timeout').get().timeout,STORAGE_BUSY_TIMEOUT_MS); assert.equal(retainedDb.prepare('SELECT body FROM private_cards WHERE id=?').get(state.confirmed.id).body,body); } finally { retainedDb.close(); }
     denied(await call('getSource',{ source:state.source }),'source_unavailable');
     denied(await core.captureRaw({ ...request(selected[0]),eventId:'late-after-delete' }),'conversation_deleted');
     assert.equal(usage().savedBytes,0); assert.equal(usage().reservedBytes,0);
