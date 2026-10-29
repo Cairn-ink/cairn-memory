@@ -26,9 +26,9 @@ const qualifiedRuntimePatches = new Set();
 export const maintenanceCutoffQualified = () => qualifiedRuntimePatches.has(process.versions.node);
 const capabilities = new WeakMap(), diagnostics = new WeakMap(), disposals = new WeakMap();
 // Private pump-to-reader cleanup cause; no caller option or handle property.
-export const disposeProductReader = (handle, code, cutoffAt) => {
+export const disposeProductReader = (handle, code, cutoffAt, failure) => {
   const dispose = disposals.get(handle.close);
-  return dispose ? dispose(code, cutoffAt) : handle.close();
+  return dispose ? dispose(code, cutoffAt, failure) : handle.close();
 };
 export const maintenancePumpCutoffDiagnostic = observation => diagnostics.get(observation);
 export const snapshotMaintenanceCutoff = (observation, value) => {
@@ -170,7 +170,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     if (!maintenance && (!types.isSharedArrayBuffer(reservation) || Reflect.apply(sharedLength, reservation, []) !== 4 ||
         Atomics.compareExchange(new Int32Array(reservation), 0, 0, 1) !== 0)) fail('authority_required');
     const resource = registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, request: maintenance ? undefined : request, frame, resources });
-    let closed = false, terminal, idle, closePromise, ready = false, releaseWriter, writerReleased = false, gracefulClose = false, disposalCutoff, tightenGrace;
+    let closed = false, terminal, idle, closePromise, ready = false, releaseWriter, writerReleased = false, gracefulClose = false, disposalCutoff, tightenGrace, forcedCleanup = false, disposalWorkerError = false;
     const epoch = 1;
     // Timeout delivery remains prompt; disposal owns a separate bounded grace.
     function stopWorker(instance) {
@@ -196,12 +196,13 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         };
         const force = cause => {
           if (!live) return;
+          if(maintenance&&!cause&&!forcedCleanup){forcedCleanup=true;closingFailure(undefined,'cleanup',{stage:'close'});}
           detach();
           try { Promise.resolve(instance.terminate()).then(value => cause ? reject(cause) : resolve(value), reject); }
           catch (error) { reject(error); }
         };
         const exited = code => { detach(); if(code!==0)closingFailure(undefined,'worker_exit',{exitCode:code,stage:'close'});code === 0 ? resolve(code) : reject(coded('reader_failed')); };
-        const failed = error => {closingFailure(error,error?.code==='ERR_WORKER_OUT_OF_MEMORY'?'worker_heap_limit':'worker_error',{errorName:maintenanceErrorName(error),stage:'close'});force(error);};
+        const failed = error => {disposalWorkerError=true;closingFailure(error,error?.code==='ERR_WORKER_OUT_OF_MEMORY'?'worker_heap_limit':'worker_error',{errorName:maintenanceErrorName(error),stage:'close'});force(error);};
         const closeDiagnostic=message=>{if(message?.kind!=='maintenance-close-failure')return;const detail=readMaintenanceFailure(message.maintenanceFailure);if(detail)closingFailure(undefined,detail.kind,{...detail,stage:'close'});workerSecondary(message,'close');};
         if(maintenance)instance.on('message',closeDiagnostic);
         instance.once('exit', exited); instance.once('error', failed);
@@ -232,11 +233,17 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       }, () => registry.finish(resource, false));
     } });
     resource.stop = code => closePromise ?? shutdown(code);
+    if(maintenance)void resource.delivery.catch(error=>{
+      if(!maintenanceFailures.has(error)){
+        if(forcedCleanup)attachFailure(error,terminalFailure??callFailure);
+        else closingFailure(error,'cleanup',{stage:'close'});
+      }
+    });
     function noteFailure(value,kind,detail={},slot=lifecycle.pending){
       if(!maintenance)return;
       let failure=slot?.failure;
       if(!failure){
-        failure=maintenanceFailureRecord(kind,{...detail,ordinal:slot?.ordinal,stage:detail.stage??(slot?slot.open?'open':'refresh':'idle'),
+        failure=maintenanceFailureRecord(kind,{...detail,ordinal:slot?.ordinal??detail.ordinal,stage:detail.stage??(slot?slot.open?'open':'refresh':'idle'),
           ...(slot?{stall:readMaintenanceMarker(marker,now())}:{})});
         if(slot&&!slot.open||slot===null&&detail.stage!=='close')callFailure=failure;
         if(slot){slot.failure=failure;if(slot.control&&typeof slot.control==='object'){maintenanceFailures.set(slot.control,failure);maintenanceReaderFailures.set(slot.control,failureState);}}
@@ -424,7 +431,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
             instance.stdout?.resume(); instance.stderr?.resume();
             instance.on('message', data => message(instance, data));
             instance.on('error', error => { if (!closed && lifecycle.worker === instance) shutdown('reader_failed',undefined,{kind:error?.code==='ERR_WORKER_OUT_OF_MEMORY'?'worker_heap_limit':'worker_error',errorName:maintenanceErrorName(error)}); });
-            instance.on('exit', exitCode => { if (!closed && lifecycle.worker === instance) shutdown('reader_failed',undefined,{kind:'worker_exit',exitCode});else if(maintenance&&exitCode!==0&&['worker_error','worker_heap_limit'].includes(terminalFailure?.cause))noteSecondary(undefined,'worker_exit',{exitCode,stage:terminalFailure.stage}); });
+            instance.on('exit', exitCode => { if (!closed && lifecycle.worker === instance) shutdown('reader_failed',undefined,{kind:'worker_exit',exitCode});else if(maintenance&&exitCode!==0&&(['worker_error','worker_heap_limit'].includes(terminalFailure?.cause)||disposalWorkerError))noteSecondary(undefined,'worker_exit',{exitCode,stage:disposalWorkerError?'close':terminalFailure.stage}); });
           } else {
             lifecycle.worker.ref();
             if (method === 'fetchCandidateEvidence') phase?.mark('readSent');
@@ -448,7 +455,11 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       try { return dispatch(method, input, credential, control, entered); }
       catch (error) {const result=productFailure(error.code);const detail=error.code===undefined?{kind:'call_error',errorName:maintenanceErrorName(error)}:failureFor(error.code);noteFailure(result,detail.kind,detail,null);return Promise.resolve(result);}
     };
-    function dispose(code = 'store_closed', cutoffAt) {
+    function dispose(code = 'store_closed', cutoffAt, failure) {
+      // The owned pump can retain its active call snapshot after a late reply
+      // has already settled the reader slot. Never infer it from an idle marker.
+      if(maintenance&&code==='read_timeout'&&!terminalFailure&&failure?.cause==='engine'&&failure.engineCode==='read_timeout')
+        terminalFailure=noteFailure(undefined,'engine',{engineCode:'read_timeout',ordinal:failure.ordinal,stage:failure.stage,stall:failure.stall},null);
       // Every call can shorten in-flight cleanup, including an idempotent close.
       if (code === 'read_timeout' && Number.isFinite(cutoffAt)) {
         disposalCutoff = Math.min(disposalCutoff ?? Infinity, cutoffAt);

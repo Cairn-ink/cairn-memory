@@ -63,7 +63,7 @@ function exitWhenIdle() {
     if(workerData.maintenance){attribution?.resetFailure();failureDetail=undefined;secondaryFailureDetail=undefined;}
     observer.select(workerData.frame);
     try { await dispose(); sealNative(workerData.frame); phase?.mark('disposed'); }
-    catch { if(workerData.maintenance)parentPort.postMessage({kind:'maintenance-close-failure',maintenanceFailure:attribution?.failure()??failureDetail,...(secondaryFailureDetail?{maintenanceSecondaryFailure:secondaryFailureDetail}:{})});process.exitCode = 1; }
+    catch { if(workerData.maintenance)try{parentPort.postMessage({kind:'maintenance-close-failure',maintenanceFailure:attribution?.failure()??failureDetail,...(secondaryFailureDetail?{maintenanceSecondaryFailure:secondaryFailureDetail}:{})});}catch{}process.exitCode = 1; }
     parentPort.close();
   })();
 }

@@ -128,7 +128,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     function cycle(){settled=false;completion=new Promise(resolve=>{report=value=>{settled=true;resolve(value);};});}cycle();
     const handles=new Map(),writers=new Map(),handleLanes=new Map();
     let cutoffDiagnostic,cancelRecovery,lastFailure=null;const failureCounts=maintenanceFailureCounts(),secondaryFailureCounts=maintenanceFailureCounts();let secondaryFailure=null;
-    const pendingDrains=new Map(),failedDrains=new Map(),drainErrors=new WeakSet(),seenReaderFailures=new WeakSet(),readerSecondaryCounts=new WeakMap(),readerSources=new WeakMap();
+    const pendingDrains=new Map(),failedDrains=new Map(),drainErrors=new WeakSet(),seenReaderFailures=new WeakSet(),readerSecondaryCounts=new WeakMap(),readerSources=new WeakMap(),cutoffFailures=new WeakMap();
     // Fixed 10-ms elapsed counters (last bucket is >5000 ms), never samples.
     // At most 64 lanes; no identities, paths, grants or content enter snapshots.
     let quantumNumber=0,residentEpoch=0;
@@ -160,7 +160,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       // Attribution follows the resident being disposed, not its replacement.
       const failureLane=handleLanes.get(key)??index;
       const started=now();
-      try{const handle=handles.get(key);await disposeProductReader(handle,error==='read_timeout'?error:'store_closed',disposalCutoff);readerSecondary(failureLane,maintenanceFailureDiagnostic(handle)?handle:readerSources.get(handle),number);handles.delete(key);handleLanes.delete(key);}
+      try{const handle=handles.get(key);await disposeProductReader(handle,error==='read_timeout'?error:'store_closed',disposalCutoff,cutoffFailures.get(handle));readerSecondary(failureLane,maintenanceFailureDiagnostic(handle)?handle:readerSources.get(handle),number);handles.delete(key);handleLanes.delete(key);}
       catch(error){
         if(error&&typeof error==='object')drainErrors.add(error);
         if(!failedDrains.has(key)){
@@ -270,6 +270,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
         const secondary=recordedFailures.size>0;recordedFailures.add(key);
         const index=phases.indexOf(lane),failure=Object.freeze({...source,stage:source.stage??activeStage,number:sequence});
         if(secondary)saveSecondary(index,failure);else saveFailure(index,failure);
+        if(activeHandle&&failure.cause==='engine'&&failure.engineCode==='read_timeout')cutoffFailures.set(activeHandle,failure);
         if(captured){seenReaderFailures.add(captured);if(activeHandle)readerSources.set(activeHandle,value);}
         readerSecondary(index,value,sequence);
       }
@@ -405,7 +406,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           recordFailure(e,'call_error',{errorName:maintenanceErrorName(e),stage:'call'});
           if(e.code==='read_timeout')recordStall(e);error=e.code??'reader_failed';
           // An opening failure returns no handle; its cleanup ID still owns disposal.
-          if(e.cleanupId)try{await c.supervisor.drain(e.cleanupId);}catch(failure){recordFailure(failure,'cleanup',{stage:'close'});error='reader_failed';}
+          if(e.cleanupId)try{await c.supervisor.drain(e.cleanupId);}catch(failure){recordFailure(failure,'cleanup',{stage:'close'});readerSecondary(phases.indexOf(lane),e,sequence);error='reader_failed';}
         }
       })().finally(()=>{
         if(lane){
