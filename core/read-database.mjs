@@ -115,7 +115,6 @@ export function openReadDatabase(path, { contextRead = false, topicMembers = fal
       if (contextRead) readTransaction(db, validate); else validate();
     }
     nativeObserver?.openDiagnostic?.mark('canonicalValidated');
-    nativeObserver?.openDiagnostic?.mark('canonicalReturned');
     return { db, fileIdentity: `${initial.dev}:${initial.ino}`, assertFile() {
       const stat = identity(path);
       if (stat.dev !== initial.dev || stat.ino !== initial.ino) fail('cursor_stale');

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 import { createProductReaderRuntime, productOpenPhaseDiagnostic } from '../context-product-reader.mjs';
+import { openDiagnosticBuffer, openDiagnosticClock } from '../context-product-open-diagnostic.mjs';
+import { createSupervisorRegistry } from '../context-read-supervisor.mjs';
 import { existsSync, statSync, renameSync, chmodSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { openContextProductReader, createContextReadSupervisor } from '../index.mjs';
@@ -57,6 +59,23 @@ test('open phase diagnostics are opt-in, private and preserve real reader result
     assert.equal(productOpenPhaseDiagnostic(result), undefined);
     await reader.close();
     const diagnostic = productOpenPhaseDiagnostic(reader);
+    const statusKeys = ['cleanupId', 'state', 'workerStopped', 'nativeDisposed', 'leasesReleased',
+      'providersSettled', 'telemetry', 'expiresAt'];
+    for (const delivery of await config.supervisor.drain()) {
+      assert.deepEqual(Object.keys(delivery).sort(), [...statusKeys, 'diagnostics'].sort(),
+        'C2 supervisor delivery has no timing fields');
+      assert.deepEqual(Object.keys(config.supervisor.getCleanupStatus(delivery.cleanupId)).sort(), statusKeys.sort(),
+        'C2 supervisor status has no timing fields');
+      const timingKeys = Object.keys(diagnostic ?? {});
+      const inspect = value => {
+        if (!value || typeof value !== 'object') return;
+        for (const [key, child] of Object.entries(value)) {
+          assert.equal(timingKeys.includes(key), false, 'C2 supervisor nested DTO has no timing fields: ' + key);
+          inspect(child);
+        }
+      };
+      inspect(delivery);
+    }
     if (enabled === true) {
       assert.ok(bootstrap.openPhases instanceof SharedArrayBuffer);
       assert.ok(Object.isFrozen(diagnostic));
@@ -100,6 +119,78 @@ test('open phase diagnostics are opt-in, private and preserve real reader result
   const reader = await open(config.options); t.after(() => reader.close());
   await reader.close();
 });
+
+// Observe only the synchronous dispatch prefix. Operational clocks are injected;
+// the spies restore before the real Worker can deliver asynchronous messages.
+for (const enabled of [undefined, false]) test(`C2 diagnostics off (${enabled}) reads no clock and allocates no timing buffer`, async t => {
+  const f = fixture(t), config = configured(t, f.path);
+  if (enabled === undefined) delete config.options.diagnostics; else config.options.diagnostics = enabled;
+  const isolatedSupervisor = createSupervisorRegistry({ now: () => 0 }).supervisor();
+  config.options.supervisor = isolatedSupervisor; t.after(() => isolatedSupervisor.close());
+  const admitted = process.hrtime.bigint(), originalClock = process.hrtime.bigint;
+  const OriginalBuffer = globalThis.SharedArrayBuffer;
+  let clocks = 0; const allocations = [];
+  const open = createProductReaderRuntime({ now: () => admitted, spawnWorker(data) {
+    // Node's Worker constructor has its own clocks; stop observing at dispatch.
+    process.hrtime.bigint = originalClock;
+    globalThis.SharedArrayBuffer = OriginalBuffer;
+    return new Worker(new URL('../context-product-worker.mjs', import.meta.url), {
+      workerData: data, env: {}, execArgv: [], stdout: true, stderr: true,
+    });
+  } });
+  let pending;
+  try {
+    process.hrtime.bigint = () => { clocks++; return originalClock(); };
+    globalThis.SharedArrayBuffer = new Proxy(OriginalBuffer, { construct(target, args) {
+      allocations.push(args[0]); return Reflect.construct(target, args);
+    } });
+    pending = open(config.options);
+  } finally {
+    process.hrtime.bigint = originalClock;
+    globalThis.SharedArrayBuffer = OriginalBuffer;
+  }
+  const reader = await pending; t.after(() => reader.close());
+  await reader.close();
+  assert.equal(clocks, 0, 'C2 diagnostics-off clock reads');
+  assert.deepEqual(allocations, [16], 'C2 diagnostics-off allocations contain only resource accounting');
+});
+
+test('C2 private open timing accessor is absent from public entries', async () => {
+  for (const entry of ['../index.mjs', '../../adapters/openai/index.mjs', '../../adapters/mcp/server.mjs', '../../adapters/local-embedder/index.mjs']) {
+    const api = await import(new URL(entry, import.meta.url));
+    assert.equal(Object.hasOwn(api, 'productOpenPhaseDiagnostic'), false, 'C2 no public timing export: ' + entry);
+    assert.equal(Object.values(api).includes(productOpenPhaseDiagnostic), false, 'C2 no aliased timing export: ' + entry);
+  }
+});
+
+const phaseBytes = openDiagnosticBuffer(1n).byteLength;
+for (const [kind, make] of [
+  ['short SAB', () => new SharedArrayBuffer(8)],
+  ['long SAB', () => new SharedArrayBuffer(phaseBytes + 8)],
+  ['ArrayBuffer', () => new ArrayBuffer(phaseBytes)],
+  ['object', () => ({ byteLength: phaseBytes })],
+  ['number', () => phaseBytes],
+]) test('C4 invalid timing buffer disables diagnostics: ' + kind, () => {
+  let clock;
+  assert.doesNotThrow(() => { clock = openDiagnosticClock(make()); }, 'C4 invalid buffer must not throw: ' + kind);
+  assert.equal(clock, null, 'C4 invalid buffer is diagnostics off: ' + kind);
+});
+
+test('C4 Worker ignores a malformed timing buffer and still opens and fetches', async t => {
+  const f = fixture(t), memory = f.admit('malformed diagnostic transport'), config = configured(t, f.path);
+  config.options.diagnostics = false;
+  const open = createProductReaderRuntime({ spawnWorker(data) {
+    return new Worker(new URL('../context-product-worker.mjs', import.meta.url), {
+      workerData: { ...data, openPhases: new SharedArrayBuffer(8) }, env: {}, execArgv: [], stdout: true, stderr: true,
+    });
+  } });
+  await assert.doesNotReject(async () => {
+    const reader = await open(config.options); t.after(() => reader.close());
+    try { assert.equal((await reader.fetchCandidateEvidence(fetchInput(memory), config.credential)).ok, true); }
+    finally { await reader.close(); }
+  }, 'C4 malformed Worker timing buffer does not crash opening');
+});
+
 // SQLite owns all database descriptors. Fingerprint logical schema/data and
 // file metadata without opening/closing a raw descriptor that drops POSIX locks.
 const fingerprint = path => {

@@ -48,7 +48,7 @@ mixed16 reader-process load: 7.26 / 8.33 / 8.89 → 7.24 / 8.31 / 8.88.
 | Canonical configuration | 0.228 | 0.194 / 0.417 / 0.482 | 0.247 | 0.191 / 0.323 / 0.335 |
 | Product layout attestation | 2.925 | 2.963 / 3.442 / 3.819 | 3.586 | 3.476 / 4.246 / 4.279 |
 | Other canonical validation | 0.951 | 0.734 / 1.023 / 1.504 | 0.630 | 0.658 / 0.847 / 0.899 |
-| Facade initialization | 0.564 | 0.582 / 0.796 / 0.912 | 0.822 | 0.809 / 0.915 / 1.001 |
+| Facade initialization (historical boundary) | 0.564 | 0.582 / 0.796 / 0.912 | 0.822 | 0.809 / 0.915 / 1.001 |
 | Product index import | 3.714 | 3.919 / 5.119 / 5.941 | 3.878 | 3.877 / 4.246 / 4.267 |
 | Product index construction | 0.152 | 0.165 / 0.262 / 0.305 | 0.154 | 0.158 / 0.219 / 0.263 |
 | Open result IPC | 0.174 | 0.143 / 0.199 / 0.210 | 0.161 | 0.141 / 0.188 / 0.198 |
@@ -67,11 +67,14 @@ mixed16 reader-process load: 7.26 / 8.33 / 8.89 → 7.24 / 8.31 / 8.88.
 | Static-graph-only control | 42.057 | 34.056 / 40.825 / 41.569 | 37.514 | 34.638 / 40.432 / 40.908 |
 | Sidecar open / attest / checks | Not executed | Not executed | Not executed | Not executed |
 
-All 80 samples have all 45 numeric fields; each open/fetch/close partition sums to its marked total. The tool also
-prints small marker/acceptance spans, overlapping subtotals and each control family's load averages.
+The saved run has 45 numeric fields per reader: 41 phases plus four external wall times. Removing the adjacent-mark
+`canonicalReturnMs` leaves 40 required phases plus four wall times; missing/nonfinite values now fail. `facadeInitializeMs` now starts at `canonicalValidated`;
+`canonicalOpenTotalMs` ends there; the historical initialization row above retains its original boundary.
+No historical values were recomputed. Every required field must be finite/nonnegative or the diagnostic fails.
+All registered finalizers run despite rejection; work and cleanup failures are reported together.
 
 These are source S: synthetic-host WSL2 measurements, with warm lifecycle p95 114.6 / 108.3 ms. Source R is the
-separately reported R5 native Linux result: open about 245 ms (about 295 ms cold), fetch 6–24 ms and lifecycle p95
+separately reported native Linux qualification-host result: open about 245 ms (about 295 ms cold), fetch 6–24 ms and lifecycle p95
 255–332 ms. Source P is the product team's pending metadata-only attribution of its actual host. These are three
 separate sources; neither cross-host subtraction nor scaling proves a gain.
 
@@ -82,7 +85,7 @@ per-request application-database ACL check with two queries, and (c) its host mo
 **host import** covers (a)+(c); **host construction** covers part or all of (b), depending on where the ACL check runs.
 Import-time ACL work instead lands in host import and is never prewarmable authority. Source S has a tiny synthetic
 graph and no application ACL: those rows are near zero and do not estimate source P. Fill in P's stages, their placement
-and eligible code-only portion before choosing an implementation. No product host was run or emulated here; no new
+and eligible code-only portion before choosing stage 2 host preloading. No product host was run or emulated here; no new
 timing campaign accompanies this revision.
 
 Fetch and find do not call `countTokens`: fetch dispatches to the facade (`core/context-product-worker.mjs:147`;
@@ -94,7 +97,7 @@ conditional counter, attached only for authorized `contextRead`, with lazy encod
 Workers never load it. No tokenizer saving belongs in their fetch forecast.
 The harness eagerly builds its encoder in `createCounter()` (`evaluation/context-read-qualification/counter.mjs:28`),
 relevant only to hosts calling it at construction; this is an observation, not a measurement.
-The diagnostic hardcodes its synthetic host (`tools/testing/context-product-open.diagnostic.mjs:63`), with no host-URL option.
+The diagnostic hardcodes its synthetic host, with no host-URL option.
 
 ## What the intervals mean
 
@@ -123,55 +126,59 @@ must not be added to them.
 Timing is internal, enabled only by `diagnostics:true`: fixed monotonic slots without paths, content or authority IDs.
 A WeakMap exposes immutable numeric snapshots; public handles, DTOs and serialization gain nothing. Off means no clock
 reads, buffer or transport. Markers preserve deadlines, transactions, authority and cleanup order. Slots hold the latest
-fetch, not history; incomplete phases are omitted and functional errors fail the tool rather than becoming zero samples.
+fetch, not history; incomplete snapshots omit absent intervals, but the reporting tool rejects every incomplete sample.
 
-## Candidate fixes, ranked
+## Candidate fixes and implementation order
 
-| Rank | Candidate and owner | Expected gain | Risk / decision boundary |
+| Order | Candidate and owner | Expected gain | Risk / decision boundary |
 | --- | --- | --- | --- |
-| 1 | Single-use pool, including service-registered host code — engine; product registers/audits host | S: engine startup/import saving about 60–70 ms; additionally P's eligible (a)+(c) | Moderate lifecycle work; no host construction, ACL or file opens while parked |
-| 2 | Cheaper per-request ACL — product | Only the measured reduction in (b), currently unknown | Authority risk; retain complete current scope/revocation checks, no authority cache |
-| 3 | Unchanged-file validation cache — engine | S: about 22–25 ms including journal probe; layout alone about 4 ms | High storage-safety risk; dev/inode alone is insufficient |
-| 4 | Defer index import/construction for canonical fetch — engine | S: about 4–5 ms | Low ceiling; shifts work/errors to first search/status |
-| 5 | Cheaper close — engine | S: entire close warm p95 only 2.9–4.0 ms | Must still await disposal and exit; no early success |
+| 1 | Stage 1: engine-only single-use pool — engine | S: about 60–70 ms startup/import work | Moderate lifecycle work; host import stays after bootstrap and identity ack |
+| 2 | Cheaper fresh ACL check or service-owned connection — product | Measured reduction in (b), unknown | Authority risk; no cross-request grant cache |
+| 3 | Lazy index import/construction for canonical fetch — engine | S: about 4–5 ms on cold/fallback opens | Small ceiling but much lower safety burden than a validation cache; engine pool hits already preload index code |
+| 4 | Stage 2: registered-host code preloading — engine; product audits/registers host | Only P's measured eligible host-import union | Separate later opt-in; justify with product attribution and audited side-effect-free import |
+| 5 | Cross-Worker validation cache — engine | S: about 22–25 ms with journal probe; layout alone about 4 ms | High storage-safety burden; independent proof/review required |
+| 6 | Cheaper close — engine | S: entire close warm p95 only 2.9–4.0 ms | Await real disposal/exit; no early success |
 
-Rank 2 includes two product decisions: make the same fresh ACL check cheaper, or run it over an already-open application
-connection owned by the service. Neither caches a grant across requests. The latter needs explicit request isolation,
-currentness/revocation semantics, bounded IPC/cancellation and service connection shutdown; sharing a connection must
-not share credentials, transactions or authorization state. Leave this choice to the product after P's measurements.
-Both options keep ACL work at request time inside that request's lifetime. The harness owns attribution/qualification
-and its counter/registration hashes; no harness counter change is proposed.
+Product ACL options keep fresh checks inside each request's authority lifetime. A cheaper check must preserve scope,
+revocation and currentness. A service-owned application connection needs request/transaction isolation, bounded
+IPC/cancellation and shutdown; it must not share credentials or cached grants. The product decides after attribution.
+The harness owns attribution/qualification and counter/registration hashes; no harness counter change is proposed.
 
-Rank 3 needs a bounded proof of layout, journal policy and store generation: size/mtime/ctime, consistent schema/store
-identity, replacement detection and restore/erasure invalidation. Preserve unsafe-file/WAL/auxiliary refusal precedence;
-the existing journal cache is Worker-local. A cross-Worker proof needs separate review. Rank 4 cannot defer canonical
-validation past a read; sidecars are already lazy. Rank 5 must await native disposal and external leases/providers.
+Lazy index work precedes a validation cache in implementation order. Canonical validation cannot move past a read;
+sidecars are already lazy. A cross-Worker validation proof must cover layout, journal policy, store generation,
+size/mtime/ctime, consistent schema/store identity, replacement and restore/erasure invalidation. Preserve unsafe-file,
+WAL and auxiliary refusal precedence. The existing journal cache is Worker-local. Close still awaits leases/providers.
 
 ## Recommended smallest engine change and forecast
 
-Subject to P's attribution and two non-author reviews, the smallest targeted engine change is an opt-in, service-owned
-pool of single-use Workers. Preload engine modules plus eligible service-registered host code; keep DELETE journal
-preflight, canonical validation, host construction and ACL at request time. Begin with at most two ready Workers and one
-refill in flight, internally configurable, with immediate existing cold fallback. Never return an assigned Worker to the
-pool, even after a failed opening; terminate it at reader close.
+Stage 1 is an opt-in, service-owned pool of single-use Workers preloading **engine modules only**: static graph,
+database library, facade and index. The host module is still imported after authenticated bootstrap and identity ack,
+exactly as today; host construction, ACL, DELETE preflight and canonical validation remain request-time work.
+Start with at most two ready Workers and one refill, immediate cold fallback, no indefinite queue. Never return an
+assigned Worker to the pool, even after failed open; terminate it at reader close. Stage 1 needs no product import split.
 
-On the **same native host**, define per-request E as removable engine startup/import work, A=a+c as the nonoverlapping
-eligible host-code/addon import work, B as request-time ACL work inside the measured lifecycle, R as all other work
-including fetch/close, and H as pool handoff. Then L=E+A+B+R and the ready-hit forecast is:
+Only later consider stage 2, a separate registered-host preload opt-in, if P demonstrates useful eligible (a)/(c)
+savings and audits the complete import graph/native initializer as side-effect-free except code/library loading.
+No host construction, ACL or application-file/database opening may move ahead of bootstrap in either stage.
 
-`p95_hit = Q95(B_i + R_i + H_i) = Q95(L_i - E_i - a_i - c_i + H_i)`.
+On the same native host, E is removable engine startup/import work; A is the **measured union** of eligible host import
+work (a)/(c), excluding all ACL work. Never add overlapping addon and graph intervals. L is baseline lifecycle; H
+includes ready-hit pool lookup and handoff. K is pool lookup on a miss; M is additional miss/fallback handling.
+Thus both hits and misses pay lookup overhead. Forecasts are counterfactuals from paired samples:
 
-Use paired native-host stage samples, not a sum/difference of independent p95s. If addon and graph stages overlap, use
-their measured union A once. Import-time ACL is B, never A. Do not move pre-open authentication into or out of the timed
-lifecycle to claim improvement. Source S's paired removable engine p95 was 71.0 / 64.5 ms, with idealized residual p95
-43.6 / 45.2 ms; these are WSL2 counterfactuals, not native forecasts. P must supply a/b/c and native E/R/H before
-claiming `p95_hit < 150 ms` with margin. For a chosen margin M, require `Q95(B_i+R_i+H_i) <= 150-M`; no numeric native
-margin is established here.
+- Stage 1 ready hit: `Q95(L_i − E_i + H_i)`; there is no A subtraction.
+- Stage 2 ready hit: `Q95(L_i − E_i − A_i + H_i)`.
+- Full mixture: `Q95(hit ? L_i − E_i − A_i + H_i : L_i + K_i + M_i)`, with A=0 for stage 1.
 
-Actual Q1 is `Q95(hit ? B_i+R_i+H_i : L_i)` over the deployment hit/miss mixture and burst distribution. A hit ratio
-below 95% can leave cold opens in the p95 tail. If B dominates the residual, the product must consider rank 2; engine
-prewarming cannot remove authority work. Prewarming moves CPU ahead of requests and may add contention, so qualify the
-full mixture. Do not add validation caching silently if the residual misses.
+B, the request-time ACL cost inside L, remains in every expression; all fetch/close/validation work also remains.
+Use paired native stage samples, never arithmetic on independent p95s. Do not move pre-open authentication into/out
+of the metric. Source S's paired removable engine p95 was 71.0 / 64.5 ms, idealized residual p95 43.6 / 45.2 ms:
+WSL2 counterfactuals, not native forecasts. P must provide native stages/overheads before claiming a margin below 150 ms.
+A low hit ratio can leave cold opens in the p95 tail; ACL-dominated residuals require product decisions, not caching grants.
+
+Qualification must measure the actual full lifecycle under refill CPU/memory contention, arrival bursts, misses and
+crashes. That measured distribution is separate from the subtraction forecast; prewarming relocates rather than removes
+CPU work. Two non-author reviews remain required before implementation. Do not silently add validation caching.
 
 ## Authority and supervision contract
 
@@ -181,20 +188,22 @@ capacity/quarantine (`core/context-read-supervisor.mjs:80`–`:90`), not a modul
 engine, so it cannot prove that an HTTP caller has no influence. The harness fixes its host URL
 (`tools/testing/fixtures/context-product/engine.mjs:61`); that does not prove product routing.
 
-A pool therefore requires explicit service registration of immutable module URL/version and code-only imports, chosen
-outside HTTP input. Match bootstrap's module to that registration; never use a request-selected URL to populate or
-retarget a parked Worker. Keep separate registrations for reader and maintenance hosts. If product routing allows caller
-influence, host preloading is ineligible until the product establishes this boundary.
+Stage 1 matches the engine build/bootstrap protocol, Worker runtime/resource policy and service deployment generation;
+it has no preloaded host to match. Incompatible slots take cold fallback. Stage 2 additionally requires immutable
+service registration of normalized host URL/version/generation outside HTTP input; reader and maintenance hosts remain
+separate. A mismatch takes the existing cold path with the requested host, original cutoffs, **same opening record and
+reservation**. It neither consumes a second reservation nor bootstraps/retargets the mismatched Worker. Retire stale
+slots under their idle owner. Request-influenced registration is ineligible for stage 2.
 
-One HTTP request remains one reader lifetime for authority. A parked Worker may hold audited module code, immutable
-service registration/constants and a private readiness/control port. It may evaluate the registered host module,
-including loading a native addon at module top level, through the code loader only. It may not call
-`createContextReadHost`, run ACL queries, hold credentials, bindings, reservations, request IDs, readSets, owner
-selections or request host configuration, or call file/database open APIs. No database file may be opened before
-issuance is verified; no identity preflight, attestation, statement preparation or content cache. Loader reads of
-registered code/libraries are the only pre-bootstrap file activity. Audit transitive imports: if module evaluation opens
-application files/databases or performs ACL work, split that work into request-time construction before allowing import
-preloading. Preserve the empty Worker environment and execArgv isolation.
+One HTTP request remains one reader lifetime for authority. Stage 1 parked Workers hold only audited engine code,
+immutable engine constants/generation and a private control port; they never import the host. Stage 2 may additionally
+evaluate audited service-registered host code, including a native addon through the code loader only. Neither stage
+may call `createContextReadHost`, run ACL queries, hold credentials, bindings, reservations, request IDs, readSets,
+owner selections or request host configuration, or call application file/database open APIs. No database opens before
+issuance verification and identity ack; no preflight, attestation, statements or content cache while parked.
+Code/library loader reads are the only pre-bootstrap file activity. Audit transitive/deferred imports and native
+initializers: application-file/database opens or ACL effects make stage 2 ineligible until split into request-time
+construction. Keep the empty environment and execArgv isolation. URL matching alone proves no import purity.
 
 Authentication and issuance precede open; any host-side ACL validation remains after bootstrap within this same request,
 never carried from another request. Admission clocks begin before parent validation. The parent checks
@@ -234,17 +243,19 @@ hit/miss/startup-failure counts without content or authority. Preloading does no
 
 ## Implementation size, tests and unchanged behavior
 
-Estimate 300–450 implementation lines plus 350–550 lifecycle/race test lines; roughly 3–5 engineering days plus two
-non-author reviews and qualification. Product import auditing/splitting and any ACL redesign are additional work.
+Stage 1 estimate: 250–400 implementation lines and 300–500 lifecycle/race test lines; about 2–4 engineering days.
+Stage 2 adds roughly 100–180 implementation and 150–250 test lines, about 1–2 days, plus product import auditing/splitting.
+Both require review and native qualification; product ACL redesign is additional work. These are provisional estimates.
 
-Tests must prove registered module evaluation is allowed but host construction/ACL/file opens are forbidden before
-bootstrap. Cover hostile/mismatched module selection, addon load failure, duplicate bootstrap, issuance and reservation
+Tests must prove stage 1 never imports a host; stage 2 imports only registered audited code, with no construction,
+ACL or application-file opens before bootstrap. Cover mismatch cold fallback with the same record/reservation,
+hostile module selection, addon load failure, duplicate bootstrap, issuance and reservation
 replay, expiry/abort during loading/handoff, crash before/after assignment, exhaustion/refill bounds, the shared
 256-record ceiling, cleanup IDs, quarantine, leases/providers, shutdown/refill races, restore/erasure drains and never
 assigning a second credential. Preserve full-ref/snapshot equivalence, two-sample authority, native telemetry,
 SQLite-free parent import and manifest installation on both Node patches. Qualify hit/miss/burst mixtures through close
 on the affected native host after P supplies attribution.
 
-Documentation only: instrumentation stays inert without `diagnostics:true` and absent from public DTOs/serialization.
+Diagnostics only: no pool/optimization is implemented; instrumentation stays inert without `diagnostics:true` and absent from public DTOs/serialization.
 Evidence, expiry, publication/lineage/eligibility/suppression, sidecar refresh/retarget, pump admission/quantum settlement,
 WAL opt-in, deadlines, cleanup proof and Q1's 150 ms lifecycle definition stay unchanged. No optimization is implemented.

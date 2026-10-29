@@ -7,9 +7,9 @@ import { PRODUCT_PROFILE, verifyRecords, boundedData, mono, issuance, deadline, 
 import { productFailure } from './context-product-reader.mjs';
 import { createProductSqlitePolicy } from './context-product-sqlite.mjs';
 import { fail } from './validation.mjs';
-import { openDiagnosticClock } from './context-product-open-diagnostic.mjs';
+import { openDiagnosticClock, validOpenDiagnosticBuffer } from './context-product-open-diagnostic.mjs';
 
-const workerFirst = workerData.openPhases ? process.hrtime.bigint() : undefined;
+const workerFirst = validOpenDiagnosticBuffer(workerData.openPhases) ? process.hrtime.bigint() : undefined;
 const phase = openDiagnosticClock(workerData.openPhases);
 phase?.mark('workerFirst', workerFirst);
 const { request, operation: opening, binding } = workerData;

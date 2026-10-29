@@ -8,7 +8,8 @@ import { once } from 'node:events';
 import { loadavg } from 'node:os';
 import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { OPEN_DIAGNOSTIC_FIELDS } from '../../core/context-product-open-diagnostic.mjs';
 
 const mono = () => Number(process.hrtime.bigint()) / 1e6;
 const self = fileURLToPath(import.meta.url);
@@ -25,9 +26,26 @@ const quantiles = values => {
   return { n: sorted.length, p50: sorted[Math.ceil(sorted.length * .5) - 1] ?? null,
     p95: sorted[Math.ceil(sorted.length * .95) - 1] ?? null, max: sorted.at(-1) ?? null };
 };
-function summarize(samples) {
-  const keys = [...new Set(samples.flatMap(Object.keys))];
-  return Object.fromEntries(keys.map(key => [key, quantiles(samples.map(s => s[key]).filter(Number.isFinite))]));
+export function summarize(samples, keys = [...new Set(samples.flatMap(Object.keys))]) {
+  for (const sample of samples) for (const key of keys) {
+    if (!Object.hasOwn(sample, key) || !Number.isFinite(sample[key]) || sample[key] < 0) {
+      throw Error('incomplete_diagnostic_sample:' + key);
+    }
+  }
+  return Object.fromEntries(keys.map(key => [key, quantiles(samples.map(s => s[key]))]));
+}
+const productFields = [...OPEN_DIAGNOSTIC_FIELDS, 'observedOpenMs', 'observedFetchMs', 'observedCloseMs', 'observedLifecycleMs'];
+export function validateProductSample(sample) {
+  summarize([sample], productFields);
+  return sample;
+}
+export async function finalizeAll(finalizers, failure) {
+  const errors = failure === undefined ? [] : [failure];
+  // Preserve reverse ownership order, but never let one rejection skip owners.
+  for (const finalize of [...finalizers].reverse()) {
+    try { await finalize(); } catch (error) { errors.push(error); }
+  }
+  if (errors.length) throw new AggregateError(errors, 'open_diagnostic_failed');
 }
 
 if (process.argv.includes('--measure-child')) {
@@ -62,7 +80,7 @@ if (process.argv.includes('--measure-child')) {
           readSet: input.readSet, ownerCoverage, diagnostics: true, requestControl: { ...ids, requestMaxMs: 5000 },
           host: { moduleUrl: new URL('../../core/testing/context-product-index-host.mjs', import.meta.url).href,
             configuration: { requestBinding: binding, state, requestReservation: new SharedArrayBuffer(4) } } };
-        let reader;
+        let reader, failure;
         const start = mono();
         try {
           reader = await openContextProductReader(options); const opened = mono();
@@ -70,9 +88,10 @@ if (process.argv.includes('--measure-child')) {
             intent: 'current', deadlineMs: 5000 }, token);
           requireSuccess(result); const fetched = mono();
           await reader.close(); const closed = mono();
-          samples.push({ ...productOpenPhaseDiagnostic(reader), observedOpenMs: opened - start,
-            observedFetchMs: fetched - opened, observedCloseMs: closed - fetched, observedLifecycleMs: closed - start });
-        } finally { await reader?.close(); await supervisor.close(); }
+          samples.push(validateProductSample({ ...productOpenPhaseDiagnostic(reader), observedOpenMs: opened - start,
+            observedFetchMs: fetched - opened, observedCloseMs: closed - fetched, observedLifecycleMs: closed - start }));
+        } catch (error) { failure = error; }
+        finally { await finalizeAll([() => supervisor.close(), () => reader?.close()], failure); }
       }
       if ((i + 1) % 10 === 0) process.stderr.write(input.kind + ' settled ' + (i + 1) + '/' + input.samples + '\n');
     }
@@ -82,7 +101,7 @@ if (process.argv.includes('--measure-child')) {
   } finally {
     process.disconnect();
   }
-} else {
+} else if (process.argv[1] && resolve(process.argv[1]) === self) {
   const smoke = process.argv.includes('--smoke'), args = process.argv.slice(2);
   const option = (name, fallback) => {
     const at = args.indexOf(name); return at < 0 ? fallback : args[at + 1];
@@ -99,6 +118,7 @@ if (process.argv.includes('--measure-child')) {
   for (const name of selected === 'all' ? Object.keys(profiles) : [selected]) {
     const requested = profiles[name], shape = smoke ? { ...requested, memories: 16, cards: requested.cards ? 2 : 0 } : requested;
     const cleanups = [], t = { after: fn => cleanups.push(fn) };
+    let failure;
     try {
       const workspace = createTestWorkspace(t, { prefix: 'context-open-diagnostic-' });
       const f = fixture(t, { cards: shape.cards > 0 });
@@ -138,7 +158,8 @@ if (process.argv.includes('--measure-child')) {
       reports.push({ profile: name, requestedSyntheticShape: requested, fixture: fixtureShape, evidenceRefs: refs.length,
         prebuilt: ['current', 'history'], staticImportDeclarations: imports.length, ...families,
         sidecarAtOpen: { connection: 'not executed (lazy)', attestation: 'not executed (lazy)', checks: 'not executed (lazy)' } });
-    } finally { for (const cleanup of cleanups.reverse()) await cleanup(); }
+    } catch (error) { failure = error; }
+    finally { await finalizeAll(cleanups, failure); }
   }
   process.stdout.write(JSON.stringify({ purpose: 'Attribution only on a non-quiet machine; not Q1 timing evidence.',
     runtime: process.version, platform: process.platform, smoke, samplesPerFamily: samples, unit: 'ms',
