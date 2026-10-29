@@ -31,7 +31,7 @@ export function fetchMemories({ runtime, model, ns, refs, view = 'current', budg
     if (countTokens(model, JSON.stringify({ ok: true, value })) > budget) fail('context_item_too_large');
     // Token counting is caller code. Revalidate the complete source projection
     // after its final callback, even if storage was changed without an epoch bump.
-    const authoritative = runtime.fetchPage(ns, refs[index], 0, page.epoch, view, false, contextMode);
+    const authoritative = runtime.fetchPage(ns, refs[index], 0, page.epoch, view, false, contextMode, page);
     if (JSON.stringify(authoritative) !== JSON.stringify(page)) fail('revision_conflict');
     return value;
   }
@@ -53,6 +53,8 @@ export function fetchMemories({ runtime, model, ns, refs, view = 'current', budg
     };
     if (countTokens(model, JSON.stringify({ ok: true, value })) <= budget) {
       runtime.assertEpoch(ns, page.epoch);
+      const authoritative = runtime.fetchPage(ns, refs[index], offset, page.epoch, view, includeQualification, contextMode, page);
+      if (JSON.stringify(authoritative) !== JSON.stringify(page)) fail('revision_conflict');
       return value;
     }
   }

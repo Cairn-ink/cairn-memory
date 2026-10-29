@@ -1,3 +1,4 @@
+import { contentReadSafety } from './content-safety.mjs';
 import { cardDependencyFence } from './card-current-storage.mjs';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { keyed } from './private-card-input.mjs';
@@ -21,6 +22,9 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
   const advanceIndex = ns => db.prepare(`INSERT INTO card_moc_epochs VALUES(?,?,?,2)
     ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET revision=revision+1`).run(...boundary(ns));
   const topic = (ns, id) => db.prepare(`SELECT * FROM card_mocs WHERE ${where} AND id=?`).get(...boundary(ns), id);
+  const safeCard = (ns, card) => Boolean(card && contentReadSafety(db, { identity, namespace: ns,
+    ref: { type: 'card', namespace: ns, cardId: card.id, revision: card.revision, bodyRevision: card.bodyRevision },
+    currentCardEligible: () => sourceEligible(card) }).allowed);
   const cardRef = (ns, card) => ({ type: 'card', namespace: ns, cardId: card.id, revision: card.revision, bodyRevision: card.bodyRevision });
   function encode(value) {
     const body = Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -41,19 +45,21 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
   }
   function currentCard(ns, ref) {
     const card = cardDetailInside(ns, ref.cardId);
-    if (!sourceEligible(card)) fail('evidence_unavailable');
+    if (!safeCard(ns, card)) fail('evidence_unavailable');
     if (!sameRef(card, ref)) fail('revision_conflict');
     return card;
   }
   function titleInside(ns, row) {
     const sources = db.prepare('SELECT * FROM card_moc_title_sources WHERE moc_id=? ORDER BY card_id LIMIT 6').all(row.id);
-    const valid = sources.length > 0 && sources.length <= 5 && sources.every(source => {
-      const card = cardDetailInside(ns, source.card_id);
-      return sourceEligible(card) && sameRef(card, { revision: source.card_revision, bodyRevision: source.body_revision });
-    });
-    return { title: valid ? row.title : null, titleSources: sources.slice(0, 5).map(source => ({ type: 'card', namespace: ns,
+    // Unsafe Cards leave no ref; a safe but stale ref stays listed and only clears the title.
+    const cards = new Map(sources.map(source => [source.card_id, cardDetailInside(ns, source.card_id)]));
+    const safe = sources.filter(source => safeCard(ns, cards.get(source.card_id)));
+    const valid = sources.length > 0 && sources.length <= 5 && safe.length === sources.length && safe.every(source =>
+      sameRef(cards.get(source.card_id), { revision: source.card_revision, bodyRevision: source.body_revision }));
+    return { title: valid ? row.title : null, titleSources: safe.slice(0, 5).map(source => ({ type: 'card', namespace: ns,
       cardId: source.card_id, revision: source.card_revision, bodyRevision: source.body_revision })) };
   }
+
   function cardTopicInside(ns, ref, allowUnavailable = false) {
     const row = topic(ns, ref.mocId);
     if (!row) fail('moc_not_found');
@@ -242,7 +248,7 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
           childType: 'topic', childId: child.id, childRevision: child.revision, relation: 'contains' } }, consumed: scanned });
       } else {
         const card = cardDetailInside(ns, row.kind === 'member' ? row.b : row.a);
-        if (!sourceEligible(card)) continue;
+        if (!safeCard(ns, card)) continue;
         if (row.kind === 'unfiled') {
           if (parent || db.prepare('SELECT 1 FROM card_moc_refs WHERE card_id=? AND card_revision=? AND body_revision=? LIMIT 1').get(card.id, card.revision, card.bodyRevision)) continue;
           result.push({ item: { type: 'unfiled', ref: cardRef(ns, card) }, consumed: scanned });

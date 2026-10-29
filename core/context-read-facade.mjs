@@ -280,12 +280,14 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     } catch (error) { if (error instanceof SourceStop) fail(code); throw error; }
   }
   function deliverPage(input, ranking, position, limit) {
-    if (!options.sources) return page(ranking, position, limit);
     return read(() => {
+      const result = page(ranking, position, limit);
+      for (const candidate of result.items) evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet);
+      if (!options.sources) return result;
       assertSourcesInside(input, ranking.sourceState, 'cursor_stale');
       const budget = sourceBudget(Infinity);
       for (const path of ranking.sourceState.witnesses) witnessInside(input, path, 'cursor_stale', budget);
-      return page(ranking, position, limit);
+      return result;
     });
   }
   const rankingConfiguration = (trace, sourceState, items) => bind('ranking-config', [configuration, trace.requested, trace.effective,

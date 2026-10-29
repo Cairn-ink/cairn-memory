@@ -1,3 +1,4 @@
+import { contentReadSafety, memoryReadEligible } from './content-safety.mjs';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { createQualificationStorage } from './claim-qualification-storage.mjs';
@@ -51,14 +52,16 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       revision: card.revision, bodyRevision: card.bodyRevision }, state: card.state,
     support: card.support, origin: card.origin };
   }
-  const cardEligible = (card, intent) => card?.state === 'confirmed' && (intent === 'history' ||
-    card.support.status === 'eligible' && card.support.applicability === 'current' && (!card.support.currentDependency || card.support.currentDependency.status === 'current'));
-  const memoryEligible = (row, intent) => row && !row.deleted &&
-    (intent === 'history' || row.currentness === 'current' && row.review_state !== 'awaiting');
+  const cardEligible = (ns, card, intent) => Boolean(card && contentReadSafety(db, { identity, namespace: ns, intent,
+    ref: { type: 'card', namespace: ns, cardId: card.id, revision: card.revision, bodyRevision: card.bodyRevision },
+    currentCardEligible: () => card.support.status === 'eligible' && card.support.applicability === 'current' &&
+      (!card.support.currentDependency || card.support.currentDependency.status === 'current') }).allowed);
+  const memoryEligible = (ns, row, intent) => Boolean(row && contentReadSafety(db, { identity, namespace: ns, intent,
+    ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed);
   function item(ns, ref, intent, readSet, options) {
     if (ref.type === 'card') {
       const card = cardDetailInside(ns, ref.cardId, readSet, options);
-      if (!cardEligible(card, intent)) fail('evidence_unavailable');
+      if (!cardEligible(ns, card, intent)) fail('evidence_unavailable');
       if (card.revision !== ref.revision || card.bodyRevision !== ref.bodyRevision) fail('revision_conflict');
       const sources = card.bindings.map(binding => binding.source);
       return { ...cardMetadata(card), title: card.title, body: card.body,
@@ -71,10 +74,11 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
         bindings: card.bindings, triggerMemoryRefs: card.triggerMemoryRefs };
     }
     const row = memoryRow(ns, ref.memoryId);
-    if (!memoryEligible(row, intent)) fail('evidence_unavailable');
+    if (!memoryEligible(ns, row, intent)) fail('evidence_unavailable');
     if (row.revision !== ref.revision) fail('revision_conflict');
     const receiptRows = db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 17').all(row.id);
-    const sourceAccess = row.currentness === 'current' && row.review_state !== 'awaiting' ? 'available' : 'unavailable-for-noncurrent-memory';
+    if (!contentReadSafety(db, { identity, namespace: ns, ref, intent, receipts: receiptRows.slice(0, 16) }).allowed) fail('evidence_unavailable');
+    const sourceAccess = memoryReadEligible(row) ? 'available' : 'unavailable-for-noncurrent-memory';
     const sources = sourceAccess === 'available' ? receiptRows.slice(0, 16).map(receipt => receiptRefInside(ns, row, receipt)) : [];
     const assessed = qualification.inspect(row);
     const qualified = assessed ? { ...assessed, sourceText: 'read-separately',
@@ -148,10 +152,11 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       if (scannedBodyUnits + text.length > input.scanBodyUnits) { blocked.add(type); stopped = 'body_budget'; continue; }
       after[type] = row.id; scannedRows++; scannedBodyUnits += text.length; byType[type].scanned++;
       const card = type === 'card' ? cardDetailInside(ns, row.id) : null;
-      if (type === 'memory' ? !memoryEligible(row, input.intent) : !cardEligible(card, input.intent)) continue;
+      if (type === 'memory' ? !memoryReadEligible(row, input.intent) : !cardEligible(ns, card, input.intent)) continue;
       const recordWords = words(text);
       const score = [...queryWords].reduce((total, word) => total + Number(recordWords.has(word)), 0);
       if (!score) continue;
+      if (type === 'memory' && !memoryEligible(ns, row, input.intent)) continue;
       matches.push({ ...(type === 'memory' ? memoryMetadata(ns, row) : cardMetadata(card)), score });
       byType[type].included++;
     }

@@ -304,6 +304,7 @@
   "core/context-product-sidecar.mjs",
   "core/context-product-quantum.mjs",
   "core/context-product-sqlite.mjs",
+  "core/content-safety.mjs",
   "core/context-product-index.mjs",
   "core/context-product-pump.mjs",
   "docs/plans/context-read-p2b-impl.md",

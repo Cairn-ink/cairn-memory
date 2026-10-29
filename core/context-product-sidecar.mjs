@@ -1,3 +1,4 @@
+import { memoryReadEligible } from './content-safety.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { types } from 'node:util';
 import { randomUUID } from 'node:crypto';
@@ -340,7 +341,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       m.supportLookups++; const r = stmt[method](...args); m.supportBytes += Buffer.byteLength(JSON.stringify(r ?? null)); return r;
     }])); } };
     return rows.map(row => ({ id:row.id,revision:row.revision,body_revision:row.body_revision,
-      eligible:Number(s.type === 'memory' ? !row.deleted && (p.intent === 'history' || row.currentness === 'current' && row.review_state !== 'awaiting')
+      eligible:Number(s.type === 'memory' ? memoryReadEligible(row, p.intent)
         : contextCardEligible(support,identity,features,s.ns,row,p.intent,{ readSet:p.readSet })) }));
   }
   const storageKey = id => {

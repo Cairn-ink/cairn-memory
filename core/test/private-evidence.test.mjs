@@ -108,14 +108,17 @@ test('R02 applicability requires exact reviewed revision and cannot make unavail
   const card = ok(f.call('getCard', { namespace: ns, cardId: ref.cardId })).card;
   const source = card.bindings[0].source;
   ok(f.call('deleteSourceNote', { namespace: ns, sourceId: source.sourceId, expectedRevision: 1, actionId: 'delete-source' }));
-  const unsupported = ok(f.call('getCard', { namespace: ns, cardId: ref.cardId })).card;
-  assert.equal(unsupported.support.applicability, 'unknown');
-  assert.equal(unsupported.support.applicabilityReviewedRevision, null);
-  ref = review(f, { ...ref, revision: unsupported.revision });
+  assert.equal(ok(f.call('getCard', { namespace: ns, cardId: ref.cardId })).card, null);
+  const db = f.db(), row = db.prepare('SELECT * FROM private_cards WHERE id=?').get(ref.cardId);
+  assert.equal(db.prepare('SELECT reviewed_revision FROM card_applicability_reviews WHERE card_id=?').get(ref.cardId).reviewed_revision !== row.revision, true);
+  const edited = ok(f.call('editKnowledgeCard', { namespace: ns, cardId: ref.cardId, expectedRevision: row.revision,
+    actionId: 'review-unsupported', title: card.title, body: card.body, bindings: [source], applicability: 'current' }));
+  ref = { ...ref, revision: edited.revision, bodyRevision: edited.bodyRevision };
   assert.equal(ok(f.call('selectEvidence', select())).items.length, 0);
   error(f.call('fetchEvidence', fetch([ref])), 'evidence_unavailable');
-  const historical = ok(f.call('fetchEvidence', fetch([ref], 'history'))).items[0];
-  assert.equal(historical.body, card.body); assert.equal(historical.provenance.support, 'unavailable');
+  const historical = f.call('fetchEvidence', fetch([ref], 'history'));
+  error(historical, 'evidence_unavailable');
+  assert.equal(JSON.stringify(historical).includes(card.body), false);
   assert.equal(JSON.stringify(historical).includes('note one'), false);
 });
 
@@ -341,18 +344,19 @@ test('R08 retained receipt to reviewed current Card to feature-off correction/fo
   assert.equal(ok(f.call('getCard', { namespace: ns, cardId: second.id })).card, null);
   assert.equal(ok(f.call('selectEvidence', select({ query: 'tea', types: ['card'] }))).items.length, 0);
   error(f.call('revalidateEvidence', { namespace: ns, snapshot: fetched.snapshot }), 'snapshot_stale');
-  const old = ok(f.call('getCard', { namespace: ns, cardId: draft.id })).card;
-  assert.equal(old.support.status, 'unavailable'); assert.equal(old.support.applicability, 'unknown');
-  const historical = ok(f.call('fetchEvidence', fetch([{ ...ref, revision: old.revision }], 'history'))).items[0];
-  assert.equal(historical.body, 'tea authored conclusion'); assert.equal(historical.provenance.support, 'unavailable');
+  assert.equal(ok(f.call('getCard', { namespace: ns, cardId: draft.id })).card, null);
+  const db = f.db(), old = db.prepare('SELECT revision,body FROM private_cards WHERE id=?').get(draft.id);
+  assert.equal(old.body, 'tea authored conclusion');
+  const historical = f.call('fetchEvidence', fetch([{ ...ref, revision: old.revision }], 'history'));
+  error(historical, 'evidence_unavailable');
+  assert.equal(JSON.stringify(historical).includes('tea authored conclusion'), false);
   assert.equal(JSON.stringify(historical).includes('retained correction'), false);
   f.reopen(false); ok(f.core.forget({ namespace: ns, memoryId: memory.memoryId, expectedRevision: corrected.revision }));
   f.reopen();
-  const afterForget = ok(f.call('getCard', { namespace: ns, cardId: ref.cardId })).card;
+  assert.equal(ok(f.call('getCard', { namespace: ns, cardId: ref.cardId })).card, null);
   const history = ok(f.call('selectEvidence', select({ query: 'tea', intent: 'history' })));
-  assert.equal(history.items.length, 1); assert.equal(history.items[0].type, 'card');
-  assert.equal(history.items[0].ref.revision, afterForget.revision);
-  error(f.call('getSource', { namespace: ns, source: historical.bindings[0].source }), 'source_unavailable');
+  assert.equal(history.items.length, 0);
+  error(f.call('getSource', { namespace: ns, source: fetched.items[1].bindings[0].source }), 'source_unavailable');
 });
 
 test('R08 fresh process verifies durable snapshot and qualified retained history without a model', t => {

@@ -1,3 +1,4 @@
+import { sourceReadSafety } from './content-safety.mjs';
 import { performance } from 'node:perf_hooks';
 import { createCardRawSources } from './card-raw-sources.mjs';
 import { rawSourceKey, sourceAnchors, sourceBudgets } from './raw-source-input.mjs';
@@ -10,7 +11,8 @@ const freeze = value => { if (value && typeof value === 'object') { Object.value
 
 /** Uninstalled async opening seam; all canonical Card writes remain synchronous. */
 export function createRawSourceReader({ db, identity, open, partDigest }) {
-  const sources = createCardRawSources(db, { storeId: identity.store_id, cursorSecret: identity.cursor_secret });
+  const safetyIdentity = { storeId: identity.store_id, cursorSecret: identity.cursor_secret };
+  const sources = createCardRawSources(db, safetyIdentity);
   function read(work) {
     if (db.isTransaction) fail('raw_transaction_active');
     db.exec('BEGIN');
@@ -42,7 +44,12 @@ export function createRawSourceReader({ db, identity, open, partDigest }) {
     if (new Set(anchors.map(rawSourceKey)).size !== anchors.length) fail('invalid_input');
     const start = resolving ? null : cursor(input.cursor,input.source,input.limit ?? 20,limits,accessGeneration);
     const state = sources.budget(limits.sourceByteLimit, limits.scanRowLimit);
-    const views = read(() => anchors.map(anchor => resolving ? sources.inspect(ns,anchor,state) : sources.resolve(ns,anchor,state)));
+    const views = read(() => anchors.map(anchor => {
+      const view = resolving ? sources.inspect(ns,anchor,state) : sources.resolve(ns,anchor,state);
+      const ref = resolving ? sources.refFor(ns,anchor,view) : anchor;
+      if (!sourceReadSafety(db, { identity: safetyIdentity, namespace: ns, ref, rawBudget: state }).allowed) fail('source_unavailable');
+      return view;
+    }));
     deadline();
     const opened = new Map(); let charged = 0;
     let pending = [];
@@ -107,6 +114,8 @@ export function createRawSourceReader({ db, identity, open, partDigest }) {
         anchors.forEach((anchor,index) => {
           const next = resolving ? sources.inspect(ns,anchor,current) : sources.resolve(ns,anchor,current);
           if (JSON.stringify(next.manifest) !== JSON.stringify(views[index].manifest)) fail('revision_conflict');
+          const ref = resolving ? sources.refFor(ns,anchor,views[index]) : anchor;
+          if (!sourceReadSafety(db, { identity: safetyIdentity, namespace: ns, ref, rawBudget: current }).allowed) fail('source_unavailable');
         });
       });
       deadline(); return output;

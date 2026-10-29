@@ -618,8 +618,8 @@ test('A15 every mutation × intent pins eligibility, revisions, generations and 
     ['forget', 'memory', true, 'evidence_unavailable', 'evidence_unavailable'],
     ['deletion', 'memory', false, 'evidence_unavailable', 'evidence_unavailable'],
     ['receipt', 'memory', false, 'snapshot_stale', 'snapshot_stale'],
-    ['support', 'card', false, 'evidence_unavailable', 'snapshot_stale'],
-    ['support-revision', 'card', false, 'evidence_unavailable', 'revision_conflict'],
+    ['support', 'card', false, 'evidence_unavailable', 'evidence_unavailable'],
+    ['support-revision', 'card', false, 'evidence_unavailable', 'evidence_unavailable'],
     ['applicability', 'card', false, 'evidence_unavailable', 'snapshot_stale'],
     ['applicability-revision', 'card', false, 'evidence_unavailable', 'revision_conflict'],
     ['edit-current', 'card', false, 'revision_conflict', 'revision_conflict'],
@@ -679,11 +679,14 @@ test('A15 every mutation × intent pins eligibility, revisions, generations and 
       assert.equal(row.revision, card.revision + Number(change.endsWith('-revision') || change.startsWith('edit-')));
       assert.equal(row.body_revision, card.bodyRevision + Number(change.startsWith('edit-')));
       const latest = { ...full, revision: row.revision, bodyRevision: row.body_revision };
-      const item = ok(await fetchTool.action(fetchTool.schema.parse({ refs: [latest], intent: 'history' }))).items[0];
-      assert.equal(item.state, 'confirmed');
-      assert.equal(item.support.status, change.startsWith('support') ? 'unavailable' : 'eligible');
-      assert.equal(item.support.applicability, change.startsWith('applicability') ? 'historical' :
-        ['support-revision', 'edit-ineligible'].includes(change) ? 'unknown' : 'current');
+      const result = await fetchTool.action(fetchTool.schema.parse({ refs: [latest], intent: 'history' }));
+      if (change.startsWith('support')) assert.deepEqual(result, { ok: false, error: { code: 'evidence_unavailable', retryable: false } });
+      else {
+        const item = ok(result).items[0];
+        assert.equal(item.state, 'confirmed'); assert.equal(item.support.status, 'eligible');
+        assert.equal(item.support.applicability, change.startsWith('applicability') ? 'historical' :
+          change === 'edit-ineligible' ? 'unknown' : 'current');
+      }
     }
     const expectedCode = intent === 'current' ? currentCode : historyCode;
     const fetched = await fetchTool.action(fetchTool.schema.parse({ refs: [compact], intent }));

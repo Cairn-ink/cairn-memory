@@ -1,3 +1,4 @@
+import { contentReadSafety, memoryContentIdentity } from './content-safety.mjs';
 import { roleProfileOptions } from './role-profile-input.mjs';
 import { createRoleProfileStorage } from './role-profile-storage.mjs';
 import { assetOptions } from './asset-input.mjs';
@@ -457,20 +458,18 @@ export function createMemoryRuntime(input, internal) {
     });
   }
 
-  function receiptPrefix(id, offset, count) {
-    return db.prepare(`SELECT id, client, session_id AS sessionId, event_id AS eventId,
-      role, excerpt, created_at AS createdAt FROM receipts WHERE memory_id = ?
-      ORDER BY created_at, id LIMIT ? OFFSET ?`).all(id, count, offset)
-      .map((row) => ({ ...row }));
+  function receiptPage(ns, row, offset, count, recent = false) {
+    const rows = db.prepare(`SELECT * FROM receipts WHERE memory_id=?
+      ORDER BY created_at ${recent ? 'DESC' : 'ASC'},id LIMIT ? OFFSET ?`).all(row.id, count, offset);
+    if (!row || !contentReadSafety(db, { identity, namespace: ns, intent: 'history',
+      ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision }, receipts: rows }).allowed) fail('revision_conflict');
+    return rows.map(receipt => ({ id: receipt.id, client: receipt.client, sessionId: receipt.session_id, eventId: receipt.event_id,
+      role: receipt.role, excerpt: receipt.excerpt, createdAt: receipt.created_at }));
   }
+  function receiptPrefix(ns, row, offset, count) { return receiptPage(ns, row, offset, count); }
 
   // A capped recall receipt list: most recent first, ties broken by ID.
-  function receiptRecent(id, count) {
-    return db.prepare(`SELECT id, client, session_id AS sessionId, event_id AS eventId,
-      role, excerpt, created_at AS createdAt FROM receipts WHERE memory_id = ?
-      ORDER BY created_at DESC, id LIMIT ?`).all(id, count)
-      .map((row) => ({ ...row }));
-  }
+  function receiptRecent(ns, row, count) { return receiptPage(ns, row, 0, count, true); }
 
   // Read before ranking only; the final recall snapshot rereads the same list.
   function recentReceipts(ns, ref, count) {
@@ -478,7 +477,7 @@ export function createMemoryRuntime(input, internal) {
     return transaction(db, () => {
       const row = currentRow(ns, ref.memoryId);
       if (!row || row.revision !== ref.revision) fail('revision_conflict');
-      return receiptRecent(row.id, count);
+      return receiptRecent(ns, row, count);
     });
   }
 
@@ -486,21 +485,35 @@ export function createMemoryRuntime(input, internal) {
     const receipts = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id LIMIT 101').all(row.id);
     const count = detailDto(row).receiptCount;
     qualificationStorage.inspect(row);
-    return sourceEvidence(row, receipts, count, receiptKey);
+    const evidence = sourceEvidence(row, receipts, count, receiptKey);
+    const ns = { ownerId: row.owner_id, scope: row.scope, projectId: row.project_id || null };
+    if (!contentReadSafety(db, { identity, namespace: ns, intent: 'history', ref: { type: 'memory', namespace: ns,
+      memoryId: row.id, revision: row.revision }, receipts }).allowed) fail('revision_conflict');
+    return evidence;
   }
 
-  function fetchPage(ns, ref, offset, expectedEpoch, view = 'current', includeQualification = false, contextMode) {
+  function safeMemory(ns, row, intent = 'current', expectedMemoryIdentity) {
+    return row && contentReadSafety(db, { identity, namespace: ns, intent, expectedMemoryIdentity, ref: { type: 'memory', namespace: ns,
+      memoryId: row.id, revision: row.revision } }).allowed;
+  }
+
+  const fetchPageIdentities = new WeakMap();
+  function fetchPage(ns, ref, offset, expectedEpoch, view = 'current', includeQualification = false, contextMode, expectedPage) {
     ready();
     return transaction(db, () => {
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && currentEpoch !== expectedEpoch) fail('cursor_stale');
-      const candidate = view === 'historical' ? visibleRow(ns, ref.memoryId) : currentRow(ns, ref.memoryId);
+      const candidate = view === 'historical' ? activeRow(ns, ref.memoryId) : currentRow(ns, ref.memoryId);
       const row = candidate?.currentness === view ? candidate : undefined;
-      const reason = !row ? 'not_found' : row.revision !== ref.revision ? 'stale' : null;
+      const reason = !safeMemory(ns, row, view === 'historical' ? 'history' : 'current', expectedPage && fetchPageIdentities.get(expectedPage)) ? 'not_found' : row.revision !== ref.revision ? 'stale' : null;
       if (reason) return { invalidRef: { memoryId: ref.memoryId, reason }, epoch: currentEpoch };
-      if (isSourceContext(contextMode)) return { source: readUsageEvidence(ns, row, contextMode), epoch: currentEpoch };
+      if (isSourceContext(contextMode)) {
+        const page = { source: readUsageEvidence(ns, row, contextMode), epoch: currentEpoch };
+        fetchPageIdentities.set(page, memoryContentIdentity(row));
+        return page;
+      }
       const memory = detailDto(row);
-      return { memory, receipts: receiptPrefix(row.id, offset, 101), epoch: currentEpoch,
+      return { memory, receipts: receiptPrefix(ns, row, offset, 101), epoch: currentEpoch,
         ...(includeQualification ? { qualification: qualificationStorage.inspect(row) } : {}),
         ...(view === 'historical' ? { supersession: supersessionStorage.inspect(ns, row.id) } : {}) };
     });
@@ -511,6 +524,7 @@ export function createMemoryRuntime(input, internal) {
       ? { rationale: rationaleStorage.inspectInside(ns, { memoryId: row.id, revision: row.revision }) } : {}) };
   }
 
+  const sourceSnapshotIdentities = new WeakMap();
   function sourceSnapshot(namespaces, count, expected) {
     ready();
     return transaction(db, () => {
@@ -528,17 +542,23 @@ export function createMemoryRuntime(input, internal) {
         WHERE ${where} AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?`)
         .all(...boundary(namespace), count + 1).map(row => ({ ...row, namespaceIndex })));
       if (identities.length > count) fail(expected ? 'revision_conflict' : 'context_item_too_large');
-      const memories = identities.map(({ id, revision, namespaceIndex }) => {
+      const contentIdentities = [], previousIdentities = expected && sourceSnapshotIdentities.get(expected);
+      if (expected && !previousIdentities) fail('revision_conflict');
+      const memories = identities.map(({ id, revision, namespaceIndex }, index) => {
         const namespace = namespaces[namespaceIndex];
         // An incomplete active projection is an error, never a smaller claim
         // of completeness. Preserve the shared index generation's authority.
         if (!db.prepare(`SELECT id FROM index_read_memories WHERE ${where} AND id = ? AND revision = ?`)
           .get(...boundary(namespace), id, revision)) fail('index_revision_conflict');
-        return { namespaceIndex, ...readSourceEvidence(currentRow(namespace, id)) };
+        const row = currentRow(namespace, id);
+        if (!safeMemory(namespace, row, 'current', previousIdentities?.[index])) fail('revision_conflict');
+        contentIdentities.push(memoryContentIdentity(row));
+        return { namespaceIndex, ...readSourceEvidence(row) };
       });
       const snapshot = { memories, namespaces: boundaries, coverage: 'complete-current-admitted',
         semanticCoverage: 'unassessed', evidenceTrust: 'untrusted-data-not-instructions' };
       if (expected && JSON.stringify(snapshot) !== JSON.stringify(expected)) fail('revision_conflict');
+      sourceSnapshotIdentities.set(snapshot, contentIdentities);
       return snapshot;
     });
   }
@@ -549,7 +569,7 @@ export function createMemoryRuntime(input, internal) {
       // This transaction is the return linearization point across the read set.
       const rows = candidates.map(({ namespace, memoryId, revision }) => {
         const row = currentRow(namespace, memoryId);
-        if (!row || row.revision !== revision) fail('revision_conflict');
+        if (!safeMemory(namespace, row) || row.revision !== revision) fail('revision_conflict');
         return row;
       });
       for (const { namespace, indexRevision } of namespaces) {
@@ -568,8 +588,8 @@ export function createMemoryRuntime(input, internal) {
       return selected.map((index) => {
         const memory = detailDto(rows[index]);
         const capped = candidates[index].receiptOrder === 'recent';
-        const receipts = capped ? receiptRecent(memory.id, candidates[index].receiptLimit)
-          : receiptPrefix(memory.id, 0, candidates[index].receiptLimit);
+        const receipts = capped ? receiptRecent(candidates[index].namespace, rows[index], candidates[index].receiptLimit)
+          : receiptPrefix(candidates[index].namespace, rows[index], 0, candidates[index].receiptLimit);
         return { memory, receipts, receiptCount: memory.receiptCount,
           ...(capped ? { receiptsOmitted: memory.receiptCount - receipts.length } : {}),
           ...(includeQualification ? { qualification: qualifications[index] } : {}) };

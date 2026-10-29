@@ -1,3 +1,4 @@
+import { contentReadSafety, memoryReadEligible } from './content-safety.mjs';
 import { createCardCurrentStorage, cardDependencyFence } from './card-current-storage.mjs';
 import { lstatSync, unlinkSync } from 'node:fs';
 import { probeRollbackJournal, createExclusiveSqliteFile } from './sqlite-journal-probe.mjs';
@@ -5,9 +6,7 @@ import { isAbsolute } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { performance } from 'node:perf_hooks';
 import { readTransaction, isConnectionDiscarded } from './database.mjs';
-import { createCardReceiptSources } from './card-receipt-sources.mjs';
-import { createCardRawSources } from './card-raw-sources.mjs';
-import { cardNamespace, keyed, sourceRef } from './private-card-input.mjs';
+import { cardNamespace } from './private-card-input.mjs';
 import { cardApplicabilityInside } from './private-evidence-schema.mjs';
 import { fail } from './validation.mjs';
 import { rankScores, scoreBM25 } from './context-read-bm25.mjs';
@@ -320,7 +319,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       metrics.canonicalRows += rows.length;
     }
     const result = rows.map(row => {
-      const eligible = type === 'memory' ? !row.deleted && (p.intent === 'history' || row.currentness === 'current' && row.review_state !== 'awaiting') :
+      const eligible = type === 'memory' ? memoryReadEligible(row, p.intent) :
         cardEligible(ns, row, p.intent, metrics, p.readSet);
       const tuple = { id: row.id, revision: row.revision, body_revision: row.body_revision, eligible: Number(eligible) };
       metrics.projectionBytes += Buffer.byteLength(JSON.stringify(tuple));
@@ -666,34 +665,14 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
 // history predicate. Only organization title-source checks omit applicability,
 // matching private-organization-storage titleInside; support remains required.
 export function contextCardEligible(sourceDb, identity, features, ns, row, intent = 'current', { requireApplicability = true, rawRows, readSet = [ns] } = {}) {
-  if (row.state !== 'confirmed') return false;
-  const raw = createCardRawSources(sourceDb, identity);
-  // Canonical history requires confirmed state, even if support is gone.
-  if (intent === 'history') return true;
-  const dependency = createCardCurrentStorage({ db: sourceDb, identity }).compare(ns, row, readSet);
-  if (dependency && dependency.status !== 'current') return false;
-  if (requireApplicability && (!features.reviews || cardApplicabilityInside(sourceDb, row).applicability !== 'current')) return false;
-  const binding = (purpose, value) => keyed(identity.cursorSecret, purpose, [identity.storeId, value]);
-  const receiptSources = createCardReceiptSources(sourceDb, binding);
-  const values = [...sourceDb.prepare('SELECT source_ref,position FROM card_bindings WHERE card_id=?').all(row.id),
-    ...(features.receipts ? sourceDb.prepare('SELECT source_ref,position FROM card_memory_bindings WHERE card_id=?').all(row.id) : []), ...raw.refs(row.id)]
-    .sort((a, b) => a.position - b.position).map(value => JSON.parse(value.source_ref));
-  return values.length > 0 && values.every(value => {
-    try {
-      sourceRef(value, ns, true);
-      if (value.type === 'raw') raw.resolve(ns, value, rawRows === undefined ? undefined : raw.budget(64000, rawRows));
-      else if (value.type === 'receipt') receiptSources.resolve(ns, value);
-      else {
-        const note = sourceDb.prepare(`SELECT id,revision,state,text FROM card_notes WHERE ${where} AND id=?`).get(...boundary(ns), value.sourceId);
-        if (!note || note.state !== 'available' || note.revision !== value.revision ||
-            binding('submitted-note-content-v1', [ns, note.id, note.revision, note.text]) !== value.contentIdentity) fail('source_unavailable');
-      }
-      return true;
-    } catch (error) {
-      if (['source_unavailable', 'source_excluded', 'raw_crypto_unavailable'].includes(error.code)) return false;
-      throw error;
-    }
-  });
+  return contentReadSafety(sourceDb, { identity, namespace: ns, intent,
+    ref: { type: 'card', namespace: ns, cardId: row.id, revision: row.revision, bodyRevision: row.body_revision || null },
+    rawRows,
+    currentCardEligible: () => {
+      const dependency = createCardCurrentStorage({ db: sourceDb, identity }).compare(ns, row, readSet);
+      return (!dependency || dependency.status === 'current') && (!requireApplicability ||
+        features.reviews && cardApplicabilityInside(sourceDb, row).applicability === 'current');
+    } }).allowed;
 }
 
 // U5c-2: call only inside the facade's deferred authoritative transaction.

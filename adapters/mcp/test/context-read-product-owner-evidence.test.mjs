@@ -106,8 +106,8 @@ const cases = [
   ['forget','memory',true,'evidence_unavailable','evidence_unavailable'],
   ['deletion','memory',false,'evidence_unavailable','evidence_unavailable'],
   ['receipt','memory',false,'snapshot_stale','snapshot_stale'],
-  ['support','card',false,'evidence_unavailable','snapshot_stale'],
-  ['support-revision','card',false,'evidence_unavailable','revision_conflict'],
+  ['support','card',false,'evidence_unavailable','evidence_unavailable'],
+  ['support-revision','card',false,'evidence_unavailable','evidence_unavailable'],
   ['applicability','card',false,'evidence_unavailable','snapshot_stale'],
   ['applicability-revision','card',false,'evidence_unavailable','revision_conflict'],
   ['edit-current','card',false,'revision_conflict','revision_conflict'],
@@ -145,9 +145,11 @@ for(const [change,type,generationChanged,currentCode,historyCode] of cases)for(c
       const row=f.db.prepare('SELECT revision,body_revision FROM private_cards WHERE id=?').get(c.id);
       assert.equal(row.revision,c.revision+Number(change.endsWith('-revision')||change.startsWith('edit-')));
       assert.equal(row.body_revision,c.bodyRevision+Number(change.startsWith('edit-')));
-      const item=ok(await h.fetchCandidateEvidence({readSet:four,refs:[{...full,revision:row.revision,bodyRevision:row.body_revision}],intent:'history'},r.token)).items[0];
-      assert.equal(item.support.status,change.startsWith('support')?'unavailable':'eligible');
-      assert.equal(item.support.applicability,change.startsWith('applicability')?'historical':['support-revision','edit-ineligible'].includes(change)?'unknown':'current');
+      const result=await h.fetchCandidateEvidence({readSet:four,refs:[{...full,revision:row.revision,bodyRevision:row.body_revision}],intent:'history'},r.token);
+      if(change.startsWith('support'))denied(result,'evidence_unavailable');
+      else {const item=ok(result).items[0];assert.equal(item.support.status,'eligible');
+        assert.equal(item.support.applicability,change.startsWith('applicability')?'historical':change==='edit-ineligible'?'unknown':'current');}
+
     }
     const actual=await fetch.action(fetch.schema.parse({refs:[compact],intent}));
     if(expectedCode===null)assert.deepEqual(ok(actual).items,before.items);
