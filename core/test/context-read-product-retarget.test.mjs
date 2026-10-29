@@ -1,3 +1,4 @@
+import { createMaintenanceAttribution } from '../context-product-attribution.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync, backup } from 'node:sqlite';
@@ -15,6 +16,7 @@ const budget={maxItems:1024,maxMs:1000};
 const counterNames=['reused','replaced','removed','copied','tokenized','retargets','verificationRestarts','verificationKept'];
 function local(t,path,readSet=four,intent='current',mode='DELETE') {
   let clock=0,stop=null,hook=()=>{},storage;
+  const attribution=createMaintenanceAttribution({now:()=>clock});
   const sqlite=createProductSqlitePolicy();sqlite.start(Infinity);
   const facade=openContextProductFacade(path,{sqlite});
   const p={readSet,types:facade.port.features.cards?['memory','card']:['memory'],intent,ownerCoverage:descriptor(readSet)};
@@ -22,11 +24,11 @@ function local(t,path,readSet=four,intent='current',mode='DELETE') {
   function reopen() {
     storage?.close();
     storage=productSidecar({path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,sqlite,
-      writable:true,sidecarJournalMode:mode,now:()=>clock,rendezvous(point){hook(point);if(point===stop)clock=900;}});
+      writable:true,sidecarJournalMode:mode,attribution,now:()=>clock,rendezvous(point){hook(point);if(point===stop)clock=900;}});
   }
   reopen();t.after(()=>{storage.close();facade.close();});
   return {p,facade,reopen,setAccess(value){access=value;},setHook(value){hook=value;},
-    step(point=null,maxItems=1024) {clock=0;stop=point;return storage.refresh(p,access,{...budget,maxItems});},
+    step(point=null,maxItems=1024) {clock=0;attribution.reset();stop=point;return storage.refresh(p,access,{...budget,maxItems});},
     observe(){return readTransaction(facade.port.db,()=>storage.observe(p,access));},
     lexical(publication,query){return storage.lexical(p,publication,query);},
     reconcile(){const totals={},end=p.readSet.length*p.types.reduce((n,type)=>n+(type==='card'?4:1),0);

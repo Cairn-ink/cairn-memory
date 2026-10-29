@@ -1,3 +1,4 @@
+import { createMaintenanceAttribution } from '../context-product-attribution.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -27,14 +28,15 @@ function write(f, type = 'memory', operation = 'capture', row = {}) {
 }
 function local(t, f, options = {}) {
   const facade = openContextProductFacade(f.path, {});
-  const storage = productSidecar({ path: f.path, db: facade.port.db, identity: facade.port.identity,
+  const attribution=createMaintenanceAttribution({now:options.now??(()=>0)});
+  const storage = productSidecar({ attribution,path: f.path, db: facade.port.db, identity: facade.port.identity,
     features: facade.port.features, writable: true, now: () => 0, ...options });
   t.after(() => { storage.close(); facade.close(); });
   const p = { ...input, ownerCoverage: descriptor(readSet) };
   const access = accessDigest({ ownerId: ns.ownerId, namespaces: { readSet } });
   return { storage, facade, p, access,
     observe(patch = {}) { return readTransaction(facade.port.db, () => storage.observe({ ...p, ...patch }, access)); },
-    refresh(maxItems = 128, patch = {}) { return storage.refresh({ ...p, ...patch }, access, { ...budget, maxItems }); } };
+    refresh(maxItems = 128, patch = {}) { attribution.reset();return storage.refresh({ ...p, ...patch }, access, { ...budget, maxItems }); } };
 }
 function staged(f) {
   const d = new DatabaseSync(f.path + PRODUCT_SIDECAR_SUFFIX, { readOnly: true });

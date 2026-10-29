@@ -23,7 +23,7 @@ function setup(t,patch={},faults={}) {
     projections:[{options,types:['memory']},{options:{...options,readSet:[{ownerId:'pump',scope:'project',projectId:'p'}],ownerCoverage,
       host:{...options.host,configuration:{serviceBinding:{...serviceBinding,namespaces:{readSet:[{ownerId:'pump',scope:'project',projectId:'p'}],ownerCoverage}}}}},types:['memory']}],...patch};
   const cost=(name,n)=>typeof faults[name]==='function'?faults[name](n):faults[name]??0;
-  const renew=createMaintenancePumpRuntime({phasesOf:faults.phasesOf,now:()=>now,observedAt:()=>faults.observedAt?faults.observedAt(observations.at(-1)?.at):observations.at(-1)?.at,setTimer:(f,ms)=>{const id=++serial;timers.set(id,{f,at:now+ms});return id;},clearTimer:id=>timers.delete(id),
+  const renew=createMaintenancePumpRuntime({phasesOf:faults.phasesOf,stallOf:faults.stallOf,now:()=>now,observedAt:()=>faults.observedAt?faults.observedAt(observations.at(-1)?.at):observations.at(-1)?.at,setTimer:(f,ms)=>{const id=++serial;timers.set(id,{f,at:now+ms});return id;},clearTimer:id=>timers.delete(id),
     open:async opts=>{const writer=JSON.stringify([opts.path,opts.readSet]);if(faults.exclusive)assert.equal(live.has(writer),false,'drain the previous writer before opening');live.add(writer);opened.push(opts);now+=cost('openMs',opened.length);return {async refreshContextIndex(input,token){calls.push([input,token]);if(faults.refresh)throw Error('refresh failed');now+=cost('dispatchMs',calls.length)+cost('workMs',calls.length);observations.push({at:now,input});now+=cost('deliveryMs',calls.length);return faults.result?faults.result(input):{ok:true,value:{status:'complete'}};},async close(){closed.push(opts);now+=cost('disposeMs',closed.length);if(faults.dispose)await faults.dispose(closed.length);live.delete(writer);if(faults.close)throw Error('close failed');}};}});
   return {renew,c,calls,opened,closed,timers,observations,admissions,setTime:n=>{now=n;},async next(){const [id,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];timers.delete(id);now=timer.at;admissions.push(now);await timer.f();}};
 }
@@ -801,4 +801,47 @@ test('B1 private work counters saturate at safe integers',async t=>{
   for(const lane of maintenancePumpPhaseDiagnostic(pump.getStatus()).projections)
     for(const name of names)assert.equal(lane.work[name],Number.MAX_SAFE_INTEGER);
   await pump.close();
+});
+
+for(const kind of [1,2,3,4,5,6,7,8,9,10,11])
+test(`stall attribution: pump watchdog retains kind ${kind}, full reservation and one bounded record`,async t=>{
+  let entered,release;const rendezvous=new Promise(resolve=>{entered=resolve;});
+  const s=setup(t,{}, {workMs:20,stallOf:(_value,time)=>({kind,runningMs:time-s.observations.at(-1).at,unitCount:7}),
+    result:()=>{entered();return new Promise(resolve=>{release=()=>resolve({ok:false,error:{code:'read_timeout'}});});}});
+  s.c.projections=[s.c.projections[0]];const p=s.renew(s.c),pending=s.next();await rendezvous;
+  try {
+    const [id,deadline]=[...s.timers][0];s.timers.delete(id);s.setTime(deadline.at);await deadline.f();
+    const lane=maintenancePumpPhaseDiagnostic(p.getStatus()).projections[0];
+    assert.deepEqual(lane.lastStall,{number:0,kind,runningMs:80,unitCount:7},'last stall survives parent watchdog before pending refresh returns');
+    assert.equal(lane.stallCounts[kind],1);assert.equal(lane.stallCounts.reduce((a,b)=>a+b),1);
+    assert.equal(p.getStatus().error,'read_timeout');assert.equal(p.getStatus().usedItems,1);assert.equal(p.getStatus().usedMs,100);
+  } finally {release();await pending;await p.close();}
+  const final=await p.completion,lane=maintenancePumpPhaseDiagnostic(final).projections[0];
+  assert.equal(final.usedMs,100,'terminal quantum receives no refund');assert.equal(final.usedItems,1);
+  assert.equal(lane.stallCounts[kind],1,'reader timeout and pump watchdog count the quantum once');
+  assert.equal(s.calls.length,1,'terminal cutoff drains without another dispatch');assert.equal(s.timers.size,0);
+  assert.equal(JSON.stringify(final).includes('lastStall'),false);
+});
+
+for(const boundary of ['overrun','reader cutoff'])test(`stall attribution: ${boundary} records without timer delivery`,async t=>{
+  const s=setup(t,{}, {workMs:boundary==='overrun'?101:20,stallOf:()=>({kind:8,runningMs:44,unitCount:3}),
+    result:()=>boundary==='overrun'?settled():{ok:false,error:{code:'read_timeout'}}});
+  const p=s.renew(s.c);await s.next();const final=await p.completion;
+  assert.deepEqual(maintenancePumpPhaseDiagnostic(final).projections[0].lastStall,{number:0,kind:8,runningMs:44,unitCount:3},'overrun/cutoff samples active operation');
+  assert.equal(final.error,'read_timeout');assert.equal(final.usedItems,1);assert.equal(final.usedMs,100);await p.close();
+});
+
+test('stall attribution: per-field aggregation saturates and excludes unknown fields',async t=>{
+  const names=['unitCount','scanUnits','itemUnits','verificationUnits','publicationUnits','gcUnits','scanRows','itemRows','verificationRows','publicationRows','gcRows',
+    'lastUnitKind','lastUnitMs','longestUnitKind','longestUnitMs','beginWaitMaxMs','beginWaitSumMs','commitMaxMs','commitSumMs','canonicalReadWaitMaxMs',
+    'saveSigningMs','gcSliceMs','vacuumMs','resultPreparationMs','serializationMs','serializationComplete','deliveryMs','returnMs'];
+  const s=setup(t,{budgets:{maxItems:2048,maxMs:60000}}, {result:()=>settled(),phasesOf:()=>({...Object.fromEntries(names.map(k=>[k,Number.MAX_SAFE_INTEGER])),privateProbe:123})});
+  s.c.projections=[s.c.projections[0]];const p=s.renew(s.c);for(let i=0;i<4;i++)await s.next();
+  const detail=maintenancePumpPhaseDiagnostic(p.getStatus());
+  for(const lane of detail.projections)for(const name of names){
+    assert.equal(lane.attribution?.[name]?.total,Number.MAX_SAFE_INTEGER,name+' aggregate saturates');
+    assert.equal(lane.attribution[name].count,2);assert.equal(lane.attribution[name].buckets.reduce((a,b)=>a+b),2);
+    assert.equal(lane.latest.attribution[name],Number.MAX_SAFE_INTEGER,name+' latest quantum field');
+  }
+  assert.equal(JSON.stringify(detail).includes('privateProbe'),false);await p.close();
 });

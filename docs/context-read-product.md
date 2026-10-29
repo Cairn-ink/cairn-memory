@@ -561,6 +561,49 @@ or credential, has no history buffer, and is absent from serialized DTOs and
 the public entry point. Hosts must still provision and qualify timer delivery
 and native capacity; recovery cannot undo a missed freshness target.
 
+The internal `maintenancePumpPhaseDiagnostic(observation)` adds fixed per-lane
+phase counters (`drain`, `open`, `dispatch`, `epochObservation`, `refreshCall`,
+`settle`), elapsed histograms, first/latest quantum samples and work counts.
+These overlapping intervals are diagnostic, never refund or timing proof.
+For stall attribution, an external harness should log each quantum's numeric
+`maintenancePhaseDiagnostic(result)` fields, quantum sequence/lane and elapsed
+time; include the lane's `lastStall` and `stallCounts` even on failure. The
+Worker's private `maintenancePhases` transport and the reader's fixed allowlist
+carry the fields below; `latest.attribution` retains the most recent returned
+sample, and `attribution` holds saturating totals, maxima and fixed log2
+histograms per field. A cutoff can lose all returned fields; it still captures
+the shared operation marker before termination. No public DTO changes.
+
+| Fields | Unit | Measurement |
+| --- | --- | --- |
+| `unitCount`, `scanUnits`, `itemUnits`, `verificationUnits`, `publicationUnits`, `gcUnits` | admitted units | Existing measured scans/items/verification/GC and admitted publication; counts include attempts rolled back later. Vacuum uses the existing GC admission unit. |
+| `scanRows`, `itemRows`, `verificationRows`, `publicationRows`, `gcRows` | rows | Returned scan rows (including verification scans), completed comparison rows, verified/reset rows, published generation, and SQLite deletion changes across GC tables. |
+| `lastUnitKind`, `longestUnitKind` | enum | Last completed admitted unit and longest measured unit; ties choose the latest. |
+| `lastUnitMs`, `longestUnitMs` | ms | Unit entry through return, including nested operations. |
+| `beginWaitMaxMs`, `beginWaitSumMs` | ms | Sidecar `BEGIN IMMEDIATE` entry through return. |
+| `commitMaxMs`, `commitSumMs` | ms | Sidecar `COMMIT` entry through return, including lock wait and sync. |
+| `canonicalReadWaitMaxMs` | ms | Existing canonical transaction entry through its first existing statement step; no added query. |
+| `saveSigningMs` | ms | Sum of progress incarnation/signing intervals in `save()`, excluding SQL updates. |
+| `gcSliceMs`, `vacuumMs` | ms | Sum of existing GC deletion slice intervals and `incremental_vacuum` intervals, respectively. |
+| `resultPreparationMs`, `serializationMs` | ms | Final refresh DTO/envelope preparation, and Worker envelope construction/`postMessage` cloning through return. Intervals overlap; do not sum. |
+| `serializationComplete` | 0/1 | Whether the parent saw `postMessage` return; if 0, serialization time is a lower bound sampled at acceptance. No waiting or extra message. |
+| `deliveryMs`, `returnMs` | ms | Parent acceptance minus Worker send timestamp, and call entry through parent acceptance, respectively; include validation, and delivery also includes serialization/IPC. |
+
+A maintenance-only 32-byte shared marker contains four unsigned 64-bit words:
+operation/start (`hrtime` microseconds shifted left four bits, kind in the low
+bits), admitted units, serialization start ns and serialization end ns. The
+Worker alone writes it. Kind/start publish atomically in one store per
+transition; nested operations restore the caller's original start; return to idle starts a new idle interval. The parent
+samples on its pump watchdog, reader cutoff or observed pump overrun without
+locks or waits. `lastStall` is `{number,kind,runningMs,unitCount}` and each lane
+keeps one saturating counter per kind, counting a quantum once. Enum order is
+`idle=0`, `scan=1`, `item=2`, `verify=3`, `publication=4`, `gc=5`, `vacuum=6`,
+`begin=7`, `commit=8`, `save=9`, `canonical-read=10`, `serialize=11`. Idle at
+cutoff can indicate dispatch/delivery delay; it does not claim a SQLite stall.
+A counter sampled concurrently with a transition can include the next admitted
+unit. Marker timestamps have microsecond resolution. Request readers allocate
+no marker and send no additional transport.
+
 A genuine quantum cutoff reports `failed` with `read_timeout`, stops scheduling
 and drains. Missing or invalid internal observation timing reports
 `reader_failed`; authority, storage, corruption and lifecycle failures also
