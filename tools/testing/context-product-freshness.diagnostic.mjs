@@ -169,6 +169,8 @@ async function runProfile(profile,shape) {
       quantum0:{n:zeros.length,maxMs:zeros.at(-1)??null,p95Ms:zeros.length?zeros[Math.ceil(.95*zeros.length)-1]:null},
       allQuanta:{n:total,maxMs:Math.max(0,...lanes.map(l=>l.worstElapsedMs)),p95UpperMs:p95Upper,bucketMs:10,overflow:counts[501]},
       opens,openAttempts,opensPerMinute:opens*60000/(mono()-campaign),openAttemptsPerMinute:openAttempts*60000/(mono()-campaign),
+      work:Object.fromEntries(['reused','replaced','removed','copied','tokenized','retargets','verificationRestarts','verificationKept'].map(name=>
+        [name,lanes.reduce((n,l)=>Math.min(Number.MAX_SAFE_INTEGER,n+(l.work[name]??0)),0)])),
       projections:lanes.map(({elapsedBuckets,...lane})=>lane),
     }:null;
     const report = { smoke,profile,purpose: 'Non-gating early signal for the product 30 s freshness target; not qualification evidence.',

@@ -167,7 +167,9 @@ someone who can edit your process configuration or read your database file.
 | correct_memory | memoryId, expectedRevision, content, optional kind | Compare-and-set correction with a new explicit receipt |
 | forget_memory | memoryId, expectedRevision | Compare-and-set logical deletion and suppression |
 
-Remember/correct text is limited to 600 characters; kind defaults to fact.
+Remember/correct text is limited by the MCP schema to 600 raw UTF-16 code units;
+kind defaults to fact. Core then applies its 4,000-unit content bound after
+per-field NFKC, secret redaction, whitespace collapse and trim.
 Inspection list/receipt pages default to 20 and cap at 50; use nextReceiptCursor
 as receiptCursor to continue receipt inspection. List and receipt parameters
 cannot be mixed. Unknown fields, including
@@ -337,6 +339,13 @@ redaction. The server fixes client `cairn-local-mcp` and session
 `submitted-capture`; each source message ID is SHA-256 of the JSON array
 `['cairn.mcp.submitted-message.v1',batchId,index]`. These deterministic identifiers
 support replay, not authentication or encryption. Do not put secrets in batch IDs.
+The MCP schema bounds raw message strings; core separately rejects messages
+above 4,000 UTF-16 code units after NFKC, secret redaction, whitespace collapse
+and trim per field, then sums those field lengths for the 20,000-unit batch cap.
+Its receipt prefixes truncate to 800 normalized units at code-point boundaries.
+Segmenters can use the exported `normalizedTextLength` and `normalizeBoundedText`
+for the core bounds, while also respecting the MCP raw limits. Concatenated
+lengths are not additive. See [bounded text lengths](capture.md#bounded-text-lengths).
 
 The same core performs bounded extraction, then one qualification batch against
 the exact retained receipt excerpts (at most 800 UTF-16 units). This requires a
@@ -566,6 +575,9 @@ Correction patches contain `{text,anchors:[{sourceId,digest,start,end}]}` using
 at 400 units; outcome/step at 240. Null outcome clears it; null nextStep closes
 it. Correction pins fields until explicit release, with no model call or change
 to source text/admitted memories. Inspect current revisions before mutations.
+These episode-field bounds are UTF-16 code units, checked both on the raw field
+and after NFKC, secret redaction, whitespace collapse and trim. The helpers above
+measure the normalized check; the raw bound and exact-anchor checks also apply.
 
 Conversation deletion clears episode prose, labels, profile, passages, steps and
 descriptive policies, tombstones the session and fences capture/keep/replay. It

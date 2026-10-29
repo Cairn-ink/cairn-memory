@@ -11,6 +11,13 @@ bundled model provider, hosted migration or network fallback is added.
 
 ## Fetch current evidence
 
+Memory content (4,000 units), receipt excerpts (800 units) and recall queries
+(4,000 units) measure UTF-16 code units after per-field NFKC, secret redaction,
+whitespace collapse and trim. Content/queries reject overflow; excerpts truncate
+at code-point boundaries. Segmenters can use the exported `normalizedTextLength`
+and `normalizeBoundedText` per field; concatenated lengths are not additive.
+See [bounded text lengths](capture.md#bounded-text-lengths).
+
 ```js
 const page = core.fetch({
   namespace: { ownerId: 'local-user', scope: 'personal', projectId: null },

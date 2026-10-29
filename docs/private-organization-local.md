@@ -70,6 +70,11 @@ and title validator are reused with cardId substituted for memoryId. Parent IDs
 refer to same-namespace topics at the expected level; index revision guards their
 versions. The engine refuses unavailable Card support, stale Card/body/index refs,
 wrong scope/level, duplicate canonical titles and over-limit batches atomically.
+Topic titles measure UTF-16 code units after per-field NFKC, secret redaction,
+whitespace collapse and trim, rejecting above 240 units or 120 code points.
+The exported `normalizedTextLength` and `normalizeBoundedText` help segmenters
+measure this path, with the additional code-point check; concatenated lengths
+are not additive. See [bounded text lengths](capture.md#bounded-text-lengths).
 
 Placement creates or replaces the selected memberships. Empty parentIds without
 newL1 unfiles a Card. It never changes Card authorship, body revision,

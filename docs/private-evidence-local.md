@@ -33,7 +33,11 @@ core.selectEvidence({
 }, authority);
 ```
 
-`query` is 1–4,000 UTF-16 units. `types` is a nonempty unique subset of memory
+`query` is 1–4,000 raw UTF-16 code units, with no NFKC, secret redaction,
+whitespace collapse or trim rewrite. The exported `normalizedTextLength` and
+`normalizeBoundedText` describe the different
+[bounded-text path](capture.md#bounded-text-lengths); segmenters must measure this
+query as supplied. `types` is a nonempty unique subset of memory
 and card; `intent` is current or history. The shown budgets are defaults. Maxima
 are 24 items, 1,024 scanned rows, 2,000,000 scanned body units and a 5,000 ms scan
 deadline. Each continuation page receives that same one shared allowance.

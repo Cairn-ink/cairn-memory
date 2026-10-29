@@ -34,10 +34,21 @@ export function identifier(value) {
   return value;
 }
 
-export function boundedText(value, max, truncate = false) {
+/** Validate and normalize one field using the bounded-text input rules. */
+export function normalizeBoundedText(value) {
   if (typeof value !== "string" || value.length > 20_000) fail("invalid_text");
   const clean = redactSecrets(value.normalize("NFKC")).replace(/\s+/gu, " ").trim();
   if (!clean || clean === "[REDACTED]" || clean.includes("\0")) fail("invalid_text");
+  return clean;
+}
+
+/** UTF-16 code units compared with the bound, before any truncation. */
+export function normalizedTextLength(value) {
+  return normalizeBoundedText(value).length;
+}
+
+export function boundedText(value, max, truncate = false) {
+  const clean = normalizeBoundedText(value);
   if (!truncate && clean.length > max) fail("invalid_text");
   let result = "";
   for (const point of clean) {
