@@ -1,0 +1,33 @@
+{
+  "source": "4559909f:core/context-product-quantum.mjs",
+  "cases": [
+    {"maxMs": 333,"kind": "scan","cost": 3,"times": [272,273,274],"decisions": [true,false,false]},
+    {"maxMs": 333,"kind": "item","cost": 7,"times": [268,269,270],"decisions": [true,false,false]},
+    {"maxMs": 333,"kind": "verification","cost": 40,"times": [202,203,204],"decisions": [true,false,false]},
+    {"maxMs": 333,"kind": "gc","cost": 90,"times": [102,103,104],"decisions": [true,false,false]},
+    {"maxMs": 334,"kind": "scan","cost": 3,"times": [272.9,273.9,274.9],"decisions": [true,true,false]},
+    {"maxMs": 334,"kind": "item","cost": 7,"times": [268.9,269.9,270.9],"decisions": [true,true,false]},
+    {"maxMs": 334,"kind": "verification","cost": 40,"times": [202.89999999999998,203.89999999999998,204.89999999999998],"decisions": [true,true,false]},
+    {"maxMs": 334,"kind": "gc","cost": 90,"times": [102.89999999999998,103.89999999999998,104.89999999999998],"decisions": [true,true,false]},
+    {"maxMs": 350,"kind": "scan","cost": 3,"times": [286.5,287.5,288.5],"decisions": [true,false,false]},
+    {"maxMs": 350,"kind": "item","cost": 7,"times": [282.5,283.5,284.5],"decisions": [true,false,false]},
+    {"maxMs": 350,"kind": "verification","cost": 40,"times": [216.5,217.5,218.5],"decisions": [true,false,false]},
+    {"maxMs": 350,"kind": "gc","cost": 90,"times": [116.5,117.5,118.5],"decisions": [true,false,false]},
+    {"maxMs": 1000,"kind": "scan","cost": 3,"times": [839,840,841],"decisions": [true,false,false]},
+    {"maxMs": 1000,"kind": "item","cost": 7,"times": [835,836,837],"decisions": [true,false,false]},
+    {"maxMs": 1000,"kind": "verification","cost": 40,"times": [769,770,771],"decisions": [true,false,false]},
+    {"maxMs": 1000,"kind": "gc","cost": 90,"times": [669,670,671],"decisions": [true,false,false]},
+    {"maxMs": 1500,"kind": "scan","cost": 3,"times": [1264,1265,1266],"decisions": [true,false,false]},
+    {"maxMs": 1500,"kind": "item","cost": 7,"times": [1260,1261,1262],"decisions": [true,false,false]},
+    {"maxMs": 1500,"kind": "verification","cost": 40,"times": [1194,1195,1196],"decisions": [true,false,false]},
+    {"maxMs": 1500,"kind": "gc","cost": 90,"times": [1094,1095,1096],"decisions": [true,false,false]},
+    {"maxMs": 2000,"kind": "scan","cost": 3,"times": [1739,1740,1741],"decisions": [true,false,false]},
+    {"maxMs": 2000,"kind": "item","cost": 7,"times": [1735,1736,1737],"decisions": [true,false,false]},
+    {"maxMs": 2000,"kind": "verification","cost": 40,"times": [1669,1670,1671],"decisions": [true,false,false]},
+    {"maxMs": 2000,"kind": "gc","cost": 90,"times": [1569,1570,1571],"decisions": [true,false,false]},
+    {"maxMs": 5000,"kind": "scan","cost": 3,"times": [4739,4740,4741],"decisions": [true,false,false]},
+    {"maxMs": 5000,"kind": "item","cost": 7,"times": [4735,4736,4737],"decisions": [true,false,false]},
+    {"maxMs": 5000,"kind": "verification","cost": 40,"times": [4669,4670,4671],"decisions": [true,false,false]},
+    {"maxMs": 5000,"kind": "gc","cost": 90,"times": [4569,4570,4571],"decisions": [true,false,false]}
+  ]
+}

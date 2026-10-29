@@ -1,3 +1,4 @@
+import { createMaintenanceAttribution } from './context-product-attribution.mjs';
 import { performance } from 'node:perf_hooks';
 import { parentPort, workerData } from 'node:worker_threads';
 import { serviceIssuance } from './context-product-service.mjs';
@@ -23,6 +24,7 @@ const resourceOwner = Object.freeze({
     Atomics.add(resources, at, 1); owned.push({ at, close });
   },
 });
+const attribution=workerData.maintenance ? createMaintenanceAttribution({buffer:workerData.maintenanceMarker}) : undefined;
 const observer = nativeObserver(workerData.frame);
 if (phase) observer.openDiagnostic = phase;
 const sqlite = workerData.wal ? createProductSqlitePolicy({ observer }) : null;
@@ -92,7 +94,7 @@ try {
   phase?.mark('facadeOpened');
   const { openProductIndex } = await import('./context-product-index.mjs');
   phase?.mark('indexImported');
-  index = openProductIndex({path:workerData.path,facade,authorize,ownerCoverage:workerData.ownerCoverage,observer,sqlite,sidecarJournalMode:workerData.sidecarJournalMode,maintenance:workerData.maintenance,counter:host.counter,semantic,operation:()=>currentOperation});
+  index = openProductIndex({path:workerData.path,facade,authorize,ownerCoverage:workerData.ownerCoverage,observer,sqlite,sidecarJournalMode:workerData.sidecarJournalMode,maintenance:workerData.maintenance,counter:host.counter,semantic,operation:()=>currentOperation,attribution});
   phase?.mark('indexOpened');
   within(opening);
   // The opening telemetry remains unsealed until connection disposal.
@@ -112,6 +114,7 @@ parentPort.on('message', async message => {
   }
   if (active || !facade) { result(message.operation, productFailure('reader_failed')); return; }
   active = true;
+  attribution?.reset(message.maintenanceOrdinal);
   const receivedAt=Number(process.hrtime.bigint())/1e6;
   if (message.method === 'fetchCandidateEvidence') phase?.mark('readReceived');
   const { operation, frame } = message;
@@ -151,11 +154,20 @@ parentPort.on('message', async message => {
       response = await index.run(message.method, boundedData(message.input), message.credential,
         performance.now() + Number(mono(operation.operationCutoffMonoNs)-process.hrtime.bigint())/1e6, observation);
     }
-    within(operation); sealNative(frame);
-    if (message.method === 'fetchCandidateEvidence') phase?.mark('readResultSent');
-    result(operation, response,
-      observation.at === undefined ? {} : { observedAtMonoMs: observation.at,
-        maintenancePhases: { ...observation, at:undefined, dispatchMs:receivedAt-Number(mono(operation.enteredMonoNs))/1e6, finishedAtMonoMs:Number(process.hrtime.bigint())/1e6 } });
+    if(attribution) {
+      const preparationStarted=Number(process.hrtime.bigint())/1e6;
+      within(operation);sealNative(frame);
+      const {at,...detail}=observation,metrics=attribution.snapshot();
+      attribution.serialize(()=>result(operation,response,{...(at===undefined?{}:{observedAtMonoMs:at}),
+        maintenancePhases:{...detail,...metrics,...(message.maintenanceOrdinal===null?{}:{ordinal:message.maintenanceOrdinal}),
+          dispatchMs:receivedAt-Number(mono(operation.enteredMonoNs))/1e6,
+          resultPreparationMs:metrics.resultPreparationMs+Number(process.hrtime.bigint())/1e6-preparationStarted,finishedAtMonoMs:Number(process.hrtime.bigint())/1e6}}));
+    } else {
+      within(operation);sealNative(frame);
+      if (message.method === 'fetchCandidateEvidence') phase?.mark('readResultSent');
+      result(operation,response,observation.at===undefined?{}:{observedAtMonoMs:observation.at,
+        maintenancePhases:{...observation,at:undefined,dispatchMs:receivedAt-Number(mono(operation.enteredMonoNs))/1e6,finishedAtMonoMs:Number(process.hrtime.bigint())/1e6}});
+    }
   } catch (error) { sealNative(frame); result(operation, nativeFailure(error)); }
   finally { active = false; }
 });
