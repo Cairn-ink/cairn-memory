@@ -16,8 +16,9 @@ import { fail } from './validation.mjs';
 import { semanticConfiguration } from './context-semantic-coordinator.mjs';
 
 // Private Worker timing, kept outside the public result DTO. Pump and reader
-// share the process hrtime domain; no namespace, authority or count is exposed.
-const maintenanceObservations = new WeakMap();
+// share the process hrtime domain; only timings and fixed work counts are kept.
+const maintenanceObservations = new WeakMap(), maintenancePhases = new WeakMap();
+export const maintenancePhaseDiagnostic = result => maintenancePhases.get(result);
 export const maintenanceObservation = result => maintenanceObservations.get(result);
 
 const codes = new Set(['invalid_input', 'invalid_read_set', 'authority_required', 'scope_changed', 'invalid_snapshot', 'snapshot_stale', 'invalid_cursor', 'cursor_stale', 'token_count_unavailable',
@@ -172,7 +173,17 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
           shutdown('reader_failed'); return;
         }
         maintenanceObservations.set(result, at);
+        // Only fixed numeric fields cross into the process-local diagnostic.
+        // Optional telemetry never supplies authority, usage refunds or timing proof.
+        const detail=message.maintenancePhases, safe={};
+        for(const name of ['dispatchMs','epochObservationMs','transformed','canonicalRows','metadataBytes','textRows','textBytes','supportLookups','supportBytes','verifiedRows']){
+          const n=detail?.[name];if(Number.isFinite(n)&&n>=0)safe[name]=n;
+        }
+        const finished=detail?.finishedAtMonoMs, delivered=Number(now())/1e6;
+        if(Number.isFinite(finished)&&finished>=at&&finished<=delivered)safe.deliveryMs=delivered-finished;
+        maintenancePhases.set(result,Object.freeze(safe));
       }
+      if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
       lifecycle.finish(slot, result);
       instance.unref(); idle = setTimer(() => shutdown('store_closed'), 60000); idle.unref?.(); lifecycle.idle = idle;
     }
