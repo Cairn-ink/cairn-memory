@@ -45,16 +45,16 @@ export function createRawLineageStorage(db) {
     for (const anchor of values) if (db.prepare(`SELECT 1 FROM raw_source_exclusions WHERE conversation_id=? AND message_id=?
       AND start<? AND end>?`).get(anchor.conversationId, anchor.messageId, anchor.end, anchor.start)) fail('source_excluded');
   }
-  function assertReceipts(ns, receipts) {
+  function assertReceipts(ns, receipts, readExisting = false) {
     if (!enabled()) return;
     for (const receipt of receipts) {
-      roots.assertSession(ns, receipt.client, receipt.sessionId);
+      roots.assertSession(ns, receipt.client, receipt.sessionId, readExisting);
       assertAnchors(anchors(ns, receipt));
     }
   }
-  // Only qualified automatic dedup calls this with inspected original anchor rows.
+  // Canonical readers and qualified automatic dedup inspect original anchor rows.
   // The admission transaction owns all reads; no Raw body is opened or rewritten.
-  function assertStoredReceipts(ns, receipts) {
+  function assertStoredReceipts(ns, receipts, { readExisting = false } = {}) {
     if (!db.isTransaction) fail('raw_transaction_required');
     const required = ['raw_conversations','raw_messages','raw_source_maps','raw_receipt_lineage',
       'raw_receipt_origins','raw_source_exclusions','raw_deletion_actions','raw_session_fences',
@@ -63,7 +63,9 @@ export function createRawLineageStorage(db) {
     const tables = new Set(db.prepare(`SELECT name FROM sqlite_master WHERE type='table'
       AND name IN (${required.map(() => '?').join(',')})`).all(...required).map(row => row.name));
     if (!['raw_conversations','raw_source_maps','raw_receipt_lineage','raw_deletion_actions'].some(name => tables.has(name))) return;
-    if (required.some(name => !tables.has(name))) fail('raw_lineage_unavailable');
+    const deletion = tables.has('raw_deletion_actions') || tables.has('raw_job_sources');
+    const inspected = readExisting && !deletion ? required.filter(name => !['raw_deletion_actions','raw_job_sources'].includes(name)) : required;
+    if (inspected.some(name => !tables.has(name))) fail('raw_lineage_unavailable');
     for (const receipt of receipts) {
       const stored = db.prepare(`SELECT l.conversation_id AS conversationId,l.message_id AS messageId,l.start,l.end,l.precision,
         c.owner_id,c.scope,c.project_id,c.client,c.session_key,m.role,m.total_units
@@ -77,14 +79,23 @@ export function createRawLineageStorage(db) {
             !Number.isSafeInteger(anchor.end) || anchor.start < 0 || anchor.end <= anchor.start || anchor.end > anchor.total_units ||
             !['exact','whole-message'].includes(anchor.precision) ||
             anchor.precision === 'whole-message' && (anchor.start !== 0 || anchor.end !== anchor.total_units)) fail('raw_lineage_unavailable');
-        roots.assertSession(ns, anchor.client, anchor.session_key);
+        roots.assertSession(ns, anchor.client, anchor.session_key, readExisting);
       }
       assertAnchors(stored);
-      const authority = roots.receipt(ns, receipt);
+      const authority = roots.receipt(ns, receipt, readExisting);
+      // Pre-Raw receipts retain their ordinary read contract; this does not classify them.
+      if (readExisting && authority.unknown && !authority.legacyKeep && !stored.length &&
+          !db.prepare("SELECT 1 FROM raw_receipt_origins WHERE receipt_id=? AND kind='derived'").get(receipt.id) &&
+          !db.prepare(`SELECT 1 FROM episode_memory_links l JOIN json_each(l.receipt_ids) r
+            WHERE l.memory_id=? AND r.value=? LIMIT 1`).get(receipt.memory_id, receipt.id)) {
+        assertReceipts(ns, [{ client: receipt.client, sessionId: receipt.session_id,
+          eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt }], true);
+        continue;
+      }
       if (authority.unknown || authority.legacyKeep && authority.roots.length !== 1) fail('raw_lineage_unavailable');
-      if (authority.independent) roots.assertSession(ns, receipt.client, receipt.session_id);
+      if (authority.independent) roots.assertSession(ns, receipt.client, receipt.session_id, readExisting);
       for (const root of authority.roots) {
-        roots.assertSession(ns, root.client, root.sessionKey);
+        roots.assertSession(ns, root.client, root.sessionKey, readExisting);
         const episodeId = root.episodeId ?? root.episode_id;
         if (episodeId) {
           const episode = db.prepare(`SELECT deleted FROM session_episodes WHERE owner_id=? AND scope=? AND project_id=?

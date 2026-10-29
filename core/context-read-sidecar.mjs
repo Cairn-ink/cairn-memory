@@ -280,7 +280,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
 
   function supportDatabase(metrics) {
     // Source support bytes/lookups are charged separately from candidate text.
-    return { prepare(sql) {
+    return { get isTransaction() { return canonical.isTransaction; }, prepare(sql) {
       const statement = canonical.prepare(sql);
       const charge = row => {
         for (const value of Object.values(row ?? {})) {

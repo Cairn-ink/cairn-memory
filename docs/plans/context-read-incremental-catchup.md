@@ -251,7 +251,8 @@ For each outgoing ref, text, title, snippet, source excerpt and metadata object:
   exclusion of superseded Memories, apply to `current` only. Under `history`, a
   superseded (not corrected) Memory or a confirmed Card that lost current
   eligibility stays readable, labelled historical with content-free supersession
-  metadata. A contributor is intact when its row still exists, is not deleted,
+  metadata. The label travels with content-bearing responses (evidence, assembly,
+  legacy fetch); candidate refs carry no content and gain no new label field. A contributor is intact when its row still exists, is not deleted,
   forgotten, excluded or purged, and its bytes still match the bound content
   identity at the bound version; supersession alone does not break that, while
   correction, receipt removal, note deletion and Raw exclusion do.

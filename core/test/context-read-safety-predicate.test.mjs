@@ -43,7 +43,7 @@ test('S1 canonical tombstones, missing rows and exact identities produce interna
   assert.deepEqual(f.check(ref), { allowed: false, reason: 'ineligible' });
   assert.deepEqual(f.check(ref, { intent: 'history' }), { allowed: true });
   f.db.prepare('UPDATE memories SET deleted=1,content=NULL WHERE id=?').run(f.memory.id);
-  assert.deepEqual(f.check(ref, { intent: 'history' }), { allowed: false, reason: 'user_forget' });
+  assert.deepEqual(f.check(ref, { intent: 'history' }), { allowed: false, reason: 'purge' });
   const source = f.card.bindings[0].source;
   assert.deepEqual(sourceReadSafety(f.db, { identity: f.identity, namespace: ns, ref: { ...source, sourceId: 'absent' } }), { allowed: false, reason: 'missing' });
   f.db.prepare('DELETE FROM receipts WHERE memory_id=?').run(f.memory.id);
@@ -52,19 +52,19 @@ test('S1 canonical tombstones, missing rows and exact identities produce interna
   f.db.prepare('UPDATE card_notes SET revision=revision+1 WHERE id=?').run(source.sourceId);
   assert.deepEqual(sourceReadSafety(f.db, { identity: f.identity, namespace: ns, ref: source }), { allowed: false, reason: 'identity_mismatch' });
   f.db.prepare("UPDATE card_notes SET state='deleted',text=NULL,byte_count=0 WHERE id=?").run(source.sourceId);
-  assert.deepEqual(f.check(f.ref, { method: 'getCard' }), { allowed: false, reason: 'user_forget' });
+  assert.deepEqual(f.check(f.ref, { method: 'getCard' }), { allowed: false, reason: 'purge' });
   assert.deepEqual(ok(f.call('getCard', { namespace: ns, cardId: f.ref.cardId })), { card: null });
   const storage = createPrivateCardStorage({ db: f.db, identity: f.identity, ready() {} });
   assert.equal(storage.cardMetadataInside(ns, f.db.prepare('SELECT * FROM private_cards WHERE id=?').get(f.ref.cardId)), null);
   f.db.prepare('DELETE FROM card_bindings WHERE card_id=?').run(f.ref.cardId);
   assert.deepEqual(f.check(f.ref, { method: 'getCard' }), { allowed: false, reason: 'ineligible' });
   ok(f.call('cancelCardDraft', { namespace: ns, cardId: f.ref.cardId, expectedRevision: f.ref.revision, actionId: 'cancel' }));
-  assert.deepEqual(f.check({ ...f.ref, revision: f.ref.revision + 1 }, { method: 'getCard' }), { allowed: false, reason: 'ineligible' });
+  assert.deepEqual(f.check({ ...f.ref, revision: f.ref.revision + 1 }, { method: 'getCard' }), { allowed: false, reason: 'purge' });
   const draft = ok(f.call('createCardDraft', { namespace: ns, actionId: 'delete-draft', drafting: 'authored', input: {
     title: 'Delete title', body: 'Delete body', authoredInput: { text: 'Delete source', occurredAt: null } } }));
   const confirmed = ok(f.call('confirmCardDraft', { namespace: ns, cardId: draft.id, expectedRevision: 1, actionId: 'confirm-delete' }));
   const deleted = ok(f.call('deleteKnowledgeCard', { namespace: ns, cardId: draft.id, expectedRevision: confirmed.revision, actionId: 'delete' }));
-  assert.deepEqual(f.check({ ...f.ref, cardId: draft.id, revision: deleted.revision, bodyRevision: confirmed.bodyRevision }, { method: 'getCard' }), { allowed: false, reason: 'user_forget' });
+  assert.deepEqual(f.check({ ...f.ref, cardId: draft.id, revision: deleted.revision, bodyRevision: confirmed.bodyRevision }, { method: 'getCard' }), { allowed: false, reason: 'purge' });
   assert.deepEqual(ok(f.call('getCard', { namespace: ns, cardId: draft.id })), { card: null });
 });
 test('S1 receipt identities bind the original Memory revision and live bytes, rather than the latest revision', t => {
@@ -81,5 +81,5 @@ test('S1 receipt identities bind the original Memory revision and live bytes, ra
   f.db.prepare('DELETE FROM receipts WHERE id=?').run(source.receiptId);
   assert.deepEqual(check(), { allowed: false, reason: 'missing' });
   f.db.prepare('UPDATE memories SET deleted=1,content=NULL WHERE id=?').run(memory.id);
-  assert.deepEqual(check(), { allowed: false, reason: 'user_forget' });
+  assert.deepEqual(check(), { allowed: false, reason: 'purge' });
 });

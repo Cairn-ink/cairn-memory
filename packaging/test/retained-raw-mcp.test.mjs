@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -107,10 +108,13 @@ test('installed retained MCP uses public discovery, real TTY, cold identity and 
   const stale = await waiting.done; assert.deepEqual([stale.code, stale.supervisorCode, stale.supervisorSignal], [1, 0, null]);
   assert.equal(ok(await call(local.client, 'inspect_private_card', { cardId: pending.card.id })).card, null);
   card = ok(await call(local.client, 'inspect_private_card', { cardId: saved.card.id })).card;
-  assert.equal(card.body, 'Synthetic owner-authored plan.'); assert.equal(card.support.status, 'unavailable');
+  assert.equal(card, null);
+  const retainedDb = new DatabaseSync(database, { readOnly: true });
+  try { assert.equal(retainedDb.prepare('SELECT body FROM private_cards WHERE id=?').get(saved.card.id).body, 'Synthetic owner-authored plan.'); }
+  finally { retainedDb.close(); }
   assert.equal((await call(local.client, 'read_private_card_source', { source: saved.sources[0] })).ok, false);
   await local.client.close(); local = await host(workspace, executable, ['--retained-raw-profile', profilePath]);
-  assert.equal(ok(await call(local.client, 'inspect_private_card', { cardId: saved.card.id })).card.support.status, 'unavailable');
+  assert.equal(ok(await call(local.client, 'inspect_private_card', { cardId: saved.card.id })).card, null);
   child('inspect'); await local.client.close();
   await workspace.cleanup(); assert.equal(existsSync(workspace.path), false);
 });

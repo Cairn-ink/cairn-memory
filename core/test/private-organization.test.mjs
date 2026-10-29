@@ -387,5 +387,6 @@ test('M07 maximum five title sources remain exact required bindings without sile
   assert.deepEqual(label.titleSources.map(ref => ref.cardId).sort(), refs.map(ref => ref.cardId).sort());
   editCard(f, refs.at(-1), 'change-fifth');
   label = ok(f.call('mapEvidence', map())).items.find(item => item.type === 'topic' && item.topic.id === l1.mocId).topic;
-  assert.equal(label.title, null); assert.equal(label.titleSources.length, 5);
+  // Stale refs are withheld; a null title still forbids prefix recovery.
+  assert.equal(label.title, null); assert.equal(label.titleSources.length, 4);
 });

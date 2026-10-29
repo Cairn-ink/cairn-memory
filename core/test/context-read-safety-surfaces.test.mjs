@@ -139,6 +139,14 @@ test('S1 supersession keeps labelled Memory history and intact receipt Card hist
   assert.equal(ok(await f.trusted.call(f.context, 'findCandidates', { ...candidateInput, intent: 'current' })).items.some(item => item.ref.memoryId === f.memory.id), false);
   const exact = ok(await f.trusted.call(f.context, 'fetchCandidateEvidence', { readSet: [ns], refs: [historicalMemory], intent: 'history' }));
   assert.equal(exact.items[0].state, 'historical');
+  assert.equal(readTransaction(f.db, () => f.role.item(historicalMemory, [ns], 1, 'history')).metadata.state, 'historical');
+  const assembled = ok(await f.trusted.call(f.context, 'contextRead', { readSet: [ns], types: ['memory'], intent: 'history',
+    query: 'SensitiveMemoryBody', deadlineMs: 5000, budget: { maxTokens: 4000, maxItems: 12 } }));
+  assert.equal(assembled.metered.items.find(item => item.ref.id === f.memory.id).metadata.state, 'historical');
+  for (let i = 0; i < 100; i++) if (ok(f.product.run('refreshContextIndex', { ...refresh({ types: ['memory'], intent: 'history' }), mode: 'lexical' })).status === 'complete') break;
+  const productAssembly = ok(f.product.run('contextRead', { readSet: [ns], types: ['memory'], intent: 'history',
+    query: 'SensitiveMemoryBody', deadlineMs: 5000, budget: { maxTokens: 4000, maxItems: 12 } }));
+  assert.equal(productAssembly.metered.items.find(item => item.ref.id === f.memory.id).metadata.state, 'historical');
   const card = ok(f.call('getCard', { namespace: ns, cardId: f.ref.cardId })).card;
   const ref = { ...f.ref, revision: card.revision };
   assert.equal(card.support.status, 'unavailable');

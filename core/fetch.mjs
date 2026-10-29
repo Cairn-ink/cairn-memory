@@ -39,9 +39,10 @@ export function fetchMemories({ runtime, model, ns, refs, view = 'current', budg
   const capacity = Math.min(100, available);
   for (let take = capacity; take >= 0; take--) {
     if (available && !take) fail('context_item_too_large');
-    const finishedRef = !page.memory || offset + take >= page.memory.receiptCount;
+    const after = take ? page.receiptOffsets?.[take - 1] ?? offset + take : page.receiptEnd ?? offset;
+    const finishedRef = !page.memory || after >= page.memory.receiptCount;
     const exhausted = finishedRef && index === refs.length - 1;
-    const next = finishedRef ? { index: index + 1, offset: 0 } : { index, offset: offset + take };
+    const next = finishedRef ? { index: index + 1, offset: 0 } : { index, offset: after };
     const value = {
       items: page.memory ? [{ memory: page.memory, receipts: page.receipts.slice(0, take),
         receiptCount: page.memory.receiptCount,

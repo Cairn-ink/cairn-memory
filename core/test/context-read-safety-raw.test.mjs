@@ -93,7 +93,7 @@ for (const mutation of ['excluded', 'deleted', 'removeReceipts']) test(`S1 ${mut
   const { sourceReadSafety } = await import('../content-safety.mjs');
   const denial = readTransaction(f.db, () => sourceReadSafety(f.db, { identity, namespace: ns, ref: sources[0] }));
   assert.equal(denial.allowed, false);
-  assert.equal(denial.reason, mutation === 'excluded' ? 'ineligible' : 'missing');
+  assert.equal(denial.reason, mutation === 'removeReceipts' ? 'missing' : 'purge');
   await build();
   assert.equal(ok(await h.call(context, 'findCandidates', query)).items.some(item => item.ref.cardId === ref.cardId), false);
   assert.equal(ok(product.run('findCandidates', query)).items.some(item => item.ref.cardId === ref.cardId), false);

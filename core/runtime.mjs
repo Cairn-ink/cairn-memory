@@ -1,4 +1,4 @@
-import { contentReadSafety, memoryContentIdentity } from './content-safety.mjs';
+import { contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { roleProfileOptions } from './role-profile-input.mjs';
 import { createRoleProfileStorage } from './role-profile-storage.mjs';
 import { assetOptions } from './asset-input.mjs';
@@ -138,15 +138,15 @@ export function createMemoryRuntime(input, internal) {
 
   function legacyDto(memory) {
     if (!memory) return null;
-    const receipts = db.prepare(`SELECT client, session_id AS sessionId,
-      event_id AS eventId, role, excerpt, created_at AS createdAt
-      FROM receipts WHERE memory_id = ? ORDER BY created_at, receipt_key`).all(memory.id);
+    const ns = { ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id || null };
+    const receipts = safeReceipts(ns, db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,receipt_key').all(memory.id));
     return {
       id: memory.id, content: memory.content, kind: memory.kind,
       scope: memory.scope, projectId: memory.project_id || null,
       origin: memory.origin, confidence: memory.confidence, revision: memory.revision,
       createdAt: memory.created_at, updatedAt: memory.updated_at,
-      receipts: receipts.map((receipt) => ({ ...receipt })),
+      receipts: receipts.map(receipt => ({ client: receipt.client, sessionId: receipt.session_id, eventId: receipt.event_id,
+        role: receipt.role, excerpt: receipt.excerpt, createdAt: receipt.created_at })),
     };
   }
 
@@ -438,8 +438,13 @@ export function createMemoryRuntime(input, internal) {
         WHERE receipts.memory_id = memories.id) AS receipt_count FROM memories
         WHERE ${where} AND id = ? AND deleted = 0`).get(...boundary(ns), id);
       if (!memory || (memory.review_state === 'awaiting' && !(decisionReview && includeAwaiting))) fail("memory_not_found");
-      let sql = `SELECT id, client, session_id AS sessionId, event_id AS eventId,
-        role, excerpt, created_at AS createdAt FROM receipts WHERE memory_id = ?`;
+      if (anchor && Object.hasOwn(anchor, 'row')) {
+        if (Object.keys(anchor).length !== 1 || !Number.isSafeInteger(anchor.row) || anchor.row < 1) fail('invalid_cursor');
+        const stored = db.prepare('SELECT created_at AS createdAt,id FROM receipts WHERE memory_id=? AND rowid=?').get(id, anchor.row);
+        if (!stored) fail('cursor_stale');
+        anchor = stored;
+      }
+      let sql = `SELECT rowid AS cursor_row,* FROM receipts WHERE memory_id = ?`;
       const params = [id];
       if (anchor) {
         sql += " AND (created_at > ? OR (created_at = ? AND id > ?))";
@@ -447,24 +452,41 @@ export function createMemoryRuntime(input, internal) {
       }
       sql += " ORDER BY created_at ASC, id ASC LIMIT ?";
       params.push(count + 1);
-      return { memory: { ...metadataDto(memory), content: memory.content },
-        receipts: db.prepare(sql).all(...params).map((receipt) => ({ ...receipt })),
-        ...(proceduralStorage.inspect(id) ? { procedural: proceduralStorage.inspect(id) } : {}),
+      const original = db.prepare(sql).all(...params), scanned = original.slice(0, count), procedural = safeProcedural(ns, id);
+      return { receiptComplete: original.length <= count, receiptScan: scanned.at(-1)?.cursor_row, memory: { ...metadataDto(memory), content: memory.content },
+        receipts: safeReceipts(ns, scanned).map(receipt => ({ id: receipt.id, client: receipt.client,
+          sessionId: receipt.session_id, eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt, createdAt: receipt.created_at })),
+        ...(procedural ? { procedural } : {}),
         placements: mocStorage.placementRefs(ns, id),
         conflicts: conflictStorage.inspect(ns, id),
-        ...(includeQualification ? { qualification: qualificationStorage.inspect(memory) } : {}),
+        ...(includeQualification ? { qualification: safeQualification(ns, memory) } : {}),
         ...(memory.currentness === 'historical'
           ? { supersession: supersessionStorage.inspect(ns, id) } : {}), epoch: currentEpoch };
     });
   }
 
+  function safeQualification(ns, row) {
+    const value = qualificationStorage.inspect(row);
+    return value && !anchoredReadSafety(db, { namespace: ns, memoryId: row.id, anchors: value.anchors }).allowed ? null : value;
+  }
+  function safeProcedural(ns, id) {
+    const value = proceduralStorage.inspect(id);
+    return value && !anchoredReadSafety(db, { namespace: ns, memoryId: id, anchors: value.anchors }).allowed ? null : value;
+  }
+  function safeReceipts(ns, receipts, memo = createContentReadMemo(db)) {
+    return receipts.filter(receipt => receiptReadSafety(db, { namespace: ns, receipt, memo }).allowed);
+  }
+  const receiptPageOffsets = new WeakMap();
   function receiptPage(ns, row, offset, count, recent = false) {
-    const rows = db.prepare(`SELECT * FROM receipts WHERE memory_id=?
+    const original = db.prepare(`SELECT * FROM receipts WHERE memory_id=?
       ORDER BY created_at ${recent ? 'DESC' : 'ASC'},id LIMIT ? OFFSET ?`).all(row.id, count, offset);
-    if (!row || !contentReadSafety(db, { identity, namespace: ns, intent: 'history',
+    const memo = createContentReadMemo(db), rows = safeReceipts(ns, original, memo);
+    if (!row || !contentReadSafety(db, { identity, namespace: ns, intent: 'history', memo,
       ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision }, receipts: rows }).allowed) fail('revision_conflict');
-    return rows.map(receipt => ({ id: receipt.id, client: receipt.client, sessionId: receipt.session_id, eventId: receipt.event_id,
+    const result = rows.map(receipt => ({ id: receipt.id, client: receipt.client, sessionId: receipt.session_id, eventId: receipt.event_id,
       role: receipt.role, excerpt: receipt.excerpt, createdAt: receipt.created_at }));
+    receiptPageOffsets.set(result, { offsets: rows.map(receipt => offset + original.indexOf(receipt) + 1), end: offset + original.length });
+    return result;
   }
   function receiptPrefix(ns, row, offset, count) { return receiptPage(ns, row, offset, count); }
 
@@ -481,13 +503,16 @@ export function createMemoryRuntime(input, internal) {
     });
   }
 
-  function readSourceEvidence(row) {
-    const receipts = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id LIMIT 101').all(row.id);
-    const count = detailDto(row).receiptCount;
-    qualificationStorage.inspect(row);
-    const evidence = sourceEvidence(row, receipts, count, receiptKey);
+  function readSourceEvidence(row, complete = true) {
+    const original = db.prepare('SELECT * FROM receipts WHERE memory_id = ? ORDER BY created_at, id LIMIT 101').all(row.id);
     const ns = { ownerId: row.owner_id, scope: row.scope, projectId: row.project_id || null };
-    if (!contentReadSafety(db, { identity, namespace: ns, intent: 'history', ref: { type: 'memory', namespace: ns,
+    qualificationStorage.inspect(row);
+    const full = sourceEvidence(row, original, detailDto(row).receiptCount, receiptKey);
+    const memo = createContentReadMemo(db), receipts = complete ? original : safeReceipts(ns, original, memo);
+    if (!complete && !receipts.length) fail('source_unavailable');
+    const ids = new Set(receipts.map(receipt => receipt.id));
+    const evidence = complete ? full : { ...full, receipts: full.receipts.filter(receipt => ids.has(receipt.id)), receiptCount: receipts.length };
+    if (!contentReadSafety(db, { identity, namespace: ns, intent: 'history', memo, ref: { type: 'memory', namespace: ns,
       memoryId: row.id, revision: row.revision }, receipts }).allowed) fail('revision_conflict');
     return evidence;
   }
@@ -513,14 +538,15 @@ export function createMemoryRuntime(input, internal) {
         return page;
       }
       const memory = detailDto(row);
-      return { memory, receipts: receiptPrefix(ns, row, offset, 101), epoch: currentEpoch,
-        ...(includeQualification ? { qualification: qualificationStorage.inspect(row) } : {}),
+      const receipts = receiptPrefix(ns, row, offset, 101), positions = receiptPageOffsets.get(receipts);
+      return { memory, receipts, receiptOffsets: positions.offsets, receiptEnd: positions.end, epoch: currentEpoch,
+        ...(includeQualification ? { qualification: safeQualification(ns, row) } : {}),
         ...(view === 'historical' ? { supersession: supersessionStorage.inspect(ns, row.id) } : {}) };
     });
   }
 
   function readUsageEvidence(ns, row, mode) {
-    return { ...readSourceEvidence(row), ...(mode === 'rationale-evidence'
+    return { ...readSourceEvidence(row, false), ...(mode === 'rationale-evidence'
       ? { rationale: rationaleStorage.inspectInside(ns, { memoryId: row.id, revision: row.revision }) } : {}) };
   }
 
@@ -584,7 +610,7 @@ export function createMemoryRuntime(input, internal) {
         });
         return selected.map(index => sources[index]);
       }
-      const qualifications = includeQualification ? rows.map(row => qualificationStorage.inspect(row)) : null;
+      const qualifications = includeQualification ? rows.map((row, index) => safeQualification(candidates[index].namespace, row)) : null;
       return selected.map((index) => {
         const memory = detailDto(rows[index]);
         const capped = candidates[index].receiptOrder === 'recent';

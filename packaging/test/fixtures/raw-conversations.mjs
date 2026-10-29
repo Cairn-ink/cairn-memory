@@ -129,8 +129,9 @@ try {
     const deleted=ok(core.deleteConversation(state.deletion));
     assert.equal(usage().savedBytes,0); assert.equal(usage().reservedBytes,0);
     assert.equal(ok(call('getCard',{ cardId:state.pending.id })).card,null);
-    const retained=ok(call('getCard',{ cardId:state.confirmed.id })).card;
-    assert.equal(retained.body,body); assert.equal(retained.support.status,'unavailable');
+    assert.equal(ok(call('getCard',{ cardId:state.confirmed.id })).card,null);
+    const retainedDb=new DatabaseSync(path,{readOnly:true});
+    try { assert.equal(retainedDb.prepare('SELECT body FROM private_cards WHERE id=?').get(state.confirmed.id).body,body); } finally { retainedDb.close(); }
     denied(await call('getSource',{ source:state.source }),'source_unavailable');
     assert.equal(policyCalls,0);
     fs.writeFileSync(statePath,JSON.stringify({ ...state,deleted }));
@@ -139,8 +140,9 @@ try {
     const state=JSON.parse(fs.readFileSync(statePath,'utf8'));
     assert.deepEqual(ok(core.deleteConversation(state.deletion)),state.deleted);
     assert.equal(ok(await core.getConversation({ namespace,conversationId:state.deletion.conversationId })).conversation,null);
-    const retained=ok(call('getCard',{ cardId:state.confirmed.id })).card;
-    assert.equal(retained.body,body); assert.equal(retained.support.status,'unavailable');
+    assert.equal(ok(call('getCard',{ cardId:state.confirmed.id })).card,null);
+    const retainedDb=new DatabaseSync(path,{readOnly:true});
+    try { assert.equal(retainedDb.prepare('SELECT body FROM private_cards WHERE id=?').get(state.confirmed.id).body,body); } finally { retainedDb.close(); }
     denied(await call('getSource',{ source:state.source }),'source_unavailable');
     denied(await core.captureRaw({ ...request(selected[0]),eventId:'late-after-delete' }),'conversation_deleted');
     assert.equal(usage().savedBytes,0); assert.equal(usage().reservedBytes,0);

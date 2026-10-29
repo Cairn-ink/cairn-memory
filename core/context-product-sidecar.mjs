@@ -337,7 +337,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       .all(...boundary(s.ns),...(s.type === 'card' ? [s.state] : []),after,maximum);
     m.canonicalRows += rows.length; m.metadataBytes += Buffer.byteLength(JSON.stringify(rows));
     // Count and meter support independently of transformation attempts.
-    const support = { prepare(sql) { const stmt = canonical.prepare(sql); return Object.fromEntries(['get','all'].map(method => [method,(...args) => {
+    const support = { get isTransaction() { return canonical.isTransaction; }, prepare(sql) { const stmt = canonical.prepare(sql); return Object.fromEntries(['get','all'].map(method => [method,(...args) => {
       m.supportLookups++; const r = stmt[method](...args); m.supportBytes += Buffer.byteLength(JSON.stringify(r ?? null)); return r;
     }])); } };
     return rows.map(row => ({ id:row.id,revision:row.revision,body_revision:row.body_revision,

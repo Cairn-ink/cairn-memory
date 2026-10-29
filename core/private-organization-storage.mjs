@@ -22,8 +22,8 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
   const advanceIndex = ns => db.prepare(`INSERT INTO card_moc_epochs VALUES(?,?,?,2)
     ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET revision=revision+1`).run(...boundary(ns));
   const topic = (ns, id) => db.prepare(`SELECT * FROM card_mocs WHERE ${where} AND id=?`).get(...boundary(ns), id);
-  const safeCard = (ns, card) => Boolean(card && contentReadSafety(db, { identity, namespace: ns,
-    ref: { type: 'card', namespace: ns, cardId: card.id, revision: card.revision, bodyRevision: card.bodyRevision },
+  const safeCard = (ns, card, ref) => Boolean(card && contentReadSafety(db, { identity, namespace: ns,
+    ref: ref ?? { type: 'card', namespace: ns, cardId: card.id, revision: card.revision, bodyRevision: card.bodyRevision },
     currentCardEligible: () => sourceEligible(card) }).allowed);
   const cardRef = (ns, card) => ({ type: 'card', namespace: ns, cardId: card.id, revision: card.revision, bodyRevision: card.bodyRevision });
   function encode(value) {
@@ -51,11 +51,10 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
   }
   function titleInside(ns, row) {
     const sources = db.prepare('SELECT * FROM card_moc_title_sources WHERE moc_id=? ORDER BY card_id LIMIT 6').all(row.id);
-    // Unsafe Cards leave no ref; a safe but stale ref stays listed and only clears the title.
     const cards = new Map(sources.map(source => [source.card_id, cardDetailInside(ns, source.card_id)]));
-    const safe = sources.filter(source => safeCard(ns, cards.get(source.card_id)));
-    const valid = sources.length > 0 && sources.length <= 5 && safe.length === sources.length && safe.every(source =>
-      sameRef(cards.get(source.card_id), { revision: source.card_revision, bodyRevision: source.body_revision }));
+    const safe = sources.filter(source => safeCard(ns, cards.get(source.card_id), { type: 'card', namespace: ns,
+      cardId: source.card_id, revision: source.card_revision, bodyRevision: source.body_revision }));
+    const valid = sources.length > 0 && sources.length <= 5 && safe.length === sources.length;
     return { title: valid ? row.title : null, titleSources: safe.slice(0, 5).map(source => ({ type: 'card', namespace: ns,
       cardId: source.card_id, revision: source.card_revision, bodyRevision: source.body_revision })) };
   }
