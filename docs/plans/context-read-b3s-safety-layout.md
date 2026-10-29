@@ -1,6 +1,6 @@
-# Fix B safety layout — revision 2
+# Fix B safety layout — revision 3
 
-Frozen design, 2026-10-29; code references use `5f37946d`. Design only.
+Frozen design, 2026-10-29; code references use `a8fd8df3`. Design only.
 This narrows [the parent design](context-read-incremental-catchup.md), §§2.2–2.3,
 3.4–3.5 and 8.1. The revision-2 product facts and owner decisions supersede the
 first draft's blanket reservations, legacy-ref refusal, Memory eras and staging.
@@ -386,104 +386,150 @@ The old fingerprint `suppressed` table is not a privacy reason source: ordinary
 supersession also writes it (`core/supersession-storage.mjs:55`–`:61`). Missing rows
 without verified deletion evidence cause unresolved denial, not an invented reason.
 
-## 5. S2h pull APIs and hosted reconciliation
+## 5. S2h hosted pull entry and identity handoff
 
-The wire operations and bounds follow parent §3.4 exactly:
+### 5.1 Read-only facade and trusted service grant
+
+Export `openContentSuppressionReader` from new `core/content-suppression-reader.mjs` and re-export at
+`core/index.mjs:10`. It is a separate long-lived read-only handle, not a method added to the product reader's closed
+set (`core/context-product-reader.mjs:266`–`:279`) or the Card-dependent facade (`core/contract.mjs:1181`–`:1194`). It
+opens mapped v18 without Card options/sidecars, imports SQLite-reaching open code inside execution, and exposes only
+these Promise/envelope methods and `close()`:
 
 ```text
-listSuppressionsSince(owner, epoch, { cursor?, limit })
- -> { items: [{ key, reason, epoch }], throughEpoch, nextCursor }
-isSuppressed(owner, sourceIdentities, { cursor?, limit })
- -> { results: [{ inputIndex, suppressed, reasons, matchedEpoch }], observedEpoch, nextCursor }
+openContentSuppressionReader({version:'content-suppression-read-v1',path,expected,
+  serviceBinding:S,suppression:Q,host:{authorize,isCurrent},requestMaxMs?})
+listSuppressionsSince(owner,epoch,{expected,cursor?,limit},credential)
+ -> {ok:true,value:{items:[{key,reason,epoch}],throughEpoch,nextCursor}}
+isSuppressed(owner,sourceIdentities,{expected,cursor?,limit},credential)
+ -> {ok:true,value:{results:[{inputIndex,suppressed,reasons,matchedEpoch}],observedEpoch,nextCursor}}
 ```
 
-`key` is content-free owner/namespace/kind/key/incarnation and version/interval scope,
-including owner/namespace-wide targets. Input identities carry this typed identity
-and relevant ancestors. Memory versions are bound revisions; receipts identify
-parent Memory/revision; Raw identifies conversation/message/span/precision. Unknown
-required ancestry/identity evaluation refuses, never returns false. Exact public
-content-ref grammars stay unchanged; these are the new pull operations' own inputs.
-No title, body, excerpt, source name, operation payload or cleanup event is returned.
+A list item's `key` is a **DenialKey**, distinct from §5.2's input `C.key` (a UUID): a closed, content-free,
+lossless wire form of one `content_suppressions` fact target, `{namespace|null,kind,incarnation|null,matchMode,
+version|null,through|null,span|null}`. `matchMode` is the fact's `match_mode`: `owner` (namespace, incarnation and
+version null), `namespace`, `incarnation`, `version` (exact `version`), `revision-through` (Memory only; `through` is
+the last retired revision, so it matches every bound revision ≤ through and never a later valid revision) or `span`
+(Raw only; `span={messageKey,start,end}` with end > start, matched by interval overlap in the same message and
+conversation incarnation). Each value maps one-to-one onto the fact columns; serialization never widens or narrows a
+fact. Acceptance adds a fact → wire → match round trip for every mode: a correction through M@6 matches bound M@4
+and M@6, not M@7; an owner-wide or namespace-wide fact matches every identity in its scope; disjoint spans do not
+match.
 
-Authorization is verified service authority bound to owner/current namespace grants,
-or authenticated owner authority; the owner argument is not a grant. Cross-owner,
-revoked or inaccessible-namespace calls refuse. An owner-wide list requires grants
-covering the entire owner suppression window; never filter inaccessible facts then
-advance the owner's checkpoint. Both operations check admission and repeat authority
-checks at page delivery. Only an explicitly authorized erasure-reconciliation service
-may read owner-wide denial facts for an erased owner. Ordinary denied-owner calls
-remain denied, including negative queries; reconciliation never grants content access.
+Closed records: expected binds bootstrap UUIDs `{storeId,suppressionDomain}`; Q is trusted issuance, not request options. S is exactly the existing service binding: `kind:'service',serviceId,credentialBindingId,
+credentialExpiresUtcMs,credentialDigest,ownerId,namespaces:{readSet,ownerCoverage}, issuedAt,ownerGeneration?` with
+existing validation (`core/context-product-service.mjs:17`–`:29`). Add `suppressionServiceIssuance(S,Q)` there:
+validate S unchanged, validate Q below, and return binding B=`{...S,suppression:Q}`. Legacy issuance stays closed.
 
-Admission currently means the host-attested original live installation, with the
-expected persisted store/domain and current authority. A restored backup or uncertain
-origin refuses; there is no restored-store admission until deferred ledger work.
-Local state alone cannot detect a host secretly rolling back the whole store; the
-no-restore operational rule is a real limitation, not an external continuity proof.
-Epochs/domain are never reset by reopening, S2c, cleanup, cache loss or migration.
-A future ledger integration must preserve externally observed owner epochs or refuse
-admission; its global sequence is not assumed to equal this owner counter.
+```text
+Q={version:'content-suppression-grant-v1',expected,
+   scope:{kind:'owner'} | {kind:'namespaces',readSet},
+   permissions:{reconcile:true,erasureReconciliation:boolean},accessGeneration}
+```
 
-### 5.1 Ordered list window
+Scope readSet is nonempty, unique, same-owner and within S.namespaces.readSet; accessGeneration is a positive safe
+integer. Each call requires owner=S.ownerId and that owner on every identity/ancestor namespace. Explicit owner scope covers **all** owner namespaces, independently of S's bounded context-selection list;
+ordinary service access/recent-project coverage never implies that permission. Lists require owner scope; namespace
+grants may batch only identities/ancestors within their set. Erasure permission is trusted host issuance, requires
+owner scope, and is distinct from ordinary reconcile. It alone permits an erased owner's denial facts; no grant here
+permits content access. Engine checks the erasure permission even when ordinary isCurrent returns true. Owner-facing
+adapters authenticate the owner before issuing B; they never gain erasure permission automatically.
 
-First page reads the owner counter in one coherent read transaction, captures fixed
-`throughEpoch`, and enumerates `inputEpoch < epoch <= throughEpoch`, ascending
-`(epoch, typed key)` with BINARY typed-key order. Epochs are unique per owner, so
-there is no tie to split. The target/window indexes in §4 provide bounded seeks.
-An absent owner counter means zero only after valid domain admission. Negative,
-noncanonical, future or unverifiable input epochs refuse; never silently restart at 0.
+Reuse `requestAuthority` (`core/context-product-authority.mjs:17`–`:59`), adding only conditional
+`suppression:B.suppression` to its trusted request for this new profile. Request grammar is
+`{method,input,ownerId,namespaces,requestControl, credentialBindingId,suppression}`; input is the frozen normalized
+method arguments, including expected and original cursor. The trusted grant returned by authorize must equal **all of
+B**, not bare S. isCurrent(grant,request) must synchronously return true at entry and immediately before **every page
+delivery**, including cached pages. Match credential digest/binding/expiry and live owner/scope/permission
+generations; revoked/async/changed grants refuse. Reuse requestRecord's fresh request id, handle id, credential
+binding/expiry and 1–5000 ms cutoff (`core/context-product-control.mjs:104`, `:129`–`:148`); default
+requestMaxMs=1000. Callbacks run outside SQLite transactions. Cursor access digest includes Q
+scope/permissions/generation/expected as well as S's credential/owner binding: existing accessDigest omits Q
+(`core/context-product-validation.mjs:8`–`:9`). Product-reader lifecycle is unchanged.
 
-The authenticated cursor binds version, owner, domain/store id, authority/scope
-digest and generation, original input epoch, fixed throughEpoch, original limit,
-last epoch and HMAC of the last typed key, issued time and expiry. The last-key
-commitment binds the exact row without putting a large identity into the cursor.
-Resume verifies that row/window, counter not regressed, and contiguous next epoch;
-no missing fact is silently skipped. Facts never prune or overwrite. Concurrent
-newer denials appear in the next pull, not the current fixed window.
+The handle attests DB store_metadata.store_id and control.suppression_domain against constructor expected and
+Q.expected. **Every first request and continuation** must also provide options.expected copied from the product
+checkpoint `{owner,storeId,suppressionDomain,epoch}`; all four owner/store/domain bindings must agree before any epoch
+query. No default to the handle's current domain. Initial checkpoint epoch 0 requires the authenticated
+migration/bootstrap pair; mismatch never resets to 0. Persist only a terminal page's throughEpoch with the same pair.
+Original-live-store admission still applies; restored/uncertain origin refuses. Local state cannot detect a host
+secretly rolling back the whole store: the decided no-serving-restore rule remains necessary until external
+ledger/admission work.
 
-Return a validated contiguous prefix of at most limit facts, with continuation if
-more facts remain through the high-water. Only a verified terminal page has null
-nextCursor. An empty list is terminal only when inputEpoch equals throughEpoch;
-absence before throughEpoch is a missing-fact refusal. The product advances its
-checkpoint to throughEpoch **only then**.
-Expired/invalid/unavailable continuation requires restart from the original input
-checkpoint. Cleanup updates cannot change list membership, reason or ordering.
+### 5.2 Frozen sourceIdentities union
 
-### 5.2 Fixed batch snapshot
+This is the new pull input, **not a replacement content-ref API**. Common fields C:
+`{storeId,suppressionDomain,namespace:{ownerId,scope,projectId},key,incarnation, boundRevision,ancestors}`.
+Store/domain match options.expected; UUID key=incarnation for content roots, scope is personal/project, projectId is
+null/string. ancestors is a recursively bounded array of this union. All fields below are mandatory:
 
-Accept 1–256 identities; preserve input-index order, including duplicate identities.
-In one read-only canonical snapshot, capture observedEpoch and evaluate all inputs
-and required ancestors against facts at/below that epoch. A positive fact can answer
-true for a removed source; a negative requires unambiguous identity and complete
-relevant ancestor resolution. Missing/ambiguous required ancestry refuses, not false.
-Include owner, namespace,
-incarnation, exact-version/revision-through and Raw-overlap matches. `reasons` is
-the deterministic deduplicated taxonomy order; matchedEpoch is the highest matching
-fact epoch, null for false. False means no applicable denial **at that epoch**, not
-source existence, complete lineage, read authority or future safety.
+| kind added to C | boundRevision and additional fields captured at body creation |
+| --- | --- |
+| memory | Positive safe integer from delivered Memory.revision; no extra fields. |
+| submitted-note | Positive note revision; contentIdentity from its existing source ref (`core/private-card-storage.mjs:38`–`:40`). |
+| receipt | boundRevision is the parent Memory revision, not a fabricated receipt counter; require memoryId and one Memory ancestor with key=memoryId, equal boundRevision/namespace. key is get's receipt id or the existing receiptRef.receiptId (`core/runtime.mjs:449`–`:450`; `core/card-receipt-sources.mjs:13`–`:17`). No new keyed field unavailable in v18 get is required. |
+| raw | key is conversationId; positive boundRevision is the conversation revision captured with the source anchor/read (`core/raw-reads.mjs:57`; `core/raw-source-input.mjs:30`–`:34`). Require messageId, span:{start,end,precision}, contentIdentity; retain the original Raw ref (`core/raw-source-input.mjs:10`–`:18`). The ref has no numeric revision: missing capture refuses; no current-state fill. |
+| card | Positive Card revision and bodyRevision; require its complete bound-body source closure, verifiable from retained S2c records. H-only/unknown Card closure cannot yield a negative answer. This probe does not add Card-derived writer inputs. |
 
-Materialize the entire evaluated result in a bounded, private in-memory batch cache
-before returning page one; retain no live SQLite transaction across pages/awaits.
-Cache entries contain only identities/evaluation facts, not content. Serialized result
-storage is capped at 64 KiB per batch; cache admission/eviction is bounded and an
-unavailable entry invalidates the snapshot. No canonical/session table is written.
-An authenticated cursor binds the cache snapshot id, full input digest, owner/domain/
-store, authority/scope generation, observedEpoch, original limit, last input index,
-issued time and expiry. Resume also verifies the live counter has not regressed
-below observedEpoch. Every continuation repeats the identical full input list.
-Worker restart, eviction or unverifiable snapshot requires a full batch restart;
-never recompute a later page at a newer epoch. New facts after observedEpoch do not
-rewrite an already materialized result. Changed authority refuses delivery.
+Closure is transitive, same store/domain/owner, deduplicated by full typed/versioned identity; cycles, conflicting
+duplicates or budget overflow refuse. Memory is a root on v18; notes are leaf identities on Card-capable bases.
+Receipt rows are children, not implicit ancestors of Memory-only text. Receipt closure contains its captured parent
+Memory and all applicable Raw ancestors; Raw closure includes its conversation erasure identity
+(C.key/incarnation/revision) and message/span/precision structurally, so message ids are never global keys. On
+Raw-capable bases, include every applicable Raw span ancestor of a Memory/receipt from canonical lineage at capture,
+recursively. Unknown/missing origin or unavailable bound-version ancestry refuses a negative result; `ancestors:[]` is
+not a caller assertion of independence. Engine validates closure against bound-version canonical evidence, never
+later-body sources. A positive known denial can still answer true for a removed source. Never infer a missing
+revision, parent, precision or store binding from today's row. Owner/namespace-wide targets are denial facts, not
+extra content input kinds. Engine may add ancestors only from immutable records of the supplied bound version; missing
+versions never resolve to current.
 
-Both operations: 1–100 entries per page; request and response <=64 KiB; opaque
-HMAC-authenticated cursor <=2 KiB; lifetime <=15 minutes from the first page, never
-extended by continuation. Strict validation precedes execution. A normal byte cap
-may shorten a page with valid continuation; a single oversize entry, validation/
-execution-budget exhaustion, lost continuity or uncertain match refuses, without a
-false complete/terminal page. Public refusal reveals no partial results or reasons.
-These are suppression queries, not discovery feeds. Final content delivery always
-checks live safety independently of cached pull/batch results. The hosted product
-owns polling/checkpoints, per-revision app Card sources, notify/unpublish behavior
-and legacy app Card policy; none becomes engine Card storage.
+For pinned (storeUuid,domainUuid), v18 get supplies Memory id/namespace/revision (`core/contract.mjs:375`–`:398`;
+`core/runtime.mjs:449`–`:450`, metadata `:152`–`:164`). For synthetic M at revision 4, persist with the app body revision:
+
+```text
+r=core.get({namespace:N,memoryId:M}); require r.ok; // pinned storeUuid/domainUuid
+{kind:'memory',storeId:storeUuid,suppressionDomain:domainUuid,namespace:r.value.memory.namespace,
+ key:M,incarnation:M,boundRevision:4,ancestors:[]}
+```
+
+Both UUIDs come from pinned bootstrap, not get's response; M=r.value.memory.id. Store the exact descriptor when
+consuming that read; never reconstruct it from a later get. If receipt excerpts also feed the body, persist separate
+receipt roots using r.value.receipts ids and that same Memory revision, with the Memory ancestor; consume all required
+receipt pages coherently or refuse a complete source claim. At reconciliation, send the stored M@4 unchanged. A
+correction retiring revision 6 and creating revision 7 matches revision-through 6; forget matches M's incarnation
+regardless of revision. Rebuilding M@7 would be wrong. An app body rewrite captures new descriptors; it never edits
+the source set of its old body revision. Bodies without captured versions/closure remain unknown; no current-state
+backfill.
+
+### 5.3 List window, batch cache and limits
+
+List page one captures throughEpoch in one coherent snapshot and seeks immutable facts `inputEpoch < epoch <=
+throughEpoch` in `(epoch,typed key)` order. Future or unverifiable epochs refuse; no counter means 0 only after
+admission. Its authenticated cursor binds owner/store/domain, full suppression access digest, original epoch/limit,
+fixed throughEpoch, last epoch/key HMAC and first-issued/expiry time. Resume checks contiguity and nonregression;
+facts never prune/overwrite. Concurrent newer facts wait for the next pull. Empty is terminal only for
+inputEpoch=throughEpoch; a missing fact before high-water refuses. Only terminal delivery advances the product
+checkpoint.
+
+Batch evaluates all 1–256 inputs/ancestor closures in one read snapshot at fixed observedEpoch, in input-index order.
+Include owner/namespace, incarnation/version, revision-through and Raw overlap denials. reasons use deduplicated
+taxonomy order; matchedEpoch is highest matching epoch or null. False only means no applicable fact at that epoch,
+never complete lineage/read permission. Missing/unbound evidence refuses. Materialize all results before page one; no
+transaction survives pagination. The **handle's service process owns its private cache** across HTTP/page requests;
+the product keeps that handle alive and routes a batch's continuations to it. Cap serialized results at 64 KiB/batch,
+at most 64 batches and 4 MiB charged total cache per handle (metadata included). Cache id and handle incarnation bind
+the cursor together with full input digest, observed counter, owner/store/domain/access, original limit/last index and
+issued/expiry time. Repeat the full identical input list on resume. Entries expire 15 minutes after page one;
+close/restart/eviction/revocation destroys them and forces a full batch restart, never mixed-epoch recomputation. Live
+counter cannot regress below observedEpoch; later denials do not rewrite a materialized snapshot.
+
+Both operations: limit 1–100, request/response <=64 KiB, cursor <=2 KiB, lifetime <=15 minutes without renewal. Byte
+caps may shorten a validated prefix with valid continuation; oversize entries, exhausted execution/closure budgets,
+changed authority, invalid cursors or uncertain matching refuse without partial/false-complete output. No content,
+source names, operation payloads or cleanup events leave these APIs. The hosted product owns its app Card
+sources/checkpoints/notify/unpublish and legacy policy. Content delivery always checks live safety independently of
+pull results.
 
 ## 6. S2c lineage storage and exact-byte commitments
 
@@ -700,6 +746,18 @@ before commit/replay as current facade does (`:47`–`:49`, `:63`–`:69`). Ever
 requires this trusted audit variant; absent actor/time refuses rather than inventing
 data. Read-only grants retain their existing grammar.
 
+S2c includes the adapters, not just the verifier. `adapters/mcp/private-card-access.mjs:25`–`:30` adds the audit
+variant for permitted draft/organization mutations, using a trusted bootstrap service actor/time; it does not acquire
+explicit-user permission. Callers `adapters/mcp/server.mjs:149` and `adapters/mcp/retained-raw.mjs:22` supply that
+context. `adapters/mcp/review-card.mjs:111`–`:116` supplies the authenticated human actor/time for approved
+confirmation/dependency mutations. First issuance stores audit data in the grant map; isCurrent returns it unchanged.
+Supplemental reads keep the old variant (`core/card-current-facade.mjs:9`–`:18`). These are the two in-tree Card
+mutation grant producers. Method/asset command grants target different facades
+(`adapters/mcp/method-package-command.mjs:107`–`:125`; `adapters/mcp/asset-command.mjs:61`–`:67`) and retain their old
+variant; embedded hosts supplying privateCards.authority must migrate too. Installed positive tests cover
+service-actor draft create/cancel and organization, human terminal confirmation/dependency revalidation, unchanged
+reads, first timestamp/retry and scope revocation; no actor is fabricated from tool input.
+
 ### 7.2 Read integration
 
 Replace S1's single contributor loader only in S2c. Within the canonical snapshot,
@@ -877,15 +935,22 @@ No S2a/S2b staged halves remain.
 
 | Package | Scope / planned files | Changed-line estimate | §8.1 acceptance / installer constraint |
 | --- | --- | --- | --- |
-| S2h | New safety layout/schema/suppression storage/migration/pull modules; `core/database.mjs`, `core/read-database.mjs`, `core/existing-store.mjs`, `core/context-product-schema.mjs`, S1 common predicate, topic validation, method capability checks, CLI/probe/local permission pins; `core/runtime.mjs`, `core/private-card-storage.mjs`, Raw deletion/lineage writers; focused storage/writer/pull/installed tests and shipped runtime manifests. | 1,400–2,400 | Reasons and both suppression pulls: all scopes/ancestors/versions, fixed windows, interleaved new facts/reasons, full-page reconciliation, batch input order/fixed snapshot, cursor/authority/size/budget refusals, same-transaction/no-ack-on-failure, epoch rollover/exhaustion/no reset, old-pin/incomplete-cell refusal; 18/23/33. v18 never gets Card tables. Hosted rollout needs pulls if selected; H-only local cells remain S1 lineage semantics. |
+| S2h | New safety layout/schema/suppression storage/migration/pull modules; `core/content-suppression-reader.mjs`, `core/index.mjs`, `core/context-product-service.mjs`, `core/context-product-authority.mjs` and typed-input adapter; `core/database.mjs`, `core/read-database.mjs`, `core/existing-store.mjs`, `core/context-product-schema.mjs`, S1 common predicate, topic validation, method capability checks, CLI/probe/local permission pins; `core/runtime.mjs`, `core/private-card-storage.mjs`, Raw deletion/lineage writers; focused storage/writer/pull/installed tests and shipped runtime manifests. | 1,900–3,200 | Reasons and both suppression pulls: all scopes/ancestors/versions, fixed windows, interleaved new facts/reasons, full-page reconciliation, batch input order/fixed snapshot, cursor/authority/size/budget refusals, same-transaction/no-ack-on-failure, epoch rollover/exhaustion/no reset, old-pin/incomplete-cell refusal; 18/23/33. v18 never gets Card tables. Hosted rollout needs pulls if selected; H-only local cells remain S1 lineage semantics. |
 | S3 | New pure classifier, canonical read-only observations/preflight and CLI router; `adapters/mcp/cli.mjs`; focused first-install/class/owner/count/file-identity tests. No S2c runtime dependency. | 350–650 | Per-environment first-install and migrated read-only counts; zero writes/DDL and unchanged family digests; suppression precedence, total/owner reconciliation, missing/over-budget evidence refusal. Deliver before/in parallel with S2h and may ship read-only before local policy. |
-| S2c | New Card provenance/authorization storage; lineage additions to schema/migration; S1 predicate loader/final digest seam; `core/private-card-storage.mjs`, `core/private-card-input.mjs`, `core/private-card-facade.mjs`, `core/private-operation-helpers.mjs`, `core/private-card-schema.mjs`, `core/card-raw-sources.mjs`, receipt checks; focused provenance/recovery/rollback/normalization/installed tests and gated packaging. Reuses S3 classifier. | 1,300–2,200 | Removed A binding then forget/purge A, rebuild/bare fetch/all purposes; child deletion/same-body union; draft inspect/confirm, confirmed needs-review repair; own-writing identical bytes/audit/owner-action retry and conflicts; latest-body rollback, noncanonical bytes, Raw precision. **One complete package; must not ship in any installer before local legacy-policy decision.** |
+| S2c | New Card provenance/authorization storage; local audit-grant adapters `adapters/mcp/private-card-access.mjs`, `adapters/mcp/review-card.mjs` and bootstrap callers `adapters/mcp/server.mjs`, `adapters/mcp/retained-raw.mjs`; lineage additions to schema/migration; S1 predicate loader/final digest seam; `core/private-card-storage.mjs`, `core/private-card-input.mjs`, `core/private-card-facade.mjs`, `core/private-operation-helpers.mjs`, `core/private-card-schema.mjs`, `core/card-raw-sources.mjs`, receipt checks; focused provenance/recovery/rollback/normalization/installed tests and gated packaging. Reuses S3 classifier. | 1,550–2,600 | Removed A binding then forget/purge A, rebuild/bare fetch/all purposes; child deletion/same-body union; draft inspect/confirm, confirmed needs-review repair; own-writing identical bytes/audit/owner-action retry and conflicts; latest-body rollback, noncanonical bytes, Raw precision. **One complete package; must not ship in any installer before local legacy-policy decision.** |
 
-Total selected design: 3,050–5,250 lines including S3, excluding S1 and product app
+Total selected design: 3,800–6,450 lines including S3, excluding S1 and product app
 Card source sets/reconciliation/UI. Pull work is included in S2h's estimate, not a
-free transfer. If owner defers it, report that requirement as unfulfilled; do not
+free transfer. S2h adds 500–800 lines for the concrete service facade/grants, typed
+handoff and positive hosted tests; S2c adds 250–400 for adapters/installed tests. If owner defers it, report that requirement as unfulfilled; do not
 claim aggregate hosted Card safety. Existing reserved-number/feature-upgrade/general
 trace/era/staging work has been removed, not relabeled into another hidden package.
+
+Positive hosted tests open v18 without Card options, page whole-owner facts and batch M@4 through correction/forget.
+Explicit erasure service access succeeds for an erased owner; ordinary service access refuses. Namespace batches
+succeed within scope; namespace grants cannot list the owner window. Test stale checkpoint domain
+on the first page, page-two revocation/expiry, batch pagination through the same handle, and close/eviction/restart refusal
+without mixed snapshots.
 
 Additional decisive counterexamples: create body 1, safely replace by body 2, then
 SQL-restore body_revision=1 plus old valid bytes/header; UPDATE must abort and every
@@ -910,7 +975,7 @@ Complete engine-Card safety requires S1+S2h+S2c; S3 is diagnostic and grants no 
 | Select or defer S2h pulls? | Select both together: required for hosted app Card reconciliation outside the forget handler. Design/storage/cost are frozen so selection does not reopen protocol work. |
 | Local legacy policy after S3? | Run real local counts first; keep fail-closed unknown policy, with explicit new-revision remediation when authorized. Keep S2c out of all installers until the owner decides. |
 | Existing app Cards lack Memory lineage; how recover availability? | Product records new per-revision Memory ids/bound revisions and relevant ancestor identities immediately and chooses conservative handling/regeneration for unknown legacy app Cards. Pulls alone cannot reconstruct their sources. |
-| Trusted actor/time supplier for local Card actions? | Extend Card-specific grants from the authenticated owner authoring adapter. Refuse own-writing if absent; never accept model-provided audit data. |
+| Trusted actor/time supplier for local Card actions? | Bind authenticated service actors/time for every ordinary draft/organization mutation and authenticated human actors for explicit authoring/terminal approval. Migrate adapters and embedded Card ports; absent audit data refuses all new mutations, not just own-writing. Tool input never supplies identity. |
 | Host reconciliation admission and maintenance window? | Pin original store/domain, inventory/drain all readers/writers, plan DELETE-mode downtime, persist checkpoints only after terminal pages, and enforce the already-decided no-serving-restore rule. |
 
 No deployed-layout question remains: hosted base is 18. No public ref protocol,
@@ -935,3 +1000,35 @@ No identified requirement forces performance-track/lifecycle/harness changes.
 | Scope migration reduction | §8.1 one atomic verified-before-commit migration; no staged/resumable machinery or serving restore. |
 | Scope preflight-first / trace machinery | §8.2–§8.3 pure shared classifier and in-memory first install independently ship before/parallel with S2h; general external trace import deferred. |
 | Product/package restructure | §§1/5/9 freeze hosted v18 path and both bounded pulls; S2c is one complete installer-gated package; app-database lineage remains product-owned. |
+
+## Revision 3 dispositions
+
+| Finding | Resolution |
+| --- | --- |
+| Scope P1 hosted pull entry/authority | §5.1 standalone v18 facade/export, closed service extension, explicit erasure permission, first-request checkpoint binding; §5.3 handle-owned cache; §9 positive hosted tests/cost. |
+| Scope P1 source identity handoff | §5.2 mandatory store/domain/namespace/UUID/version union, bound ancestor closure and existing-get M@4 example; missing/unbound data refuses, never current backfill. S3 contract unchanged. |
+| Scope P2 S2c adapters | §7.1 inventories both Card grant producers/bootstrap callers and installed positive paths; §9 costs adapters; §10 includes authenticated ordinary service actors as well as human authoring. |
+| Soundness P2 (round 3) list response key | §5.1 defines the DenialKey wire form, distinct from §5.2's input `C.key`, mapping each fact's match mode, version, revision-through and span losslessly, with a fact → wire → match acceptance case. |
+
+## Revision 3.2 addendum: opt-in creation at the safety cell (2026-10-29)
+
+This addendum adds one creation path. It changes nothing above.
+
+- **Default creation is unchanged.** New stores are still created at their legacy cell (18, 23 or 33). Installers, local setup and CLI flags are untouched.
+- **One explicit opt-in creation option.** It applies only when the store file is new. It creates the base layout of that cell plus the complete S2h safety objects and guards (§4, §4.1), and the new physical version (34, 38 or 48), in **one** transaction. Before COMMIT it verifies the same items as §8.1.
+  - On an existing store the option refuses and never migrates. Existing stores use only §8.1.
+  - On a base the creation path cannot produce, it refuses.
+- **Control fields for a never-migrated store** (§4, `content_safety_control`):
+  - `migration_state` is `'complete'`;
+  - `suppression_domain` is a fresh UUID;
+  - `migration_id` is a fresh UUID identifying this creation;
+  - `inventory_digest` is the §8.1 logical inventory digest of the pristine legacy-base store, computed inside the creation transaction before the safety objects are installed.
+  - No facts, reservations or epoch rows exist until the first writer creates them.
+- **The result is equivalent to a §8.1 migration of an empty legacy store**, apart from its per-store UUIDs. Every opener attests it identically, and old pins refuse it.
+- **Deployment note (assumption from product facts, not measured):** a deployment that serves all owners from one store per environment reaches the safety cell through one §8.1 maintenance migration per environment. This option serves only newly built environments, or imports that build a fresh store.
+
+**Acceptance:**
+- a store created at each base has the same schema digest as an empty migrated store of that base, with control semantics equal apart from UUIDs;
+- the option refuses on an existing store;
+- old pins refuse the created store;
+- default creation stays byte-for-byte the same schema as before.
