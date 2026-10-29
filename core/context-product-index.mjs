@@ -162,7 +162,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       }
       if(method==='refreshContextIndex') {
         const m=p.mode==='lexical'?storage.refresh(p,access.accessGenerations,p.budget):{transformed:0};
-        if(observation)for(const name of ['transformed','canonicalRows','metadataBytes','textRows','textBytes','supportLookups','supportBytes','verifiedRows']){
+        if(observation)for(const name of ['transformed','canonicalRows','metadataBytes','textRows','textBytes','supportLookups','supportBytes','verifiedRows','reused','replaced','removed','copied','tokenized','retargets','verificationRestarts','verificationKept']){
           if(Number.isSafeInteger(m[name])&&m[name]>=0)observation[name]=m[name];
         }
         const knownFailure=storage.prepareObservation();access.check();
@@ -177,7 +177,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
           db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();
           const observed=storage.observe(p,access.accessGenerations,{knownFailure}),ready=observed.dto.lexical.state==='ready';
           const covered=coverage(observed.dto);covered.stops.budget=m.transformed>=p.budget.maxItems;
-          return success({status:ready?p.mode==='embeddings'?'partial':'complete':'rebuilding',
+          return success({status:ready&&observed.byteSafe?p.mode==='embeddings'?'partial':'complete':'rebuilding',
             progress:{lexical:observed.dto.lexical.progress,transformed:m.transformed,embeddingAttempts:0,embedded:0},coverage:covered,channels:channels(ready)});
         });}finally{if(observation)observation.epochObservationMs=Number(process.hrtime.bigint())/1e6-epochStarted;}
       }

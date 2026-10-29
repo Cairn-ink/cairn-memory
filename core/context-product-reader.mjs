@@ -190,7 +190,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         // Only fixed numeric fields cross into the process-local diagnostic.
         // Optional telemetry never supplies authority, usage refunds or timing proof.
         const detail=message.maintenancePhases, safe={};
-        for(const name of ['dispatchMs','epochObservationMs','transformed','canonicalRows','metadataBytes','textRows','textBytes','supportLookups','supportBytes','verifiedRows']){
+        for(const name of ['dispatchMs','epochObservationMs','transformed','canonicalRows','metadataBytes','textRows','textBytes','supportLookups','supportBytes','verifiedRows','reused','replaced','removed','copied','tokenized','retargets','verificationRestarts','verificationKept']){
           const n=detail?.[name];if(Number.isFinite(n)&&n>=0)safe[name]=n;
         }
         const finished=detail?.finishedAtMonoMs, delivered=Number(now())/1e6;

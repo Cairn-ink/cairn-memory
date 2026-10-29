@@ -676,7 +676,7 @@ for(const residents of [1,4])test(`B0 ${residents} owner split reuses one mainta
 
 test('B0 bounded phase counters include opening in quantum zero, remain private and immutable',async t=>{
   const s=setup(t,{budgets:{maxItems:2048,maxMs:60000}},
-    {openMs:7,workMs:11,deliveryMs:2,result:()=>settled(),phasesOf:()=>({dispatchMs:1,epochObservationMs:2,deliveryMs:3,canonicalRows:4,metadataBytes:5,path:'private-diagnostic-probe',credential:'private-diagnostic-probe'})});
+    {openMs:7,workMs:11,deliveryMs:2,result:()=>settled(),phasesOf:()=>({dispatchMs:1,epochObservationMs:2,deliveryMs:3,canonicalRows:4,metadataBytes:5,reused:6,replaced:7,removed:8,copied:9,tokenized:10,retargets:11,verificationRestarts:12,verificationKept:13,path:'private-diagnostic-probe',credential:'private-diagnostic-probe'})});
   s.c.projections=[s.c.projections[0]];
   const p=s.renew(s.c);await s.next();const before=p.getStatus(),first=maintenancePumpPhaseDiagnostic(before);
   const shape=JSON.stringify(first).length;
@@ -689,6 +689,7 @@ test('B0 bounded phase counters include opening in quantum zero, remain private 
   assert.equal(current.phases.dispatch.latestMs,1);assert.equal(current.phases.epochObservation.latestMs,2);
   assert.equal(current.phases.settle.latestMs,3);assert.equal(current.phases.settle.count,11);
   assert.equal(current.work.canonicalRows,44);assert.equal(current.work.metadataBytes,55);
+  for(const [i,name] of ['reused','replaced','removed','copied','tokenized','retargets','verificationRestarts','verificationKept'].entries())assert.equal(current.work[name],11*(i+6));
   assert.equal(JSON.stringify(detail).includes('private-diagnostic-probe'),false);
   assert.equal(current.quanta,11);assert.equal(history.quanta,10);
   assert.equal(current.elapsedBuckets.length,502);assert.equal(history.elapsedBuckets.length,502);
@@ -716,6 +717,7 @@ test('B0 fresh native calls on a resident maintainer alternate intents, retain a
     const d=productReader.maintenancePhaseDiagnostic(raw);
     for(const name of ['dispatchMs','epochObservationMs','deliveryMs'])assert.ok(Number.isFinite(d[name])&&d[name]>=0,name);
     assert.ok(Number.isSafeInteger(d.canonicalRows));assert.ok(Number.isSafeInteger(d.metadataBytes));
+    for(const name of ['reused','replaced','removed','copied','tokenized','retargets','verificationRestarts','verificationKept'])assert.ok(Number.isSafeInteger(d[name]),name);
     assert.equal(JSON.stringify(raw).includes('dispatchMs'),false);
   }
   const foreign=configured(t,f.path,[project('foreign')],{service:true});
@@ -788,4 +790,15 @@ test('B0 mutable shared host state retains identity while a new buffer replaces 
     host:{...projection.options.host,configuration:{...projection.options.host.configuration,state:new SharedArrayBuffer(4)}}}}))};
   assert.throws(()=>s.renew(changed),{code:'read_in_progress'});
   await p.close();
+});
+
+test('B1 private work counters saturate at safe integers',async t=>{
+  const names=['reused','replaced','removed','copied','tokenized','retargets','verificationRestarts','verificationKept'];
+  const s=setup(t,{budgets:{maxItems:2048,maxMs:60000}},
+    {result:()=>settled(),phasesOf:()=>Object.fromEntries(names.map(name=>[name,Number.MAX_SAFE_INTEGER]))});
+  s.c.projections=[s.c.projections[0]];const pump=s.renew(s.c);
+  for(let i=0;i<4;i++)await s.next();
+  for(const lane of maintenancePumpPhaseDiagnostic(pump.getStatus()).projections)
+    for(const name of names)assert.equal(lane.work[name],Number.MAX_SAFE_INTEGER);
+  await pump.close();
 });
