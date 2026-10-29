@@ -69,10 +69,10 @@ export const testClock = {
   // This deliberately consumes real scheduling time without advancing test time.
   // It is an injected stall, never an elapsed-time assertion or a timing gate.
   stall() { if (delayMs) Atomics.wait(stallState, 0, 0, delayMs); },
-  async advance(ms) {
+  async advance(ms, { waitForWorkers = true } = {}) {
     Atomics.add(state, 0, BigInt(ms) * 1000000n);
     flush();
-    await Promise.all([...workers].map(port => new Promise(resolve => {
+    if (waitForWorkers) await Promise.all([...workers].map(port => new Promise(resolve => {
       port.once('message', resolve);
       port.postMessage('tick');
     })));

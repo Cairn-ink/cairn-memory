@@ -183,3 +183,52 @@ test('cutoff recovery: cooldown never shortens minimum admission spacing',async 
   assert.equal(p.getStatus().state,'active','spacing_case_recovers_before_successor');
   await s.step();assert.ok(s.now()-admitted>=2400,'cooldown_preserves_minimum_admission_spacing');
 });
+
+
+test('cutoff recovery: unrelated admission cannot retire another domain cooldown',async t=>{
+  const s=setup(t,{domains:2}),[a,b]=s.config.projections;s.set(900);
+  const options={pollMs:100,budgets:{maxItems:10000,maxMs:60000}};
+  const first=s.create({...options,projections:[a],window:{id:'old',endsAtMonoMs:1500,usedItems:0,usedMs:0}});
+  await s.step();const until=s.diagnostic(first).cooldownUntil;await first.close();
+  assert.equal(until,2100);assert.equal((await first.completion).usedMs,100);
+  s.set(1500);const nextWindow={id:'next',endsAtMonoMs:61500,usedItems:0,usedMs:0};
+  const other=s.create({id:randomUUID(),projections:[b],window:nextWindow});await other.close();
+  s.create({id:randomUUID(),projections:[a]});const {operation}=await s.begin();await operation;
+  assert.ok(s.now()>=until,'cooldown_survives_unrelated_ledger_retirement');
+});
+
+test('cutoff recovery: pending disposal publishes cooldown across pump and window handoff',async t=>{
+  let release;const termination=new Promise(resolve=>{release=resolve;});
+  const s=setup(t,{termination:()=>termination});s.set(900);
+  const first=s.create({pollMs:100,budgets:{maxItems:10000,maxMs:60000},window:{id:'old',endsAtMonoMs:1500,usedItems:0,usedMs:0}});
+  const {operation}=await s.begin();await s.due(1100);s.set(1500);
+  const next=s.create({id:randomUUID(),window:{id:'next',endsAtMonoMs:61500,usedItems:0,usedMs:0}});
+  s.set(1600);release(1);await operation;await flush();
+  const until=s.diagnostic(first).cooldownUntil;assert.equal(until,2600);
+  for(let i=0;i<3 && s.opens.length===1;i++){const resumed=await s.begin();await resumed.operation;}
+  assert.equal(s.opens.length,2,'handoff_dispatch_eventually_opens_successor');
+  assert.ok(s.now()>=until,'confirmation_updates_authoritative_domain_after_window_handoff');
+  assert.equal(first.getStatus().usedMs,100,'interrupted_charge_stays_in_captured_window');
+  assert.equal(next.getStatus().usedItems,0,'new_window_does_not_inherit_failed_charge');
+});
+
+test('cutoff recovery: branded parent deadline precedes reader entry cutoff',async t=>{
+  const s=setup(t,{entryDelayMs:2}),p=s.create(),{operation}=await s.begin();
+  assert.equal(Number(BigInt(s.calls[0].operation.operationCutoffMonoNs))/1e6,1102);
+  await s.due(1100);const atDeadline=p.getStatus();await s.due(1102);await operation;
+  assert.equal(atDeadline.state,'active','earlier_branded_parent_cutoff_recovers');
+  assert.equal(s.diagnostic(p).outcome,1);assert.equal(p.getStatus().usedMs,100);
+});
+
+
+test('cutoff recovery: domain ownership survives retirement before watchdog registration',async t=>{
+  const s=setup(t,{domains:2}),[a,b]=s.config.projections;s.set(900);
+  const first=s.create({pollMs:100,budgets:{maxItems:10000,maxMs:60000},projections:[a],window:{id:'old',endsAtMonoMs:1100,usedItems:0,usedMs:0}});
+  const {operation}=await s.begin();s.set(1100);
+  const other=s.create({id:randomUUID(),projections:[b],window:{id:'next',endsAtMonoMs:61100,usedItems:0,usedMs:0}});await other.close();
+  await s.due(1100);await operation;
+  assert.equal(s.diagnostic(first).outcome,1,'watchdog_can_confirm_disposal_after_ledger_retirement');
+  const until=s.diagnostic(first).cooldownUntil;assert.equal(first.getStatus().usedMs,100);await first.close();
+  s.create({id:randomUUID(),projections:[a]});const resumed=await s.begin();await resumed.operation;
+  assert.ok(s.now()>=until,'pre_watchdog_retirement_keeps_domain_cooldown');
+});

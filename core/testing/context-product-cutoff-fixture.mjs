@@ -8,7 +8,7 @@ import { createContextReadSupervisor, supervisorOwner } from '../context-read-su
 import { credentialDigest, PRODUCT_PROFILE } from '../context-product-control.mjs';
 export const flush = async () => { for (let i=0;i<30;i++) await Promise.resolve(); };
 let identity=100;
-export function setup(t,{enabled=true,stalls=1,domains=1,termination,resources,openStall=false,usage=0,paths,refusal,late=false}={}) {
+export function setup(t,{enabled=true,stalls=1,domains=1,termination,resources,openStall=false,usage=0,paths,refusal,late=false,entryDelayMs=0}={}) {
   let now=0,serial=0,attempt=0,stalled=false;
   const timers=new Map(),calls=[],opens=[],closes=[],pumps=[],workers=[];
   const supervisor=createContextReadSupervisor(),token={opaque:randomUUID()},identities=new Map();
@@ -40,7 +40,7 @@ export function setup(t,{enabled=true,stalls=1,domains=1,termination,resources,o
     queueMicrotask(()=>worker.emit('message',{kind:'identity',operation:data.operation,fileIdentity:'100:'+physical}));
     return worker;
   }});
-  const renew=pump.createMaintenancePumpRuntime({now:()=>now,setTimer,clearTimer,open,...(enabled?{cutoffQualified:()=>true}:{})});
+  const renew=pump.createMaintenancePumpRuntime({now:()=>now,setTimer,clearTimer,open:async (...args)=>{const h=await open(...args);return entryDelayMs?{...h,refreshContextIndex(...call){now+=entryDelayMs;return h.refreshContextIndex(...call);}}:h;},...(enabled?{cutoffQualified:()=>true}:{})});
   let config={supervisor,id:randomUUID(),window:{id:'window',endsAtMonoMs:60000,usedItems:0,usedMs:0},
     budgets:{maxItems:100,maxMs:50000},quantum:{maxItems:1,maxMs:100},pollMs:1000,renewalMs:60000,
     serviceCredential:token,projections};

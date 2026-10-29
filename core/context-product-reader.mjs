@@ -169,10 +169,11 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       }, () => registry.finish(resource, false));
     } });
     resource.stop = code => closePromise ?? shutdown(code);
-    function shutdown(code) {
+    function shutdown(code, parentDeadline) {
       closed = true; terminal ??= code; clearTimer(idle);
       const slot = lifecycle.pending;
-      if (slot?.cutoff && code === 'read_timeout' && terminal === code && now() >= mono(slot.operation.operationCutoffMonoNs)) slot.cutoff.attested = true;
+      if (slot?.cutoff && code === 'read_timeout' && terminal === code && (now() >= mono(slot.operation.operationCutoffMonoNs) ||
+          parentDeadline === slot.cutoff && Number(now()) / 1e6 >= slot.cutoff.cutoffAt)) slot.cutoff.attested = true;
       const stall=maintenance && code==='read_timeout' ? readMaintenanceMarker(marker,now()) : undefined;
       if(semantic){Atomics.store(new Int32Array(semantic.configuration.cancellation),0,1);if(slot)semantic.handle.cancel(slot.operation.operationId);}
       const stopped = lifecycle.stop();
@@ -300,8 +301,8 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         const slot = { resolve, operation, record, signal, open: opening, method, detach, ordinal }; lifecycle.pending = slot;
         if (maintenance && !semantic && method === 'refreshContextIndex') {
           slot.cutoff = bindMaintenanceCutoff(control, ordinal, operation, resource, record, lifecycle, () => {
-            if (lifecycle.pending !== slot || now() < mono(operation.operationCutoffMonoNs)) return false;
-            shutdown('read_timeout'); return slot.cutoff.attested;
+            if (lifecycle.pending !== slot || Number(now()) / 1e6 < slot.cutoff.cutoffAt) return false;
+            shutdown('read_timeout', slot.cutoff); return slot.cutoff.attested;
           }, () => writerReleased);
         }
         const abort = () => shutdown('read_cancelled');

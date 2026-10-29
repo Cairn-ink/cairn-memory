@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "93fd92ba2e4a7504fd97502656e831403522a6136ed506853f543222bb42d71e",
-  "bytes": 977602,
+  "sha256": "bcc748d485ca5adfe7784e3e20c3cc197648280614b8f93d0a8f2d6bf3e80c46",
+  "bytes": 977887,
   "files": [
     "LICENSE",
     "README.md",
@@ -637,7 +637,7 @@
     "docs/plans/topic-reader-wal-fix.md": "ff375d11f558b7c60245ee44a65020f1888a2fdc24e8def7d68dd4b47c3b57f0",
     "core/context-product-authority.mjs": "8eda367985cfbcfcb52a3c7f3300e162b47cd7077bad921632106739eb5de765",
     "core/context-product-control.mjs": "83f036d20faa2515ba98d270d88a92b641c778f124dd51bbfbee7a931a9c7744",
-    "core/context-product-reader.mjs": "47bc302095e48be47436cd43ec1c2488cb819ba890d67c80635a92ebb8a00604",
+    "core/context-product-reader.mjs": "0e2d1514a3b6358e15afd02a174c554f59cebc40707b34846590fe3e5b211230",
     "core/context-product-open-diagnostic.mjs": "fcf436e5219a45ee91f629a33515e44b35523e638aaea65e326eb4853a6c0bf8",
     "core/context-product-schema.mjs": "052048d1c8300ae349778428f7d430e6a70b16a96502ac89d7efe56de494e076",
     "core/context-product-telemetry.mjs": "4601cfc76379b7daf3d26a4f9690689469687685e7289d05ddf7773ee6959f85",
@@ -654,7 +654,7 @@
     "core/context-product-attribution.mjs": "cddbe782a4ac5ac4da732910c1f6b46a52569c3b1274bc53d50c743613728b7f",
     "core/context-product-sqlite.mjs": "03d69f0bdb2e5e8acd1b6e08e566d3333bfbc9e22fdfac97514aa8023618c207",
     "core/context-product-index.mjs": "6b309eda139680c9e426288fb107e6981789805eaf1f6d574bc3e10fd25af8c1",
-    "core/context-product-pump.mjs": "17bb4c3ceb2edc01a7a8568fc561c1d96a231bc49b9f046c4d55e282a92bc74c",
+    "core/context-product-pump.mjs": "4ed29d9c8662219ac2e0e34a81835874b7030a836f51da2b971ffa2f103e7d98",
     "docs/plans/context-read-p2b-impl.md": "aa8aa4820502d8b4002ae33ef8b734658a683ed0edd527ef3d183ddb39e9f737",
     "docs/plans/context-read-p2d-impl.md": "f4301c2126605bf2dd71c188e79dde7827741afed0cc196c294c29efc07feabd",
     "core/context-product-selection.mjs": "0e2bab9437b51d1e91f980084ef5b2b167d43646b54686927f36d6dc79f980fc",
