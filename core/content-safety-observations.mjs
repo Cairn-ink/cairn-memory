@@ -20,24 +20,40 @@ const actionKey = row => JSON.stringify([...boundary(row), row.action_id]);
 // A read-only, budgeted facade also bounds the existing ancestry helpers' reads.
 // No live cursor escapes; even .all is iterated/charged before materialization.
 function boundedReader(db, limits, check) {
-  let rows = 0, bytes = 0;
+  let rows = 0, bytes = 0, queries = 0;
+  const statements = new Map(), results = new Map();
   const charge = value => {
     check();
     if (++rows > limits.scanRows || (bytes += Buffer.byteLength(JSON.stringify(value))) > limits.scanBytes) throw Error();
     return value;
   };
-  return { charge, prepare(sql) {
+  return { charge, usage: () => ({ scanRows: rows, scanBytes: bytes, preparedStatements: statements.size, queries }), prepare(sql) {
     check();
     if (!/^\s*(SELECT|PRAGMA)\b/i.test(sql)) throw Error();
+    if (statements.has(sql)) return statements.get(sql);
     const statement = db.prepare(sql);
-    return {
-      get(...args) { check(); const row = statement.get(...args); return row === undefined ? row : charge(row); },
-      all(...args) {
-        const values = [];
-        for (const row of statement.iterate(...args)) values.push(charge(row));
-        check(); return values;
-      },
+    const read = (method, args) => {
+      check();
+      const key = JSON.stringify([sql, method, args]);
+      if (!results.has(key)) {
+        // Empty lookups consume cache space too; bound their materialization.
+        if ((bytes += Buffer.byteLength(key)) > limits.scanBytes) throw Error();
+        queries++;
+        if (method === 'get') {
+          const row = statement.get(...args); results.set(key, row === undefined ? row : charge(row));
+        } else {
+          const values = [];
+          for (const row of statement.iterate(...args)) values.push(charge(row));
+          results.set(key, values);
+        }
+      }
+      check();
+      const result = results.get(key);
+      return method === 'all' ? result.slice() : result;
     };
+    const prepared = { get: (...args) => read('get', args), all: (...args) => read('all', args) };
+    statements.set(sql, prepared);
+    return prepared;
   } };
 }
 
@@ -51,7 +67,7 @@ export function contentSafetyObservations(native, limits, check) {
   const schemaBase = db.prepare('PRAGMA user_version').get().user_version;
   if (![18, 23, 33].includes(schemaBase) || db.prepare('PRAGMA application_id').get().application_id !== 0x43414952) throw Error();
   const objects = db.prepare('SELECT name,tbl_name FROM sqlite_schema').all();
-  const safety = /^(?:content_safety_|content_identity_|content_suppression|owner_suppression_|card_body_|safety_)/i;
+  const safety = /^(?:content_safety_|content_identity_|content_suppression|owner_suppression_|card_body_|safety_|card_operations_owner_action$)/i;
   if (objects.some(row => safety.test(row.name) || safety.test(row.tbl_name))) throw Error();
   validateContextProductLayout(db);
   const identities = db.prepare('SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1').all();
@@ -63,7 +79,7 @@ export function contentSafetyObservations(native, limits, check) {
   const memoryReceipts = grouping(receiptRows, row => row.memory_id);
   scan('suppressed'); // Fingerprints have no identity association by themselves.
   const corrections = grouping(scan('confirmation_supersessions'), row => row.previous_id);
-  if (schemaBase === 18) return { schemaBase, observations: [] };
+  if (schemaBase === 18) return { schemaBase, observations: [], usage: db.usage() };
   const cards = scan('private_cards'), notes = new Map(scan('card_notes').map(row => [row.id, row]));
   const bindings = grouping(scan('card_bindings'), row => row.card_id);
   const memoryBindings = grouping(scan('card_memory_bindings'), row => row.card_id);
@@ -71,24 +87,69 @@ export function contentSafetyObservations(native, limits, check) {
   const effects = scan('card_effects'), cardEffects = grouping(effects.filter(row => row.entity_type === 'card'), row => row.entity_id);
   const actionEffects = grouping(effects, actionKey), actionOperations = grouping(operations, actionKey);
   const cardOperations = grouping(operations, row => row.target_id);
-  let rawBindings = new Map(), conversations = new Map(), exclusions = new Map(), deletionEffects = new Map(), rawDeletions = new Map();
+  let rawBindings = new Map(), conversations = new Map(), exclusions = new Map(), rawDeletions = new Map(), memoryDeletions = new Map();
+  let sourceMaps = new Map(), mappedMessages = new Set(), messages = new Map(), fences = new Map();
+  let episodeSecret;
   if (schemaBase === 33) {
     rawBindings = grouping(scan('card_raw_bindings'), row => row.card_id);
     conversations = new Map(scan('raw_conversations').map(row => [row.id, row]));
     exclusions = grouping(scan('raw_source_exclusions'), row => JSON.stringify([row.conversation_id, row.message_id]));
     const removed = scan('raw_deletion_effects');
-    deletionEffects = grouping(removed, actionKey);
-    rawDeletions = grouping(removed.filter(row => row.source_type === 'conversation'), row => row.source_id);
+    const deletionKey = row => JSON.stringify([actionKey(row), row.source_type, row.source_id]);
+    const rootsDeleted = new Set(removed.filter(row => row.entity_type === row.source_type && row.entity_id === row.source_id).map(deletionKey));
+    // These joins stay inside the engine's Raw effect ledger and require its
+    // typed root identity. Caller-selected Card action strings are not evidence.
+    const verified = removed.filter(row => rootsDeleted.has(deletionKey(row)));
+    rawDeletions = grouping(verified.filter(row => row.source_type === 'conversation'), row => row.source_id);
+    memoryDeletions = grouping(verified.filter(row => row.entity_type === 'memory'), row => row.entity_id);
+    const maps = scan('raw_source_maps');
+    sourceMaps = grouping(maps, row => JSON.stringify([row.conversation_id, row.message_id, row.source_key]));
+    mappedMessages = new Set(maps.map(row => JSON.stringify([row.conversation_id, row.message_id])));
+    messages = new Map(scan('raw_messages').map(row => [JSON.stringify([row.conversation_id, row.message_id]), row]));
+    fences = grouping(scan('raw_session_fences'), row => JSON.stringify([...boundary(row), row.client, row.session_key]));
+    episodeSecret = db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get().secret;
     // Examine every retained canonical source/tombstone provider, including
     // memory-only namespaces, without decrypting Raw text or invoking a writer.
-    for (const table of ['raw_messages', 'raw_receipt_lineage', 'raw_receipt_origins', 'raw_source_maps',
-      'raw_session_fences', 'raw_job_sources', 'raw_closed_jobs', 'episode_memory_links',
+    for (const table of ['raw_receipt_lineage', 'raw_receipt_origins', 'raw_job_sources', 'raw_closed_jobs', 'episode_memory_links',
       'episode_keep_actions', 'episode_sources', 'session_episodes']) scan(table);
     for (const row of scan('raw_deletion_actions')) JSON.parse(row.result);
     db.prepare('SELECT conversation_id,message_id,part_index,start,end,saved,digest,length(sealed) AS sealed_length FROM raw_parts').all();
   }
   const roots = schemaBase === 33 ? createRawSourceRoots(db) : null;
   const raw = schemaBase === 33 ? createCardRawSources(db, { storeId, cursorSecret }) : null;
+  const ancestry = new Map();
+  function receiptAncestry(card, receipt) {
+    if (ancestry.has(receipt.id)) return ancestry.get(receipt.id);
+    const authority = roots.receipt(nsFor(card), receipt), spans = [];
+    const stored = db.prepare('SELECT * FROM raw_receipt_lineage WHERE receipt_id=?').all(receipt.id);
+    for (const entry of stored) spans.push({ ref: { conversationId: entry.conversation_id, messageId: entry.message_id,
+      span: { start: entry.start, end: entry.end, precision: entry.precision } }, origin: 'raw_receipt_lineage', row: entry });
+    const sessions = [...authority.roots, ...(authority.possibleRoots ?? [])];
+    if (authority.independent) for (const sessionKey of roots.keys(nsFor(card), receipt.client, receipt.session_id)) {
+      sessions.push({ client: receipt.client, sessionKey });
+    }
+    if (!stored.length) for (const root of [...authority.roots, ...(authority.possibleRoots ?? [])]) {
+      const conversationId = root.conversationId ?? root.conversation_id;
+      if (!conversationId) continue;
+      const sourceKey = createHmac('sha256', Buffer.from(episodeSecret, 'hex'))
+        .update(JSON.stringify(['raw-source-v1', receipt.role, receipt.excerpt])).digest('hex');
+      const maps = sourceMaps.get(JSON.stringify([conversationId, receipt.event_id, sourceKey])) ?? [];
+      for (const entry of maps) spans.push({ ref: { conversationId, messageId: receipt.event_id,
+        span: { start: entry.start, end: entry.end, precision: entry.precision } }, origin: 'raw_source_maps', row: entry });
+      const messageKey = JSON.stringify([conversationId, receipt.event_id]), message = messages.get(messageKey);
+      if (!maps.length && !mappedMessages.has(messageKey) && message && message.role === receipt.role) {
+        spans.push({ ref: { conversationId, messageId: receipt.event_id,
+          span: { start: 0, end: message.total_units, precision: 'whole-message' } }, origin: 'receipts', row: receipt });
+      }
+    }
+    const matchedFences = new Map();
+    for (const root of sessions) for (const sessionKey of roots.keys(nsFor(card), root.client, root.sessionKey)) {
+      for (const fence of fences.get(JSON.stringify([...boundary(card), root.client, sessionKey])) ?? []) matchedFences.set(digest(fence), fence);
+    }
+    const result = { spans, fences: [...matchedFences.values()] };
+    ancestry.set(receipt.id, result);
+    return result;
+  }
   const identity = (card, kind, key, version) => ({ storeId, ownerId: card.owner_id, scope: card.scope,
     projectId: card.project_id, kind, key, incarnation: key, version: JSON.stringify(version) });
   const evidence = (origin, row) => ({ origin, digest: digest(row) });
@@ -109,7 +170,7 @@ export function contentSafetyObservations(native, limits, check) {
       titleUtf8: card.title === null ? null : textBytes(Buffer.from(stored.title, 'hex')),
       bodyUtf8: card.body === null ? null : textBytes(Buffer.from(stored.body, 'hex')) }, edges: [], suppressionFacts: [], coverage: null };
     db.charge(observation.body);
-    const seen = new Set(), factsSeen = new Set();
+    const seen = new Set(), factsSeen = new Set(), expandedReceipts = new Set();
     function fact(target, reason, origin, row) {
       const value = { target, reason, evidence: evidence(origin, row) }, key = JSON.stringify(value);
       if (!factsSeen.has(key)) { db.charge(key); factsSeen.add(key); observation.suppressionFacts.push(value); }
@@ -125,11 +186,11 @@ export function contentSafetyObservations(native, limits, check) {
       const id = add('raw', ref.conversationId, legacyVersion(ref), origin, row, { exists, source: ref });
       for (const item of rawDeletions.get(ref.conversationId) ?? []) {
         check();
-        if (item.source_type === 'conversation' && item.source_id === ref.conversationId && sameNamespace(item, card)) fact(id, 'privacy_erase', 'raw_deletion_effects', item);
+        if (item.source_type === 'conversation' && item.source_id === ref.conversationId && sameNamespace(item, card)) fact(id, 'purge', 'raw_deletion_effects', item);
       }
       if (exists && ref.messageId && ref.span) {
         const values = exclusions.get(JSON.stringify([ref.conversationId, ref.messageId])) ?? [];
-        for (const excluded of values) if (excluded.start < ref.span.end && excluded.end > ref.span.start) fact(id, 'privacy_erase', 'raw_source_exclusions', excluded);
+        for (const excluded of values) if (excluded.start < ref.span.end && excluded.end > ref.span.start) fact(id, 'purge', 'raw_source_exclusions', excluded);
       }
       // Verification can establish a present binding's current state, never
       // coverage. Unavailable/missing inputs remain plausible canonical edges.
@@ -142,10 +203,20 @@ export function contentSafetyObservations(native, limits, check) {
       const memory = memories.get(memoryId), exists = Boolean(memory && sameNamespace(memory, card));
       const id = add('memory', memoryId, revisionVersion('memory-revision-v1', boundRevision, row), origin, row,
         { exists, ...(exists ? { revision: memory.revision, deleted: memory.deleted, fingerprint: memory.fingerprint } : {}) });
-      if (exists && memory.deleted === 1) fact(id, 'user_forget', 'memories', memory);
+      // Legacy deleted=1 does not distinguish explicit forget from nested purge/reject.
+      if (exists && memory.deleted === 1) fact(id, 'purge', 'memories', memory);
       if (receiptId) {
         const receipt = receipts.get(receiptId), kept = Boolean(receipt && receipt.memory_id === memoryId && exists);
         add('receipt', receiptId, legacyVersion(row), origin, row, { exists: kept, memoryId, boundRevision: boundRevision ?? null });
+        // A missing bound receipt + retired Memory revision identifies the
+        // affected contributor even when the deletion and Card effects have
+        // different action ids. A fresh, surviving receipt does not match.
+        if (!kept && Number.isSafeInteger(boundRevision) && (!exists || memory.revision > boundRevision)) {
+          for (const removed of memoryDeletions.get(memoryId) ?? []) if (sameNamespace(removed, card)) {
+            fact(id, 'purge', 'raw_deletion_effects', removed);
+            if (removed.source_type === 'conversation') rawEdge({ conversationId: removed.source_id }, 'raw_deletion_effects', removed);
+          }
+        }
         // A newer revision and lost receipts alone also result from Raw erasure.
         // Require retained identity-linked old fingerprint evidence as well.
         if (exists && !kept && memory.revision > boundRevision) for (const old of corrections.get(memoryId) ?? []) {
@@ -165,22 +236,14 @@ export function contentSafetyObservations(native, limits, check) {
           }
         }
       }
-      if (exists && roots) for (const receipt of memoryReceipts.get(memoryId) ?? []) {
-        const authority = roots.receipt(nsFor(card), receipt);
-        const stored = db.prepare('SELECT * FROM raw_receipt_lineage WHERE receipt_id=?').all(receipt.id);
-        for (const entry of stored) rawEdge({ conversationId: entry.conversation_id, messageId: entry.message_id,
-          span: { start: entry.start, end: entry.end, precision: entry.precision } }, 'raw_receipt_lineage', entry);
-        for (const root of [...authority.roots, ...(authority.possibleRoots ?? [])]) {
-          if (root.conversationId) {
-            const maps = db.prepare('SELECT * FROM raw_source_maps WHERE conversation_id=? AND message_id=?').all(root.conversationId, receipt.event_id);
-            if (maps.length) for (const entry of maps) rawEdge({ conversationId: root.conversationId, messageId: receipt.event_id,
-              span: { start: entry.start, end: entry.end, precision: entry.precision } }, 'raw_source_maps', entry);
-            else rawEdge({ conversationId: root.conversationId }, 'receipts', receipt);
-          }
-          const fences = db.prepare('SELECT * FROM raw_session_fences WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=?')
-            .all(...boundary(card), root.client, root.sessionKey);
-          for (const fence of fences) fact(id, 'privacy_erase', 'raw_session_fences', fence);
-        }
+      const selectedReceipts = receiptId ? [receipts.get(receiptId)].filter(row => row?.memory_id === memoryId)
+        : memoryReceipts.get(memoryId) ?? [];
+      if (exists && roots) for (const receipt of selectedReceipts) {
+        if (expandedReceipts.has(receipt.id)) continue;
+        expandedReceipts.add(receipt.id);
+        const lineage = receiptAncestry(card, receipt);
+        for (const span of lineage.spans) rawEdge(span.ref, span.origin, span.row);
+        for (const fence of lineage.fences) fact(id, 'purge', 'raw_session_fences', fence);
       }
       return id;
     }
@@ -216,27 +279,24 @@ export function contentSafetyObservations(native, limits, check) {
       span: { start: row.start, end: row.end } }, 'card_raw_bindings', row); refs(JSON.parse(row.source_ref), 'card_raw_bindings', row); }
     for (const operation of cardOperations.get(card.id) ?? []) if (sameNamespace(operation, card)) refs(operation.parsed, 'card_operations', operation);
     for (const effect of cardEffects.get(card.id) ?? []) if (sameNamespace(effect, card)) {
-      const memory = effect.action_id.match(/^memory-revision-(.+)-([0-9]+)$/);
-      if (memory) memoryEdge(memory[1], null, null, 'card_effects', effect);
-      const correction = effect.action_id.match(/^memory-correct-(.+)-([0-9]+)$/);
-      if (correction) memoryEdge(correction[1], Number(correction[2]), null, 'card_effects', effect);
+      if (effect.kind !== 'evidence_invalidated') continue;
+      // Only the recorded method/target and its typed source effect establish
+      // note-deletion causality. An action string by itself never adds an edge.
       for (const operation of actionOperations.get(actionKey(effect)) ?? []) {
-        refs(operation.parsed, 'card_operations', operation);
-        if (operation.method === 'deleteSourceNote') {
-          const id = noteEdge(operation.target_id, null, 'card_operations', operation);
-          if (operation.parsed.id === operation.target_id && operation.parsed.state === 'deleted') fact(id, 'purge', 'card_operations', operation);
-        }
-      }
-      for (const sibling of actionEffects.get(actionKey(effect)) ?? []) if (sibling.entity_type === 'submitted-note') noteEdge(sibling.entity_id, null, 'card_effects', sibling);
-      for (const removed of deletionEffects.get(actionKey(effect)) ?? []) {
-        if (removed.source_type === 'conversation') rawEdge({ conversationId: removed.source_id }, 'raw_deletion_effects', removed);
-        if (removed.entity_type === 'memory') {
-          const id = memoryEdge(removed.entity_id, null, null, 'raw_deletion_effects', removed);
-          fact(id, 'privacy_erase', 'raw_deletion_effects', removed);
-        }
+        if (operation.method !== 'deleteSourceNote' || operation.parsed.id !== operation.target_id || operation.parsed.state !== 'deleted') continue;
+        const sourceEffect = (actionEffects.get(actionKey(effect)) ?? []).find(item =>
+          item.kind === 'evidence_invalidated' && item.entity_type === 'submitted-note' &&
+          item.entity_id === operation.target_id && item.revision === operation.parsed.revision);
+        // deleteSourceNote emits its dependent Card effects immediately before
+        // the terminal note effect and records their exact batch size. This
+        // excludes automatic effects from another ledger reusing the string.
+        if (!sourceEffect || !Number.isSafeInteger(operation.parsed.effectCount) ||
+            effect.ordinal >= sourceEffect.ordinal || sourceEffect.ordinal - effect.ordinal >= operation.parsed.effectCount) continue;
+        const id = noteEdge(operation.target_id, null, 'card_operations', operation);
+        fact(id, 'purge', 'card_effects', sourceEffect);
       }
     }
     observations.push(observation);
   }
-  return { schemaBase, observations };
+  return { schemaBase, observations, usage: db.usage() };
 }

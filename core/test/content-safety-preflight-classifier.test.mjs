@@ -37,3 +37,12 @@ test('suppression matches the full identity, never another owner/version', () =>
     assert.equal(classifyCardBodySafetyV1(input).status, 'unknown');
   }
 });
+
+for (const [source, origin] of [['submitted-note', 'card_notes'], ['card-delete', 'private_cards'], ['card-cancel', 'private_cards'],
+  ['raw-deletion', 'raw_deletion_effects'], ['raw-exclusion', 'raw_source_exclusions'], ['unattributed-memory-deletion', 'memories']]) {
+  test(`revision-3 legacy recovery uses purge for ${source}`, () => {
+    const input = observation();
+    input.suppressionFacts.push({ target: identity('memory'), reason: 'purge', evidence: { ...evidence, origin } });
+    assert.deepEqual(classifyCardBodySafetyV1(input), { status: 'known-suppressed', reasons: ['purge'] });
+  });
+}
