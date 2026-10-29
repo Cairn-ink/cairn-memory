@@ -10,7 +10,6 @@ import { createRawSourceRoots } from '../raw-source-roots.mjs';
 import { sourceFixture, savedSource, ns as rawNs } from '../testing/raw-source-fixtures.mjs';
 import { fixture, ns, ok, receipt } from './content-safety-preflight-fixture.mjs';
 import { installedImportClosure } from '../../packaging/test/fixtures/installed-import-closure.mjs';
-import { removeReviewedRoleHelpAdditions } from '../../adapters/mcp/test/fixtures/role-profile-help-compat.mjs';
 
 function classify(f, id) {
   const snapshot = readTransaction(f.db, () => contentSafetyObservations(f.db, { scanRows: 250000, scanBytes: 128 * 1024 * 1024 }, () => {}));
@@ -114,13 +113,4 @@ test('R2.6 file checker refuses in-process import and has only isolated child gr
   const source = readFileSync(entry, 'utf8');
   assert.deepEqual([...source.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(match => match[1]).sort(), ['node:crypto', 'node:fs', 'node:url']);
   assert.equal(/import\s*\(/.test(source), false);
-});
-
-test('R2.7 reviewed safety usage addition preserves the pinned help bytes', () => {
-  const cli = new URL('../../adapters/mcp/cli.mjs', import.meta.url);
-  const child = spawnSync(process.execPath, [fileURLToPath(cli), '--help'], { encoding: 'utf8', env: {} });
-  assert.equal(child.status, 0); assert.equal(child.stderr, '');
-  const projected = removeReviewedRoleHelpAdditions(child.stdout);
-  assert.match(projected, /^Cairn Memory[^\n]*\n\nUsage:\n/);
-  assert.equal(projected.includes('safety preflight'), false);
 });

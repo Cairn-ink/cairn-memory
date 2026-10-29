@@ -5,9 +5,18 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { installedImportClosure } from '../../../packaging/test/fixtures/installed-import-closure.mjs';
 import { fixture, ns, refusal, independentFiles } from '../../../core/test/content-safety-preflight-fixture.mjs';
+import { removeReviewedRoleHelpAdditions } from './fixtures/role-profile-help-compat.mjs';
 
 const cli = fileURLToPath(new URL('../cli.mjs', import.meta.url));
 const root = fileURLToPath(new URL('../../../', import.meta.url));
+test('R2.7 reviewed safety usage addition preserves the pinned help bytes', () => {
+  const child = spawnSync(process.execPath, [cli, '--help'], { encoding: 'utf8', env: {} });
+  assert.equal(child.status, 0); assert.equal(child.stderr, '');
+  const projected = removeReviewedRoleHelpAdditions(child.stdout);
+  assert.match(projected, /^Cairn Memory[^\n]*\n\nUsage:\n/);
+  assert.equal(projected.includes('safety preflight'), false);
+});
+
 function command(args) {
   const child = spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8', env: { NODE_NO_WARNINGS: '1' }, timeout: 30000 });
   assert.equal(child.error, undefined); assert.equal(child.signal, null);
