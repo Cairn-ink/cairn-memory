@@ -1,5 +1,5 @@
 import { attributionFields, maintenanceWorkFields, maintenanceKinds, add, maintenanceDispatchControl, maintenanceControlState } from './context-product-attribution.mjs';
-import { openContextIndexMaintainer, maintenanceObservation, maintenancePhaseDiagnostic, maintenanceStallDiagnostic } from './context-product-reader.mjs';
+import { openContextIndexMaintainer, maintenanceObservation, maintenancePhaseDiagnostic, maintenanceStallDiagnostic, maintenanceCutoffQualified, authorizeMaintenanceCutoff, snapshotMaintenanceCutoff } from './context-product-reader.mjs';
 import { supervisorOwner } from './context-read-supervisor.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { boundedData, hostConfiguration, coverage, PRODUCT_PROFILE } from './context-product-control.mjs';
@@ -43,7 +43,9 @@ export const maintenancePumpDiagnostic=observation=>pumpDiagnostics.get(observat
 // beyond handle shutdown; a host persists the same monotonic window/quota state
 // across process restarts before reopening admission (see the product guide).
 export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigint())/1e6,setTimer=setTimeout,clearTimer=clearTimeout,
-  open=openContextIndexMaintainer,observedAt=maintenanceObservation,phasesOf=maintenancePhaseDiagnostic,stallOf=maintenanceStallDiagnostic}={}) {
+  open=openContextIndexMaintainer,observedAt=maintenanceObservation,phasesOf=maintenancePhaseDiagnostic,stallOf=maintenanceStallDiagnostic,cutoffQualified=maintenanceCutoffQualified}={}) {
+  // Test-only dependency seam on this internal factory; public renewal never reaches it.
+  const recoveryEnabled=cutoffQualified();
   return function renewContextMaintenancePump(original) {
     if(ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential','semanticConfig','semanticServiceCredential','firstCoverageValidation']).semanticConfig!==undefined)return semanticPump(original,{now,setTimer,clearTimer,open});
     const c=ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential']);
@@ -88,12 +90,18 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     const domainOf=p=>JSON.stringify([resolve(p.options.path),p.options.readSet[0].ownerId,p.options.host.moduleUrl]);
     const domains=[...new Set(projections.map(domainOf))];
     const all=state(), old=all.entries.get(c.id);
+    // Recovery state outlives quota ledgers, including unrelated retirement.
+    const recoveryDomains=recoveryEnabled ? all.recoveryDomains??=new Map() : null;
     if(old) {
       if(old.fingerprint!==fingerprint || old.supervisor!==c.supervisor)fail('read_in_progress');
       old.renew(c,window,budgets,credential); return old.api;
     }
     function admit(w,b) {
       for(const [key,l] of all.ledgers)if(now()>=l.endsAt)all.ledgers.delete(key);
+      if(recoveryEnabled)for(const [domain,r] of recoveryDomains){
+        if(!r.pending && r.cooldownUntil<=now() && ![...all.ledgers.values()].some(l=>l.domain===domain) &&
+          ![...all.entries.values()].some(e=>e.cutoffDomains?.includes(domain)))recoveryDomains.delete(domain);
+      }
       // Validate the entire admission before changing any domain's ledger.
       const candidates=domains.map(domain=>{
         const key=JSON.stringify([domain,w.id]),existing=all.ledgers.get(key);
@@ -103,9 +111,12 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
         return {key,ledger:existing??{domain,endsAt:w.endsAtMonoMs,maxItems:b.maxItems,maxMs:b.maxMs,items:w.usedItems,ms:w.usedMs}};
       });
       if(all.ledgers.size+candidates.filter(x=>!all.ledgers.has(x.key)).length>1024)fail('read_in_progress');
+      if(recoveryEnabled && recoveryDomains.size+domains.filter(d=>!recoveryDomains.has(d)).length>1024)fail('read_in_progress');
       for(const {key,ledger} of candidates){
         ledger.floorItems=Math.max(ledger.floorItems??0,w.usedItems);ledger.floorMs=Math.max(ledger.floorMs??0,w.usedMs);
-        ledger.items=Math.max(ledger.items,ledger.floorItems);ledger.ms=Math.max(ledger.ms,ledger.floorMs);all.ledgers.set(key,ledger);
+        ledger.items=Math.max(ledger.items,ledger.floorItems);ledger.ms=Math.max(ledger.ms,ledger.floorMs);
+        if(recoveryEnabled && !recoveryDomains.has(ledger.domain))recoveryDomains.set(ledger.domain,{pending:0,pendingUntil:0,cooldownUntil:0});
+        all.ledgers.set(key,ledger);
       }
       return new Map(candidates.map(({ledger})=>[ledger.domain,ledger]));
     }
@@ -115,6 +126,8 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     let report,completion,settled=false;
     function cycle(){settled=false;completion=new Promise(resolve=>{report=value=>{settled=true;resolve(value);};});}cycle();
     const handles=new Map(),writers=new Map(),handleLanes=new Map();
+    let cutoffDiagnostic,cancelRecovery;
+    const pendingDrains=new Map();
     // Fixed 10-ms elapsed counters (last bucket is >5000 ms), never samples.
     // At most 64 lanes; no identities, paths, grants or content enter snapshots.
     let quantumNumber=0,residentEpoch=0;
@@ -145,6 +158,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
         windowId:window.id,usedItems:Math.max(...[...ledgers.values()].map(l=>l.items)),usedMs:Math.max(...[...ledgers.values()].map(l=>l.ms)),maxItems:budgets.maxItems,maxMs:budgets.maxMs,error});
       pumpDiagnostics.set(value,Object.freeze({cadenceMisses,worstGapMs,observation:lastObservation}));
       phaseDiagnostics.set(value,freezeTree(structuredClone({elapsedBucketMs:10,projections:phases})));
+      snapshotMaintenanceCutoff(value,cutoffDiagnostic);
       return value;
     }
     // Stop this selection conservatively at its first exhausted domain; a new
@@ -152,10 +166,10 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     function exhausted(){return [...ledgers.values()].some(l=>now()>=l.endsAt||l.items>=l.maxItems||l.ms>=l.maxMs);}
     function stop(){
       if(closing)return closing;
-      stopped=true;clearTimer(timer);registry.cleanup(record);
+      stopped=true;clearTimer(timer);cancelRecovery?.();registry.cleanup(record);
       closing=(async()=>{
         await running;
-        const disposed=await Promise.allSettled([...handles.keys()].map(key=>drain(key)));
+        const disposed=await Promise.allSettled([...handles.keys()].map(key=>pendingDrains.get(key)??drain(key)));
         if(disposed.some(r=>r.status==='rejected'))throw Error('reader_failed');
         registry.finish(record);all.entries.delete(c.id);report(observation());
       })();
@@ -183,18 +197,29 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       // for intervening turns. A fixed admission period cannot bound reads.
       // N*S+Q <= 5000 makes this deadline at least lastTick+S after each
       // punctual, in-budget turn, so advancing it preserves minimum spacing.
-      const due=Math.min(...observations.map((time,i)=>time+5000-quantum.maxMs-
+      let due=Math.min(...observations.map((time,i)=>time+5000-quantum.maxMs-
         ((i-at%projections.length+projections.length)%projections.length)*spacing));
+      if(recoveryEnabled){
+        const order=projections.map((_,i)=>(at+i)%projections.length).filter(i=>!cooling(i));
+        if(!order.length){
+          const next=Math.min(Math.max(lastTick+spacing,Math.min(...[...ledgers.keys()].map(eligibleAt))),renewedUntil,window.endsAtMonoMs);
+          timer=setTimer(tick,Math.max(1,next-now()));return;
+        }
+        due=Math.min(...order.map((i,position)=>observations[i]+5000-quantum.maxMs-position*spacing));
+      }
       // After a cadence miss the old deadline can be in the past. Recover in
       // round-robin order without violating spacing or spinning overdue timers.
       timer=setTimer(tick,Math.max(0,Math.min(Math.max(lastTick+spacing,Math.min(lastTick+interval(),due)),renewedUntil,window.endsAtMonoMs)-now()));
     }
+    const eligibleAt=domain=>{const r=recoveryDomains.get(domain);return Math.max(r?.cooldownUntil??0,r?.pending?Math.max(r.pendingUntil,now()+spacing):0);};
+    const cooling=index=>recoveryEnabled && eligibleAt(domainOf(projections[index]))>now();
     function tick(){
       if(stopped||error)return;
       checkCadence(now());
       if(exhausted()||now()>=renewedUntil){report(observation());return;}
+      if(recoveryEnabled && projections.every((_,i)=>cooling(i))){schedule();return;}
       lastTick=now();
-      let quantumTimer,lane,sequence,settleStarted,deliveryMs=0,activeHandle,activeControl,ordinal,openingOrdinal,quantumDetail={},stallRecorded=false;
+      let quantumTimer,lane,sequence,settleStarted,deliveryMs=0,activeHandle,activeControl,ordinal,openingOrdinal,quantumDetail={},stallRecorded=false,capability,recovery;
       function recordStall(value){
         if(stallRecorded||!lane)return;
         const stall=ordinal===null?{kind:0,runningMs:0,unitCount:0,unattributed:1}:stallOf(value??activeControl,now());
@@ -205,7 +230,12 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       }
       return running=(async()=>{
         try {
-          const index=at++%projections.length,p=projections[index],key=JSON.stringify([residentKeys[index],residentEpoch]),ledger=ledgers.get(domainOf(p));
+          let index=at++%projections.length;
+          if(recoveryEnabled){
+            let skipped=0;while(cooling(index)&&++skipped<projections.length)index=at++%projections.length;
+            if(cooling(index))return;
+          }
+          const p=projections[index],dispatchEpoch=residentEpoch,key=JSON.stringify([residentKeys[index],dispatchEpoch]),ledger=ledgers.get(domainOf(p));
           const maxItems=Math.min(quantum.maxItems,ledger.maxItems-ledger.items),maxMs=Math.min(quantum.maxMs,ledger.maxMs-ledger.ms,Math.floor(ledger.endsAt-now()),Math.floor(renewedUntil-now()));
           if(maxItems<1||maxMs<1)return;
           // Reserve the full quantum before dispatch. Unknown usage remains
@@ -215,7 +245,42 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           // Disposal can await a Worker/host resource. Expose timeout even if
           // that await has not settled; supervision still owns the drain.
           activeControl=maintenanceDispatchControl();ordinal=maintenanceControlState(activeControl).ordinal;
-          quantumTimer=setTimer(()=>{recordStall(activeHandle);error='read_timeout';void stop();},Math.max(0,maxMs-(now()-lastTick)));
+          // Outcomes: pending, recovered, proof deadline, failed proof, closed, allowance spent.
+          const describeCutoff=outcome=>cutoffDiagnostic={ordinal,lane:index,quantum:sequence,resident:dispatchEpoch,cutoff:1,
+            chargedItems:maxItems,chargedMs:maxMs,disposalMs:0,outcome,allowance:ledger.recoveries??0,cooldownUntil:0};
+          const recover=()=>recovery??= (async()=>{
+            const started=now(),proofDeadline=Math.min(capability.cutoffAt,Number(BigInt(capability.operation.operationCutoffMonoNs))/1e6)+1000;
+            const domainRecovery=recoveryDomains.get(domainOf(p));
+            domainRecovery.pending++;domainRecovery.pendingUntil=Math.max(domainRecovery.pendingUntil,proofDeadline);
+            let confirmationTimer;describeCutoff(0);
+            try {
+              const drainPromise=drain(key,index);pendingDrains.set(key,drainPromise);
+              const forget=()=>{if(pendingDrains.get(key)===drainPromise)pendingDrains.delete(key);};
+              drainPromise.then(forget,forget);
+              const disposal=drainPromise.then(()=>capability.proof());
+              const confirmed=await Promise.race([disposal.then(()=>true),new Promise(resolve=>{
+                confirmationTimer=setTimer(()=>resolve(false),Math.max(0,proofDeadline-now()));
+              }),new Promise(resolve=>{cancelRecovery=()=>{clearTimer(confirmationTimer);resolve(null);};})]);
+              cutoffDiagnostic.disposalMs=Math.max(0,now()-started);
+              if(confirmed===null){cutoffDiagnostic.outcome=4;return;}
+              if(!confirmed || now()>proofDeadline){cutoffDiagnostic.outcome=2;error='read_timeout';return;}
+              for(const [writer,handle] of writers)if(handle===key)writers.delete(writer);
+              if(stopped){cutoffDiagnostic.outcome=4;return;}
+              if((ledger.recoveries??0)>=2){cutoffDiagnostic.outcome=5;error='read_timeout';return;}
+              ledger.recoveries=(ledger.recoveries??0)+1;
+              const until=now()+1000;
+              domainRecovery.cooldownUntil=Math.max(domainRecovery.cooldownUntil,until);
+              cutoffDiagnostic.allowance=ledger.recoveries;cutoffDiagnostic.cooldownUntil=until;cutoffDiagnostic.outcome=1;
+            } catch {cutoffDiagnostic.outcome=3;error='reader_failed';}
+            finally {domainRecovery.pending--;clearTimer(confirmationTimer);cancelRecovery=undefined;}
+          })();
+          quantumTimer=setTimer(()=>{
+            recordStall(activeHandle);
+            if(capability && (capability.attested||capability.expire?.())){
+              if((ledger.recoveries??0)<2){void recover();return;}describeCutoff(5);
+            }
+            error='read_timeout';void stop();
+          },Math.max(0,maxMs-(now()-lastTick)));
           let h=handles.get(key),openedHere=false;
           if(!h){
             // Native admission permits one maintainer per physical selection,
@@ -237,6 +302,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           if(openedHere){
             activeControl=maintenanceDispatchControl();ordinal=maintenanceControlState(activeControl).ordinal;
           }
+          if(recoveryEnabled && ordinal!==null)capability=authorizeMaintenanceCutoff(activeControl,{pumpEpoch:record.id,ordinal,ledger,cutoffAt:lastTick+maxMs,quantum:sequence,resident:dispatchEpoch,lane:index});
           const refreshing=now();let result;
           try{result=await h.refreshContextIndex({readSet:p.options.readSet,types:p.types,intent:p.intent,mode:'lexical',budget:{maxItems,maxMs:remainingMs}},grant,activeControl);}
           finally{settleStarted=now();recordPhase(lane.phases.refreshCall,settleStarted-refreshing);}
@@ -255,6 +321,10 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           }
           for(const name of attributionFields){const n=detail?.[name];if(Number.isFinite(n)&&n>=0){quantumDetail[name]=Math.min(Number.MAX_SAFE_INTEGER,n);recordField(lane.attribution[name],quantumDetail[name]);}}
           if(result?.error?.code==='read_timeout')recordStall(result);
+          if(recovery){await recovery;return;}
+          if(result?.error?.code==='read_timeout' && capability?.attested){
+            if((ledger.recoveries??0)<2){await recover();return;}describeCutoff(5);
+          }
           if(error)return;
           if(!result.ok){error=result.error.code;return;}
           const time=observedAt(result),finished=now();
@@ -289,7 +359,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
         clearTimer(quantumTimer);running=null;if(error){void stop();return;}if(exhausted() || now()>=renewedUntil)report(observation());schedule();});
     }
     const api=Object.freeze({getStatus:observation,get completion(){return completion;},close:stop});
-    const entry={api,supervisor:c.supervisor,fingerprint,renew(next,w,b,g){
+    const entry={api,supervisor:c.supervisor,fingerprint,...(recoveryEnabled?{cutoffDomains:domains}:{}),renew(next,w,b,g){
       if(stopped)fail('store_closed');
       // Renewal exactly at expiry is a continuous handoff. Only an elapsed
       // authority/window gap or settled spent quota resets observation duty;

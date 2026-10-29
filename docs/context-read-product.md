@@ -635,6 +635,37 @@ stop and drain. Failed/uncertain work keeps its full reservation. A parent
 deadline timer exposes failure even while disposal or refresh remains pending;
 supervision continues to own the drain. No additional host input is needed.
 
+An internal confirmed-disposal exception exists for owned lexical pump refreshes,
+but is **disabled until a deployed Node patch is qualified**. The engine's private
+qualified-patch set starts empty. No public option, credential, environment variable
+or diagnostic marker can enable it. Tests use only the internal runtime factory's
+dependency seam; passing a recovery flag to public renewal remains invalid input.
+Functional tests alone do not qualify a patch: native recovery/resource settlement
+and separate quiet-window disposal/open-tail and observation-gap evidence are required.
+
+When enabled, an attested refresh cutoff keeps the pump alive while resident
+`close()`/drain confirms Worker exit, both complete cleanup records, balanced
+leases/providers and exclusive-writer release within 1,000 ms. Node environment
+teardown closes isolate-owned `node:sqlite` connections; the derived `nativeDisposed`
+bit is not independent evidence and does not prove disposal of arbitrary host resources.
+Invalidate that resident's cached intents, wait a fixed 1,000-ms shared-domain
+cooldown, then continue with unchanged observation baselines and round-robin position.
+At most two expedited recoveries use the existing resolved-path/owner/host domain's
+allowance per quota window. The breaker is process-local; restart resets it but
+must restore cumulative usage floors. Failed quanta retain their full reservation;
+every successor reserves anew, including open/recovery time. Writable SQLite recovery
+precedes final status observation; no read-only status preflight is added.
+
+Late proof cannot revive expedited recovery, but ordinary authorized renewal after
+safe drain remains available. A failed/uncertain drain overrides public completion
+with `reader_failed`; private diagnostics retain the cutoff. Opening, status,
+standalone maintainers, request readers and semantic pumps retain terminal cutoffs.
+The fixed numeric `maintenancePumpCutoffDiagnostic(observation)` in the internal
+reader module records only the process-wide dispatch ordinal, lane/quantum/resident,
+cutoff enum, charged items/ms, disposal ms/outcome, allowance and cooldown deadline.
+Outcome enums are pending=0, recovered=1, proof-deadline=2, failed-proof=3, closed=4,
+allowance-spent=5. No public DTO or serializer fields are added.
+
 Quanta reserve their full item/time allowance before opening/dispatch. After a
 successful settled quantum with a valid transformation-attempt count and known
 elapsed time, unused items and milliseconds are returned to that minute window.
