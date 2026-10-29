@@ -5,6 +5,7 @@ import { methodCommand } from './method-package-command.mjs';
 import { MethodStdioServerTransport } from './method-package-transport.mjs';
 import { modelCommand } from './model-command.mjs';
 import { contextCommand } from './context-read-command.mjs';
+import { safetyCommand } from './safety-command.mjs';
 // U5c-2 source startup wiring (SQLite-free).
 import { CONTEXT_SOURCE_FLAG, contextSourcesConfiguration, contextSourcesPreset } from './context-read-sources-configuration.mjs';
 import { CONTEXT_FLAGS, contextHostConfiguration } from './context-read-configuration.mjs';
@@ -19,6 +20,8 @@ import { DEFAULT_MODEL } from '../openai/profiles.mjs';
 import { assertRetainedRuntime, retainedProfilePath } from './retained-raw-profile.mjs';
 
 const help = `Cairn Memory — local stdio MCP developer preview
+
+  cairn-memory safety preflight --db ABS
 
 Usage:
   cairn-memory --db ABS --owner ID [--project ID] --context-read context-read-v1 [--context-read-personal]
@@ -286,6 +289,7 @@ export async function start(args = process.argv.slice(2), env = process.env) {
   if(args[0]==='methods')return methodCommand(args.slice(1));
   if(args[0]==='model')return modelCommand(args.slice(1));
   if(args[0]==='context')return contextCommand(args.slice(1),env);
+  if(args[0]==='safety')return safetyCommand(args.slice(1));
   if(args[0]==='--check-config'&&args[1]==='context')return contextCommand([...args.slice(2),'--check-config'],env);
   if (args[0] === 'review-card') {
     if (args.includes('--retained-raw-profile')) {
