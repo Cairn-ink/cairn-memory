@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "8af9f65a43026a42994b2c8561e3cb451f9de73424d029c09cc47a0c4ed1caf6",
-  "bytes": 963969,
+  "sha256": "fd755d3be46fd7a6b5ee09ac26c9846a1c820523e1a1802de59ce04a401fb89c",
+  "bytes": 964000,
   "files": [
     "LICENSE",
     "README.md",
@@ -571,7 +571,7 @@
     "plugins/cairn-memory/lib/transcript.mjs": "9b049fa05f2ff0c26f4c9ef1a757e4c3846b51d72bfb968a126228424e998804",
     "integrations/client/runtime-usage.mjs": "8bf732bb36664b33aa238a40903986b16c112a44829412c32a11b01dcad08d4d",
     "integrations/client/state-lock.mjs": "ee4bc6161d97bac44a8dc34a2058ed48e3dbbfeb105e32f6e66590b883b29b58",
-    "docs/raw-local-journal.md": "892fc37dfe3d4182bcab0f11138dc06767312d88c4092532491eb54deba97ea8",
+    "docs/raw-local-journal.md": "28a59878229526c660690dd903bc9edaec4f53d42247ccd14647c5ce3a94978d",
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
     "docs/context-read-local.md": "5b5062e3498cb253aa72ede5bd82b2881ca32e6c701e2e8b192f31fe464c01ca",
     "docs/method-packages-local.md": "3912f7d95956e74be91d031c6eeba1ead4ca194fdb15854d0ded05de196a3815",
@@ -595,7 +595,7 @@
     "core/context-read-moc.mjs": "2fe6ea129032c8b3ac989f89ea62c1a52a354e8e7bc384e0b7ee97625c092b6b",
     "adapters/mcp/context-read-sources-configuration.mjs": "0b03510d8a8252c27b4587c798671674041a3d9033df822d0feb68483be1d0fd",
     "adapters/mcp/context-read-sources-tools.mjs": "61f8653a9e1c05021b34b9c3b00ab6e8e3bf2c45731171893b96ef3fe718a3ca",
-    "docs/limitations.md": "e65b1771545e6a996bd687b0063200ffd28befe565c2214389f2771baaf8b004",
+    "docs/limitations.md": "2442cfb2e6af4b66033a1a1ed0a63ddf058880a53adae67446304af5f7c96c51",
     "core/card-current-input.mjs": "bc7207aeffceb667e6bd5c50808f08b259f70556d48d8cd11b3a50d4810618f1",
     "core/card-current-schema.mjs": "08cd3274d796ef2c3cad876c174a084bc43933447c96cbb50879ce6d4e99932d",
     "core/card-current-storage.mjs": "ea8c99510582727f201a13d07564580b3dba5bc38d7822cc2b1f80ca13c08d7c",

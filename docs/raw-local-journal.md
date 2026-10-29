@@ -1020,9 +1020,10 @@ and reserved bytes once, purges Raw rows/maps/exclusions, and records replay and
 withdrawal metadata. Existing `forgetEpisode` delegates to this same cascade on
 27, even for actual pre-Raw/empty episodes and option-off writers. It retains its
 old DTO and compares the episode revision, not the conversation revision.
-Confirmed authored Card bodies/host records remain retained in canonical storage,
-but Cards with suppressed contributors are withheld from inspection and current
-and history reads, and bound drafts are cancelled.
+Confirmed authored Card bodies remain retained in canonical storage, and host
+records stay in the host's own store under its retention policy, but Cards with
+suppressed contributors are withheld from inspection and current and history
+reads, and bound drafts are cancelled.
 
 Real ordinary/staged/ordered/episode/keep transactions persist core-owned source
 session bindings before provider dispatch. Tombstones refuse late legacy and Raw

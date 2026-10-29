@@ -2461,7 +2461,8 @@ ordinary stores are not silently upgraded. The actual frozen v26 opener refuses
 
 Existing receipt-backed Card drafts/current evidence invalidate, and confirmed
 Cards with suppressed contributors are withheld from inspection and history
-while their authored bodies and host records remain in canonical storage. The
+while their authored bodies remain in canonical storage; host records stay in
+the host's own store under its retention policy. The
 finite content-free Raw outbox is not evidence that a host withdrew an ask/preview, consumed an effect or received
 an acknowledgement. RawSourceRef resolution/bare Raw-to-Card remain P3c;
 installed Raw/client lifecycle and consumption remain P4. No paid-model,
