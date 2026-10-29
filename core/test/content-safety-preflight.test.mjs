@@ -56,11 +56,11 @@ for (const version of [23, 33]) {
     f.db.exec('PRAGMA foreign_keys=OFF'); f.db.prepare('DELETE FROM card_notes WHERE id=?').run(note.sourceId);
     assert.equal(classify(f, missing.id).status, 'unknown');
   });
-  test(`physical ${version}: removed bindings require a canonical source association; note deletion records retain it`, t => {
+  test(`physical ${version}: removed bindings retain authenticated Memory and note associations`, t => {
     const f = fixture(t, version), memory = f.admit(), card = f.draft(ns, [memory], true);
     ok(f.core.forget({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision }));
     f.db.prepare('DELETE FROM card_memory_bindings WHERE card_id=?').run(card.id);
-    assert.equal(classify(f, card.id).status, 'unknown');
+    assert.equal(classify(f, card.id).status, 'known-suppressed');
     const noteCard = f.draft(ns, undefined, true);
     const source = ok(f.call('getCard', { namespace: ns, cardId: noteCard.id })).card.bindings[0].source;
     ok(f.call('deleteSourceNote', { namespace: ns, sourceId: source.sourceId, expectedRevision: source.revision, actionId: 'purge-note' }));

@@ -1,6 +1,10 @@
 // Run only in a SQLite-free child. Never return file bytes, paths or error text.
 import { constants, openSync, closeSync, fstatSync, lstatSync, readSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+
+// Refuse imports before stdin or any database file can be opened.
+if (!process.argv[1] || pathToFileURL(process.argv[1]).href !== import.meta.url) throw Error('child_entry_required');
 
 const identity = stat => Object.fromEntries(['dev', 'ino', 'size', 'mtimeNs', 'ctimeNs']
   .map(key => [key, String(stat[key])]));

@@ -1643,5 +1643,20 @@
     "path": "evaluation/context-read-qualification/registration.mjs",
     "source": "if(readFileSync(new URL('./registration.engine.template.sha256',import.meta.url),'utf8')!==createHash('sha256').update(templateBytes).digest('hex')+'  registration.engine.template.json\\n')throw Error('template_hash_changed');",
     "reason": "Fixed repository template SHA-256 resource only; never a database or companion. SQLite-free preparation/validation tooling."
+  },
+  {
+    "path": "core/content-safety-files-child.mjs",
+    "source": "import { constants, openSync, closeSync, fstatSync, lstatSync, readSync, readFileSync } from 'node:fs'",
+    "reason": "Entry-guarded SQLite-free child, spawned by content-safety-preflight.mjs in a separate process. Reads stdin configuration and hashes database/companion bytes only in that child; never imports the engine or SQLite, so its descriptor closes cannot drop host SQLite locks."
+  },
+  {
+    "path": "core/content-safety-files-child.mjs",
+    "source": "const { path, maxBytes } = JSON.parse(readFileSync(0, 'utf8'));",
+    "reason": "Entry-guarded SQLite-free child, spawned by content-safety-preflight.mjs in a separate process. Reads stdin configuration and hashes database/companion bytes only in that child; never imports the engine or SQLite, so its descriptor closes cannot drop host SQLite locks."
+  },
+  {
+    "path": "core/content-safety-files-child.mjs",
+    "source": "const fd = openSync(path + suffix, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);",
+    "reason": "Entry-guarded SQLite-free child, spawned by content-safety-preflight.mjs in a separate process. Reads stdin configuration and hashes database/companion bytes only in that child; never imports the engine or SQLite, so its descriptor closes cannot drop host SQLite locks."
   }
 ]

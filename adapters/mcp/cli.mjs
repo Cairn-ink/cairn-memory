@@ -21,8 +21,6 @@ import { assertRetainedRuntime, retainedProfilePath } from './retained-raw-profi
 
 const help = `Cairn Memory — local stdio MCP developer preview
 
-  cairn-memory safety preflight --db ABS
-
 Usage:
   cairn-memory --db ABS --owner ID [--project ID] --context-read context-read-v1 [--context-read-personal]
     [--context-read-sources relations-one-hop-v1,moc-v1]
@@ -37,6 +35,7 @@ Usage:
   cairn-memory --db ABS --owner ID [--project ID] --assets local-v1
   cairn-memory methods import|adopt|disable [method command arguments; see docs/method-packages-local.md]
   cairn-memory --db PATH --owner ID [--project ID] --method-packages local-v1 [--method-read-personal]
+  cairn-memory safety preflight --db ABS
   cairn-memory --help
   cairn-memory [--check-config] --retained-raw-profile ABS
   cairn-memory review-card --retained-raw-profile ABS --card ID --revision N [--applicability current|historical|conflict|unknown]

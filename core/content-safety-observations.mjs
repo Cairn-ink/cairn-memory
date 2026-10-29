@@ -87,7 +87,7 @@ export function contentSafetyObservations(native, limits, check) {
   const effects = scan('card_effects'), cardEffects = grouping(effects.filter(row => row.entity_type === 'card'), row => row.entity_id);
   const actionEffects = grouping(effects, actionKey), actionOperations = grouping(operations, actionKey);
   const cardOperations = grouping(operations, row => row.target_id);
-  let rawBindings = new Map(), conversations = new Map(), exclusions = new Map(), rawDeletions = new Map(), memoryDeletions = new Map();
+  let rawBindings = new Map(), conversations = new Map(), exclusions = new Map(), rawDeletions = new Map();
   let sourceMaps = new Map(), mappedMessages = new Set(), messages = new Map(), fences = new Map();
   let episodeSecret;
   if (schemaBase === 33) {
@@ -101,7 +101,6 @@ export function contentSafetyObservations(native, limits, check) {
     // typed root identity. Caller-selected Card action strings are not evidence.
     const verified = removed.filter(row => rootsDeleted.has(deletionKey(row)));
     rawDeletions = grouping(verified.filter(row => row.source_type === 'conversation'), row => row.source_id);
-    memoryDeletions = grouping(verified.filter(row => row.entity_type === 'memory'), row => row.entity_id);
     const maps = scan('raw_source_maps');
     sourceMaps = grouping(maps, row => JSON.stringify([row.conversation_id, row.message_id, row.source_key]));
     mappedMessages = new Set(maps.map(row => JSON.stringify([row.conversation_id, row.message_id])));
@@ -125,9 +124,8 @@ export function contentSafetyObservations(native, limits, check) {
     for (const entry of stored) spans.push({ ref: { conversationId: entry.conversation_id, messageId: entry.message_id,
       span: { start: entry.start, end: entry.end, precision: entry.precision } }, origin: 'raw_receipt_lineage', row: entry });
     const sessions = [...authority.roots, ...(authority.possibleRoots ?? [])];
-    if (authority.independent) for (const sessionKey of roots.keys(nsFor(card), receipt.client, receipt.session_id)) {
-      sessions.push({ client: receipt.client, sessionKey });
-    }
+    // Match assertSession: expand each original identity once, never its aliases.
+    if (authority.independent) sessions.push({ client: receipt.client, sessionKey: receipt.session_id });
     if (!stored.length) for (const root of [...authority.roots, ...(authority.possibleRoots ?? [])]) {
       const conversationId = root.conversationId ?? root.conversation_id;
       if (!conversationId) continue;
@@ -208,15 +206,10 @@ export function contentSafetyObservations(native, limits, check) {
       if (receiptId) {
         const receipt = receipts.get(receiptId), kept = Boolean(receipt && receipt.memory_id === memoryId && exists);
         add('receipt', receiptId, legacyVersion(row), origin, row, { exists: kept, memoryId, boundRevision: boundRevision ?? null });
-        // A missing bound receipt + retired Memory revision identifies the
-        // affected contributor even when the deletion and Card effects have
-        // different action ids. A fresh, surviving receipt does not match.
-        if (!kept && Number.isSafeInteger(boundRevision) && (!exists || memory.revision > boundRevision)) {
-          for (const removed of memoryDeletions.get(memoryId) ?? []) if (sameNamespace(removed, card)) {
-            fact(id, 'purge', 'raw_deletion_effects', removed);
-            if (removed.source_type === 'conversation') rawEdge({ conversationId: removed.source_id }, 'raw_deletion_effects', removed);
-          }
-        }
+        // raw_deletion_effects retains the affected Memory id, but neither its
+        // retired revision nor the removed receipt ids. It cannot attribute a
+        // later missing receipt to that deletion. Without retained exact Raw
+        // ancestry, the missing contributor remains unknown.
         // A newer revision and lost receipts alone also result from Raw erasure.
         // Require retained identity-linked old fingerprint evidence as well.
         if (exists && !kept && memory.revision > boundRevision) for (const old of corrections.get(memoryId) ?? []) {
@@ -236,8 +229,10 @@ export function contentSafetyObservations(native, limits, check) {
           }
         }
       }
-      const selectedReceipts = receiptId ? [receipts.get(receiptId)].filter(row => row?.memory_id === memoryId)
-        : memoryReceipts.get(memoryId) ?? [];
+      // Presentation selection does not narrow the source set of a proven
+      // current Memory version. A later revision cannot supply that proof.
+      const selectedReceipts = exists && memory.revision === boundRevision ? memoryReceipts.get(memoryId) ?? []
+        : receiptId ? [receipts.get(receiptId)].filter(row => row?.memory_id === memoryId) : [];
       if (exists && roots) for (const receipt of selectedReceipts) {
         if (expandedReceipts.has(receipt.id)) continue;
         expandedReceipts.add(receipt.id);
@@ -277,9 +272,38 @@ export function contentSafetyObservations(native, limits, check) {
     for (const row of memoryBindings.get(card.id) ?? []) { memoryEdge(row.memory_id, row.memory_revision, row.receipt_id, 'card_memory_bindings', row); refs(JSON.parse(row.source_ref), 'card_memory_bindings', row); }
     for (const row of rawBindings.get(card.id) ?? []) { rawEdge({ conversationId: row.conversation_id, messageId: row.message_id,
       span: { start: row.start, end: row.end } }, 'card_raw_bindings', row); refs(JSON.parse(row.source_ref), 'card_raw_bindings', row); }
-    for (const operation of cardOperations.get(card.id) ?? []) if (sameNamespace(operation, card)) refs(operation.parsed, 'card_operations', operation);
+    // Only these methods return the target Card. Organization result ids are
+    // action/mapping/topic identities, even when a caller chooses a Card id.
+    const cardTargetMethods = ['createCardDraft', 'editCardDraft', 'confirmCardDraft', 'cancelCardDraft', 'editKnowledgeCard', 'deleteKnowledgeCard'];
+    for (const operation of cardOperations.get(card.id) ?? []) if (sameNamespace(operation, card) &&
+        cardTargetMethods.includes(operation.method) && operation.parsed.id === card.id) refs(operation.parsed, 'card_operations', operation);
     for (const effect of cardEffects.get(card.id) ?? []) if (sameNamespace(effect, card)) {
       if (effect.kind !== 'evidence_invalidated') continue;
+      // The SQL revision trigger is the only producer of an unowned Card
+      // invalidation with this identity format. A caller operation owns its
+      // exact entity/revision effect (or the authenticated note batch below);
+      // its chosen action text must never be parsed as a Memory association.
+      const matchingOperations = actionOperations.get(actionKey(effect)) ?? [];
+      const callerOwned = matchingOperations.some(operation => {
+        if (['editCardDraft', 'editKnowledgeCard', 'cancelCardDraft'].includes(operation.method)) return operation.target_id === effect.entity_id && operation.parsed.id === effect.entity_id &&
+          operation.parsed.revision === effect.revision && operation.parsed.effectCount === 1;
+        if (operation.method !== 'deleteSourceNote' || operation.parsed.id !== operation.target_id || operation.parsed.state !== 'deleted') return false;
+        const terminal = (actionEffects.get(actionKey(effect)) ?? []).find(item => item.kind === 'evidence_invalidated' &&
+          item.entity_type === 'submitted-note' && item.entity_id === operation.target_id && item.revision === operation.parsed.revision);
+        return terminal && Number.isSafeInteger(operation.parsed.effectCount) && effect.ordinal < terminal.ordinal &&
+          terminal.ordinal - effect.ordinal < operation.parsed.effectCount;
+      });
+      const atBody = (cardOperations.get(card.id) ?? []).filter(operation => sameNamespace(operation, card) &&
+        cardTargetMethods.includes(operation.method) && operation.parsed.id === card.id && operation.parsed.revision < effect.revision)
+        .sort((a, b) => b.parsed.revision - a.parsed.revision)[0];
+      if (atBody?.parsed.bodyRevision !== card.body_revision) continue;
+      const revisionEffect = /^memory-revision-(.+)-([1-9][0-9]*)$/.exec(effect.action_id);
+      if (revisionEffect && !callerOwned) {
+        const memory = memories.get(revisionEffect[1]), revision = Number(revisionEffect[2]);
+        if (memory && sameNamespace(memory, card) && Number.isSafeInteger(revision) && revision > 1 && memory.revision >= revision) {
+          memoryEdge(memory.id, revision - 1, null, 'card_effects', effect);
+        }
+      }
       // Only the recorded method/target and its typed source effect establish
       // note-deletion causality. An action string by itself never adds an edge.
       for (const operation of actionOperations.get(actionKey(effect)) ?? []) {

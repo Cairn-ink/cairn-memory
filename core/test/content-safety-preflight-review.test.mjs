@@ -38,7 +38,7 @@ function rawFixture(t) {
   return f;
 }
 
-test('R1 surviving Memory: removed Raw receipt is suppressed through contributor identity, without a Card action join', async t => {
+test('R1 surviving Memory: an unversioned deletion effect cannot prove a missing receipt cause', async t => {
   const f = rawFixture(t), source = await savedSource(f), memory = f.admitRaw(source);
   const withIndependent = ok(f.core.admit({ namespace: rawNs, memory: { content: memory.content, kind: 'context' }, receipts: [receipt('independent')] })).memory;
   const card = f.memoryCard(withIndependent);
@@ -47,9 +47,9 @@ test('R1 surviving Memory: removed Raw receipt is suppressed through contributor
   assert.equal(f.db.prepare('SELECT deleted FROM memories WHERE id=?').get(memory.id).deleted, 0);
   assert.equal(f.db.prepare('SELECT count(*) n FROM receipts WHERE memory_id=?').get(memory.id).n, 1);
   assert.ok(oldIds.some(id => !f.db.prepare('SELECT 1 FROM receipts WHERE id=?').get(id)));
-  assert.deepEqual(classify(f, card.id), { status: 'known-suppressed', reasons: ['purge'] });
+  assert.equal(classify(f, card.id).status, 'unknown');
   const report = await preflightContentSafetyV1({ path: f.path });
-  assert.equal(report.knownSuppressed, 1);
+  assert.equal(report.knownSuppressed, 0);
   // A fresh revision using only surviving receipts is not the removed source.
   const current = ok(f.core.get({ namespace: rawNs, memoryId: memory.id })).memory;
   const fresh = f.memoryCard(current);
