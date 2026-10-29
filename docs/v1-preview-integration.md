@@ -89,6 +89,11 @@ require confirmed, eligible support and current applicability.
 
 Defaults: `semantic:false`, 12 items, 1,000 ms. Maximums: 24 items,
 4,000 UTF-16 query units, 5,000 ms; fetch responseByteLimit is 1–65,536.
+This candidate query bound measures raw UTF-16 code units, without NFKC,
+redaction, whitespace collapse or trim rewrite. The exported
+`normalizedTextLength` and `normalizeBoundedText` instead measure the
+[bounded-text path](capture.md#bounded-text-lengths) used by capture, memory
+content and ordinary recall; segmenters must use each field's own rules.
 Pages partition one frozen top-24 ranking without reranking/embedding; at most
 128 rankings per handle, expiring after five minutes. Cursor/snapshot bounds
 are 8,192/16,384 characters. Changed semantics or generations require restarting.

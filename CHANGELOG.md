@@ -2251,6 +2251,8 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- Export `normalizeBoundedText` and `normalizedTextLength` for bounded engine text, preserving existing validation and truncation behavior.
+
 - Prepare an installed ordered-capture lifecycle gate with fresh MCP consumers,
   source-bound history, scoped correction/forgetting, isolation and explicit
   failure retention. Scripted installed tests are not real-model acceptance or

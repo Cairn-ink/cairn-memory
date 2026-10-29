@@ -195,6 +195,12 @@ packages per namespace, 128 versions per package, 16 unique reason refs per
 action and 32 change items per version, each summary at most 500 units. Package
 and version limits include tombstones. Each change item has at most 128 unique
 paths, selected from either endpoint manifest even when those manifests are larger.
+File text, titles, attribution labels and change summaries use UTF-16 code-unit
+bounds both before and after secret redaction, per field (and both file-text sums
+for the version total). They preserve formatting and apply no NFKC, whitespace
+collapse or trim. The exported `normalizedTextLength` and `normalizeBoundedText`
+describe the different [bounded-text path](capture.md#bounded-text-lengths), so
+segmenters must use these method-specific raw/redacted bounds instead.
 
 File parts are half-open UTF16 offsets, at most 4,000 units and always at code
 point boundaries. A call returns one part; an empty file returns no parts.

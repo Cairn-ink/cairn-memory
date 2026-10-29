@@ -53,6 +53,12 @@ most 300 UTF-16 units. Optional `methods` names up to 16 distinct package refs;
 `related` names up to 16 Memory/Card refs, without copying their bodies. Optional
 `appliesTo` and change-reason `text` are at most 500 units; reason refs are at most
 16 closed U2 refs. Role keys are 1–200 ASCII letters/digits/dot/underscore/hyphen.
+Duty/output/applicability/change-reason limits measure UTF-16 code units both
+before and after secret redaction per field, preserving formatting without NFKC,
+whitespace collapse or trim. The exported `normalizedTextLength` and
+`normalizeBoundedText` describe the different
+[bounded-text path](capture.md#bounded-text-lengths) and do not predict these
+fields' acceptance.
 Release inputs and retained payloads are bounded to 32,768 UTF-8 bytes; each
 namespace has at most 256 profiles and each profile 128 releases including tombstones.
 Retained release and reason payloads share a 50,000,000-byte owner quota.
@@ -64,7 +70,8 @@ and optional `history`; `refresh` takes `receipt` and optional `task`. `compare`
 takes `roleKey`, same-family `from`/`to` release or method-version refs and optional
 `cursor`. `file` takes `receipt`, exact `package`, `path` and optional half-open
 `range:{start,end}`. History takes `profile`, optional `limit` (max 20) and `cursor`.
-Tasks are at most 4,000 units. Semantic search stays disabled.
+Tasks are at most 4,000 raw UTF-16 code units, without normalization or redaction.
+Semantic search stays disabled.
 
 Keep the complete receipt string verbatim outside the engine: **a lost receipt
 cannot be recovered**. There is no receipt lookup or revocation table. The receipt

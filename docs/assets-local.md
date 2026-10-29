@@ -98,6 +98,13 @@ mutation gives `cursor_stale`. A valid cursor for a deleted target reports
 `asset_version_unavailable`. List pages default to and cap at 20 items and are
 also trimmed by envelope bytes.
 
+Title/filename bounds measure UTF-16 code units both before and after secret
+redaction, per field; derivative text below uses the same two length checks.
+Formatting is preserved without NFKC, whitespace collapse or trim. The exported
+`normalizedTextLength` and `normalizeBoundedText` describe the different
+[bounded-text path](capture.md#bounded-text-lengths) and do not predict these
+fields' acceptance.
+
 Limits: 33,554,432 bytes per version, 64 versions per asset, 1,024 assets per
 namespace, title 200 UTF-16 units, single-component filename 512 units. Tombstones
 continue to count toward entity limits. The owner-wide binary quota is

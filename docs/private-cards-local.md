@@ -171,6 +171,10 @@ cancels/invalidates at most 128 Cards in the same transaction.
 
 Title ≤200, body/source ≤20,000 UTF-16 units. Invalid Unicode/NUL/oversize input
 is rejected. Formatting is preserved after redaction; no NFKC/whitespace rewrite.
+These are raw UTF-16 code-unit limits checked again after secret redaction,
+per field. The exported `normalizedTextLength` and `normalizeBoundedText` use
+the different [bounded-text path](capture.md#bounded-text-lengths) and must not
+be used to predict Card/note acceptance.
 Sources return half-open UTF-16 parts of ≤4,000 units at code-point boundaries.
 `provided-note` means the provided note, never a complete conversation;
 `conversationCoverage:'unknown'` is explicit. Pages default 20/max 50 items.

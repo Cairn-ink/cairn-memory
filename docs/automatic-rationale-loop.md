@@ -55,6 +55,12 @@ respects active index authority. The query uses up to 4000 UTF-16 units of
 canonical retained source text. It can miss paraphrases and important sources;
 the response reports query/candidate truncation, scan exhaustion and unassessed
 semantic coverage. Filling the window can include irrelevant candidates.
+This query cap counts UTF-16 code units of the assembled query as supplied,
+with code-point-safe truncation; it does not reapply NFKC, redaction, whitespace
+collapse or trim after joining the already canonical source fields. The exported
+`normalizedTextLength` and `normalizeBoundedText` instead describe the
+[bounded-text path](capture.md#bounded-text-lengths), applied separately to the
+original capture fields. Concatenated lengths are not additive under that path.
 
 One `relate` model call receives only local indices and complete retained source
 excerpts/roles. The baseline adapter uses a request-scoped strict schema and the
