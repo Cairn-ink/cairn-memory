@@ -4,6 +4,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
+import { STORAGE_BUSY_TIMEOUT_MS } from '../../core/database.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { buildArtifact, command, packageName } from '../build.mjs';
 import { ok, call, host, review } from '../../adapters/mcp/test/card-support.mjs';
@@ -84,10 +86,10 @@ test('H04/H05/R08/M06 installed stdio preserves reviewed evidence, typed organiz
       expectedRevision: memory.revision, content: 'Synthetic installed review is Friday.' })).memory;
     assert.equal(ok(await call(local.client, 'inspect_private_card', { cardId: pending.id })).card, null);
     const unsupported = ok(await call(local.client, 'inspect_private_card', { cardId: draft.id })).card;
-    assert.notEqual(unsupported.support.status, 'eligible');
-    assert.equal(unsupported.support.applicability, 'unknown');
-    assert.equal(unsupported.support.applicabilityReviewedRevision, null);
-    assert.equal(unsupported.body, input.body);
+    assert.equal(unsupported, null);
+    const db = new DatabaseSync(path, { readOnly: true, timeout: STORAGE_BUSY_TIMEOUT_MS });
+    try { assert.equal(db.prepare('SELECT body FROM private_cards WHERE id=?').get(draft.id).body, input.body); }
+    finally { db.close(); }
     const invalidatedMap = ok(await call(local.client, 'map_evidence', { type: 'card' }));
     assert.equal(invalidatedMap.items.some(item => item.type === 'ref' && item.ref.childType === 'card'), false);
     assert.equal(invalidatedMap.items.filter(item => item.type === 'topic').every(item => item.topic.title === null), true);
@@ -97,20 +99,15 @@ test('H04/H05/R08/M06 installed stdio preserves reviewed evidence, typed organiz
     const current = ok(await call(local.client, 'select_evidence', request));
     assert.equal(current.items.some(item => item.type === 'card'), false);
     const history = ok(await call(local.client, 'select_evidence', { ...request, intent: 'history', types: ['card'] }));
-    assert.equal(history.items.length, 1);
-    const { namespace: omittedHistoryScope, ...historyRef } = history.items[0].ref;
-    const historical = ok(await call(local.client, 'fetch_evidence', { refs: [historyRef], intent: 'history' })).items[0];
-    assert.equal(historical.body, input.body);
-    assert.equal(historical.support.applicability, 'unknown');
-    assert.equal(historical.provenance.support, 'unavailable');
+    assert.equal(history.items.length, 0);
     ok(await call(local.client, 'forget_memory', { memoryId: memory.id, expectedRevision: corrected.revision }));
     assert.equal((await call(local.client, 'read_private_card_source', { source })).ok, false);
     await local.client.close();
     const cold = await host(workspace, path, { command: executable });
-    assert.notEqual(ok(await call(cold.client, 'inspect_private_card', { cardId: draft.id })).card.support.status, 'eligible');
+    assert.equal(ok(await call(cold.client, 'inspect_private_card', { cardId: draft.id })).card, null);
     assert.equal(ok(await call(cold.client, 'select_evidence', { ...request, types: ['card'] })).items.length, 0);
     const coldHistory = ok(await call(cold.client, 'select_evidence', { ...request, types: ['card'], intent: 'history' }));
-    assert.equal(coldHistory.items.length, 1);
+    assert.equal(coldHistory.items.length, 0);
     assert.equal(ok(await call(cold.client, 'list_evidence_mappings', { type: 'card', mocId: organized.cardTopic.mocId })).items[0].navigable, false);
     await cold.client.close();
     t.diagnostic('Actual installed stdio + synthetic terminal subprocesses: no key; fetch abort guard stayed inactive (zero provider calls).');

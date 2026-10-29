@@ -156,9 +156,11 @@ test('C05 source deletion cancels drafts once, retains unsupported confirmed aut
   assert.equal(ok(f.call('deleteSourceNote', deletion)).effectCount, 3);
   f.reopen();
   assert.equal(ok(f.call('getCard', { namespace: ns, cardId: draft.id })).card, null);
-  const card = ok(f.call('getCard', { namespace: ns, cardId: confirmed.id })).card;
+  assert.equal(ok(f.call('getCard', { namespace: ns, cardId: confirmed.id })).card, null);
+  const db = new DatabaseSync(f.path); t.after(() => db.close());
+  const card = db.prepare('SELECT body,revision FROM private_cards WHERE id=?').get(confirmed.id);
   assert.equal(card.body, 'Authored private body'); assert.equal(card.revision, 3);
-  assert.equal(card.support.status, 'unavailable'); assert.deepEqual(card.bindings[0].source, source);
+  assert.deepEqual(JSON.parse(db.prepare('SELECT source_ref FROM card_bindings WHERE card_id=?').get(confirmed.id).source_ref), source);
   error(f.call('getSource', { namespace: ns, source }), 'source_unavailable');
   assert.equal(ok(f.call('deleteSourceNote', deletion)).effectCount, 3);
   assert.deepEqual(ok(f.call('createCardDraft', draftInput)), draft);

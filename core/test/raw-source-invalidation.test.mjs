@@ -97,10 +97,10 @@ for (const client of ['claude-code','codex']) {
           eventId:'replacement',role:'user',excerpt:'Synthetic explicit replacement.' } }));
       assert.ok(result);
       const removedAll = mutation === 'deleteConversation' || episode;
-      const retained = ok(f.call('getCard',{ namespace: ns,cardId: mixed.id })).card;
+      assert.equal(ok(f.call('getCard',{ namespace: ns,cardId: mixed.id })).card,null);
+      const retained = f.db.prepare('SELECT revision,body FROM private_cards WHERE id=?').get(mixed.id);
       assert.equal(retained.revision,confirmed.revision+1);
       assert.equal(retained.body,'Synthetic authored body.');
-      assert.equal(retained.support.status,'unavailable');
       assert.equal(ok(f.call('getCard',{ namespace: ns,cardId: pending.id })).card,null);
       const purged = f.db.prepare('SELECT state,revision,title,body FROM private_cards WHERE id=?').get(pending.id);
       assert.deepEqual({ ...purged },{ state:'cancelled',revision:pending.revision+1,title:null,body:null });
@@ -109,13 +109,15 @@ for (const client of ['claude-code','codex']) {
       assert.equal(effects(f,mixed.id).length,mixedEffects.length+1);
       assert.equal(effects(f,pending.id).length,pendingEffects.length+1);
       assert.deepEqual(effects(f,mixed.id).slice(0,mixedEffects.length),mixedEffects);
-      const receiptRetained = ok(f.call('getCard',{ namespace: ns,cardId: receipt.id })).card;
+      assert.equal(ok(f.call('getCard',{ namespace: ns,cardId: receipt.id })).card,null);
+      const receiptRetained = f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(receipt.id);
       const receiptDelta = removedAll ? 2 : 1;
       assert.equal(receiptRetained.revision,receiptConfirmed.revision+receiptDelta);
       assert.equal(effects(f,receipt.id).length,receiptEffects.length+receiptDelta);
       const separateRetained = ok(f.call('getCard',{ namespace: ns,cardId: separate.id })).card;
-      assert.equal(separateRetained.revision,separateConfirmed.revision+(removedAll ? 1 : 0));
-      assert.equal(separateRetained.support.status,removedAll ? 'unavailable' : 'eligible');
+      assert.equal(f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(separate.id).revision,separateConfirmed.revision+(removedAll ? 1 : 0));
+      if (removedAll) assert.equal(separateRetained,null);
+      else assert.equal(separateRetained.support.status,'eligible');
       // MOC revision advances once per actually changed Card, including the
       // deliberately unchanged legacy receipt-only trigger behavior.
       assert.equal(f.db.prepare('SELECT revision FROM card_moc_epochs').get().revision-index,2+receiptDelta+(removedAll ? 1 : 0));
@@ -126,7 +128,8 @@ for (const client of ['claude-code','codex']) {
         assert.equal(effects(f,mixed.id).length,mixedEffects.length+1);
       }
       f.reopen();
-      assert.equal(ok(f.call('getCard',{ namespace: ns,cardId: mixed.id })).card.revision,confirmed.revision+1);
+      assert.equal(ok(f.call('getCard',{ namespace: ns,cardId: mixed.id })).card,null);
+      assert.equal(f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(mixed.id).revision,confirmed.revision+1);
       noPendingMutation(f.db);
     });
   }
@@ -151,10 +154,12 @@ for (const client of ['claude-code','codex']) {
     noPendingMutation(f.db);
     f.db.exec('DROP TRIGGER fail_mixed_effect');
     ok(f.core.deleteConversation(deletion));
-    assert.equal(ok(f.call('getCard',{ namespace: ns,cardId:mixed.id })).card.revision,confirmed.revision+1);
+    assert.equal(ok(f.call('getCard',{ namespace:ns,cardId:mixed.id })).card,null);
+    assert.equal(f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(mixed.id).revision,confirmed.revision+1);
     assert.equal(f.db.prepare('SELECT count(*) n FROM memories WHERE deleted=1').get().n,firstMemories.length);
     ok(f.core.deleteConversation({ namespace:ns,conversationId:second.conversationId,expectedRevision:second.expectedConversationRevision,actionId:'delete-second' }));
-    assert.equal(ok(f.call('getCard',{ namespace:ns,cardId:mixed.id })).card.revision,confirmed.revision+2);
+    assert.equal(ok(f.call('getCard',{ namespace:ns,cardId:mixed.id })).card,null);
+    assert.equal(f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(mixed.id).revision,confirmed.revision+2);
     assert.equal(effects(f,mixed.id).length,baselineEffects.length+2);
     assert.deepEqual(effects(f,mixed.id).slice(0,baselineEffects.length),baselineEffects);
     noPendingMutation(f.db);
@@ -174,7 +179,8 @@ for (const client of ['claude-code','codex']) {
     const foreignCard = ok(f.call('getCard',{ namespace:foreign,cardId:foreignDraft.id })).card;
     const beforeEffects = effects(f,mixed.id);
     ok(f.core.deleteConversation({ namespace:ns,conversationId:first.conversationId,expectedRevision:first.expectedConversationRevision,actionId:'delete-first' }));
-    assert.equal(ok(f.call('getCard',{ namespace:ns,cardId:mixed.id })).card.revision,confirmed.revision+1);
+    assert.equal(ok(f.call('getCard',{ namespace:ns,cardId:mixed.id })).card,null);
+    assert.equal(f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(mixed.id).revision,confirmed.revision+1);
     assert.equal(effects(f,mixed.id).length,beforeEffects.length+1);
     assert.equal(ok(await f.call('getSource',{ namespace:ns,source:ref })).parts[0].text,other.text);
     assert.deepEqual(ok(f.call('getCard',{ namespace:foreign,cardId:foreignDraft.id })).card,foreignCard);
@@ -191,7 +197,8 @@ for (const client of ['claude-code','codex']) {
     const card = receiptDraft(f,memories,'ordinary'), confirmed = confirm(f,card,'confirm');
     const rawBefore = f.db.prepare('SELECT * FROM raw_conversations').all();
     for (const memory of memories) ok(f.core.forget({ namespace:ns,memoryId:memory.id,expectedRevision:memory.revision }));
-    assert.equal(ok(f.call('getCard',{ namespace:ns,cardId:card.id })).card.revision,confirmed.revision+2);
+    assert.equal(ok(f.call('getCard',{ namespace:ns,cardId:card.id })).card,null);
+    assert.equal(f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(card.id).revision,confirmed.revision+2);
     assert.equal(effects(f,card.id).length,2);
     assert.deepEqual(f.db.prepare('SELECT * FROM raw_conversations').all(),rawBefore);
     noPendingMutation(f.db);

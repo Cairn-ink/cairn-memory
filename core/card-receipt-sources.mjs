@@ -1,12 +1,13 @@
+import { sourceReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { fail } from './validation.mjs';
 import { cardMemoryRefs, sourceRef } from './private-card-input.mjs';
 
 /** Canonical reads only; never persists Memory text or copies receipt excerpts. */
 export function createCardReceiptSources(db, binding) {
   function memory(ns, id, revision) {
-    const row = db.prepare(`SELECT id,revision FROM memories WHERE id=? AND owner_id=? AND scope=?
-      AND project_id=? AND deleted=0 AND currentness='current' AND review_state!='awaiting'`)
-      .get(id, ns.ownerId, ns.scope, ns.projectId ?? '');
+    const row = db.prepare(`SELECT id,revision FROM memories WHERE owner_id=? AND scope=?
+      AND project_id=? AND id=? AND deleted=0 AND currentness='current' AND review_state!='awaiting'`)
+      .get(ns.ownerId, ns.scope, ns.projectId ?? '', id);
     if (!row || row.revision !== revision) fail('source_unavailable');
     return row;
   }
@@ -18,10 +19,10 @@ export function createCardReceiptSources(db, binding) {
   }
   function resolve(ns, ref) {
     sourceRef(ref, ns);
-    const current = memory(ns, ref.memoryId, ref.memoryRevision);
-    const row = db.prepare('SELECT * FROM receipts WHERE id=? AND memory_id=?').get(ref.receiptId, current.id);
-    if (!row || refFor(ns, current, row).contentIdentity !== ref.contentIdentity) fail('source_unavailable');
-    return { text: row.excerpt, byte_count: Buffer.byteLength(row.excerpt, 'utf8') };
+    const identity = db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata WHERE singleton=1').get();
+    const memo = createContentReadMemo(db);
+    if (!sourceReadSafety(db, { identity, namespace: ns, ref, strict: true, memo }).allowed) fail('source_unavailable');
+    return memo.sources.get(JSON.stringify(ref)).value;
   }
   function refInside(ns, memoryRow, receiptRow) {
     const current = memory(ns, memoryRow.id, memoryRow.revision);

@@ -98,7 +98,6 @@ test('R3.2 ambiguous legacy keep roots cannot authenticate a fenced contributor'
   const extra = f.db.prepare('SELECT id FROM episode_sources WHERE episode_id=?').get(other);
   const action = f.db.prepare('SELECT admission_key,keep_source_ids FROM episode_keep_actions WHERE episode_id=?').get(f.consumer);
   const ids = [...JSON.parse(action.keep_source_ids), extra.id];
-  f.db.prepare('UPDATE episode_keep_actions SET keep_source_ids=? WHERE admission_key=?').run(JSON.stringify(ids), action.admission_key);
   const upgrade = openDatabase(f.path, { currentDependencies: true }); upgrade.close();
   const host = cardHost(), core = openMemoryCore({ path: f.path, privateCards: host.options });
   f.workspace.defer(() => core.close());
@@ -107,6 +106,7 @@ test('R3.2 ambiguous legacy keep roots cannot authenticate a fenced contributor'
     title: 'Synthetic ambiguous title', body: 'Synthetic ambiguous body', sourcePolicy: 'retained-receipts-v1',
     memoryRefs: [{ type: 'memory', namespace, memoryId: memory.id, revision: memory.revision }] } }));
   const card = ok(host.call(core, 'confirmCardDraft', { namespace, cardId: draft.id, expectedRevision: draft.revision, actionId: 'ambiguous-confirm' }));
+  f.db.prepare('UPDATE episode_keep_actions SET keep_source_ids=? WHERE admission_key=?').run(JSON.stringify(ids), action.admission_key);
   const origin = f.db.prepare('SELECT * FROM session_episodes WHERE id=?').get(f.origin);
   f.db.prepare('INSERT INTO raw_session_fences VALUES(?,?,?,?,?)').run(origin.owner_id, origin.scope, origin.project_id, origin.client, origin.session_key);
   assert.equal(classify(f, card.id).status, 'unknown');

@@ -1,3 +1,4 @@
+import { memoryReadEligible } from './content-safety.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { types } from 'node:util';
 import { randomUUID } from 'node:crypto';
@@ -377,11 +378,11 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       for(const row of rows)if(rebound.get(...boundary(s.ns),row.id)?.bytes!==row.id_bytes)unavailable('corrupt');
     }
     // Count and meter support independently of transformation attempts.
-    const support = { prepare(sql) { const stmt = canonical.prepare(sql); return Object.fromEntries(['get','all'].map(method => [method,(...args) => {
+    const support = { get isTransaction() { return canonical.isTransaction; }, prepare(sql) { const stmt = canonical.prepare(sql); return Object.fromEntries(['get','all'].map(method => [method,(...args) => {
       m.supportLookups++; const r = stmt[method](...args); m.supportBytes += Buffer.byteLength(JSON.stringify(r ?? null)); return r;
     }])); } };
     return rows.map(row => ({ id:row.id,id_bytes:row.id_bytes,revision:row.revision,body_revision:row.body_revision,
-      eligible:Number(s.type === 'memory' ? !row.deleted && (p.intent === 'history' || row.currentness === 'current' && row.review_state !== 'awaiting')
+      eligible:Number(s.type === 'memory' ? memoryReadEligible(row, p.intent)
         : contextCardEligible(support,identity,features,s.ns,row,p.intent,{ readSet:p.readSet })) }));
   }
   const storageKey = id => {

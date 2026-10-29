@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { openMemoryCore } from '../core/index.mjs';
+import { DatabaseSync } from 'node:sqlite';
+import { STORAGE_BUSY_TIMEOUT_MS } from '../core/database.mjs';
 
 // Synthetic, model-free host example. This function stands in for an already
 // verified host user-intent channel; receiving a tool call must never call it.
@@ -56,11 +58,14 @@ try {
   call('deleteSourceNote', { namespace, sourceId: source.sourceId,
     expectedRevision: source.revision, actionId: 'synthetic-delete-note' }, 'explicit-user');
   const unsupported = call('getCard', { namespace, cardId: draft.id }, 'read').card;
-  assert.equal(unsupported.support.status, 'unavailable');
-  assert.equal(unsupported.support.applicability, 'unknown');
-  assert.equal(unsupported.body, create.input.body);
+  assert.equal(unsupported, null);
+  const db = new DatabaseSync(path, { readOnly: true, timeout: STORAGE_BUSY_TIMEOUT_MS });
+  let retained;
+  try { retained = db.prepare('SELECT body,revision FROM private_cards WHERE id=?').get(draft.id); }
+  finally { db.close(); }
+  assert.equal(retained.body, create.input.body);
   call('deleteKnowledgeCard', { namespace, cardId: draft.id,
-    expectedRevision: unsupported.revision, actionId: 'synthetic-delete-card' }, 'explicit-user');
+    expectedRevision: retained.revision, actionId: 'synthetic-delete-card' }, 'explicit-user');
   assert.equal(call('getCard', { namespace, cardId: draft.id }, 'read').card, null);
   assert.deepEqual(call('createCardDraft', create, 'explicit-user'), draft);
   assert.equal(call('getPrivateCardUsage', { namespace }, 'read').submittedNoteBytes, 0);
@@ -85,10 +90,12 @@ try {
     content: 'Compare longer tea steeping times.', kind: 'context', receipt: { client: 'synthetic-example',
       sessionId: 'tasting', eventId: 'revised-memory', role: 'user', excerpt: 'Compare 120 s and 180 s.' } }).ok, true);
   const retainedMemoryCard = call('getCard', { namespace, cardId: memoryDraft.id }, 'read').card;
-  assert.equal(retainedMemoryCard.support.status, 'unavailable');
-  assert.equal(retainedMemoryCard.body, memoryDetail.body);
-  console.log('PASS: explicit note + draft → inspect → confirm → reopen → delete source → qualified private body → delete Card → content-free replay');
-  console.log('PASS: retained Memory receipts → authored Card → reopen → Memory correction → unsupported private authored body');
+  assert.equal(retainedMemoryCard, null);
+  const probe = new DatabaseSync(path, { readOnly: true, timeout: STORAGE_BUSY_TIMEOUT_MS });
+  try { assert.equal(probe.prepare('SELECT body FROM private_cards WHERE id=?').get(memoryDraft.id).body, memoryDetail.body); }
+  finally { probe.close(); }
+  console.log('PASS: explicit note + draft → inspect → confirm → reopen → delete source → withheld Card with retained body → delete Card → content-free replay');
+  console.log('PASS: retained Memory receipts → authored Card → reopen → Memory correction → withheld Card with retained body');
   console.log('Synthetic host intent only; zero model/provider/network calls. No installed MCP, full Raw, common retrieval or publication claim.');
   console.log(`Synthetic SQLite database retained at ${path}`);
 } finally { core.close(); }

@@ -125,7 +125,8 @@ for (const client of ['claude-code', 'codex']) {
     assert.deepEqual(snapshot(f.db), before);
     const raw = rawCore(f), unrelated = await rawSource(raw, client, 'foreign', { ...ns, ownerId: 'another-owner' });
     ok(raw.deleteConversation({ ...unrelated.key, actionId: 'foreign-delete' }));
-    assert.equal(ok(core.get({ namespace: ns, memoryId: f.memoryId })).receipts.length, 1);
+    assert.equal(ok(core.get({ namespace: ns, memoryId: f.memoryId })).receipts.length, 0);
+    assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM receipts WHERE memory_id=?').get(f.memoryId).n, 1);
   });
 
   test(`P3b-02/07 ${client}: colliding legacy message IDs do not invent a union or block proven unrelated roots`, async t => {
@@ -141,7 +142,8 @@ for (const client of ['claude-code', 'codex']) {
     assert.deepEqual(snapshot(f.db), before);
     const raw = rawCore(f), unrelated = await rawSource(raw, client, 'unrelated');
     ok(raw.deleteConversation({ ...unrelated.key, actionId: 'unrelated-delete' }));
-    assert.equal(ok(core.get({ namespace: ns, memoryId: kept.admission.memories[0].id })).receipts.length, 1);
+    assert.equal(ok(core.get({ namespace: ns, memoryId: kept.admission.memories[0].id })).receipts.length, 0);
+    assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM receipts WHERE memory_id=?').get(kept.admission.memories[0].id).n, 1);
   });
 
   test(`P3b-05/07 ${client}: legacy keep cascade abort rolls back provenance, prose, receipt and tombstone`, async t => {

@@ -81,7 +81,7 @@ export function relationDiagnostic(reason) {
  * residual eligibility/revision predicates. Validate returned metadata in JS so
  * rejected/stale rows and every repeated lookup are still fully charged. */
 export function chargedSourceDatabase(db, budget) {
-  return { prepare(sql) {
+  return { get isTransaction() { return db.isTransaction; }, prepare(sql) {
     const statement = db.prepare(sql);
     return { get(...args) {
       budget.ensure(2); budget.charge('lookups');

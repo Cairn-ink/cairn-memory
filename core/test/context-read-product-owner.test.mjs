@@ -28,7 +28,7 @@ test('P2-15 four-namespace access/projection digest known answers omit request a
   const readSet = canonicalSet(four), namespaces = readSet.map(ns => ({ownerId:ns.ownerId,projectId:ns.projectId,scope:ns.scope}));
   const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('base64url');
   const expectedAccess = hash({ownerGeneration:null,ownerId:personal.ownerId,profile:PRODUCT_PROFILE,readSet:namespaces});
-  const expectedProjection = hash({intent:'current',profile:PRODUCT_PROFILE,readSet:namespaces,types:['memory','card']});
+  const expectedProjection = hash({contentSafetyPolicy:'content-safety-s1-v1',intent:'current',profile:PRODUCT_PROFILE,readSet:namespaces,types:['memory','card']});
   for(const selectionRevision of ['r1','r2'])for(const selected of [readSet,[...readSet].reverse()]){
     const binding={ownerId:personal.ownerId,namespaces:{readSet:selected,ownerCoverage:descriptor(selected,0,selectionRevision)},issuedAt:123,requestId:selectionRevision,handleId:selectionRevision};
     assert.equal(accessDigest(binding),expectedAccess);

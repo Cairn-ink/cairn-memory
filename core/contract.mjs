@@ -389,13 +389,12 @@ export function createMemoryCore(input, internal) {
       if (input.receiptCursor !== undefined) cursor = decodeCursor(input.receiptCursor, binding);
       const page = runtime.getPage(ns, memoryId, count, cursor?.a, cursor?.e, input.includeQualification === true, input.includeAwaiting === true);
       const receipts = page.receipts.slice(0, count);
-      const exhausted = page.receipts.length <= count;
-      const last = receipts.at(-1);
+      const exhausted = page.receiptComplete;
       return { memory: page.memory, receipts, ...(page.procedural ? { procedural: page.procedural } : {}), placements: page.placements, conflicts: page.conflicts,
         ...(input.includeQualification === true ? { qualification: page.qualification } : {}),
         ...(page.supersession ? { supersession: page.supersession } : {}),
         nextReceiptCursor: exhausted ? null : encodeCursor({ ...binding, e: page.epoch,
-          a: { createdAt: last.createdAt, id: last.id } }), exhausted };
+          a: { row: page.receiptScan } }), exhausted };
     });
   }
 

@@ -48,8 +48,9 @@ test('R2.1 retained invalidation belongs to the body revision it actually affect
   const f = fixture(t), card = f.draft(ns, undefined, true);
   const source = ok(f.call('getCard', { namespace: ns, cardId: card.id })).card.bindings[0].source;
   ok(f.call('deleteSourceNote', { namespace: ns, sourceId: source.sourceId, expectedRevision: source.revision, actionId: 'delete-old-note' }));
-  const fresh = f.draft(ns, undefined, true), current = ok(f.call('getCard', { namespace: ns, cardId: card.id })).card;
-  const bindings = ok(f.call('getCard', { namespace: ns, cardId: fresh.id })).card.bindings.map(item => item.source);
+  const fresh = f.draft(ns, undefined, true), current = f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(card.id);
+  const bindings = f.db.prepare('SELECT source_ref FROM card_bindings WHERE card_id=? ORDER BY position').all(fresh.id)
+    .map(item => JSON.parse(item.source_ref));
   ok(f.call('editKnowledgeCard', { namespace: ns, cardId: card.id, expectedRevision: current.revision, actionId: 'replace-body',
     title: 'Synthetic replacement body title', body: 'Synthetic replacement body bytes', applicability: 'unknown', bindings }));
   assert.equal(classify(f, card.id).status, 'unknown');

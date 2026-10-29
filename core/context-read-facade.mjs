@@ -280,12 +280,14 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     } catch (error) { if (error instanceof SourceStop) fail(code); throw error; }
   }
   function deliverPage(input, ranking, position, limit) {
-    if (!options.sources) return page(ranking, position, limit);
     return read(() => {
+      const result = page(ranking, position, limit);
+      for (const candidate of result.items) evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet);
+      if (!options.sources) return result;
       assertSourcesInside(input, ranking.sourceState, 'cursor_stale');
       const budget = sourceBudget(Infinity);
       for (const path of ranking.sourceState.witnesses) witnessInside(input, path, 'cursor_stale', budget);
-      return page(ranking, position, limit);
+      return result;
     });
   }
   const rankingConfiguration = (trace, sourceState, items) => bind('ranking-config', [configuration, trace.requested, trace.effective,
@@ -609,7 +611,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           }
           const { type, ref, state, origin } = item;
           const sources = type === 'memory' && item.provenance.sourceAccess === 'available' ?
-            db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId)
+            db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id))
               .map((row, index) => {
                 const { role, excerpt } = validateSourceReceipt(ref.memoryId, row, source =>
                   createHash('sha256').update(JSON.stringify(source)).digest('hex'));

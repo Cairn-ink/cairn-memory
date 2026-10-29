@@ -1,3 +1,4 @@
+import { contentReadSafety, sourceReadSafety, cardContributorsInside, createContentReadMemo } from './content-safety.mjs';
 import { createCardCurrentStorage, cardDependencyFence } from './card-current-storage.mjs';
 import { CARD_CURRENT_METHODS } from './card-current-input.mjs';
 import { randomUUID } from 'node:crypto';
@@ -40,14 +41,10 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
       contentIdentity: binding('submitted-note-content-v1', [ns, row.id, row.revision, row.text]),
       completeness: 'provided-note' };
   }
-  function resolve(ns, ref) {
+  function resolve(ns, ref, memo = createContentReadMemo(db)) {
     sourceRef(ref, ns, rawSources);
-    if (ref.type === 'raw') return raw.resolve(ns, ref);
-    if (ref.type === 'receipt') return receiptSources.resolve(ns, ref);
-    const row = note(ns, ref.sourceId);
-    if (!row || row.state !== 'available' || row.revision !== ref.revision ||
-        refFor(ns, row).contentIdentity !== ref.contentIdentity) fail('source_unavailable');
-    return row;
+    if (!sourceReadSafety(db, { identity, namespace: ns, ref, strict: true, memo }).allowed) fail('source_unavailable');
+    return memo.sources.get(JSON.stringify(ref)).value;
   }
   function validateRefs(ns, values, existing = [], currentCardId = '') {
     const selected = refs(values, ns, rawSources), rawBudget = raw.budget();
@@ -89,12 +86,10 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
       DO UPDATE SET byte_count=byte_count+excluded.byte_count`).run(ns.ownerId, bytes);
     return refFor(ns, note(ns, id));
   }
-  function getRefs(id) {
-    const rawRefs = raw.refs(id);
-    if (rawRefs.length && !rawSources) fail('source_unavailable');
-    return [...db.prepare(`SELECT source_ref,position FROM card_bindings WHERE card_id=?
-      UNION ALL SELECT source_ref,position FROM card_memory_bindings WHERE card_id=? ORDER BY position`)
-      .all(id, id), ...rawRefs].sort((a,b) => a.position-b.position).map(row => JSON.parse(row.source_ref));
+  function getRefs(id, memo) {
+    const values = cardContributorsInside(db, id, memo);
+    if (!rawSources && values.some(ref => ref.type === 'raw')) fail('source_unavailable');
+    return values;
   }
   function putRefs(id, values) {
     raw.put(id,values);
@@ -106,28 +101,33 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
       ? memoryInsert.run(id, ref.memoryId, ref.memoryRevision, ref.receiptId, JSON.stringify(ref), position)
       : insert.run(id, ref.sourceId, JSON.stringify(ref), position));
   }
-  function support(ns, values) {
+  function support(ns, values, memo) {
     const available = values.length > 0 && values.every(ref => {
-      try { resolve(ns, ref); return true; }
+      try { resolve(ns, ref, memo); return true; }
       catch (error) { if (error.code === 'source_unavailable' || ref.type === 'raw' &&
         ['source_excluded','raw_crypto_unavailable'].includes(error.code)) return false; throw error; }
     });
     return { status: available ? 'eligible' : 'unavailable', applicability: 'unknown',
       reasons: [available ? 'unassessed' : values.some(ref => ref.type === 'receipt') ? 'memory_changed' : 'source_deleted'] };
   }
-  function metadata(ns, row, readSet = [ns], { historicalReason = false, deadlineAt = Infinity } = {}) {
+  function metadata(ns, row, readSet = [ns], { historicalReason = false, deadlineAt = Infinity } = {}, memo = createContentReadMemo(db)) {
     const review = cardApplicabilityInside(db, row), currentDependency = historicalReason ? null : dependencies.compare(ns, row, readSet, { deadlineAt });
     return { id: row.id, namespace: ns, revision: row.revision, state: row.state,
-      bodyRevision: row.body_revision, origin: 'authored', support: { ...support(ns, getRefs(row.id)),
+      bodyRevision: row.body_revision, origin: 'authored', support: { ...support(ns, getRefs(row.id, memo), memo),
         applicability: review.applicability,
         applicabilityReviewedRevision: review.reviewedRevision, checkedAt: row.updated_at,
         ...(currentDependency ? { currentDependency } : {}) },
       createdAt: row.created_at, updatedAt: row.updated_at, confirmedAt: row.confirmed_at };
   }
+  function cardSafe(ns, row, method = 'getCard', memo) {
+    return contentReadSafety(db, { identity, namespace: ns, method, memo, ref: { type: 'card', namespace: ns,
+      cardId: row.id, revision: row.revision, bodyRevision: row.body_revision } }).allowed;
+  }
   function detail(ns, row, readSet, intent) {
-    if (!row || ['cancelled', 'deleted'].includes(row.state)) return null;
-    return { ...metadata(ns, row, readSet, intent), title: row.title, body: row.body,
-      bindings: getRefs(row.id).map(ref => ({ id: ref.type === 'raw' ? raw.bindingId(ref) : ref.sourceId ?? ref.receiptId, source: ref,
+    const memo = intent?.safetyMemo ?? createContentReadMemo(db);
+    if (!row || !cardSafe(ns, row, 'getCard', memo)) return null;
+    return { ...metadata(ns, row, readSet, intent, memo), title: row.title, body: row.body,
+      bindings: getRefs(row.id, memo).map(ref => ({ id: ref.type === 'raw' ? raw.bindingId(ref) : ref.sourceId ?? ref.receiptId, source: ref,
         dependency: ref.type === 'receipt' ? 'memory-interpretation' : 'source-only',
         memoryRef: ref.type === 'receipt' ? { type: 'memory', namespace: ns,
           memoryId: ref.memoryId, revision: ref.memoryRevision } : null,
@@ -204,6 +204,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     }
     getRefs(row.id); // Ordinary facades cannot consume unsupported Raw bindings.
     if (method === 'confirmCardDraft') {
+      if (!cardSafe(ns, row, method)) fail('source_unavailable');
       validateRefs(ns, getRefs(row.id), [], row.id);
       db.prepare(`UPDATE private_cards SET state='confirmed',revision=revision+1,body_revision=1,
         confirmed_at=?,updated_at=? WHERE id=?`).run(now(), now(), row.id);
@@ -270,34 +271,47 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
       fail('context_item_too_large');
     }
     const isCards = method === 'listCards';
-    let items = isCards ? db.prepare(`SELECT id,revision,state,body_revision,created_at,updated_at,confirmed_at FROM private_cards WHERE ${where}
-      AND state IN (${input.states.map(() => '?').join(',')}) AND id>? ORDER BY id LIMIT ?`)
-      .all(...boundary(ns), ...input.states, cursor?.after ?? '', count + 1).map(row => metadata(ns, row)) :
+    const memo = createContentReadMemo(db);
+    let cardAfter, cardComplete;
+    const cardRows = [];
+    if (isCards) {
+      const after = typeof cursor?.after === 'number' ? db.prepare(`SELECT id FROM private_cards WHERE ${where} AND rowid=?`)
+        .get(...boundary(ns), cursor.after)?.id : cursor?.after ?? '';
+      if (after === undefined) fail('cursor_stale');
+      const rows = db.prepare(`SELECT rowid AS cursor_row,id,revision,state,body_revision,created_at,updated_at,confirmed_at
+        FROM private_cards WHERE ${where} AND state IN (${input.states.map(() => '?').join(',')}) AND id>? ORDER BY id LIMIT ?`)
+        .all(...boundary(ns), ...input.states, after, count + 1);
+      cardComplete = rows.length <= count;
+      cardAfter = rows.slice(0, count).at(-1)?.cursor_row;
+      cardRows.push(...rows.slice(0, count).filter(row => cardSafe(ns, row, 'listCards', memo)));
+    }
+    let items = isCards ? cardRows.map(row => metadata(ns, row, undefined, undefined, memo)) :
       db.prepare(`SELECT * FROM card_effects WHERE ${where} AND ordinal>? ORDER BY ordinal LIMIT ?`)
         .all(...boundary(ns), cursor?.after ?? 0, count + 1).map(row => ({ effectId: row.effect_id,
           namespace: ns, kind: row.kind, entity: { type: row.entity_type, id: row.entity_id },
           revision: row.revision, actionId: row.action_id, affectedIds: [], cursor: null, ordinal: row.ordinal }));
-    let complete = items.length <= count;
+    let complete = isCards ? cardComplete : items.length <= count;
     items = items.slice(0, count);
     while (true) {
       const result = { [isCards ? 'cards' : 'effects']: items,
         coverage: { status: complete ? 'complete' : 'budget_exhausted', included: items.length, omitted: complete ? 0 : null },
         nextCursor: complete ? null : cursorEncode({ binding: expected, epoch: isCards ? cardEpoch(ns) : epoch(ns),
-          after: isCards ? items.at(-1)?.id : items.at(-1)?.ordinal }) };
+          after: isCards ? cardAfter : items.at(-1)?.ordinal }) };
       if (size(result) <= 65536) return result;
       complete = false; items.pop();
+      if (isCards) cardAfter = cardRows[items.length - 1]?.cursor_row;
       if (!items.length) fail('context_item_too_large');
     }
   }
   const evidence = createPrivateEvidenceStorage({ db, identity,
-    cardDetailInside: (ns, id) => detail(ns, card(ns, id)),
+    cardDetailInside: (ns, id, readSet, options) => detail(ns, card(ns, id), readSet, options),
     receiptRefInside: (ns, memory, receipt) => receiptSources.refInside(ns, memory, receipt) });
   const organization = createPrivateOrganizationStorage({ db, identity, memoryMapInside, memoryTopicInside,
     cardDetailInside: (ns, id) => detail(ns, card(ns, id)) });
   return Object.freeze({
     // Internal shared-read seams: caller owns scope authorization and transaction.
     cardDetailInside(ns, id, readSet, intent) { ready(); return detail(ns, card(ns, id), readSet, intent); },
-    cardMetadataInside(ns, row) { ready(); return metadata(ns, row); },
+    cardMetadataInside(ns, row) { ready(); const memo = createContentReadMemo(db); return row && cardSafe(ns, row, 'listCards', memo) ? metadata(ns, row, undefined, undefined, memo) : null; },
     receiptRefInside(ns, memoryRow, receiptRow) { ready(); return receiptSources.refInside(ns, memoryRow, receiptRow); },
     payloadBinding: value => binding('card-action-v1', value),
     call(method, ns, input, payloadBinding, isRead, context) {
