@@ -305,7 +305,7 @@ on a fence change. Both keyset predicates and ordering explicitly use BINARY.
 IDs must reproduce their stored bytes when bound through SQLite on the same
 connection; lossy decoding or native parameter conversion is refused as corrupt
 before the ID is used as a cursor, identity, or body lookup. Cache inserts also
-read back the stored ID and identity before their batch commits, refusing native
+validate the ID and identity before their batch commits, refusing native
 conversion that changes either value.
 
 New generations carry an authenticated byte-safety marker in their existing

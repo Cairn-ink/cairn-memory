@@ -269,7 +269,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   function invalid(p, reason) { return { dto: status(p,'unavailable',reason), publication:null }; }
   // Caller supplies the canonical transaction. Pointer, generation and record
   // are read under one independent sidecar transaction, with no deep scans.
-  function observe(p, access, {forWrite=false,knownFailure=null,workOnly=false}={}) {
+  function observe(p, access, {forWrite=false,knownFailure=null,workOnly=false,mergeOrder}={}) {
     if(knownFailure)return invalid(p,knownFailure);
     try {
       if (!connection(forWrite)) return { dto:status(p,'absent','missing'), publication:null };
@@ -287,7 +287,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
           const text = side.prepare('SELECT record FROM progress_records WHERE generation=?').get(work.generation)?.record;
           if (!g || !text) return invalid(p,'validation_missing');
           const r = verifiedRecord(identity.cursorSecret,'progress',text);
-          if ((JSON.parse(g.verify)?.byteSafe===1 && !canMerge() && JSON.parse(g.verify)?.appendOnly!==true) || g.published || pointer?.generation===g.id || side.prepare('SELECT 1 FROM validation_records WHERE generation=?').get(g.id) ||
+          if ((JSON.parse(g.verify)?.byteSafe===1 && !(mergeOrder??canMerge()) && JSON.parse(g.verify)?.appendOnly!==true) || g.published || pointer?.generation===g.id || side.prepare('SELECT 1 FROM validation_records WHERE generation=?').get(g.id) ||
               g.id!==generationId(g) || g.incarnation!==incarnationOf(g) || !same(r.generation,{ id:g.id,incarnation:g.incarnation }) || !same(r.progress,progressOf(g)) ||
               r.kind !== g.kind || r.projectionDigest !== g.projection || r.accessDigest !== g.access ||
               !same(JSON.parse(g.fences), { canonicalFenceDigest:r.canonicalFenceDigest,dependencyFenceDigest:r.dependencyFenceDigest })) return invalid(p,'validation_invalid');
@@ -307,7 +307,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         if (!g || !text) return invalid(p,'validation_missing');
         const r = verifiedRecord(identity.cursorSecret,'validation',text);
         const expectedTypes = ['memory','card'].filter(type => p.types.includes(type));
-        if ((JSON.parse(g.verify)?.byteSafe===1 && !canMerge() && JSON.parse(g.verify)?.appendOnly!==true) || g.id !== generationId(g) || g.incarnation !== incarnationOf(g) || g.phase !== streams(p).length+3 || !g.published || r.publicationId !== pointer.publication || !same(r.generation, { id:g.id,sequence:g.sequence,checkpoint:g.checkpoint,incarnation:g.incarnation }) ||
+        if ((JSON.parse(g.verify)?.byteSafe===1 && !(mergeOrder??canMerge()) && JSON.parse(g.verify)?.appendOnly!==true) || g.id !== generationId(g) || g.incarnation !== incarnationOf(g) || g.phase !== streams(p).length+3 || !g.published || r.publicationId !== pointer.publication || !same(r.generation, { id:g.id,sequence:g.sequence,checkpoint:g.checkpoint,incarnation:g.incarnation }) ||
             g.projection !== r.projectionDigest || g.access !== r.accessDigest || g.manifest !== r.manifestDigest ||
             !same(JSON.parse(g.fences),{ canonicalFenceDigest:r.canonicalFenceDigest,dependencyFenceDigest:r.dependencyFenceDigest }) ||
             !same(r.counts,JSON.parse(g.verify).counts) || !same(Object.keys(r.counts.byType).sort(),expectedTypes.sort())) return invalid(p,'validation_invalid');
@@ -342,7 +342,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   function fresh(t,p,access) {
     return same(t,readTransaction(canonical,() => target(p,access)));
   }
-  function metadataRows(s, after, maximum, p, m) {
+  function metadataRows(s, after, maximum, p, m, canonicalUtf8) {
     // Column collations are not attested. Both the cursor and ordering must
     // explicitly match the stored-byte merge; INDEXED BY never changes SQL order.
     const rows = canonical.prepare(s.type === 'memory'
@@ -350,10 +350,14 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       : `SELECT id,hex(CAST(id AS BLOB)) AS id_bytes,revision,coalesce(body_revision,0) AS body_revision,state FROM private_cards INDEXED BY private_card_scope WHERE ${where} AND state=? AND id COLLATE BINARY>? ORDER BY id COLLATE BINARY LIMIT ?`)
       .all(...boundary(s.ns),...(s.type === 'card' ? [s.state] : []),after,maximum);
     m.canonicalRows += rows.length; m.metadataBytes += Buffer.byteLength(JSON.stringify(rows.map(({id_bytes,...row})=>row)));
-    // Round-trip through the same native BINARY lookup used for body reads.
-    // UTF-16 conversion can rewrite values Buffer accepts (such as U+FFFE).
-    const rebound=canonical.prepare(`SELECT hex(CAST(id AS BLOB)) AS bytes FROM ${s.type==='memory'?'memories':'private_cards'} WHERE ${where} AND id COLLATE BINARY=?`);
-    for(const row of rows)if(rebound.get(...boundary(s.ns),row.id)?.bytes!==row.id_bytes)unavailable('corrupt');
+    // UTF-8 binding agrees with Buffer encoding; only UTF-16 needs a native
+    // round trip (its conversion can rewrite values such as U+FFFE).
+    if(canonicalUtf8) {
+      for(const row of rows)if(!Buffer.from(row.id).equals(Buffer.from(row.id_bytes,'hex')))unavailable('corrupt');
+    } else {
+      const rebound=canonical.prepare(`SELECT hex(CAST(id AS BLOB)) AS bytes FROM ${s.type==='memory'?'memories':'private_cards'} WHERE ${where} AND id COLLATE BINARY=?`);
+      for(const row of rows)if(rebound.get(...boundary(s.ns),row.id)?.bytes!==row.id_bytes)unavailable('corrupt');
+    }
     // Count and meter support independently of transformation attempts.
     const support = { prepare(sql) { const stmt = canonical.prepare(sql); return Object.fromEntries(['get','all'].map(method => [method,(...args) => {
       m.supportLookups++; const r = stmt[method](...args); m.supportBytes += Buffer.byteLength(JSON.stringify(r ?? null)); return r;
@@ -367,12 +371,15 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     if(key===undefined)unavailable('validation_missing');
     return key;
   };
-  function put(g,stream,row,tokens,source) {
+  function put(g,stream,row,tokens,source,cacheUtf8) {
     const s=g.streams[stream], key=JSON.stringify([...boundary(s.ns),s.type,row.id]);
     const doc=side.prepare('SELECT coalesce(max(doc),0)+1 AS id FROM documents WHERE generation=?').get(g.storage_id).id;
+    if(cacheUtf8 && (Buffer.from(row.id).toString()!==row.id || Buffer.from(key).toString()!==key))unavailable('corrupt');
     side.prepare('INSERT INTO documents VALUES(?,?,?,?,?,?,?,?,?)').run(g.storage_id,doc,stream,row.id,key,row.revision,row.body_revision,row.eligible,tokens.length);
-    const stored=side.prepare('SELECT id,identity FROM documents WHERE generation=? AND doc=?').get(g.storage_id,doc);
-    if(stored.id!==row.id || stored.identity!==key)unavailable('corrupt');
+    if(!cacheUtf8) {
+      const stored=side.prepare('SELECT id,identity FROM documents WHERE generation=? AND doc=?').get(g.storage_id,doc);
+      if(stored.id!==row.id || stored.identity!==key)unavailable('corrupt');
+    }
     const terms=source ? side.prepare(`SELECT s.term,p.frequency FROM postings p JOIN statistics s
       ON s.generation=p.generation AND s.term_id=p.term JOIN documents d ON d.generation=p.generation AND d.doc=p.doc
       WHERE p.generation=? AND d.identity=? ORDER BY s.term`).all(storageKey(source),key)
@@ -613,17 +620,18 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     rendezvous('opened');
     // The merge's byte comparator and both indexed TEXT cursors must have
     // identical BINARY order. Other encodings retain the append-only builder.
-    const mergeOrder=canMerge();
+    const canonicalUtf8=canonical.prepare('PRAGMA encoding').get().encoding==='UTF-8',
+      cacheUtf8=side.prepare('PRAGMA encoding').get().encoding==='UTF-8',mergeOrder=canonicalUtf8&&cacheUtf8;
     let t = readTransaction(canonical,() => target(p,access));
     selectProjection(p,t);
     // Cleanup also advances during a long build or repeated target changes;
     // it does not depend on having time left after corpus admission.
     collect(quantum,p.readSet[0].ownerId,1);
-    const observed = readTransaction(canonical,() => observe(p,access,{forWrite:true}));
+    const observed = readTransaction(canonical,() => observe(p,access,{forWrite:true,mergeOrder}));
     if (observed.dto.lexical.state === 'ready' && observed.byteSafe) { collect(quantum,p.readSet[0].ownerId);rendezvous('noop'); return m; }
     const w = side.prepare('SELECT generation FROM work WHERE projection=?').get(t.projectionDigest);
     let g = w && side.prepare('SELECT * FROM generations WHERE id=?').get(w.generation);
-    const workStatus=readTransaction(canonical,()=>observe(p,access,{forWrite:true,workOnly:true}));
+    const workStatus=readTransaction(canonical,()=>observe(p,access,{forWrite:true,workOnly:true,mergeOrder}));
     const resumable=g && (workStatus.resumable===g.id || mergeOrder && workStatus.retargetable===g.id);
     let rebinding=false;
     // Invalid publication evidence still controls status. Independently signed
@@ -658,14 +666,18 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       if (!fresh(t,p,access)) return m;
       const stream = g.streams[g.phase], maximum = stream.type === 'card' ? 1 : 128;
       const { rows, exhausted } = quantum.measure(()=>{
-        const canonicalRows=readTransaction(canonical,() => metadataRows(stream,g.last_key,maximum,p,m));
+        const canonicalRows=readTransaction(canonical,() => metadataRows(stream,g.last_key,maximum,p,m,canonicalUtf8));
         if(!mergeOrder) {
           rendezvous('scan');return {rows:canonicalRows.map(row=>({row,old:null})),exhausted:canonicalRows.length<maximum};
         }
         const workRows=side.prepare('SELECT *,hex(CAST(id AS BLOB)) AS id_bytes FROM documents WHERE generation=? AND stream=? AND id COLLATE BINARY>? ORDER BY id COLLATE BINARY LIMIT ?')
           .all(g.storage_id,g.phase,g.last_key,maximum);
-        const rebound=side.prepare('SELECT hex(CAST(id AS BLOB)) AS bytes FROM documents WHERE generation=? AND stream=? AND id COLLATE BINARY=?');
-        for(const old of workRows)if(rebound.get(g.storage_id,g.phase,old.id)?.bytes!==old.id_bytes)unavailable('corrupt');
+        if(cacheUtf8) {
+          for(const old of workRows)if(!Buffer.from(old.id).equals(Buffer.from(old.id_bytes,'hex')))unavailable('corrupt');
+        } else {
+          const rebound=side.prepare('SELECT hex(CAST(id AS BLOB)) AS bytes FROM documents WHERE generation=? AND stream=? AND id COLLATE BINARY=?');
+          for(const old of workRows)if(rebound.get(g.storage_id,g.phase,old.id)?.bytes!==old.id_bytes)unavailable('corrupt');
+        }
         const rows=[];let c=0,w=0;
         // Merge at most one page of keys. A full input page can never run out
         // before this output bound; absence is proved only in its scanned range.
@@ -715,7 +727,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
                 .get(g.storage_id,JSON.stringify([...boundary(stream.ns),stream.type,row.id])));
               if(displaced){remove(g,displaced);if(displaced.stream===g.phase)m.replaced++;else m.removed++;}
               if(source)m.copied++;
-              put(g,g.phase,row,tokens,source);
+              put(g,g.phase,row,tokens,source,cacheUtf8);
             }
             last=(row || old).id;processed++;
             rendezvous('item');return true;

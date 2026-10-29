@@ -41,7 +41,7 @@ function reencode(source,path,encoding,{nocase=false}={}) {
 function seed(t) {
   const f=fixture(t,{cards:true});
   const memories=[f.admit('orchard needle first',four[0]),f.admit('orchard needle second',four[0])];
-  const cards=[card(f,four[0],'orchard first','needle first'),card(f,four[0],'orchard second','needle second')];
+  const cards=[card(f,four[0],'orchard cardalphatitle','needle cardalphabody'),card(f,four[0],'orchard cardbetatitle','needle cardbetabody')];
   return {f,memories,cards};
 }
 function unicode(path,seeded,values=ids) {
@@ -57,9 +57,9 @@ function unicode(path,seeded,values=ids) {
   });
 }
 const bump=path=>sql(path,db=>db.exec('UPDATE namespace_epochs SET epoch=epoch+1; UPDATE card_epochs SET generation=generation+1'));
-function local(t,path,mode='DELETE') {
+function local(t,path,mode='DELETE',observer) {
   let clock=0,stop,storage;
-  const sqlite=createProductSqlitePolicy();sqlite.start(Infinity);
+  const sqlite=createProductSqlitePolicy({observer});sqlite.start(Infinity);
   const facade=openContextProductFacade(path,{sqlite});
   const p={readSet:four,types:['memory','card'],intent:'current',ownerCoverage:descriptor(four)};
   const access=accessDigest({ownerId:four[0].ownerId,namespaces:{readSet:four}});
@@ -89,15 +89,19 @@ function canonicalSet(path) {
       ? db.prepare("SELECT id FROM private_cards WHERE state='confirmed'").all().map(r=>'card:'+r.id) : [])
   ].sort());
 }
+function documentStreams(a) {
+  return a.p.readSet.flatMap(ns=>['card','memory'].filter(type=>a.p.types.includes(type)).flatMap(type=>Array(type==='card'?4:1).fill({ns,type})));
+}
 function documentSet(a,publication) {
-  const types=a.p.readSet.flatMap(()=>['card','memory'].filter(type=>a.p.types.includes(type)).flatMap(type=>type==='card'?Array(4).fill(type):[type]));
+  const streams=documentStreams(a);
   return sql(a.path+PRODUCT_SIDECAR_SUFFIX,db=>db.prepare(`SELECT stream,id FROM documents WHERE eligible=1 AND generation=
-    (SELECT storage_id FROM generations WHERE id=?)`).all(publication.generation.id).map(r=>types[r.stream]+':'+r.id).sort());
+    (SELECT storage_id FROM generations WHERE id=?)`).all(publication.generation.id).map(r=>streams[r.stream].type+':'+r.id).sort());
 }
 async function equivalent(t,a,result,label) {
   // Membership is checked against canonical SQL before invoking the independent
   // builder, so the same builder defect cannot make this oracle pass.
   assert.deepEqual(documentSet(a,result.publication),canonicalSet(a.path),label+' document set equals canonical eligible set');
+  ownTerms(a,result.publication,label+' every eligible document indexes its own canonical body');
   const path=a.path+'-oracle-'+(oracleSequence++)+'.sqlite',native=new DatabaseSync(a.path,{readOnly:true});
   try {await backup(native,path);} finally {native.close();}
   chmodSync(path,0o600);
@@ -214,14 +218,22 @@ function legacy(a,id) {
 }
 const generation=(a,id)=>sql(a.path+PRODUCT_SIDECAR_SUFFIX,db=>db.prepare('SELECT * FROM generations WHERE id=?').get(id));
 function ownTerms(a,publication,label) {
-  const canonical=sql(a.path,db=>new Map(db.prepare('SELECT id,content FROM memories WHERE deleted=0').all().map(r=>[r.id,r.content])));
+  const streams=documentStreams(a);
+  const canonical=sql(a.path,db=>{
+    const entries=(type,rows)=>rows.map(r=>[JSON.stringify([r.owner_id,r.scope,r.project_id,type,r.id]),r.text]);
+    return new Map([
+      ...entries('memory',db.prepare('SELECT owner_id,scope,project_id,id,content AS text FROM memories WHERE deleted=0').all()),
+      ...(db.prepare("SELECT 1 FROM sqlite_schema WHERE name='private_cards' AND type='table'").get()
+        ? entries('card',db.prepare("SELECT owner_id,scope,project_id,id,title||char(10)||body AS text FROM private_cards WHERE title IS NOT NULL AND body IS NOT NULL").all()) : [])
+    ]);
+  });
   sql(a.path+PRODUCT_SIDECAR_SUFFIX,db=>{
     const g=generation(a,publication.generation.id);
     for(const doc of db.prepare('SELECT * FROM documents WHERE generation=? AND eligible=1').all(g.storage_id)) {
-      if(doc.stream%5!==4 && a.p.types.includes('card'))continue;
       const actual=db.prepare(`SELECT s.term,p.frequency FROM postings p JOIN statistics s ON s.generation=p.generation AND s.term_id=p.term
         WHERE p.generation=? AND p.doc=? ORDER BY s.term`).all(g.storage_id,doc.doc).map(r=>[r.term,r.frequency]);
-      assert.deepEqual(actual,[...termFrequencies(canonical.get(doc.id)).frequencies].sort(),label);
+      const {ns,type}=streams[doc.stream],key=JSON.stringify([ns.ownerId,ns.scope,ns.projectId??'',type,doc.id]);
+      assert.deepEqual(actual,[...termFrequencies(canonical.get(key)).frequencies].sort(),label);
     }
   });
 }
@@ -333,4 +345,58 @@ for(const encoding of ['UTF-16le','UTF-16be'])test(`F5 UTF-8 canonical / ${encod
   }
   assert.deepEqual(documentSet(a,result.publication),canonicalSet(f.path),'cache binding must preserve canonical document identity');
   ownTerms(a,result.publication,'cache publication indexes its own canonical body');
+});
+
+function statementCounter() {
+  const counts={roundTrips:0,readBacks:0,encodings:0};
+  return {counts,database(native){return new Proxy(native,{get(target,key){
+    if(key==='prepare')return query=>{
+      const statement=target.prepare(query);
+      return new Proxy(statement,{get(stmt,method){const value=Reflect.get(stmt,method,stmt);
+        if(typeof value!=='function')return value;
+        return (...args)=>{
+          if(['get','all','run'].includes(method)){
+            if(/^SELECT hex\(CAST\(id AS BLOB\)\) AS bytes FROM /.test(query))counts.roundTrips++;
+            if(query==='SELECT id,identity FROM documents WHERE generation=? AND doc=?')counts.readBacks++;
+            if(query==='PRAGMA encoding')counts.encodings++;
+          }
+          return value.apply(stmt,args);
+        };
+      }});
+    };
+    const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
+  }});}};
+}
+
+test('G1 UTF-8 unchanged retarget avoids per-row native identity checks',t=>{
+  const {f}=seed(t),observer=statementCounter(),a=local(t,f.path,'DELETE',observer);
+  a.finish();const buildReadBacks=observer.counts.readBacks;
+  bump(f.path);a.prepare();bump(f.path);
+  observer.counts.roundTrips=0;observer.counts.readBacks=0;
+  const totals={};let maximumEncodings=0;
+  for(let i=0;i<100;i++){
+    const before=observer.counts.encodings,m=a.step('verification');
+    maximumEncodings=Math.max(maximumEncodings,observer.counts.encodings-before);
+    for(const [k,v] of Object.entries(m))totals[k]=(totals[k]??0)+v;
+    if(a.state().phase>=20)break;
+  }
+  assert.equal(observer.counts.roundTrips,0,'UTF-8 unchanged retarget issues no per-row ID round-trip statements');
+  assert.equal(buildReadBacks,0,'UTF-8 inserts issue no native ID read-back statements');
+  assert.equal(observer.counts.readBacks,0);
+  assert.equal(maximumEncodings,2,'each refresh reads each connection encoding once');
+  assert.equal(totals.reused,4);assert.equal(totals.retargets,1);assert.equal(totals.tokenized,0);
+});
+
+test('G2 independent Card body oracle detects swaps with unchanged membership',t=>{
+  const {f,cards}=seed(t),a=local(t,f.path),result=a.finish(),before=documentSet(a,result.publication);
+  ownTerms(a,result.publication,'each eligible Card indexes its own canonical title and body');
+  sql(f.path,db=>{
+    const [first,second]=cards.map(c=>db.prepare('SELECT body FROM private_cards WHERE id=?').get(c.id).body);
+    db.prepare('UPDATE private_cards SET body=? WHERE id=?').run(second,cards[0].id);
+    db.prepare('UPDATE private_cards SET body=? WHERE id=?').run(first,cards[1].id);
+  });
+  assert.deepEqual(documentSet(a,result.publication),before);
+  assert.throws(()=>ownTerms(a,result.publication,'each eligible Card indexes its own canonical title and body'),
+    e=>e.code==='ERR_ASSERTION'&&e.message.startsWith('each eligible Card indexes its own canonical title and body'),
+    'Card body oracle must detect a swap with unchanged membership');
 });
