@@ -20,7 +20,11 @@ and resource projection. It does not alter the embedded core or host defaults.
 
 The same [canonical indexed windows](retained-source-windows.md), extractor
 prompt and wire are reused. Core normalizes and redacts up to 24 submitted
-messages, with 4,000 UTF-16 units/message and 20,000/batch. At most 64
+messages, with 4,000 UTF-16 code units/message and 20,000/batch, measured after
+NFKC, secret redaction, whitespace collapse and trim per message. Segmenters
+can use the exported `normalizedTextLength` and `normalizeBoundedText` per field;
+concatenated lengths are not additive. See [bounded text lengths](capture.md#bounded-text-lengths).
+At most 64
 surrogate-safe windows of 800 units are visible. Extraction selects at most five
 items with one to four distinct exact receipts each. The model selects indices;
 core supplies identity, roles and excerpt bytes. Selected source binding is not

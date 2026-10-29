@@ -41,6 +41,13 @@ best-effort. Constructor/storage-opening errors throw; operation failures return
 
 ## What works
 
+Explicit memory content is bounded to 4,000 UTF-16 code units after per-field
+NFKC, secret redaction, whitespace collapse and trim; inferred finish-admission
+content uses 600. Receipt excerpts use the same normalization before truncation
+to 800 units at code-point boundaries. Segmenters can use the exported
+`normalizedTextLength` and `normalizeBoundedText` per field; concatenated lengths
+are not additive. See [bounded text lengths](capture.md#bounded-text-lengths).
+
 - Explicit `admit`: one to four source receipts in one transaction, stable
   memory/source IDs, duplicate no-op handling and namespace-scoped suppression.
 - `list`: metadata only, including unfiled memories, bounded keyset pages beyond

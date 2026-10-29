@@ -1,3 +1,4 @@
+import { maintenanceMarker, readMaintenanceMarker, prepareMaintenanceMarker, claimMaintenanceOrdinal, maintenanceControlState, bindMaintenanceControl, serializationDiagnostic, attributionFields, maintenanceWorkFields } from './context-product-attribution.mjs';
 import { types } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { serviceIssuance, claimMaintenanceWriter } from './context-product-service.mjs';
@@ -14,12 +15,20 @@ import { PRODUCT_PROFILE, boundedData, hostConfiguration, requestRecord, operati
   credentialDigest, deadline, mono, operationMessage } from './context-product-control.mjs';
 import { fail } from './validation.mjs';
 import { semanticConfiguration } from './context-semantic-coordinator.mjs';
+import { openDiagnosticBuffer, openDiagnosticClock, openDiagnosticSnapshot } from './context-product-open-diagnostic.mjs';
 
 // Private Worker timing, kept outside the public result DTO. Pump and reader
 // share the process hrtime domain; only timings and fixed work counts are kept.
-const maintenanceObservations = new WeakMap(), maintenancePhases = new WeakMap();
+const maintenanceObservations = new WeakMap(), maintenancePhases = new WeakMap(), maintenanceMarkers = new WeakMap(), maintenanceStalls = new WeakMap();
+export const maintenanceStallDiagnostic = (value, atMs) => maintenanceStalls.get(value) ?? readMaintenanceMarker(maintenanceMarkers.get(value)??maintenanceControlState(value)?.buffer, atMs===undefined?undefined:BigInt(Math.floor(atMs*1e6)));
 export const maintenancePhaseDiagnostic = result => maintenancePhases.get(result);
 export const maintenanceObservation = result => maintenanceObservations.get(result);
+const openPhases = new WeakMap();
+// Internal accessor only; never a property of a public handle or result DTO.
+export const productOpenPhaseDiagnostic = reader => {
+  const buffer = openPhases.get(reader);
+  return buffer ? openDiagnosticSnapshot(buffer) : undefined;
+};
 
 const codes = new Set(['invalid_input', 'invalid_read_set', 'authority_required', 'scope_changed', 'invalid_snapshot', 'snapshot_stale', 'invalid_cursor', 'cursor_stale', 'token_count_unavailable',
   'revision_conflict', 'evidence_unavailable', 'context_item_too_large', 'index_unavailable', 'storage_busy', 'storage_error',
@@ -88,17 +97,25 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       credentialExpiresUtcMs: binding.credentialExpiresUtcMs, requestMaxMs: 5000 });
     const request = requestRecord(maintenance ? serviceControl() : options.requestControl, admitted, admissionUtc);
     const issuedBinding = maintenance ? binding : issuance(configuration.requestBinding, request, readSet, ownerCoverage);
+    const phaseBuffer = options.diagnostics === true ? openDiagnosticBuffer(admitted) : null;
+    const phase = openDiagnosticClock(phaseBuffer);
+    phase?.mark('issued');
     const openDeadline = deadline(options.deadlineMs ?? 5000);
     // Bound complete bootstrap/control transport before reserving or dispatching.
     const bootstrap = { path: options.path, readSet, ownerCoverage, request, host: { moduleUrl: host.moduleUrl, configuration }, binding: issuedBinding };
     hostConfiguration(bootstrap);
     const first = operationRecord(request, admitted, openDeadline, 1);
+    const firstOrdinal=maintenance ? claimMaintenanceOrdinal(controls) : undefined;
     const frame = options.diagnostics ? nativeTelemetry(first.operationId, 1) : null;
     const resources = new SharedArrayBuffer(16);
+    const marker=maintenance ? maintenanceMarker() : undefined;
     const openingData = { path: options.path, readSet, ownerCoverage, request, binding: issuedBinding, maintenance,
       wal: options.wal === true, ...(maintenance ? { sidecarJournalMode: options.sidecarJournalMode } : {}),
       host: { moduleUrl: host.moduleUrl, configuration }, operation: first, frame, resources, deadlineMs: openDeadline };
     hostConfiguration(openingData);
+    // Internal fixed storage does not consume the caller's bootstrap allowance.
+    if (phaseBuffer) openingData.openPhases = phaseBuffer;
+    if(maintenance)openingData.maintenanceMarker=marker;
     if(semantic) {
       openingData.semanticConfig=semantic.configuration;
       openingData.semanticPort=semantic.handle.attach({ownerId:readSet[0].ownerId,path:options.path,readSet,maintenance,bindingId:issuedBinding.credentialBindingId,cancellation:semantic.configuration.cancellation});
@@ -122,6 +139,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     function shutdown(code) {
       closed = true; terminal ??= code; clearTimer(idle);
       const slot = lifecycle.pending;
+      const stall=maintenance && code==='read_timeout' ? readMaintenanceMarker(marker,now()) : undefined;
       if(semantic){Atomics.store(new Int32Array(semantic.configuration.cancellation),0,1);if(slot)semantic.handle.cancel(slot.operation.operationId);}
       const stopped = lifecycle.stop();
       if (!lifecycle.worker && !resource.cleaning) { registry.cleanup(resource); registry.finish(resource); }
@@ -130,7 +148,9 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
           registry.cleanup(slot.record);
           stopped.then(() => registry.finish(slot.record), () => registry.finish(slot.record, false));
         }
-        lifecycle.finish(slot, productFailure(terminal));
+        const failure=productFailure(terminal);
+        if(stall)maintenanceStalls.set(failure,stall);
+        lifecycle.finish(slot, failure);
       }
       return stopped;
     }
@@ -150,6 +170,8 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         } catch (error) { shutdown(error.code ?? 'reader_failed'); }
         return;
       }
+      if (slot.open) phase?.mark('openReceived');
+      else if (slot.method === 'fetchCandidateEvidence') phase?.mark('readDelivered');
       let result;
       try {
         boundedData(message.result, 65536);
@@ -167,23 +189,33 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
       if (signalCancelled(slot.signal)) result = productFailure('read_cancelled');
       if (slot.open && !result.ok) { shutdown(result.error.code); return; }
-      if (maintenance && !slot.open && result.ok && message.observedAtMonoMs !== undefined) {
-        const at = message.observedAtMonoMs;
-        if (!Number.isFinite(at) || at < Number(mono(slot.operation.enteredMonoNs)) / 1e6 || at > Number(now()) / 1e6) {
-          shutdown('reader_failed'); return;
+      if (maintenance && !slot.open) {
+        if(result.ok && message.observedAtMonoMs !== undefined) {
+          const at = message.observedAtMonoMs;
+          if (!Number.isFinite(at) || at < Number(mono(slot.operation.enteredMonoNs)) / 1e6 || at > Number(now()) / 1e6) {
+            shutdown('reader_failed'); return;
+          }
+          maintenanceObservations.set(result, at);
         }
-        maintenanceObservations.set(result, at);
         // Only fixed numeric fields cross into the process-local diagnostic.
         // Optional telemetry never supplies authority, usage refunds or timing proof.
         const detail=message.maintenancePhases, safe={};
-        for(const name of ['dispatchMs','epochObservationMs','transformed','canonicalRows','metadataBytes','textRows','textBytes','supportLookups','supportBytes','verifiedRows']){
+        for(const name of ['dispatchMs','epochObservationMs',...maintenanceWorkFields,...attributionFields]){
           const n=detail?.[name];if(Number.isFinite(n)&&n>=0)safe[name]=n;
         }
         const finished=detail?.finishedAtMonoMs, delivered=Number(now())/1e6;
-        if(Number.isFinite(finished)&&finished>=at&&finished<=delivered)safe.deliveryMs=delivered-finished;
+        if(Number.isFinite(finished)&&finished>=Number(mono(slot.operation.enteredMonoNs))/1e6&&finished<=delivered)safe.deliveryMs=delivered-finished;
+        Object.assign(safe,serializationDiagnostic(marker,now()));
+        if(slot.ordinal!==null)safe.ordinal=slot.ordinal;
+        safe.returnMs=Number(now()-mono(slot.operation.enteredMonoNs))/1e6;
         maintenancePhases.set(result,Object.freeze(safe));
+        if(result.error?.code==='read_timeout'){
+          const stall=readMaintenanceMarker(marker,now());if(stall)maintenanceStalls.set(result,stall);
+        }
       }
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
+      if (slot.open) phase?.mark('openAccepted');
+      else if (slot.method === 'fetchCandidateEvidence') phase?.mark('readAccepted');
       lifecycle.finish(slot, result);
       instance.unref(); idle = setTimer(() => shutdown('store_closed'), 60000); idle.unref?.(); lifecycle.idle = idle;
     }
@@ -215,8 +247,12 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       const callRequest = !opening && maintenance ? requestRecord(serviceControl(), entered, utc()) : request;
       const operation = opening ? first : operationRecord(callRequest, entered, duration, epoch);
       const callFrame = opening ? frame : options.diagnostics ? nativeTelemetry(operation.operationId, epoch) : null;
+      const ordinal=maintenance ? opening ? firstOrdinal : claimMaintenanceOrdinal(control) : undefined;
       const outbound = opening ? openingData : { method, input, credential: token, request: callRequest, operation, frame: callFrame };
-      if(opening && semantic) {const {semanticPort,...data}=outbound;operationMessage(data);}else operationMessage(outbound);
+      if(maintenance){
+        const {maintenanceMarker:internalMarker,semanticPort,openPhases,...data}=outbound;operationMessage(data);
+        outbound.maintenanceOrdinal=ordinal;bindMaintenanceControl(control,marker);prepareMaintenanceMarker(marker,ordinal,entered);
+      }else if(opening && (semantic || phaseBuffer)) {const {semanticPort,openPhases,...data}=outbound;operationMessage(data);}else operationMessage(outbound);
       const record = opening ? resource : registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, parent: resource, frame: callFrame });
       let subscription;
       const detach = () => {
@@ -224,7 +260,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         previous?.[Symbol.dispose]();
       };
       return new Promise(resolve => {
-        const slot = { resolve, operation, record, signal, open: opening, detach }; lifecycle.pending = slot;
+        const slot = { resolve, operation, record, signal, open: opening, method, detach, ordinal }; lifecycle.pending = slot;
         const abort = () => shutdown('read_cancelled');
         try {
           clearTimer(idle);
@@ -240,6 +276,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
           if (remaining <= 0n) { shutdown('read_timeout'); return; }
           if (opening) {
             resource.workerStopped = false; resource.nativeDisposed = false;
+            phase?.mark('spawn');
             const instance = spawnWorker(openingData);
             lifecycle.worker = instance;
             instance.stdout?.resume(); instance.stderr?.resume();
@@ -248,6 +285,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
             instance.on('exit', () => { if (!closed && lifecycle.worker === instance) shutdown('reader_failed'); });
           } else {
             lifecycle.worker.ref();
+            if (method === 'fetchCandidateEvidence') phase?.mark('readSent');
             lifecycle.worker.postMessage(outbound);
           }
         } catch { shutdown('reader_failed'); }
@@ -256,14 +294,18 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         try { detach(); } catch { /* Public settlement is already terminal. */ }
       });
     }
-    const opened = await dispatch('open', null, null, { signal }, admitted, true);
-    if (!opened.ok || !ready) throw coded(opened.error?.code ?? 'reader_failed', resource.id);
+    const opened = await dispatch('open', null, null, controls, admitted, true);
+    if (!opened.ok || !ready) {
+      const error=coded(opened.error?.code??'reader_failed',resource.id),stall=maintenanceStalls.get(opened);
+      if(stall)maintenanceStalls.set(error,stall);throw error;
+    }
     const call = (method, input, credential, control) => {
       const entered = now();
+      if (method === 'fetchCandidateEvidence') phase?.mark('readEntered');
       try { return dispatch(method, input, credential, control, entered); }
       catch (error) { return Promise.resolve(productFailure(error.code)); }
     };
-    return Object.freeze({
+    const handle=Object.freeze({
       getContextReadCapabilities(input = {},credential,control) {
         if(semantic) {
           try {const data=ownData(input,['deadlineMs']);return call('getContextReadCapabilities',{readSet,deadlineMs:deadline(data.deadlineMs)},credential,control);}
@@ -280,22 +322,27 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       close() {
         if(semantic)Atomics.store(new Int32Array(semantic.configuration.cancellation),0,1);
         return closePromise ??= (async () => {
+          phase?.mark('closeEntered');
           if (!closed && !lifecycle.pending && lifecycle.worker) {
             // Graceful native close receives an independent cleanup acknowledgement.
             closed = true; clearTimer(idle); registry.cleanup(resource);
             const instance = lifecycle.worker;
             await new Promise((resolve, reject) => {
               instance.ref();
-              instance.once('exit', code => code === 0 ? resolve() : reject(coded('reader_failed')));
+              instance.once('exit', code => { phase?.mark('closeExited'); code === 0 ? resolve() : reject(coded('reader_failed')); });
               instance.once('error', reject);
               instance.postMessage({ method: 'close' });
             }).then(() => { releaseSemanticWriter();registry.finish(resource); if (resource.state === 'complete') releaseWriter?.(); }, () => registry.finish(resource, false));
             lifecycle.worker = undefined;
           } else await shutdown('store_closed');
           await resource.delivery;
+          phase?.mark('closeFinished');
         })();
       },
     });
+    if (phaseBuffer) openPhases.set(handle, phaseBuffer);
+    if(maintenance)maintenanceMarkers.set(handle,marker);
+    return handle;
   };
 }
 export const openContextProductReader = createProductReaderRuntime();

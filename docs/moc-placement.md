@@ -39,6 +39,11 @@ bottleneck, not the limits on large topic catalogs or a model-quality claim.
 with a handcrafted proposal. Its transaction still validates namespace, IDs,
 levels, versions and canonical duplicate titles. The embedding application
 authenticates the caller; possession of a group ID grants no access.
+Each proposed topic title must fit both 240 UTF-16 code units and 120 code points
+after NFKC, secret redaction, whitespace collapse and trim. Overflow is rejected.
+The exported `normalizedTextLength` and `normalizeBoundedText` measure that
+per-field path; segmenters must also check the code-point bound. Concatenated
+lengths are not additive. See [bounded text lengths](capture.md#bounded-text-lengths).
 
 The exact inputs/results and acceptance cases are documented in the
 [S2b plan](plans/s2-moc-placement.md). `linkMocs` adds a guarded L2→L1 edge.

@@ -63,6 +63,10 @@ async function runProfile(profile,shape) {
   const { fixture } = await moduleAt('core/testing/context-read-fixture.mjs');
   const { configured, prebuild, card, four, personal, project } = await moduleAt('core/testing/context-product-owner-fixture.mjs');
   const { renewContextMaintenancePump, maintenancePumpPhaseDiagnostic } = await moduleAt('core/context-product-pump.mjs');
+  const { attributionFields=[], maintenanceKinds=[] } = await moduleAt('core/context-product-attribution.mjs').catch(error=>{
+    if(error.code!=='ERR_MODULE_NOT_FOUND')throw error;
+    return {}; // Untouched comparison checkouts have no attribution module.
+  });
   const readSet=shape.namespaces===4?four:[personal,...Array.from({length:shape.namespaces-1},(_,i)=>project('diagnostic-'+i))];
   const cleanups = [], t = { after: fn => cleanups.push(fn) }, start = mono(), loadStart = loadavg();
   let pump, writer, tick, campaign, readerHandle, windowBoundary;
@@ -169,6 +173,18 @@ async function runProfile(profile,shape) {
       quantum0:{n:zeros.length,maxMs:zeros.at(-1)??null,p95Ms:zeros.length?zeros[Math.ceil(.95*zeros.length)-1]:null},
       allQuanta:{n:total,maxMs:Math.max(0,...lanes.map(l=>l.worstElapsedMs)),p95UpperMs:p95Upper,bucketMs:10,overflow:counts[501]},
       opens,openAttempts,opensPerMinute:opens*60000/(mono()-campaign),openAttemptsPerMinute:openAttempts*60000/(mono()-campaign),
+      work:Object.fromEntries(['reused','replaced','removed','copied','tokenized','retargets','verificationRestarts','verificationKept'].map(name=>
+        [name,lanes.reduce((n,l)=>Math.min(Number.MAX_SAFE_INTEGER,n+(l.work[name]??0)),0)])),
+      attribution:Object.fromEntries(attributionFields.map(name=>{
+        const summaries=lanes.map(l=>l.attribution?.[name]).filter(Boolean),buckets=Array(55).fill(0);
+        for(const summary of summaries)summary.buckets.forEach((n,i)=>{buckets[i]+=n;});
+        const n=buckets.reduce((a,b)=>a+b,0),percentile=p=>{let count=0;for(let i=0;i<buckets.length;i++){count+=buckets[i];if(n&&count>=Math.ceil(n*p))return i===0?0:Math.min(Number.MAX_SAFE_INTEGER,2**(i-1));}return null;};
+        return [name,{n,total:summaries.reduce((sum,s)=>Math.min(Number.MAX_SAFE_INTEGER,sum+s.total),0),max:Math.max(0,...summaries.map(s=>s.max)),
+          p50Upper:percentile(.5),p95Upper:percentile(.95),buckets}];
+      })),
+      attributionBuckets:'zero, (0,1], (1,2], (2,4], ...; final bucket includes saturation; durations in ms, counts in units/rows, kinds use enum',
+      stallKinds:maintenanceKinds,
+      stalls:lanes.map(({pump,projection,lastStall,stallCounts})=>({pump,projection,lastStall,stallCounts})),
       projections:lanes.map(({elapsedBuckets,...lane})=>lane),
     }:null;
     const report = { smoke,profile,purpose: 'Non-gating early signal for the product 30 s freshness target; not qualification evidence.',

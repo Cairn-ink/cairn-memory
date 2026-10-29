@@ -26,6 +26,10 @@ const unavailable = reason => { throw Object.assign(Error('index_unavailable'), 
 // Never classify storage/corruption/authority errors by their public code.
 const fenceChanged = Symbol('maintenance fence changed');
 const same = (a,b) => canonicalJson(a) === canonicalJson(b);
+// Identical provenance predicate for private reuse and immutable-base copying.
+const exactDocument = (old, row) => old && old.revision===row.revision && old.body_revision===row.body_revision && old.eligible===row.eligible;
+const initialVerification = p => ({ byteSafe:1,phase:0,last:[],hash:new ManifestHash().state(),
+  counts:{ byType:Object.fromEntries(['memory','card'].filter(t => p.types.includes(t)).map(t => [t,{eligible:0,indexed:0}])),documents:0,terms:0,totalTokenLength:0 } });
 // Cleanup must not replace a native failure already committed to telemetry.
 function cleaned(work, cleanup) {
   let result;
@@ -108,8 +112,10 @@ export function canonicalProductIdentity(path, db) {
 
 // Construction acquires no sidecar. Only a separately authorized operation
 // invokes observe/refresh, including when the file is missing or malformed.
-export function productSidecar({ path, db: canonical, identity, features, observer, sqlite, sidecarJournalMode = 'DELETE', writable = false,
-  now = () => performance.now(), rendezvous = () => {} }) {
+export function productSidecar({ path, db: canonicalDatabase, identity, features, observer, sqlite, sidecarJournalMode = 'DELETE', writable = false,
+  now = () => performance.now(), rendezvous = () => {}, attribution }) {
+  const canonical=canonicalDatabase;
+  const canonicalRead=work=>attribution ? attribution.transaction(canonicalDatabase,work,readTransaction) : readTransaction(canonicalDatabase,work);
   features={...features,reviews:features.cards,receipts:features.cards};
   const sidePath = path + PRODUCT_SIDECAR_SUFFIX;
   let sideFormat, side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0;
@@ -166,8 +172,14 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   function close() { if (side?.isOpen) side.close(); side = null; metadata = null; sideFiles = null; }
   function write(work) {
     sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});
-    side.exec('BEGIN IMMEDIATE');
-    try { verifyOpened();const result = work();rendezvous('batch');side.exec('COMMIT'); return result; }
+    const beginning=attribution?.start('begin');
+    try {attribution?.checkpoint('begin');side.exec('BEGIN IMMEDIATE');}finally{attribution?.end(beginning);}
+    try {
+      verifyOpened();const result=work();rendezvous('batch');
+      const committing=attribution?.start('commit');
+      try {attribution?.checkpoint('commit');side.exec('COMMIT');}finally{attribution?.end(committing);}
+      return result;
+    }
     catch (e) { if (side.isTransaction) side.exec('ROLLBACK'); if(e.reason==='storage_unavailable')close();throw e; }
   }
   function connection(create = false) {
@@ -238,7 +250,11 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   const sideIdentity = () => ({ ...productFile(sidePath), incarnation: metadata.incarnation,
     schemaVersion: side.prepare('PRAGMA schema_version').get().schema_version });
   function target(p, access) {
-    if(canonical.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id!==identity.storeId)unavailable('wrong_store');
+    attribution?.step();
+    let storeId;
+    try {storeId=canonical.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id;}
+    finally {attribution?.acquired();}
+    if(storeId!==identity.storeId)unavailable('wrong_store');
     return { projectionDigest: projectionDigest(p), accessDigest: access, ...canonicalProductFences(canonical,p),
       canonical: canonicalProductIdentity(path,canonical), sidecar: sideIdentity() };
   }
@@ -252,6 +268,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     if (r.canonicalFenceDigest !== t.canonicalFenceDigest) return 'fence_changed';
     return null;
   }
+  const canMerge=()=>canonical.prepare('PRAGMA encoding').get().encoding==='UTF-8' && side.prepare('PRAGMA encoding').get().encoding==='UTF-8';
   function status(p, state, reason, progress = null, counts = null) {
     const ready = state === 'ready';
     return { profile: PRODUCT_PROFILE, lexical: { state,reason,progress }, semantic: { state:'disabled',reason:'not_enabled' },
@@ -264,7 +281,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   function invalid(p, reason) { return { dto: status(p,'unavailable',reason), publication:null }; }
   // Caller supplies the canonical transaction. Pointer, generation and record
   // are read under one independent sidecar transaction, with no deep scans.
-  function observe(p, access, {forWrite=false,knownFailure=null,workOnly=false}={}) {
+  function observe(p, access, {forWrite=false,knownFailure=null,workOnly=false,mergeOrder}={}) {
     if(knownFailure)return invalid(p,knownFailure);
     try {
       if (!connection(forWrite)) return { dto:status(p,'absent','missing'), publication:null };
@@ -282,28 +299,36 @@ export function productSidecar({ path, db: canonical, identity, features, observ
           const text = side.prepare('SELECT record FROM progress_records WHERE generation=?').get(work.generation)?.record;
           if (!g || !text) return invalid(p,'validation_missing');
           const r = verifiedRecord(identity.cursorSecret,'progress',text);
-          if (g.id!==generationId(g) || g.incarnation!==incarnationOf(g) || !same(r.generation,{ id:g.id,incarnation:g.incarnation }) || !same(r.progress,progressOf(g)) ||
+          if ((JSON.parse(g.verify)?.byteSafe===1 && !(mergeOrder??canMerge()) && JSON.parse(g.verify)?.appendOnly!==true) || g.published || pointer?.generation===g.id || side.prepare('SELECT 1 FROM validation_records WHERE generation=?').get(g.id) ||
+              g.id!==generationId(g) || g.incarnation!==incarnationOf(g) || !same(r.generation,{ id:g.id,incarnation:g.incarnation }) || !same(r.progress,progressOf(g)) ||
               r.kind !== g.kind || r.projectionDigest !== g.projection || r.accessDigest !== g.access ||
               !same(JSON.parse(g.fences), { canonicalFenceDigest:r.canonicalFenceDigest,dependencyFenceDigest:r.dependencyFenceDigest })) return invalid(p,'validation_invalid');
           const mismatch = recordBindings(r,t,true);
           if (mismatch && !['access_changed','dependency_changed','fence_changed'].includes(mismatch)) return invalid(p,mismatch);
-          checkpoint = { mismatch,baseSequence:g.base_sequence,kind:g.kind,progress:r.progress };
+          // Legacy work is authenticated but cannot attest byte-safe scanning.
+          // Ignore it for resumption without hiding an existing publication.
+          if(JSON.parse(g.verify).byteSafe===1)checkpoint = { mismatch,baseSequence:g.base_sequence,kind:g.kind,progress:r.progress };
         }
-        if(workOnly)return {resumable:checkpoint && !checkpoint.mismatch ? work.generation : null};
+        if(workOnly)return {
+          resumable:checkpoint && !checkpoint.mismatch ? work.generation : null,
+          retargetable:checkpoint && ['dependency_changed','fence_changed'].includes(checkpoint.mismatch) ? work.generation : null
+        };
         if (!pointer) return checkpoint ? checkpoint.mismatch ? { dto:status(p,'stale',checkpoint.mismatch),publication:null } : incomplete() : { dto:status(p,'absent','missing'),publication:null };
         const g = side.prepare('SELECT * FROM generations WHERE id=?').get(pointer.generation);
         const text = side.prepare('SELECT record FROM validation_records WHERE publication=?').get(pointer.publication)?.record;
         if (!g || !text) return invalid(p,'validation_missing');
         const r = verifiedRecord(identity.cursorSecret,'validation',text);
         const expectedTypes = ['memory','card'].filter(type => p.types.includes(type));
-        if (g.id !== generationId(g) || g.incarnation !== incarnationOf(g) || g.phase !== streams(p).length+3 || !g.published || r.publicationId !== pointer.publication || !same(r.generation, { id:g.id,sequence:g.sequence,checkpoint:g.checkpoint,incarnation:g.incarnation }) ||
+        if ((JSON.parse(g.verify)?.byteSafe===1 && !(mergeOrder??canMerge()) && JSON.parse(g.verify)?.appendOnly!==true) || g.id !== generationId(g) || g.incarnation !== incarnationOf(g) || g.phase !== streams(p).length+3 || !g.published || r.publicationId !== pointer.publication || !same(r.generation, { id:g.id,sequence:g.sequence,checkpoint:g.checkpoint,incarnation:g.incarnation }) ||
             g.projection !== r.projectionDigest || g.access !== r.accessDigest || g.manifest !== r.manifestDigest ||
             !same(JSON.parse(g.fences),{ canonicalFenceDigest:r.canonicalFenceDigest,dependencyFenceDigest:r.dependencyFenceDigest }) ||
             !same(r.counts,JSON.parse(g.verify).counts) || !same(Object.keys(r.counts.byType).sort(),expectedTypes.sort())) return invalid(p,'validation_invalid');
         const mismatch = recordBindings(r,t);
         if (mismatch && !['access_changed','dependency_changed','fence_changed'].includes(mismatch)) return invalid(p,mismatch);
-        if(checkpoint && !checkpoint.mismatch)return incomplete();
-        return { dto:status(p,mismatch ? 'stale' : 'ready',mismatch,progressOf(g),r.counts), publication:r };
+        const byteSafe=JSON.parse(g.verify).byteSafe===1;
+        // A legacy publication stays available while its replacement is private.
+        if(byteSafe && checkpoint && !checkpoint.mismatch)return incomplete();
+        return { dto:status(p,mismatch ? 'stale' : 'ready',mismatch,progressOf(g),r.counts), publication:r,byteSafe };
       });
     } catch (e) {
       if (e instanceof SyntaxError) return invalid(p,'validation_invalid');
@@ -317,29 +342,45 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   function save(g,t) {
     // The signed incarnation commits to resumable hash/count/scan state too.
     // A changed verification checkpoint cannot be used to mint a certificate.
-    g.incarnation=incarnationOf(g);
-    const record = signedRecord(identity.cursorSecret,'progress',{ version:'context-index-progress-v1',profile:PRODUCT_PROFILE,storeId:identity.storeId,
+    const signing=attribution?.start('save');let record;
+    try {
+      attribution?.checkpoint('save');g.incarnation=incarnationOf(g);
+      record=signedRecord(identity.cursorSecret,'progress',{ version:'context-index-progress-v1',profile:PRODUCT_PROFILE,storeId:identity.storeId,
       canonicalIdentityDigest:digest(t.canonical),sidecarIdentityDigest:digest({format:PRODUCT_SIDECAR_FORMAT,...t.sidecar}),projectionDigest:g.projection,accessDigest:g.access,
       ...JSON.parse(g.fences),generation:{ id:g.id,incarnation:g.incarnation },kind:g.kind,progress:progressOf(g) });
+    }finally{attribution?.end(signing);}
     if (Buffer.byteLength(record)>4096) fail('context_item_too_large');
     side.prepare('INSERT OR REPLACE INTO progress_records VALUES(?,?)').run(g.id,record);
-    side.prepare('UPDATE generations SET incarnation=?,phase=?,last_key=?,checkpoint=?,verify=? WHERE id=?').run(g.incarnation,g.phase,g.last_key,g.checkpoint,JSON.stringify(g.verify),g.id);
+    side.prepare('UPDATE generations SET incarnation=?,fences=?,phase=?,last_key=?,checkpoint=?,verify=? WHERE id=?').run(g.incarnation,g.fences,g.phase,g.last_key,g.checkpoint,JSON.stringify(g.verify),g.id);
     side.prepare('INSERT OR REPLACE INTO work VALUES(?,?)').run(g.projection,g.id);
   }
   function fresh(t,p,access) {
-    return same(t,readTransaction(canonical,() => target(p,access)));
+    return same(t,canonicalRead(() => target(p,access)));
   }
-  function metadataRows(s, after, maximum, p, m) {
-    const rows = canonical.prepare(s.type === 'memory'
-      ? `SELECT id,revision,0 AS body_revision,deleted,currentness,review_state FROM memories INDEXED BY index_memory_keyset WHERE ${where} AND id>? ORDER BY id LIMIT ?`
-      : `SELECT id,revision,coalesce(body_revision,0) AS body_revision,state FROM private_cards INDEXED BY private_card_scope WHERE ${where} AND state=? AND id>? ORDER BY id LIMIT ?`)
-      .all(...boundary(s.ns),...(s.type === 'card' ? [s.state] : []),after,maximum);
-    m.canonicalRows += rows.length; m.metadataBytes += Buffer.byteLength(JSON.stringify(rows));
+  function metadataRows(s, after, maximum, p, m, canonicalUtf8) {
+    // Column collations are not attested. Both the cursor and ordering must
+    // explicitly match the stored-byte merge; INDEXED BY never changes SQL order.
+    attribution?.step();
+    let rows;
+    try {rows = canonical.prepare(s.type === 'memory'
+      ? `SELECT id,hex(CAST(id AS BLOB)) AS id_bytes,revision,0 AS body_revision,deleted,currentness,review_state FROM memories INDEXED BY index_memory_keyset WHERE ${where} AND id COLLATE BINARY>? ORDER BY id COLLATE BINARY LIMIT ?`
+      : `SELECT id,hex(CAST(id AS BLOB)) AS id_bytes,revision,coalesce(body_revision,0) AS body_revision,state FROM private_cards INDEXED BY private_card_scope WHERE ${where} AND state=? AND id COLLATE BINARY>? ORDER BY id COLLATE BINARY LIMIT ?`)
+      .all(...boundary(s.ns),...(s.type === 'card' ? [s.state] : []),after,maximum);}
+    finally {attribution?.acquired();}
+    m.canonicalRows += rows.length; m.metadataBytes += Buffer.byteLength(JSON.stringify(rows.map(({id_bytes,...row})=>row)));
+    // UTF-8 binding agrees with Buffer encoding; only UTF-16 needs a native
+    // round trip (its conversion can rewrite values such as U+FFFE).
+    if(canonicalUtf8) {
+      for(const row of rows)if(!Buffer.from(row.id).equals(Buffer.from(row.id_bytes,'hex')))unavailable('corrupt');
+    } else {
+      const rebound=canonical.prepare(`SELECT hex(CAST(id AS BLOB)) AS bytes FROM ${s.type==='memory'?'memories':'private_cards'} WHERE ${where} AND id COLLATE BINARY=?`);
+      for(const row of rows)if(rebound.get(...boundary(s.ns),row.id)?.bytes!==row.id_bytes)unavailable('corrupt');
+    }
     // Count and meter support independently of transformation attempts.
     const support = { prepare(sql) { const stmt = canonical.prepare(sql); return Object.fromEntries(['get','all'].map(method => [method,(...args) => {
       m.supportLookups++; const r = stmt[method](...args); m.supportBytes += Buffer.byteLength(JSON.stringify(r ?? null)); return r;
     }])); } };
-    return rows.map(row => ({ id:row.id,revision:row.revision,body_revision:row.body_revision,
+    return rows.map(row => ({ id:row.id,id_bytes:row.id_bytes,revision:row.revision,body_revision:row.body_revision,
       eligible:Number(s.type === 'memory' ? !row.deleted && (p.intent === 'history' || row.currentness === 'current' && row.review_state !== 'awaiting')
         : contextCardEligible(support,identity,features,s.ns,row,p.intent,{ readSet:p.readSet })) }));
   }
@@ -348,10 +389,15 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     if(key===undefined)unavailable('validation_missing');
     return key;
   };
-  function put(g,stream,row,tokens,source) {
+  function put(g,stream,row,tokens,source,cacheUtf8) {
     const s=g.streams[stream], key=JSON.stringify([...boundary(s.ns),s.type,row.id]);
     const doc=side.prepare('SELECT coalesce(max(doc),0)+1 AS id FROM documents WHERE generation=?').get(g.storage_id).id;
+    if(cacheUtf8 && (Buffer.from(row.id).toString()!==row.id || Buffer.from(key).toString()!==key))unavailable('corrupt');
     side.prepare('INSERT INTO documents VALUES(?,?,?,?,?,?,?,?,?)').run(g.storage_id,doc,stream,row.id,key,row.revision,row.body_revision,row.eligible,tokens.length);
+    if(!cacheUtf8) {
+      const stored=side.prepare('SELECT id,identity FROM documents WHERE generation=? AND doc=?').get(g.storage_id,doc);
+      if(stored.id!==row.id || stored.identity!==key)unavailable('corrupt');
+    }
     const terms=source ? side.prepare(`SELECT s.term,p.frequency FROM postings p JOIN statistics s
       ON s.generation=p.generation AND s.term_id=p.term JOIN documents d ON d.generation=p.generation AND d.doc=p.doc
       WHERE p.generation=? AND d.identity=? ORDER BY s.term`).all(storageKey(source),key)
@@ -365,6 +411,16 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     }
     side.prepare("UPDATE statistics SET n=n+?,total_length=total_length+? WHERE generation=? AND term='' ").run(row.eligible,tokens.length,g.storage_id);
   }
+  // Only authenticated, unpublished work reaches this path. Integer keys need
+  // not be dense: verification hashes identities/term text and audits references.
+  function remove(g, old) {
+    const terms=side.prepare(`UPDATE statistics SET df=df-1 WHERE generation=? AND term_id IN
+      (SELECT term FROM postings WHERE generation=? AND doc=?) RETURNING term_id,df`).all(g.storage_id,g.storage_id,old.doc);
+    side.prepare('DELETE FROM postings WHERE generation=? AND doc=?').run(g.storage_id,old.doc);
+    for(const term of terms)if(term.df===0)side.prepare('DELETE FROM statistics WHERE generation=? AND term_id=?').run(g.storage_id,term.term_id);
+    side.prepare("UPDATE statistics SET n=n-?,total_length=total_length-? WHERE generation=? AND term=''").run(old.eligible,old.token_length,g.storage_id);
+    side.prepare('DELETE FROM documents WHERE generation=? AND doc=?').run(g.storage_id,old.doc);
+  }
   function verifyPage(g, p, m, quantum) {
     const v=g.verify;
     if(v.phase===1 && !v.resetDone) {
@@ -373,7 +429,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       const reset=quantum.measure(()=>side.prepare(`UPDATE statistics SET verified_df=0 WHERE generation=? AND term_id IN
         (SELECT term_id FROM statistics WHERE generation=? ${v.resetLast===undefined?'':'AND term_id>?'} ORDER BY term_id LIMIT 128)
         RETURNING term_id`).all(g.storage_id,g.storage_id,...(v.resetLast===undefined?[]:[v.resetLast])),'verification-reset');
-      m.verifiedRows+=reset.length;
+      m.verifiedRows+=reset.length;attribution?.add('verificationRows',reset.length);
       if(reset.length)v.resetLast=Math.max(...reset.map(row=>row.term_id));
       if(reset.length===128)return;
       v.resetDone=true;
@@ -409,7 +465,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         LEFT JOIN documents d ON d.generation=p.generation AND d.doc=p.doc
         LEFT JOIN statistics s ON s.generation=p.generation AND s.term_id=p.term
         WHERE p.generation=? ${last.length?'AND (p.doc,p.term)>(?,?)':''} ORDER BY p.doc,p.term LIMIT 128`).all(g.storage_id,...last);
-      rendezvous('verify-scan');
+      attribution?.add('scanRows',rows.length);rendezvous('verify-scan');
     },'verify-scan');
     let processed=0;
     for(const r of rows) {
@@ -455,7 +511,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
           v.last=[r.doc,r.term];v.checkedPostings=(v.checkedPostings ?? 0)+1;
         }
         if(tuple)hash.update(JSON.stringify(tuple)+'\n');m.verifiedRows++;processed++;
-        rendezvous('verify-item');
+        attribution?.add('verificationRows',1);rendezvous('verify-item');
       },'verification');
     }
     v.hash=hash.state();
@@ -501,20 +557,21 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   }
   // Remove rows before their signed metadata. A slice advances exactly one
   // bounded range; an interrupted deletion resumes from the remaining rows.
+  const gcChanges=result=>{attribution?.add('gcRows',result.changes);return result;};
   function collectVector(owner,lexicalGeneration) {
     if(lexicalGeneration!==undefined) {
-      const cached=side.prepare(`DELETE FROM semantic_vectors WHERE owner=? AND generation=? AND (doc,identity,epoch) IN
-        (SELECT doc,identity,epoch FROM semantic_vectors WHERE owner=? AND generation=? LIMIT 128)`).run(owner,lexicalGeneration,owner,lexicalGeneration);
+      const cached=gcChanges(side.prepare(`DELETE FROM semantic_vectors WHERE owner=? AND generation=? AND (doc,identity,epoch) IN
+        (SELECT doc,identity,epoch FROM semantic_vectors WHERE owner=? AND generation=? LIMIT 128)`).run(owner,lexicalGeneration,owner,lexicalGeneration));
       if(cached.changes)return true;
     }
     const g=vectorCandidate(owner,lexicalGeneration);
     if(!g)return false;
-    const rows=side.prepare('DELETE FROM vector_rows WHERE generation=? AND doc IN (SELECT doc FROM vector_rows WHERE generation=? LIMIT 128)').run(g.storage_id,g.storage_id);
+    const rows=gcChanges(side.prepare('DELETE FROM vector_rows WHERE generation=? AND doc IN (SELECT doc FROM vector_rows WHERE generation=? LIMIT 128)').run(g.storage_id,g.storage_id));
     if(rows.changes)return true;
-    side.prepare('DELETE FROM vector_publications WHERE generation=? AND owner=?').run(g.storage_id,owner);
-    side.prepare('DELETE FROM vector_work WHERE generation=?').run(g.storage_id);
-    side.prepare('DELETE FROM vector_validation_records WHERE generation=? AND owner=?').run(g.storage_id,owner);
-    side.prepare('DELETE FROM vector_generations WHERE storage_id=? AND owner=?').run(g.storage_id,owner);
+    gcChanges(side.prepare('DELETE FROM vector_publications WHERE generation=? AND owner=?').run(g.storage_id,owner));
+    gcChanges(side.prepare('DELETE FROM vector_work WHERE generation=?').run(g.storage_id));
+    gcChanges(side.prepare('DELETE FROM vector_validation_records WHERE generation=? AND owner=?').run(g.storage_id,owner));
+    gcChanges(side.prepare('DELETE FROM vector_generations WHERE storage_id=? AND owner=?').run(g.storage_id,owner));
     return true;
   }
   function collect(quantum,owner,maximum=128) {
@@ -538,21 +595,22 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         if(!g){found=collectVector(owner);return;}
         found=true;
         for(const [table,key] of [['postings','doc,term'],['documents','doc'],['statistics','term_id']]) {
-          const result=side.prepare(`DELETE FROM ${table} WHERE generation=? AND (${key}) IN (SELECT ${key} FROM ${table} WHERE generation=? LIMIT 128)`).run(g.storage_id,g.storage_id);
+          const result=gcChanges(side.prepare(`DELETE FROM ${table} WHERE generation=? AND (${key}) IN (SELECT ${key} FROM ${table} WHERE generation=? LIMIT 128)`).run(g.storage_id,g.storage_id));
           if(result.changes)return;
         }
         if(collectVector(owner,g.storage_id))return;
-        side.prepare('DELETE FROM validation_records WHERE generation=?').run(g.id);
-        side.prepare('DELETE FROM progress_records WHERE generation=?').run(g.id);
-        side.prepare('DELETE FROM generations WHERE id=?').run(g.id);
+        gcChanges(side.prepare('DELETE FROM validation_records WHERE generation=?').run(g.id));
+        gcChanges(side.prepare('DELETE FROM progress_records WHERE generation=?').run(g.id));
+        gcChanges(side.prepare('DELETE FROM generations WHERE id=?').run(g.id));
       });if(found)rendezvous('gc');},'gc');
       if(!found)break;
     }
-    if(quantum.admit('gc'))quantum.measure(()=>side.exec('PRAGMA incremental_vacuum(32)'),'gc');
+    if(quantum.admit('gc'))quantum.measure(()=>side.exec('PRAGMA incremental_vacuum(32)'),'gc','vacuum');
   }
   function refresh(p,access,budget,quantum) {
     if (!writable) fail('invalid_input');
-    const m = { transformed:0,canonicalRows:0,metadataBytes:0,textRows:0,textBytes:0,supportLookups:0,supportBytes:0,verifiedRows:0 };
+    const m = { transformed:0,canonicalRows:0,metadataBytes:0,textRows:0,textBytes:0,supportLookups:0,supportBytes:0,verifiedRows:0,
+      reused:0,replaced:0,removed:0,copied:0,tokenized:0,retargets:0,verificationRestarts:0,verificationKept:0 };
     // Retain the identity whose validation failed. A different selection may
     // repair the cache before this maintainer reaches its own repair branch.
     const repairIdentity=productFile(sidePath,true),repairStamp=repairIdentity && stamp();
@@ -579,71 +637,137 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       connection(true);
     }
     rendezvous('opened');
-    let t = readTransaction(canonical,() => target(p,access));
+    // The merge's byte comparator and both indexed TEXT cursors must have
+    // identical BINARY order. Other encodings retain the append-only builder.
+    const canonicalUtf8=canonical.prepare('PRAGMA encoding').get().encoding==='UTF-8',
+      cacheUtf8=side.prepare('PRAGMA encoding').get().encoding==='UTF-8',mergeOrder=canonicalUtf8&&cacheUtf8;
+    let t = canonicalRead(() => target(p,access));
     selectProjection(p,t);
     // Cleanup also advances during a long build or repeated target changes;
     // it does not depend on having time left after corpus admission.
     collect(quantum,p.readSet[0].ownerId,1);
-    const observed = readTransaction(canonical,() => observe(p,access,{forWrite:true}));
-    if (observed.dto.lexical.state === 'ready') { collect(quantum,p.readSet[0].ownerId);rendezvous('noop'); return m; }
+    const observed = canonicalRead(() => observe(p,access,{forWrite:true,mergeOrder}));
+    if (observed.dto.lexical.state === 'ready' && observed.byteSafe) { collect(quantum,p.readSet[0].ownerId);rendezvous('noop'); return m; }
     const w = side.prepare('SELECT generation FROM work WHERE projection=?').get(t.projectionDigest);
     let g = w && side.prepare('SELECT * FROM generations WHERE id=?').get(w.generation);
-    const resumable=readTransaction(canonical,()=>observe(p,access,{forWrite:true,workOnly:true})).resumable===g?.id;
+    const workStatus=canonicalRead(()=>observe(p,access,{forWrite:true,workOnly:true,mergeOrder}));
+    const resumable=g && (workStatus.resumable===g.id || mergeOrder && workStatus.retargetable===g.id);
+    let rebinding=false;
     // Invalid publication evidence still controls status. Independently signed
     // rebuild work can resume; delta work must first abandon the invalid base.
-    if (!resumable || !g || g.access !== access || !same(JSON.parse(g.fences), { canonicalFenceDigest:t.canonicalFenceDigest,dependencyFenceDigest:t.dependencyFenceDigest }) || (observed.dto.lexical.state === 'unavailable' && g.base_sequence!==0)) {
+    if (!resumable || !g || g.access !== access || (observed.dto.lexical.state === 'unavailable' && g.base_sequence!==0)) {
       const pointer = side.prepare('SELECT generation FROM publications WHERE projection=?').get(t.projectionDigest);
-      const base = observed.dto.lexical.state !== 'unavailable' && pointer && side.prepare('SELECT * FROM generations WHERE id=?').get(pointer.generation);
+      const published = observed.dto.lexical.state !== 'unavailable' && pointer && side.prepare('SELECT * FROM generations WHERE id=?').get(pointer.generation);
+      const base = observed.byteSafe && published;
       const baseSequence = base?.sequence ?? 0;
-      g = { id:null,incarnation:null,seed:randomUUID(),projection:t.projectionDigest,sequence:Math.max(baseSequence,g?.sequence ?? 0)+1,
+      g = { id:null,incarnation:null,seed:randomUUID(),projection:t.projectionDigest,sequence:Math.max(published?.sequence ?? 0,g?.sequence ?? 0)+1,
         base_sequence:baseSequence,checkpoint:0,kind:baseSequence ? 'delta' : pointer || w ? 'rebuild' : metadata.kind,
         fences:canonicalJson({ canonicalFenceDigest:t.canonicalFenceDigest,dependencyFenceDigest:t.dependencyFenceDigest }),access,
-        phase:0,last_key:'',base_id:base?.id ?? null,verify:{ phase:0,last:[],hash:new ManifestHash().state(),
-          counts:{ byType:Object.fromEntries(['memory','card'].filter(t => p.types.includes(t)).map(t => [t,{eligible:0,indexed:0}])),documents:0,terms:0,totalTokenLength:0 } } };
+        phase:0,last_key:'',base_id:base?.id ?? null,verify:initialVerification(p) };
+      if(!mergeOrder)g.verify.appendOnly=true;
       g.id=generationId(g);g.incarnation=incarnationOf(g);
       write(() => {
         side.prepare('INSERT INTO generations(id,owner,projection,incarnation,sequence,base_sequence,checkpoint,kind,fences,access,phase,last_key,base_id,verify,manifest,published,seed) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)').run(g.id,p.readSet[0].ownerId,g.projection,g.incarnation,g.sequence,g.base_sequence,0,g.kind,g.fences,g.access,0,'',g.base_id,JSON.stringify(g.verify),null,g.seed);
         g.storage_id=side.prepare('SELECT storage_id FROM generations WHERE id=?').get(g.id).storage_id;
         side.prepare("INSERT INTO statistics(generation,term_id,term,df,n,total_length) VALUES(?,0,'',0,0,0)").run(g.storage_id); save(g,t);
       });
-    } else g.verify = JSON.parse(g.verify);
+    } else {
+      g.verify=JSON.parse(g.verify);
+      if(mergeOrder && workStatus.retargetable===g.id) {
+        // Rebinding is provisional until a real comparison batch commits. A
+        // cutoff/race before that commit leaves the old signed checkpoint intact.
+        g.fences=canonicalJson({canonicalFenceDigest:t.canonicalFenceDigest,dependencyFenceDigest:t.dependencyFenceDigest});
+        g.phase=0;g.last_key='';g.verify.reconciling=true;rebinding=true;
+      }
+    }
     g.streams = streams(p);
     while (quantum.admit('scan') && quantum.admit('item') && g.phase < g.streams.length && m.transformed<budget.maxItems) {
       if (!fresh(t,p,access)) return m;
       const stream = g.streams[g.phase], maximum = stream.type === 'card' ? 1 : 128;
-      const rows = quantum.measure(()=>{
-        const result=readTransaction(canonical,() => metadataRows(stream,g.last_key,maximum,p,m));
-        rendezvous('scan');return result;
+      const { rows, exhausted } = quantum.measure(()=>{
+        const canonicalRows=canonicalRead(() => metadataRows(stream,g.last_key,maximum,p,m,canonicalUtf8));
+        if(!mergeOrder) {
+          attribution?.add('scanRows',canonicalRows.length);
+          rendezvous('scan');return {rows:canonicalRows.map(row=>({row,old:null})),exhausted:canonicalRows.length<maximum};
+        }
+        const workRows=side.prepare('SELECT *,hex(CAST(id AS BLOB)) AS id_bytes FROM documents WHERE generation=? AND stream=? AND id COLLATE BINARY>? ORDER BY id COLLATE BINARY LIMIT ?')
+          .all(g.storage_id,g.phase,g.last_key,maximum);
+        if(cacheUtf8) {
+          for(const old of workRows)if(!Buffer.from(old.id).equals(Buffer.from(old.id_bytes,'hex')))unavailable('corrupt');
+        } else {
+          const rebound=side.prepare('SELECT hex(CAST(id AS BLOB)) AS bytes FROM documents WHERE generation=? AND stream=? AND id COLLATE BINARY=?');
+          for(const old of workRows)if(rebound.get(g.storage_id,g.phase,old.id)?.bytes!==old.id_bytes)unavailable('corrupt');
+        }
+        const rows=[];let c=0,w=0;
+        // Merge at most one page of keys. A full input page can never run out
+        // before this output bound; absence is proved only in its scanned range.
+        while(rows.length<maximum && (c<canonicalRows.length || w<workRows.length)) {
+          const row=canonicalRows[c],old=workRows[w];
+          const order=!row ? 1 : !old ? -1 : Buffer.compare(Buffer.from(row.id_bytes,'hex'),Buffer.from(old.id_bytes,'hex'));
+          rows.push({row:order<=0 ? canonicalRows[c++] : null,old:order>=0 ? workRows[w++] : null});
+        }
+        attribution?.add('scanRows',rows.length);rendezvous('scan');return {rows,exhausted:c===canonicalRows.length && w===workRows.length && canonicalRows.length<maximum && workRows.length<maximum};
       },'scan');
       if(now()>=quantum.cutoff)fail('read_timeout');
       let units=0, processed=0, last=g.last_key;
       // Include postings/dictionary writes in the observed item cost. Staging
       // rows and their checkpoint commit together, even when admission yields.
       try { write(() => {
-        for (const row of rows) {
+        const changing=()=>{
+          if(g.verify.reconciling || g.verify.hash.bytes || g.verify.phase) {
+            g.verify=initialVerification(p);m.verificationRestarts++;
+          }
+        };
+        for (const {row,old} of rows) {
           if (processed && !quantum.admit() || m.transformed>=budget.maxItems) break;
           if(now()>=quantum.cutoff)fail('read_timeout');
           const kept=quantum.measure(()=>{
-            const old=g.base_id && side.prepare('SELECT * FROM documents WHERE generation=? AND stream=? AND id=?').get(storageKey(g.base_id),g.phase,row.id);
-            let tokens,source;
-            if(old && old.revision===row.revision && old.body_revision===row.body_revision && old.eligible===row.eligible) {
-              tokens={length:old.token_length};source=g.base_id;
-            } else {
-              const text=row.eligible ? readTransaction(canonical,()=>canonical.prepare(stream.type==='memory'
-                ? `SELECT content AS text FROM memories WHERE ${where} AND id=?` : `SELECT title||char(10)||body AS text FROM private_cards WHERE ${where} AND id=?`).get(...boundary(stream.ns),row.id)?.text) : '';
-              if(typeof text!=='string' || text.length>2000000)fail('context_item_too_large');
-              if(processed && units+text.length>2000000)return false;
-              units+=text.length;m.transformed++;m.textRows+=Number(Boolean(row.eligible));m.textBytes+=Buffer.byteLength(text);tokens=termFrequencies(text);
+            if(row && exactDocument(old,row))m.reused++;
+            else if(!row) {changing();remove(g,old);m.removed++;}
+            else {
+              const base=g.base_id && side.prepare('SELECT * FROM documents WHERE generation=? AND stream=? AND id=?').get(storageKey(g.base_id),g.phase,row.id);
+              let tokens,source;
+              if(exactDocument(base,row)) {tokens={length:base.token_length};source=g.base_id;}
+              else {
+                const text=row.eligible ? canonicalRead(()=>{
+                  attribution?.step();
+                  let found;
+                  try {found=canonical.prepare(stream.type==='memory'
+                    ? `SELECT content AS text FROM memories WHERE ${where} AND id COLLATE BINARY=?` : `SELECT title||char(10)||body AS text FROM private_cards WHERE ${where} AND id COLLATE BINARY=?`).get(...boundary(stream.ns),row.id);}
+                  finally {attribution?.acquired();}return found?.text;
+                }) : '';
+                if(typeof text!=='string' || text.length>2000000) {
+                  // A deletion/forget can invalidate the observed body before
+                  // this read. Preserve the same batch-only fence-race outcome.
+                  if(!fresh(t,p,access))throw fenceChanged;
+                  fail('context_item_too_large');
+                }
+                if(processed && units+text.length>2000000)return false;
+                units+=text.length;m.transformed++;m.tokenized++;m.textRows+=Number(Boolean(row.eligible));m.textBytes+=Buffer.byteLength(text);tokens=termFrequencies(text);
+              }
+              changing();
+              // Cards can move to an earlier state stream. Remove the old
+              // identity before inserting there; the later stream then sees absence.
+              const displaced=mergeOrder && (old || side.prepare('SELECT * FROM documents WHERE generation=? AND identity=?')
+                .get(g.storage_id,JSON.stringify([...boundary(stream.ns),stream.type,row.id])));
+              if(displaced){remove(g,displaced);if(displaced.stream===g.phase)m.replaced++;else m.removed++;}
+              if(source)m.copied++;
+              put(g,g.phase,row,tokens,source,cacheUtf8);
             }
-            put(g,g.phase,row,tokens,source);last=row.id;processed++;
-            rendezvous('item');return true;
+            last=(row || old).id;processed++;
+            attribution?.add('itemRows',1);rendezvous('item');return true;
           });
           if (!kept) break;
         }
         rendezvous('transformed');
         if(!fresh(t,p,access))throw fenceChanged;
         g.last_key=last;
-        if(processed===rows.length && rows.length<maximum){g.phase++;g.last_key='';}
+        if(processed===rows.length && exhausted){g.phase++;g.last_key='';}
+        if(g.phase===g.streams.length) {
+          if(g.verify.reconciling){delete g.verify.reconciling;m.verificationKept++;}
+          g.phase+=g.verify.phase;
+        }
+        if(rebinding){m.retargets++;rebinding=false;}
         g.checkpoint++;save(g,t);
       }); } catch(e) { if(e===fenceChanged)return m;throw e; }
       rendezvous('checkpoint');
@@ -654,27 +778,29 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       write(() => { verifyPage(g,p,m,quantum); g.checkpoint++; save(g,t); });
       rendezvous('verification');
     }
-    if (g.verify.phase===3 && quantum.admit('publication') && fresh(t,p,access)) {
-      if(!side.prepare("SELECT 1 FROM statistics WHERE generation=? AND term=''").get(g.storage_id))unavailable('corrupt');
-      const publicationId=randomUUID(), manifestDigest=new ManifestHash(g.verify.hash).digest();
-      // Last pre-commit canonical snapshot ends here. The independent writer
-      // may commit after this check; the certificate still attests captured E.
-      rendezvous('precommit');
-      write(() => {
-        g.checkpoint++;
-        const body={ version:'context-index-validation-v1',profile:PRODUCT_PROFILE,format:PRODUCT_SIDECAR_FORMAT,storeId:identity.storeId,
-          canonical:t.canonical,sidecar:t.sidecar,projectionDigest:g.projection,accessDigest:access,...JSON.parse(g.fences),
-          tokenizer:TOKENIZER_VERSION,representation:REPRESENTATION_VERSION,
-          generation:{id:g.id,sequence:g.sequence,checkpoint:g.checkpoint,incarnation:g.incarnation},publicationId,manifestDigest,counts:g.verify.counts };
-        const record=signedRecord(identity.cursorSecret,'validation',body);
-        if (Buffer.byteLength(record)>16384) fail('context_item_too_large');
-        verifiedRecord(identity.cursorSecret,'validation',record);
-        side.prepare('UPDATE generations SET published=1,checkpoint=?,manifest=? WHERE id=?').run(g.checkpoint,manifestDigest,g.id);
-        side.prepare('INSERT INTO validation_records VALUES(?,?,?)').run(publicationId,g.id,record);
-        side.prepare('INSERT OR REPLACE INTO publications VALUES(?,?,?)').run(g.projection,g.id,publicationId);
-        side.prepare('DELETE FROM work WHERE projection=?').run(g.projection);
-      });
-      rendezvous('published');
+    if (g.phase>=g.streams.length && g.verify.phase===3 && quantum.admit('publication') && fresh(t,p,access)) {
+      quantum.measure(()=>{
+        if(!side.prepare("SELECT 1 FROM statistics WHERE generation=? AND term=''").get(g.storage_id))unavailable('corrupt');
+        const publicationId=randomUUID(), manifestDigest=new ManifestHash(g.verify.hash).digest();
+        // Last pre-commit canonical snapshot ends here. The independent writer
+        // may commit after this check; the certificate still attests captured E.
+        rendezvous('precommit');
+        write(() => {
+          g.checkpoint++;
+          const body={ version:'context-index-validation-v1',profile:PRODUCT_PROFILE,format:PRODUCT_SIDECAR_FORMAT,storeId:identity.storeId,
+            canonical:t.canonical,sidecar:t.sidecar,projectionDigest:g.projection,accessDigest:access,...JSON.parse(g.fences),
+            tokenizer:TOKENIZER_VERSION,representation:REPRESENTATION_VERSION,
+            generation:{id:g.id,sequence:g.sequence,checkpoint:g.checkpoint,incarnation:g.incarnation},publicationId,manifestDigest,counts:g.verify.counts };
+          const record=signedRecord(identity.cursorSecret,'validation',body);
+          if (Buffer.byteLength(record)>16384) fail('context_item_too_large');
+          verifiedRecord(identity.cursorSecret,'validation',record);
+          side.prepare('UPDATE generations SET published=1,checkpoint=?,manifest=? WHERE id=?').run(g.checkpoint,manifestDigest,g.id);
+          side.prepare('INSERT INTO validation_records VALUES(?,?,?)').run(publicationId,g.id,record);
+          side.prepare('INSERT OR REPLACE INTO publications VALUES(?,?,?)').run(g.projection,g.id,publicationId);
+          side.prepare('DELETE FROM work WHERE projection=?').run(g.projection);
+        });
+        attribution?.add('publicationRows',1);rendezvous('published');
+      },'publication');
     }
     collect(quantum,p.readSet[0].ownerId);
     return m;
@@ -740,7 +866,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     refresh:(p,access,budget)=>{
       const started=now();p=projection(p);
       const cutoff=Math.min(p.deadlineAt ?? Infinity,started+budget.maxMs);
-      const quantum=maintenanceQuantum({now,cutoff,maxMs:budget.maxMs});
+      const quantum=maintenanceQuantum({now,cutoff,maxMs:budget.maxMs,attribution});
       return guarded(()=>refresh(p,access,budget,quantum),true);
     },
     lexical:(p,...args)=>{p=projection(p);return guarded(()=>lexical(p,...args));},

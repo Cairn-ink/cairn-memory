@@ -1,4 +1,5 @@
-import { openContextIndexMaintainer, maintenanceObservation, maintenancePhaseDiagnostic } from './context-product-reader.mjs';
+import { attributionFields, maintenanceWorkFields, maintenanceKinds, add, maintenanceDispatchControl, maintenanceControlState } from './context-product-attribution.mjs';
+import { openContextIndexMaintainer, maintenanceObservation, maintenancePhaseDiagnostic, maintenanceStallDiagnostic } from './context-product-reader.mjs';
 import { supervisorOwner } from './context-read-supervisor.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { boundedData, hostConfiguration, coverage, PRODUCT_PROFILE } from './context-product-control.mjs';
@@ -20,7 +21,10 @@ const pumpDiagnostics=new WeakMap(), phaseDiagnostics=new WeakMap();
 export const maintenancePumpPhaseDiagnostic=observation=>phaseDiagnostics.get(observation);
 const phaseNames=['drain','open','dispatch','epochObservation','refreshCall','settle'];
 const phaseCounter=()=>({count:0,totalMs:0,worstMs:0,latestMs:0});
-const recordPhase=(counter,ms)=>{if(Number.isFinite(ms)&&ms>=0){counter.count++;counter.totalMs+=ms;counter.worstMs=Math.max(counter.worstMs,ms);counter.latestMs=ms;}};
+const recordPhase=(counter,ms)=>{if(Number.isFinite(ms)&&ms>=0){ms=Math.min(Number.MAX_SAFE_INTEGER,ms);counter.count=add(counter.count,1);counter.totalMs=add(counter.totalMs,ms);counter.worstMs=Math.max(counter.worstMs,ms);counter.latestMs=ms;}};
+// Log2 buckets: zero, (0,1], (1,2], ...; final bucket includes saturation.
+const fieldCounter=()=>({count:0,total:0,max:0,latest:0,buckets:Array(55).fill(0)});
+const recordField=(counter,n)=>{counter.count=add(counter.count,1);counter.total=add(counter.total,n);counter.max=Math.max(counter.max,n);counter.latest=n;const bucket=n===0?0:Math.min(54,Math.max(1,Math.ceil(Math.log2(n))+1));counter.buckets[bucket]=add(counter.buckets[bucket],1);};
 const freezeTree=value=>{if(value&&typeof value==='object'){Object.values(value).forEach(freezeTree);Object.freeze(value);}return value;};
 // Shared configuration is identified by its buffer, never its mutable contents.
 // Tagged containers avoid collisions with ordinary host configuration values.
@@ -39,7 +43,7 @@ export const maintenancePumpDiagnostic=observation=>pumpDiagnostics.get(observat
 // beyond handle shutdown; a host persists the same monotonic window/quota state
 // across process restarts before reopening admission (see the product guide).
 export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigint())/1e6,setTimer=setTimeout,clearTimer=clearTimeout,
-  open=openContextIndexMaintainer,observedAt=maintenanceObservation,phasesOf=maintenancePhaseDiagnostic}={}) {
+  open=openContextIndexMaintainer,observedAt=maintenanceObservation,phasesOf=maintenancePhaseDiagnostic,stallOf=maintenanceStallDiagnostic}={}) {
   return function renewContextMaintenancePump(original) {
     if(ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential','semanticConfig','semanticServiceCredential','firstCoverageValidation']).semanticConfig!==undefined)return semanticPump(original,{now,setTimer,clearTimer,open});
     const c=ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential']);
@@ -115,7 +119,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     // At most 64 lanes; no identities, paths, grants or content enter snapshots.
     let quantumNumber=0,residentEpoch=0;
     const phases=projections.map(()=>({phases:Object.fromEntries(phaseNames.map(k=>[k,phaseCounter()])),
-      opens:0,quanta:0,first:null,latest:null,worstElapsedMs:0,elapsedBuckets:Array(502).fill(0),work:{}}));
+      opens:0,quanta:0,first:null,latest:null,worstElapsedMs:0,elapsedBuckets:Array(502).fill(0),work:{},attribution:Object.fromEntries(attributionFields.map(k=>[k,fieldCounter()])),lastStall:null,stallCounts:Array(maintenanceKinds.length).fill(0)}));
     async function drain(key,index=handleLanes.get(key)){
       const started=now();
       try{await handles.get(key).close();handles.delete(key);handleLanes.delete(key);}
@@ -190,7 +194,15 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       checkCadence(now());
       if(exhausted()||now()>=renewedUntil){report(observation());return;}
       lastTick=now();
-      let quantumTimer,lane,sequence,settleStarted,deliveryMs=0;
+      let quantumTimer,lane,sequence,settleStarted,deliveryMs=0,activeHandle,activeControl,ordinal,openingOrdinal,quantumDetail={},stallRecorded=false;
+      function recordStall(value){
+        if(stallRecorded||!lane)return;
+        const stall=ordinal===null?{kind:0,runningMs:0,unitCount:0,unattributed:1}:stallOf(value??activeControl,now());
+        if(stall?.ordinal!==undefined&&stall.ordinal!==ordinal)return;
+        if(!stall||!Number.isInteger(stall.kind)||!maintenanceKinds[stall.kind]||!Number.isFinite(stall.runningMs)||stall.runningMs<0||!Number.isSafeInteger(stall.unitCount)||stall.unitCount<0)return;
+        lane.lastStall={number:sequence,...(ordinal===null?{}:{ordinal}),kind:stall.kind,runningMs:Math.min(Number.MAX_SAFE_INTEGER,stall.runningMs),unitCount:stall.unitCount,...(stall.pendingDispatch===undefined?{}:{pendingDispatch:stall.pendingDispatch}),...(stall.unattributed===1?{unattributed:1}:{})};
+        lane.stallCounts[stall.kind]=add(lane.stallCounts[stall.kind],1);stallRecorded=true;
+      }
       return running=(async()=>{
         try {
           const index=at++%projections.length,p=projections[index],key=JSON.stringify([residentKeys[index],residentEpoch]),ledger=ledgers.get(domainOf(p));
@@ -199,11 +211,12 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           // Reserve the full quantum before dispatch. Unknown usage remains
           // charged after crash/timeout; restarting or renewing cannot refund it.
           ledger.items+=maxItems;ledger.ms+=maxMs;
-          lane=phases[index];sequence=quantumNumber++;
+          lane=phases[index];sequence=quantumNumber;quantumNumber=add(quantumNumber,1);
           // Disposal can await a Worker/host resource. Expose timeout even if
           // that await has not settled; supervision still owns the drain.
-          quantumTimer=setTimer(()=>{error='read_timeout';void stop();},Math.max(0,maxMs-(now()-lastTick)));
-          let h=handles.get(key);
+          activeControl=maintenanceDispatchControl();ordinal=maintenanceControlState(activeControl).ordinal;
+          quantumTimer=setTimer(()=>{recordStall(activeHandle);error='read_timeout';void stop();},Math.max(0,maxMs-(now()-lastTick)));
+          let h=handles.get(key),openedHere=false;
           if(!h){
             // Native admission permits one maintainer per physical selection,
             // across intents/types/journal policies. Drain before replacing its
@@ -213,15 +226,19 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             if(stopped||error)return;
             const openingMs=Math.min(maxMs,Math.floor(maxMs-(now()-lastTick)));
             if(openingMs<1){error='read_timeout';return;}
-            const opening=now();
-            try{h=await open({...p.options,deadlineMs:openingMs});lane.opens++;handles.set(key,h);handleLanes.set(key,index);writers.set(writer,key);}
+            const opening=now();openingOrdinal=ordinal;
+            try{h=await open({...p.options,deadlineMs:openingMs},activeControl);openedHere=true;lane.opens=add(lane.opens,1);handles.set(key,h);handleLanes.set(key,index);writers.set(writer,key);}
             finally{recordPhase(lane.phases.open,now()-opening);}
           }
+          activeHandle=h;
           if(stopped||error)return;
           const remainingMs=Math.min(maxMs,Math.floor(maxMs-(now()-lastTick)));
-          if(remainingMs<1){error='read_timeout';return;}
+          if(remainingMs<1){recordStall(h);error='read_timeout';return;}
+          if(openedHere){
+            activeControl=maintenanceDispatchControl();ordinal=maintenanceControlState(activeControl).ordinal;
+          }
           const refreshing=now();let result;
-          try{result=await h.refreshContextIndex({readSet:p.options.readSet,types:p.types,intent:p.intent,mode:'lexical',budget:{maxItems,maxMs:remainingMs}},grant);}
+          try{result=await h.refreshContextIndex({readSet:p.options.readSet,types:p.types,intent:p.intent,mode:'lexical',budget:{maxItems,maxMs:remainingMs}},grant,activeControl);}
           finally{settleStarted=now();recordPhase(lane.phases.refreshCall,settleStarted-refreshing);}
           // dispatch: call entry to Worker receipt; epochObservation: the final
           // fresh snapshot transaction. refreshCall includes both. settle adds
@@ -232,16 +249,18 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             recordPhase(lane.phases.dispatch,detail.dispatchMs);
             recordPhase(lane.phases.epochObservation,detail.epochObservationMs);
             if(Number.isFinite(detail.deliveryMs)&&detail.deliveryMs>=0)deliveryMs=detail.deliveryMs;
-            for(const name of ['transformed','canonicalRows','metadataBytes','textRows','textBytes','supportLookups','supportBytes','verifiedRows']){
-              const n=detail[name];if(Number.isSafeInteger(n)&&n>=0)lane.work[name]=(lane.work[name]??0)+n;
+            for(const name of maintenanceWorkFields){
+              const n=detail[name];if(Number.isSafeInteger(n)&&n>=0)lane.work[name]=Math.min(Number.MAX_SAFE_INTEGER,(lane.work[name]??0)+n);
             }
           }
+          for(const name of attributionFields){const n=detail?.[name];if(Number.isFinite(n)&&n>=0){quantumDetail[name]=Math.min(Number.MAX_SAFE_INTEGER,n);recordField(lane.attribution[name],quantumDetail[name]);}}
+          if(result?.error?.code==='read_timeout')recordStall(result);
           if(error)return;
           if(!result.ok){error=result.error.code;return;}
           const time=observedAt(result),finished=now();
           // Missing timing is uncertain, never an invented observation at
           // admission/delivery. A quantum overrun retains its full reservation.
-          if(finished-lastTick>maxMs){error='read_timeout';return;}
+          if(finished-lastTick>maxMs){recordStall(h);error='read_timeout';return;}
           if(!Number.isFinite(time)||time<lastTick||time>finished){error='reader_failed';return;}
           checkCadence(time);
           lastObservation=Object.freeze({projection:index,atMonoMs:time,gapMs:time-observations[index],cadenceMiss:missed[index]});
@@ -257,15 +276,15 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             ledger.items=Math.max(ledger.items-maxItems+items,ledger.floorItems);
             ledger.ms=Math.max(ledger.ms-maxMs+elapsed,ledger.floorMs);
           }
-        } catch(e){error=e.code??'reader_failed';}
+        } catch(e){if(e.code==='read_timeout')recordStall(e);error=e.code??'reader_failed';}
       })().finally(()=>{
         if(lane){
           if(settleStarted!==undefined)recordPhase(lane.phases.settle,deliveryMs+now()-settleStarted);
           const elapsedMs=now()-lastTick;
-          const sample={number:sequence,elapsedMs};
-          lane.quanta++;lane.first??=sample;lane.latest=sample;
+          const sample={number:sequence,...(ordinal==null?{}:{ordinal}),...(ordinal===null||openingOrdinal==null?{}:{openingOrdinal}),elapsedMs,attribution:quantumDetail};
+          lane.quanta=add(lane.quanta,1);lane.first??=sample;lane.latest=sample;
           lane.worstElapsedMs=Math.max(lane.worstElapsedMs,elapsedMs);
-          lane.elapsedBuckets[Math.min(501,Math.ceil(elapsedMs/10))]++;
+          const bucket=Math.min(501,Math.ceil(elapsedMs/10));lane.elapsedBuckets[bucket]=add(lane.elapsedBuckets[bucket],1);
         }
         clearTimer(quantumTimer);running=null;if(error){void stop();return;}if(exhausted() || now()>=renewedUntil)report(observation());schedule();});
     }

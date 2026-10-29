@@ -1,3 +1,4 @@
+import { createMaintenanceAttribution } from '../context-product-attribution.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -27,14 +28,15 @@ function write(f, type = 'memory', operation = 'capture', row = {}) {
 }
 function local(t, f, options = {}) {
   const facade = openContextProductFacade(f.path, {});
-  const storage = productSidecar({ path: f.path, db: facade.port.db, identity: facade.port.identity,
+  const attribution=createMaintenanceAttribution({now:options.now??(()=>0)});
+  const storage = productSidecar({ attribution,path: f.path, db: facade.port.db, identity: facade.port.identity,
     features: facade.port.features, writable: true, now: () => 0, ...options });
   t.after(() => { storage.close(); facade.close(); });
   const p = { ...input, ownerCoverage: descriptor(readSet) };
   const access = accessDigest({ ownerId: ns.ownerId, namespaces: { readSet } });
   return { storage, facade, p, access,
     observe(patch = {}) { return readTransaction(facade.port.db, () => storage.observe({ ...p, ...patch }, access)); },
-    refresh(maxItems = 128, patch = {}) { return storage.refresh({ ...p, ...patch }, access, { ...budget, maxItems }); } };
+    refresh(maxItems = 128, patch = {}) { attribution.reset();return storage.refresh({ ...p, ...patch }, access, { ...budget, maxItems }); } };
 }
 function staged(f) {
   const d = new DatabaseSync(f.path + PRODUCT_SIDECAR_SUFFIX, { readOnly: true });
@@ -137,29 +139,32 @@ test('Fix A: actual product Worker fence race returns rebuilding and the pump co
   assert.equal(ok(await h.getContextIndexStatus(input, reader.token)).lexical.state, 'ready');
 });
 
-test('diagnosis: continuous independent commits abandon checkpoints; delta still scans the full corpus', t => {
+test('B1: continuous independent commits retain work; complete metadata discovery remains charged', t => {
   const f = fixture(t, { cards: true });
   for (let i = 0; i < 32; i++) f.admit('unchanged corpus probe ' + i);
-  const a = local(t, f);
-  a.refresh(); assert.equal(a.observe().dto.lexical.state, 'ready');
-  const base = a.observe().publication.generation.id;
-  let lastSequence = 0;
-  for (let i = 0; i < 4; i++) {
-    write(f); const m = a.refresh(1), s = staged(f), g = s.work[0];
-    assert.equal(m.transformed, 1);
-    // Four empty Card-state streams checkpoint before the Memory stream.
-    assert.equal(g.checkpoint, 5);
-    assert.ok(g.sequence > lastSequence); lastSequence = g.sequence;
-    assert.equal(g.base_id, base, 'restarts from publication, not last checkpoint');
-    assert.ok(s.documents.some(d => d.generation === g.storage_id));
-    assert.equal(a.observe().dto.lexical.state, 'catching_up');
+  let clock=0,stop=false;
+  const a=local(t,f,{now:()=>clock,rendezvous(point){if(stop && point==='checkpoint')clock=900;}});
+  a.refresh();assert.equal(a.observe().dto.lexical.state,'ready');
+  write(f);a.refresh(1);const first=staged(f).work[0];
+  const base=first?.base_id??a.observe().publication.generation.id;
+  // A one-item transform can finish if the random new key sorts last. Start
+  // another delta if it already published; then stop comparison checkpoints.
+  stop=true;let id=first?.id,previous=first?.checkpoint??0;
+  for(let i=0;i<4;i++) {
+    write(f);clock=0;const m=a.refresh(),g=staged(f).work[0];
+    if(id){assert.equal(g.id,id);assert.equal(m.retargets,1);assert.ok(g.checkpoint>previous);}
+    id=g.id;previous=g.checkpoint;
+    assert.equal(g.base_id,base);assert.equal(a.observe().dto.lexical.state,'catching_up');
   }
-  // One more write invalidates the last checkpoint. Exactly one new row since
-  // the preceding quantum still requires reading every canonical metadata row.
-  write(f); const m = a.refresh();
-  assert.equal(m.transformed, 5); assert.equal(m.canonicalRows, 37);
-  assert.ok(m.verifiedRows >= 37); assert.equal(a.observe().dto.lexical.state, 'ready');
-  t.diagnostic('5 changes since publication: 37 canonical metadata rows, 5 transformations; abandoned work never becomes the base');
+  stop=false;const m={canonicalRows:0,verifiedRows:0};
+  for(let i=0;i<100;i++) {
+    clock=0;const quantum=a.refresh();m.canonicalRows+=quantum.canonicalRows;m.verifiedRows+=quantum.verifiedRows;
+    if(a.observe().dto.lexical.state==='ready')break;
+  }
+  assert.ok(m.canonicalRows>=37,'all canonical metadata remains charged');
+  assert.equal(a.observe().dto.lexical.state,'ready');
+  assert.ok(m.verifiedRows>=37);
+  t.diagnostic('retarget preserves completed work; reuse still requires complete metadata discovery and ordered verification');
 });
 
 test('diagnosis: precommit writer leaves a valid captured certificate stale for fresh readers', t => {
