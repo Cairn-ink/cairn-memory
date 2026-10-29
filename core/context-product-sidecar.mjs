@@ -256,6 +256,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     if (r.canonicalFenceDigest !== t.canonicalFenceDigest) return 'fence_changed';
     return null;
   }
+  const canMerge=()=>canonical.prepare('PRAGMA encoding').get().encoding==='UTF-8' && side.prepare('PRAGMA encoding').get().encoding==='UTF-8';
   function status(p, state, reason, progress = null, counts = null) {
     const ready = state === 'ready';
     return { profile: PRODUCT_PROFILE, lexical: { state,reason,progress }, semantic: { state:'disabled',reason:'not_enabled' },
@@ -286,7 +287,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
           const text = side.prepare('SELECT record FROM progress_records WHERE generation=?').get(work.generation)?.record;
           if (!g || !text) return invalid(p,'validation_missing');
           const r = verifiedRecord(identity.cursorSecret,'progress',text);
-          if (g.published || pointer?.generation===g.id || side.prepare('SELECT 1 FROM validation_records WHERE generation=?').get(g.id) ||
+          if ((!canMerge() && JSON.parse(g.verify)?.appendOnly!==true) || g.published || pointer?.generation===g.id || side.prepare('SELECT 1 FROM validation_records WHERE generation=?').get(g.id) ||
               g.id!==generationId(g) || g.incarnation!==incarnationOf(g) || !same(r.generation,{ id:g.id,incarnation:g.incarnation }) || !same(r.progress,progressOf(g)) ||
               r.kind !== g.kind || r.projectionDigest !== g.projection || r.accessDigest !== g.access ||
               !same(JSON.parse(g.fences), { canonicalFenceDigest:r.canonicalFenceDigest,dependencyFenceDigest:r.dependencyFenceDigest })) return invalid(p,'validation_invalid');
@@ -304,7 +305,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         if (!g || !text) return invalid(p,'validation_missing');
         const r = verifiedRecord(identity.cursorSecret,'validation',text);
         const expectedTypes = ['memory','card'].filter(type => p.types.includes(type));
-        if (g.id !== generationId(g) || g.incarnation !== incarnationOf(g) || g.phase !== streams(p).length+3 || !g.published || r.publicationId !== pointer.publication || !same(r.generation, { id:g.id,sequence:g.sequence,checkpoint:g.checkpoint,incarnation:g.incarnation }) ||
+        if ((!canMerge() && JSON.parse(g.verify)?.appendOnly!==true) || g.id !== generationId(g) || g.incarnation !== incarnationOf(g) || g.phase !== streams(p).length+3 || !g.published || r.publicationId !== pointer.publication || !same(r.generation, { id:g.id,sequence:g.sequence,checkpoint:g.checkpoint,incarnation:g.incarnation }) ||
             g.projection !== r.projectionDigest || g.access !== r.accessDigest || g.manifest !== r.manifestDigest ||
             !same(JSON.parse(g.fences),{ canonicalFenceDigest:r.canonicalFenceDigest,dependencyFenceDigest:r.dependencyFenceDigest }) ||
             !same(r.counts,JSON.parse(g.verify).counts) || !same(Object.keys(r.counts.byType).sort(),expectedTypes.sort())) return invalid(p,'validation_invalid');
@@ -337,17 +338,24 @@ export function productSidecar({ path, db: canonical, identity, features, observ
   function fresh(t,p,access) {
     return same(t,readTransaction(canonical,() => target(p,access)));
   }
-  function metadataRows(s, after, maximum, p, m) {
+  function metadataRows(s, after, maximum, p, m, encoding) {
     const rows = canonical.prepare(s.type === 'memory'
-      ? `SELECT id,revision,0 AS body_revision,deleted,currentness,review_state FROM memories INDEXED BY index_memory_keyset WHERE ${where} AND id>? ORDER BY id LIMIT ?`
-      : `SELECT id,revision,coalesce(body_revision,0) AS body_revision,state FROM private_cards INDEXED BY private_card_scope WHERE ${where} AND state=? AND id>? ORDER BY id LIMIT ?`)
+      ? `SELECT id,hex(CAST(id AS BLOB)) AS id_bytes,revision,0 AS body_revision,deleted,currentness,review_state FROM memories INDEXED BY index_memory_keyset WHERE ${where} AND id>? ORDER BY id LIMIT ?`
+      : `SELECT id,hex(CAST(id AS BLOB)) AS id_bytes,revision,coalesce(body_revision,0) AS body_revision,state FROM private_cards INDEXED BY private_card_scope WHERE ${where} AND state=? AND id>? ORDER BY id LIMIT ?`)
       .all(...boundary(s.ns),...(s.type === 'card' ? [s.state] : []),after,maximum);
-    m.canonicalRows += rows.length; m.metadataBytes += Buffer.byteLength(JSON.stringify(rows));
+    m.canonicalRows += rows.length; m.metadataBytes += Buffer.byteLength(JSON.stringify(rows.map(({id_bytes,...row})=>row)));
+    for(const row of rows) {
+      let bytes=Buffer.from(row.id,encoding==='UTF-8'?'utf8':'utf16le');
+      if(encoding==='UTF-16be')bytes.swap16();
+      // Lossy native string decoding cannot supply a safe indexed cursor or
+      // identity. Refuse rather than certify a skipped/aliased canonical row.
+      if(!bytes.equals(Buffer.from(row.id_bytes,'hex')))unavailable('corrupt');
+    }
     // Count and meter support independently of transformation attempts.
     const support = { prepare(sql) { const stmt = canonical.prepare(sql); return Object.fromEntries(['get','all'].map(method => [method,(...args) => {
       m.supportLookups++; const r = stmt[method](...args); m.supportBytes += Buffer.byteLength(JSON.stringify(r ?? null)); return r;
     }])); } };
-    return rows.map(row => ({ id:row.id,revision:row.revision,body_revision:row.body_revision,
+    return rows.map(row => ({ id:row.id,id_bytes:row.id_bytes,revision:row.revision,body_revision:row.body_revision,
       eligible:Number(s.type === 'memory' ? !row.deleted && (p.intent === 'history' || row.currentness === 'current' && row.review_state !== 'awaiting')
         : contextCardEligible(support,identity,features,s.ns,row,p.intent,{ readSet:p.readSet })) }));
   }
@@ -598,6 +606,9 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       connection(true);
     }
     rendezvous('opened');
+    // The merge's byte comparator and both indexed TEXT cursors must have
+    // identical BINARY order. Other encodings retain the append-only builder.
+    const canonicalEncoding=canonical.prepare('PRAGMA encoding').get().encoding,mergeOrder=canMerge();
     let t = readTransaction(canonical,() => target(p,access));
     selectProjection(p,t);
     // Cleanup also advances during a long build or repeated target changes;
@@ -608,7 +619,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
     const w = side.prepare('SELECT generation FROM work WHERE projection=?').get(t.projectionDigest);
     let g = w && side.prepare('SELECT * FROM generations WHERE id=?').get(w.generation);
     const workStatus=readTransaction(canonical,()=>observe(p,access,{forWrite:true,workOnly:true}));
-    const resumable=g && (workStatus.resumable===g.id || workStatus.retargetable===g.id);
+    const resumable=g && (workStatus.resumable===g.id || mergeOrder && workStatus.retargetable===g.id);
     let rebinding=false;
     // Invalid publication evidence still controls status. Independently signed
     // rebuild work can resume; delta work must first abandon the invalid base.
@@ -620,6 +631,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
         base_sequence:baseSequence,checkpoint:0,kind:baseSequence ? 'delta' : pointer || w ? 'rebuild' : metadata.kind,
         fences:canonicalJson({ canonicalFenceDigest:t.canonicalFenceDigest,dependencyFenceDigest:t.dependencyFenceDigest }),access,
         phase:0,last_key:'',base_id:base?.id ?? null,verify:initialVerification(p) };
+      if(!mergeOrder)g.verify.appendOnly=true;
       g.id=generationId(g);g.incarnation=incarnationOf(g);
       write(() => {
         side.prepare('INSERT INTO generations(id,owner,projection,incarnation,sequence,base_sequence,checkpoint,kind,fences,access,phase,last_key,base_id,verify,manifest,published,seed) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)').run(g.id,p.readSet[0].ownerId,g.projection,g.incarnation,g.sequence,g.base_sequence,0,g.kind,g.fences,g.access,0,'',g.base_id,JSON.stringify(g.verify),null,g.seed);
@@ -628,7 +640,7 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       });
     } else {
       g.verify=JSON.parse(g.verify);
-      if(workStatus.retargetable===g.id) {
+      if(mergeOrder && workStatus.retargetable===g.id) {
         // Rebinding is provisional until a real comparison batch commits. A
         // cutoff/race before that commit leaves the old signed checkpoint intact.
         g.fences=canonicalJson({canonicalFenceDigest:t.canonicalFenceDigest,dependencyFenceDigest:t.dependencyFenceDigest});
@@ -640,15 +652,19 @@ export function productSidecar({ path, db: canonical, identity, features, observ
       if (!fresh(t,p,access)) return m;
       const stream = g.streams[g.phase], maximum = stream.type === 'card' ? 1 : 128;
       const { rows, exhausted } = quantum.measure(()=>{
-        const canonicalRows=readTransaction(canonical,() => metadataRows(stream,g.last_key,maximum,p,m));
-        const workRows=side.prepare('SELECT * FROM documents WHERE generation=? AND stream=? AND id>? ORDER BY id LIMIT ?')
+        const canonicalRows=readTransaction(canonical,() => metadataRows(stream,g.last_key,maximum,p,m,canonicalEncoding));
+        if(!mergeOrder) {
+          rendezvous('scan');return {rows:canonicalRows.map(row=>({row,old:null})),exhausted:canonicalRows.length<maximum};
+        }
+        const workRows=side.prepare('SELECT *,hex(CAST(id AS BLOB)) AS id_bytes FROM documents WHERE generation=? AND stream=? AND id>? ORDER BY id LIMIT ?')
           .all(g.storage_id,g.phase,g.last_key,maximum);
+        for(const old of workRows)if(!Buffer.from(old.id).equals(Buffer.from(old.id_bytes,'hex')))unavailable('corrupt');
         const rows=[];let c=0,w=0;
         // Merge at most one page of keys. A full input page can never run out
         // before this output bound; absence is proved only in its scanned range.
         while(rows.length<maximum && (c<canonicalRows.length || w<workRows.length)) {
           const row=canonicalRows[c],old=workRows[w];
-          const order=!row ? 1 : !old ? -1 : Buffer.compare(Buffer.from(row.id),Buffer.from(old.id));
+          const order=!row ? 1 : !old ? -1 : Buffer.compare(Buffer.from(row.id_bytes,'hex'),Buffer.from(old.id_bytes,'hex'));
           rows.push({row:order<=0 ? canonicalRows[c++] : null,old:order>=0 ? workRows[w++] : null});
         }
         rendezvous('scan');return {rows,exhausted:c===canonicalRows.length && w===workRows.length && canonicalRows.length<maximum && workRows.length<maximum};
@@ -688,8 +704,8 @@ export function productSidecar({ path, db: canonical, identity, features, observ
               changing();
               // Cards can move to an earlier state stream. Remove the old
               // identity before inserting there; the later stream then sees absence.
-              const displaced=old || side.prepare('SELECT * FROM documents WHERE generation=? AND identity=?')
-                .get(g.storage_id,JSON.stringify([...boundary(stream.ns),stream.type,row.id]));
+              const displaced=mergeOrder && (old || side.prepare('SELECT * FROM documents WHERE generation=? AND identity=?')
+                .get(g.storage_id,JSON.stringify([...boundary(stream.ns),stream.type,row.id])));
               if(displaced){remove(g,displaced);if(displaced.stream===g.phase)m.replaced++;else m.removed++;}
               if(source)m.copied++;
               put(g,g.phase,row,tokens,source);

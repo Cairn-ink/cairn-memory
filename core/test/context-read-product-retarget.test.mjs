@@ -29,6 +29,12 @@ function local(t,path,readSet=four,intent='current',mode='DELETE') {
     step(point=null,maxItems=1024) {clock=0;stop=point;return storage.refresh(p,access,{...budget,maxItems});},
     observe(){return readTransaction(facade.port.db,()=>storage.observe(p,access));},
     lexical(publication,query){return storage.lexical(p,publication,query);},
+    reconcile(){const totals={},end=p.readSet.length*p.types.reduce((n,type)=>n+(type==='card'?4:1),0);
+      for(let i=0;i<1000;i++) {
+        const m=this.step('verification');for(const [k,v] of Object.entries(m))totals[k]=(totals[k]??0)+v;
+        const g=work(path);if(!g || g.phase>=end)return totals;
+      }assert.fail('comparison must converge');
+    },
     finish(){const totals={};for(let i=0;i<200;i++){
       const m=this.step();for(const [k,v] of Object.entries(m))totals[k]=(totals[k]??0)+v;
       const r=this.observe();if(r.dto.lexical.state==='ready')return {publication:r.publication,totals};
@@ -81,7 +87,7 @@ test(`B1 backup oracle: ${mode}, ${width} namespaces, ${intent}`,async t=>{
     ['delete-with-fence',()=>{mutate(f,'DELETE FROM memories WHERE id=?',rows[4].id);bump(f);}]
   ];
   for(const [label,change] of cases) {
-    bump(f);a.step('verification');const before=work(f.path);assert.ok(before);
+    bump(f);a.reconcile();const before=work(f.path);assert.ok(before);
     change();const m=a.step('checkpoint'),after=work(f.path);
     assert.equal(m.retargets,1,label);assert.equal(after.id,before.id,label);
     assert.notEqual(after.incarnation,before.incarnation,label);
@@ -95,10 +101,10 @@ test('B1 no re-copy: changed N of M work documents replace/tokenize only N; publ
   const f=fixture(t),rows=[];for(let i=0;i<40;i++)rows.push(f.admit('orchard needle '+i,four[0]));
   const a=local(t,f.path,four);const base=a.finish().publication;
   const before=inspect(f.path,db=>db.prepare('SELECT * FROM documents ORDER BY generation,doc').all());
-  bump(f);const first=a.step('verification');assert.equal(first.copied,40);assert.equal(first.tokenized,0);
+  bump(f);const first=a.reconcile();assert.equal(first.copied,40);assert.equal(first.tokenized,0);
   const id=work(f.path).id;
   for(let i=0;i<3;i++)correct(f,rows[i],four[0],'changed orchard needle '+i);
-  const m=a.step('verification');
+  const m=a.reconcile();
   assert.equal(work(f.path).id,id);assert.equal(m.retargets,1);assert.equal(m.reused,37);
   assert.equal(m.tokenized,3);assert.equal(m.replaced,3);assert.equal(m.copied,0);assert.equal(m.verificationRestarts,1);
   assert.deepEqual(inspect(f.path,db=>db.prepare('SELECT * FROM documents WHERE generation=(SELECT storage_id FROM generations WHERE id=?) ORDER BY generation,doc').all(base.generation.id)),before);
@@ -156,26 +162,26 @@ test('B1 rebinding waits for first admitted comparison and signed record refuses
 });
 
 test('B1 access change and projection change create new generations',t=>{
-  const f=fixture(t);f.admit('orchard needle',four[0]);const a=local(t,f.path);a.step('verification');const before=work(f.path);
+  const f=fixture(t);f.admit('orchard needle',four[0]);const a=local(t,f.path);a.reconcile();const before=work(f.path);
   a.setAccess('new-access');const m=a.step('checkpoint');assert.equal(m.retargets,0);assert.notEqual(work(f.path).id,before.id);
   const accessWork=work(f.path);a.p.intent='history';a.step('checkpoint');assert.notEqual(work(f.path).id,accessWork.id);
 });
 
 test('B1 ordered absence detection removes page gaps and the entire tail, including zero-df terms',async t=>{
   const f=fixture(t);for(let i=0;i<260;i++)f.admit('orchard needle '+i,four[0]);
-  const a=local(t,f.path);a.p.types=['memory'];a.step('verification');
+  const a=local(t,f.path);a.p.types=['memory'];a.reconcile();
   const before=work(f.path),all=documents(f.path);assert.equal(all.length,260);
   const victims=[all[0],all[126],all[128],...all.slice(255)];
   for(const row of victims)mutate(f,'DELETE FROM memories WHERE id=?',row.id);
-  bump(f);const m=a.step('verification');assert.equal(m.removed,8);assert.equal(m.reused,252);assert.equal(m.copied,0);assert.equal(m.tokenized,0);
+  bump(f);const m=a.reconcile();assert.equal(m.removed,8);assert.equal(m.reused,252);assert.equal(m.copied,0);assert.equal(m.tokenized,0);
   assert.equal(work(f.path).id,before.id);assert.equal(documents(f.path).length,252);
   await oracle(t,f,a,'ranges');
 });
 
 test('B1 removal deletes the last posting and zero-df dictionary row and adjusts totals',async t=>{
   const f=fixture(t),victim=f.admit('uniqueobsolete uniqueobsolete',four[0]);f.admit('orchard needle',four[0]);
-  const a=local(t,f.path);a.step('verification');const before=work(f.path);
-  mutate(f,'DELETE FROM memories WHERE id=?',victim.id);bump(f);const m=a.step('verification');assert.equal(m.removed,1);
+  const a=local(t,f.path);a.reconcile();const before=work(f.path);
+  mutate(f,'DELETE FROM memories WHERE id=?',victim.id);bump(f);const m=a.reconcile();assert.equal(m.removed,1);
   assert.equal(inspect(f.path,db=>db.prepare("SELECT count(*) n FROM statistics WHERE generation=? AND term='uniqueobsolete'").get(before.storage_id).n),0);
   assert.equal(inspect(f.path,db=>db.prepare("SELECT n FROM statistics WHERE generation=? AND term=''").get(before.storage_id).n),1);
   await oracle(t,f,a,'zero-df');
@@ -191,7 +197,7 @@ test('B1 refuses to rebind a work pointer to a certified generation',t=>{
 for(const intent of ['current','history'])test(`B1 dependency-only retarget reobserves eligibility: ${intent}`,async t=>{
   const f=dependencyFixture(t);f.card();const a=local(t,f.path,[dependencyNamespace],intent);a.p.types=['card'];a.step('verification');
   const before=work(f.path);f.change();assert.equal(a.observe().dto.lexical.reason,'dependency_changed');
-  const m=a.step('verification'),after=work(f.path);assert.equal(after.id,before.id);assert.equal(m.retargets,1);
+  const m=a.reconcile(),after=work(f.path);assert.equal(after.id,before.id);assert.equal(m.retargets,1);
   assert.equal(JSON.parse(after.fences).canonicalFenceDigest,JSON.parse(before.fences).canonicalFenceDigest);
   if(intent==='current'){assert.equal(m.replaced,1);assert.equal(m.verificationRestarts,1);}
   else {assert.equal(m.reused,1);assert.equal(m.verificationKept,1);assert.equal(m.verificationRestarts,0);}
@@ -210,7 +216,7 @@ test('B1 a fully verified no-change retarget cannot publish before completing re
 
 test('B1 unavailable publication still abandons delta work with a nonzero base sequence',t=>{
   const f=fixture(t);f.admit('orchard needle',four[0]);const a=local(t,f.path);const base=a.finish().publication;
-  bump(f);a.step('verification');const before=work(f.path);assert.ok(before.base_sequence>0);
+  bump(f);a.reconcile();const before=work(f.path);assert.ok(before.base_sequence>0);
   tamper(f.path,db=>db.prepare("UPDATE validation_records SET record='invalid' WHERE publication=?").run(base.publicationId));bump(f);
   const m=a.step('checkpoint'),after=work(f.path);assert.equal(m.retargets,0);assert.notEqual(after.id,before.id);assert.equal(after.base_sequence,0);
   a.finish();
@@ -218,10 +224,10 @@ test('B1 unavailable publication still abandons delta work with a nonzero base s
 
 for(const intent of ['current','history'])test(`B1 removal deletes old Card stream contributions in either direction: ${intent}`,async t=>{
   const f=fixture(t,{cards:true}),c=card(f,four[0],'card orchard','needle');const a=local(t,f.path,four,intent);
-  a.step('verification');const id=work(f.path).id;
+  a.reconcile();const id=work(f.path).id;
   for(const state of ['draft','confirmed']) {
     mutate(f,'UPDATE private_cards SET state=? WHERE id=?',state,c.id);mutate(f,'UPDATE card_epochs SET generation=generation+1');
-    const m=a.step('verification');assert.equal(work(f.path).id,id);assert.equal(m.removed,1);assert.equal(m.replaced,0);assert.equal(m.tokenized,1);
+    const m=a.reconcile();assert.equal(work(f.path).id,id);assert.equal(m.removed,1);assert.equal(m.replaced,0);assert.equal(m.tokenized,1);
   }
   await oracle(t,f,a,'card-moves');
 });

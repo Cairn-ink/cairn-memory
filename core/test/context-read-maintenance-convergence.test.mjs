@@ -154,7 +154,11 @@ test('B1: continuous independent commits retain work; complete metadata discover
     id=g.id;previous=g.checkpoint;
     assert.equal(g.base_id,base);assert.equal(a.observe().dto.lexical.state,'catching_up');
   }
-  stop=false;clock=0;const m=a.refresh();
+  stop=false;const m={canonicalRows:0,verifiedRows:0};
+  for(let i=0;i<100;i++) {
+    clock=0;const quantum=a.refresh();m.canonicalRows+=quantum.canonicalRows;m.verifiedRows+=quantum.verifiedRows;
+    if(a.observe().dto.lexical.state==='ready')break;
+  }
   assert.ok(m.canonicalRows>=37,'all canonical metadata remains charged');
   assert.equal(a.observe().dto.lexical.state,'ready');
   assert.ok(m.verifiedRows>=37);
