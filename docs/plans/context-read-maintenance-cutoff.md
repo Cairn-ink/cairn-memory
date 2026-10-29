@@ -1,199 +1,219 @@
-# Confirmed-disposal maintenance cutoff delta
+# Confirmed-disposal maintenance cutoff delta, revision 2
 
-Design only, against fix A and B0; B1 recovery is a compatibility requirement, not implemented behavior.
+Design only, against fix A and B0. Adopt the reduced recovery below as the recommendation.
 Amends the [product cutoff rule](../context-read-product.md#cron-renewal-and-supervised-pump), preserving
 [fix B crash safety](context-read-incremental-catchup.md#5-retarget-reuse-closure-and-crash-safety-under-continuous-writes).
 
-On a native qualification host, the reserve covered ordinary overruns; rare discrete stalls reached
-the hard cutoff and stopped the pump until renewal. This delta replaces that wait with one charged
-quantum plus bounded recovery overhead; freshness and unchanged call cutoffs still require qualification.
+On a native qualification host, rare stalls reached cutoff and stopped maintenance until renewal.
+Safe disposal should instead cost one charged quantum plus recovery overhead; all call bounds stay intact.
 
-## Eligibility and state transition
+## Recommended eligibility and recovery
 
-Only lexical `refreshContextIndex` calls dispatched by the owned lexical pump qualify. The parent must
-retain an internal dispatch record binding pump epoch, lane ordinal, quantum sequence, resident epoch,
-operation identity, reserved window/domain, and absolute cutoff. No caller-supplied flag grants
-eligibility. An attested hard deadline firing during that refresh, or its matching internal deadline
-failure, enters `cutoff_pending_disposal`. A bare `read_timeout` code is insufficient: missing/mismatched
-identity or another failure remains terminal. Opening, status calls, independently opened maintainers,
-reader operations, `fetchCandidateEvidence`, search/`findCandidates`, and `contextRead` stay terminal.
-Semantic/embedding-enabled pumps, including their lexical turns, keep their current behavior; there is no
-change to provider retries or USD accounting.
+Only lexical `refreshContextIndex` dispatched by the owned lexical pump qualifies. Use a private,
+parent-owned dispatch capability binding pump/resident epochs, lane, quantum, operation, ledger and
+absolute cutoff, plus parent/reader deadline-cause attestation. An operation ID, method name, bare
+`read_timeout` or caller flag alone is insufficient. Opening, status, standalone maintainers, reader
+operations, `fetchCandidateEvidence`, search/`findCandidates` and `contextRead` retain terminal cutoffs.
+Semantic/embedding-enabled pumps, including their lexical turns, keep their current behavior and USD rules.
 
-The call still settles `read_timeout` promptly. Detach it, discard late frames, terminate the affected
-resident, and close admission to its writer domain before awaiting cleanup. The pump must not invoke
-global `stop()` for an eligible cutoff until the recovery decision is made. It remains supervised, with
-scheduling held while disposal is pending; no second dispatch overlaps the unsettled turn. After proof,
-enter lane backoff, then ordinary scheduling. Public DTOs stay closed: an isolated recovered cutoff
-leaves `active`, error null and completion pending. Private diagnostics expose the pending/recovery state
-immediately. Failed proof or a confirmation deadline of 1,000 ms after cutoff takes today's terminal
-`failed`/`read_timeout` stop-and-drain path; failed cleanup also retains its existing `reader_failed`
-diagnostic. This deadline bounds the decision, not native cleanup.
+Keep the pump alive on an eligible cutoff; do not invoke global `stop()` while deciding recovery.
+The call still settles `read_timeout` promptly. Preserve reader deadline checks, detachment, late-frame
+rejection and the pump elapsed check. Reuse the affected resident's existing `close()` and drain path;
+it owns termination or graceful close as appropriate. Hold new dispatch while that turn/disposal is
+pending. Do not close healthy residents or restart the whole pump through the renewal factory.
 
-## Disposal gate and ownership
+Require proof within 1,000 ms of cutoff and an available recovery allowance. On success invalidate the
+dead resident's handle/writer cache references and every cached intent sharing it. Apply the shared-domain
+cooldown, then resume the existing scheduler with the same observation baselines, missed-interval flags,
+last observation, round-robin cursor and spacing baseline. Preserve the already-advanced cursor; do not
+rewind to the failed lane or initialize a new observation interval. No dispatch overlaps pending work.
+An isolated recovered cutoff keeps public status `active`, error null and completion pending while
+quota/authority remain valid; private diagnostics expose the cutoff and recovery decision.
 
-Confirmation requires the resident resource cleanup record, plus the interrupted operation's cleanup
-record, to finish under the existing lifecycle/supervisor: `state === 'complete'` and `workerStopped`,
-`nativeDisposed`, `leasesReleased`, `providersSettled` all true. Await actual Worker exit/termination
-completion and the resource delivery; operation settlement or an operation record alone proves neither
-native disposal nor exclusive-writer release. All native SQLite connections/statements must be closed by
-the existing disposal mechanism, and registered lease/provider acquisition and release counters must
-balance. Forced termination does not run host close hooks; outstanding registered resources can therefore
-make this gate fail. Such a host gains no automatic retry exception.
+If allowance/proof wait is exhausted, take the existing terminal stop-and-drain path. Successful terminal
+drain retains public `read_timeout`. A failed or uncertain drain after cutoff makes public completion
+`failed`/`reader_failed`, exactly as `stop()` and its failed-drain regression do today; private diagnostics
+retain the triggering cutoff. No successful disposal outcome may be inferred from an unresolved drain.
+Late proof cannot revive this expedited recovery or its stopped pump. Ordinary authorized renewal after
+a later successful drain remains available as today; failed or uncertain disposal retains quarantine.
 
-Release the maintenance-writer claim only after proof: no old writer can execute or commit after the
-replacement opens. An executing commit may finish before exit; inspect durable state on recovery.
-Remove the dead resident and invalidate every intent sharing it. Physical identity/selection exclusion
-and quarantine still cover alternate paths and new pump IDs; a watchdog cannot release the writer.
+## Disposal proof and runtime enablement
 
-Rejected terminate/close, missing/expired cleanup IDs, unbalanced resources, quarantine or late proof
-never enable automatic retry. Preserve safety records and drain ownership; operator recovery is separate.
-Diagnostic coverage cannot prove disposal or override a failed safety field.
+Await actual Worker exit/termination completion and both resident-resource and interrupted-operation
+cleanup deliveries. Both records must be `complete`, with `workerStopped`, `nativeDisposed`,
+`leasesReleased` and `providersSettled` true. Operation completion alone does not prove resident disposal.
+All native SQLite connections/statements must be closed; lease/provider acquisition/release counters
+must balance. The writer claim is released only after successful resident disposal. No replacement
+opens before that release: no transaction from the old Worker can commit after the successor opens.
+A commit already executing can finish before exit; inspect durable state rather than assume rollback.
 
-## Reservations, cadence and reopen cost
+Worker exit suffices for the engine's isolate-owned `node:sqlite` connections because Node tears down
+its Worker environment before joining/reporting exit, and the `DatabaseSync` destructor finalizes
+backups/statements/sessions and calls `sqlite3_close_v2`. This is a runtime-specific inference from
+[Worker teardown](https://github.com/nodejs/node/blob/v24.22.1/src/node_worker.cc),
+[environment cleanup](https://github.com/nodejs/node/blob/v24.22.1/src/env.cc) and
+[the SQLite destructor](https://github.com/nodejs/node/blob/v24.22.1/src/node_sqlite.cc#L931).
+It is not a generic property of thread exit. The registry's `nativeDisposed` bit derives from confirmed
+termination, not independent native-close evidence; `complete` is likewise derived from its safety bits.
+Qualify this ownership/teardown argument and forced-termination recovery on each deployed Node patch
+before enabling the exception. A different native adapter requires its own proof; no blanket opt-in.
 
-Keep the captured original domain/window ledger's full admitted `maxItems`/`maxMs` in `items`/`ms` as
-settled unknown usage, consuming that window's budget even after successful disposal or partial commits.
-Never transfer it to a new window, erase it on renewal or refund checkpoint deltas/partial counters.
-Export old-window charges before ledger retirement; host floors/restart persistence remain unchanged.
+Registered leases/providers remain independent: forced termination can skip their close hooks. A host
+exposing `close()` registers a lease and can be ineligible despite SQLite closure. Rejected close/termination,
+missing proof/ID, unbalanced resources or quarantine forbids recovery; retain safety records/drain ownership.
 
-Every successor requires a new full available reservation before drain/open/dispatch; each call receives
-a fresh parent-stamped service scope, shortened by remaining budget, window and authenticated expiry. No
-retry extends old authority. Successful calls alone receive existing validated attempt-count/rounded
-elapsed refunds. Elapsed includes drain, open, recovery reads and delivery. A fresh open measured about
-286 ms p95 on a native qualification host, outside the measured refresh quantum; it must remain inside
-the pump's reserved elapsed envelope. Do not add a free pre-open phase. If overhead consumes the envelope
-before refresh dispatch, the opening/turn failure stays terminal with its full reservation. Disposal
-beyond cutoff remains charged conservatively by the failed reservation; record actual excess wall time
-separately. Quota milliseconds do not bound native cleanup latency, and this delta does not silently
-enlarge that quota.
+## Fixed cooldown, allowance and persistence
 
-Keep fix A's admission inequality, 5,000-ms observation deadlines, minimum spacing and round-robin order.
-A cutoff supplies no successful epoch observation and cannot reset its deadline. Count overdue intervals
-and recover cadence exactly as today; a cadence miss alone remains nonterminal. Skip a cooling lane
-without dispatch/reservation, visit other eligible lanes in order, and use a positive next-eligibility
-timer if all cool. Never catch up with overlapping or burst retries.
+Initially use one fixed 1,000-ms cooldown after confirmed disposal and at most two expedited recoveries
+per existing ledger domain/window; the next cutoff is terminal. Consume one allowance when recovery is
+approved, even if later authority expiry prevents reopening. Renewing or replacing pump IDs within the
+same process/window cannot reset the shared allowance or bypass a pending cooldown. Open failures stay
+terminal. A new quota window starts a fresh allowance; carry any unexpired cooldown into its ledger.
 
-## Bounded retry and forward progress
+Use exactly the current `domainOf(p)` key: `JSON.stringify([resolve(p.options.path),
+p.options.readSet[0].ownerId, p.options.host.moduleUrl])`; its ledger key is `JSON.stringify([domain,
+window.id])`. Store allowance with that process-owned ledger, retain it through the window, and retire
+it with the ledger. This is a resolved-path key, not an inode/physical-store circuit identity. Keep the
+existing consistent-path host ownership contract and physical-identity exclusive-writer checks unchanged.
+The cooldown gates all intents/selections in that domain; another intent cannot open around it.
 
-Proposed fixed initial policy: permit two recovered cutoffs per physical store/owner/host ledger domain
-per quota window; the third is terminal. Also make the third consecutive cutoff on a lane terminal across
-window boundaries. A lane is the normalized selection/types/intent, independent of resident/pump epoch.
-Retain counters across same-process renewal/replacement IDs; persist circuit state with uncertain charges
-across process replacement. Successful durable advancement or validated ready/no-work status resets the
-lane streak, never the window count. An empty yield while work remains cannot reset it. Defaults require
-qualification.
+The breaker is process-local. A process restart resets the recovery allowance; this is acceptable because
+restart is rare, costs more than a recovery and never refunds usage. Cross-process usage persistence stays
+mandatory: restore cumulative `usedItems`/`usedMs` floors, including uncertain reservations, before admission.
+Floors do not transport circuits. Cross-process breaker persistence is deferred hardening requiring a
+defined host restore/persist interface, ordering, retention and unknown-history policy.
 
-After confirmation, set reopen eligibility at least 1,000 ms later for the first recovery and 2,000 ms
-for the second; ordinary scheduling may delay it further. Gate the writer domain so another intent
-cannot bypass backoff. Other eligible domains keep turns; no Worker sleeps waiting. Recheck authority,
-quota and supervisor capacity before reopening. Open failures are terminal. Qualify other lanes' actual
-gaps including disposal and open cost; this policy bounds wasted opens, not native disposal latency.
+Use scheduler eligibility times, not sleeping Workers. Skip cooling lanes without reserving, preserve
+relative round-robin order among eligible lanes, and use a positive timer when all are cooling. Keep
+`N*S + Q <= 5000`, actual observation deadlines and minimum spacing. A cutoff is no epoch observation:
+never reset its deadline; count cadence misses and recover them nonterminally as today. Disposal can
+still delay other lanes. Qualify their actual gaps, disposal/open tails and capacity before enablement.
 
-Retain committed progress; never synthesize a successful empty checkpoint. Require advancement and
-publication under finite injected stalls with sufficient authority/budget. A permanently over-budget
-indivisible item must reach the breaker. Continuous writes or inadequate capacity can still prevent progress.
+Graduated backoff, per-lane consecutive limits, cross-window/process circuits and extra phase diagnostics
+are optional later hardening, outside the reduced estimate; the shared allowance bounds initial retries.
 
-## Interrupted transactions and resume
+## Reservations and forward progress
 
-`context-product-sidecar.mjs` writes with `BEGIN IMMEDIATE`/`COMMIT`; cooperative exceptions roll back,
-but a killed Worker need not run JavaScript rollback. In DELETE mode it can leave a hot journal. On the
-next authorized writable sidecar open/first access, SQLite obtains recovery locks and restores the
-pre-transaction pages before serving data. The opener drives SQLite recovery; the pump does not delete a
-journal or replay pages itself. A request read-only connection unable to recover may refuse until
-writable recovery succeeds. See [SQLite atomic recovery](https://www.sqlite.org/atomiccommit.html).
+The full admitted `maxItems`/`maxMs` stays charged in the captured ledger's `items`/`ms` and may exhaust
+its window. Disposal, partial counters, checkpoint deltas or lost replies authorize no refund/transfer.
+Export charges before ledger retirement; renewal/restart must preserve cumulative usage floors.
 
-In WAL mode uncommitted frames beyond the last valid commit are invisible; SQLite reconstructs the WAL
-index if necessary and ignores that tail on recovery. Committed frames remain valid even before
-checkpointing. Neither pump nor host truncates WAL, copies SHM, forces a checkpoint or changes journal
-mode to retry. Existing protected-file, identity and journal admission checks still apply; a
-busy/refused/corrupt recovery open fails normally and remains terminal. See [SQLite WAL
-recovery](https://www.sqlite.org/walformat.html).
+Reserve every successor's full available quantum before drain/open/dispatch. Every call receives fresh
+parent-stamped service control within remaining budget/window/grant expiry; never extend an old cutoff.
+Successful settled calls alone get existing validated attempt-count and rounded elapsed refunds.
+Elapsed includes disposal/opening, SQLite recovery, inspection and delivery. The roughly 286-ms fresh-open
+p95 on a native qualification host was outside measured refresh time, not free pump time or a tail bound.
+Keep open inside the reserved turn; an opening/overhead cutoff before refresh remains terminal and charged.
+Retain the failed reservation for disposal beyond cutoff; quota milliseconds do not bound cleanup latency.
 
-Each batch's rows, statistics and signed progress checkpoint commit atomically. Recovery sees the prior
-complete checkpoint or a newer complete committed one, including a commit whose reply was lost.
-Revalidate HMAC/domain, format, physical identity, access, fences and generation lineage before resuming;
-never trust in-memory cursors. With unchanged bindings the last signed checkpoint remains valid and the
-generation resumes. Changed bindings follow existing invalidation, abandon/rebuild rules; validity is not
-an assertion of current canonical freshness. Publication/certificate/pointer are likewise all old or all
-new; partial batches are never visible to readers or admitted as committed work by a successor.
+Retain committed progress; never synthesize a successful empty checkpoint. Require real work or legitimate
+empty-page phase advancement. Sufficient capacity and finite stalls below the allowance permit publication;
+a breaker ends the run. Arbitrary finite stalls, continuous writes or oversized items give no such guarantee.
 
-B1 must preserve authenticated exact-provenance sealed artifacts across retargets and its atomic
+## SQLite recovery and durable resume
+
+The successor's lexical refresh must reach writable `connection(true)` before any final status
+observation. Do not insert a read-only status preflight before writable hot-journal recovery.
+Recovery and durable-state inspection use SQLite only, never raw file-descriptor access.
+
+Sidecar `write()` wraps rows/statistics/signed progress in `BEGIN IMMEDIATE`/`COMMIT`. Cooperative errors
+roll back; a killed Worker need not run JavaScript rollback. DELETE can leave a hot journal: SQLite,
+driven by the next writable open/first access under recovery locks, restores pre-transaction pages before
+serving data. A protected journal is allowed; a read-only probe's recovery refusal must not automatically
+prevent the writable opener. Read-only requests unable to recover may refuse meanwhile.
+See [SQLite atomic recovery](https://www.sqlite.org/atomiccommit.html).
+
+WAL recovery reconstructs the WAL index as needed and ignores frames beyond the last valid commit;
+committed frames remain valid without checkpointing. Preserve protected-file/identity/journal checks.
+Never unlink journals, truncate WAL, copy SHM, force checkpointing or change journal mode to retry.
+A refused/busy/corrupt writable recovery fails normally and is terminal.
+See [SQLite WAL recovery](https://www.sqlite.org/walformat.html#recovery).
+
+SQLite supplies atomicity; HMAC validation authenticates the recovered complete state. Revalidate format,
+physical/store identity, HMAC/domain, access, fences and generation lineage; never use in-memory cursors.
+With unchanged bindings, the last signed checkpoint remains valid and resumable, or a newer complete
+checkpoint committed before exit is found. Changed bindings follow existing abandon/rebuild rules.
+Publication/certificate/pointer are all old or all new, including a lost commit reply. Partial batches
+are never visible as committed work. Valid progress does not certify current canonical freshness.
+
+When B1 integrates, preserve authenticated exact-provenance artifacts across retargets and its atomic
 replacement/map/statistics/checkpoint boundary. Restart incomplete comparisons as full coherent passes;
-reobserve metadata, dependencies and lineage before reuse. Retargeting earns no coverage credit.
-Closed E/witness keep their identity/time; never redate or certify mixed observations.
+reobserve metadata/dependencies/lineage before reuse. Retarget earns no coverage credit; closed E and
+its witness retain identity/time. This remains a future compatibility requirement.
 
-## Lifecycle, capacity and private diagnostics
+## Lifecycle, capacity and minimal diagnostics
 
-Renewal may extend future authority while disposal/backoff proceeds, but cannot clear circuits, shorten
-backoff, replace the captured ledger or resurrect a stopped pump. `budget_exhausted`/`renewal_expired`
-prevent new dispatch and report through existing completion cycles; disposal remains supervised.
-Expiry/boundary races use existing continuous-renewal observation rules, not an artificial observation.
-Explicit pump/supervisor close, restore and erasure drains cancel pending reopen timers, close admission
-first, then await all native drains. Late confirmation cannot reschedule after close. Restore/erasure
-must not treat backoff as quiescence.
+Renewal extends future authority only: no charge erasure, cooldown shortening or stopped-pump revival.
+`budget_exhausted`/`renewal_expired` prevent dispatch and retain existing completion/continuous-renewal
+observation rules; disposal stays supervised. Pump/supervisor close and restore/erasure admission close
+cancel recovery timers and await all native drains. Backoff is not quiescence; late callbacks cannot reopen.
+Keep the process-wide 256-live-record limit, including pump/resident/operation records; no alternate
+registry bypasses it. Export diagnostics before acknowledging completed IDs, never pending/failed records.
+Capacity refusal is terminal without spinning; retain verified proof before history eviction/acknowledgment.
 
-Keep the process-wide 256-live-record limit, including pump, resident and operation records; replacement
-supervisors cannot bypass it. Export bounded diagnostics before acknowledging completed IDs; never
-acknowledge pending/failed safety records. Capacity refusal is terminal without spinning. Retain the
-verified disposal decision before acknowledgment/history eviction; an absent ID proves nothing.
+Minimal fixed numeric private diagnostics: process-wide operation ordinal, lane/quantum/resident counters,
+triggering cutoff enum, charged items/ms, disposal wait/outcome enum, allowance count and cooldown deadline.
+Use one process-wide monotonically increasing safe-integer operation ordinal shared with stall markers,
+unique across all pumps; refuse expedited recovery if uniqueness cannot be maintained. Keep bounded
+counters/latest snapshots with fixed absent-value sentinels, no history buffer or paths/content/credentials/
+owner/window strings/raw cleanup IDs. Markers never grant eligibility, disposal proof or usage refunds.
+Public DTO shapes/serializer remain unchanged; extra phase diagnostics are deferred.
 
-Record a fixed numeric private snapshot per cutoff: lane/quantum/resident epoch, phase/cause enums,
-cutoff and elapsed ms, reserved items/ms, disposal wait/ms and four proof bits, writer-release bit,
-circuit counts, backoff ms, terminal/recovered enum and next-open elapsed ms when available. Fixed
-sentinel values represent absent data. Keep bounded counters/latest values, not an unbounded event
-buffer; exclude paths, owner/window strings, credentials, content and raw cleanup IDs from snapshots.
-Join the separate stall-attribution marker with the same process-local numeric quantum/resident/operation
-ordinal; map cleanup IDs privately only until delivery. Missing markers mean unknown attribution, never
-retry eligibility or refund proof. Public status/error DTOs and serializer remain unchanged.
+## Staged acceptance and estimate
 
-## Required tests and implementation estimate
+Current acceptance, runnable now with fixture extensions: deterministic
+parent/reader deadline races, late replies/commits, request/open exclusions, gated/failed termination,
+unbalanced resources, failed-drain public `reader_failed`, late successful drain then ordinary renewal.
+Assert writer handoff, invalidated shared intents, preserved scheduler baselines/cursor/spacing, cooldown
+fairness/misses, allowance across same-process IDs, reset on process restart with usage floors retained,
+window rollover, quota/expiry/close/restore/erasure cancellation and 256-record pressure. Native DELETE/WAL
+barrier-driven kills before/after batch, verification and publication COMMIT must compare recovered
+rows/checkpoint/pointer with an independent atomic old-or-new oracle. Adapt the existing crash harness
+to product tables/phases; add finite-stall progress and persistent-stall breaker tests. Timing campaigns
+measure real disposal/open tails and other lanes' gaps per deployed Node patch; p95 alone is insufficient.
 
-Require deterministic timer/lifecycle tests for parent/Worker deadline races, late success/commit,
-terminal request/open timeouts, delayed/failed disposal and unbalanced leases/providers. Assert no
-replacement before writer release and no dispatch after close, expiry, quota exhaustion, restore or
-erasure admission close. Exercise renewal/window rollover during cleanup with exact original-ledger
-charges, host floors, successful-only refunds, both intents sharing a dead resident, backoff
-fairness/cadence misses, repeated-cutoff circuits and 256-record pressure. Native DELETE/WAL kill tests
-must interrupt batch, verification and publication before/after COMMIT; independently compare recovered
-rows/checkpoint/pointer with an atomic old-or-new oracle, including B1 retarget and unknown commit
-outcomes. Run finite-stall progress and persistent-stall breaker campaigns with real open/drain costs.
-Inspect stalls exceeding proof deadline; do not silently tune them away.
+B1 integration acceptance, required when B1 exists: authenticated artifact reuse and retarget recovery,
+incomplete comparison restart, atomic replacement/map/checkpoint and lost-commit outcomes. These cases
+are outside this delta's current acceptance and estimate; do not block current recovery on absent B1 code.
 
-Estimate 700–1,200 changed lines: 250–450 runtime/lifecycle diagnostics, 350–600 meaningful
-deterministic/native tests, 100–150 contract/docs. Assumes reuse of existing disposal proof and kill
-harness; new native proof machinery or B1 work requires a separate estimate. No code, schema, public API,
-request semantics, authority sampling, safety predicates, semantic scheduling or bundle changes here.
+Estimate: 150–250 runtime lines; 450–800 total, comprising runtime 150–250, current deterministic/native
+fixture/tests 225–400, and contract/docs 75–150. Covers the private eligibility bridge, resident close/drain
+reuse, cache invalidation, fixed cooldown/shared allowance, scheduler preservation and minimal unique
+attribution. Assumes existing lifecycle proof and crash-harness adaptation; excludes B1, broader circuits,
+new native proof machinery, host persistence interfaces and extended diagnostics. This revision edits no
+code/schema/API and changes no request authority/safety, semantic scheduling or runtime bundle inventory.
 
 ## Rule summary (10 lines)
 
-1. Only internally identified lexical pump refresh cutoffs qualify.
-2. The interrupted call remains timed out and all late replies are discarded.
-3. Worker exit, native closure, balanced resources and writer release are mandatory.
-4. Uncertain, failed or late disposal keeps today's terminal stop and drain.
-5. The original window retains the full failed item/time reservation.
-6. A successor reserves again and receives a fresh bounded service scope.
-7. SQLite recovers atomically; signed durable state decides resume or retarget.
-8. Backoff and shared-domain/window plus lane circuits bound repeated cutoffs.
-9. Cadence misses remain observable and nonterminal; no observation is invented.
-10. Close, drains, exhaustion and expiry forbid reopening; requests stay terminal.
+1. Only privately attested lexical pump refresh cutoffs qualify.
+2. Keep the pump; close/drain the affected resident and reject late replies.
+3. Require Worker exit, qualified native disposal, balanced resources and writer release.
+4. Failed/uncertain drain makes public completion reader_failed; retain cutoff privately.
+5. Keep the full failed reservation in its original window; reserve successors again.
+6. Use fixed shared-domain cooldown and a process-local domain/window allowance.
+7. Carry observation baselines and round-robin position into the existing scheduler.
+8. Recover through writable SQLite first, then validate complete signed durable state.
+9. Late proof cannot revive expedited recovery; ordinary renewal after safe drain remains.
+10. Expiry/exhaustion/close/drains forbid dispatch; request and semantic behavior stay unchanged.
 
 ## Accounting argument per fix A invariant
 
 | Invariant | Preservation argument |
 | --- | --- |
-| Full unknown reservation | Failed quantum stays in its captured domain/window `items`/`ms`; it consumes quota. |
-| Known-usage refunds only | Only successful validated counts/elapsed settle refunds; disposal proves safety, not usage. |
-| Five-second cadence | Keep actual observations, admission/spacing and miss recovery; cutoff/backoff never reset deadlines. |
-| Reserve before dispatch | Every replacement turn reserves before any open/recovery work; cooling alone reserves nothing. |
-| Per-call service scope | New control/operation/cutoff per call within existing grant, budget and expiry; no deadline extension. |
-| Exclusive writer | Await resource and operation proof and writer release before opening; quarantine still blocks admission. |
-| No empty successful checkpoint | Timeout stays failure; existing atomic nonempty-work/real-phase-progress admission remains required. |
-| Forward progress | Resume last committed work; finite stalls permit progress, persistent stalls terminate at bounded circuits. |
+| Full unknown reservation | Captured window/domain retains failed items/ms, including across restart usage restoration. |
+| Known-usage refunds only | Only successful validated usage refunds; disposal or checkpoint inspection proves no usage. |
+| Five-second cadence | Preserve admission, real observations, spacing/cursor and nonterminal misses; cooldown invents no observation. |
+| Reserve before dispatch | Successor reserves before open/recovery; skipped cooling lanes reserve nothing. |
+| Per-call service scope | Fresh bounded control within grant/budget/expiry; no old call extension. |
+| Exclusive writer | Qualified native exit plus complete records and writer release precede replacement open. |
+| No empty successful checkpoint | Cutoff remains failure; real work or legitimate phase advancement remains required. |
+| Forward progress | Resume committed work; sufficient capacity/stalls below breaker allow progress, never unconditional liveness. |
 
-## Open questions for reviewers
+## Review answers and remaining qualification
 
-- Are the proposed proof wait, backoffs and recovery limits appropriate for shared-intent cadence/open tails?
-- Does each supported native adapter's existing exit/disposal proof establish
-  connection closure under forced termination, without relying on telemetry seals?
-- Can the host persist circuits with uncertain usage, and can attribution supply the bounded numeric join?
+Timing: the proposed proof wait, fixed cooldown and allowance are experimental defaults, not qualified
+bounds. Open p95 establishes no tail budget; measure disposal tails and other lanes' observation gaps.
+Native closure: qualify the checked Node teardown chain per deployed patch and require host settlement.
+Persistence/join: usage floors stay mandatory, breakers process-local; the process-wide ordinal is unique.
+Remaining enablement question: which deployed Node patch/host combinations pass those native recovery,
+resource-balance and observation-gap campaigns with the proposed constants? Record evidence before enabling.
