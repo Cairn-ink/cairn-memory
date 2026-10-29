@@ -6,6 +6,7 @@ import { readTransaction } from '../database.mjs';
 import { rankMoc } from '../context-read-moc.mjs';
 import { expandRelations, relationIncidentQuery, sourceScopeQuery, sourceReader, sourceBudget, createSourceContext } from '../context-read-relations.mjs';
 import { instrumentSourceWork } from '../../tools/testing/context-read-source-work.mjs';
+import { sourceFixture, savedSource, ns as rawNs } from '../testing/raw-source-fixtures.mjs';
 import { sourcesFixture, ns, ok, memoryRef } from '../testing/context-read-sources-fixture.mjs';
 
 function memoryFixture(t) {
@@ -197,4 +198,31 @@ test('C04/C10 mismatched receipt ownership uses one ID seek, charges every physi
     });
   }
   assert.deepEqual(payloads, [null, null]);
+});
+
+test('S1 Raw receipt Card reads through the work oracle and mirrors native transaction state', async t => {
+  const f = sourceFixture(t, { model: { extract: () => ({ items: [{ content: 'Synthetic Raw-backed interpretation',
+    kind: 'fact', confidence: .8, sourceIndices: [0] }] }) } });
+  await savedSource(f, 'Synthetic intact Raw receipt source.');
+  const memory = f.db.prepare('SELECT id,revision FROM memories').get();
+  const draft = ok(f.call('createCardDraft', { namespace: rawNs, actionId: 'source-work-draft', drafting: 'authored', input: {
+    title: 'Synthetic source work Card', body: 'Synthetic authored source work body', sourcePolicy: 'retained-receipts-v1',
+    memoryRefs: [{ type: 'memory', namespace: rawNs, memoryId: memory.id, revision: memory.revision }] } }));
+  const card = ok(f.call('confirmCardDraft', { namespace: rawNs, cardId: draft.id, expectedRevision: draft.revision,
+    actionId: 'source-work-confirm', applicability: 'current' }));
+  const ref = { type: 'card', namespace: rawNs, cardId: card.id, revision: card.revision, bodyRevision: card.bodyRevision };
+  const identity = f.db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get();
+  f.db.exec('ANALYZE');
+  const meter = instrumentSourceWork(f.db, { readSet: [rawNs] }), outside = meter.database.isTransaction;
+  const row = readTransaction(f.db, () => {
+    const reader = sourceReader(meter.database, identity, { cards: true, receipts: true, reviews: true },
+      { readSet: [rawNs], types: ['card'], intent: 'current' }, sourceBudget(Infinity));
+    const result = reader.endpoint(ref);
+    assert.equal(result.reason, undefined); assert.equal(result.row.id, card.id);
+    assert.equal(meter.database.isTransaction, f.db.isTransaction); assert.equal(meter.database.isTransaction, true);
+    return result.row;
+  });
+  assert.equal(row.id, card.id); assert.ok(meter.counts.visits > 0);
+  assert.equal(outside, false); assert.equal(meter.database.isTransaction, f.db.isTransaction);
+  assert.equal(meter.database.isTransaction, false);
 });
