@@ -637,8 +637,10 @@ Opening/drain cost within an admitted turn still consumes its reservation.
 
 A hard `read_timeout`, for maintenance or a request reader, detaches and settles
 the call promptly. The parent first sends the existing close command, with up to
-500 ms of grace and never beyond 1,000 ms after the triggering cutoff. The Worker
-stops accepting work, waits for bootstrap/current work to finish, then closes native
+500 ms of grace and never beyond 1,000 ms after the triggering cutoff. A pump
+timeout carries its cutoff into disposal even if the reader already accepted a
+response before its own deadline. Ordinary idle close has the same 500 ms bound.
+The Worker stops accepting work, waits for bootstrap/current work to finish, then closes native
 resources and registered host leases/providers before exiting. The writer claim
 remains held until confirmed disposal. Late replies are rejected; an executing
 commit may finish, so existing authenticated SQLite recovery decides durable state.
@@ -646,8 +648,8 @@ If grace expires, forced termination retains the existing cleanup/quarantine rul
 A failed close, exit or unbalanced resource count never clears quarantine; changing
 supervisors does not bypass the process-wide registry. Confirmed disposal leaves
 pump completion `read_timeout`, permitting ordinary authorized reopening after drain,
-instead of the `reader_failed` caused by failed disposal. Request calls retain their
-existing error DTO and terminal handle semantics. No public shapes or exports change.
+instead of the `reader_failed` caused by failed disposal, including failed opening
+drains that returned no handle. Request calls retain their existing error DTO and terminal handle semantics. No public shapes or exports change.
 
 A genuine quantum cutoff reports `failed` with `read_timeout`, stops scheduling
 and drains. Missing or invalid internal observation timing reports

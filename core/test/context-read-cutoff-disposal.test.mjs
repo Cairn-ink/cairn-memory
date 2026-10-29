@@ -17,25 +17,28 @@ function nativeTest(name,body){test(name,async t=>{
   try{await Promise.race([body(t),realDelay(30000,undefined,{signal:abort.signal}).then(async()=>{await testClock.advance(10000,{waitForWorkers:false});assert.fail('disposal_test_watchdog');})]);}
   finally{abort.abort();}
 });}
-function setup(t,{stage='open',mode='normal',request=false,tail}={}) {
+function setup(t,{stage='open',mode='normal',request=false,tail,parentGap=false}={}) {
   // Pin canonical identities until all process-wide quarantine probes finish.
   const f=fixture({after:fn=>retained.push(fn)}),memory=f.admit('Synthetic lease disposal memory.',personal),supervisors=[],pumps=[];
   // Failed cleanup is asserted explicitly, rather than hidden by an after hook.
   const owner={after:fn=>t.after(()=>Promise.resolve(fn()).catch(()=>{}))};
   const s=configured(owner,f.path,[personal],{service:!request}),disposalState=new SharedArrayBuffer(32),state=new Int32Array(disposalState);
-  supervisors.push(s.supervisor);let injected=false,responses=0,spawned=0,injectEnabled=true;const resources=[],workers=[],exits=[];
+  supervisors.push(s.supervisor);let injected=false,responses=0,spawned=0,injectEnabled=true,acceptedBetweenDeadlines=false,forced=0;const resources=[],workers=[],exits=[];
   const spawnWorker=data=>{
     spawned++;const w=new Worker(new URL('../context-product-worker.mjs',import.meta.url),{workerData:data,env:{},execArgv:[],stdout:true,stderr:true});
+    const terminate=w.terminate.bind(w);w.terminate=()=>{forced++;return terminate();};
     workers.push(w);resources.push(new Int32Array(data.resources));exits.push(new Promise(resolve=>w.once('exit',resolve)));
     w.on('message',m=>{
       if(m.result?.ok && m.result.value!==null)responses++;
       const selected=stage==='open'?m.result?.ok && m.result.value===null:m.result?.ok && m.result.value!==null && responses===(request?1:2);
       if(injectEnabled && !injected && selected){injected=true;const cutoff=Number(BigInt(m.operation.operationCutoffMonoNs))/1e6;
-        void testClock.advance(Math.max(1,Math.ceil(cutoff-testClock.now()+1)),{waitForWorkers:false});}
+        void testClock.advance(Math.max(1,Math.ceil(cutoff-testClock.now()+(parentGap?-1:1))),{waitForWorkers:false});
+        if(parentGap){const due=[...timers].find(([,timer])=>timer.at<=testClock.now());assert.ok(due,'parent_deadline_precedes_accepted_response');timers.delete(due[0]);due[1].fn();}}
     });return w;
   };
   const open=createProductReaderRuntime({maintenance:!request,spawnWorker}),timers=new Map();let serial=0;
-  const renew=createMaintenancePumpRuntime({open,now:testClock.now,setTimer:(fn,ms)=>{const id=++serial;timers.set(id,{fn,at:testClock.now()+ms});return id;},clearTimer:id=>timers.delete(id)});
+  const pumpOpen=parentGap?async(...args)=>{const h=await open(...args);return {...h,refreshContextIndex(...call){void testClock.advance(2,{waitForWorkers:false});return h.refreshContextIndex(...call).then(result=>{if(injected)acceptedBetweenDeadlines=result.ok;return result;});}};}:open;
+  const renew=createMaintenancePumpRuntime({open:pumpOpen,now:testClock.now,setTimer:(fn,ms)=>{const id=++serial;timers.set(id,{fn,at:testClock.now()+ms});return id;},clearTimer:id=>timers.delete(id)});
   const options={...s.options,host:{moduleUrl:hostUrl,configuration:{...s.options.host.configuration,disposalState,disposalMode:mode,bootstrapGate:stage==='bootstrap'}}};
   const config={supervisor:s.supervisor,id:randomUUID(),window:{id:randomUUID(),endsAtMonoMs:testClock.now()+(tail==='window'?1056:60000),usedItems:0,usedMs:0},
     budgets:{maxItems:10000,maxMs:60000},quantum:{maxItems:1,maxMs:1000},pollMs:1000,renewalMs:tail==='renewal'?1056:60000,serviceCredential:s.token,projections:[{options,types:['memory']}]};
@@ -54,7 +57,7 @@ function setup(t,{stage='open',mode='normal',request=false,tail}={}) {
   }
   f.workspace.defer(async()=>{Atomics.store(state,1,1);Atomics.notify(state,1);
     for(const p of pumps)await p.close().catch(()=>{});for(const supervisor of supervisors)await supervisor.close().catch(()=>{});});
-  return {f,s,memory,options,open,config,renew,state,resources,workers,exits,timers,tick,retries,pumps,disableCutoff(){injectEnabled=false;},get spawned(){return spawned;},get injected(){return injected;}};
+  return {f,s,memory,options,open,config,renew,state,resources,workers,exits,timers,tick,retries,pumps,disableCutoff(){injectEnabled=false;},get spawned(){return spawned;},get injected(){return injected;},get acceptedBetweenDeadlines(){return acceptedBetweenDeadlines;},get forced(){return forced;}};
 }
 async function failedLeaseRepro(x,records){
   assert.ok(records.some(r=>r.state==='failed'&&r.workerStopped&&r.nativeDisposed&&!r.leasesReleased&&r.providersSettled));
@@ -117,4 +120,35 @@ for(const mode of ['reject','block'])nativeTest(`disposal ${mode}: grace failure
   await testClock.advance(500,{waitForWorkers:false});await turn.pending;await p.completion;await p.close().catch(()=>{});
   const records=await x.s.supervisor.drain();assert.ok(records.some(r=>r.state==='failed'));await x.retries(true);
   assert.equal(x.state[0],1,'timeout_attempts_host_disposal_before_force');
+});
+
+// Parent and reader clocks differ only at dispatch; disposal cannot inherit an unbounded idle close.
+nativeTest('disposal parent deadline: accepted response between deadlines still bounds blocked close',async t=>{
+  const x=setup(t,{stage:'refresh',mode:'block',parentGap:true}),p=x.renew(x.config);x.pumps.push(p);
+  const first=await x.tick();await first.pending;const turn=await x.tick();
+  while(!x.state[0])await realDelay(1);await flush();
+  assert.equal(x.acceptedBetweenDeadlines,true,'reader_accepts_response_between_parent_and_reader_deadlines');
+  await testClock.advance(499,{waitForWorkers:false});assert.equal(x.forced,0);
+  await testClock.advance(1,{waitForWorkers:false});await flush();
+  try{assert.equal(x.forced,1,'parent_timeout_forces_blocked_close_within_proof_bound');}
+  finally{if(!x.forced){Atomics.store(x.state,1,1);Atomics.notify(x.state,1);}}
+  await x.exits[0];assert.equal(x.workers[0].threadId,-1);
+  await turn.pending;assert.equal((await p.completion).error,'reader_failed');
+  const records=await x.s.supervisor.drain();assert.ok(records.some(r=>r.state==='failed'&&r.workerStopped));await x.retries(true);
+});
+nativeTest('disposal ordinary close: blocked host cannot retain a live Worker indefinitely',async t=>{
+  const x=setup(t,{mode:'block'});x.disableCutoff();const h=await x.open(x.options),closing=h.close().catch(e=>e);
+  while(!x.state[0])await realDelay(1);await testClock.advance(499,{waitForWorkers:false});assert.equal(x.forced,0);
+  await testClock.advance(1,{waitForWorkers:false});
+  try{assert.equal(x.forced,1,'ordinary_close_forces_blocked_host_within_bound');}
+  finally{if(!x.forced){Atomics.store(x.state,1,1);Atomics.notify(x.state,1);}}
+  await x.exits[0];assert.equal(x.workers[0].threadId,-1);
+  assert.equal((await closing).code,'reader_failed');await x.retries(true);
+});
+for(const mode of ['reject','block'])nativeTest(`disposal opening ${mode}: failed drain overrides the triggering timeout`,async t=>{
+  const x=setup(t,{mode}),p=x.renew(x.config);x.pumps.push(p);const turn=await x.tick();
+  while(!x.state[0] && x.workers[0].threadId!==-1)await realDelay(1);
+  await testClock.advance(500,{waitForWorkers:false});await turn.pending;
+  assert.equal((await p.completion).error,'reader_failed','failed_opening_disposal_has_reader_failed_precedence');
+  const records=await x.s.supervisor.drain();assert.ok(records.some(r=>r.state==='failed'));await x.retries(true);
 });
