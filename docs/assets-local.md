@@ -102,7 +102,7 @@ Title/filename bounds measure UTF-16 code units both before and after secret
 redaction, per field; derivative text below uses the same two length checks.
 Formatting is preserved without NFKC, whitespace collapse or trim. The exported
 `normalizedTextLength` and `normalizeBoundedText` describe the different
-[bounded-text path](capture.md#bounded-text-lengths) and do not predict these
+[bounded-text path](https://github.com/Cairn-ink/cairn-memory/blob/main/docs/capture.md#bounded-text-lengths) and do not predict these
 fields' acceptance.
 
 Limits: 33,554,432 bytes per version, 64 versions per asset, 1,024 assets per

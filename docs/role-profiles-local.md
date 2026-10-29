@@ -57,7 +57,7 @@ Duty/output/applicability/change-reason limits measure UTF-16 code units both
 before and after secret redaction per field, preserving formatting without NFKC,
 whitespace collapse or trim. The exported `normalizedTextLength` and
 `normalizeBoundedText` describe the different
-[bounded-text path](capture.md#bounded-text-lengths) and do not predict these
+[bounded-text path](https://github.com/Cairn-ink/cairn-memory/blob/main/docs/capture.md#bounded-text-lengths) and do not predict these
 fields' acceptance.
 Release inputs and retained payloads are bounded to 32,768 UTF-8 bytes; each
 namespace has at most 256 profiles and each profile 128 releases including tombstones.

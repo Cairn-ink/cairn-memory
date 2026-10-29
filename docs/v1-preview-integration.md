@@ -92,7 +92,7 @@ Defaults: `semantic:false`, 12 items, 1,000 ms. Maximums: 24 items,
 This candidate query bound measures raw UTF-16 code units, without NFKC,
 redaction, whitespace collapse or trim rewrite. The exported
 `normalizedTextLength` and `normalizeBoundedText` instead measure the
-[bounded-text path](capture.md#bounded-text-lengths) used by capture, memory
+[bounded-text path](https://github.com/Cairn-ink/cairn-memory/blob/main/docs/capture.md#bounded-text-lengths) used by capture, memory
 content and ordinary recall; segmenters must use each field's own rules.
 Pages partition one frozen top-24 ranking without reranking/embedding; at most
 128 rankings per handle, expiring after five minutes. Cursor/snapshot bounds

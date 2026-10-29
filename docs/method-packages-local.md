@@ -199,7 +199,7 @@ File text, titles, attribution labels and change summaries use UTF-16 code-unit
 bounds both before and after secret redaction, per field (and both file-text sums
 for the version total). They preserve formatting and apply no NFKC, whitespace
 collapse or trim. The exported `normalizedTextLength` and `normalizeBoundedText`
-describe the different [bounded-text path](capture.md#bounded-text-lengths), so
+describe the different [bounded-text path](https://github.com/Cairn-ink/cairn-memory/blob/main/docs/capture.md#bounded-text-lengths), so
 segmenters must use these method-specific raw/redacted bounds instead.
 
 File parts are half-open UTF16 offsets, at most 4,000 units and always at code
