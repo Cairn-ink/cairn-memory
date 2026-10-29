@@ -180,9 +180,12 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
           attribution?.step();
           try {db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();}finally{attribution?.acquired();}
           const observed=storage.observe(p,access.accessGenerations,{knownFailure}),ready=observed.dto.lexical.state==='ready';
-          const covered=coverage(observed.dto);covered.stops.budget=m.transformed>=p.budget.maxItems;
-          return success({status:ready&&observed.byteSafe?p.mode==='embeddings'?'partial':'complete':'rebuilding',
-            progress:{lexical:observed.dto.lexical.progress,transformed:m.transformed,embeddingAttempts:0,embedded:0},coverage:covered,channels:channels(ready)});
+          const preparation=attribution?.start('serialize');
+          try {
+            const covered=coverage(observed.dto);covered.stops.budget=m.transformed>=p.budget.maxItems;
+            return success({status:ready&&observed.byteSafe?p.mode==='embeddings'?'partial':'complete':'rebuilding',
+              progress:{lexical:observed.dto.lexical.progress,transformed:m.transformed,embeddingAttempts:0,embedded:0},coverage:covered,channels:channels(ready)});
+          } finally {if(attribution)attribution.end(preparation);}
         });}finally{if(observation)observation.epochObservationMs=Number(process.hrtime.bigint())/1e6-epochStarted;}
       }
       const binding=digest({readSet:p.readSet,types:p.types,intent:p.intent,query:p.query,semantic:p.semantic,access:access.accessGenerations});

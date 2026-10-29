@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
@@ -222,34 +222,54 @@ test('round 1 A4 dispatch ordinals are process-wide across runtime module instan
   assert.equal(new Set(values).size,3);assert.ok(values[0]<values[1]&&values[1]<values[2]);
 });
 
-test('round 1 A4 ordinal exhaustion fails closed instead of repeating an identifier',()=>{
-  assert.equal(typeof attribution.createMaintenanceOrdinalAllocator,'function','non-saturating ordinal allocator exists');
+test('round 2 C1 ordinal exhaustion disables attribution without repeating an identifier',()=>{
   const next=attribution.createMaintenanceOrdinalAllocator({next:Number.MAX_SAFE_INTEGER-1});
-  assert.equal(next(),Number.MAX_SAFE_INTEGER);for(let i=0;i<2;i++)assert.throws(next,{code:'reader_failed'});
+  assert.equal(next(),Number.MAX_SAFE_INTEGER);
+  for(let i=0;i<2;i++){let ordinal;assert.doesNotThrow(()=>{ordinal=next();},'exhaustion disables attribution without throwing');assert.equal(ordinal,null,'exhaustion returns explicit no ordinal');}
 });
 
 test('round 1 A5 unit telemetry reuses admission clock samples without per-row mapping allocation',async t=>{
   let reads=0;const clock=()=>{reads++;return 100;},meter=attribution.createMaintenanceAttribution({now:clock,hrtime:()=>{reads++;return 100000000n;}});
   const q=maintenanceQuantum({now:clock,cutoff:1100,maxMs:1000,attribution:meter});reads=0;
   q.measure(()=>{},'item');assert.equal(reads,4,'unit reuses admission clock samples');
-  const reference=await import('data:text/javascript;base64,'+Buffer.from(execFileSync('git',['show','4559909f:core/context-product-quantum.mjs'])).toString('base64'));
+  const oracle=JSON.parse(readFileSync(new URL('../testing/context-product-admission-oracle.json',import.meta.url),'utf8'));
   let decisions=0;
-  for(const maxMs of [333,334,350,1000,1500,2000,5000])for(const [kind,cost] of [['scan',3],['item',7],['verification',40],['gc',90]]){
-    let time=0,oldTime=0;const stats=attribution.createMaintenanceAttribution({now:()=>time,hrtime:()=>BigInt(Math.floor(time*1000000))});
-    const unit=maintenanceQuantum({now:()=>time,cutoff:maxMs,maxMs,attribution:stats}),old=reference.maintenanceQuantum({now:()=>oldTime,cutoff:maxMs,maxMs});unit.measure(()=>{time+=cost;},kind);old.measure(()=>{oldTime+=cost;},kind);
-    const boundary=maxMs-Math.max(50,Math.min(250,.15*maxMs))-Math.max(10,2*cost);
-    for(const offset of [-1,0,1]){time=oldTime=boundary+offset;assert.equal(unit.admit(kind),old.admit(kind));decisions++;}
+  for(const {maxMs,kind,cost,times,decisions:expected} of oracle.cases){
+    let time=0;const stats=attribution.createMaintenanceAttribution({now:()=>time,hrtime:()=>BigInt(Math.floor(time*1000000))});
+    const unit=maintenanceQuantum({now:()=>time,cutoff:maxMs,maxMs,attribution:stats});unit.measure(()=>{time+=cost;},kind);
+    for(let i=0;i<times.length;i++){time=times[i];assert.equal(unit.admit(kind),expected[i],`admission ${maxMs}/${kind}/${i} matches frozen oracle`);decisions++;}
   }
-  assert.equal(decisions,84);t.diagnostic('84 original admission boundary decisions matched');
+  assert.equal(decisions,84);t.diagnostic('84 frozen admission boundary decisions matched');
 });
 
-test('round 1 A5 canonical DTO preparation performs no attribution callback inside its transaction',async t=>{
+test('round 2 C3 admission regression has no runtime Git dependency',()=>{
+  const source=readFileSync(new URL('./context-read-product-stall.test.mjs',import.meta.url),'utf8');
+  assert.doesNotMatch(source,/\bexecFileSync\s*\(\s*['"]git['"]/,'admission regression has no Git subprocess dependency');
+});
+
+test('round 2 C2 canonical DTO preparation retains serialize timing without an instrumentation callback',async t=>{
   const f=fixture(t);f.admit('orchard preparation evidence',personal);const facade=openContextProductFacade(f.path,{});t.after(()=>facade.close());
-  let inside=0;const meter=attribution.createMaintenanceAttribution({now:()=>0,rendezvous(kind){if(kind==='serialize'&&facade.port.db.isTransaction)inside++;}});
-  const index=openProductIndex({path:f.path,facade,maintenance:true,ownerCoverage:descriptor([personal]),now:()=>0,attribution:meter,
+  let clock=100,inside=0,observed;
+  const buffer=attribution.maintenanceMarker(),meter=attribution.createMaintenanceAttribution({buffer,now:()=>clock,hrtime:()=>BigInt(clock)*1000000n,
+    rendezvous(kind){if(kind==='serialize'&&facade.port.db.isTransaction)inside++;}});
+  const index=openProductIndex({path:f.path,facade,maintenance:true,ownerCoverage:descriptor([personal]),now:()=>clock,attribution:meter,
     authorize:()=>({accessGenerations:accessDigest({ownerId:personal.ownerId,namespaces:{readSet:[personal]}}),check(){},envelope:fn=>fn()})});t.after(()=>index.close());
-  const result=await index.run('refreshContextIndex',{readSet:[personal],types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:32,maxMs:1000}},{});
-  assert.equal(result.ok,true,JSON.stringify(result));assert.equal(inside,0,'canonical transaction has no result-preparation instrumentation');
+  const entries=Object.entries;
+  // coverage() enumerates this fixed DTO map while preparing the result.
+  Object.entries=value=>{
+    if(!observed&&facade.port.db.isTransaction&&value?.memory&&Object.hasOwn(value.memory,'eligible')&&Object.hasOwn(value.memory,'embedded')){
+      clock+=40;observed=attribution.readMaintenanceMarker(buffer,BigInt(clock)*1000000n);
+    }
+    return entries(value);
+  };
+  let result;
+  try {result=index.run('refreshContextIndex',{readSet:[personal],types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:32,maxMs:1000}},{});}
+  finally {Object.entries=entries;}
+  assert.equal(result.ok,true,JSON.stringify(result));assert.ok(observed,'DTO preparation interval reached');
+  assert.equal(observed.kind,11,'DTO preparation is attributed to serialize');
+  assert.equal(observed.runningMs,40,'serialize marker includes the full DTO preparation interval');
+  assert.equal(meter.snapshot().resultPreparationMs,40,'resultPreparationMs preserves DTO preparation');
+  assert.equal(inside,0,'transaction instrumentation invokes no rendezvous callback');
 });
 
 test('round 1 A6 internal marker preserves the legacy bootstrap capacity boundary',async t=>{
@@ -278,4 +298,31 @@ test('round 1 A3 reader opening error reaches the pump without outer timer deliv
   assert.equal(lane.lastStall?.kind,7,'opening error snapshot reaches pump without quantum timer');
   assert.equal(lane.lastStall.runningMs,1000);assert.equal(lane.lastStall.ordinal,lane.latest.ordinal);
   assert.equal(final.usedItems,32);assert.equal(final.usedMs,1000);assert.equal(final.error,'read_timeout');await pump.close();
+});
+
+
+test('round 2 C1 exhausted reader dispatch uses an explicit unjoined call and rejects old markers',async t=>{
+  const io=transport(t),h=await io.open(io.options);t.after(()=>h.close());
+  const buffer=io.data.maintenanceMarker,meter=attribution.createMaintenanceAttribution({buffer,now:io.now,hrtime:()=>BigInt(io.now())*1000000n});
+  meter.measure('item',()=>{},true);
+  const previous=io.data.maintenanceOrdinal,state=globalThis[Symbol.for('context-read-product/maintenance-dispatch-ordinal')],saved=state.next;
+  t.after(()=>{state.next=saved;});state.next=Number.MAX_SAFE_INTEGER;
+  const payload={readSet:[personal],types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:32,maxMs:1000}};
+  io.action(message=>{meter.reset(message.maintenanceOrdinal);meter.serialize(()=>{});io.reply(message,{ok:true,value:{}},{observedAtMonoMs:100,maintenancePhases:{ordinal:123}});});
+  const success=await h.refreshContextIndex(payload,io.token);
+  assert.equal(success.ok,true,'exhausted reader call succeeds');
+  assert.equal(io.outbound.at(-1)?.maintenanceOrdinal,null,'exhausted call explicitly transports no ordinal');
+  assert.equal(Object.hasOwn(reader.maintenancePhaseDiagnostic(success),'ordinal'),false,'exhausted reader sample has no join key');
+  assert.deepEqual(attribution.serializationDiagnostic(buffer),{},'exhausted calls cannot accept serialization from an unjoined marker');
+  meter.reset(previous);meter.measure('item',()=>{},true);io.action(()=>{});
+  const pending=h.refreshContextIndex(payload,io.token);
+  const expected={kind:0,runningMs:0,unitCount:0,unattributed:1};
+  assert.deepEqual(attribution.readMaintenanceMarker(buffer,6000000000n),expected,'no receipt never reads previous-call data after exhaustion');
+  meter.reset(previous);meter.measure('commit',()=>{},true);
+  assert.deepEqual(attribution.readMaintenanceMarker(buffer,6000000000n),expected,'late previous writer remains unattributed');
+  meter.reset(null);meter.measure('item',()=>{},true);
+  assert.deepEqual(attribution.readMaintenanceMarker(buffer,6000000000n),expected,'received exhausted call remains unattributed');
+  io.set(1100);io.fire();const result=await pending;
+  assert.deepEqual(reader.maintenanceStallDiagnostic(result),expected,'reader cutoff carries only unattributed marker data');
+  await h.close();
 });

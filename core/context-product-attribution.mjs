@@ -1,4 +1,3 @@
-import { fail } from './validation.mjs';
 // Private, fixed numeric maintenance telemetry. Never supplies admission proof.
 export const maintenanceKinds = Object.freeze(['idle','scan','item','verify','publication','gc','vacuum','begin','commit','save','canonical-read','serialize']);
 export const maintenanceWorkFields = Object.freeze(['transformed','canonicalRows','metadataBytes','textRows','textBytes','supportLookups','supportBytes','verifiedRows','reused','replaced','removed','copied','tokenized','retargets','verificationRestarts','verificationKept']);
@@ -15,7 +14,8 @@ const waitSlots=Object.freeze({begin:Object.freeze([slots.beginWaitMaxMs,slots.b
 // One process-wide join domain, including separately imported runtime instances.
 const ordinalKey=Symbol.for('context-read-product/maintenance-dispatch-ordinal');
 export const createMaintenanceOrdinalAllocator=state=>()=>{
-  if(!Number.isSafeInteger(state.next)||state.next<0||state.next>=Number.MAX_SAFE_INTEGER)fail('reader_failed');
+  // Exhaustion disables joins, never maintenance execution.
+  if(!Number.isSafeInteger(state.next)||state.next<0||state.next>=Number.MAX_SAFE_INTEGER)return null;
   return ++state.next;
 };
 export const allocateMaintenanceOrdinal=createMaintenanceOrdinalAllocator(globalThis[ordinalKey]??={next:0});
@@ -29,15 +29,19 @@ export const maintenanceControlState=control=>controls.get(control);
 export const bindMaintenanceControl=(control,buffer)=>{const state=controls.get(control);if(state)state.buffer=buffer;};
 // Seven unsigned words: operation/start, units, serialization start/end ns,
 // parent active ordinal, Worker writer ordinal, parent dispatch start ns.
+// Outside the safe-integer ordinal domain; this sentinel is never a join key.
+const unjoinedOrdinal=0xffffffffffffffffn;
+const markerOrdinal=ordinal=>ordinal===null?unjoinedOrdinal:BigInt(ordinal);
 export const maintenanceMarker = () => new SharedArrayBuffer(56);
 const view = buffer => buffer instanceof SharedArrayBuffer && buffer.byteLength===56 ? new BigUint64Array(buffer) : null;
 export function prepareMaintenanceMarker(buffer,ordinal,enteredNs) {
   const v=view(buffer);if(!v)return;
-  Atomics.store(v,6,enteredNs);Atomics.store(v,4,BigInt(ordinal));
+  Atomics.store(v,6,enteredNs);Atomics.store(v,4,markerOrdinal(ordinal));
 }
 export function readMaintenanceMarker(buffer, nowNs=process.hrtime.bigint()) {
   const v=view(buffer);if(!v)return undefined;
   const ordinal=Atomics.load(v,4),writer=Atomics.load(v,5);
+  if(ordinal===unjoinedOrdinal)return Object.freeze({kind:0,runningMs:0,unitCount:0,unattributed:1});
   const packed=Atomics.load(v,0),kind=Number(packed&15n),start=packed>>4n,units=Atomics.load(v,1);
   if(ordinal!==writer || writer!==Atomics.load(v,5) || ordinal!==Atomics.load(v,4))
     return Object.freeze({kind:0,runningMs:saturate(Number(nowNs-Atomics.load(v,6))/1e6),unitCount:0,ordinal:Number(Atomics.load(v,4)),pendingDispatch:1});
@@ -45,7 +49,7 @@ export function readMaintenanceMarker(buffer, nowNs=process.hrtime.bigint()) {
   return Object.freeze({kind,runningMs:saturate(Number(nowNs/1000n-start)/1000),unitCount:saturate(Number(units)),...(ordinal?{ordinal:Number(ordinal),pendingDispatch:0}:{})});
 }
 export function serializationDiagnostic(buffer, nowNs=process.hrtime.bigint()) {
-  const v=view(buffer);if(!v||Atomics.load(v,4)!==Atomics.load(v,5))return {};
+  const v=view(buffer);if(!v||Atomics.load(v,4)===unjoinedOrdinal||Atomics.load(v,4)!==Atomics.load(v,5))return {};
   const start=Atomics.load(v,2),end=Atomics.load(v,3);if(!start)return {};
   return {serializationMs:saturate(Number((end||nowNs)-start)/1e6),serializationComplete:Number(end>=start)};
 }
@@ -67,10 +71,10 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
     readState=4;restore(readPrevious);
   };
   const api={
-    reset(ordinal=v?Number(Atomics.load(v,4)):0){
+    reset(ordinal=v?Atomics.load(v,4):0){
       if(v)Atomics.store(v,5,0n);fields.fill(0);readState=0;operationDepth=0;
       if(v){Atomics.store(v,1,0n);Atomics.store(v,2,0n);Atomics.store(v,3,0n);}publish(hrtime()/1000n<<4n);
-      if(v)Atomics.store(v,5,BigInt(ordinal));
+      if(v)Atomics.store(v,5,markerOrdinal(ordinal));
     },
     start(kind){
       if(operationDepth===operationStarts.length)return -1;

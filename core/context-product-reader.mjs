@@ -206,7 +206,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         const finished=detail?.finishedAtMonoMs, delivered=Number(now())/1e6;
         if(Number.isFinite(finished)&&finished>=Number(mono(slot.operation.enteredMonoNs))/1e6&&finished<=delivered)safe.deliveryMs=delivered-finished;
         Object.assign(safe,serializationDiagnostic(marker,now()));
-        safe.ordinal=slot.ordinal;
+        if(slot.ordinal!==null)safe.ordinal=slot.ordinal;
         safe.returnMs=Number(now()-mono(slot.operation.enteredMonoNs))/1e6;
         maintenancePhases.set(result,Object.freeze(safe));
         if(result.error?.code==='read_timeout'){

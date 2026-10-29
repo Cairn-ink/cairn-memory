@@ -159,7 +159,7 @@ parentPort.on('message', async message => {
       within(operation);sealNative(frame);
       const {at,...detail}=observation,metrics=attribution.snapshot();
       attribution.serialize(()=>result(operation,response,{...(at===undefined?{}:{observedAtMonoMs:at}),
-        maintenancePhases:{...detail,...metrics,ordinal:message.maintenanceOrdinal,
+        maintenancePhases:{...detail,...metrics,...(message.maintenanceOrdinal===null?{}:{ordinal:message.maintenanceOrdinal}),
           dispatchMs:receivedAt-Number(mono(operation.enteredMonoNs))/1e6,
           resultPreparationMs:metrics.resultPreparationMs+Number(process.hrtime.bigint())/1e6-preparationStarted,finishedAtMonoMs:Number(process.hrtime.bigint())/1e6}}));
     } else {

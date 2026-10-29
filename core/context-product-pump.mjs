@@ -197,10 +197,10 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       let quantumTimer,lane,sequence,settleStarted,deliveryMs=0,activeHandle,activeControl,ordinal,openingOrdinal,quantumDetail={},stallRecorded=false;
       function recordStall(value){
         if(stallRecorded||!lane)return;
-        const stall=stallOf(value??activeControl,now());
+        const stall=ordinal===null?{kind:0,runningMs:0,unitCount:0,unattributed:1}:stallOf(value??activeControl,now());
         if(stall?.ordinal!==undefined&&stall.ordinal!==ordinal)return;
         if(!stall||!Number.isInteger(stall.kind)||!maintenanceKinds[stall.kind]||!Number.isFinite(stall.runningMs)||stall.runningMs<0||!Number.isSafeInteger(stall.unitCount)||stall.unitCount<0)return;
-        lane.lastStall={number:sequence,ordinal,kind:stall.kind,runningMs:Math.min(Number.MAX_SAFE_INTEGER,stall.runningMs),unitCount:stall.unitCount,...(stall.pendingDispatch===undefined?{}:{pendingDispatch:stall.pendingDispatch})};
+        lane.lastStall={number:sequence,...(ordinal===null?{}:{ordinal}),kind:stall.kind,runningMs:Math.min(Number.MAX_SAFE_INTEGER,stall.runningMs),unitCount:stall.unitCount,...(stall.pendingDispatch===undefined?{}:{pendingDispatch:stall.pendingDispatch}),...(stall.unattributed===1?{unattributed:1}:{})};
         lane.stallCounts[stall.kind]=add(lane.stallCounts[stall.kind],1);stallRecorded=true;
       }
       return running=(async()=>{
@@ -281,7 +281,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
         if(lane){
           if(settleStarted!==undefined)recordPhase(lane.phases.settle,deliveryMs+now()-settleStarted);
           const elapsedMs=now()-lastTick;
-          const sample={number:sequence,...(ordinal===undefined?{}:{ordinal}),...(openingOrdinal===undefined?{}:{openingOrdinal}),elapsedMs,attribution:quantumDetail};
+          const sample={number:sequence,...(ordinal==null?{}:{ordinal}),...(ordinal===null||openingOrdinal==null?{}:{openingOrdinal}),elapsedMs,attribution:quantumDetail};
           lane.quanta=add(lane.quanta,1);lane.first??=sample;lane.latest=sample;
           lane.worstElapsedMs=Math.max(lane.worstElapsedMs,elapsedMs);
           const bucket=Math.min(501,Math.ceil(elapsedMs/10));lane.elapsedBuckets[bucket]=add(lane.elapsedBuckets[bucket],1);

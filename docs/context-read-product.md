@@ -585,7 +585,7 @@ the shared operation marker before termination. No public DTO changes.
 | `canonicalReadWaitMaxMs` | ms | Canonical transaction startup plus its first existing canonical statement step, excluding intervening sidecar connection/snapshot/schema work. The marker leaves canonical-read during that gap; no added query. |
 | `saveSigningMs` | ms | Sum of progress incarnation/signing intervals in `save()`, excluding SQL updates. |
 | `gcSliceMs`, `vacuumMs` | ms | Sum of existing GC deletion slice intervals and `incremental_vacuum` intervals, respectively. |
-| `resultPreparationMs`, `serializationMs` | ms | Worker envelope preparation outside SQLite transactions, and envelope construction/`postMessage` cloning through return. Canonical DTO assembly remains covered by epoch observation, without an instrumentation callback inside its transaction. Intervals overlap; do not sum. |
+| `resultPreparationMs`, `serializationMs` | ms | Canonical result DTO assembly plus Worker envelope preparation, and envelope construction/`postMessage` cloning through return. DTO instrumentation uses the preallocated start/end slots inside its transaction, without an instrumentation callback or closure. Intervals overlap; do not sum. |
 | `serializationComplete` | 0/1 | Whether the parent saw `postMessage` return; if 0, serialization time is a lower bound sampled at acceptance. No waiting or extra message. |
 | `deliveryMs`, `returnMs` | ms | Parent acceptance minus Worker send timestamp, and call entry through parent acceptance, respectively; include validation, and delivery also includes serialization/IPC. |
 
@@ -603,13 +603,23 @@ An opening cutoff also carries its private snapshot on the thrown error into
 the pump. `lastStall` includes `{number,ordinal,kind,runningMs,unitCount,
 pendingDispatch}`; each lane counts a stalled quantum once per kind.
 Ordinals are process-wide safe integers, unique across pumps and reader
-instances; exhaustion fails closed rather than saturating into duplicates.
+instances. Exhaustion returns explicit `null` on the private call, disabling join
+attribution only; maintenance admission, dispatch and accounting continue.
+The marker uses the reserved all-ones ordinal for these calls and always reads
+`{kind:0,runningMs:0,unitCount:0,unattributed:1}`, including before receipt and
+after late previous-writer updates. No previous-call data or running time is
+inferred. Such quantum samples and stall records omit the ordinal join keys;
+they are ineligible for any policy requiring a dispatch join.
 Each quantum sample carries its active dispatch ordinal and, when it opened a
 reader, `openingOrdinal` for that separate dispatch. Ordinals are join keys,
 not aggregate counters. The internal fixed marker and ordinal are excluded
 from caller bootstrap/transport capacity accounting. Counter slots and maps
 are preallocated; transaction-time instrumentation uses clocks, atomic stores
-and numeric updates. Unit durations reuse the admission clock samples;
+and numeric updates. The admission test uses a frozen 84-decision fixture,
+generated once by evaluating the quantum implementation at `4559909f` over seven
+budgets and four unit kinds at one millisecond before, at, and after each
+admission boundary; tests need no Git executable or historical objects.
+Unit durations reuse the admission clock samples;
 materialization and pump aggregation happen outside SQLite transactions. Enum order is
 `idle=0`, `scan=1`, `item=2`, `verify=3`, `publication=4`, `gc=5`, `vacuum=6`,
 `begin=7`, `commit=8`, `save=9`, `canonical-read=10`, `serialize=11`. Idle at

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import * as attribution from '../context-product-attribution.mjs';
 import * as productReader from '../context-product-reader.mjs';
 const { openContextIndexMaintainer } = productReader;
 import * as productPump from '../context-product-pump.mjs';
@@ -864,4 +865,34 @@ test('round 1 A4 independent pumps expose unique ordinals in quantum samples and
   for(const s of fixtures){const p=s.renew(s.c);await s.next();const lane=maintenancePumpPhaseDiagnostic(p.getStatus()).projections[0];
     assert.ok(Number.isSafeInteger(lane.latest.ordinal)&&lane.latest.ordinal>0,'quantum sample has dispatch join ordinal');values.push(lane.latest.ordinal);await p.close();}
   assert.equal(new Set(values).size,2,'different pumps do not reuse ordinal zero');
+});
+
+
+test('round 2 C1 exhausted ordinals preserve successful pump dispatch and exact refunds',async t=>{
+  const state=globalThis[Symbol.for('context-read-product/maintenance-dispatch-ordinal')],saved=state.next;
+  t.after(()=>{state.next=saved;});
+  const results=[];
+  for(const exhaustion of [0,1,2]){
+    const exhausted=exhaustion>0;state.next=exhausted?Number.MAX_SAFE_INTEGER-(exhaustion===1?1:0):saved;
+    const s=setup(t,{quantum:{maxItems:4,maxMs:100}},{openMs:7,workMs:11,result:()=>settled(2)}),pump=s.renew(s.c);
+    await s.next();const status=pump.getStatus(),lane=maintenancePumpPhaseDiagnostic(status).projections[0];
+    assert.equal(s.calls.length,1,'exhausted counter still dispatches the quantum');
+    assert.equal(s.opened.length,1);assert.equal(status.error,null);assert.equal(status.usedItems,2);assert.equal(status.usedMs,18);
+    if(exhausted){assert.equal(Object.hasOwn(lane.latest,'ordinal'),false,'exhausted sample has no join key');assert.equal(Object.hasOwn(lane.latest,'openingOrdinal'),false);}
+    results.push({state:status.state,error:status.error,usedItems:status.usedItems,usedMs:status.usedMs,admissions:s.admissions,calls:s.calls.map(([input])=>input)});
+    await pump.close();
+  }
+  for(const result of results.slice(1))assert.deepEqual(result,results[0],'exhausted attribution preserves healthy admission, dispatch and refund');
+});
+
+test('round 2 C1 exhausted cutoff records no join key or previous-call attribution',async t=>{
+  const state=globalThis[Symbol.for('context-read-product/maintenance-dispatch-ordinal')],saved=state.next;
+  t.after(()=>{state.next=saved;});state.next=Number.MAX_SAFE_INTEGER;
+  const s=setup(t,{}, {workMs:101,result:()=>settled(),stallOf:()=>({ordinal:123,kind:8,runningMs:9999,unitCount:7})}),pump=s.renew(s.c);
+  await s.next();const status=await pump.completion,lane=maintenancePumpPhaseDiagnostic(status).projections[0];
+  assert.equal(s.calls.length,1,'exhausted cutoff still dispatches');assert.equal(status.error,'read_timeout');assert.equal(status.usedItems,1);assert.equal(status.usedMs,100);
+  assert.ok(lane.lastStall,'exhausted cutoff keeps an unattributed stall record');
+  for(const value of [lane.latest,lane.lastStall])assert.equal(Object.hasOwn(value,'ordinal'),false,'exhausted records have no join key');
+  assert.deepEqual(lane.lastStall,{number:0,kind:0,runningMs:0,unitCount:0,unattributed:1},'exhaustion never accepts previous-call units or guesses running time');
+  await pump.close();
 });
