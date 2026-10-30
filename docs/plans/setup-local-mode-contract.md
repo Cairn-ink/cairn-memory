@@ -1131,7 +1131,7 @@ else outside `packages/setup/` except the three documents named here.
 
 v0.18 (setup session, 2026-10-31). v0.17 (`c09746e3`) was audited by a
 non-author Codex auditor (gpt-6.1-sol, xhigh, read-only): no P0, five P1, three
-P2, not ready. v0.18 adopted the auditor's replacement text. The re-check of v0.18 (`bc0b6804`) found one new P1 (the unresolved-gate rule cannot block a single host) and one P2 (Rule 7 precision); v0.19 adopts its text and classifies the §18.3 cases as required or best-effort. The second re-check (`65250fb7`) found no P0/P1 and one P2 (Rule 5 names its exception), adopted here; verdict ready for implementation. v0.20 corrects case (g) after the implementer's native runs (2026-10-31). The trusted hooks ran on all four hosts, proven by the `hook/started`/`hook/completed` notifications, but no host persists hook lifecycle rollout rows, so requiring them was a wrong expectation rather than a format change. Release scope set
+P2, not ready. v0.18 adopted the auditor's replacement text. The re-check of v0.18 (`bc0b6804`) found one new P1 (the unresolved-gate rule cannot block a single host) and one P2 (Rule 7 precision); v0.19 adopts its text and classifies the §18.3 cases as required or best-effort. The second re-check (`65250fb7`) found no P0/P1 and one P2 (Rule 5 names its exception), adopted here; verdict ready for implementation. v0.20 corrects case (g) after the implementer's native runs (2026-10-31). The trusted hooks ran on all four hosts, proven by the `hook/started`/`hook/completed` notifications, but no host persists hook lifecycle rollout rows, so requiring them was a wrong expectation rather than a format change. v0.21 adds the Rule 8 qualification-verdict exception, after the implementer's focused L06 run showed that the only differing HOME entry was the verdict cache written under the new policy. Release scope set
 by the engine primary on 2026-10-31: 0.6.3 carries only this fix and no
 storage, retrieval or safety engine change; the new engine moves to 0.6.4.
 The engine primary chose option B for the engine bundle (Rule 7).
@@ -1276,6 +1276,29 @@ strings.
      baseline is a failure.
    - Engine hashes are not normalized in L06/L24, and `--check` is not weakened.
      Rule 7 supplies the historical engine comparison.
+   - **Qualification-verdict exception (v0.21).** Rule 3 deliberately changes
+     the `policy` and `fingerprint` values that installed setup and status
+     write into `$CODEX_HOME/cairn/qualification/<binary-identity>.json`. In
+     the L06/L24 HOME inventories, and only for files whose name is 64
+     lowercase hex characters plus `.json` in that directory, the comparison
+     works as follows:
+     - Parse the 0.5.3 baseline verdict as JSON.
+     - Replace `policy` only if it equals the 0.6.2 policy (the hash of the
+       0.6.2 `KNOWN_FORMATS` list, frozen as a literal in the test). The
+       replacement is the 0.6.3 policy computed by the shipped module.
+     - Replace `fingerprint` only if it equals a 0.6.2 known format. The
+       replacement is that format's 0.6.3 fingerprint, recomputed in the test
+       from the same frozen `format.json` with only `serdeMarkers` replaced.
+     - Re-serialize the baseline with the production writer's key order, then
+       compare it byte-for-byte with the current file.
+     - `identity`, `version`, `status`, `reason`, `binarySha256`, the key set,
+       the key order and every other byte remain checked.
+     - An unmapped `policy` or `fingerprint` value, a non-JSON verdict, or an
+       added or missing verdict file fails the test.
+     - `observed-*.json` descriptors and `.pending` locks keep their existing
+       comparison.
+     - A regression proves that a verdict differing in any field other than
+       the two mapped values still fails L06.
 
 ### 18.3 Native rollout evidence (new, offline)
 
