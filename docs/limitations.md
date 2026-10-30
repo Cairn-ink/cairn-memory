@@ -2759,5 +2759,5 @@ were absent from their respective top 20, so their exact ranks are unknown. The
 broad `memory` query was exploratory; branded identity controls were separate
 and do not show generic-term visibility. These API results do not establish
 Cairn.ink website or Google search order, AI citations, or discovery improvement.
-See the [discovery plan](plans/memory-discovery-2026-10-30.md) for the query
+See the [discovery plan](https://github.com/Cairn-ink/cairn-memory/blob/main/docs/plans/memory-discovery-2026-10-30.md) for the query
 list, method, totals, timestamps, and retained responses.

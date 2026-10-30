@@ -1,10 +1,12 @@
 # Cairn Memory discovery metadata
 
-Base: `eeef2e8ff777e27515e03b55452e4211578ca912`. Worktree:
+Review base: `88d168f81979d51d1861fbd6d70cd91ea18f9936`; prior task base
+`eeef2e8ff777e27515e03b55452e4211578ca912` remains in the commit history.
+Worktree:
 `/home/chichieh/Github/cairn-memory-worktrees/memory-discovery-20261030`, branch
 `docs/memory-discovery-20261030`. This is a bounded metadata and entry-point
-copy change. It does not alter the product, installer version, or published
-package.
+copy change. It does not alter product behavior or installer version, or
+publish a package.
 
 ## Acceptance contract
 
@@ -54,18 +56,26 @@ package.
   improvement before comparable indexed results exist.
 - **D7 — Scope and affected surfaces.** Only these files may change:
   `packages/setup/package.json`, `packages/setup/README.md`, `README.md`,
-  `README.zh-TW.md`, `docs/limitations.md`, this plan, and `CHANGELOG.md`. A
-  small Unreleased changelog note may describe the metadata and documentation
-  update only. Do not change runtime, generated files, build manifests,
-  dependencies, versions, live accounts, production, publication, tags,
-  settings, or the prior pilot. The changed discovery surfaces are npm package
-  search/homepage/package README and GitHub README entry points; retained
-  discovery evidence also goes in `docs/limitations.md` per CONTRIBUTING. No UI
-  replay is implicated. The primary agent owns the scoped PR gates: Node
-  22.16/24.15 tests, packaging, and final diff review. Any release qualification
-  and publication remain later work under the release checklist and separate
-  approval. This worker runs static JSON and scoped-diff checks only; no heavy
-  tests or installs.
+  `README.zh-TW.md`, `docs/limitations.md`, this plan, `CHANGELOG.md`,
+  `packages/setup/runtime/engine/cairn-memory-local-preview-0.0.0-preview.1.tgz`,
+  and `packages/setup/runtime/engine/manifest.json`. The two generated engine
+  package artifacts are allowed because `docs/limitations.md` is included in
+  `packaging/artifact-files.json`; refresh them to include the updated evidence.
+  Their inventory and packaged `package.json`/`npm-shrinkwrap.json` must remain
+  unchanged; only the `docs/limitations.md` payload and its derived source hash,
+  archive digest, and byte count may change. Do not change executable sources,
+  engine behavior, dependencies, versions, or the frozen hosted Codex runtime
+  files or inventory. A small Unreleased changelog note may describe the
+  metadata and documentation update only. Do not change live accounts,
+  production, publication, tags, settings, or the prior pilot. The changed
+  discovery surfaces are npm package search/homepage/package README and GitHub
+  README entry points; retained discovery evidence also goes in
+  `docs/limitations.md` per CONTRIBUTING. No UI replay is implicated. The
+  primary agent owns scoped PR gates, including Node 22.16/24.15 tests,
+  packaging, and final diff review. Any release qualification and publication
+  remain later work under the release checklist and separate approval. This
+  worker performs the scoped payload refresh and static checks; no heavy tests
+  or installs.
 
 ## Initial discovery-surface audit
 
@@ -130,6 +140,7 @@ results separately. Do not schedule automatic reruns.
 | English and Traditional Chinese GitHub READMEs | Existing anchors and detailed content remain intact; opening identifies the Cairn.ink relationship and links to the three official entry points. | Worker: diff inspection. |
 | Evaluation limitations record | Labeled as discovery measurement, links to this plan, and separates API visibility from product-quality evidence. | Worker: diff inspection. |
 | Discovery query baseline | Query list, platform-specific results, and post-publication follow-up remain separate from the existing pilot. | Primary audit: eight API responses and summary at the private evidence path above. |
+| Embedded engine package | `docs/limitations.md` is packaged; refresh its embedded copy without changing inventory, package metadata, executable content, or host-runtime files. | Worker on Node 22.16.0: generator and `--check` both exit 0. The 338 members have identical inventories; only `docs/limitations.md` bytes and source hash differ. Packaged `package.json` and `npm-shrinkwrap.json` are byte-identical; all 32 host-runtime files are unchanged. |
 
 ## Routing record
 

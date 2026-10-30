@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "06d1ab1dd440f24944548992373c14584800abd496fa4ba07af1483712a813d8",
-  "bytes": 991711,
+  "sha256": "43aadc027110f62c4863152d63fa368bdd379bf24e07c4db58b7debdd45bc4ec",
+  "bytes": 992007,
   "files": [
     "LICENSE",
     "README.md",
@@ -601,7 +601,7 @@
     "core/context-read-moc.mjs": "2fe6ea129032c8b3ac989f89ea62c1a52a354e8e7bc384e0b7ee97625c092b6b",
     "adapters/mcp/context-read-sources-configuration.mjs": "0b03510d8a8252c27b4587c798671674041a3d9033df822d0feb68483be1d0fd",
     "adapters/mcp/context-read-sources-tools.mjs": "61f8653a9e1c05021b34b9c3b00ab6e8e3bf2c45731171893b96ef3fe718a3ca",
-    "docs/limitations.md": "2442cfb2e6af4b66033a1a1ed0a63ddf058880a53adae67446304af5f7c96c51",
+    "docs/limitations.md": "c0929684427c34d851d55c8d0ea837c0acbf80a1b0d79fb1faa828d32b6f131a",
     "core/card-current-input.mjs": "bc7207aeffceb667e6bd5c50808f08b259f70556d48d8cd11b3a50d4810618f1",
     "core/card-current-schema.mjs": "08cd3274d796ef2c3cad876c174a084bc43933447c96cbb50879ce6d4e99932d",
     "core/card-current-storage.mjs": "ea8c99510582727f201a13d07564580b3dba5bc38d7822cc2b1f80ca13c08d7c",
