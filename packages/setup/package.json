@@ -1,7 +1,7 @@
 {
   "name": "@cairn-ink/memory",
   "version": "0.6.2",
-  "description": "Setup Cairn Memory local MCP tools or cloud automatic memory for Claude Code and Codex.",
+  "description": "Cairn.ink AI memory for Claude Code and Codex: local MCP tools or cloud automatic memory.",
   "type": "module",
   "license": "Apache-2.0",
   "engines": { "node": ">=22.16.0" },
@@ -13,6 +13,17 @@
     "url": "git+https://github.com/Cairn-ink/cairn-memory.git",
     "directory": "packages/setup"
   },
-  "homepage": "https://github.com/Cairn-ink/cairn-memory#install-for-claude-code-automatic-memory",
+  "homepage": "https://cairn.ink",
+  "keywords": [
+    "memory",
+    "ai-memory",
+    "agent-memory",
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "codex",
+    "cairn",
+    "cairn-ink"
+  ],
   "publishConfig": { "access": "public" }
 }

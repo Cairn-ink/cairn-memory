@@ -291,6 +291,8 @@
   "core/context-product-authority.mjs",
   "core/context-product-control.mjs",
   "core/context-product-reader.mjs",
+  "core/context-product-reader-pool.mjs",
+  "core/context-product-reader-pool-worker.mjs",
   "core/context-product-open-diagnostic.mjs",
   "core/context-product-schema.mjs",
   "core/context-product-telemetry.mjs",

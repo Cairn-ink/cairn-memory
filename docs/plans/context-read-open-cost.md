@@ -1,6 +1,6 @@
 # Fresh context reader open cost
 
-Status: design only; two non-author reviews required before implementation. Q1: fresh `open → fetch → close` p95 ≤150 ms,
+Status: stage 1 is implemented behind the service-owned `readerWorkerPool:true` opt-in; stage 2 remains a proposal. Q1: fresh `open → fetch → close` p95 ≤150 ms,
 where fetch is `fetchCandidateEvidence`. No authority-bearing reader may survive between HTTP requests.
 
 ## Method and limits
@@ -256,6 +256,6 @@ assigning a second credential. Preserve full-ref/snapshot equivalence, two-sampl
 SQLite-free parent import and manifest installation on both Node patches. Qualify hit/miss/burst mixtures through close
 on the affected native host after P supplies attribution.
 
-Diagnostics only: no pool/optimization is implemented; instrumentation stays inert without `diagnostics:true` and absent from public DTOs/serialization.
+Only stage 1 is implemented; no host preloading or validation cache is added. Instrumentation stays inert without `diagnostics:true` and absent from public DTOs/serialization.
 Evidence, expiry, publication/lineage/eligibility/suppression, sidecar refresh/retarget, pump admission/quantum settlement,
-WAL opt-in, deadlines, cleanup proof and Q1's 150 ms lifecycle definition stay unchanged. No optimization is implemented.
+WAL opt-in, deadlines, cleanup proof and Q1's 150 ms lifecycle definition stay unchanged. No native-host latency claim is made.

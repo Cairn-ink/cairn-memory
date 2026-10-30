@@ -28,6 +28,12 @@
   <a href="docs/privacy.md">Privacy</a>
 </p>
 
+**Cairn Memory** is Cairn.ink's open-source AI memory toolkit for Claude Code
+and Codex, with local MCP tools or cloud automatic memory. Visit
+[Cairn.ink](https://cairn.ink), install
+[@cairn-ink/memory on npm](https://www.npmjs.com/package/@cairn-ink/memory), or
+view the [Cairn Memory GitHub repository](https://github.com/Cairn-ink/cairn-memory).
+
 Starting a new AI session often means repeating your preferences and project
 decisions. Cairn provides memory tools to save that context between sessions,
 inspect the submitted text behind each memory, and update it when things change.

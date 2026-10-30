@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — Cairn Memory discovery metadata
+
+- Add focused npm search keywords and point the package homepage to Cairn.ink.
+- Clarify the relationship between Cairn Memory and Cairn.ink in the package and
+  repository README entry points. These metadata and documentation changes are
+  not in the published installer; installer version and behavior are unchanged.
+
 ## 0.6.2 — 2026-10-28: hosted Codex inspection TMPDIR fallback
 
 - Fix the 0.6.1 known limitation: cloud-mode Codex setup and `status` no longer
