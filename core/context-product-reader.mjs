@@ -1,3 +1,5 @@
+import { setTimeout as safetyDelay } from 'node:timers/promises';
+import { hrtime } from 'node:process';
 import { maintenanceMarker, readMaintenanceMarker, prepareMaintenanceMarker, claimMaintenanceOrdinal, maintenanceControlState, bindMaintenanceControl, serializationDiagnostic, attributionFields, maintenanceWorkFields } from './context-product-attribution.mjs';
 import { types } from 'node:util';
 import { randomUUID } from 'node:crypto';
@@ -171,9 +173,18 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       const cutoff = Math.min(disposalCutoff ?? Infinity, slot ? Math.min(Number(mono(slot.operation.operationCutoffMonoNs)) / 1e6, slot.cutoff?.cutoffAt ?? Infinity) : Number(now()) / 1e6);
       let until = Math.min(Number(now()) / 1e6 + 500, cutoff + 1000);
       return new Promise((resolve, reject) => {
-        let timer;
-        const detach = () => { clearTimer(timer); tightenGrace = undefined; instance.off('exit', exited); instance.off('error', failed); };
+        let timer, safety, live = true, realUntil = Infinity;
+        const realNow = () => { const [seconds, nanos] = hrtime(); return seconds * 1000 + nanos / 1e6; };
+        const detach = () => { live = false; clearTimer(timer); safety?.abort(); tightenGrace = undefined; instance.off('exit', exited); instance.off('error', failed); };
+        // An injected operation clock/timer cannot suspend the safety fallback.
+        const armSafety = remaining => {
+          realUntil = Math.min(realUntil, realNow() + Math.max(0, remaining));
+          safety?.abort(); safety = new AbortController();
+          void safetyDelay(Math.max(0, realUntil - realNow()), undefined, { signal: safety.signal })
+            .then(() => force(), error => { if (error.name !== 'AbortError') force(error); });
+        };
         const force = cause => {
+          if (!live) return;
           detach();
           try { Promise.resolve(instance.terminate()).then(value => cause ? reject(cause) : resolve(value), reject); }
           catch (error) { reject(error); }
@@ -188,11 +199,12 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
           try {
             const remaining = until - Number(now()) / 1e6;
             if (remaining <= 0) force();
-            else timer = setTimer(() => force(), remaining);
+            else { armSafety(remaining); timer = setTimer(() => force(), remaining); }
           } catch (error) { force(error); }
         };
         try {
-          timer = setTimer(() => force(), Math.max(0, until - Number(now()) / 1e6));
+          const remaining = Math.max(0, until - Number(now()) / 1e6);
+          armSafety(remaining); timer = setTimer(() => force(), remaining);
           instance.ref(); instance.postMessage({ method: 'close' });
         } catch (error) { force(error); }
       });

@@ -123,12 +123,13 @@ for(const mode of ['reject','block'])nativeTest(`disposal ${mode}: grace failure
 });
 
 // Parent and reader clocks differ only at dispatch; disposal cannot inherit an unbounded idle close.
+// The real safety cap may win first; paused injected time is not a lower bound.
 nativeTest('disposal parent deadline: accepted response between deadlines still bounds blocked close',async t=>{
   const x=setup(t,{stage:'refresh',mode:'block',parentGap:true}),p=x.renew(x.config);x.pumps.push(p);
   const first=await x.tick();await first.pending;const turn=await x.tick();
   while(!x.state[0])await realDelay(1);await flush();
   assert.equal(x.acceptedBetweenDeadlines,true,'reader_accepts_response_between_parent_and_reader_deadlines');
-  await testClock.advance(499,{waitForWorkers:false});assert.equal(x.forced,0);
+  await testClock.advance(499,{waitForWorkers:false});
   await testClock.advance(1,{waitForWorkers:false});await flush();
   try{assert.equal(x.forced,1,'parent_timeout_forces_blocked_close_within_proof_bound');}
   finally{if(!x.forced){Atomics.store(x.state,1,1);Atomics.notify(x.state,1);}}
@@ -138,7 +139,7 @@ nativeTest('disposal parent deadline: accepted response between deadlines still 
 });
 nativeTest('disposal ordinary close: blocked host cannot retain a live Worker indefinitely',async t=>{
   const x=setup(t,{mode:'block'});x.disableCutoff();const h=await x.open(x.options),closing=h.close().catch(e=>e);
-  while(!x.state[0])await realDelay(1);await testClock.advance(499,{waitForWorkers:false});assert.equal(x.forced,0);
+  while(!x.state[0])await realDelay(1);await testClock.advance(499,{waitForWorkers:false});
   await testClock.advance(1,{waitForWorkers:false});
   try{assert.equal(x.forced,1,'ordinary_close_forces_blocked_host_within_bound');}
   finally{if(!x.forced){Atomics.store(x.state,1,1);Atomics.notify(x.state,1);}}
@@ -162,10 +163,27 @@ for(const delayedGrace of [{gap:2,delay:850},{gap:900,delay:900}])nativeTest(`di
   const closed=first.catch(e=>e);
   assert.strictEqual(disposeProductReader(h,'read_timeout',parentCutoff),first,'repeated_disposal_keeps_the_owned_cleanup_promise');
   assert.strictEqual(disposeProductReader(h,'read_timeout',x.readerCutoff+1000),first);
-  await testClock.advance(parentCutoff+999-testClock.now(),{waitForWorkers:false});assert.equal(x.forced,0);
+  await testClock.advance(parentCutoff+999-testClock.now(),{waitForWorkers:false});
   await testClock.advance(1,{waitForWorkers:false});
   try{assert.equal(x.forced,1,'earlier_cutoff_tightens_running_grace_by_earliest_proof_boundary');}
   finally{if(!x.forced){Atomics.store(x.state,1,1);Atomics.notify(x.state,1);}}
   await x.exits[0];assert.equal(x.workers[0].threadId,-1);assert.equal((await closed).code,'reader_failed');
   await x.retries(true);
+});
+
+for(const trigger of ['close','timeout'])nativeTest(`disposal frozen clock ${trigger}: real safety fallback ends a blocked host close`,async t=>{
+  const x=setup(t,{mode:'block'});if(trigger==='close')x.disableCutoff();
+  let closed;
+  if(trigger==='close'){const h=await x.open(x.options);closed=h.close().catch(e=>e);}
+  else assert.equal((await x.open(x.options).catch(e=>e)).code,'read_timeout');
+  while(!x.state[0] && x.workers[0].threadId!==-1)await realDelay(1);
+  const frozen=testClock.now(),guard=new AbortController();
+  try{
+    const exited=await Promise.race([x.exits[0].then(()=>true),realDelay(2000,false,{signal:guard.signal})]);
+    assert.equal(exited,true,'real_time_fallback_terminates_with_a_frozen_injected_clock');
+  }finally{guard.abort();if(!x.forced){Atomics.store(x.state,1,1);Atomics.notify(x.state,1);}}
+  assert.equal(testClock.now(),frozen,'safety_fallback_needs_no_injected_timer_delivery');
+  assert.equal(x.forced,1);assert.equal(x.workers[0].threadId,-1);
+  if(closed)assert.equal((await closed).code,'reader_failed');
+  assert.ok((await x.s.supervisor.drain()).some(r=>r.state==='failed'&&r.workerStopped));await x.retries(true);
 });

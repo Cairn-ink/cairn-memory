@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "be76857161c7d6101056ea83c0f3860d16ce69f0447d35be4f8767a388efcce0",
-  "bytes": 985180,
+  "sha256": "d9b59c7b7b9d9df1182f3ec1bd84d535810d776b4529d85bf08011a50d6cc416",
+  "bytes": 985473,
   "files": [
     "LICENSE",
     "README.md",
@@ -638,7 +638,7 @@
     "docs/plans/topic-reader-wal-fix.md": "ff375d11f558b7c60245ee44a65020f1888a2fdc24e8def7d68dd4b47c3b57f0",
     "core/context-product-authority.mjs": "8eda367985cfbcfcb52a3c7f3300e162b47cd7077bad921632106739eb5de765",
     "core/context-product-control.mjs": "83f036d20faa2515ba98d270d88a92b641c778f124dd51bbfbee7a931a9c7744",
-    "core/context-product-reader.mjs": "548292ec2462d7faf0d51f7a372136337907f9a5468b2ac6c50ac7ee52340658",
+    "core/context-product-reader.mjs": "2aaeaffee7cc1925f032ed6ca2fa6362801bf8d2e0691545658a6ebb15178981",
     "core/context-product-open-diagnostic.mjs": "fcf436e5219a45ee91f629a33515e44b35523e638aaea65e326eb4853a6c0bf8",
     "core/context-product-schema.mjs": "052048d1c8300ae349778428f7d430e6a70b16a96502ac89d7efe56de494e076",
     "core/context-product-telemetry.mjs": "4601cfc76379b7daf3d26a4f9690689469687685e7289d05ddf7773ee6959f85",
