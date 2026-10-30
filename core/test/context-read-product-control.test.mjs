@@ -37,8 +37,17 @@ function harness({ expiry = null, openAt = 0, stall = false, terminationFails = 
       const worker = new EventEmitter(), gate = deferred(), messages = [];
       Object.assign(worker, { data, messages, gate, ref() {}, unref() {},
         postMessage(message) {
+          const prior = messages.at(-1)?.operation ?? data.operation;
           messages.push(message);
-          if (message.method === 'close') { sealNative(data.frame); worker.emit('exit', 0); }
+          if (message.method === 'close') {
+            // Timeout close remains gated just like forced termination. Keep
+            // these fault cases' intentionally incomplete native telemetry.
+            if (time >= BigInt(prior.operationCutoffMonoNs)) void gate.promise.then(() => {
+              if (terminationFails) worker.emit('error', Error('synthetic close failure'));
+              else worker.emit('exit', 0);
+            });
+            else { sealNative(data.frame); worker.emit('exit', 0); }
+          }
         },
         terminate() { return gate.promise.then(() => { if (terminationFails) throw Error('synthetic'); return 1; }); },
         reply(result, operation = messages.at(-1)?.operation ?? data.operation) { worker.emit('message', { operation, result, fileIdentity: '1:2' }); },

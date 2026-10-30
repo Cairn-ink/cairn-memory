@@ -70,6 +70,11 @@ nativeTest(`cutoff native ${mode} ${phase} ${point} COMMIT: atomic SQL oracle an
   // let the branded parent deadline terminate it, without waiting for its port.
   await testClock.advance(Math.max(0,Math.ceil(deadline-now())),{waitForWorkers:false});
   for(const [key,timer] of [...timers])if(timer.at<=now()){timers.delete(key);timer.fn();}
+  await flush();
+  // This Worker is blocked in the COMMIT rendezvous, so expire only the
+  // injected disposal grace; the independent proof deadline is still future.
+  await testClock.advance(500,{waitForWorkers:false});
+  for(const [key,timer] of [...timers])if(timer.at<=now()){timers.delete(key);timer.fn();}
   await operation;await flush();
   assert.equal(p.getStatus().state,'active','native_confirmed_disposal_recovers_without_renewal');
   assert.equal(productReader.maintenancePumpCutoffDiagnostic?.(p.getStatus()).outcome,1,'native_exit_and_complete_records_prove_disposal');

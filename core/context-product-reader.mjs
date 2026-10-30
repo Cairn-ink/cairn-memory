@@ -1,3 +1,5 @@
+import { setTimeout as safetyDelay } from 'node:timers/promises';
+import { hrtime } from 'node:process';
 import { maintenanceMarker, readMaintenanceMarker, prepareMaintenanceMarker, claimMaintenanceOrdinal, maintenanceControlState, bindMaintenanceControl, serializationDiagnostic, attributionFields, maintenanceWorkFields } from './context-product-attribution.mjs';
 import { types } from 'node:util';
 import { randomUUID } from 'node:crypto';
@@ -21,7 +23,12 @@ import { openDiagnosticBuffer, openDiagnosticClock, openDiagnosticSnapshot } fro
 // qualification. Neither public configuration nor environment can enable this.
 const qualifiedRuntimePatches = new Set();
 export const maintenanceCutoffQualified = () => qualifiedRuntimePatches.has(process.versions.node);
-const capabilities = new WeakMap(), diagnostics = new WeakMap();
+const capabilities = new WeakMap(), diagnostics = new WeakMap(), disposals = new WeakMap();
+// Private pump-to-reader cleanup cause; no caller option or handle property.
+export const disposeProductReader = (handle, code, cutoffAt) => {
+  const dispose = disposals.get(handle.close);
+  return dispose ? dispose(code, cutoffAt) : handle.close();
+};
 export const maintenancePumpCutoffDiagnostic = observation => diagnostics.get(observation);
 export const snapshotMaintenanceCutoff = (observation, value) => {
   if (value) diagnostics.set(observation, Object.freeze({ ...value }));
@@ -157,9 +164,57 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     if (!maintenance && (!types.isSharedArrayBuffer(reservation) || Reflect.apply(sharedLength, reservation, []) !== 4 ||
         Atomics.compareExchange(new Int32Array(reservation), 0, 0, 1) !== 0)) fail('authority_required');
     const resource = registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, request: maintenance ? undefined : request, frame, resources });
-    let closed = false, terminal, idle, closePromise, ready = false, releaseWriter, writerReleased = false;
+    let closed = false, terminal, idle, closePromise, ready = false, releaseWriter, writerReleased = false, gracefulClose = false, disposalCutoff, tightenGrace;
     const epoch = 1;
-    const lifecycle = createReaderWorkerLifecycle({ clearTimer, onStop(termination) {
+    // Timeout delivery remains prompt; disposal owns a separate bounded grace.
+    function stopWorker(instance) {
+      if (terminal !== 'read_timeout' && !gracefulClose) return instance.terminate();
+      const slot = lifecycle.pending;
+      const cutoff = Math.min(disposalCutoff ?? Infinity, slot ? Math.min(Number(mono(slot.operation.operationCutoffMonoNs)) / 1e6, slot.cutoff?.cutoffAt ?? Infinity) : Number(now()) / 1e6);
+      let until = Math.min(Number(now()) / 1e6 + 500, cutoff + 1000);
+      return new Promise((resolve, reject) => {
+        let timer, safety, live = true, realUntil = Infinity;
+        const realNow = () => { const [seconds, nanos] = hrtime(); return seconds * 1000 + nanos / 1e6; };
+        const detach = () => { live = false; clearTimer(timer); safety?.abort(); tightenGrace = undefined; instance.off('exit', exited); instance.off('error', failed); };
+        // An injected operation clock/timer cannot suspend the safety fallback.
+        const armSafety = remaining => {
+          realUntil = Math.min(realUntil, realNow() + Math.max(0, remaining));
+          safety?.abort(); safety = new AbortController();
+          void safetyDelay(Math.ceil(Math.max(0, realUntil - realNow())), undefined, { signal: safety.signal })
+            .then(() => {
+              if (!live) return;
+              const remaining = realUntil - realNow();
+              if (remaining > 0) armSafety(remaining);
+              else force();
+            }, error => { if (error.name !== 'AbortError') force(error); });
+        };
+        const force = cause => {
+          if (!live) return;
+          detach();
+          try { Promise.resolve(instance.terminate()).then(value => cause ? reject(cause) : resolve(value), reject); }
+          catch (error) { reject(error); }
+        };
+        const exited = code => { detach(); code === 0 ? resolve(code) : reject(coded('reader_failed')); };
+        const failed = error => force(error);
+        instance.once('exit', exited); instance.once('error', failed);
+        tightenGrace = earlier => {
+          const next = Math.min(until, earlier + 1000);
+          if (next >= until) return;
+          until = next; clearTimer(timer);
+          try {
+            const remaining = until - Number(now()) / 1e6;
+            if (remaining <= 0) force();
+            else { armSafety(remaining); timer = setTimer(() => force(), remaining); }
+          } catch (error) { force(error); }
+        };
+        try {
+          const remaining = Math.max(0, until - Number(now()) / 1e6);
+          armSafety(remaining); timer = setTimer(() => force(), remaining);
+          instance.ref(); instance.postMessage({ method: 'close' });
+        } catch (error) { force(error); }
+      });
+    }
+    const lifecycle = createReaderWorkerLifecycle({ clearTimer, stopWorker, onStop(termination) {
       registry.cleanup(resource);
       termination.then(() => {
         releaseSemanticWriter();
@@ -349,6 +404,23 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       try { return dispatch(method, input, credential, control, entered); }
       catch (error) { return Promise.resolve(productFailure(error.code)); }
     };
+    function dispose(code = 'store_closed', cutoffAt) {
+      // Every call can shorten in-flight cleanup, including an idempotent close.
+      if (code === 'read_timeout' && Number.isFinite(cutoffAt)) {
+        disposalCutoff = Math.min(disposalCutoff ?? Infinity, cutoffAt);
+        tightenGrace?.(disposalCutoff);
+      }
+      if(semantic)Atomics.store(new Int32Array(semantic.configuration.cancellation),0,1);
+      return closePromise ??= (async () => {
+        phase?.mark('closeEntered');
+        // Idle close uses the same bounded acknowledgement as timeout disposal.
+        gracefulClose = !lifecycle.pending;
+        await shutdown(code).catch(() => {});
+        phase?.mark('closeExited');
+        await resource.delivery;
+        phase?.mark('closeFinished');
+      })();
+    }
     const handle=Object.freeze({
       getContextReadCapabilities(input = {},credential,control) {
         if(semantic) {
@@ -363,27 +435,9 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       contextRead: (input, credential, control) => call('contextRead', input, credential, control) } : {}),
       getContextIndexStatus: (input, credential, control) => call('getContextIndexStatus', input, credential, control),
       ...(maintenance ? { refreshContextIndex: (input, credential, control) => call('refreshContextIndex', input, credential, control) } : {}),
-      close() {
-        if(semantic)Atomics.store(new Int32Array(semantic.configuration.cancellation),0,1);
-        return closePromise ??= (async () => {
-          phase?.mark('closeEntered');
-          if (!closed && !lifecycle.pending && lifecycle.worker) {
-            // Graceful native close receives an independent cleanup acknowledgement.
-            closed = true; clearTimer(idle); registry.cleanup(resource);
-            const instance = lifecycle.worker;
-            await new Promise((resolve, reject) => {
-              instance.ref();
-              instance.once('exit', code => { phase?.mark('closeExited'); code === 0 ? resolve() : reject(coded('reader_failed')); });
-              instance.once('error', reject);
-              instance.postMessage({ method: 'close' });
-            }).then(() => { releaseSemanticWriter();registry.finish(resource); if (resource.state === 'complete') releaseWriter?.(); }, () => registry.finish(resource, false));
-            lifecycle.worker = undefined;
-          } else await shutdown('store_closed');
-          await resource.delivery;
-          phase?.mark('closeFinished');
-        })();
-      },
+      close() { return dispose('store_closed'); },
     });
+    disposals.set(handle.close, dispose);
     if (phaseBuffer) openPhases.set(handle, phaseBuffer);
     if(maintenance)maintenanceMarkers.set(handle,marker);
     return handle;

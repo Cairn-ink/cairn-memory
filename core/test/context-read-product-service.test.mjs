@@ -6,13 +6,15 @@ import { createProductReaderRuntime } from '../context-product-reader.mjs';
 import { createContextReadSupervisor } from '../context-read-supervisor.mjs';
 import { credentialDigest,PRODUCT_PROFILE } from '../context-product-control.mjs';
 function fixture(t,{stall=false}={}){
-  let time=0n,release;const timers=new Set(),messages=[];
+  let time=0n,release;const stopped=new Promise(resolve=>{release=resolve;}),timers=new Set(),messages=[];
   const supervisor=createContextReadSupervisor();t.after(()=>supervisor.close());
   const credential={service:randomUUID()},readSet=[{ownerId:'service',scope:'personal',projectId:null}],ownerCoverage={policy:'recent-projects-v1',selectionRevision:'fixture',requestedNamespaces:1,selectedNamespaces:1,omittedNamespaces:0};
   const serviceBinding={kind:'service',serviceId:randomUUID(),credentialBindingId:randomUUID(),credentialExpiresUtcMs:null,credentialDigest:credentialDigest(credential),ownerId:'service',namespaces:{readSet,ownerCoverage},issuedAt:0};
   const options={supervisor,path:new URL('synthetic-service.sqlite',import.meta.url).pathname,version:'context-read-v1',profile:PRODUCT_PROFILE,readSet,ownerCoverage,sidecarJournalMode:'DELETE',host:{moduleUrl:new URL('../testing/context-product-index-host.mjs',import.meta.url).href,configuration:{serviceBinding}}};
   const open=createProductReaderRuntime({maintenance:true,now:()=>time,utc:()=>1000+Number(time/1000000n),setTimer:(fn,ms)=>{const timer={fn,ms,unref(){}};timers.add(timer);return timer;},clearTimer:timer=>timers.delete(timer),spawnWorker:data=>{
-    const w=new EventEmitter();Object.assign(w,{ref(){},unref(){},terminate:()=>new Promise(resolve=>{release=resolve;}),postMessage(m){messages.push(m);if(m.method==='close'){queueMicrotask(()=>w.emit('exit',0));return;}
+    const w=new EventEmitter();Object.assign(w,{ref(){},unref(){},terminate:()=>stopped,postMessage(m){messages.push(m);if(m.method==='close'){
+      // Hold either disposal acknowledgement; an immediate exit already proves cleanup.
+      if(stall)void stopped.then(()=>w.emit('exit',0));else queueMicrotask(()=>w.emit('exit',0));return;}
       queueMicrotask(()=>w.emit('message',{operation:m.operation,result:{ok:true,value:null}}));}});
     if(!stall)queueMicrotask(()=>w.emit('message',{operation:data.operation,result:{ok:true,value:null},fileIdentity:'42:43'}));return w;
   }});

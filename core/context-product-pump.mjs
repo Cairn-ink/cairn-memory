@@ -1,5 +1,5 @@
 import { attributionFields, maintenanceWorkFields, maintenanceKinds, add, maintenanceDispatchControl, maintenanceControlState } from './context-product-attribution.mjs';
-import { openContextIndexMaintainer, maintenanceObservation, maintenancePhaseDiagnostic, maintenanceStallDiagnostic, maintenanceCutoffQualified, authorizeMaintenanceCutoff, snapshotMaintenanceCutoff } from './context-product-reader.mjs';
+import { openContextIndexMaintainer, disposeProductReader, maintenanceObservation, maintenancePhaseDiagnostic, maintenanceStallDiagnostic, maintenanceCutoffQualified, authorizeMaintenanceCutoff, snapshotMaintenanceCutoff } from './context-product-reader.mjs';
 import { supervisorOwner } from './context-read-supervisor.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { boundedData, hostConfiguration, coverage, PRODUCT_PROFILE } from './context-product-control.mjs';
@@ -122,7 +122,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     }
     let ledgers=admit(window,budgets);
     const record=registry.register(owner,{path:projections[0].options.path,domain:'context-read-product-v1.1/pump/'+c.id});
-    let timer,closing,stopped=false,running,lastTick=now(),at=0,renewedUntil=now()+c.renewalMs,error=null,grant=credential;
+    let timer,closing,stopped=false,running,disposalCutoff,lastTick=now(),at=0,renewedUntil=now()+c.renewalMs,error=null,grant=credential;
     let report,completion,settled=false;
     function cycle(){settled=false;completion=new Promise(resolve=>{report=value=>{settled=true;resolve(value);};});}cycle();
     const handles=new Map(),writers=new Map(),handleLanes=new Map();
@@ -135,7 +135,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       opens:0,quanta:0,first:null,latest:null,worstElapsedMs:0,elapsedBuckets:Array(502).fill(0),work:{},attribution:Object.fromEntries(attributionFields.map(k=>[k,fieldCounter()])),lastStall:null,stallCounts:Array(maintenanceKinds.length).fill(0)}));
     async function drain(key,index=handleLanes.get(key)){
       const started=now();
-      try{await handles.get(key).close();handles.delete(key);handleLanes.delete(key);}
+      try{await disposeProductReader(handles.get(key),error==='read_timeout'?error:'store_closed',disposalCutoff);handles.delete(key);handleLanes.delete(key);}
       finally{recordPhase(phases[index].phases.drain,now()-started);}
     }
     // Initial observations are due within five seconds of activation. Expired
@@ -192,6 +192,9 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     }
     function schedule(){
       if(stopped||error||exhausted()||now()>=renewedUntil)return;
+      if(Math.min(window.endsAtMonoMs,renewedUntil)-now()<quantum.maxMs){
+        timer=setTimer(tick,Math.max(1,Math.min(window.endsAtMonoMs,renewedUntil)-now()));return;
+      }
       // Look ahead through the unchanged round-robin order. Each future turn
       // needs its full pre-observation quantum plus minimum admission spacing
       // for intervening turns. A fixed admission period cannot bound reads.
@@ -217,6 +220,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       if(stopped||error)return;
       checkCadence(now());
       if(exhausted()||now()>=renewedUntil){report(observation());return;}
+      if(Math.min(window.endsAtMonoMs,renewedUntil)-now()<quantum.maxMs){schedule();return;}
       if(recoveryEnabled && projections.every((_,i)=>cooling(i))){schedule();return;}
       lastTick=now();
       let quantumTimer,lane,sequence,settleStarted,deliveryMs=0,activeHandle,activeControl,ordinal,openingOrdinal,quantumDetail={},stallRecorded=false,capability,recovery;
@@ -238,6 +242,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           const p=projections[index],dispatchEpoch=residentEpoch,key=JSON.stringify([residentKeys[index],dispatchEpoch]),ledger=ledgers.get(domainOf(p));
           const maxItems=Math.min(quantum.maxItems,ledger.maxItems-ledger.items),maxMs=Math.min(quantum.maxMs,ledger.maxMs-ledger.ms,Math.floor(ledger.endsAt-now()),Math.floor(renewedUntil-now()));
           if(maxItems<1||maxMs<1)return;
+          disposalCutoff=lastTick+maxMs;
           // Reserve the full quantum before dispatch. Unknown usage remains
           // charged after crash/timeout; restarting or renewing cannot refund it.
           ledger.items+=maxItems;ledger.ms+=maxMs;
@@ -346,7 +351,11 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             ledger.items=Math.max(ledger.items-maxItems+items,ledger.floorItems);
             ledger.ms=Math.max(ledger.ms-maxMs+elapsed,ledger.floorMs);
           }
-        } catch(e){if(e.code==='read_timeout')recordStall(e);error=e.code??'reader_failed';}
+        } catch(e){
+          if(e.code==='read_timeout')recordStall(e);error=e.code??'reader_failed';
+          // An opening failure returns no handle; its cleanup ID still owns disposal.
+          if(e.cleanupId)try{await c.supervisor.drain(e.cleanupId);}catch{error='reader_failed';}
+        }
       })().finally(()=>{
         if(lane){
           if(settleStarted!==undefined)recordPhase(lane.phases.settle,deliveryMs+now()-settleStarted);
