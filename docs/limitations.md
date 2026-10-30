@@ -2749,3 +2749,15 @@ metadata to models do not get a metadata invisibility guarantee.
 ### Current-dependent Cards
 
 Explicit Card dependency review is opt-in for authoring and always enforced for existing declarations. Stale current evidence is excluded; eligible retained authored history is qualified. Review does not judge semantic accuracy, rewrite content, archive overwritten revisions or restore purged sources/methods. Complete declaration context requires separate authorization; restricted readers receive minimal `access_revoked` metadata. Memory dependencies and generated-summary freshness remain unsupported. Schema v33 requires stopping older binaries before upgrade. Dependency contention/latency gates run only in the opt-in measurement script. See [the local guide](card-current-dependencies-local.md).
+
+## Discovery measurement limits (2026-10-30)
+
+This records search-surface visibility only; it is separate from product-quality
+evidence. Four frozen unbranded queries were sampled through the npm registry
+and GitHub repository search APIs. The exact npm package and GitHub repository
+were absent from their respective top 20, so their exact ranks are unknown. The
+broad `memory` query was exploratory; branded identity controls were separate
+and do not show generic-term visibility. These API results do not establish
+Cairn.ink website or Google search order, AI citations, or discovery improvement.
+See the [discovery plan](plans/memory-discovery-2026-10-30.md) for the query
+list, method, totals, timestamps, and retained responses.
