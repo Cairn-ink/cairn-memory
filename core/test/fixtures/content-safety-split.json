@@ -1,0 +1,505 @@
+{
+  "version": "s2h1-reviewed-split-v1",
+  "reviewedBase": "9e99a3dd",
+  "inventory": {
+    "exports": [
+      "CARD_CURRENT_METHODS",
+      "CARD_CURRENT_VERSION",
+      "CONTEXT_SOURCES",
+      "MemoryStoreError",
+      "SOURCE_LIMITS",
+      "createContextReadSupervisor",
+      "normalizeBoundedText",
+      "normalizedTextLength",
+      "openContextIndexMaintainer",
+      "openContextProductReader",
+      "openContextReader",
+      "openContextSemanticCoordinator",
+      "openMemoryCore",
+      "openMemoryReader",
+      "openMemoryStore",
+      "renewContextMaintenancePump",
+      "roleProfileRef",
+      "roleProfileReleaseRef",
+      "roleTaskMeteredText",
+      "roleTaskToolResponse",
+      "selectContextProductNamespaces"
+    ],
+    "core": [
+      "abandonAdmission",
+      "admit",
+      "adoptMethodVersion",
+      "applyCardPlacement",
+      "applyPlacement",
+      "bindQualifiedClaim",
+      "cancelCardDraft",
+      "capture",
+      "captureRaw",
+      "checkMethodReasonRefs",
+      "claimAdmission",
+      "classifyPlacement",
+      "close",
+      "closeEpisodeNextStep",
+      "compareMethodVersions",
+      "confirm",
+      "confirmCardDraft",
+      "correct",
+      "correctEpisode",
+      "createAssetDerivative",
+      "createCardDraft",
+      "declareCardCurrentDependencies",
+      "deleteAsset",
+      "deleteAssetDerivative",
+      "deleteAssetVersion",
+      "deleteConversation",
+      "deleteKnowledgeCard",
+      "deleteMethodPackage",
+      "deleteMethodVersion",
+      "deleteRoleProfileRelease",
+      "deleteSourceNote",
+      "disableMethodBinding",
+      "disableRoleProfile",
+      "discardCaptureEvidence",
+      "editCardDraft",
+      "editKnowledgeCard",
+      "endEpisodeSession",
+      "fenceSession",
+      "fetch",
+      "fetchEvidence",
+      "finishAdmission",
+      "forget",
+      "forgetEpisode",
+      "get",
+      "getAssetCapabilities",
+      "getAssetUsage",
+      "getAssetVersion",
+      "getCaptureControl",
+      "getCard",
+      "getConversation",
+      "getEpisode",
+      "getLocalCaptureControl",
+      "getMethodPackageCapabilities",
+      "getMethodPackageUsage",
+      "getMethodVersion",
+      "getPrivateCardCapabilities",
+      "getPrivateCardUsage",
+      "getRationale",
+      "getRawCaptureControl",
+      "getRawUsage",
+      "getSource",
+      "importAssetVersion",
+      "importMethodVersion",
+      "inspectAdmission",
+      "inspectCaptureEvidence",
+      "inspectCardOperation",
+      "keepEpisode",
+      "linkMocs",
+      "list",
+      "listAssetDerivatives",
+      "listAssetEffects",
+      "listAssetVersions",
+      "listAssets",
+      "listCardEffects",
+      "listCards",
+      "listEpisodes",
+      "listEvidenceMappings",
+      "listMemoriesByTime",
+      "listMethodBindingEvents",
+      "listMethodEffects",
+      "listMethodManifest",
+      "listMethodPackages",
+      "listMethodVersions",
+      "listRawConversations",
+      "listRawEffects",
+      "listReviewConflicts",
+      "listReviewTransitions",
+      "map",
+      "mapEvidence",
+      "planCaptureBatches",
+      "previewDeleteConversation",
+      "proposeEvidenceMapping",
+      "publishRoleProfileRelease",
+      "readAssetBytes",
+      "readAssetDerivative",
+      "readMethodAttachmentBytes",
+      "readMethodFile",
+      "readRoleTaskContext",
+      "rebuildIndex",
+      "recall",
+      "refreshCardTopic",
+      "reject",
+      "releaseEpisodeCorrection",
+      "resolveMethod",
+      "resolveMethodsForRole",
+      "resolveSourceReferences",
+      "revalidateCardCurrentDependencies",
+      "revalidateEvidence",
+      "reviewDecisionBasis",
+      "reviewEvidenceMapping",
+      "reviewRationale",
+      "selectEvidence",
+      "sessionStartContext",
+      "setCapturePaused",
+      "setLocalCaptureControl",
+      "setProceduralMemory",
+      "setProjectCapture",
+      "setRawCaptureControl",
+      "sourceSnapshot",
+      "submitSourceNote",
+      "supersede",
+      "transitionQualified",
+      "transitionQualifiedSet",
+      "verifyAssetBytes"
+    ],
+    "legacy": [
+      "close",
+      "scope"
+    ],
+    "supervisor": [
+      "ackCleanup",
+      "close",
+      "drain",
+      "getCleanupStatus"
+    ],
+    "scope": [
+      "correct",
+      "forget",
+      "get",
+      "list",
+      "remember",
+      "search"
+    ],
+    "context": [
+      "close",
+      "contextRead",
+      "fetchCandidateEvidence",
+      "findCandidates",
+      "getContextReadCapabilities",
+      "refreshContextIndex"
+    ],
+    "topic": [
+      "close",
+      "readTopicMembers",
+      "readTopicOverview"
+    ],
+    "product": [
+      "close",
+      "contextRead",
+      "fetchCandidateEvidence",
+      "findCandidates",
+      "getContextIndexStatus",
+      "getContextReadCapabilities"
+    ],
+    "maintainer": [
+      "close",
+      "getContextIndexStatus",
+      "getContextReadCapabilities",
+      "refreshContextIndex"
+    ],
+    "cards": [
+      "applyCardPlacement",
+      "cancelCardDraft",
+      "confirmCardDraft",
+      "createCardDraft",
+      "declareCardCurrentDependencies",
+      "deleteKnowledgeCard",
+      "deleteSourceNote",
+      "editCardDraft",
+      "editKnowledgeCard",
+      "fetchEvidence",
+      "getCard",
+      "getPrivateCardCapabilities",
+      "getPrivateCardUsage",
+      "getSource",
+      "inspectCardOperation",
+      "listCardEffects",
+      "listCards",
+      "listEvidenceMappings",
+      "mapEvidence",
+      "proposeEvidenceMapping",
+      "refreshCardTopic",
+      "revalidateCardCurrentDependencies",
+      "revalidateEvidence",
+      "reviewEvidenceMapping",
+      "selectEvidence",
+      "submitSourceNote"
+    ],
+    "methods": [
+      "adoptMethodVersion",
+      "checkMethodReasonRefs",
+      "compareMethodVersions",
+      "deleteMethodPackage",
+      "deleteMethodVersion",
+      "disableMethodBinding",
+      "getMethodPackageCapabilities",
+      "getMethodPackageUsage",
+      "getMethodVersion",
+      "importMethodVersion",
+      "listMethodBindingEvents",
+      "listMethodEffects",
+      "listMethodManifest",
+      "listMethodPackages",
+      "listMethodVersions",
+      "readMethodAttachmentBytes",
+      "readMethodFile",
+      "resolveMethod",
+      "resolveMethodsForRole"
+    ],
+    "assets": [
+      "createAssetDerivative",
+      "deleteAsset",
+      "deleteAssetDerivative",
+      "deleteAssetVersion",
+      "getAssetCapabilities",
+      "getAssetUsage",
+      "getAssetVersion",
+      "importAssetVersion",
+      "listAssetDerivatives",
+      "listAssetEffects",
+      "listAssetVersions",
+      "listAssets",
+      "readAssetBytes",
+      "readAssetDerivative",
+      "verifyAssetBytes"
+    ],
+    "roles": [
+      "deleteRoleProfileRelease",
+      "disableRoleProfile",
+      "publishRoleProfileRelease",
+      "readRoleTaskContext"
+    ],
+    "semantic": [
+      "close",
+      "getOwnerSemanticStatus",
+      "purgeOwnerVectors",
+      "setOwnerSemantic",
+      "validateOwnerSemanticCoverage"
+    ],
+    "pump": [
+      "close",
+      "getStatus"
+    ]
+  },
+  "capabilities": [
+    {
+      "file": "core/content-suppression-storage.mjs",
+      "name": "reserveContentIdentityInside",
+      "classification": "fact-only"
+    },
+    {
+      "file": "core/content-suppression-storage.mjs",
+      "name": "writeContentSuppressionInside",
+      "classification": "fact-only"
+    },
+    {
+      "file": "core/content-suppression-storage.mjs",
+      "name": "suppressOwnerInside",
+      "classification": "fact-only"
+    },
+    {
+      "file": "core/content-suppression-storage.mjs",
+      "name": "suppressReceiptsInside",
+      "classification": "fact-only"
+    },
+    {
+      "file": "core/content-safety-migration.mjs",
+      "name": "installContentSafetyInside",
+      "classification": "fact-only installer; only pristine creation or verified canonical tombstones"
+    },
+    {
+      "file": "core/content-safety-schema.mjs",
+      "name": "contentSafetyDDL",
+      "classification": "SQL capability producer; does not execute SQL"
+    }
+  ],
+  "implementations": [
+    {
+      "file": "core/content-suppression-storage.mjs",
+      "sha256": "dd99f8120974d94dfe1c4271d30db7a7a4b90c123800921efd9a701138f49e8b"
+    },
+    {
+      "file": "core/content-safety-migration.mjs",
+      "sha256": "811d7ad5b0d33c13332961206bc440763949904f5cb6c36210662fd50e2cae2b"
+    },
+    {
+      "file": "core/content-safety-schema.mjs",
+      "sha256": "2b205936634b6f0bb58c35b29c30373c0006d22e41a87958bff3f03fdcf2f2d8"
+    }
+  ],
+  "writers": [
+    {
+      "id": "correct",
+      "file": "core/runtime.mjs",
+      "start": "  function correct(",
+      "end": "  function forgetMutation(",
+      "sha256": "f40d5b46bf93790d10252ef2b6e4021e45c2422bf8ce04623e60263bfbcfe112"
+    },
+    {
+      "id": "forget",
+      "file": "core/runtime.mjs",
+      "start": "  function forgetMutationInside(",
+      "end": "  function forget(ns,",
+      "sha256": "771259cb3f097d71e10ba96ffb8121d182c55222b5749944c0fb1deba6e48f31"
+    },
+    {
+      "id": "remove-receipts",
+      "file": "core/runtime.mjs",
+      "start": "  function removeReceipts(",
+      "end": "  function supersede(",
+      "sha256": "3eb808b24aec8801bc3951105da3a71c1f84b5accc2a7c06a4cb5618a5818665"
+    },
+    {
+      "id": "card-purge",
+      "file": "core/private-card-storage.mjs",
+      "start": "  function purgeCard(",
+      "end": "  function mutate(",
+      "sha256": "5f988f289b28cbc02a515ef4790293948c5cdf91093ce3ef93997725a2788e74"
+    },
+    {
+      "id": "note-delete",
+      "file": "core/private-card-storage.mjs",
+      "start": "    if (method === 'deleteSourceNote') {",
+      "end": "    const confirmed =",
+      "sha256": "0d0e12c0c5b8e8a703c799a590e9c37de283b40c681db1d10a0fb34b6d64ae12"
+    },
+    {
+      "id": "raw-delete",
+      "file": "core/raw-deletion-storage.mjs",
+      "start": "  function cascadeInside(",
+      "end": "  function remove(",
+      "sha256": "63eb5ba06ede3bac8595ed1dceb17b310037a6da6ddab6cc38267867414f7f1c"
+    },
+    {
+      "id": "raw-exclusion",
+      "file": "core/raw-lineage-storage.mjs",
+      "start": "  function excludeMemory(",
+      "end": "  function filter(",
+      "sha256": "f3a97554af8c1752c981c1acf8dc4eb06689a249dca81d8467ba01c3634fc573"
+    },
+    {
+      "id": "pristine-creation",
+      "file": "core/database.mjs",
+      "start": "export function openDatabase(",
+      "end": null,
+      "sha256": "82e4e838d95e9687781b1f7ec2fe91476bd8dce8d7d22497f9960c923b36e194"
+    }
+  ],
+  "imports": [
+    {
+      "file": "core/database.mjs",
+      "name": "installContentSafetyInside",
+      "from": "core/content-safety-migration.mjs"
+    },
+    {
+      "file": "core/raw-lineage-storage.mjs",
+      "name": "writeContentSuppressionInside",
+      "from": "core/content-suppression-storage.mjs"
+    },
+    {
+      "file": "core/content-safety-migration.mjs",
+      "name": "contentSafetyDDL",
+      "from": "core/content-safety-schema.mjs"
+    },
+    {
+      "file": "core/content-safety-migration.mjs",
+      "name": "writeContentSuppressionInside",
+      "from": "core/content-suppression-storage.mjs"
+    },
+    {
+      "file": "core/raw-deletion-storage.mjs",
+      "name": "writeContentSuppressionInside",
+      "from": "core/content-suppression-storage.mjs"
+    },
+    {
+      "file": "core/runtime.mjs",
+      "name": "writeContentSuppressionInside",
+      "from": "core/content-suppression-storage.mjs"
+    },
+    {
+      "file": "core/runtime.mjs",
+      "name": "suppressReceiptsInside",
+      "from": "core/content-suppression-storage.mjs"
+    },
+    {
+      "file": "core/private-card-storage.mjs",
+      "name": "writeContentSuppressionInside",
+      "from": "core/content-suppression-storage.mjs"
+    }
+  ],
+  "edges": [
+    {
+      "writer": "correct",
+      "helper": "writeContentSuppressionInside"
+    },
+    {
+      "writer": "correct",
+      "helper": "suppressReceiptsInside"
+    },
+    {
+      "writer": "forget",
+      "helper": "writeContentSuppressionInside"
+    },
+    {
+      "writer": "forget",
+      "helper": "suppressReceiptsInside"
+    },
+    {
+      "writer": "remove-receipts",
+      "helper": "suppressReceiptsInside"
+    },
+    {
+      "writer": "card-purge",
+      "helper": "writeContentSuppressionInside"
+    },
+    {
+      "writer": "note-delete",
+      "helper": "writeContentSuppressionInside"
+    },
+    {
+      "writer": "raw-delete",
+      "helper": "writeContentSuppressionInside"
+    },
+    {
+      "writer": "raw-exclusion",
+      "helper": "writeContentSuppressionInside"
+    },
+    {
+      "writer": "pristine-creation",
+      "helper": "installContentSafetyInside"
+    }
+  ],
+  "facadeFactories": {
+    "openMemoryCore": [
+      "core",
+      "cards",
+      "methods",
+      "assets",
+      "roles"
+    ],
+    "openMemoryStore": [
+      "legacy",
+      "scope"
+    ],
+    "createContextReadSupervisor": [
+      "supervisor"
+    ],
+    "openContextReader": [
+      "context"
+    ],
+    "openMemoryReader": [
+      "topic"
+    ],
+    "openContextProductReader": [
+      "product"
+    ],
+    "openContextIndexMaintainer": [
+      "maintainer"
+    ],
+    "openContextSemanticCoordinator": [
+      "semantic"
+    ],
+    "renewContextMaintenancePump": [
+      "pump"
+    ]
+  }
+}

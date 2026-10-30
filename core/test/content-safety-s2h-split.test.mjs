@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { assertSplitGraph, assertSplitInventory, splitFixture, splitSources } from '../testing/content-safety-split-audit.mjs';
+import { additionalSplitFacades } from '../testing/content-safety-split-facades.mjs';
+import { mutatedSplitSources, splitMutations } from '../testing/content-safety-split-mutations.mjs';
 import * as api from '../index.mjs';
 import * as storage from '../content-suppression-storage.mjs';
 import { transaction } from '../database.mjs';
@@ -13,14 +15,6 @@ import { createRoleProfileFacade } from '../role-profile-facade.mjs';
 import { configured } from '../testing/context-product-owner-fixture.mjs';
 import { safetyFixture, ns, ok, receipt } from '../testing/content-safety-s2h-fixture.mjs';
 
-const root = new URL('../../', import.meta.url).pathname;
-function runtimeFiles(directory) {
-  return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
-    if (['test','testing','node_modules'].includes(entry.name)) return [];
-    const path = join(directory, entry.name);
-    return entry.isDirectory() ? runtimeFiles(path) : entry.name.endsWith('.mjs') ? [path] : [];
-  });
-}
 const methods = value => Reflect.ownKeys(value).filter(key => typeof value[key] === 'function').sort();
 const options = path => {
   const authority = { authorize(request) { const { input, ...binding } = request; return { ...binding, accessGeneration: 1 }; }, isCurrent: grant => grant };
@@ -41,13 +35,13 @@ test('S2h-1 split: enumerate public exports and facades; no fact-only writer is 
   t.after(() => { topic.close(); context.close(); legacy.close(); runtime.close(); core.close(); });
   const product = await configured(t,f.path,[ns]).open(), maintainer = await configured(t,f.path,[ns],{service:true}).open();
   const supervisor=api.createContextReadSupervisor();t.after(()=>supervisor.close());
-  const handles = { core,legacy,supervisor,scope:legacy.scope({ownerId:ns.ownerId,projectId:ns.projectId}),context,topic,product,maintainer,
+  const handles = { ...await additionalSplitFacades(t, f, ns), core,legacy,supervisor,scope:legacy.scope({ownerId:ns.ownerId,projectId:ns.projectId}),context,topic,product,maintainer,
     cards:createPrivateCardFacade(runtime.privateCards,config.privateCards,runtime.ready),
     methods:createMethodPackageFacade(runtime.methodPackages,config.methodPackages,runtime.ready,config.assets),
     assets:createAssetFacade(runtime.assets,config.assets,runtime.ready),
     roles:createRoleProfileFacade(runtime.roleProfiles,config.roleProfiles,{path:f.path,context:contextRead,assets:config.assets}) };
   const internal = new Set(Object.values(storage).filter(value => typeof value === 'function'));
-  const inventory = { exports:methods(api) };
+  const inventory = { exports:Object.keys(api).sort() };
   for (const [name,handle] of Object.entries(handles)) {
     inventory[name] = methods(handle);
     for (const method of inventory[name]) {
@@ -59,37 +53,48 @@ test('S2h-1 split: enumerate public exports and facades; no fact-only writer is 
     assert.equal(internal.has(value),false,name);
     assert.doesNotMatch(name,/suppression|suppressOwner|migrateContentSafety/i);
   }
-  // Audit symbol uses, not just method names: the trusted owner writer has no
-  // production caller. Every generic insertion seam is imported by a closed
-  // set of tombstone writers or the offline canonical-tombstone migration.
-  const calls = new Map([['core/runtime.mjs',2],['core/private-card-storage.mjs',2],
-    ['core/raw-deletion-storage.mjs',1],['core/raw-lineage-storage.mjs',1],['core/content-safety-migration.mjs',1]]);
-  let sites = 0;
-  for (const path of [...runtimeFiles(join(root,'core')),...runtimeFiles(join(root,'adapters')),...runtimeFiles(join(root,'integrations/client/raw'))]) {
-    const relative = path.slice(root.length), source = readFileSync(path,'utf8');
-    if (relative === 'core/content-suppression-storage.mjs') continue;
-    if(source.includes('content-suppression-storage.mjs')){
-      assert.ok(calls.has(relative)||relative==='core/raw-journal.mjs','unreviewed storage import: '+relative);
-      assert.match(source,/import\s*\{[^}]+\}\s*from\s*['"][^'"]*content-suppression-storage\.mjs['"]/);
-      assert.doesNotMatch(source,/export[^;]*content-suppression-storage/);
-    }
-    if(/(?:INSERT(?: OR [A-Z]+)? INTO|REPLACE INTO)\s+content_suppressions\b/i.test(source))
-      assert.equal(relative,'core/content-safety-schema.mjs','fact SQL must stay in the guarded storage module');
-    assert.doesNotMatch(source,/\b(?:suppressOwnerInside|reserveContentIdentityInside)\b/,relative);
-    if (!/\bwriteContentSuppressionInside\b/.test(source)) continue;
-    assert.ok(calls.has(relative),'unreviewed generic fact seam: '+relative);
-    const uses = [...source.matchAll(/\bwriteContentSuppressionInside\b/g)];
-    assert.equal(uses.length,calls.get(relative)+1,relative+' must only import and call; no forwarding or re-export');
-    const invocations = [...source.matchAll(/writeContentSuppressionInside\(db,\s*\{/g)];
-    assert.equal(invocations.length,calls.get(relative),relative);
-    assert.doesNotMatch(source,/kind:\s*['"](?:owner|namespace)['"]|matchMode:\s*['"](?:owner|namespace)['"]/,relative);
-    sites += invocations.length;
-  }
-  assert.equal(sites,7);
+  assert.deepEqual(Object.values(splitFixture.facadeFactories).flat().sort(), Object.keys(handles).sort());
+  assertSplitInventory(inventory);
+  const graph = assertSplitGraph();
   const cli = readFileSync(new URL('../../adapters/mcp/cli.mjs',import.meta.url),'utf8');
   assert.equal([...cli.matchAll(/args\[0\]\s*===?\s*['"]safety['"]/g)].length,1,'one safety dispatch');
   t.diagnostic('SPLIT_INVENTORY '+JSON.stringify(inventory));
-  t.diagnostic('split reachability: '+Object.keys(api).length+' exports, '+Object.keys(handles).length+' facades, '+Object.values(inventory).slice(1).reduce((n,list)=>n+list.length,0)+' methods, '+sites+' canonical insertion sites');
+  t.diagnostic('split reachability: '+Object.keys(api).length+' exports, '+Object.keys(handles).length+' facades, '+Object.values(inventory).slice(1).reduce((n,list)=>n+list.length,0)+' methods, '+graph.edges+' pinned helper edges');
+});
+
+for (const mutation of splitMutations) test('S2h-1 split rejects mutation: ' + mutation.name, () => {
+  const inventory = structuredClone(splitFixture.inventory);
+  if (mutation.addedExport) inventory.exports = [...inventory.exports, mutation.addedExport].sort();
+  if (mutation.addedMethod) inventory.core = [...inventory.core, mutation.addedMethod].sort();
+  if (mutation.addedExport || mutation.addedMethod) assert.throws(() => assertSplitInventory(inventory), /public inventory changed/);
+  else assert.doesNotThrow(() => assertSplitInventory(inventory));
+  // Independently reject the graph even if a reviewer updates the inventory.
+  assert.throws(() => assertSplitGraph(mutatedSplitSources(splitSources(), mutation)),
+    /unreviewed fact-only reference|unreviewed forwarding|capability alias/);
+});
+
+test('S2h-1 split rejects inventory removals and unreviewed writer changes', () => {
+  for (const surface of Object.keys(splitFixture.inventory)) {
+    const inventory = structuredClone(splitFixture.inventory); inventory[surface].pop();
+    assert.throws(() => assertSplitInventory(inventory), /public inventory changed/, surface);
+  }
+  const sources = splitSources();
+  sources.set('core/runtime.mjs', sources.get('core/runtime.mjs').replace('    suppressReceiptsInside(db, ns, id, suppression);', '    void id;'));
+  assert.throws(() => assertSplitGraph(sources), /review canonical writer: correct/);
+});
+
+test('S2h-1 split closes every insertion capability alias and direct SQL bypass', () => {
+  for (const capability of splitFixture.capabilities) {
+    const sources = splitSources();
+    sources.set('core/unreviewed-split-helper.mjs',
+      `import { ${capability.name} as tidy } from './${capability.file.slice(5)}';\nexport { tidy };\n`);
+    assert.throws(() => assertSplitGraph(sources), /capability alias requires review/, capability.name);
+  }
+  for (const table of ['content_suppressions','content_identity_reservations']) {
+    const sources = splitSources();
+    sources.set('core/unreviewed-split-helper.mjs', `export const tidy = db => db.exec('INSERT INTO ${table} VALUES(1)');`);
+    assert.throws(() => assertSplitGraph(sources), /unreviewed direct insertion SQL/, table);
+  }
 });
 
 test('S2h-1 split: internal fact-only observations do not change S1 reads or public writes', async t => {

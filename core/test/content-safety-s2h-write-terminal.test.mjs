@@ -144,4 +144,3 @@ for(const base of [18,33])test(`r4 existing episode/staged-capture writes remain
   assert.equal(db.prepare('SELECT count(*) n FROM episode_sources').get().n,1);
   assert.equal(db.prepare('SELECT count(*) n FROM session_episodes WHERE observed=2 AND covered=1').get().n,1);
 });
-
