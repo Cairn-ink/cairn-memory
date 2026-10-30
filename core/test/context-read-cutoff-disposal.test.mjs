@@ -291,3 +291,31 @@ nativeTest('M2 bootstrap timeout preserves the rejected disposal cause when its 
   assert.equal(d.secondaryFailureCounts.exception,1,'bootstrap cleanup TypeError reaches the reader secondary diagnostic once');
   assert.equal(d.failureCounts.engine,1);assert.equal(d.failureCounts.exception,0);
 });
+
+nativeTest('P1R Worker-first bootstrap timeout keeps its disposal exception separate',async t=>{
+  const x=setup(t,{stage:'bootstrap',mode:'bootstrap-reject'}),delayedTimers=new Map(),frames=[];
+  let worker,exited,timerCallbacks=0;
+  const open=createProductReaderRuntime({maintenance:true,
+    setTimer(fn,ms){const id={unref(){}};delayedTimers.set(id,{fn:()=>{timerCallbacks++;fn();},ms});return id;},
+    clearTimer:id=>delayedTimers.delete(id),
+    spawnWorker(data){
+      worker=new Worker(new URL('../context-product-worker.mjs',import.meta.url),{workerData:data,env:{},execArgv:[],stdout:true,stderr:true});
+      worker.on('message',message=>frames.push(message));exited=new Promise(resolve=>worker.once('exit',resolve));return worker;
+    }});
+  const opening=open(x.options).catch(error=>error);
+  while(!x.state[4])await realDelay(1);
+  await testClock.advance(5001,{waitForWorkers:false});
+  assert.equal(timerCallbacks,0,'parent deadline callbacks remain delayed');assert.equal(x.state[6],0,'parent close has not interrupted bootstrap');
+  worker.postMessage({fixtureRelease:true});const error=await opening;
+  assert.equal(error.code,'read_timeout','Worker-first bootstrap keeps the public timeout');
+  await x.s.supervisor.drain();await exited;
+  const initiating=frames.find(message=>message.result?.error?.code==='read_timeout');
+  assert.equal(initiating?.maintenanceFailure?.engineCode,'read_timeout','Worker detected and reported its own cutoff first');
+  assert.equal(timerCallbacks,0);assert.equal(x.state[5],1,'rejecting registered closer runs once');
+  const d=readerDiagnostic.maintenanceReaderFailureDiagnostic(error);
+  assert.equal(d.lastFailure.engineCode,'read_timeout');assert.equal(d.failureCounts.engine,1);
+  assert.equal(d.secondaryFailureCounts.exception,1,'Worker-first bootstrap disposal records its TypeError once');
+  assert.equal(d.secondaryFailureCounts.engine,0,'initiating timeout is never resent as a secondary');
+  const disposal=frames.find(message=>message.kind==='maintenance-close-failure');
+  assert.equal(disposal.maintenanceFailure.kind,'exception');assert.equal(disposal.maintenanceFailure.errorName,'TypeError');
+});
