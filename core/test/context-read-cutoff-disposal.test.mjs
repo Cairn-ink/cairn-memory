@@ -20,18 +20,19 @@ function nativeTest(name,body){test(name,async t=>{
   try{await Promise.race([body(t),realDelay(60000,undefined,{signal:abort.signal}).then(async()=>{await testClock.advance(10000,{waitForWorkers:false});assert.fail('disposal_test_watchdog');})]);}
   finally{abort.abort();}
 });}
-function setup(t,{stage='open',mode='normal',request=false,tail,parentGap=false,delayedGrace}={}) {
+function setup(t,{stage='open',mode='normal',request=false,tail,parentGap=false,delayedGrace,qualified=false}={}) {
   // Pin canonical identities until all process-wide quarantine probes finish.
   const f=fixture({after:fn=>retained.push(fn)}),memory=f.admit('Synthetic lease disposal memory.',personal),supervisors=[],pumps=[];
   // Failed cleanup is asserted explicitly, rather than hidden by an after hook.
   const owner={after:fn=>t.after(()=>Promise.resolve(fn()).catch(()=>{}))};
   const s=configured(owner,f.path,[personal],{service:!request}),disposalState=new SharedArrayBuffer(32),state=new Int32Array(disposalState);
-  supervisors.push(s.supervisor);let injected=false,responses=0,spawned=0,injectEnabled=true,acceptedBetweenDeadlines=false,forced=0,readerCutoff;const resources=[],workers=[],exits=[],handles=[],openingErrors=[];
+  supervisors.push(s.supervisor);let injected=false,responses=0,spawned=0,injectEnabled=true,acceptedBetweenDeadlines=false,forced=0,readerCutoff;const resources=[],workers=[],exits=[],handles=[],openingErrors=[],closeFrames=[];
   const spawnWorker=data=>{
     spawned++;const w=new Worker(new URL('../context-product-worker.mjs',import.meta.url),{workerData:data,env:{},execArgv:[],stdout:true,stderr:true});
     const terminate=w.terminate.bind(w);w.terminate=()=>{forced++;return terminate();};
     workers.push(w);resources.push(new Int32Array(data.resources));exits.push(new Promise(resolve=>w.once('exit',resolve)));
     w.on('message',m=>{
+      if(m.kind==='maintenance-close-failure')closeFrames.push(m);
       if(m.result?.ok && m.result.value!==null)responses++;
       const selected=stage==='open'?m.result?.ok && m.result.value===null:m.result?.ok && m.result.value!==null && responses===(request||delayedGrace?1:2);
       if(injectEnabled && !injected && selected){injected=true;const cutoff=Number(BigInt(m.operation.operationCutoffMonoNs))/1e6;readerCutoff=cutoff;
@@ -42,7 +43,7 @@ function setup(t,{stage='open',mode='normal',request=false,tail,parentGap=false,
   const productOpen=createProductReaderRuntime({maintenance:!request,spawnWorker});
   const open=(...args)=>productOpen(...args).then(handle=>{handles.push(handle);return handle;},error=>{openingErrors.push(error);throw error;}),timers=new Map();let serial=0;
   const pumpOpen=parentGap?async(...args)=>{const h=await open(...args);return {...h,refreshContextIndex(...call){void testClock.advance(2,{waitForWorkers:false});return h.refreshContextIndex(...call).then(result=>{if(injected)acceptedBetweenDeadlines=result.ok;return result;});}};}:open;
-  const renew=createMaintenancePumpRuntime({open:pumpOpen,now:testClock.now,setTimer:(fn,ms)=>{const id=++serial;timers.set(id,{fn,at:testClock.now()+ms});return id;},clearTimer:id=>timers.delete(id)});
+  const renew=createMaintenancePumpRuntime({open:pumpOpen,...(qualified?{cutoffQualified:()=>true}:{}),now:testClock.now,setTimer:(fn,ms)=>{const id=++serial;timers.set(id,{fn,at:testClock.now()+ms});return id;},clearTimer:id=>timers.delete(id)});
   const options={...s.options,host:{moduleUrl:hostUrl,configuration:{...s.options.host.configuration,disposalState,disposalMode:mode,bootstrapGate:stage==='bootstrap'}}};
   const config={supervisor:s.supervisor,id:randomUUID(),window:{id:randomUUID(),endsAtMonoMs:testClock.now()+(tail==='window'?1056:60000),usedItems:0,usedMs:0},
     budgets:{maxItems:10000,maxMs:60000},quantum:{maxItems:1,maxMs:1000},pollMs:1000,renewalMs:tail==='renewal'?1056:60000,serviceCredential:s.token,projections:[{options,types:['memory']}]};
@@ -61,7 +62,7 @@ function setup(t,{stage='open',mode='normal',request=false,tail,parentGap=false,
   }
   f.workspace.defer(async()=>{Atomics.store(state,1,1);Atomics.notify(state,1);
     for(const p of pumps)await p.close().catch(()=>{});for(const supervisor of supervisors)await supervisor.close().catch(()=>{});});
-  return {f,s,memory,options,open,config,renew,state,resources,workers,exits,timers,tick,retries,pumps,disableCutoff(){injectEnabled=false;},handles,openingErrors,get spawned(){return spawned;},get injected(){return injected;},get acceptedBetweenDeadlines(){return acceptedBetweenDeadlines;},get forced(){return forced;},get readerCutoff(){return readerCutoff;}};
+  return {f,s,memory,options,open,config,renew,state,resources,workers,exits,timers,tick,retries,pumps,disableCutoff(){injectEnabled=false;},handles,openingErrors,closeFrames,get spawned(){return spawned;},get injected(){return injected;},get acceptedBetweenDeadlines(){return acceptedBetweenDeadlines;},get forced(){return forced;},get readerCutoff(){return readerCutoff;}};
 }
 async function failedLeaseRepro(x,records){
   assert.ok(records.some(r=>r.state==='failed'&&r.workerStopped&&r.nativeDisposed&&!r.leasesReleased&&r.providersSettled));
@@ -121,7 +122,7 @@ nativeTest('disposal bootstrap rendezvous: close waits for in-flight host constr
 for(const mode of ['reject','block'])nativeTest(`disposal ${mode}: grace failure retains process quarantine`,async t=>{
   const x=setup(t,{mode}),p=x.renew(x.config);x.pumps.push(p);const turn=await x.tick();
   while(!x.state[0] && x.workers[0].threadId!==-1)await realDelay(1);
-  await testClock.advance(500,{waitForWorkers:false});await turn.pending;await p.completion;await p.close().catch(()=>{});
+  await testClock.advance(10000,{waitForWorkers:false});await turn.pending;await p.completion;await p.close().catch(()=>{});
   const records=await x.s.supervisor.drain();assert.ok(records.some(r=>r.state==='failed'));await x.retries(true);
   assert.equal(x.state[0],1,'timeout_attempts_host_disposal_before_force');
 });
@@ -133,9 +134,9 @@ nativeTest('disposal parent deadline: accepted response between deadlines still 
   const first=await x.tick();await first.pending;const turn=await x.tick();
   while(!x.state[0])await realDelay(1);await flush();
   assert.equal(x.acceptedBetweenDeadlines,true,'reader_accepts_response_between_parent_and_reader_deadlines');
-  await testClock.advance(499,{waitForWorkers:false});
+  await testClock.advance(9999,{waitForWorkers:false});
   await testClock.advance(1,{waitForWorkers:false});await flush();
-  try{assert.equal(x.forced,1,'parent_timeout_forces_blocked_close_within_proof_bound');}
+  try{assert.equal(x.forced,1,'parent_timeout_forces_blocked_close_within_disposal_bound');}
   finally{if(!x.forced){Atomics.store(x.state,1,1);Atomics.notify(x.state,1);}}
   await x.exits[0];assert.equal(x.workers[0].threadId,-1);
   await turn.pending;assert.equal((await p.completion).error,'reader_failed');
@@ -143,7 +144,7 @@ nativeTest('disposal parent deadline: accepted response between deadlines still 
 });
 nativeTest('disposal ordinary close: blocked host cannot retain a live Worker indefinitely',async t=>{
   const x=setup(t,{mode:'block'});x.disableCutoff();const h=await x.open(x.options),closing=h.close().catch(e=>e);
-  while(!x.state[0])await realDelay(1);await testClock.advance(499,{waitForWorkers:false});
+  while(!x.state[0])await realDelay(1);await testClock.advance(9999,{waitForWorkers:false});
   await testClock.advance(1,{waitForWorkers:false});
   try{assert.equal(x.forced,1,'ordinary_close_forces_blocked_host_within_bound');}
   finally{if(!x.forced){Atomics.store(x.state,1,1);Atomics.notify(x.state,1);}}
@@ -153,12 +154,12 @@ nativeTest('disposal ordinary close: blocked host cannot retain a live Worker in
 for(const mode of ['reject','block'])nativeTest(`disposal opening ${mode}: failed drain overrides the triggering timeout`,async t=>{
   const x=setup(t,{mode}),p=x.renew(x.config);x.pumps.push(p);const turn=await x.tick();
   while(!x.state[0] && x.workers[0].threadId!==-1)await realDelay(1);
-  await testClock.advance(500,{waitForWorkers:false});await turn.pending;
+  await testClock.advance(10000,{waitForWorkers:false});await turn.pending;
   assert.equal((await p.completion).error,'reader_failed','failed_opening_disposal_has_reader_failed_precedence');
   const records=await x.s.supervisor.drain();assert.ok(records.some(r=>r.state==='failed'));await x.retries(true);
 });
 
-for(const delayedGrace of [{gap:2,delay:850},{gap:900,delay:900}])nativeTest(`disposal delayed callbacks: earlier cutoff tightens running grace (${delayedGrace.gap} ms gap)`,async t=>{
+for(const delayedGrace of [{gap:2,delay:850},{gap:900,delay:900}])nativeTest(`disposal delayed callbacks: earlier cutoff leaves disposal grace intact (${delayedGrace.gap} ms gap)`,async t=>{
   const x=setup(t,{stage:'refresh',mode:'block',delayedGrace}),h=await x.open(x.options);
   const result=await h.refreshContextIndex({readSet:[personal],types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:1,maxMs:1000}},x.s.token);
   assert.equal(result.error.code,'read_timeout');while(!x.state[0])await realDelay(1);
@@ -167,9 +168,11 @@ for(const delayedGrace of [{gap:2,delay:850},{gap:900,delay:900}])nativeTest(`di
   const closed=first.catch(e=>e);
   assert.strictEqual(disposeProductReader(h,'read_timeout',parentCutoff),first,'repeated_disposal_keeps_the_owned_cleanup_promise');
   assert.strictEqual(disposeProductReader(h,'read_timeout',x.readerCutoff+1000),first);
-  await testClock.advance(parentCutoff+999-testClock.now(),{waitForWorkers:false});
-  await testClock.advance(1,{waitForWorkers:false});
-  try{assert.equal(x.forced,1,'earlier_cutoff_tightens_running_grace_by_earliest_proof_boundary');}
+  const disposalStarted=testClock.now();
+  await testClock.advance(parentCutoff+1000-testClock.now(),{waitForWorkers:false});
+  assert.equal(x.forced,0,'eligibility_deadline_never_shortens_disposal_grace');
+  await testClock.advance(disposalStarted+10000-testClock.now(),{waitForWorkers:false});
+  try{assert.equal(x.forced,1,'earlier_cutoff_preserves_bounded_disposal_grace');}
   finally{if(!x.forced){Atomics.store(x.state,1,1);Atomics.notify(x.state,1);}}
   await x.exits[0];assert.equal(x.workers[0].threadId,-1);assert.equal((await closed).code,'reader_failed');
   await x.retries(true);
@@ -193,9 +196,9 @@ for(const trigger of ['close','timeout'])nativeTest(`disposal frozen clock ${tri
   assert.ok((await x.s.supervisor.drain()).some(r=>r.state==='failed'&&r.workerStopped));await x.retries(true);
 });
 
-for(const grace of [500,50])nativeTest(`disposal early safety wake: preserves ${grace} ms monotonic deadline`,async t=>{
+for(const earlier of [false,true])nativeTest(`disposal early safety wake: preserves 10000 ms monotonic deadline (earlier cutoff ${earlier})`,async t=>{
   const x=setup(t,{mode:'block'});x.disableCutoff();const h=await x.open(x.options);
-  const originalDelay=timerPromises.setTimeout,originalHrtime=process.hrtime,wakes=[];let elapsed=0,closing;
+  const grace=10000,originalDelay=timerPromises.setTimeout,originalHrtime=process.hrtime,wakes=[];let elapsed=0,closing;
   const fakeHrtime=()=>[0,Math.round(elapsed*1e6)];fakeHrtime.bigint=originalHrtime.bigint;
   process.hrtime=fakeHrtime;
   timerPromises.setTimeout=(ms,value,{signal}={})=>new Promise((resolve,reject)=>{
@@ -205,7 +208,7 @@ for(const grace of [500,50])nativeTest(`disposal early safety wake: preserves ${
   syncBuiltinESMExports();
   try{
     closing=h.close().catch(e=>e);
-    if(grace===50)disposeProductReader(h,'read_timeout',testClock.now()-950);
+    if(earlier)disposeProductReader(h,'read_timeout',testClock.now()-950);
     const active=()=>wakes.filter(w=>!w.signal.aborted).at(-1);
     elapsed=grace-0.9;active().resolve();await flush();
     assert.equal(x.forced,0,'early_safety_wake_must_not_terminate_before_monotonic_deadline');
@@ -239,12 +242,14 @@ nativeTest('failure/disposal success: timeout is the only recorded failure',asyn
 nativeTest('failure/disposal force: opening timeout keeps its primary and counts cleanup once',async t=>{
   const x=setup(t,{mode:'block'}),p=x.renew(x.config);x.pumps.push(p);const turn=await x.tick();
   while(!x.state[0]&&x.workers[0].threadId!==-1)await realDelay(1);
-  await testClock.advance(499,{waitForWorkers:false});assert.equal(x.forced,0);
+  await testClock.advance(9999,{waitForWorkers:false});assert.equal(x.forced,0,'host_keeps_full_disposal_grace');
   await testClock.advance(1,{waitForWorkers:false});await turn.pending;const final=await p.completion;
   assert.equal(x.forced,1,'forced disposal retains the bounded grace');assert.equal(final.error,'reader_failed','failed opening disposal public precedence equals the base');
   const r=readerDiagnostic.maintenanceReaderFailureDiagnostic(x.openingErrors[0]),d=pumpDiagnostic.maintenancePumpDiagnostic(final);
   assert.equal(r.lastFailure.engineCode,'read_timeout');assert.equal(d.lastFailure.engineCode,'read_timeout');
   assert.equal(r.secondaryFailureCounts.cleanup,1,'forced opening disposal records one reader cleanup secondary');
+  assert.equal(r.secondaryFailure.cause,'cleanup');assert.equal(r.secondaryFailure.stage,'close');
+  await x.retries(true);
   assert.equal(d.secondaryFailureCounts.cleanup,1,'forced opening disposal records one pump cleanup secondary');
   assert.equal(d.lastFailure.ordinal,r.lastFailure.ordinal);assert.deepEqual(d.lastFailure.stall,r.lastFailure.stall);
   await p.close().catch(()=>{});assert.equal(pumpDiagnostic.maintenancePumpDiagnostic(p.getStatus()).secondaryFailureCounts.cleanup,1,'repeated close does not recount forced disposal');
@@ -255,6 +260,10 @@ nativeTest('failure/disposal opening rejection: public reader_failed keeps the p
   assert.equal(final.error,'reader_failed','rejected opening disposal keeps public reader_failed');
   const r=readerDiagnostic.maintenanceReaderFailureDiagnostic(x.openingErrors[0]),d=pumpDiagnostic.maintenancePumpDiagnostic(final);
   assert.equal(r.lastFailure.engineCode,'read_timeout');assert.equal(d.lastFailure.engineCode,'read_timeout');
+  assert.equal(r.secondaryFailureCounts.exception,1,'rejected_close_records_exception_once');
+  assert.equal(x.closeFrames[0].maintenanceFailure.kind,'exception');assert.equal(x.closeFrames[0].maintenanceFailure.errorName,'Error');
+  assert.equal(r.secondaryFailure.stage,'close');
+  await x.retries(true);
   // Worker cleanup and the registry rejection are distinct K1 secondary events.
   assert.equal(r.secondaryFailureCounts.cleanup,2,'rejected opening cleanup reaches the reader private diagnostic');
   assert.equal(d.secondaryFailureCounts.cleanup,2,'rejected opening cleanup reaches the pump private diagnostic');
@@ -318,4 +327,47 @@ nativeTest('P1R Worker-first bootstrap timeout keeps its disposal exception sepa
   assert.equal(d.secondaryFailureCounts.engine,0,'initiating timeout is never resent as a secondary');
   const disposal=frames.find(message=>message.kind==='maintenance-close-failure');
   assert.equal(disposal.maintenanceFailure.kind,'exception');assert.equal(disposal.maintenanceFailure.errorName,'TypeError');
+});
+
+// Advance only logical time at the registered host-close rendezvous. The close
+// cannot finish until released, independently of machine scheduling speed.
+for(const delay of [600,2000])for(const stage of ['open','refresh'])nativeTest(`disposal slow ${stage} timeout ${delay} ms: confirmed cleanup permits successors`,async t=>{
+  const x=setup(t,{stage,mode:'block'}),p=x.renew(x.config);x.pumps.push(p);
+  if(stage==='refresh'){const first=await x.tick();await first.pending;}
+  const turn=await x.tick();while(!x.state[0]&&x.workers.at(-1).threadId!==-1)await realDelay(1);
+  assert.equal(p.getStatus().error,'read_timeout','slow_close_never_delays_public_timeout');
+  const before=x.spawned;await assert.rejects(x.open(x.options),{code:'read_in_progress'});assert.equal(x.spawned,before);
+  await testClock.advance(delay,{waitForWorkers:false});
+  assert.equal(x.forced,0,'slow_successful_close_is_not_forced_at_old_grace');
+  Atomics.store(x.state,1,1);Atomics.notify(x.state,1);await turn.pending;
+  assert.equal((await p.completion).error,'read_timeout','slow_confirmed_disposal_preserves_timeout');
+  const records=await x.s.supervisor.drain();assert.ok(records.every(r=>r.state==='complete'&&['workerStopped','nativeDisposed','leasesReleased','providersSettled'].every(k=>r[k])));
+  assert.equal(await x.exits.at(-1),0);await x.retries(false);
+});
+
+nativeTest('disposal slow idle close 2000 ms: confirmed cleanup permits successors',async t=>{
+  const x=setup(t,{mode:'block'});x.disableCutoff();const h=await x.open(x.options),closing=h.close().catch(e=>e);
+  while(!x.state[0]&&x.workers[0].threadId!==-1)await realDelay(1);
+  await testClock.advance(2000,{waitForWorkers:false});assert.equal(x.forced,0,'slow_idle_close_is_not_forced_at_old_grace');
+  Atomics.store(x.state,1,1);Atomics.notify(x.state,1);assert.equal(await closing,undefined);
+  assert.ok((await x.s.supervisor.drain()).every(r=>r.state==='complete'));await x.retries(false);
+});
+
+for(const {delay,earlier} of [{delay:600},{delay:1500},{delay:600,earlier:500}])nativeTest(`disposal eligibility ${delay} ms earlier ${earlier??0}: proof window is separate from cleanup grace`,async t=>{
+  const x=setup(t,{stage:'refresh',mode:'block',qualified:true}),p=x.renew(x.config);x.pumps.push(p);
+  const first=await x.tick();await first.pending;const turn=await x.tick();
+  while(!x.state[0]&&x.workers.at(-1).threadId!==-1)await realDelay(1);
+  if(earlier)disposeProductReader(x.handles.at(-1),'read_timeout',x.readerCutoff-earlier);
+  await testClock.advance(delay,{waitForWorkers:false});
+  assert.equal(x.forced,0,'eligibility_expiry_does_not_terminate_a_slow_close');
+  for(const [id,timer]of [...x.timers])if(timer.at<=testClock.now()){x.timers.delete(id);timer.fn();}await flush();
+  const late=delay>1000-(earlier??0);
+  if(late)assert.equal(readerDiagnostic.maintenancePumpCutoffDiagnostic(p.getStatus()).outcome,2,'late_proof_ends_only_expedited_eligibility');
+  Atomics.store(x.state,1,1);Atomics.notify(x.state,1);await turn.pending;
+  const diagnostic=readerDiagnostic.maintenancePumpCutoffDiagnostic(p.getStatus());
+  assert.equal(diagnostic.outcome,late?2:1,'only_timely_proof_earns_expedited_recovery');
+  assert.equal(p.getStatus().state,late?'failed':'active');
+  if(late)assert.equal((await p.completion).error,'read_timeout');
+  assert.ok((await x.s.supervisor.drain()).every(r=>r.state==='complete'),'late_confirmed_disposal_never_quarantines');
+  await p.close();await x.retries(false);
 });

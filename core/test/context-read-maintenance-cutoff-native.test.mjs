@@ -71,13 +71,15 @@ nativeTest(`cutoff native ${mode} ${phase} ${point} COMMIT: atomic SQL oracle an
   await testClock.advance(Math.max(0,Math.ceil(deadline-now())),{waitForWorkers:false});
   for(const [key,timer] of [...timers])if(timer.at<=now()){timers.delete(key);timer.fn();}
   await flush();
-  // This Worker is blocked in the COMMIT rendezvous, so expire only the
-  // injected disposal grace; the independent proof deadline is still future.
-  await testClock.advance(500,{waitForWorkers:false});
+  // A COMMIT barrier cannot acknowledge close. The ten-second disposal grace
+  // outlives expedited eligibility; confirmed termination still permits reopening.
+  await testClock.advance(10000,{waitForWorkers:false});
   for(const [key,timer] of [...timers])if(timer.at<=now()){timers.delete(key);timer.fn();}
   await operation;await flush();
-  assert.equal(p.getStatus().state,'active','native_confirmed_disposal_recovers_without_renewal');
-  assert.equal(productReader.maintenancePumpCutoffDiagnostic?.(p.getStatus()).outcome,1,'native_exit_and_complete_records_prove_disposal');
+  assert.equal(p.getStatus().state,'failed','late_native_disposal_requires_ordinary_renewal');
+  assert.equal((await p.completion).error,'read_timeout');
+  assert.ok((await service.supervisor.drain()).every(r=>r.state==='complete'),'late_native_disposal_is_confirmed_without_quarantine');
+  assert.equal(productReader.maintenancePumpCutoffDiagnostic?.(p.getStatus()).outcome,2,'late_native_proof_cannot_grant_expedited_recovery');
   await p.close();
   // Inspect through the successor's own writable open, before it changes recovered work.
   // DELETE uses the default legacy journal probe; no parent read-only preflight repairs it first.

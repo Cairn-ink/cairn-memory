@@ -20,6 +20,8 @@ import { fail } from './validation.mjs';
 import { semanticConfiguration } from './context-semantic-coordinator.mjs';
 import { openDiagnosticBuffer, openDiagnosticClock, openDiagnosticSnapshot } from './context-product-open-diagnostic.mjs';
 
+const DISPOSAL_GRACE_MS = 10_000;
+
 // Engine-internal only. A patch is added only after native and quiet-window
 // qualification. Neither public configuration nor environment can enable this.
 const qualifiedRuntimePatches = new Set();
@@ -37,6 +39,11 @@ export const snapshotMaintenanceCutoff = (observation, value) => {
 export function authorizeMaintenanceCutoff(control, identity) {
   if (!Number.isSafeInteger(identity.ordinal) || identity.ordinal < 1) return undefined;
   const capability = { ...identity, attested: false };
+  capability.tighten = earlier => {
+    if (earlier >= capability.cutoffAt) return;
+    capability.cutoffAt = Math.min(capability.cutoffAt, earlier);
+    capability.rescheduleProof?.();
+  };
   capabilities.set(control, capability);
   return capability;
 }
@@ -170,18 +177,16 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     if (!maintenance && (!types.isSharedArrayBuffer(reservation) || Reflect.apply(sharedLength, reservation, []) !== 4 ||
         Atomics.compareExchange(new Int32Array(reservation), 0, 0, 1) !== 0)) fail('authority_required');
     const resource = registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, request: maintenance ? undefined : request, frame, resources });
-    let closed = false, terminal, idle, closePromise, ready = false, releaseWriter, writerReleased = false, gracefulClose = false, disposalCutoff, tightenGrace, forcedCleanup = false, disposalWorkerError = false;
+    let closed = false, terminal, idle, closePromise, ready = false, releaseWriter, writerReleased = false, gracefulClose = false, cutoffCapability, forcedCleanup = false, disposalWorkerError = false;
     const epoch = 1;
     // Timeout delivery remains prompt; disposal owns a separate bounded grace.
     function stopWorker(instance) {
       if (terminal !== 'read_timeout' && !gracefulClose) return instance.terminate();
-      const slot = lifecycle.pending;
-      const cutoff = Math.min(disposalCutoff ?? Infinity, slot ? Math.min(Number(mono(slot.operation.operationCutoffMonoNs)) / 1e6, slot.cutoff?.cutoffAt ?? Infinity) : Number(now()) / 1e6);
-      let until = Math.min(Number(now()) / 1e6 + 500, cutoff + 1000);
+      const until = Number(now()) / 1e6 + DISPOSAL_GRACE_MS;
       return new Promise((resolve, reject) => {
         let timer, safety, live = true, realUntil = Infinity;
         const realNow = () => { const [seconds, nanos] = hrtime(); return seconds * 1000 + nanos / 1e6; };
-        const detach = () => { live = false; clearTimer(timer); safety?.abort(); tightenGrace = undefined; instance.off('exit', exited); instance.off('error', failed); if(maintenance)instance.off('message',closeDiagnostic); };
+        const detach = () => { live = false; clearTimer(timer); safety?.abort(); instance.off('exit', exited); instance.off('error', failed); if(maintenance)instance.off('message',closeDiagnostic); };
         // An injected operation clock/timer cannot suspend the safety fallback.
         const armSafety = remaining => {
           realUntil = Math.min(realUntil, realNow() + Math.max(0, remaining));
@@ -206,16 +211,6 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         const closeDiagnostic=message=>{if(message?.kind!=='maintenance-close-failure')return;const detail=readMaintenanceFailure(message.maintenanceFailure);if(detail)closingFailure(undefined,detail.kind,{...detail,stage:'close'});workerSecondary(message,'close');};
         if(maintenance)instance.on('message',closeDiagnostic);
         instance.once('exit', exited); instance.once('error', failed);
-        tightenGrace = earlier => {
-          const next = Math.min(until, earlier + 1000);
-          if (next >= until) return;
-          until = next; clearTimer(timer);
-          try {
-            const remaining = until - Number(now()) / 1e6;
-            if (remaining <= 0) force();
-            else { armSafety(remaining); timer = setTimer(() => force(), remaining); }
-          } catch (error) { force(error); }
-        };
         try {
           const remaining = Math.max(0, until - Number(now()) / 1e6);
           armSafety(remaining); timer = setTimer(() => force(), remaining);
@@ -405,7 +400,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       return new Promise(resolve => {
         const slot = { resolve, operation, record, signal, open: opening, method, detach, ordinal, control }; lifecycle.pending = slot;
         if (maintenance && !semantic && method === 'refreshContextIndex') {
-          slot.cutoff = bindMaintenanceCutoff(control, ordinal, operation, resource, record, lifecycle, () => {
+          cutoffCapability = slot.cutoff = bindMaintenanceCutoff(control, ordinal, operation, resource, record, lifecycle, () => {
             if (lifecycle.pending !== slot || Number(now()) / 1e6 < slot.cutoff.cutoffAt) return false;
             shutdown('read_timeout', slot.cutoff); return slot.cutoff.attested;
           }, () => writerReleased);
@@ -469,11 +464,8 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       // has already settled the reader slot. Never infer it from an idle marker.
       if(maintenance&&code==='read_timeout'&&!terminalFailure&&failure?.cause==='engine'&&failure.engineCode==='read_timeout')
         terminalFailure=noteFailure(undefined,'engine',{engineCode:'read_timeout',ordinal:failure.ordinal,stage:failure.stage,stall:failure.stall},null);
-      // Every call can shorten in-flight cleanup, including an idempotent close.
-      if (code === 'read_timeout' && Number.isFinite(cutoffAt)) {
-        disposalCutoff = Math.min(disposalCutoff ?? Infinity, cutoffAt);
-        tightenGrace?.(disposalCutoff);
-      }
+      // Earlier cutoffs tighten expedited eligibility, never the disposal grace.
+      if (code === 'read_timeout' && Number.isFinite(cutoffAt)) cutoffCapability?.tighten(cutoffAt);
       if(semantic)Atomics.store(new Int32Array(semantic.configuration.cancellation),0,1);
       return closePromise ??= (async () => {
         phase?.mark('closeEntered');
