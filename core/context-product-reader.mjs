@@ -427,7 +427,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
             resource.workerStopped = false; resource.nativeDisposed = false;
             phase?.mark('spawn');
             const lease = !maintenance && owner.owner.readerPool?.take(spawnWorker === nativeWorker
-              ? new URL('./context-product-worker.mjs', import.meta.url).href : undefined);
+              ? new URL('.', import.meta.url).href + 'context-product-worker.mjs' : undefined);
             const instance = lease ? lease.worker : spawnWorker(openingData);
             lifecycle.worker = instance;
             instance.stdout?.resume(); instance.stderr?.resume();

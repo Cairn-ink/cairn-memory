@@ -4,13 +4,8 @@ import { drainNative } from './context-product-telemetry.mjs';
 import { deepFreeze } from './private-card-input.mjs';
 import { fail } from './validation.mjs';
 import { ownData } from './local-authority-input.mjs';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-
-// Keep the standby implementation out of the default reader's import graph.
-// This synchronous, SQLite-free module is loaded only by service opt-in.
-const nativePool = () => createRequire(import.meta.url)(fileURLToPath(
-  new URL('./context-product-reader-pool.mjs', import.meta.url))).createReaderWorkerPool();
+// Importing this SQLite-free factory creates no Workers, timers or records.
+import { createReaderWorkerPool as nativePool } from './context-product-reader-pool.mjs';
 
 export const SUPERVISOR_LIMITS = Object.freeze({ live: 256, completed: 1024, metadataBytes: 1048576,
   diagnosticBytes: 16777216, historyMs: 300000 });

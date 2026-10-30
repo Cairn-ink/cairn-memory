@@ -2,7 +2,8 @@
 import { Worker } from 'node:worker_threads';
 import { randomUUID } from 'node:crypto';
 
-const engine = new URL('./context-product-worker.mjs', import.meta.url).href;
+// Compatibility identity only: directory URL construction loads no module.
+const engine = new URL('.', import.meta.url).href + 'context-product-worker.mjs';
 export const READER_POOL_COMPATIBILITY = JSON.stringify({
   protocol: 'context-reader-pool-v1', engine, runtime: process.version, oldGenerationMiB: 192,
 });

@@ -26,7 +26,9 @@ for (const [mode, client] of [['layouts', 'claude-code'], ['raw', 'claude-code']
     for (const path of graph.required) { assert.ok(archived.includes(path), path); assert.equal(hash(readFileSync(join(installed, path))), artifact.sourceHashes[path]); }
     for (const [path, expected] of Object.entries(artifact.sourceHashes)) assert.equal(hash(readFileSync(join(installed, path))), expected, path);
     assert.deepEqual(installedImportClosure(installed, ['core/index.mjs']), graph);
-    assert.deepEqual(graph.workerEntries, ['core/context-product-worker.mjs', 'core/context-semantic-worker.mjs', 'core/topic-overview-worker.mjs']);
+    assert.deepEqual(graph.workerEntries, ['core/context-product-reader-pool-worker.mjs', 'core/context-product-worker.mjs', 'core/context-semantic-worker.mjs', 'core/topic-overview-worker.mjs']);
+    assert.ok(graph.eager.includes('core/context-product-reader-pool.mjs'));
+    assert.ok(graph.lazy.includes('core/context-product-reader-pool-worker.mjs'));
     assert.ok(graph.lazy.includes('core/context-product-worker.mjs'));
     const child = spawnSync(process.execPath, [fixture, installed, workspace.path, mode, client], { cwd: workspace.path, encoding: 'utf8', timeout: 30000, maxBuffer: 262144,
       env: { PATH: dirname(process.execPath), HOME: home, TMPDIR: workspace.path, TMP: workspace.path, TEMP: workspace.path,

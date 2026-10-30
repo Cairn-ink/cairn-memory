@@ -162,6 +162,23 @@ const databaseFds = path => process.platform !== 'linux' ? undefined : readdirSy
   try { const target = readlinkSync('/proc/self/fd/' + name); return target.startsWith(path) ? [target] : []; } catch { return []; }
 }).sort();
 
+test('static pool import and default-off supervisors create no Workers, timers or records', () => {
+  const source = `import assert from 'node:assert/strict';import threads from 'node:worker_threads';
+    import {syncBuiltinESMExports} from 'node:module';
+    threads.Worker=class {constructor(){assert.fail('default_off_worker_spawn');}};syncBuiltinESMExports();
+    globalThis.setTimeout=()=>assert.fail('default_off_timeout');
+    globalThis.setInterval=()=>assert.fail('default_off_interval');
+    const {createContextReadSupervisor,supervisorOwner,readerPoolDiagnostic}=await import(${JSON.stringify(new URL('../context-read-supervisor.mjs', import.meta.url).href)});
+    for(const options of [undefined,{readerWorkerPool:false}]){
+      const supervisor=createContextReadSupervisor(options),{registry,owner}=supervisorOwner(supervisor);
+      assert.equal(owner.readerPool,undefined);assert.equal(readerPoolDiagnostic(supervisor),undefined);
+      assert.deepEqual(registry.counters(),{live:0,completed:0,metadataBytes:0,diagnosticBytes:0,reservations:0,records:0});
+      assert.deepEqual(await supervisor.close(),[]);
+    }`;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', source], { env: {}, encoding: 'utf8', timeout: 30000 });
+  assert.equal(result.status, 0, 'default_off_pool_has_no_resources: ' + result.stderr);
+});
+
 test('opted-in parent stays SQLite-free while its real Workers finish preloading', () => {
   const source = `import assert from 'node:assert/strict';import threads from 'node:worker_threads';
     import {register,syncBuiltinESMExports,createRequire} from 'node:module';
