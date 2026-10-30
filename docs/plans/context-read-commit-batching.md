@@ -42,9 +42,12 @@ Use the existing operation clock. Let `start` be refresh entry, and define
 (`core/context-product-sidecar.mjs:869`). Opening and dispatch are not free time.
 Keep `R0 = max(50 ms, min(250 ms, 0.15 * maxMs))`, sourced from
 `core/context-product-quantum.mjs:4`, inside the existing quantum reservation.
-Reserve `R >= R0` for signing/save, COMMIT and final observation/delivery;
-increase it conservatively from observed tail costs without extending `D`.
-Treat the reserve as cooperative headroom, not a guaranteed native-I/O bound.
+Reserve `R >= R0` for rechecks, signing/save, COMMIT and final observation/delivery.
+The adaptive reserve is call-local: initialize `R = R0`; raise only between transactions
+to `min(D - start, max(R, 2 * H, F(firstUnit)))`. H is the largest observed finalization cost plus
+estimated remaining delivery cost. Doubling follows `core/context-product-quantum.mjs:15`;
+tail adaptation is a proposal. Never lower R or resize an open batch retroactively.
+Its cap is D-start; if that cannot cover R0/useful work, do not begin a batch. Reset next call; no native-I/O guarantee.
 
 Candidate policy P below is a **new, unqualified design choice**, not measurement.
 Freeze it before qualification; use private finite limits, not new public knobs.
@@ -58,9 +61,9 @@ Freeze it before qualification; use private finite limits, not new public knobs.
 | Reclamation duty interval | 8 eligible owner refreshes | Maximum deferral while reclamation debt exists. |
 
 Logical bytes are an admission bound, not exact dirty-page or filesystem bytes.
-Before each scan/reset/item, check its conservative row/byte cost, the existing
-per-kind quantum admission and `now + estimatedCost < min(batchStart + T, D - R)`;
-`T` is P's active-work ceiling. Do not spend the commit reserve on another chunk.
+Ordinary work keeps Fix A's predicate unchanged (`core/context-product-quantum.mjs:10`).
+Also require row/byte bounds and `now + estimatedCost < min(batchStart + T, D - R)` before each unit; T is P's work ceiling.
+Before adding a unit require `F(prospectivePrefix) <= R`; otherwise finalize the existing prefix.
 Count all native work, including rows fetched but not consumed and repeated reads;
 do not replace existing accounting with a count of completed logical chunks.
 Use bounded length metadata and smaller fetch prefixes to enforce byte limits
@@ -93,11 +96,11 @@ Do not defer the entire verification pass until publication or keep progress
 only in Worker memory between calls. Publication retains its atomic certificate,
 generation, sequence and pointer transaction and its existing admission checks.
 
-Before saving and entering COMMIT, require real progress, remaining tail admission
-and the existing target/access/fence checks. A preparation-fence change before
-that point invalidates the whole open batch, including verified counters.
-Do not introduce a requirement that an already closed E become the newest epoch:
-the unchanged publication/closure rules decide what E certifies.
+Finalization spends the reserve: require real progress, valid target/access/fences and
+`now < D && F(prefix) <= D - now`. F conservatively estimates remaining rechecks, save, COMMIT and
+observation/delivery. Do **not** call ordinary work `admit()` or add R again; recheck remaining cost before COMMIT.
+A preparation-fence change invalidates the whole batch, including counters. Future
+closed-E compatibility still does not require E to become the newest epoch.
 No canonical read transaction spans a sidecar COMMIT or await; release all native
 iterators before commit. Never carry a write transaction across calls or awaits,
 or intentionally past cutoff. An in-flight native COMMIT may finish during drain;
@@ -106,6 +109,7 @@ its outcome is resolved through SQLite, never retained for the next call to use.
 | Outcome | Required action |
 | --- | --- |
 | Soft row/byte/time limit, useful work, bindings valid | Save and commit the complete prefix within the reserved tail. |
+| Prospective next unit would leave insufficient tail | Do not admit it; finalize the smaller completed prefix if F fits. If F no longer fits, roll back the whole open batch to the last durable checkpoint; never just move its cursor backward. |
 | No useful unit and no legitimate phase advance | Roll back; do not increment/sign an empty successful checkpoint. |
 | Fence race before COMMIT or known rollback-safe failure | Roll back the whole open batch; discard tentative objects and reload the previous durable checkpoint before replay. |
 | Genuine deadline/cutoff | Cooperatively roll back when possible; retain terminal failure and full reservation. Disposal/recovery resolves any uncertain native outcome. |
@@ -116,6 +120,12 @@ or freshness credit, although its attempts remain charged. Fewer checkpoints
 increase crash/race replay relative to page commits; that tradeoff is explicit.
 Keep the private fence-change control flow and existing honest rebuilding/stale
 outcome; do not relabel an ordinary retarget race as a storage error or cutoff.
+After tail-shortage rollback, end the call. A clean pre-D yield may refund only validated
+unused allowance; attempts and elapsed rollback stay charged (`docs/context-read-product.md:783`).
+Failure, cutoff or uncertainty retains it all. Set a bounded lane/kind width cap to a single
+existing chunk across calls/resident replacement; fresh lanes calibrate with a single chunk.
+After shortage, widen only on explicit policy reset and successful calibration. These are
+proposed backoff rules; work admission stays unchanged and arbitrary stalls promise no liveness.
 
 ## Optional comparison coalescing
 
@@ -221,11 +231,13 @@ Required implementation acceptance, not tests performed for this documentation:
   HMAC/domain, access, fences, lineage and byte safety after SQLite recovery.
 - Replay with unchanged bindings, retargeted bindings and a contribution change;
   compare batched and unbatched builds against the same captured canonical state.
+  Preserve current format-3 restart points below; do not add full preparation restarts.
   Require equal manifests, counts, documents/postings/statistics and lexical
   results/scores/order; physical layout and checkpoint ordinals may differ.
 - Cover row/byte/time edges, oversized-unit fallback, zero-work scans, reset-only
   chunks, empty Card tails, fence races, retained earlier batches, GC pins/debt,
   grace/forced disposal, lost samples, failure causes, refunds and nonterminal misses.
+  Include tail spending despite rejected work admission, reserve cap/reset, prefix commit/rollback, and backoff across calls/resident replacement.
   Keep the cutoff exception disabled in normal cells; test its existing seam only.
 
 ## Quiet-window protocol
@@ -272,13 +284,17 @@ Baseline conflicts/interpretations; line references are against `50877b4e`:
   alive on eligible cutoff without the current enablement gate. Read it subject
   to `docs/context-read-product.md:752`: the exception stays disabled; batching
   adds no qualification, public override or eligibility evidence.
-- `docs/plans/context-read-maintenance-cutoff.md:139` and `:175` defer B1 recovery
-  and acceptance as future work. B1 is present: those atomic retarget/artifact,
-  incomplete-comparison and lost-commit obligations are mandatory here.
+- `docs/plans/context-read-maintenance-cutoff.md:139` and `:175` mix present/future scope.
+  Current format-3 preserves B1 retarget/artifact reuse and lost-commit recovery; production closure/witnesses remain B4 (`docs/plans/context-read-incremental-catchup.md:1780`).
 - `docs/plans/context-read-incremental-catchup.md:110` describes abandonment on
   target mismatch; it is historical motivation, superseded for authenticated
   UTF-8 preparation by `docs/context-read-product.md:333`, not batching behavior.
-- `docs/plans/context-read-incremental-catchup.md:1333` requires a full comparison
-  on restart. Saved preparation cursors do not replace that coherent closure
-  pass: replay/retarget retains artifacts, while incomplete closure comparisons
-  restart fully. Batching grants no additional captured-E or readiness proof.
+- **Current format-3 behavior:** after a crash, authenticate the checkpoint and resume its
+  preparation cursor with unchanged bindings (`core/context-product-sidecar.mjs:675`). Changed
+  fences reset comparison phase/cursor, retaining authenticated artifacts (`:677`). Preserve
+  these restart points and access/invalid-work/verification rules (`docs/context-read-product.md:333`).
+- **Future compatibility:** `docs/plans/context-read-incremental-catchup.md:1333` stays intact:
+  “Any incomplete comparison restarts as a full comparison, with sealed artifacts still reusable.”
+  This covers any incomplete comparison, not only closure; B4 acceptance must address it.
+- **Open conflict for the coordinating owner:** that rule and `docs/plans/context-read-maintenance-cutoff.md:140`
+  conflict with current B1 cursor resume after a halfway-comparison crash; this delta amends neither rule nor owner policy.
