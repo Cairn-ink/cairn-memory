@@ -293,8 +293,9 @@ Baseline conflicts/interpretations; line references are against `50877b4e`:
   preparation cursor with unchanged bindings (`core/context-product-sidecar.mjs:675`). Changed
   fences reset comparison phase/cursor, retaining authenticated artifacts (`:677`). Preserve
   these restart points and access/invalid-work/verification rules (`docs/context-read-product.md:333`).
-- **Future compatibility:** `docs/plans/context-read-incremental-catchup.md:1333` stays intact:
+- **Future compatibility, as amended:** `docs/plans/context-read-incremental-catchup.md:1333` remains historical text:
   “Any incomplete comparison restarts as a full comparison, with sealed artifacts still reusable.”
-  This covers any incomplete comparison, not only closure; B4 acceptance must address it.
-- **Open conflict for the coordinating owner:** that rule and `docs/plans/context-read-maintenance-cutoff.md:140`
-  conflict with current B1 cursor resume after a halfway-comparison crash; this delta amends neither rule nor owner policy.
+  The [restart-point amendment v1 (2026-10-30)](context-read-incremental-catchup.md#restart-point-amendment-v1--2026-10-30)
+  records the coordinating owner's decision: full restart applies to incomplete B4 closure
+  passes; authenticated B1 preparation resumes as above and alone earns no closure/renewal credit.
+  This resolves the former open conflict with the cutoff plan's blanket restart wording.
