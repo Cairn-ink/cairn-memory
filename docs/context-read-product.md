@@ -225,6 +225,46 @@ this integration and any separately reauthenticated fallback. Real +50 ms
 settlement and deployment latency gates require the opt-in qualification runs;
 ordinary tests use mock clocks and rendezvous.
 
+## Optional engine-only reader prewarming
+
+A service may opt in once with `createContextReadSupervisor({readerWorkerPool:true})`.
+This is an **interface change for product adoption**: select it in trusted service
+construction, never from HTTP input or reader request options. The default is off;
+`false` also keeps the existing cold path. The returned supervisor and reader DTOs
+are unchanged. No maintenance Worker is admitted from this pool.
+
+The supervisor owns at most two ready Workers and one loading refill, with no
+request queue. A loading/exhausted/incompatible pool falls back immediately to the
+ordinary cold Worker using the same opening record, consumed reservation and
+original cutoffs. Assignment follows issuance, reservation CAS and registration.
+Every assigned Worker accepts one bootstrap, is never returned, and uses the
+existing bounded graceful disposal and quarantine path at close/timeout.
+
+Parked Workers have only engine code, engine/runtime policy, a service generation
+and their private control channel. They have no credential, binding, reservation,
+request IDs, readSet, host module/configuration, or application/database descriptor.
+Only code-loader reads occur before bootstrap. The host is imported only after
+Worker issuance verification and the parent identity acknowledgement, as before.
+Empty env/execArgv isolation and the 192 MiB old-generation limit remain in force;
+that heap limit is not an RSS cap. Imports/refill still consume CPU/native memory.
+
+Pool compatibility binds the engine entry URL, bootstrap protocol, Node runtime,
+192 MiB policy and supervisor generation. Engine upgrades require service restart;
+there is no hot retargeting. Private aggregate hit/miss/startup-failure counters
+carry no authority/content and are not exported by the public core entry.
+Startup failures/crashes are reaped with bounded retry/backoff, never assigned.
+With `diagnostics:true`, the existing phase names remain request-scoped. On a hit,
+spawn-to-first-statement covers lookup/bootstrap handoff; parked time is excluded.
+Engine import intervals measure the cached imports during that same request.
+
+Await `supervisor.close()` on shutdown: it stops refill and awaits idle/loading
+termination plus the ordinary assigned-record deliveries. Unconfirmed cleanup
+still rejects; the 256 live-record ceiling and cleanup IDs are unchanged. Before
+restore/erasure, deny admission, publish revocation and close/drain every service
+supervisor (including its pool), then resume with fresh issuance and a new supervisor.
+No native-host latency claim follows from enabling this option; qualification of
+hits, misses, refill contention and bursts is a separate step.
+
 ## P2b service maintenance and prebuild
 
 The product supplies independent authenticated service issuance in trusted

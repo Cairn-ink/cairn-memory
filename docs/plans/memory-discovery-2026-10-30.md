@@ -1,7 +1,8 @@
 # Cairn Memory discovery metadata
 
-Review base: `88d168f81979d51d1861fbd6d70cd91ea18f9936`; prior task base
-`eeef2e8ff777e27515e03b55452e4211578ca912` remains in the commit history.
+Review base: `e329d57fd0e7d3fad71eda704add0a116b3af715`; previous review base
+`88d168f81979d51d1861fbd6d70cd91ea18f9936` and original task base
+`eeef2e8ff777e27515e03b55452e4211578ca912` remain in the commit history.
 Worktree:
 `/home/chichieh/Github/cairn-memory-worktrees/memory-discovery-20261030`, branch
 `docs/memory-discovery-20261030`. This is a bounded metadata and entry-point
@@ -60,12 +61,14 @@ publish a package.
   `packages/setup/runtime/engine/cairn-memory-local-preview-0.0.0-preview.1.tgz`,
   and `packages/setup/runtime/engine/manifest.json`. The two generated engine
   package artifacts are allowed because `docs/limitations.md` is included in
-  `packaging/artifact-files.json`; refresh them to include the updated evidence.
-  Their inventory and packaged `package.json`/`npm-shrinkwrap.json` must remain
-  unchanged; only the `docs/limitations.md` payload and its derived source hash,
-  archive digest, and byte count may change. Do not change executable sources,
-  engine behavior, dependencies, versions, or the frozen hosted Codex runtime
-  files or inventory. A small Unreleased changelog note may describe the
+  `packaging/artifact-files.json`; regenerate them from the merged source to
+  include the updated evidence and preserve main's two reader-pool modules in
+  the 340-member inventory. Relative to this review base, their inventory and
+  packaged `package.json`/`npm-shrinkwrap.json` must remain unchanged; only the
+  `docs/limitations.md` payload and its derived source hash, archive digest,
+  and byte count may change. Do not change executable sources, engine behavior,
+  dependencies, versions, or the frozen hosted Codex runtime files or inventory.
+  A small Unreleased changelog note may describe the
   metadata and documentation update only. Do not change live accounts,
   production, publication, tags, settings, or the prior pilot. The changed
   discovery surfaces are npm package search/homepage/package README and GitHub
@@ -140,7 +143,7 @@ results separately. Do not schedule automatic reruns.
 | English and Traditional Chinese GitHub READMEs | Existing anchors and detailed content remain intact; opening identifies the Cairn.ink relationship and links to the three official entry points. | Worker: diff inspection. |
 | Evaluation limitations record | Labeled as discovery measurement, links to this plan, and separates API visibility from product-quality evidence. | Worker: diff inspection. |
 | Discovery query baseline | Query list, platform-specific results, and post-publication follow-up remain separate from the existing pilot. | Primary audit: eight API responses and summary at the private evidence path above. |
-| Embedded engine package | `docs/limitations.md` is packaged; refresh its embedded copy without changing inventory, package metadata, executable content, or host-runtime files. | Worker on Node 22.16.0: generator and `--check` both exit 0. The 338 members have identical inventories; only `docs/limitations.md` bytes and source hash differ. Packaged `package.json` and `npm-shrinkwrap.json` are byte-identical; all 32 host-runtime files are unchanged. |
+| Embedded engine package | `docs/limitations.md` is packaged; refresh its embedded copy without changing inventory, package metadata, executable content, or host-runtime files. | Worker on Node 22.16.0: generator and `--check` both exit 0. The 340 members have identical inventories; only `docs/limitations.md` bytes and source hash differ. Packaged `package.json` and `npm-shrinkwrap.json` are byte-identical; all 32 host-runtime files are unchanged. |
 
 ## Routing record
 

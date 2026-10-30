@@ -3,6 +3,9 @@ import { resolve } from 'node:path';
 import { drainNative } from './context-product-telemetry.mjs';
 import { deepFreeze } from './private-card-input.mjs';
 import { fail } from './validation.mjs';
+import { ownData } from './local-authority-input.mjs';
+// Importing this SQLite-free factory creates no Workers, timers or records.
+import { createReaderWorkerPool as nativePool } from './context-product-reader-pool.mjs';
 
 export const SUPERVISOR_LIMITS = Object.freeze({ live: 256, completed: 1024, metadataBytes: 1048576,
   diagnosticBytes: 16777216, historyMs: 300000 });
@@ -12,7 +15,8 @@ const statusKeys = ['cleanupId', 'state', 'workerStopped', 'nativeDisposed', 'le
 
 // A factory is internal to permit deterministic clocks. Public supervisors all
 // use the single registry below; a new supervisor never creates a new quota.
-export function createSupervisorRegistry({ now = () => Number(process.hrtime.bigint()) / 1e6, limits = SUPERVISOR_LIMITS } = {}) {
+export function createSupervisorRegistry({ now = () => Number(process.hrtime.bigint()) / 1e6, limits = SUPERVISOR_LIMITS,
+  createPool = nativePool } = {}) {
   const records = new Map(), history = new Map(), reservations = new Map();
   let live = 0, metadataBytes = 0, diagnosticBytes = 0;
   function remove(record) {
@@ -99,8 +103,13 @@ export function createSupervisorRegistry({ now = () => Number(process.hrtime.big
     records.set(record.id, record); owner.records.add(record); live++;
     return record;
   }
-  function supervisor() {
+  function supervisor(options, poolFactory = createPool) {
     const owner = { records: new Set(), closed: false };
+    if (options !== undefined) {
+      const { readerWorkerPool } = ownData(options, ['readerWorkerPool']);
+      if (readerWorkerPool !== undefined && typeof readerWorkerPool !== 'boolean') fail('invalid_input');
+      if (readerWorkerPool === true) owner.readerPool = poolFactory();
+    }
     const api = Object.freeze({
       getCleanupStatus(id) { return status(lookup(owner, id)); },
       drain(id) {
@@ -120,8 +129,14 @@ export function createSupervisorRegistry({ now = () => Number(process.hrtime.big
       },
       close() {
         owner.closed = true;
+        const parked = owner.readerPool?.close();
         const active = [...owner.records].filter(r => r.expiresAt === null);
         for (const record of active) { record.draining = true; record.stop?.('store_closed'); }
+        if (parked) return Promise.allSettled([...active.map(r => r.delivery), parked]).then(results => {
+          const failure = results.find(result => result.status === 'rejected');
+          if (failure) throw failure.reason;
+          return results.slice(0, -1).map(result => result.value);
+        });
         return Promise.all(active.map(r => r.delivery));
       },
     });
@@ -158,10 +173,12 @@ export function createSupervisorRegistry({ now = () => Number(process.hrtime.big
   };
   return instance;
 }
-export function createContextReadSupervisor() {
+export function createContextReadSupervisor(options) {
   const state = processState();
-  return (state.registry ??= createSupervisorRegistry()).supervisor();
+  return (state.registry ??= createSupervisorRegistry()).supervisor(options, nativePool);
 }
+// Private aggregate diagnostics, never part of a supervisor or delivery DTO.
+export const readerPoolDiagnostic = supervisor => processState().owners.get(supervisor)?.owner.readerPool?.diagnostic();
 export function supervisorOwner(supervisor) {
   const owner = processState().owners.get(supervisor);
   if (!owner) fail('invalid_input');

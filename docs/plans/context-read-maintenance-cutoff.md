@@ -141,6 +141,17 @@ replacement/map/statistics/checkpoint boundary. Restart incomplete comparisons a
 reobserve metadata/dependencies/lineage before reuse. Retarget earns no coverage credit; closed E and
 its witness retain identity/time. This remains a future compatibility requirement.
 
+### Restart-point amendment v1 — 2026-10-30
+
+The coordinating owner's decision supersedes the blanket restart scope above and in
+the B1 integration acceptance below; the original text remains as revision history.
+Eligible UTF-8 B1 preparation resumes authenticated cursors with unchanged bindings; changed fences
+reset phase/cursor while retaining artifacts (`core/context-product-sidecar.mjs:675`, `:677`).
+Only incomplete B4 closure comparisons must restart fully; sealed artifacts remain
+reusable, stitching is forbidden, and resumed preparation alone earns no closure/renewal credit.
+See the [versioned catch-up amendment](context-read-incremental-catchup.md#restart-point-amendment-v1--2026-10-30)
+for whole-generation verification/publication evidence and the next-package test requirements.
+
 ## Lifecycle, capacity and minimal diagnostics
 
 Renewal extends future authority only: no charge erasure, cooldown shortening or stopped-pump revival.
