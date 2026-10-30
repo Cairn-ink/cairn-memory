@@ -126,7 +126,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     if (!lifecycle) {
       if (!productFile(lockPath,true)) {
         if (!createLock) unavailable('storage_unavailable');
-        try { createExclusiveSqliteFile(lockPath); } catch(e) { if(e.code!=='EEXIST')throw e; }
+        try { createExclusiveSqliteFile(lockPath); } catch(e) {attribution?.captureFailure(e); if(e.code!=='EEXIST')throw e; }
       }
       lockIdentity=productFile(lockPath);
       const open=()=>new DatabaseSync(lockPath,{readOnly:true});
@@ -153,7 +153,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   function publish(replacement,init) {
     const work=()=>createExclusiveSqliteFile(sidePath,replacement,init,sqlite && observer ? {observe:observer.creation} : {});
     try { return observer && !sqlite ? observer.invoke('execute','transaction',work) : work(); }
-    catch(error) { if(sqlite)sqlite.initializationFailure(error);throw error; }
+    catch(error) {attribution?.captureFailure(error); if(sqlite)sqlite.initializationFailure(error);throw error; }
   }
   function verifyOpened() {
     sideFiles?.();
@@ -163,25 +163,25 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     try { sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});return readTransaction(side,()=>{
       side.prepare('PRAGMA schema_version').get();
       verifyOpened();rendezvous('snapshot');return work();
-    }); } catch(e) { if(e.reason==='storage_unavailable')try{close();}catch{}throw e; }
+    }); } catch(e) {attribution?.captureFailure(e); if(e.reason==='storage_unavailable')try{close();}catch{}throw e; }
   }
   const openNative = (write = false) => {
     try { return observer ? observer.invoke('open','connection', () => new DatabaseSync(sidePath, { readOnly: !write }))
       : new DatabaseSync(sidePath, { readOnly: !write }); }
-    catch (error) { if(sqlite)sqlite.openingFailure(error);throw error; }
+    catch (error) {attribution?.captureFailure(error); if(sqlite)sqlite.openingFailure(error);throw error; }
   };
   function close() { if (side?.isOpen) side.close(); side = null; metadata = null; sideFiles = null; }
   function write(work) {
     sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});
     const beginning=attribution?.start('begin');
-    try {attribution?.checkpoint('begin');side.exec('BEGIN IMMEDIATE');}finally{attribution?.end(beginning);}
+    try {attribution?.checkpoint('begin');side.exec('BEGIN IMMEDIATE');}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.end(beginning);}
     try {
       verifyOpened();const result=work();rendezvous('batch');
       const committing=attribution?.start('commit');
-      try {attribution?.checkpoint('commit');side.exec('COMMIT');}finally{attribution?.end(committing);}
+      try {attribution?.checkpoint('commit');side.exec('COMMIT');}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.end(committing);}
       return result;
     }
-    catch (e) { if (side.isTransaction) side.exec('ROLLBACK'); if(e.reason==='storage_unavailable')close();throw e; }
+    catch (e) {attribution?.captureFailure(e); if (side.isTransaction) side.exec('ROLLBACK'); if(e.reason==='storage_unavailable')close();throw e; }
   }
   function connection(create = false) {
     if (closed) fail('store_closed');
@@ -193,7 +193,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         try {
           sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});
           if(wantsWrite && sideMode!==sidecarJournalMode)unavailable('storage_unavailable');
-        } catch(error) {try{close();}catch{}throw error;}
+        } catch(error) {attribution?.captureFailure(error);try{close();}catch{}throw error;}
       } else auxiliaries(sidePath, wantsWrite);
       if (create) read(() => {
         sideFormat=side.prepare('PRAGMA user_version').get().user_version;
@@ -212,7 +212,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       // It owns the exclusive lifecycle lock, so release our shared lock first.
       release();
       cleaned(()=>{try { publish(null,initialization()); }
-        catch(e) { if(e.code!=='EEXIST')throw e; }},()=>acquire());
+        catch(e) {attribution?.captureFailure(e); if(e.code!=='EEXIST')throw e; }},()=>acquire());
     } else if (!sqlite) {
       const mode = probeRollbackJournal(sidePath, observer ? { observe: observer.journalProbe } : {});
       if (mode.code === 14 || mode.mode && mode.mode !== 'delete') unavailable('incompatible');
@@ -241,7 +241,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         if(admittedMetadata.profile!==PRODUCT_PROFILE)unavailable('incompatible');
         if(wantsWrite && (candidate.prepare('PRAGMA quick_check').get().quick_check!=='ok' || candidate.prepare('PRAGMA foreign_key_check').get()))unavailable('corrupt');
       });
-    } catch(error) {try{if(candidate?.isOpen)candidate.close();}catch{}throw error;}
+    } catch(error) {attribution?.captureFailure(error);try{if(candidate?.isOpen)candidate.close();}catch{}throw error;}
     side=candidate;sideWritable=wantsWrite;sideFiles=files;openedIdentity=admittedIdentity;metadata=admittedMetadata;
     return true;
   }
@@ -254,7 +254,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     attribution?.step();
     let storeId;
     try {storeId=canonical.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id;}
-    finally {attribution?.acquired();}
+    catch(error){attribution?.captureFailure(error);throw error;}finally {attribution?.acquired();}
     if(storeId!==identity.storeId)unavailable('wrong_store');
     return { projectionDigest: projectionDigest(p), accessDigest: access, ...canonicalProductFences(canonical,p),
       canonical: canonicalProductIdentity(path,canonical), sidecar: sideIdentity() };
@@ -299,7 +299,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
           const g = side.prepare('SELECT * FROM generations WHERE id=?').get(work.generation);
           const text = side.prepare('SELECT record FROM progress_records WHERE generation=?').get(work.generation)?.record;
           if (!g || !text) return invalid(p,'validation_missing');
-          const r = verifiedRecord(identity.cursorSecret,'progress',text);
+          const r = verifiedRecord(identity.cursorSecret,'progress',text,attribution);
           if ((JSON.parse(g.verify)?.byteSafe===1 && !(mergeOrder??canMerge()) && JSON.parse(g.verify)?.appendOnly!==true) || g.published || pointer?.generation===g.id || side.prepare('SELECT 1 FROM validation_records WHERE generation=?').get(g.id) ||
               g.id!==generationId(g) || g.incarnation!==incarnationOf(g) || !same(r.generation,{ id:g.id,incarnation:g.incarnation }) || !same(r.progress,progressOf(g)) ||
               r.kind !== g.kind || r.projectionDigest !== g.projection || r.accessDigest !== g.access ||
@@ -318,7 +318,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         const g = side.prepare('SELECT * FROM generations WHERE id=?').get(pointer.generation);
         const text = side.prepare('SELECT record FROM validation_records WHERE publication=?').get(pointer.publication)?.record;
         if (!g || !text) return invalid(p,'validation_missing');
-        const r = verifiedRecord(identity.cursorSecret,'validation',text);
+        const r = verifiedRecord(identity.cursorSecret,'validation',text,attribution);
         const expectedTypes = ['memory','card'].filter(type => p.types.includes(type));
         if ((JSON.parse(g.verify)?.byteSafe===1 && !(mergeOrder??canMerge()) && JSON.parse(g.verify)?.appendOnly!==true) || g.id !== generationId(g) || g.incarnation !== incarnationOf(g) || g.phase !== streams(p).length+3 || !g.published || r.publicationId !== pointer.publication || !same(r.generation, { id:g.id,sequence:g.sequence,checkpoint:g.checkpoint,incarnation:g.incarnation }) ||
             g.projection !== r.projectionDigest || g.access !== r.accessDigest || g.manifest !== r.manifestDigest ||
@@ -331,7 +331,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         if(byteSafe && checkpoint && !checkpoint.mismatch)return incomplete();
         return { dto:status(p,mismatch ? 'stale' : 'ready',mismatch,progressOf(g),r.counts), publication:r,byteSafe };
       });
-    } catch (e) {
+    } catch (e) {attribution?.captureFailure(e);
       if (e instanceof SyntaxError) return invalid(p,'validation_invalid');
       if (e.code === 'index_unavailable') return invalid(p,e.reason);
       if (e.code === 'ERR_SQLITE_ERROR' && [11,26].includes(e.errcode & 255)) return invalid(p,'corrupt');
@@ -349,7 +349,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       record=signedRecord(identity.cursorSecret,'progress',{ version:'context-index-progress-v1',profile:PRODUCT_PROFILE,storeId:identity.storeId,
       canonicalIdentityDigest:digest(t.canonical),sidecarIdentityDigest:digest({format:PRODUCT_SIDECAR_FORMAT,...t.sidecar}),projectionDigest:g.projection,accessDigest:g.access,
       ...JSON.parse(g.fences),generation:{ id:g.id,incarnation:g.incarnation },kind:g.kind,progress:progressOf(g) });
-    }finally{attribution?.end(signing);}
+    }catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.end(signing);}
     if (Buffer.byteLength(record)>4096) fail('context_item_too_large');
     side.prepare('INSERT OR REPLACE INTO progress_records VALUES(?,?)').run(g.id,record);
     side.prepare('UPDATE generations SET incarnation=?,fences=?,phase=?,last_key=?,checkpoint=?,verify=? WHERE id=?').run(g.incarnation,g.fences,g.phase,g.last_key,g.checkpoint,JSON.stringify(g.verify),g.id);
@@ -367,7 +367,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       ? `SELECT id,hex(CAST(id AS BLOB)) AS id_bytes,revision,0 AS body_revision,deleted,currentness,review_state FROM memories INDEXED BY index_memory_keyset WHERE ${where} AND id COLLATE BINARY>? ORDER BY id COLLATE BINARY LIMIT ?`
       : `SELECT id,hex(CAST(id AS BLOB)) AS id_bytes,revision,coalesce(body_revision,0) AS body_revision,state FROM private_cards INDEXED BY private_card_scope WHERE ${where} AND state=? AND id COLLATE BINARY>? ORDER BY id COLLATE BINARY LIMIT ?`)
       .all(...boundary(s.ns),...(s.type === 'card' ? [s.state] : []),after,maximum);}
-    finally {attribution?.acquired();}
+    catch(error){attribution?.captureFailure(error);throw error;}finally {attribution?.acquired();}
     m.canonicalRows += rows.length; m.metadataBytes += Buffer.byteLength(JSON.stringify(rows.map(({id_bytes,...row})=>row)));
     // UTF-8 binding agrees with Buffer encoding; only UTF-16 needs a native
     // round trip (its conversion can rewrite values such as U+FFFE).
@@ -616,7 +616,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     // repair the cache before this maintainer reaches its own repair branch.
     const repairIdentity=productFile(sidePath,true),repairStamp=repairIdentity && stamp();
     try { connection(true); }
-    catch(e) {
+    catch(e) {attribution?.captureFailure(e);
       if (!['wrong_store','incompatible','corrupt'].includes(e.reason) && !(e.code==='ERR_SQLITE_ERROR' && [1,11,26].includes(e.errcode&255))) throw e;
       const oldFormat = sideFormat > 0 && sideFormat !== PRODUCT_SIDECAR_FORMAT; close();
       if (oldFormat) unavailable(e.reason==='wrong_store'?'wrong_store':'incompatible');
@@ -631,7 +631,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       try {
         release();
         cleaned(()=>publish(old.device+':'+old.inode,{...initialization(),expectedStamp:repairStamp}),()=>acquire());
-      } catch(e) {
+      } catch(e) {attribution?.captureFailure(e);
         if(['ESTALE','EEXIST','EBUSY'].includes(e.code))unavailable('storage_unavailable');
         throw e;
       }
@@ -735,7 +735,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
                   let found;
                   try {found=canonical.prepare(stream.type==='memory'
                     ? `SELECT content AS text FROM memories WHERE ${where} AND id COLLATE BINARY=?` : `SELECT title||char(10)||body AS text FROM private_cards WHERE ${where} AND id COLLATE BINARY=?`).get(...boundary(stream.ns),row.id);}
-                  finally {attribution?.acquired();}return found?.text;
+                  catch(error){attribution?.captureFailure(error);throw error;}finally {attribution?.acquired();}return found?.text;
                 }) : '';
                 if(typeof text!=='string' || text.length>2000000) {
                   // A deletion/forget can invalidate the observed body before
@@ -770,7 +770,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         }
         if(rebinding){m.retargets++;rebinding=false;}
         g.checkpoint++;save(g,t);
-      }); } catch(e) { if(e===fenceChanged)return m;throw e; }
+      }); } catch(e) {attribution?.captureFailure(e); if(e===fenceChanged)return m;throw e; }
       rendezvous('checkpoint');
     }
     while (g.phase>=g.streams.length && g.verify.phase<3 && quantum.admit('verify-scan') && quantum.admit('verification') &&
@@ -794,7 +794,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
             generation:{id:g.id,sequence:g.sequence,checkpoint:g.checkpoint,incarnation:g.incarnation},publicationId,manifestDigest,counts:g.verify.counts };
           const record=signedRecord(identity.cursorSecret,'validation',body);
           if (Buffer.byteLength(record)>16384) fail('context_item_too_large');
-          verifiedRecord(identity.cursorSecret,'validation',record);
+          verifiedRecord(identity.cursorSecret,'validation',record,attribution);
           side.prepare('UPDATE generations SET published=1,checkpoint=?,manifest=? WHERE id=?').run(g.checkpoint,manifestDigest,g.id);
           side.prepare('INSERT INTO validation_records VALUES(?,?,?)').run(publicationId,g.id,record);
           side.prepare('INSERT OR REPLACE INTO publications VALUES(?,?,?)').run(g.projection,g.id,publicationId);
@@ -862,7 +862,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     observe(p,...args) {
       p=projection(p);
       try {return guarded(()=>observe(p,...args));}
-      catch(e) {if(e.code==='index_unavailable')return invalid(p,e.reason);throw e;}
+      catch(e) {attribution?.captureFailure(e);if(e.code==='index_unavailable')return invalid(p,e.reason);throw e;}
     },
     refresh:(p,access,budget)=>{
       const started=now();p=projection(p);
@@ -873,7 +873,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     lexical:(p,...args)=>{p=projection(p);return guarded(()=>lexical(p,...args));},
     prepareObservation() {
     try {return guarded(()=>{ connection(false);return null; }); }
-    catch(e) {
+    catch(e) {attribution?.captureFailure(e);
       // Carry the observed failure into this operation's final observation;
       // never retry a failed native opening/statement behind the status DTO.
       if(e.code==='index_unavailable')return e.reason;

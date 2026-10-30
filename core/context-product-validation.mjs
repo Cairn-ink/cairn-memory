@@ -23,7 +23,7 @@ const hash = v => typeof v === 'string' && /^[A-Za-z0-9_-]{43}$/.test(v);
 const file = v => v && /^(0|[1-9][0-9]*)$/.test(v.device) && /^(0|[1-9][0-9]*)$/.test(v.inode) && integer(v.schemaVersion);
 export const validProgress = p => keys(p, 'phase,checkpoint,sequence,baseSequence') &&
   ['phase','checkpoint','baseSequence'].every(k => integer(p[k])) && integer(p.sequence, 1) && p.baseSequence <= p.sequence;
-export function verifiedRecord(secret, purpose, text) {
+export function verifiedRecord(secret, purpose, text, attribution) {
   const maximum = purpose === 'validation' ? 16384 : 4096;
   try {
     if (typeof text !== 'string' || Buffer.byteLength(text) > maximum) fail('invalid_input');
@@ -51,5 +51,9 @@ export function verifiedRecord(secret, purpose, text) {
           Object.values(value.counts.byType).some(c => !keys(c,'eligible,indexed') || !integer(c.eligible) || c.eligible !== c.indexed)) fail('invalid_input');
     }
     return value;
-  } catch { throw Object.assign(Error('index_unavailable'), { code: 'index_unavailable', reason: 'validation_invalid' }); }
+  } catch(error) {
+    attribution?.captureFailure(error);
+    const mapped=Object.assign(Error('index_unavailable'), { code: 'index_unavailable', reason: 'validation_invalid' });
+    throw attribution?attribution.mapFailure(error,mapped):mapped;
+  }
 }

@@ -159,7 +159,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       if(method==='getContextIndexStatus') {
         const knownFailure=storage.prepareObservation();access.check(); return read(()=>{
           attribution?.step();
-          try {db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();}finally{attribution?.acquired();}
+          try {db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.acquired();}
           return success(storage.observe(p,access.accessGenerations,{knownFailure}).dto);
         });
       }
@@ -178,14 +178,14 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
           // No host callback or await; only successful comparisons transport it.
           if(observation)observation.at=Number(process.hrtime.bigint())/1e6;
           attribution?.step();
-          try {db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();}finally{attribution?.acquired();}
+          try {db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.acquired();}
           const observed=storage.observe(p,access.accessGenerations,{knownFailure}),ready=observed.dto.lexical.state==='ready';
           const preparation=attribution?.start('serialize');
           try {
             const covered=coverage(observed.dto);covered.stops.budget=m.transformed>=p.budget.maxItems;
             return success({status:ready&&observed.byteSafe?p.mode==='embeddings'?'partial':'complete':'rebuilding',
               progress:{lexical:observed.dto.lexical.progress,transformed:m.transformed,embeddingAttempts:0,embedded:0},coverage:covered,channels:channels(ready)});
-          } finally {if(attribution)attribution.end(preparation);}
+          } catch(error){attribution?.captureFailure(error);throw error;}finally {if(attribution)attribution.end(preparation);}
         });}finally{if(observation)observation.epochObservationMs=Number(process.hrtime.bigint())/1e6-epochStarted;}
       }
       const binding=digest({readSet:p.readSet,types:p.types,intent:p.intent,query:p.query,semantic:p.semantic,access:access.accessGenerations});
@@ -214,7 +214,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         for(const candidate of result.value.items)evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);
         return result;
       });
-    } catch(e) {
+    } catch(e) {attribution?.captureFailure(e);attribution?.selectFailure(e);
       const code=e.code==='ERR_SQLITE_ERROR'?[5,6].includes(e.errcode&255)?'storage_busy':'storage_error':e.code??'storage_error';
       return failure(code);
     }
@@ -272,7 +272,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
             const result=await semantic.call('embed',{texts:[p.query],kind:'query',expected:snapshot.policy,projection:{readSet:p.readSet,types:p.types,intent:p.intent,accessDigest:c.observed.publication.accessDigest,lexicalValidationDigest:digest(c.observed.publication),vectorValidationDigest:digest(preflight.record)}},sub);
             diagnostic.queryEmbeddingAttempts=1;
             ranked=vectors.rank(preflight,result.vectors[0]);p.vectorPublication=preflight.record.publicationId;p.semanticSnapshot=snapshot;
-          }catch(error){reason=['not_enabled','purge_pending','backfill_ceiling','ledger_unavailable','price_unavailable','timeout','provider_error','rate_limited','budget_denied','dimension_mismatch','provider_unavailable'].includes(error.code)?error.code:'provider_error';diagnostic.queryEmbeddingAttempts=error.attempts??0;}
+          }catch(error){attribution?.captureFailure(error);reason=['not_enabled','purge_pending','backfill_ceiling','ledger_unavailable','price_unavailable','timeout','provider_error','rate_limited','budget_denied','dimension_mismatch','provider_unavailable'].includes(error.code)?error.code:'provider_error';diagnostic.queryEmbeddingAttempts=error.attempts??0;}
           diagnostic.queryEmbeddingMs=diagnostic.queryEmbeddingAttempts?performance.now()-started:0;detail.timings.embeddingMs=diagnostic.queryEmbeddingMs;
         }
       }
@@ -329,7 +329,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         for(const candidate of result.value.items)evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);
         return result;
       });
-    }catch(error){return failure(error.code==='ERR_SQLITE_ERROR'?[5,6].includes(error.errcode&255)?'storage_busy':'storage_error':error.code??'storage_error');}
+    }catch(error){attribution?.captureFailure(error);attribution?.selectFailure(error);return failure(error.code==='ERR_SQLITE_ERROR'?[5,6].includes(error.errcode&255)?'storage_busy':'storage_error':error.code??'storage_error');}
   }
   async function embeddingRefresh(p,access,cutoff) {
     // Start before opening or any authority/provider work; the parent window
@@ -344,7 +344,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     if(ready&&!reason) {
       const sidecarIdentity=productFile(path+PRODUCT_SIDECAR_SUFFIX);
       const catalog={catalogId:digest({storeId:identity.storeId,canonicalIdentity:physical,sidecarIdentity}),ownerId:p.readSet[0].ownerId,storeId:identity.storeId,canonicalPath:path,canonicalIdentity:physical,sidecarIdentity,sidecarJournalMode:sidecarJournalMode??'DELETE'};
-      try{await semantic.call('catalog',catalog);}catch(error){if(!['not_enabled','purge_pending','ledger_unavailable','timeout'].includes(error.code))throw error;reason=error.code;}
+      try{await semantic.call('catalog',catalog);}catch(error){attribution?.captureFailure(error);if(!['not_enabled','purge_pending','ledger_unavailable','timeout'].includes(error.code))throw error;reason=error.code;}
       let maximum=Math.min(p.budget.maxItems,semantic.configuration.selection.maxBatchDocuments,64);
       while(!reason&&attempts<p.budget.maxItems&&quantum.admit('embedding-item')&&quantum.admit('vector-scan')) {
         let rows=vectors.plan(p,observed.publication,snapshot,Math.min(maximum,p.budget.maxItems-attempts),quantum);if(!rows.length||!quantum.admit('embedding-item'))break;
@@ -367,7 +367,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       }
       if((!reason||attempts>0)&&quantum.admit('vector-scan')&&quantum.admit('vector-verification')) {
         let release;
-        try{release=semantic.gate.enter(snapshot.policy);vectors.certify(p,observed.publication,snapshot,quantum);}catch(error){reason=error.reason==='validation_invalid'||error.code==='index_unavailable'?'validation_invalid':error.code==='read_timeout'?'timeout':error.code;}finally{release?.();}
+        try{release=semantic.gate.enter(snapshot.policy);vectors.certify(p,observed.publication,snapshot,quantum);}catch(error){attribution?.captureFailure(error);reason=error.reason==='validation_invalid'||error.code==='index_unavailable'?'validation_invalid':error.code==='read_timeout'?'timeout':error.code;}finally{release?.();}
       }
     }
     if(!snapshot.unavailable) {
