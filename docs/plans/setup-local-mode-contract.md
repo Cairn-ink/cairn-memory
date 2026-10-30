@@ -1131,7 +1131,7 @@ else outside `packages/setup/` except the three documents named here.
 
 v0.18 (setup session, 2026-10-31). v0.17 (`c09746e3`) was audited by a
 non-author Codex auditor (gpt-6.1-sol, xhigh, read-only): no P0, five P1, three
-P2, not ready. v0.18 adopted the auditor's replacement text. The re-check of v0.18 (`bc0b6804`) found one new P1 (the unresolved-gate rule cannot block a single host) and one P2 (Rule 7 precision); v0.19 adopts its text and classifies the §18.3 cases as required or best-effort. Release scope set
+P2, not ready. v0.18 adopted the auditor's replacement text. The re-check of v0.18 (`bc0b6804`) found one new P1 (the unresolved-gate rule cannot block a single host) and one P2 (Rule 7 precision); v0.19 adopts its text and classifies the §18.3 cases as required or best-effort. The second re-check (`65250fb7`) found no P0/P1 and one P2 (Rule 5 names its exception), adopted here; verdict ready for implementation. Release scope set
 by the engine primary on 2026-10-31: 0.6.3 carries only this fix and no
 storage, retrieval or safety engine change; the new engine moves to 0.6.4.
 The engine primary chose option B for the engine bundle (Rule 7).
@@ -1220,11 +1220,12 @@ strings.
    `hasQualifiedCreator` rejects old-policy evidence. Seeding a creator
    accepts its header on a later qualified writer; it does not prove that the
    writer's appended records are compatible.
-5. **Parser.** The parser's closed sets change only to admit what §18.3
-   native rollouts actually contain.
-   - A new type may be excluded only when native provenance establishes that
-     it is not an additional canonical completed user or assistant message.
-     Mirrors, instructions, tool descriptions, retained context and
+5. **Parser.** Except for top-level `dynamic_tools_updated`, which is admitted
+   and excluded as specified in §18.3, the parser's closed sets change only to
+   admit what §18.3 native rollouts actually contain.
+   - For every other newly excluded type, native provenance must establish
+     that it is not an additional canonical completed user or assistant
+     message. Mirrors, instructions, tool descriptions, retained context and
      compaction summaries may contain text and must remain excluded.
    - There is no lenient fallback. Reason: an `unsupported_format` latch is
      permanent per session (`integrations/codex/worker.mjs`), so a qualified
