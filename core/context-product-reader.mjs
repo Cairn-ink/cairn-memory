@@ -180,8 +180,13 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         const armSafety = remaining => {
           realUntil = Math.min(realUntil, realNow() + Math.max(0, remaining));
           safety?.abort(); safety = new AbortController();
-          void safetyDelay(Math.max(0, realUntil - realNow()), undefined, { signal: safety.signal })
-            .then(() => force(), error => { if (error.name !== 'AbortError') force(error); });
+          void safetyDelay(Math.ceil(Math.max(0, realUntil - realNow())), undefined, { signal: safety.signal })
+            .then(() => {
+              if (!live) return;
+              const remaining = realUntil - realNow();
+              if (remaining > 0) armSafety(remaining);
+              else force();
+            }, error => { if (error.name !== 'AbortError') force(error); });
         };
         const force = cause => {
           if (!live) return;

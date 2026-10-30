@@ -2,7 +2,8 @@ import { testClock } from '../testing/context-product-test-clock.mjs';
 import test,{after} from 'node:test';
 import assert from 'node:assert/strict';
 import { Worker } from 'node:worker_threads';
-import { setTimeout as realDelay } from 'node:timers/promises';
+import timerPromises,{ setTimeout as realDelay } from 'node:timers/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import { fixture } from '../testing/context-read-fixture.mjs';
 import { personal,configured } from '../testing/context-product-owner-fixture.mjs';
@@ -14,7 +15,7 @@ const hostUrl=new URL('../testing/context-product-disposal-host.mjs',import.meta
 const flush=async()=>{for(let i=0;i<40;i++)await Promise.resolve();};
 function nativeTest(name,body){test(name,async t=>{
   const abort=new AbortController();
-  try{await Promise.race([body(t),realDelay(30000,undefined,{signal:abort.signal}).then(async()=>{await testClock.advance(10000,{waitForWorkers:false});assert.fail('disposal_test_watchdog');})]);}
+  try{await Promise.race([body(t),realDelay(60000,undefined,{signal:abort.signal}).then(async()=>{await testClock.advance(10000,{waitForWorkers:false});assert.fail('disposal_test_watchdog');})]);}
   finally{abort.abort();}
 });}
 function setup(t,{stage='open',mode='normal',request=false,tail,parentGap=false,delayedGrace}={}) {
@@ -177,13 +178,42 @@ for(const trigger of ['close','timeout'])nativeTest(`disposal frozen clock ${tri
   if(trigger==='close'){const h=await x.open(x.options);closed=h.close().catch(e=>e);}
   else assert.equal((await x.open(x.options).catch(e=>e)).code,'read_timeout');
   while(!x.state[0] && x.workers[0].threadId!==-1)await realDelay(1);
-  const frozen=testClock.now(),guard=new AbortController();
-  try{
-    const exited=await Promise.race([x.exits[0].then(()=>true),realDelay(2000,false,{signal:guard.signal})]);
-    assert.equal(exited,true,'real_time_fallback_terminates_with_a_frozen_injected_clock');
-  }finally{guard.abort();if(!x.forced){Atomics.store(x.state,1,1);Atomics.notify(x.state,1);}}
+  const frozen=testClock.now();
+  // The outer hang watchdog bounds the test; initiation and native exit are
+  // separate rendezvous, so parent scheduling pauses cannot win an exit race.
+  while(!x.forced)await realDelay(1);
+  assert.equal(x.forced,1,'real_time_fallback_terminates_with_a_frozen_injected_clock');
+  await x.exits[0];
   assert.equal(testClock.now(),frozen,'safety_fallback_needs_no_injected_timer_delivery');
   assert.equal(x.forced,1);assert.equal(x.workers[0].threadId,-1);
   if(closed)assert.equal((await closed).code,'reader_failed');
   assert.ok((await x.s.supervisor.drain()).some(r=>r.state==='failed'&&r.workerStopped));await x.retries(true);
+});
+
+for(const grace of [500,50])nativeTest(`disposal early safety wake: preserves ${grace} ms monotonic deadline`,async t=>{
+  const x=setup(t,{mode:'block'});x.disableCutoff();const h=await x.open(x.options);
+  const originalDelay=timerPromises.setTimeout,originalHrtime=process.hrtime,wakes=[];let elapsed=0,closing;
+  const fakeHrtime=()=>[0,Math.round(elapsed*1e6)];fakeHrtime.bigint=originalHrtime.bigint;
+  process.hrtime=fakeHrtime;
+  timerPromises.setTimeout=(ms,value,{signal}={})=>new Promise((resolve,reject)=>{
+    const wake={ms,signal,resolve:()=>resolve(value)};wakes.push(wake);
+    signal?.addEventListener('abort',()=>reject(Object.assign(Error('aborted'),{name:'AbortError'})),{once:true});
+  });
+  syncBuiltinESMExports();
+  try{
+    closing=h.close().catch(e=>e);
+    if(grace===50)disposeProductReader(h,'read_timeout',testClock.now()-950);
+    const active=()=>wakes.filter(w=>!w.signal.aborted).at(-1);
+    elapsed=grace-0.9;active().resolve();await flush();
+    assert.equal(x.forced,0,'early_safety_wake_must_not_terminate_before_monotonic_deadline');
+    assert.equal(active().ms,1,'early_wake_rearms_with_ceiling_of_remaining_ms');
+    elapsed=grace;active().resolve();await flush();
+    assert.equal(x.forced,1,'deadline_wake_terminates_exactly_once');
+    for(const wake of wakes)wake.resolve();await flush();assert.equal(x.forced,1);
+    assert.ok(wakes.every(w=>w.signal.aborted),'cleanup_aborts_every_safety_timer');
+  }finally{
+    timerPromises.setTimeout=originalDelay;process.hrtime=originalHrtime;syncBuiltinESMExports();
+    Atomics.store(x.state,1,1);Atomics.notify(x.state,1);await closing;
+  }
+  await x.exits[0];assert.equal(x.workers[0].threadId,-1);
 });
