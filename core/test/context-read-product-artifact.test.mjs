@@ -10,6 +10,9 @@ import { fixture, ns, ok } from '../testing/context-read-fixture.mjs';
 import { credentialDigest, PRODUCT_PROFILE } from '../context-product-control.mjs';
 import { card } from '../testing/context-product-owner-fixture.mjs';
 import { installedImportClosure } from '../../packaging/test/fixtures/installed-import-closure.mjs';
+import threads from 'node:worker_threads';
+import { syncBuiltinESMExports } from 'node:module';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const root = new URL('../../', import.meta.url).pathname;
 function imports(source, dynamic = true) {
@@ -36,7 +39,7 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   const entries = ['core/context-product-reader.mjs', 'core/context-product-worker.mjs', 'core/context-product-pump.mjs', 'core/context-product-selection.mjs', 'core/context-read-supervisor.mjs'];
   const expected = closure(root, entries);
   // Hosted P2e closure, shared maintenance admission, private open timing and attribution, content safety and retained receipt lineage.
-  assert.equal(expected.length, 104);
+  assert.equal(expected.length, 106);
   for (const file of expected) assert.ok(manifest.includes(file), 'missing artifact file: ' + file);
   for (const file of manifest) {
     const target = join(staged, file); mkdirSync(dirname(target), { recursive: true }); copyFileSync(join(root, file), target);
@@ -85,7 +88,23 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
     if (namespace.projectId !== ns.projectId) f.admit('installed canonical evidence', namespace);
     card(f, namespace, 'installed Card', 'canonical evidence');
   }
-  const supervisor = api.createContextReadSupervisor(); t.after(() => supervisor.close());
+  // Observe loading only; the installed public opt-in owns the real Workers.
+  let warmed; const ready = new Promise(resolve => { warmed = resolve; }); let readyCount = 0;
+  const OriginalWorker = threads.Worker;
+  threads.Worker = class extends OriginalWorker {
+    constructor(entry, options) {
+      super(entry, options);
+      if (entry.href === pathToFileURL(join(artifact, 'core/context-product-reader-pool-worker.mjs')).href)
+        this.on('message', message => { if (message.kind === 'context-reader-pool-ready' && ++readyCount === 2) warmed(); });
+    }
+  };
+  syncBuiltinESMExports();
+  let supervisor; const timeout = new AbortController();
+  try {
+    supervisor = api.createContextReadSupervisor({ readerWorkerPool: true }); t.after(() => supervisor.close());
+    await Promise.race([ready, delay(30000, undefined, { signal: timeout.signal }).then(() => assert.fail('installed_pool_ready_watchdog'))]);
+  } finally { timeout.abort(); threads.Worker = OriginalWorker; syncBuiltinESMExports(); }
+  const { readerPoolDiagnostic } = await import(pathToFileURL(join(artifact, 'core/context-read-supervisor.mjs')));
   const credential = { nonce: randomUUID() }, requestControl = { requestId: randomUUID(), handleId: randomUUID(), credentialBindingId: randomUUID(), credentialExpiresUtcMs: null, requestMaxMs: 5000 };
   const ownerCoverage = { policy: 'recent-projects-v1', selectionRevision: 'fixture', requestedNamespaces: 4, selectedNamespaces: 4, omittedNamespaces: 0 };
   const { requestMaxMs, ...ids } = requestControl;
@@ -102,9 +121,11 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
       assert.equal(result.status,'complete');
     }
   } finally {await maintainer.close();}
+  assert.deepEqual(readerPoolDiagnostic(supervisor), { hits: 0, misses: 0, startupFailures: 0 });
   const reader = await api.openContextProductReader({ supervisor, path: f.path, version: 'context-read-v1', profile: PRODUCT_PROFILE,
     readSet: [...readSet].reverse(), ownerCoverage, requestControl, wal: true, diagnostics: true, host: { moduleUrl: pathToFileURL(join(artifact, 'host.mjs')).href, configuration: { requestBinding: binding, state, requestReservation: new SharedArrayBuffer(4) } } });
   try {
+    assert.equal(readerPoolDiagnostic(supervisor).hits, 1, 'installed_engine_pool_supplies_reader');
     assert.equal(ok(await reader.getContextReadCapabilities()).execution, 'worker');
     assert.deepEqual(ok(await reader.getContextReadCapabilities()).sidecarJournals, ['DELETE','WAL']);
     const evidence = ok(await reader.fetchCandidateEvidence({ readSet, refs: [{ type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision }], intent: 'current' }, credential));

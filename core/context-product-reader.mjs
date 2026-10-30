@@ -426,12 +426,21 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
           if (opening) {
             resource.workerStopped = false; resource.nativeDisposed = false;
             phase?.mark('spawn');
-            const instance = spawnWorker(openingData);
+            const lease = !maintenance && owner.owner.readerPool?.take(spawnWorker === nativeWorker
+              ? new URL('./context-product-worker.mjs', import.meta.url).href : undefined);
+            const instance = lease ? lease.worker : spawnWorker(openingData);
             lifecycle.worker = instance;
             instance.stdout?.resume(); instance.stderr?.resume();
             instance.on('message', data => message(instance, data));
             instance.on('error', error => { if (!closed && lifecycle.worker === instance) shutdown('reader_failed',undefined,{kind:error?.code==='ERR_WORKER_OUT_OF_MEMORY'?'worker_heap_limit':'worker_error',errorName:maintenanceErrorName(error)}); });
             instance.on('exit', exitCode => { if (!closed && lifecycle.worker === instance) shutdown('reader_failed',undefined,{kind:'worker_exit',exitCode});else if(maintenance&&exitCode!==0&&(['worker_error','worker_heap_limit'].includes(terminalFailure?.cause)||disposalWorkerError))noteSecondary(undefined,'worker_exit',{exitCode,stage:disposalWorkerError?'close':terminalFailure.stage}); });
+            if (lease) {
+              instance.ref();
+              if (closed || owner.owner.closed || lifecycle.pending !== slot) shutdown(terminal ?? 'store_closed');
+              else if (signalCancelled(signal)) shutdown('read_cancelled');
+              else if (now() >= mono(operation.operationCutoffMonoNs)) shutdown('read_timeout');
+              else lease.bootstrap(openingData);
+            }
           } else {
             lifecycle.worker.ref();
             if (method === 'fetchCandidateEvidence') phase?.mark('readSent');
