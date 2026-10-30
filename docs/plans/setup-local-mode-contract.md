@@ -1131,7 +1131,7 @@ else outside `packages/setup/` except the three documents named here.
 
 v0.18 (setup session, 2026-10-31). v0.17 (`c09746e3`) was audited by a
 non-author Codex auditor (gpt-6.1-sol, xhigh, read-only): no P0, five P1, three
-P2, not ready. v0.18 adopts the auditor's replacement text. Release scope set
+P2, not ready. v0.18 adopted the auditor's replacement text. The re-check of v0.18 (`bc0b6804`) found one new P1 (the unresolved-gate rule cannot block a single host) and one P2 (Rule 7 precision); v0.19 adopts its text and classifies the §18.3 cases as required or best-effort. Release scope set
 by the engine primary on 2026-10-31: 0.6.3 carries only this fix and no
 storage, retrieval or safety engine change; the new engine moves to 0.6.4.
 The engine primary chose option B for the engine bundle (Rule 7).
@@ -1179,7 +1179,7 @@ strings.
 
    Each marker must be present as a standalone string in the four §18.4
    binaries and in the 0.160.1/0.161.0/0.162.0 `serde-markers.json`
-   excerpts; a test checks the excerpts. This is limited type/tag evidence.
+   excerpts; a test checks the excerpts. The collector keeps the sorted marker-array order. This is limited type/tag evidence.
    Dropping the `ThreadItem::*` arity markers loses an automatic alarm for
    future unknown binaries; §18.3 covers only the exercised binaries and
    cases. The fingerprint remains
@@ -1241,22 +1241,31 @@ strings.
 7. **Engine bundle (option B, chosen by the engine primary on 2026-10-31).**
    The engine archive is rebuilt with `build-runtime.mjs` from this branch,
    whose base `34182d51` has engine sources equal to `be2bc543`.
-   - **Allowed difference.** The rebuilt archive may differ from the 0.6.2
-     archive only in `integrations/codex/parser.mjs`, `qualification.mjs` and
-     `schema-evidence.mjs`, plus the hash and version lines that follow
-     mechanically from them. No other engine source changes. No S1, S2h or
-     fix B content.
-   - **Proof by two routes.** Derive the differing-file list twice: once from
-     a manifest diff, and once from a sha256/`cmp` walk of both extracted
-     archives. Diff the two lists. The PR records the count and both lists.
-     Any other differing byte stops the work and goes to the engine primary.
+   - **Allowed difference.** Compare the decompressed archive member
+     inventories, member types and modes, and member contents. Exactly
+     `integrations/codex/parser.mjs`, `integrations/codex/qualification.mjs`
+     and `integrations/codex/schema-evidence.mjs` may have changed contents.
+     Every other member must stay byte-identical. The compressed archive is
+     regenerated, so its compressed bytes, checksum and length may change
+     mechanically. In `runtime/engine/manifest.json`, only those three
+     `sourceHashes` values and the archive's `sha256` and `bytes` may change.
+     `schemaVersion`, `package`, `files`, every other source hash and both
+     generated hashes stay as they are. The engine package remains
+     `0.0.0-preview.1`; only the installer version becomes `0.6.3`. No S1, S2h
+     or fix B content.
+   - **Proof by two routes.** First, derive the changed-member list from
+     `sourceHashes`/`generatedHashes`. Second, derive it independently from
+     the union of both archive inventories and a member-byte comparison.
+     Compare archive metadata separately. The PR records the count and both
+     lists. Any difference outside these allowances stops the work and goes
+     to the engine primary.
    - **Check.** `build-runtime.mjs --check` exits 0.
    - **Reason for B over freezing the engine.** A frozen engine would keep the
      old Codex modules, so the local capture host would still refuse new
      Codex.
 
-8. **Hosted runtime exceptions.** Under §16, named hosted runtime exceptions
-   are added for exactly `integrations/codex/parser.mjs`,
+8. **Hosted runtime exceptions.** Under §16, the existing four exceptions are
+   kept and three named hosted runtime exceptions (seven in total) are added for exactly `integrations/codex/parser.mjs`,
    `integrations/codex/qualification.mjs` and
    `integrations/codex/schema-evidence.mjs`, citing this amendment.
    - Installed-versus-packaged byte equality and complete-generation
@@ -1264,6 +1273,8 @@ strings.
    - Every unrelated runtime or manifest change is still rejected.
    - L06/L24 run with `CAIRN_SETUP_REQUIRE_BASELINE=1`; an unavailable
      baseline is a failure.
+   - Engine hashes are not normalized in L06/L24, and `--check` is not weakened.
+     Rule 7 supplies the historical engine comparison.
 
 ### 18.3 Native rollout evidence (new, offline)
 
@@ -1313,19 +1324,57 @@ completion.
 | (c) Interrupted | Start an item and emit unfinished text, hold the stream, then call `turn/interrupt`. Assert that the unfinished text is excluded. Dropping the socket alone does not count, because it can trigger retries. |
 | (d) Partial/final | Complete separate message items with `phase: "partial_answer"` and `"final_answer"`. Assert that each completed message appears once. |
 | (e) Resume | Shut down cleanly, restart with the same disposable home, call `thread/resume`, then append a new turn. |
-| (f) Tools | The mock requests one benign read-only tool call. Its full lifecycle is recorded, including `dynamic_tools_updated` on 0.166.0. |
-| (g) Hooks | Enable a trivial hook command in the disposable home so that hook start/completion records are emitted. |
-| (h) Compaction | Explicit compaction followed by a continuation turn. |
-| (i) Context records | The normal `turn_context` and `world_state` rows, plus any emitted security-risk records. |
-| (j) Recall placement | A benign hook-context canary in `additionalContext`. The mock request is inspected to verify where it is delivered, and the canary is excluded from captured messages. |
+| (f1) Tool lifecycle | Register a benign dynamic function through `thread/start.dynamicTools`. Complete its native `item/tool/call` request and response, then continue to a final assistant message. |
+| (f2) `dynamic_tools_updated` (0.166.0) | Separately exercise a native tool-definition replacement that actually persists `dynamic_tools_updated`. A tool invocation, or the discriminator's presence in binary strings, does not satisfy (f2). |
+| (g) Hooks | Enable a trivial hook command in the disposable home. Inventory and trust only that hook through its native key/current-hash mechanism (`hooks/list`, `hooks.state."<key>".trusted_hash`), reload it, and verify its trusted status before the turn. Hook start/completion records must then appear. |
+| (h) Compaction | After a completed turn, call `thread/compact/start`, wait for it to complete, then run a continuation turn. Prefer the local path with a distinctive `compact_prompt` answered by the mock; a remote-v2 path must have its compaction item validated natively. |
+| (i) Context records | The normal `turn_context` and `world_state` rows produced by ordinary turns, never fabricated. Any emitted `security_risk_score` rows are recorded, and their absence is recorded explicitly. |
+| (j) Recall placement | A trusted `UserPromptSubmit` hook (as in (g)) returns `hookSpecificOutput.additionalContext` with a benign canary. The next mock request is inspected for the canary's role and placement, and the canary is asserted absent from captured messages. A `turn/start` additional-context parameter or a seeded rollout does not satisfy (j). |
 
 For each host, the script inventories the observed top-level, `event_msg`,
-item and content discriminators. Any case that cannot be produced is recorded
-as an unresolved qualification gate. An unresolved gate blocks that host's
-`KNOWN_FORMATS` entry until a later amendment of this section accepts it, and
-that amendment names the parser behaviour for the affected rows. Every
-produced case must parse with zero `unsupported_format` and emit only the
-expected canonical completed messages.
+item and content discriminators.
+
+**Required and best-effort cases.**
+
+- Cases (a)–(e), (f1), (g), (i) (`turn_context`, `world_state`) and (j) are
+  required for every named host.
+- Cases (f2), (h) and the security-risk part of (i) are best-effort. The
+  re-check found no evidenced public trigger for (f2) or for security-risk
+  rows, and compaction needs a native mock shape that is not yet proven.
+- Every produced case must parse with zero `unsupported_format` and emit only
+  the expected canonical completed messages.
+
+**Gates.**
+
+- `KNOWN_FORMATS` is a fingerprint registry, not a per-version allowlist.
+  Hosts that share a fingerprint (0.162.0/0.163.0, 0.164.0/0.165.0) cannot be
+  excluded independently by omitting an entry.
+- An unresolved required case therefore blocks release of this amendment as a
+  whole: its registry changes and its creator seeds. It stays blocked until
+  native evidence resolves the case or a later amendment explicitly accepts
+  the limitation and names the parser behaviour and the qualification
+  consequences. Q01, Q04 and Q05 do not pass while required cases are
+  unresolved.
+
+**Accepted limitation for the best-effort cases.**
+
+- The parser takes canonical messages only from `event_msg` rows.
+  `integrations/codex/parser.mjs` returns `non_conversation` for every other
+  admitted top-level type before reading its payload.
+- `dynamic_tools_updated` is therefore admitted to the top-level set and
+  excluded, even if (f2) is not produced. Evidence: it is the
+  `RolloutItemWire::DynamicToolsUpdated` variant, tied to the binary's
+  `replace_dynamic_tools` operation, and it carries tool definitions, which
+  Rule 5 keeps excluded. Refusing it would permanently latch every session on
+  a host that emits it.
+- A unit test feeds a synthetic `dynamic_tools_updated` row and asserts
+  `non_conversation`.
+- Unobserved compaction and security-risk rows keep their 0.6.2 handling: the
+  `compacted` and `security_risk_score` top-level types are admitted and
+  excluded, `context_compacted` is admitted and excluded, and any `event_msg`
+  type not in the set is refused.
+- New `event_msg`, item or content discriminators are admitted only from
+  produced native cases, never from binary strings alone.
 
 The rollouts are copied into fixtures as
 `native-rollout-<version>-<case>.jsonl`. A manifest per version records:
@@ -1356,7 +1405,7 @@ read, and paths are never committed.
 | Q01 | **Registry regression:** 0.6.2's `KNOWN_FORMATS` lacks the 0.164.0–0.166.0 snapshots; 0.6.3 qualifies them. **Marker regression:** a strict collection that fails on 0.6.2's marker list for the 0.164.0–0.166.0 excerpts succeeds on the new list. The lenient evidence files keep missing marker names in `serdeMarkers` and are never treated as strict successful collection. |
 | Q02 | The 0.160.1, 0.161.0 and 0.162.0 fixtures stay qualified under the new list, and 0.163.0 has the same fingerprint as 0.162.0 |
 | Q03 | Any unlisted app-server or hook difference, including one in a protected field such as `ThreadItem.agentMessage`, stays `changed` |
-| Q04 | Every produced §18.3 case for each of 0.163.0–0.166.0 parses with the exact messages and zero `unsupported_format`; unresolved gates are listed |
+| Q04 | Every required §18.3 case is produced for each of 0.163.0–0.166.0 and parses with the exact messages and zero `unsupported_format`. Best-effort cases are listed as produced or not produced, and the synthetic `dynamic_tools_updated` row is `non_conversation` |
 | Q05 | Seeded creators 0.163.0–0.166.0 verify without a cache. With no matching current-host or cached creator evidence, 0.167.0 remains `creator_unqualified`. An unknown creator backed by a current-policy qualified host or verdict is still accepted. |
 | Q06 | Stale `qualified` and stale `changed/serde_marker_missing` verdicts are exercised. The observing hook stays closed; concurrent hooks schedule at most one probe while its pending marker is live; after successful qualification, later eligible hooks run. |
 | Q07 | Capture and recall are tested through the installed path. Pending, changed, unavailable, replaced-binary, disabled-recall and excluded-source cases perform neither recall nor injection. For each new native host, the §18.3 (j) canary verifies delivery placement and exclusion from captured messages. A changed placement requires the documented A7 re-evaluation. |
