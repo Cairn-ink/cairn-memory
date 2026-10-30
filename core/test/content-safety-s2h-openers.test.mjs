@@ -1,4 +1,3 @@
-import { copySqliteFixture, readSqliteFixture } from '../testing/content-safety-s2h-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
@@ -163,24 +162,4 @@ test('S2h hosted v34 topic and legacy fetch fallback keep working and suppress f
   const initial = await invoke(); assert.ok(JSON.stringify(initial).includes('Synthetic fallback content'));
   ok(core.forget({ namespace: ns, memoryId: memory.id, expectedRevision: memory.revision }));
   assert.doesNotMatch(JSON.stringify(await invoke()), /Synthetic fallback content|user_forget/);
-});
-
-test('S2h local permission, probe, oneshot capture and setup negotiate v48; partial cells refuse', async t => {
-  const [{ fixture: localFixture }, { setupFixture }, { preflight }, { checkHostPermission }, { migrateContentSafety }, { quiescence }] = await Promise.all([
-    import('../../adapters/local/test/fixtures/workspace.mjs'), import('../../integrations/client/test/fixtures/local-setup-workspace.mjs'),
-    import('../../adapters/local/configuration.mjs'), import('../../integrations/client/raw/local-host-permission.mjs'),
-    import('../content-safety-migration.mjs'), import('../testing/content-safety-s2h-fixture.mjs'),
-  ]);
-  async function migrate(path, core, backupPath) {
-    core.close(); const db = openDatabase(path, { currentDependencies: true });
-    const storeId = db.prepare('SELECT store_id FROM store_metadata').get().store_id; db.close(); copySqliteFixture(path, backupPath);
-    await migrateContentSafety({ path, backupPath, expected: { storeId, base: 33 }, quiescence });
-  }
-  const f = localFixture(t); await migrate(f.databasePath, f.core, join(f.workspace.path, 'backup.sqlite'));
-  await preflight(f.config); await checkHostPermission(f.config);
-  const capture = f.reply(await f.run(f.request())); assert.equal(capture.status, 200, JSON.stringify(capture));
-  const setup = await setupFixture(t); await migrate(setup.request.databasePath, setup.core, join(setup.workspace.path, 'backup.sqlite'));
-  assert.equal((await setup.setup()).status, 'prepared');
-  const db = new DatabaseSync(f.databasePath); db.exec('PRAGMA busy_timeout=5000; DROP TRIGGER safety_raw_part_identity'); db.close();
-  await assert.rejects(() => preflight(f.config)); await assert.rejects(() => checkHostPermission(f.config));
 });

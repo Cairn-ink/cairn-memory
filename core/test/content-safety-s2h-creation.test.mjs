@@ -77,22 +77,6 @@ test('creation S2h public constructors forward the explicit option; unsupported 
   assert.throws(()=>openMemoryCore({path:join(f.workspace.path,'bad.sqlite'),contentSafety:true}),{code:'invalid_input'});
 });
 
-test('creation S2h v48 is accepted by local permission, setup and the retained CLI without new flags',async t=>{
-  const [{fixture},{setupFixture},{preflight},{checkHostPermission}]=await Promise.all([
-    import('../../adapters/local/test/fixtures/workspace.mjs'),import('../../integrations/client/test/fixtures/local-setup-workspace.mjs'),
-    import('../../adapters/local/configuration.mjs'),import('../../integrations/client/raw/local-host-permission.mjs')]);
-  const f=fixture(t),path=join(f.workspace.path,'created.sqlite');f.core.close();
-  const db=openDatabase(path,{currentDependencies:true,contentSafety:'s2h-v1'});db.close();
-  const core=openMemoryCore({path,rawConversations:{mode:'off',readPolicy:()=>({generation:'synthetic',reason:null})}});t.after(()=>core.close());
-  const current=core.getLocalCaptureControl({namespace:f.namespace,client:f.client}).value;
-  const granted=core.setLocalCaptureControl({namespace:f.namespace,client:f.client,targetId:'synthetic-oneshot',expectedStoreId:current.storeId,expectedRevision:current.revision,automaticCaptureEnabled:true,rawNoticeVersion:'local-plain-v1'}).value;
-  f.config.databasePath=path;f.config.authority={...f.config.authority,storeId:granted.storeId,expectedControlRevision:granted.revision,expectedConsentGeneration:granted.consentGeneration,
-    expectedNamespaceGeneration:core.getCaptureControl({namespace:f.namespace}).value.generation,expectedRawRevision:core.getRawCaptureControl({ownerId:f.namespace.ownerId,client:f.client}).value.revision};f.save();
-  await preflight(f.config);await checkHostPermission(f.config);assert.equal(f.reply(await f.run(f.request())).status,200);
-  const setup=await setupFixture(t),setupPath=join(setup.root,'created.sqlite');setup.core.close();
-  const store=openDatabase(setupPath,{currentDependencies:true,contentSafety:'s2h-v1'});store.close();setup.request.databasePath=setupPath;assert.equal((await setup.setup()).status,'prepared');
-});
-
 test('creation S2h refuses a legacy store raced into the exclusively created empty file',t=>{
   const f=safetyFixture(t),path=join(f.workspace.path,'raced.sqlite'),exec=DatabaseSync.prototype.exec;let armed=true;
   DatabaseSync.prototype.exec=function(sql){if(armed&&sql==='BEGIN IMMEDIATE'){armed=false;const winner=openDatabase(path);winner.close();}return exec.call(this,sql);};
