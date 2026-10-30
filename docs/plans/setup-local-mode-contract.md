@@ -1129,108 +1129,216 @@ else outside `packages/setup/` except the three documents named here.
 
 ## 18. 0.6.3 amendment: Codex 0.164.0–0.166.0 format requalification
 
-v0.17 (setup session, 2026-10-31). Release scope set by the engine primary on
-2026-10-31: 0.6.3 carries only this fix, on the unchanged 0.6.2 engine bundle;
-the new engine moves to 0.6.4.
+v0.18 (setup session, 2026-10-31). v0.17 (`c09746e3`) was audited by a
+non-author Codex auditor (gpt-6.1-sol, xhigh, read-only): no P0, five P1, three
+P2, not ready. v0.18 adopts the auditor's replacement text. Release scope set
+by the engine primary on 2026-10-31: 0.6.3 carries only this fix and no
+storage, retrieval or safety engine change; the new engine moves to 0.6.4.
+Rule 7 records the engine-bundle choice (§18.2).
 
 ### 18.1 Defect (observed 2026-10-31 on a real installation's verdict cache)
 
-Every Codex host from 0.164.0 is qualified `changed` with reason
-`serde_marker_missing` (`integrations/codex/schema-evidence.mjs` marker loop,
-around lines 42–48). The installed hook then returns `''` before reading any
-transcript (`integrations/codex/installed.mjs`, `qualification.status !==
-'qualified'`), so hosted automatic capture and recall stop silently. 0.163.0
-still reproduces the known fingerprint `66fc1097…`.
+The tested native hosts 0.164.0, 0.165.0 and 0.166.0 are classified `changed`
+with reason `serde_marker_missing` (`integrations/codex/schema-evidence.mjs`
+marker loop, around lines 42–48). The installed hook then returns `''` before
+reading any transcript (`integrations/codex/installed.mjs`,
+`qualification.status !== 'qualified'`), so hosted automatic capture and
+recall stop silently. 0.163.0 still reproduces the known fingerprint
+`66fc1097…`.
 
 Offline evidence (setup session, 2026-10-31; isolated `HOME`, no model calls,
 no network):
 
 | Host | Missing markers | Hook schemas (8) vs 0.162.0 | App-server selections vs 0.162.0 |
 |---|---|---|---|
-| 0.164.0 | `RolloutItemWiremessagereplacement_history` | identical | `HookEventName` (+`preModelRequest`, `postModelRequest`), `ThreadItem` (`imageGeneration`: `result` no longer required, `+inputImages`, `-result`) |
+| 0.164.0 | `RolloutItemWiremessagereplacement_history` | identical | `HookEventName` (+`preModelRequest`, `postModelRequest`); `ThreadItem.imageGeneration` (`anyOf` `fileId` or `result`, +`inputImages`); transitive +`ImageGenerationInputImage` |
 | 0.165.0 | same as 0.164.0 | identical | same as 0.164.0 |
-| 0.166.0 | `struct variant ThreadItem::AgentMessage with 6 elements`, `struct variant ThreadItem::UserMessage with 3 elements` | identical | as 0.165.0, plus `imageGeneration.generationId`, `HookMetadata.environmentId`, `HooksListParams.threadId` |
+| 0.166.0 | `struct variant ThreadItem::AgentMessage with 6 elements`, `struct variant ThreadItem::UserMessage with 3 elements` | identical | as 0.165.0, plus `imageGeneration.generationId`; outer `ThreadItem.startedAtMs`/`completedAtMs` with their wrapper and description; `HookMetadata.environmentId`; `HooksListParams.threadId`; a `HooksListParams.cwds` description change |
 
-`ThreadItem.agentMessage` and `ThreadItem.userMessage` are byte-identical to
-0.162.0 in every row. The 0.164.0/0.165.0 marker is an adjacency of three
-strings, so it depends on linker layout. The 0.166.0 binary contains no
-`struct variant ThreadItem::*` strings at all, so its rollout item
-serialization needs direct native evidence (§18.3).
+The `ThreadItem.agentMessage` and `ThreadItem.userMessage` branches are
+byte-identical to 0.162.0 in every row. User/agent branch equality does not
+establish equality of the surrounding `ThreadItem` wrapper or of the core
+rollout format. The core rollout vocabulary is outside the app-server
+selection, and 0.166.0 adds at least `RolloutItemWire::DynamicToolsUpdated`
+(`dynamic_tools_updated`), which the parser's top-level allowlist refuses. The
+0.164.0/0.165.0 marker is an adjacency of three strings and so depends on
+linker layout. The 0.166.0 binary contains no `struct variant ThreadItem::*`
+strings.
 
 ### 18.2 Rules
 
-1. **Evidence profile.** Replace the serde marker list with markers that are
-   present, each as a standalone string, in every binary listed in §18.4,
-   including those whose evidence exists only as `serde-markers.json`
-   excerpts in the fixtures. Each marker must constrain the shape the parser
-   reads (agent message content, the rollout wire enum, hook start/complete
-   records), not linker adjacency. The fingerprint remains
-   `sha256(canonical({hooks, appServer, serdeMarkers}))` and the evidence
+1. **Evidence profile.** The serde marker list becomes exactly:
+
+   ```text
+   internally tagged enum AgentMessageContent
+   struct variant AgentMessageContent::Text with 1 element
+   internally tagged enum RolloutItemWire
+   hook_started
+   hook_completed
+   ```
+
+   Each marker must be present as a standalone string in the four §18.4
+   binaries and in the 0.160.1/0.161.0/0.162.0 `serde-markers.json`
+   excerpts; a test checks the excerpts. This is limited type/tag evidence.
+   Dropping the `ThreadItem::*` arity markers loses an automatic alarm for
+   future unknown binaries; §18.3 covers only the exercised binaries and
+   cases. The fingerprint remains
+   `sha256(canonical({hooks, appServer, serdeMarkers}))`, and the evidence
    function remains offline, with no session reads.
-2. **Known formats.** `KNOWN_FORMATS` is recomputed: the 0.160.1/0.161.0 and
-   0.162.0 entries become their fingerprints under the new marker list,
-   derived mechanically from the frozen `format.json` fixtures. One entry is
-   added per distinct new evidence among 0.164.0–0.166.0, only after a test
-   shows every app-server and hook difference from 0.162.0 is outside the
-   fields the parser and hooks use (§18.1 table). Any other difference stays
-   `changed`.
-3. **Policy change.** The policy hash changes, so every cached verdict becomes
-   `pending` and is requalified through the existing background path. The
-   hook that observes `pending` stays closed for that call, as today. A test
-   proves that a 0.6.2-era `qualified` verdict file is not reused.
+2. **Known formats.** Old `KNOWN_FORMATS` entries are recomputed from the frozen
+   `format.json` fixtures with only `serdeMarkers` replaced. Historical
+   fixtures stay immutable, and the refreshed hash inputs are derived in the
+   test loader. One entry is added per distinct new snapshot among
+   0.164.0–0.166.0. Compatibility is checked mechanically on complete
+   evidence objects:
+   - all eight hook schemas and their definitions are equal;
+   - each new snapshot has an exact list of permitted app-server JSON-pointer
+     differences (the §18.1 table), and any unlisted difference is rejected;
+   - all other definitions and references are preserved;
+   - the core rollout fields and discriminator sets are validated separately
+     through §18.3.
+
+   Protected fields include:
+
+   | Reader | Fields and constraints |
+   |---|---|
+   | Header/source | `type`; `payload.cli_version`, `history_mode`, `id`, `source`, `originator`, `history_base`, `forked_from_id`, `parent_thread_id`, `subagent_history_start_ordinal`, `thread_source` |
+   | Row/event | allowed outer keys `timestamp`, `ordinal`, `type`, `payload`, `metadata`; the closed discriminator sets; completed-event keys `type`, `thread_id`, `turn_id`, `item`, `started_at_ms`, `completed_at_ms` |
+   | Message | `type`, `id`, `content`; user `client_id`; assistant `phase`, `memory_citation`, `delivery`, `questions`; content `type`, `text`, user `text_elements` |
+   | Hooks/recall | `hook_event_name`, `session_id`, `cwd`, `transcript_path`, `agent_id`, `agent_type`, `prompt`; output `hookSpecificOutput.hookEventName` and `additionalContext`; trust/delivery references |
+
+3. **Policy change.** The policy hash changes, so old `qualified` and old
+   `changed` verdicts both read as `pending`. The hook that observes `pending`
+   schedules background qualification and stays closed for that call. The
+   pending marker suppresses rescheduling for up to 120 s. Installed `status`
+   may qualify synchronously; uninstalled `status` only reads the cache.
+   Detached workers re-check binary identity and the current verdict.
 4. **Creators.** `QUALIFIED_CREATORS` (`integrations/codex/parser.mjs`) gains
    `0.163.0`, `0.164.0`, `0.165.0` and `0.166.0`, each backed by §18.3 native
-   rollout evidence. Without it, sessions created on these hosts are
-   `creator_unqualified` after the policy change, because the old cached
-   verdicts no longer count.
-5. **Parser.** The parser's closed sets (top-level row types, `event_msg`
-   types, item types, content part types) change only to admit what §18.3
-   native rollouts actually contain. A new type is `non_conversation` only
-   when the evidence shows that it carries no user or assistant text.
-   Otherwise it stays `unsupported_format`. There is no lenient fallback.
-   Reason: an `unsupported_format` latch is permanent per session, so a
-   qualified host whose rollouts the parser refuses is worse than a paused
-   host. §18.3 must therefore show zero `unsupported_format` on every native
-   case.
-6. **Unchanged.** The recall gate (`qualifiedContextHost` and the A7 scope),
-   exec exclusion, source and originator rules, cursors, latches, the daily
-   cap and hosted pause are unchanged. Messages and exit codes are unchanged.
-   The loud capture-stopped notice is out of scope (0.6.4 unless the owner
-   says otherwise).
-7. **Engine bundle.** `packages/setup/runtime/engine/**` is byte-identical to
-   `34182d51`. The Codex runtime mirror (`packages/setup/runtime/integrations/**`
-   and its manifest) is regenerated with `build-runtime.mjs`. `--check` exits 0.
+   rollout evidence. Without them, sessions created on these hosts are
+   `creator_unqualified` after the policy change, because
+   `hasQualifiedCreator` rejects old-policy evidence. Seeding a creator
+   accepts its header on a later qualified writer; it does not prove that the
+   writer's appended records are compatible.
+5. **Parser.** The parser's closed sets change only to admit what §18.3
+   native rollouts actually contain.
+   - A new type may be excluded only when native provenance establishes that
+     it is not an additional canonical completed user or assistant message.
+     Mirrors, instructions, tool descriptions, retained context and
+     compaction summaries may contain text and must remain excluded.
+   - There is no lenient fallback. Reason: an `unsupported_format` latch is
+     permanent per session (`integrations/codex/worker.mjs`), so a qualified
+     host whose rollouts the parser refuses is worse than a paused host.
+   - Qualification requires native evidence for the persistent row
+     vocabulary, not only successful text turns (§18.3).
+6. **Unchanged.** Unchanged behaviour: exec exclusion, the source and
+   originator rules, cursors, EOF boundaries, pending batches, latches, the
+   daily cap, hosted pause, messages and exit codes. Recall uses the shared
+   qualification gate (`installed.mjs`), so qualifying these hosts
+   intentionally re-enables recall on them. Q07 therefore verifies context
+   placement. The loud capture-stopped notice is out of scope (0.6.4 unless
+   the owner says otherwise).
+7. **Engine bundle (option B, recommended; engine primary decision pending).**
+   - The engine archive is rebuilt with `build-runtime.mjs` from this branch.
+     The branch base is `34182d51`, whose engine sources equal `be2bc543`.
+   - The rebuilt archive differs from the 0.6.2 archive only in
+     `integrations/codex/parser.mjs`, `qualification.mjs` and
+     `schema-evidence.mjs`, plus the hashes that record them. A test lists
+     the archive contents of both and proves this.
+   - No other engine source changes. `build-runtime.mjs --check` exits 0.
+   - If the engine primary chooses option A instead, this rule is replaced
+     by: "Keep `packages/setup/runtime/engine/**` byte-identical to
+     `34182d51`. Add an explicit hosted-only build/check path that
+     regenerates and verifies `runtime/integrations/**` and
+     `runtime/manifest.json` without rebuilding the engine. Prepack must use
+     that path and independently verify the frozen engine against
+     `34182d51`. Do not weaken the existing source-derived engine check, and
+     do not claim that its current `--check` passes after these source
+     changes."
+8. **Hosted runtime exceptions.** Under §16, named hosted runtime exceptions
+   are added for exactly `integrations/codex/parser.mjs`,
+   `integrations/codex/qualification.mjs` and
+   `integrations/codex/schema-evidence.mjs`, citing this amendment.
+   - Installed-versus-packaged byte equality and complete-generation
+     comparisons are preserved.
+   - Every unrelated runtime or manifest change is still rejected.
+   - L06/L24 run with `CAIRN_SETUP_REQUIRE_BASELINE=1`; an unavailable
+     baseline is a failure.
 
 ### 18.3 Native rollout evidence (new, offline)
 
 A new script `scripts/probe-codex-rollout.mjs --binary <native> --out
-<new-private-dir>` produces rollouts written by the native host itself:
+<new-private-dir>` produces rollouts that the native host writes itself.
 
-- It creates an isolated `HOME`/`CODEX_HOME` with analytics, feedback,
-  plugins, apps and memories disabled. It sets `model_provider` to a loopback
-  mock Responses server that the script starts on `127.0.0.1`
-  (`requires_openai_auth = false`) and runs with `PATH=/usr/bin:/bin` and no
-  credentials in the environment.
-- The mock server streams fixed synthetic assistant text. The script asserts
-  that every request reached the mock, records the request count, and fails
-  on any non-loopback connection attempt that it can observe.
-- Cases, driven through `app-server` (`thread/start`, `turn/start`) unless
-  the binary only supports `exec` for a case:
-  - (a) one user turn with one final answer;
-  - (b) two turns;
-  - (c) an interrupted turn;
-  - (d) a partial answer followed by a final answer;
-  - (e) resume of an existing thread.
-- The rollout files are copied into fixtures as
-  `native-rollout-<version>-<case>.jsonl`. A manifest records the script
-  sha256, native exit codes, request counts and `modelCalls: 0`, meaning no
-  call to any real provider.
-- Tests run the real parser over every fixture. They assert the exact
-  user/assistant messages, zero `unsupported_format`, and that unfinished
-  text is excluded as in 0.162.0.
+**Isolation.** The mock and every native child run under enforced network
+isolation that permits only loopback communication. On Linux this is an
+unprivileged network namespace (`unshare -rn` with `lo` up). The script
+verifies the isolation before starting Codex and fails if it cannot be
+established. WebSockets, retries, analytics, feedback, plugins, apps and
+memories are disabled. Only the expected mock routes are allowed. Every
+request, native exit code or signal, and fixture hash is recorded.
+`modelCalls: 0` means zero real-provider calls; mock-provider requests are
+reported separately. `PATH=/usr/bin:/bin`, an isolated `HOME`/`CODEX_HOME`,
+and no credentials anywhere in the environment or configuration.
 
-`scripts/probe-codex-phases.mjs` (seeded readback) is generalised from its
-0.162.0-only gate to an explicit version list and rerun for 0.163.0–0.166.0.
+**Provider.**
+
+```toml
+model = "synthetic-offline"
+model_provider = "offline"
+
+[model_providers.offline]
+name = "Offline rollout probe"
+base_url = "http://127.0.0.1:<port>/v1"
+wire_api = "responses"
+requires_openai_auth = false
+supports_websockets = false
+request_max_retries = 0
+stream_max_retries = 0
+```
+
+The mock serves `POST /v1/responses` as `text/event-stream`. A full stream
+contains `response.created`, `response.output_item.added`,
+`response.output_text.delta`, `response.output_item.done` and
+`response.completed`. Completed items carry `type: "message"`,
+`role: "assistant"` and `output_text` content. `[DONE]` alone is not a valid
+completion.
+
+**Cases.** Each case runs through `app-server` (`thread/start`, `turn/start`).
+
+| Case | Required behaviour |
+|---|---|
+| (a) Final | Create a response and an assistant message. Add the output item before any text delta, finish it with `response.output_item.done`, and finish the response with `response.completed`. |
+| (b) Two turns | Repeat (a) for two `turn/start` calls with distinct response and item IDs. |
+| (c) Interrupted | Start an item and emit unfinished text, hold the stream, then call `turn/interrupt`. Assert that the unfinished text is excluded. Dropping the socket alone does not count, because it can trigger retries. |
+| (d) Partial/final | Complete separate message items with `phase: "partial_answer"` and `"final_answer"`. Assert that each completed message appears once. |
+| (e) Resume | Shut down cleanly, restart with the same disposable home, call `thread/resume`, then append a new turn. |
+| (f) Tools | The mock requests one benign read-only tool call. Its full lifecycle is recorded, including `dynamic_tools_updated` on 0.166.0. |
+| (g) Hooks | Enable a trivial hook command in the disposable home so that hook start/completion records are emitted. |
+| (h) Compaction | Explicit compaction followed by a continuation turn. |
+| (i) Context records | The normal `turn_context` and `world_state` rows, plus any emitted security-risk records. |
+| (j) Recall placement | A benign hook-context canary in `additionalContext`. The mock request is inspected to verify where it is delivered, and the canary is excluded from captured messages. |
+
+For each host, the script inventories the observed top-level, `event_msg`,
+item and content discriminators. Any case that cannot be produced is recorded
+as an unresolved qualification gate. An unresolved gate blocks that host's
+`KNOWN_FORMATS` entry until a later amendment of this section accepts it, and
+that amendment names the parser behaviour for the affected rows. Every
+produced case must parse with zero `unsupported_format` and emit only the
+expected canonical completed messages.
+
+The rollouts are copied into fixtures as
+`native-rollout-<version>-<case>.jsonl`. A manifest per version records:
+
+- the script sha256;
+- the native exit codes;
+- the mock request counts;
+- the discriminator inventory;
+- `modelCalls: 0`.
+
+`scripts/probe-codex-phases.mjs` stays byte-for-byte the recorded 0.162.0
+reproduction. A separately named generalized seeded-readback probe covers
+0.163.0–0.166.0, and its script hash and results go into new manifests.
 
 ### 18.4 Binaries and acceptance
 
@@ -1240,20 +1348,21 @@ Native binaries (read-only, outside the repository):
 - 0.165.0: the installed npm CLI vendor binary;
 - 0.166.0: the installed app-server daemon release.
 
-Paths are given to the implementer and are never committed.
+The implementer receives the paths. Nothing else under the real Codex home is
+read, and paths are never committed.
 
 | Case | Expected |
 |---|---|
-| Q01 | 0.6.2 code with the 0.165.0 and 0.166.0 evidence fixtures returns `changed`. 0.6.3 returns `qualified` (regression that fails on 0.6.2) |
-| Q02 | The 0.160.1, 0.161.0 and 0.162.0 fixtures stay qualified under the new list. 0.163.0 has the same fingerprint as 0.162.0 |
-| Q03 | An app-server difference in a parser-used field (for example `ThreadItem.agentMessage`) stays `changed` |
-| Q04 | Every §18.3 native case, for each of 0.163.0–0.166.0, parses with the exact messages and zero `unsupported_format` |
-| Q05 | Sessions whose creator is 0.163.0–0.166.0 verify without a cached verdict. 0.167.0 stays `creator_unqualified` |
-| Q06 | A cached verdict from the old policy reads as `pending` and requalifies once in the background |
-| Q07 | The installed hook on a 0.165.0-evidence host captures through the fake-Codex E2E; on a `changed` host it still returns `''` |
-| Q08 | `packages/setup/runtime/engine/**` is unchanged since `34182d51`. `build-runtime.mjs --check` exits 0 |
+| Q01 | **Registry regression:** 0.6.2's `KNOWN_FORMATS` lacks the 0.164.0–0.166.0 snapshots; 0.6.3 qualifies them. **Marker regression:** a strict collection that fails on 0.6.2's marker list for the 0.164.0–0.166.0 excerpts succeeds on the new list. The lenient evidence files keep missing marker names in `serdeMarkers` and are never treated as strict successful collection. |
+| Q02 | The 0.160.1, 0.161.0 and 0.162.0 fixtures stay qualified under the new list, and 0.163.0 has the same fingerprint as 0.162.0 |
+| Q03 | Any unlisted app-server or hook difference, including one in a protected field such as `ThreadItem.agentMessage`, stays `changed` |
+| Q04 | Every produced §18.3 case for each of 0.163.0–0.166.0 parses with the exact messages and zero `unsupported_format`; unresolved gates are listed |
+| Q05 | Seeded creators 0.163.0–0.166.0 verify without a cache. With no matching current-host or cached creator evidence, 0.167.0 remains `creator_unqualified`. An unknown creator backed by a current-policy qualified host or verdict is still accepted. |
+| Q06 | Stale `qualified` and stale `changed/serde_marker_missing` verdicts are exercised. The observing hook stays closed; concurrent hooks schedule at most one probe while its pending marker is live; after successful qualification, later eligible hooks run. |
+| Q07 | Capture and recall are tested through the installed path. Pending, changed, unavailable, replaced-binary, disabled-recall and excluded-source cases perform neither recall nor injection. For each new native host, the §18.3 (j) canary verifies delivery placement and exclusion from captured messages. A changed placement requires the documented A7 re-evaluation. |
+| Q08 | Rule 7 holds (archive diff limited to the three files, `--check` exit 0) and Rule 8 holds (L06/L24 with the three named exceptions and `CAIRN_SETUP_REQUIRE_BASELINE=1`) |
 | Q09 | Full `test:setup` and the Codex integration suites exit 0 on Node 22.16.0 and 24.15.0 |
-| Q10 | The tarball contains the same file list as 0.6.2 except for new fixture-free runtime files, if any, and declares version 0.6.3 |
+| Q10 | The tarball inventories, compared independently with `tar` and with npm's pack manifest (including the embedded engine), equal 0.6.2's except for the declared version and the Rule 7 files. They contain no fixtures. |
 
 ### 18.5 Release text
 
@@ -1261,11 +1370,11 @@ Paths are given to the implementer and are never committed.
 
 - installations that lost their sign-in around 2026-10-22 stopped capturing then;
 - Codex 0.164.0 and later have been paused since those hosts were installed (about 2026-10-24 on the observed machine);
-- the fix restores capture after the next hook on a qualified host;
-- sessions already latched `unsupported_format` stay closed;
-- the engine is unchanged from 0.6.2.
+- after successful current-policy qualification, later eligible hooks resume automatic capture and recall;
+- existing EOF boundaries, pending batches and permanent `unsupported_format` latches keep their existing behaviour;
+- the engine is unchanged from 0.6.2 except the Codex format qualification modules (Rule 7).
 
-The status lines in `README.md`, `README.zh-TW.md`,
-`docs/codex-setup.md` and `packages/setup/README.md` name 0.6.3. The 0.164.0–0.166.0
-qualification and the new evidence are added to `docs/codex-setup.md` and
+The status lines in `README.md`, `README.zh-TW.md`, `docs/codex-setup.md` and
+`packages/setup/README.md` name 0.6.3. The 0.164.0–0.166.0 qualification and
+the new evidence are added to `docs/codex-setup.md` and
 `integrations/codex/README.md`.
