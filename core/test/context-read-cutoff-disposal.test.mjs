@@ -8,6 +8,8 @@ import { randomUUID } from 'node:crypto';
 import { fixture } from '../testing/context-read-fixture.mjs';
 import { personal,configured } from '../testing/context-product-owner-fixture.mjs';
 import { createContextReadSupervisor } from '../index.mjs';
+import * as readerDiagnostic from '../context-product-reader.mjs';
+import * as pumpDiagnostic from '../context-product-pump.mjs';
 import { createProductReaderRuntime,disposeProductReader } from '../context-product-reader.mjs';
 import { createMaintenancePumpRuntime } from '../context-product-pump.mjs';
 const retained=[];after(async()=>{for(const cleanup of retained)await cleanup();});
@@ -24,7 +26,7 @@ function setup(t,{stage='open',mode='normal',request=false,tail,parentGap=false,
   // Failed cleanup is asserted explicitly, rather than hidden by an after hook.
   const owner={after:fn=>t.after(()=>Promise.resolve(fn()).catch(()=>{}))};
   const s=configured(owner,f.path,[personal],{service:!request}),disposalState=new SharedArrayBuffer(32),state=new Int32Array(disposalState);
-  supervisors.push(s.supervisor);let injected=false,responses=0,spawned=0,injectEnabled=true,acceptedBetweenDeadlines=false,forced=0,readerCutoff;const resources=[],workers=[],exits=[];
+  supervisors.push(s.supervisor);let injected=false,responses=0,spawned=0,injectEnabled=true,acceptedBetweenDeadlines=false,forced=0,readerCutoff;const resources=[],workers=[],exits=[],handles=[],openingErrors=[];
   const spawnWorker=data=>{
     spawned++;const w=new Worker(new URL('../context-product-worker.mjs',import.meta.url),{workerData:data,env:{},execArgv:[],stdout:true,stderr:true});
     const terminate=w.terminate.bind(w);w.terminate=()=>{forced++;return terminate();};
@@ -37,7 +39,8 @@ function setup(t,{stage='open',mode='normal',request=false,tail,parentGap=false,
         if(parentGap){const due=[...timers].find(([,timer])=>timer.at<=testClock.now());assert.ok(due,'parent_deadline_precedes_accepted_response');timers.delete(due[0]);due[1].fn();}}
     });return w;
   };
-  const open=createProductReaderRuntime({maintenance:!request,spawnWorker}),timers=new Map();let serial=0;
+  const productOpen=createProductReaderRuntime({maintenance:!request,spawnWorker});
+  const open=(...args)=>productOpen(...args).then(handle=>{handles.push(handle);return handle;},error=>{openingErrors.push(error);throw error;}),timers=new Map();let serial=0;
   const pumpOpen=parentGap?async(...args)=>{const h=await open(...args);return {...h,refreshContextIndex(...call){void testClock.advance(2,{waitForWorkers:false});return h.refreshContextIndex(...call).then(result=>{if(injected)acceptedBetweenDeadlines=result.ok;return result;});}};}:open;
   const renew=createMaintenancePumpRuntime({open:pumpOpen,now:testClock.now,setTimer:(fn,ms)=>{const id=++serial;timers.set(id,{fn,at:testClock.now()+ms});return id;},clearTimer:id=>timers.delete(id)});
   const options={...s.options,host:{moduleUrl:hostUrl,configuration:{...s.options.host.configuration,disposalState,disposalMode:mode,bootstrapGate:stage==='bootstrap'}}};
@@ -58,7 +61,7 @@ function setup(t,{stage='open',mode='normal',request=false,tail,parentGap=false,
   }
   f.workspace.defer(async()=>{Atomics.store(state,1,1);Atomics.notify(state,1);
     for(const p of pumps)await p.close().catch(()=>{});for(const supervisor of supervisors)await supervisor.close().catch(()=>{});});
-  return {f,s,memory,options,open,config,renew,state,resources,workers,exits,timers,tick,retries,pumps,disableCutoff(){injectEnabled=false;},get spawned(){return spawned;},get injected(){return injected;},get acceptedBetweenDeadlines(){return acceptedBetweenDeadlines;},get forced(){return forced;},get readerCutoff(){return readerCutoff;}};
+  return {f,s,memory,options,open,config,renew,state,resources,workers,exits,timers,tick,retries,pumps,disableCutoff(){injectEnabled=false;},handles,openingErrors,get spawned(){return spawned;},get injected(){return injected;},get acceptedBetweenDeadlines(){return acceptedBetweenDeadlines;},get forced(){return forced;},get readerCutoff(){return readerCutoff;}};
 }
 async function failedLeaseRepro(x,records){
   assert.ok(records.some(r=>r.state==='failed'&&r.workerStopped&&r.nativeDisposed&&!r.leasesReleased&&r.providersSettled));
@@ -216,4 +219,103 @@ for(const grace of [500,50])nativeTest(`disposal early safety wake: preserves ${
     Atomics.store(x.state,1,1);Atomics.notify(x.state,1);await closing;
   }
   await x.exits[0];assert.equal(x.workers[0].threadId,-1);
+});
+
+nativeTest('failure/disposal success: timeout is the only recorded failure',async t=>{
+  const x=setup(t,{stage:'refresh',parentGap:true}),p=x.renew(x.config);x.pumps.push(p);
+  for(let i=0;i<2;i++){const turn=await x.tick();await turn.pending;}
+  const final=await p.completion;await p.close();
+  assert.equal(final.error,'read_timeout','graceful disposal public timeout equals the disposal base');
+  const r=readerDiagnostic.maintenanceReaderFailureDiagnostic(x.handles[0]),d=pumpDiagnostic.maintenancePumpDiagnostic(final);
+  assert.equal(r.lastFailure.engineCode,'read_timeout','successful graceful disposal retains the reader timeout');
+  assert.equal(d.lastFailure.engineCode,'read_timeout','successful graceful disposal retains the pump timeout');
+  assert.equal(r.failureCounts.engine,1);assert.equal(d.failureCounts.engine,1);
+  assert.equal(r.secondaryFailure,null,'successful graceful disposal creates no reader secondary');
+  assert.equal(d.secondaryFailure,null,'successful graceful disposal creates no pump secondary');
+  assert.ok(Object.values(r.secondaryFailureCounts).every(n=>n===0));assert.ok(Object.values(d.secondaryFailureCounts).every(n=>n===0));
+  assert.equal(r.lastFailure.ordinal,d.lastFailure.ordinal,'graceful disposal retains the active dispatch ordinal');assert.deepEqual(d.lastFailure.stall,r.lastFailure.stall);
+});
+
+nativeTest('failure/disposal force: opening timeout keeps its primary and counts cleanup once',async t=>{
+  const x=setup(t,{mode:'block'}),p=x.renew(x.config);x.pumps.push(p);const turn=await x.tick();
+  while(!x.state[0]&&x.workers[0].threadId!==-1)await realDelay(1);
+  await testClock.advance(499,{waitForWorkers:false});assert.equal(x.forced,0);
+  await testClock.advance(1,{waitForWorkers:false});await turn.pending;const final=await p.completion;
+  assert.equal(x.forced,1,'forced disposal retains the bounded grace');assert.equal(final.error,'reader_failed','failed opening disposal public precedence equals the base');
+  const r=readerDiagnostic.maintenanceReaderFailureDiagnostic(x.openingErrors[0]),d=pumpDiagnostic.maintenancePumpDiagnostic(final);
+  assert.equal(r.lastFailure.engineCode,'read_timeout');assert.equal(d.lastFailure.engineCode,'read_timeout');
+  assert.equal(r.secondaryFailureCounts.cleanup,1,'forced opening disposal records one reader cleanup secondary');
+  assert.equal(d.secondaryFailureCounts.cleanup,1,'forced opening disposal records one pump cleanup secondary');
+  assert.equal(d.lastFailure.ordinal,r.lastFailure.ordinal);assert.deepEqual(d.lastFailure.stall,r.lastFailure.stall);
+  await p.close().catch(()=>{});assert.equal(pumpDiagnostic.maintenancePumpDiagnostic(p.getStatus()).secondaryFailureCounts.cleanup,1,'repeated close does not recount forced disposal');
+});
+
+nativeTest('failure/disposal opening rejection: public reader_failed keeps the private timeout',async t=>{
+  const x=setup(t,{mode:'reject'}),p=x.renew(x.config);x.pumps.push(p);const turn=await x.tick();await turn.pending;const final=await p.completion;
+  assert.equal(final.error,'reader_failed','rejected opening disposal keeps public reader_failed');
+  const r=readerDiagnostic.maintenanceReaderFailureDiagnostic(x.openingErrors[0]),d=pumpDiagnostic.maintenancePumpDiagnostic(final);
+  assert.equal(r.lastFailure.engineCode,'read_timeout');assert.equal(d.lastFailure.engineCode,'read_timeout');
+  // Worker cleanup and the registry rejection are distinct K1 secondary events.
+  assert.equal(r.secondaryFailureCounts.cleanup,2,'rejected opening cleanup reaches the reader private diagnostic');
+  assert.equal(d.secondaryFailureCounts.cleanup,2,'rejected opening cleanup reaches the pump private diagnostic');
+  assert.equal(d.lastFailure.ordinal,r.lastFailure.ordinal);assert.deepEqual(d.lastFailure.stall,r.lastFailure.stall);
+});
+
+
+nativeTest('failure/disposal error then exit: timeout remains primary and exit is retained',async t=>{
+  const x=setup(t,{mode:'block'}),p=x.renew(x.config);x.pumps.push(p);const turn=await x.tick();
+  while(!x.state[0]&&x.workers[0].threadId!==-1)await realDelay(1);
+  x.workers[0].emit('error',new TypeError('synthetic disposal event'));
+  await turn.pending;const final=await p.completion;
+  assert.equal(final.error,'reader_failed');
+  const r=readerDiagnostic.maintenanceReaderFailureDiagnostic(x.openingErrors[0]),d=pumpDiagnostic.maintenancePumpDiagnostic(final);
+  assert.equal(r.lastFailure.engineCode,'read_timeout');assert.equal(d.lastFailure.engineCode,'read_timeout');
+  assert.equal(r.secondaryFailureCounts.worker_exit,1,'disposal error then exit retains one reader exit secondary');
+  assert.equal(d.secondaryFailureCounts.worker_exit,1,'disposal error then exit retains one pump exit secondary');
+  assert.equal(r.secondaryFailureCounts.worker_error,1);assert.equal(r.secondaryFailureCounts.cleanup,1);
+});
+
+nativeTest('M2 bootstrap timeout preserves the rejected disposal cause when its promise is reused',async t=>{
+  const x=setup(t,{stage:'bootstrap',mode:'bootstrap-reject'}),opening=x.open(x.options).catch(error=>error);
+  while(!x.state[4])await realDelay(1);
+  const closeFrames=[];x.workers[0].on('message',message=>{if(message.kind==='maintenance-close-failure')closeFrames.push(message);});
+  await testClock.advance(5001,{waitForWorkers:false});const error=await opening;
+  assert.equal(error.code,'read_timeout','bootstrap timeout preserves the public opening code');
+  while(!x.state[6]&&x.workers[0].threadId!==-1)await realDelay(1);
+  x.workers[0].postMessage({fixtureRelease:true});await x.s.supervisor.drain();await x.exits[0];
+  assert.equal(x.state[5],1,'registered bootstrap close ran once');
+  const d=readerDiagnostic.maintenanceReaderFailureDiagnostic(error);
+  assert.equal(d.lastFailure.engineCode,'read_timeout','bootstrap cleanup retains the initiating timeout');
+  assert.equal(closeFrames[0]?.maintenanceFailure?.kind,'exception','cached bootstrap disposal retains its exception metadata');
+  assert.equal(closeFrames[0].maintenanceFailure.errorName,'TypeError');
+  assert.equal(d.secondaryFailureCounts.exception,1,'bootstrap cleanup TypeError reaches the reader secondary diagnostic once');
+  assert.equal(d.failureCounts.engine,1);assert.equal(d.failureCounts.exception,0);
+});
+
+nativeTest('P1R Worker-first bootstrap timeout keeps its disposal exception separate',async t=>{
+  const x=setup(t,{stage:'bootstrap',mode:'bootstrap-reject'}),delayedTimers=new Map(),frames=[];
+  let worker,exited,timerCallbacks=0;
+  const open=createProductReaderRuntime({maintenance:true,
+    setTimer(fn,ms){const id={unref(){}};delayedTimers.set(id,{fn:()=>{timerCallbacks++;fn();},ms});return id;},
+    clearTimer:id=>delayedTimers.delete(id),
+    spawnWorker(data){
+      worker=new Worker(new URL('../context-product-worker.mjs',import.meta.url),{workerData:data,env:{},execArgv:[],stdout:true,stderr:true});
+      worker.on('message',message=>frames.push(message));exited=new Promise(resolve=>worker.once('exit',resolve));return worker;
+    }});
+  const opening=open(x.options).catch(error=>error);
+  while(!x.state[4])await realDelay(1);
+  await testClock.advance(5001,{waitForWorkers:false});
+  assert.equal(timerCallbacks,0,'parent deadline callbacks remain delayed');assert.equal(x.state[6],0,'parent close has not interrupted bootstrap');
+  worker.postMessage({fixtureRelease:true});const error=await opening;
+  assert.equal(error.code,'read_timeout','Worker-first bootstrap keeps the public timeout');
+  await x.s.supervisor.drain();await exited;
+  const initiating=frames.find(message=>message.result?.error?.code==='read_timeout');
+  assert.equal(initiating?.maintenanceFailure?.engineCode,'read_timeout','Worker detected and reported its own cutoff first');
+  assert.equal(timerCallbacks,0);assert.equal(x.state[5],1,'rejecting registered closer runs once');
+  const d=readerDiagnostic.maintenanceReaderFailureDiagnostic(error);
+  assert.equal(d.lastFailure.engineCode,'read_timeout');assert.equal(d.failureCounts.engine,1);
+  assert.equal(d.secondaryFailureCounts.exception,1,'Worker-first bootstrap disposal records its TypeError once');
+  assert.equal(d.secondaryFailureCounts.engine,0,'initiating timeout is never resent as a secondary');
+  const disposal=frames.find(message=>message.kind==='maintenance-close-failure');
+  assert.equal(disposal.maintenanceFailure.kind,'exception');assert.equal(disposal.maintenanceFailure.errorName,'TypeError');
 });

@@ -4,7 +4,7 @@ import { createContextReadHost as base } from './context-product-index-host.mjs'
 export async function createContextReadHost(c) {
   const host=await base(c),state=new Int32Array(c.disposalState);
   if(c.bootstrapGate){
-    c.resourceOwner.register('lease',()=>{Atomics.add(state,5,1);});
+    c.resourceOwner.register('lease',()=>{Atomics.add(state,5,1);if(c.disposalMode==='bootstrap-reject')throw new TypeError('synthetic bootstrap disposal refusal');});
     await new Promise(resolve=>{const release=m=>{if(m.fixtureRelease){parentPort.off('message',release);resolve();}
       else if(m.method==='close')Atomics.store(state,6,1);};parentPort.on('message',release);Atomics.store(state,4,1);});
   }

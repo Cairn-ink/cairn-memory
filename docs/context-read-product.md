@@ -628,6 +628,57 @@ A counter sampled concurrently with a transition can include the next admitted
 unit. Marker timestamps have microsecond resolution. Request readers allocate
 no marker and send no additional transport.
 
+Maintenance failures also have private latest-value diagnostics. Log
+`maintenanceFailureDiagnostic(resultOrOpeningError)` and
+`maintenanceReaderFailureDiagnostic(handleOrOpeningError)`, plus
+`maintenancePumpDiagnostic(observation)` and the failed lane's
+`maintenancePumpPhaseDiagnostic(observation).projections[lane]`. The reader and
+pump diagnostics expose `lastFailure`, `failureCounts`, `secondaryFailure` and
+`secondaryFailureCounts`. `lastFailure` retains the initiating failure through
+disposal; a later cleanup, Worker exit after error, or registry rejection updates
+only the bounded latest `secondaryFailure` and its separate saturated counts.
+One rejected resident close is counted once across propagation and repeated
+attempts, on the resident's owning lane, rather than its replacement's lane.
+
+Each recorded failure has `cause` and `stage`. Pump records also have `lane`;
+`number` is present when a quantum triggered the failure or disposal, and absent
+for explicit idle disposal with no triggering quantum. `stage` is one of `open`,
+`refresh`, `call`, `idle`, `close`, `observation`, `disposal`; a watchdog records
+`open` while opening, `close` while draining an incompatible resident, and
+`refresh` after opening. Log optional `ordinal` and
+`stall` when captured from an active dispatch. Idle/close failures without an
+active dispatch omit those fields, rather than accepting the last call's marker.
+A primary captured during a call keeps its original step, ordinal, stall and
+stage even if disposal later fails. Log optional `step` for caught exceptions,
+`exitCode` for `worker_exit`, bounded constructor `errorName` for `worker_error`,
+`spawn`, `dispatch` or `call_error`, and `engineCode` for a known `engine` failure.
+Secondary records have the same field optionality; their counts use the same
+fixed cause-family buckets as primary counts, with no unbounded history.
+
+The cause families are `worker_heap_limit` (Worker out-of-memory event),
+`worker_exit`, `worker_error`, `protocol`, `unmapped:<code>`,
+`exception:<ErrorName>`, `observation_timing`, `engine`, `spawn`, `dispatch`,
+`call_error`, `identity`, `worker_state`, `cleanup`, and `disposal_proof`.
+Codes match `^[a-z][a-z0-9_]{0,47}$`; constructor names match
+`^[A-Za-z][A-Za-z0-9_]{0,47}$`; invalid values become `other`.
+An uncoded exception caught inside the Worker also records numeric `step` using
+the existing maintenance-kind enum above, sampled before unwinding the measured
+operation. Resume/checkpoint validation outside an admitted unit can be `idle`.
+Inner error-to-code conversions retain this metadata; existing public mappings,
+including `storage_error` in the lexical catch, stay unchanged. Only sanitized
+kind/name/code/step fields accompany a failed Worker envelope; none enter the
+public result, serializers, public exports, or request-reader transport.
+
+`lastFailure` is immutable and retained across later success; a new reader or
+pump starts with `null`. Counts saturate and use fixed cause-family buckets:
+parameterized `unmapped:*` and `exception:*` values count under `unmapped` and
+`exception`, keeping labels bounded. Repeated observations never increment
+counts. A call's initiating cause is primary; propagated copies do not add
+counts. Distinct cleanup/proof failures retain their secondary cause and counts. Success has no result-level
+failure record. No message, stack, path, content, credential, or error object is
+retained in a diagnostic. These fields supply no admission, refund, cutoff
+eligibility, or disposal proof.
+
 A quantum is admitted only when both window and renewal time have at least
 `quantum.maxMs` remaining. A shorter tail waits for expiry or authorized renewal,
 without reserving items/ms, opening a maintainer or advancing round-robin position.
