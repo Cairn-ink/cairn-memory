@@ -1,4 +1,5 @@
-import { createHmac, randomUUID } from 'node:crypto';
+import { allocateContentKey } from './content-suppression-storage.mjs';
+import { createHmac } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { fail, identifier, object } from './validation.mjs';
 import { rawBoundary, rawClient, rawContext, rawNamespace, rawPolicy, rawRegistration, rawSealed, RAW_CLIENTS } from './raw-input.mjs';
@@ -120,7 +121,7 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     const eventDigest = digest(['raw-event-v1',session,input]);
     const authority = policy(input), fence = durableFence(ns,input.client,session);
     const duplicate = replay(input,eventDigest), row = conversation(ns,input.client,session);
-    const id = row?.id ?? randomUUID(), revision = row?.revision ?? null;
+    const id = row?.id ?? allocateContentKey(db, ns, 'raw'), revision = row?.revision ?? null;
     const token = Object.freeze({});
     if (duplicate) {
       prepared.set(token,{ input,session,eventDigest,authority,fence,id,revision,duplicate });

@@ -15,6 +15,7 @@ test('R2.7 reviewed safety usage addition preserves the pinned help bytes', () =
   const projected = removeReviewedRoleHelpAdditions(child.stdout);
   assert.match(projected, /^Cairn Memory[^\n]*\n\nUsage:\n/);
   assert.equal(projected.includes('safety preflight'), false);
+  assert.equal(projected.includes('safety migrate'), false);
 });
 
 function command(args) {

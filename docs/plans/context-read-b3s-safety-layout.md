@@ -1032,3 +1032,13 @@ This addendum adds one creation path. It changes nothing above.
 - the option refuses on an existing store;
 - old pins refuse the created store;
 - default creation stays byte-for-byte the same schema as before.
+
+## Revision 3.3 addendum: threat-model scope for suppression integrity (2026-10-30)
+
+This addendum scopes the guarantees above. It changes no storage, writer or pull contract.
+
+- **In scope:** every engine writer, reader and pull path. Suppression facts, reservations and epochs are protected against application faults and against every engine API caller. The §4.1 guards refuse UPDATE, DELETE and INSERT OR REPLACE. Openers refuse missing, partial or inconsistent safety objects, and a failed attestation refuses for the life of the native connection. Pull batches and list pages refuse a missing fact inside the interval they verify (§5.3).
+- **Out of scope:** an actor with direct DDL or DML rights on the engine database file. For example, one who drops a guard, edits or deletes rows, and restores the guard. Such an actor can equally rewrite or delete the content itself, so suppression-fact integrity cannot be stronger than content integrity.
+- **Basis:** this matches the existing trust boundary. Same-database DML is trusted only through the coordinated maintenance writer, and arbitrary same-user edits and undetected bit rot are not certified (`docs/plans/context-read-product.md:419`). Cooperative locks do not attest against malicious same-user filesystem or SQL edits (`docs/limitations.md:209`).
+- **Consequence for §5.3:** batch and list contiguity checks detect gaps inside the interval they verify. They do not re-verify facts at or before the caller's authenticated checkpoint, which the caller already received and must retain. No schema-cookie binding is added: a legitimate external `ANALYZE` or `PRAGMA optimize` would otherwise brick a store permanently.
+- Observed corruption, such as malformed rows, broken intervals or failed attestation, still always refuses.
