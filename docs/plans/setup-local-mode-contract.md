@@ -1336,8 +1336,10 @@ item and content discriminators.
 
 **Required and best-effort cases.**
 
-- Cases (a)–(e), (f1), (g), (i) (`turn_context`, `world_state`) and (j) are
-  required for every named host.
+- Cases (a)–(e), (f1), (g) and (j) are required for every named host. Case
+  (i) is required as an inventory: every row that ordinary turns produce is
+  recorded and must parse. The absence of a particular admitted top-level
+  type such as `world_state` is recorded, not treated as a failure.
 - Cases (f2), (h) and the security-risk part of (i) are best-effort. The
   re-check found no evidenced public trigger for (f2) or for security-risk
   rows, and compaction needs a native mock shape that is not yet proven.
