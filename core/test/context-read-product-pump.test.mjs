@@ -493,7 +493,7 @@ for(const [name,delivered,workMs] of [
   assert.equal(diagnostic.cadenceMisses,1);assert.equal(diagnostic.worstGapMs,gap);
   assert.deepEqual(diagnostic.observation,{projection:0,atMonoMs:delivered+workMs,gapMs:gap,cadenceMiss:true});
   assert.deepEqual(maintenancePumpDiagnostic(before),{cadenceMisses:0,worstGapMs:0,
-    observation:{projection:3,atMonoMs:4900,gapMs:4900,cadenceMiss:false}},'old status is an immutable snapshot');
+    observation:{projection:3,atMonoMs:4900,gapMs:4900,cadenceMiss:false},lastFailure:null,failureCounts:attribution.maintenanceFailureCounts(),secondaryFailure:null,secondaryFailureCounts:attribution.maintenanceFailureCounts()},'old status is an immutable snapshot');
   assert.deepEqual(Reflect.ownKeys(status).sort(),['error','id','maxItems','maxMs','state','usedItems','usedMs','windowId']);
   assert.equal(JSON.stringify(status).includes('cadence'),false,'internal diagnostic never enters public JSON');
   assert.ok(Object.isFrozen(diagnostic));assert.ok(Object.isFrozen(diagnostic.observation));
@@ -895,4 +895,55 @@ test('round 2 C1 exhausted cutoff records no join key or previous-call attributi
   for(const value of [lane.latest,lane.lastStall])assert.equal(Object.hasOwn(value,'ordinal'),false,'exhausted records have no join key');
   assert.deepEqual(lane.lastStall,{number:0,kind:0,runningMs:0,unitCount:0,unattributed:1},'exhaustion never accepts previous-call units or guesses running time');
   await pump.close();
+});
+
+
+test('K2 incompatible resident close failure is counted once on its owning lane',async t=>{
+  const s=setup(t,{}, {close:true,result:()=>settled(0)}),first=s.c.projections[0];
+  s.c.projections=[first,{...first,options:{...first.options,diagnostics:true}}];
+  const p=s.renew(s.c);await s.next();await s.next();await s.next();const final=await p.completion;
+  assert.equal(final.error,'reader_failed','switch failure public code equals the base');
+  const diagnostic=maintenancePumpDiagnostic(final),lanes=maintenancePumpPhaseDiagnostic(final).projections;
+  assert.equal(lanes[2].phases.drain.count,1,'replacement quantum retains its existing drain phase counter');
+  assert.equal(lanes[0].phases.drain.count,1,'final drain retains its existing phase counter');
+  assert.equal(diagnostic.failureCounts.cleanup,1,'one physical rejected close has one cleanup count');
+  assert.equal(diagnostic.lastFailure.cause,'cleanup');assert.equal(diagnostic.lastFailure.lane,0,'failed close stays on the resident owning lane');
+  assert.equal(lanes[0].failureCounts.cleanup,1);assert.equal(lanes[2].failureCounts.cleanup,0);assert.equal(diagnostic.lastFailure.stage,'close');
+  assert.equal(diagnostic.lastFailure.number,2,'drain failure carries the triggering quantum number');
+});
+
+test('K4 pump watchdog failure records the active stage and quantum',async t=>{
+  let enter,release;const entered=new Promise(resolve=>{enter=resolve;});
+  const s=setup(t,{}, {result:()=>{enter();return new Promise(resolve=>{release=()=>resolve({ok:false,error:{code:'read_timeout'}});});}});
+  const p=s.renew(s.c),pending=s.next();await entered;
+  try {
+    const [id,timer]=[...s.timers][0];s.timers.delete(id);s.setTime(timer.at);await timer.f();
+    const failure=maintenancePumpDiagnostic(p.getStatus()).lastFailure;
+    assert.equal(failure.stage,'refresh','watchdog failure identifies active refresh stage');assert.equal(failure.number,0);assert.equal(failure.lane,0);
+  } finally {release();await pending;await p.close();}
+});
+
+test('K4 explicit idle drain omits quantum number and includes close stage',async t=>{
+  const s=setup(t,{}, {close:true,result:()=>settled(0)}),p=s.renew(s.c);await s.next();await assert.rejects(p.close());
+  const failure=maintenancePumpDiagnostic(await p.completion).lastFailure;
+  assert.equal(failure.stage,'close');assert.equal(Object.hasOwn(failure,'number'),false,'idle disposal has no triggering quantum');assert.equal(failure.lane,0);
+});
+
+
+test('K4 failed quantum drain carries its triggering number',async t=>{
+  const s=setup(t,{}, {close:true,refresh:true}),p=s.renew(s.c);await s.next();const final=await p.completion,diagnostic=maintenancePumpDiagnostic(final);
+  const failure=diagnostic.secondaryFailure??diagnostic.lastFailure;
+  assert.equal(failure.number,0,'quantum-triggered drain retains its quantum number');assert.equal(failure.stage,'close');assert.equal(failure.lane,0);
+});
+
+test('K4 watchdog during incompatible resident disposal records close stage',async t=>{
+  let enter,release;const entered=new Promise(resolve=>{enter=resolve;});
+  const s=setup(t,{}, {result:()=>settled(0),dispose:()=>{enter();return new Promise(resolve=>{release=resolve;});}}),first=s.c.projections[0];
+  s.c.projections=[first,{...first,options:{...first.options,diagnostics:true}}];
+  const p=s.renew(s.c);await s.next();await s.next();const pending=s.next();await entered;
+  try {
+    const [id,timer]=[...s.timers][0];s.timers.delete(id);s.setTime(timer.at);await timer.f();
+    const failure=maintenancePumpDiagnostic(p.getStatus()).lastFailure;
+    assert.equal(failure.stage,'close','watchdog identifies the resident disposal stage');assert.equal(failure.number,2);
+  } finally {release();await pending;await p.close();}
 });

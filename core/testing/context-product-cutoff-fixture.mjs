@@ -29,7 +29,9 @@ export function setup(t,{enabled=true,stalls=1,domains=1,termination,resources,o
       postMessage(message){
         if(message.kind==='identity-ack'){
           if(!openStall)queueMicrotask(()=>worker.emit('message',{operation:data.operation,fileIdentity:'100:'+physical,result:{ok:true,value:null}}));
-        }else if(message.method==='close')queueMicrotask(()=>worker.emit('exit',0));
+        }else if(message.method==='close'){
+          closes.push(data);Promise.resolve(termination?.()??0).then(()=>worker.emit('exit',0),error=>worker.emit('error',error));
+        }
         else {
           calls.push(message);stalled=typeof stalls==='function'?stalls(++attempt):attempt++<stalls;
           if(resources)resources(new Int32Array(data.resources));

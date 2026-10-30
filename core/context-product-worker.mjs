@@ -1,3 +1,4 @@
+import { maintenanceErrorName, maintenanceFailureCode } from './context-product-attribution.mjs';
 import { createMaintenanceAttribution } from './context-product-attribution.mjs';
 import { performance } from 'node:perf_hooks';
 import { parentPort, workerData } from 'node:worker_threads';
@@ -15,7 +16,7 @@ const phase = openDiagnosticClock(workerData.openPhases);
 phase?.mark('workerFirst', workerFirst);
 const { request, operation: opening, binding } = workerData;
 let facade, index, host, active = false, disposing, currentControl = request;
-let semantic,currentOperation=opening;
+let semantic,currentOperation=opening,booting=true,closing=false,rejectPermission,exiting;
 const owned = [], resources = new Int32Array(workerData.resources);
 const resourceOwner = Object.freeze({
   register(kind, close) {
@@ -31,21 +32,49 @@ const sqlite = workerData.wal ? createProductSqlitePolicy({ observer }) : null;
 const startSqlite = op => sqlite?.start(Number(mono(op.operationCutoffMonoNs)) / 1e6);
 
 // Match the legacy native mapping without linking SQLite into bootstrap.
-const nativeFailure = error => productFailure(error?.code === 'ERR_SQLITE_ERROR'
-  ? Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 255) ? 'storage_busy' : 'storage_error'
-  : error?.code);
-const within = op => { if (process.hrtime.bigint() >= mono(op.operationCutoffMonoNs)) fail('read_timeout'); };
-function result(operation, result, extra = {}) { parentPort.postMessage({ operation, result, ...extra }); }
+// Keep the initiating call and the first disposal failure independent.
+let failureDetail,secondaryFailureDetail,disposalFailureDetail;
+const noteFailure=(kind,engineCode,error,disposal=false)=>{if(!workerData.maintenance)return;const detail={kind,...(kind==='engine'||kind==='unmapped'?{engineCode:maintenanceFailureCode(engineCode)}:{}),...(kind==='exception'?{errorName:maintenanceErrorName(error),step:attribution?.stepKind??0}:{})};if(disposal)disposalFailureDetail??=detail;else failureDetail??=detail;};
+const nativeFailure = (error, disposal = false) => {
+  const code=error?.code === 'ERR_SQLITE_ERROR'
+    ? Number.isInteger(error.errcode) && [5,6].includes(error.errcode&255) ? 'storage_busy':'storage_error' : error?.code;
+  const response=productFailure(code);
+  if(!(closing&&code==='store_closed'))noteFailure(code===undefined?'exception':code===response.error.code?'engine':'unmapped',code,error,disposal);
+  return response;
+};
+const within = op => { if (closing) fail('store_closed'); if (process.hrtime.bigint() >= mono(op.operationCutoffMonoNs)) fail('read_timeout'); };
+function result(operation, result, extra = {}) {
+  const failure=workerData.maintenance&&!result.ok&&!(closing&&result.error?.code==='store_closed')?(attribution?.failure()??failureDetail):undefined;
+  parentPort.postMessage({ operation, result, ...extra,...(failure?{maintenanceFailure:failure,...(secondaryFailureDetail?{maintenanceSecondaryFailure:secondaryFailureDetail}:{})}:{}) });
+}
 function dispose() {
   return disposing ??= (async () => {
     let failed = false;
-    try { semantic?.close(); index?.close(); facade?.close(); } catch { failed = true; }
+    const failedDisposal=error=>{if(workerData.maintenance&&!failed)nativeFailure(error,true);failed=true;};
+    try { semantic?.close(); index?.close(); facade?.close(); } catch(error) {failedDisposal(error);}
     for (const resource of owned.reverse()) {
-      try { await resource.close(); Atomics.add(resources, resource.at + 1, 1); } catch { failed = true; }
+      try { await resource.close(); Atomics.add(resources, resource.at + 1, 1); } catch(error) {failedDisposal(error);}
     }
-    if (failed) fail('reader_failed');
+    if (failed){if(workerData.maintenance)secondaryFailureDetail={kind:'cleanup'};fail('reader_failed');}
   })();
 }
+// Close never races bootstrap acquisition or an outstanding asynchronous call.
+function exitWhenIdle() {
+  return exiting ??= (async () => {
+    // A cached disposal promise owns its already-captured failure metadata.
+    if(workerData.maintenance&&!disposing){attribution?.resetFailure();failureDetail=undefined;secondaryFailureDetail=undefined;}
+    observer.select(workerData.frame);
+    try { await dispose(); sealNative(workerData.frame); phase?.mark('disposed'); }
+    catch { if(workerData.maintenance)try{parentPort.postMessage({kind:'maintenance-close-failure',maintenanceFailure:disposalFailureDetail,...(secondaryFailureDetail?{maintenanceSecondaryFailure:secondaryFailureDetail}:{})});}catch{}process.exitCode = 1; }
+    parentPort.close();
+  })();
+}
+parentPort.on('message', message => {
+  if (message?.method !== 'close') return;
+  closing = true; phase?.mark('closeReceived');
+  rejectPermission?.(Object.assign(Error('store_closed'), { code: 'store_closed' }));
+  if (!booting && !active) void exitWhenIdle();
+});
 function capabilities() {
   return { ok: true, value: { version: 'context-read-v1', profile: PRODUCT_PROFILE,
     methods: workerData.maintenance ? ['refreshContextIndex','getContextIndexStatus'] : ['findCandidates','contextRead','fetchCandidateEvidence','getContextIndexStatus'], types: facade.capabilities.types, intents: ['current', 'history'],
@@ -61,38 +90,38 @@ try {
   if (workerData.maintenance) serviceIssuance(binding,workerData.readSet,workerData.ownerCoverage);
   else issuance(binding, request, workerData.readSet, workerData.ownerCoverage);
   phase?.mark('verified');
-  const { contextProductFileIdentity } = await import('./read-database.mjs');
+  const { contextProductFileIdentity } = await import('./read-database.mjs'); within(opening);
   phase?.mark('databaseImported');
   const fileIdentity = contextProductFileIdentity(workerData.path);
   phase?.mark('fileIdentified');
-  const permission = new Promise((resolve, reject) => parentPort.once('message', message => {
+  const permission = new Promise((resolve, reject) => { rejectPermission = reject; parentPort.once('message', message => {
     try {
-      if (message.kind !== 'identity-ack') fail('reader_failed');
+      if (message.kind !== 'identity-ack'){if(!closing)noteFailure('protocol');fail('reader_failed');}
       verifyRecords(request, message.operation, request, opening); resolve();
     } catch (error) { reject(error); }
-  }));
+  }); });
   phase?.mark('identitySent');
   parentPort.postMessage({ kind: 'identity', operation: opening, fileIdentity });
-  await permission; within(opening);
+  await permission; rejectPermission = undefined; within(opening);
   phase?.mark('identityAcked');
   observer.identity = actual => { if (actual !== fileIdentity) fail('unsafe_database_file'); };
-  const module = await import(workerData.host.moduleUrl);
+  const module = await import(workerData.host.moduleUrl); within(opening);
   phase?.mark('hostImported');
   host = await module.createContextReadHost(Object.freeze({ ...workerData.host.configuration, resourceOwner }));
   if (typeof host?.close === 'function') resourceOwner.register('lease', () => host.close());
   const authorize = (method,payload,credential) => requestAuthority(host,binding,currentControl)(method,payload,credential);
   if(workerData.semanticConfig) {
-    const {semanticClient}=await import('./context-semantic-client.mjs');
+    const {semanticClient}=await import('./context-semantic-client.mjs'); within(opening);
     semantic=semanticClient(workerData.semanticPort,workerData.semanticConfig,()=>currentOperation);
   }
   within(opening);
   phase?.mark('hostCreated');
-  const { openContextProductFacade } = await import('./context-read-facade.mjs');
+  const { openContextProductFacade } = await import('./context-read-facade.mjs'); within(opening);
   phase?.mark('facadeImported');
   phase?.mark('facadeOpening');
   facade = openContextProductFacade(workerData.path, { observer, authorize, sqlite });
   phase?.mark('facadeOpened');
-  const { openProductIndex } = await import('./context-product-index.mjs');
+  const { openProductIndex } = await import('./context-product-index.mjs'); within(opening);
   phase?.mark('indexImported');
   index = openProductIndex({path:workerData.path,facade,authorize,ownerCoverage:workerData.ownerCoverage,observer,sqlite,sidecarJournalMode:workerData.sidecarJournalMode,maintenance:workerData.maintenance,counter:host.counter,semantic,operation:()=>currentOperation,attribution});
   phase?.mark('indexOpened');
@@ -100,20 +129,18 @@ try {
   // The opening telemetry remains unsealed until connection disposal.
   phase?.mark('openSent');
   result(opening, { ok: true, value: null }, { fileIdentity: facade.fileIdentity });
-} catch (error) {
+} catch (error) {attribution?.captureFailure(error);attribution?.selectFailure(error);
+  const response=workerData.maintenance?nativeFailure(error):undefined;
   try { await dispose(); sealNative(workerData.frame); } catch { /* No seal: diagnostic coverage is incomplete. */ }
-  result(opening, nativeFailure(error));
+  result(opening, response??nativeFailure(error));
+} finally {
+  booting = false;
+  if (closing) await exitWhenIdle();
 }
 parentPort.on('message', async message => {
-  if (message?.method === 'close') {
-    phase?.mark('closeReceived');
-    observer.select(workerData.frame);
-    try { await dispose(); sealNative(workerData.frame); phase?.mark('disposed'); parentPort.close(); }
-    catch { process.exitCode = 1; parentPort.close(); }
-    return;
-  }
-  if (active || !facade) { result(message.operation, productFailure('reader_failed')); return; }
-  active = true;
+  if (closing || message?.method === 'close') return;
+  if (active || !facade) {failureDetail=undefined;secondaryFailureDetail=undefined;noteFailure('worker_state');result(message.operation, productFailure('reader_failed')); return;}
+  active = true;failureDetail=undefined;secondaryFailureDetail=undefined;
   attribution?.reset(message.maintenanceOrdinal);
   const receivedAt=Number(process.hrtime.bigint())/1e6;
   if (message.method === 'fetchCandidateEvidence') phase?.mark('readReceived');
@@ -129,7 +156,7 @@ parentPort.on('message', async message => {
     currentOperation=operation;
     startSqlite(operation);
     within(operation);
-    if (frame && (frame.operationId !== operation.operationId || frame.workerEpoch !== operation.workerEpoch)) fail('reader_failed');
+    if (frame && (frame.operationId !== operation.operationId || frame.workerEpoch !== operation.workerEpoch)){noteFailure('protocol');fail('reader_failed');}
     let response;
     const observation = {};
     if (message.method === 'getContextReadCapabilities') {
@@ -168,6 +195,6 @@ parentPort.on('message', async message => {
       result(operation,response,observation.at===undefined?{}:{observedAtMonoMs:observation.at,
         maintenancePhases:{...observation,at:undefined,dispatchMs:receivedAt-Number(mono(operation.enteredMonoNs))/1e6,finishedAtMonoMs:Number(process.hrtime.bigint())/1e6}});
     }
-  } catch (error) { sealNative(frame); result(operation, nativeFailure(error)); }
-  finally { active = false; }
+  } catch (error) {attribution?.captureFailure(error);attribution?.selectFailure(error);sealNative(frame); result(operation, nativeFailure(error)); }
+  finally { active = false; if (closing) await exitWhenIdle(); }
 });

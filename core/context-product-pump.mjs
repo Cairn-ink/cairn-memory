@@ -1,5 +1,6 @@
+import { maintenanceFailureCounts, maintenanceFailureRecord, maintenanceFailureKind, maintenanceErrorName } from './context-product-attribution.mjs';
 import { attributionFields, maintenanceWorkFields, maintenanceKinds, add, maintenanceDispatchControl, maintenanceControlState } from './context-product-attribution.mjs';
-import { openContextIndexMaintainer, maintenanceObservation, maintenancePhaseDiagnostic, maintenanceStallDiagnostic, maintenanceCutoffQualified, authorizeMaintenanceCutoff, snapshotMaintenanceCutoff } from './context-product-reader.mjs';
+import { openContextIndexMaintainer, disposeProductReader, maintenanceObservation, maintenancePhaseDiagnostic, maintenanceStallDiagnostic, maintenanceCutoffQualified, authorizeMaintenanceCutoff, snapshotMaintenanceCutoff, maintenanceFailureDiagnostic, maintenanceReaderFailureDiagnostic } from './context-product-reader.mjs';
 import { supervisorOwner } from './context-read-supervisor.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { boundedData, hostConfiguration, coverage, PRODUCT_PROFILE } from './context-product-control.mjs';
@@ -122,20 +123,58 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     }
     let ledgers=admit(window,budgets);
     const record=registry.register(owner,{path:projections[0].options.path,domain:'context-read-product-v1.1/pump/'+c.id});
-    let timer,closing,stopped=false,running,lastTick=now(),at=0,renewedUntil=now()+c.renewalMs,error=null,grant=credential;
+    let timer,closing,stopped=false,running,disposalCutoff,lastTick=now(),at=0,renewedUntil=now()+c.renewalMs,error=null,grant=credential;
     let report,completion,settled=false;
     function cycle(){settled=false;completion=new Promise(resolve=>{report=value=>{settled=true;resolve(value);};});}cycle();
     const handles=new Map(),writers=new Map(),handleLanes=new Map();
-    let cutoffDiagnostic,cancelRecovery;
-    const pendingDrains=new Map();
+    let cutoffDiagnostic,cancelRecovery,lastFailure=null;const failureCounts=maintenanceFailureCounts(),secondaryFailureCounts=maintenanceFailureCounts();let secondaryFailure=null;
+    const pendingDrains=new Map(),failedDrains=new Map(),drainErrors=new WeakSet(),seenReaderFailures=new WeakSet(),readerSecondaryCounts=new WeakMap(),readerSources=new WeakMap(),cutoffFailures=new WeakMap();
     // Fixed 10-ms elapsed counters (last bucket is >5000 ms), never samples.
     // At most 64 lanes; no identities, paths, grants or content enter snapshots.
     let quantumNumber=0,residentEpoch=0;
     const phases=projections.map(()=>({phases:Object.fromEntries(phaseNames.map(k=>[k,phaseCounter()])),
-      opens:0,quanta:0,first:null,latest:null,worstElapsedMs:0,elapsedBuckets:Array(502).fill(0),work:{},attribution:Object.fromEntries(attributionFields.map(k=>[k,fieldCounter()])),lastStall:null,stallCounts:Array(maintenanceKinds.length).fill(0)}));
-    async function drain(key,index=handleLanes.get(key)){
+      opens:0,quanta:0,first:null,latest:null,worstElapsedMs:0,elapsedBuckets:Array(502).fill(0),work:{},attribution:Object.fromEntries(attributionFields.map(k=>[k,fieldCounter()])),lastFailure:null,failureCounts:maintenanceFailureCounts(),secondaryFailure:null,secondaryFailureCounts:maintenanceFailureCounts(),lastStall:null,stallCounts:Array(maintenanceKinds.length).fill(0)}));
+    function saveFailure(index,failure){
+      if(!failure||!phases[index])return;
+      const kind=maintenanceFailureKind(failure);if(!Object.hasOwn(failureCounts,kind))return;
+      lastFailure=Object.freeze({...failure,lane:index});phases[index].lastFailure=lastFailure;
+      phases[index].failureCounts[kind]=add(phases[index].failureCounts[kind],1);failureCounts[kind]=add(failureCounts[kind],1);
+    }
+    function saveSecondary(index,failure,counts){
+      if(!failure||!phases[index])return;
+      secondaryFailure=Object.freeze({...failure,lane:index});phases[index].secondaryFailure=secondaryFailure;
+      for(const kind of Object.keys(secondaryFailureCounts)){
+        const n=counts?.[kind]??(kind===maintenanceFailureKind(failure)?1:0);
+        if(Number.isSafeInteger(n)&&n>0){phases[index].secondaryFailureCounts[kind]=add(phases[index].secondaryFailureCounts[kind],n);secondaryFailureCounts[kind]=add(secondaryFailureCounts[kind],n);}
+      }
+    }
+    function readerSecondary(index,value,number){
+      const diagnostic=maintenanceReaderFailureDiagnostic(value),identity=maintenanceFailureDiagnostic(value);
+      if(!diagnostic?.secondaryFailure||!identity)return;
+      const previous=readerSecondaryCounts.get(identity),counts={};let changed=false;
+      for(const kind of Object.keys(secondaryFailureCounts)){counts[kind]=Math.max(0,diagnostic.secondaryFailureCounts[kind]-(previous?.[kind]??0));changed ||= counts[kind]>0;}
+      readerSecondaryCounts.set(identity,diagnostic.secondaryFailureCounts);
+      if(changed)saveSecondary(index,{...diagnostic.secondaryFailure,...(number===undefined?{}:{number})},counts);
+    }
+    async function drain(key,index=handleLanes.get(key),number){
+      // Attribution follows the resident being disposed, not its replacement.
+      const failureLane=handleLanes.get(key)??index;
       const started=now();
-      try{await handles.get(key).close();handles.delete(key);handleLanes.delete(key);}
+      try{const handle=handles.get(key);await disposeProductReader(handle,error==='read_timeout'?error:'store_closed',disposalCutoff,cutoffFailures.get(handle));readerSecondary(failureLane,maintenanceFailureDiagnostic(handle)?handle:readerSources.get(handle),number);handles.delete(key);handleLanes.delete(key);}
+      catch(error){
+        if(error&&typeof error==='object')drainErrors.add(error);
+        if(!failedDrains.has(key)){
+          failedDrains.set(key,true);
+          const found=maintenanceFailureDiagnostic(error),failure={...(found??maintenanceFailureRecord('cleanup',{stage:'close'})),...(number===undefined?{}:{number})};
+          const primary=number!==undefined&&lastFailure?.number===number?lastFailure:undefined;
+          // Equal values identify one call only with a valid shared ordinal.
+          const samePrimary=found&&primary&&Number.isSafeInteger(found.ordinal)&&found.ordinal>0&&['cause','ordinal','engineCode','errorName','step','stage'].every(field=>found[field]===primary[field]);
+          if(!found||!seenReaderFailures.has(found)&&!samePrimary){if(primary)saveSecondary(failureLane,failure);else saveFailure(failureLane,failure);}
+          if(found)seenReaderFailures.add(found);
+          readerSecondary(failureLane,error,number);
+        }
+        throw error;
+      }
       finally{recordPhase(phases[index].phases.drain,now()-started);}
     }
     // Initial observations are due within five seconds of activation. Expired
@@ -156,7 +195,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     function observation(){
       const value=Object.freeze({id:c.id,state:error?'failed':stopped?'stopped':exhausted()?'budget_exhausted':now()>=renewedUntil?'renewal_expired':'active',
         windowId:window.id,usedItems:Math.max(...[...ledgers.values()].map(l=>l.items)),usedMs:Math.max(...[...ledgers.values()].map(l=>l.ms)),maxItems:budgets.maxItems,maxMs:budgets.maxMs,error});
-      pumpDiagnostics.set(value,Object.freeze({cadenceMisses,worstGapMs,observation:lastObservation}));
+      pumpDiagnostics.set(value,Object.freeze({cadenceMisses,worstGapMs,observation:lastObservation,lastFailure,failureCounts:Object.freeze({...failureCounts}),secondaryFailure,secondaryFailureCounts:Object.freeze({...secondaryFailureCounts})}));
       phaseDiagnostics.set(value,freezeTree(structuredClone({elapsedBucketMs:10,projections:phases})));
       snapshotMaintenanceCutoff(value,cutoffDiagnostic);
       return value;
@@ -169,7 +208,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       stopped=true;clearTimer(timer);cancelRecovery?.();registry.cleanup(record);
       closing=(async()=>{
         await running;
-        const disposed=await Promise.allSettled([...handles.keys()].map(key=>pendingDrains.get(key)??drain(key)));
+        const disposed=await Promise.allSettled([...handles.keys()].map(key=>pendingDrains.get(key)??drain(key,undefined,error?lastFailure?.number:undefined)));
         if(disposed.some(r=>r.status==='rejected'))throw Error('reader_failed');
         registry.finish(record);all.entries.delete(c.id);report(observation());
       })();
@@ -192,6 +231,9 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
     }
     function schedule(){
       if(stopped||error||exhausted()||now()>=renewedUntil)return;
+      if(Math.min(window.endsAtMonoMs,renewedUntil)-now()<quantum.maxMs){
+        timer=setTimer(tick,Math.max(1,Math.min(window.endsAtMonoMs,renewedUntil)-now()));return;
+      }
       // Look ahead through the unchanged round-robin order. Each future turn
       // needs its full pre-observation quantum plus minimum admission spacing
       // for intervening turns. A fixed admission period cannot bound reads.
@@ -217,9 +259,22 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
       if(stopped||error)return;
       checkCadence(now());
       if(exhausted()||now()>=renewedUntil){report(observation());return;}
+      if(Math.min(window.endsAtMonoMs,renewedUntil)-now()<quantum.maxMs){schedule();return;}
       if(recoveryEnabled && projections.every((_,i)=>cooling(i))){schedule();return;}
       lastTick=now();
-      let quantumTimer,lane,sequence,settleStarted,deliveryMs=0,activeHandle,activeControl,ordinal,openingOrdinal,quantumDetail={},stallRecorded=false,capability,recovery;
+      let quantumTimer,lane,sequence,settleStarted,deliveryMs=0,activeHandle,activeControl,ordinal,openingOrdinal,quantumDetail={},stallRecorded=false,capability,recovery,activeStage='open';
+      const recordedFailures=new Set();
+      function recordFailure(value,kind='engine',detail={}){
+        if(!lane||value&&typeof value==='object'&&drainErrors.has(value))return;
+        const found=maintenanceFailureDiagnostic(value),captured=kind!=='disposal_proof'&&(found?.ordinal===undefined||found.ordinal===ordinal)?found:undefined,stamp=now(),source=captured??maintenanceFailureRecord(kind,{...detail,ordinal,stall:stallOf(value,stamp)??stallOf(activeHandle??activeControl,stamp)});
+        const key=maintenanceFailureKind(source);if(recordedFailures.has(key))return;
+        const secondary=recordedFailures.size>0;recordedFailures.add(key);
+        const index=phases.indexOf(lane),failure=Object.freeze({...source,stage:source.stage??activeStage,number:sequence});
+        if(secondary)saveSecondary(index,failure);else saveFailure(index,failure);
+        if(activeHandle&&failure.cause==='engine'&&failure.engineCode==='read_timeout')cutoffFailures.set(activeHandle,failure);
+        if(captured){seenReaderFailures.add(captured);if(activeHandle)readerSources.set(activeHandle,value);}
+        readerSecondary(index,value,sequence);
+      }
       function recordStall(value){
         if(stallRecorded||!lane)return;
         const stall=ordinal===null?{kind:0,runningMs:0,unitCount:0,unattributed:1}:stallOf(value??activeControl,now());
@@ -238,6 +293,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           const p=projections[index],dispatchEpoch=residentEpoch,key=JSON.stringify([residentKeys[index],dispatchEpoch]),ledger=ledgers.get(domainOf(p));
           const maxItems=Math.min(quantum.maxItems,ledger.maxItems-ledger.items),maxMs=Math.min(quantum.maxMs,ledger.maxMs-ledger.ms,Math.floor(ledger.endsAt-now()),Math.floor(renewedUntil-now()));
           if(maxItems<1||maxMs<1)return;
+          disposalCutoff=lastTick+maxMs;
           // Reserve the full quantum before dispatch. Unknown usage remains
           // charged after crash/timeout; restarting or renewing cannot refund it.
           ledger.items+=maxItems;ledger.ms+=maxMs;
@@ -254,7 +310,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             domainRecovery.pending++;domainRecovery.pendingUntil=Math.max(domainRecovery.pendingUntil,proofDeadline);
             let confirmationTimer;describeCutoff(0);
             try {
-              const drainPromise=drain(key,index);pendingDrains.set(key,drainPromise);
+              const drainPromise=drain(key,index,sequence);pendingDrains.set(key,drainPromise);
               const forget=()=>{if(pendingDrains.get(key)===drainPromise)pendingDrains.delete(key);};
               drainPromise.then(forget,forget);
               const disposal=drainPromise.then(()=>capability.proof());
@@ -271,11 +327,11 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
               const until=now()+1000;
               domainRecovery.cooldownUntil=Math.max(domainRecovery.cooldownUntil,until);
               cutoffDiagnostic.allowance=ledger.recoveries;cutoffDiagnostic.cooldownUntil=until;cutoffDiagnostic.outcome=1;
-            } catch {cutoffDiagnostic.outcome=3;error='reader_failed';}
+            } catch(failure){recordFailure(failure,'disposal_proof',{stage:'disposal'});cutoffDiagnostic.outcome=3;error='reader_failed';}
             finally {domainRecovery.pending--;clearTimer(confirmationTimer);cancelRecovery=undefined;}
           })();
           quantumTimer=setTimer(()=>{
-            recordStall(activeHandle);
+            recordStall(activeHandle);recordFailure(activeHandle,'engine',{engineCode:'read_timeout'});
             if(capability && (capability.attested||capability.expire?.())){
               if((ledger.recoveries??0)<2){void recover();return;}describeCutoff(5);
             }
@@ -287,18 +343,18 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             // across intents/types/journal policies. Drain before replacing its
             // full-key handle; never weaken admission to populate this cache.
             const writer=JSON.stringify([resolve(p.options.path),p.options.readSet]),previous=writers.get(writer);
-            if(previous!==undefined){await drain(previous,index);writers.delete(writer);}
+            if(previous!==undefined){activeStage='close';await drain(previous,index,sequence);writers.delete(writer);activeStage='open';}
             if(stopped||error)return;
             const openingMs=Math.min(maxMs,Math.floor(maxMs-(now()-lastTick)));
-            if(openingMs<1){error='read_timeout';return;}
+            if(openingMs<1){recordFailure(activeControl,'engine',{engineCode:'read_timeout',stage:'open'});error='read_timeout';return;}
             const opening=now();openingOrdinal=ordinal;
             try{h=await open({...p.options,deadlineMs:openingMs},activeControl);openedHere=true;lane.opens=add(lane.opens,1);handles.set(key,h);handleLanes.set(key,index);writers.set(writer,key);}
             finally{recordPhase(lane.phases.open,now()-opening);}
           }
-          activeHandle=h;
+          activeHandle=h;activeStage='refresh';
           if(stopped||error)return;
           const remainingMs=Math.min(maxMs,Math.floor(maxMs-(now()-lastTick)));
-          if(remainingMs<1){recordStall(h);error='read_timeout';return;}
+          if(remainingMs<1){recordStall(h);recordFailure(h,'engine',{engineCode:'read_timeout'});error='read_timeout';return;}
           if(openedHere){
             activeControl=maintenanceDispatchControl();ordinal=maintenanceControlState(activeControl).ordinal;
           }
@@ -320,6 +376,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             }
           }
           for(const name of attributionFields){const n=detail?.[name];if(Number.isFinite(n)&&n>=0){quantumDetail[name]=Math.min(Number.MAX_SAFE_INTEGER,n);recordField(lane.attribution[name],quantumDetail[name]);}}
+          if(result?.ok===false)recordFailure(result,'engine',{engineCode:result.error?.code});
           if(result?.error?.code==='read_timeout')recordStall(result);
           if(recovery){await recovery;return;}
           if(result?.error?.code==='read_timeout' && capability?.attested){
@@ -330,8 +387,8 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           const time=observedAt(result),finished=now();
           // Missing timing is uncertain, never an invented observation at
           // admission/delivery. A quantum overrun retains its full reservation.
-          if(finished-lastTick>maxMs){recordStall(h);error='read_timeout';return;}
-          if(!Number.isFinite(time)||time<lastTick||time>finished){error='reader_failed';return;}
+          if(finished-lastTick>maxMs){recordStall(h);recordFailure(h,'engine',{engineCode:'read_timeout'});error='read_timeout';return;}
+          if(!Number.isFinite(time)||time<lastTick||time>finished){recordFailure(result,'observation_timing',{stage:'observation'});error='reader_failed';return;}
           checkCadence(time);
           lastObservation=Object.freeze({projection:index,atMonoMs:time,gapMs:time-observations[index],cadenceMiss:missed[index]});
           observations[index]=time;
@@ -346,7 +403,12 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
             ledger.items=Math.max(ledger.items-maxItems+items,ledger.floorItems);
             ledger.ms=Math.max(ledger.ms-maxMs+elapsed,ledger.floorMs);
           }
-        } catch(e){if(e.code==='read_timeout')recordStall(e);error=e.code??'reader_failed';}
+        } catch(e){
+          recordFailure(e,'call_error',{errorName:maintenanceErrorName(e),stage:'call'});
+          if(e.code==='read_timeout')recordStall(e);error=e.code??'reader_failed';
+          // An opening failure returns no handle; its cleanup ID still owns disposal.
+          if(e.cleanupId)try{await c.supervisor.drain(e.cleanupId);}catch(failure){recordFailure(failure,'cleanup',{stage:'close'});readerSecondary(phases.indexOf(lane),e,sequence);error='reader_failed';}
+        }
       })().finally(()=>{
         if(lane){
           if(settleStarted!==undefined)recordPhase(lane.phases.settle,deliveryMs+now()-settleStarted);
