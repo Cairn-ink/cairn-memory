@@ -1134,7 +1134,7 @@ non-author Codex auditor (gpt-6.1-sol, xhigh, read-only): no P0, five P1, three
 P2, not ready. v0.18 adopts the auditor's replacement text. Release scope set
 by the engine primary on 2026-10-31: 0.6.3 carries only this fix and no
 storage, retrieval or safety engine change; the new engine moves to 0.6.4.
-Rule 7 records the engine-bundle choice (§18.2).
+The engine primary chose option B for the engine bundle (Rule 7).
 
 ### 18.1 Defect (observed 2026-10-31 on a real installation's verdict cache)
 
@@ -1238,23 +1238,23 @@ strings.
    intentionally re-enables recall on them. Q07 therefore verifies context
    placement. The loud capture-stopped notice is out of scope (0.6.4 unless
    the owner says otherwise).
-7. **Engine bundle (option B, recommended; engine primary decision pending).**
-   - The engine archive is rebuilt with `build-runtime.mjs` from this branch.
-     The branch base is `34182d51`, whose engine sources equal `be2bc543`.
-   - The rebuilt archive differs from the 0.6.2 archive only in
-     `integrations/codex/parser.mjs`, `qualification.mjs` and
-     `schema-evidence.mjs`, plus the hashes that record them. A test lists
-     the archive contents of both and proves this.
-   - No other engine source changes. `build-runtime.mjs --check` exits 0.
-   - If the engine primary chooses option A instead, this rule is replaced
-     by: "Keep `packages/setup/runtime/engine/**` byte-identical to
-     `34182d51`. Add an explicit hosted-only build/check path that
-     regenerates and verifies `runtime/integrations/**` and
-     `runtime/manifest.json` without rebuilding the engine. Prepack must use
-     that path and independently verify the frozen engine against
-     `34182d51`. Do not weaken the existing source-derived engine check, and
-     do not claim that its current `--check` passes after these source
-     changes."
+7. **Engine bundle (option B, chosen by the engine primary on 2026-10-31).**
+   The engine archive is rebuilt with `build-runtime.mjs` from this branch,
+   whose base `34182d51` has engine sources equal to `be2bc543`.
+   - **Allowed difference.** The rebuilt archive may differ from the 0.6.2
+     archive only in `integrations/codex/parser.mjs`, `qualification.mjs` and
+     `schema-evidence.mjs`, plus the hash and version lines that follow
+     mechanically from them. No other engine source changes. No S1, S2h or
+     fix B content.
+   - **Proof by two routes.** Derive the differing-file list twice: once from
+     a manifest diff, and once from a sha256/`cmp` walk of both extracted
+     archives. Diff the two lists. The PR records the count and both lists.
+     Any other differing byte stops the work and goes to the engine primary.
+   - **Check.** `build-runtime.mjs --check` exits 0.
+   - **Reason for B over freezing the engine.** A frozen engine would keep the
+     old Codex modules, so the local capture host would still refuse new
+     Codex.
+
 8. **Hosted runtime exceptions.** Under §16, named hosted runtime exceptions
    are added for exactly `integrations/codex/parser.mjs`,
    `integrations/codex/qualification.mjs` and
@@ -1360,7 +1360,7 @@ read, and paths are never committed.
 | Q05 | Seeded creators 0.163.0–0.166.0 verify without a cache. With no matching current-host or cached creator evidence, 0.167.0 remains `creator_unqualified`. An unknown creator backed by a current-policy qualified host or verdict is still accepted. |
 | Q06 | Stale `qualified` and stale `changed/serde_marker_missing` verdicts are exercised. The observing hook stays closed; concurrent hooks schedule at most one probe while its pending marker is live; after successful qualification, later eligible hooks run. |
 | Q07 | Capture and recall are tested through the installed path. Pending, changed, unavailable, replaced-binary, disabled-recall and excluded-source cases perform neither recall nor injection. For each new native host, the §18.3 (j) canary verifies delivery placement and exclusion from captured messages. A changed placement requires the documented A7 re-evaluation. |
-| Q08 | Rule 7 holds (archive diff limited to the three files, `--check` exit 0) and Rule 8 holds (L06/L24 with the three named exceptions and `CAIRN_SETUP_REQUIRE_BASELINE=1`) |
+| Q08 | Rule 7 holds (two-route archive diff limited to the three files and their hash/version lines, `--check` exit 0) and Rule 8 holds (L06/L24 with the three named exceptions and `CAIRN_SETUP_REQUIRE_BASELINE=1`) |
 | Q09 | Full `test:setup` and the Codex integration suites exit 0 on Node 22.16.0 and 24.15.0 |
 | Q10 | The tarball inventories, compared independently with `tar` and with npm's pack manifest (including the embedded engine), equal 0.6.2's except for the declared version and the Rule 7 files. They contain no fixtures. |
 
