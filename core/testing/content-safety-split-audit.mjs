@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
+import { protectedInsertionTargets } from './content-safety-split-sql.mjs';
 
 export const splitRoot = new URL('../../', import.meta.url).pathname;
 export const splitFixture = JSON.parse(readFileSync(new URL('../test/fixtures/content-safety-split.json', import.meta.url), 'utf8'));
@@ -80,7 +81,7 @@ export function assertSplitGraph(sources = splitSources(), reviewed = splitFixtu
       }
     }
     // Newly introduced SQL insertion seams cannot bypass the helper graph.
-    if (/\b(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO)\s+["`\[]?(?:content_suppressions|content_identity_reservations)\b/i.test(source)) {
+    if (protectedInsertionTargets(source).length) {
       assert.ok(reviewed.implementations.some(pin => pin.file === file), 'unreviewed direct insertion SQL: ' + file);
     }
     for (const capability of capabilities) {

@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { assertSplitGraph, assertSplitInventory, splitFixture, splitSources } from '../testing/content-safety-split-audit.mjs';
-import { additionalSplitFacades } from '../testing/content-safety-split-facades.mjs';
-import { mutatedSplitSources, splitMutations } from '../testing/content-safety-split-mutations.mjs';
+import { additionalSplitFacades, composedSplitFacades } from '../testing/content-safety-split-facades.mjs';
+import { mutatedSplitSources, splitMutations, splitRevisionMutations } from '../testing/content-safety-split-mutations.mjs';
+import { protectedInsertionTargets, protectedSplitTables } from '../testing/content-safety-split-sql.mjs';
+import { DatabaseSync } from 'node:sqlite';
 import * as api from '../index.mjs';
 import * as storage from '../content-suppression-storage.mjs';
 import { transaction } from '../database.mjs';
@@ -35,7 +37,7 @@ test('S2h-1 split: enumerate public exports and facades; no fact-only writer is 
   t.after(() => { topic.close(); context.close(); legacy.close(); runtime.close(); core.close(); });
   const product = await configured(t,f.path,[ns]).open(), maintainer = await configured(t,f.path,[ns],{service:true}).open();
   const supervisor=api.createContextReadSupervisor();t.after(()=>supervisor.close());
-  const handles = { ...await additionalSplitFacades(t, f, ns), core,legacy,supervisor,scope:legacy.scope({ownerId:ns.ownerId,projectId:ns.projectId}),context,topic,product,maintainer,
+  const handles = { ...await additionalSplitFacades(t, f, ns), ...composedSplitFacades(f, config, contextRead), core,legacy,supervisor,scope:legacy.scope({ownerId:ns.ownerId,projectId:ns.projectId}),context,topic,product,maintainer,
     cards:createPrivateCardFacade(runtime.privateCards,config.privateCards,runtime.ready),
     methods:createMethodPackageFacade(runtime.methodPackages,config.methodPackages,runtime.ready,config.assets),
     assets:createAssetFacade(runtime.assets,config.assets,runtime.ready),
@@ -73,6 +75,17 @@ for (const mutation of splitMutations) test('S2h-1 split rejects mutation: ' + m
     /unreviewed fact-only reference|unreviewed forwarding|capability alias/);
 });
 
+for (const mutation of splitRevisionMutations) test('S2h-1 split rejects mutation: ' + mutation.name, () => {
+  const inventory = structuredClone(splitFixture.inventory);
+  if (mutation.addedMethod) {
+    inventory[mutation.surface] = [...inventory[mutation.surface], mutation.addedMethod].sort();
+    assert.throws(() => assertSplitInventory(inventory), /public inventory changed/);
+  } else assert.doesNotThrow(() => assertSplitInventory(inventory));
+  const sources = mutatedSplitSources(splitSources(), mutation);
+  if (mutation.graphUnchanged) assert.doesNotThrow(() => assertSplitGraph(sources));
+  else assert.throws(() => assertSplitGraph(sources), /unreviewed direct insertion SQL/);
+});
+
 test('S2h-1 split rejects inventory removals and unreviewed writer changes', () => {
   for (const surface of Object.keys(splitFixture.inventory)) {
     const inventory = structuredClone(splitFixture.inventory); inventory[surface].pop();
@@ -95,6 +108,30 @@ test('S2h-1 split closes every insertion capability alias and direct SQL bypass'
     sources.set('core/unreviewed-split-helper.mjs', `export const tidy = db => db.exec('INSERT INTO ${table} VALUES(1)');`);
     assert.throws(() => assertSplitGraph(sources), /unreviewed direct insertion SQL/, table);
   }
+});
+
+test('S2h-1 split normalizes SQLite insertion targets across schemas, quoting and comments', t => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close());
+  const quote = (name, mark) => mark === '[' ? '[' + name + ']' : mark + name.replaceAll(mark, mark + mark) + mark;
+  const schemas = ['main','temp','attached schema'];
+  db.exec(`ATTACH DATABASE ':memory:' AS "attached schema"`);
+  for (const schema of schemas) for (const table of protectedSplitTables)
+    db.exec(`CREATE TABLE ${quote(schema, '"')}.${quote(table, '"')}(value INTEGER)`);
+  let checked = 0;
+  for (const table of protectedSplitTables) for (const schema of [null,...schemas])
+    for (const mark of ['', '"', '`', '[', "'"]) for (const verb of ['INSERT', ...['ROLLBACK','ABORT','REPLACE','FAIL','IGNORE'].map(mode => 'INSERT OR ' + mode), 'REPLACE']) {
+      const name = table.toUpperCase(), target = mark ? quote(name, mark) : name;
+      const qualified = schema === null ? target : (mark ? quote(schema, mark) : schema === 'attached schema' ? '"attached schema"' : schema) + ' /* qualifier */ . ' + target;
+      const prefix = verb.toLowerCase().split(' ').join('/* gap */');
+      const sql = `${prefix} -- before INTO\n INTO /* table */ ${qualified} VALUES(1)`;
+      assert.deepEqual(protectedInsertionTargets(sql), [table], sql);
+      assert.deepEqual(protectedInsertionTargets('db.exec(' + JSON.stringify(sql) + ')'), [table], sql);
+      // SQLite itself validates every accepted spelling; no production table or file is used.
+      db.prepare(sql).run(); checked++;
+    }
+  assert.deepEqual(protectedInsertionTargets('INSERT INTO main.content_suppressions_archive VALUES(1); REPLACE INTO other_table VALUES(1)'), []);
+  assert.deepEqual(protectedInsertionTargets('INSERT INTO "attached""schema".`content_suppressions` VALUES(1)'), ['content_suppressions']);
+  t.diagnostic('SQLite-validated insertion spellings: ' + checked);
 });
 
 test('S2h-1 split: internal fact-only observations do not change S1 reads or public writes', async t => {

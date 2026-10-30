@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { createContextReadSupervisor, openContextSemanticCoordinator, renewContextMaintenancePump } from '../index.mjs';
+import { createContextReadSupervisor, openContextSemanticCoordinator, renewContextMaintenancePump, openMemoryCore } from '../index.mjs';
 import { provisionSemanticOwner } from '../context-semantic-ledger.mjs';
 import { credentialDigest } from '../context-product-control.mjs';
 import { canonicalJson } from '../context-product-validation.mjs';
@@ -56,4 +56,20 @@ export async function additionalSplitFacades(t, f, ns) {
       configuration:{semanticServiceBinding:binding,anchorPath,state,priceTable} } });
   f.workspace.defer(() => semantic.close());
   return { semantic, pump };
+}
+
+// Cover both composition branches and their optional feature surfaces.
+export function composedSplitFacades(f, config, contextRead) {
+  const rawConversations = { mode:'off',readPolicy:()=>({generation:'synthetic',reason:null}) };
+  const handles = {
+    plainCore: openMemoryCore(config),
+    contextCore: openMemoryCore({ ...config, contextRead }),
+    contextRawCore: openMemoryCore({ ...config, contextRead, rawConversations }),
+    minimalCore: openMemoryCore({ path:f.path }),
+    minimalRawCore: openMemoryCore({ path:f.path, rawConversations }),
+    minimalContextCore: openMemoryCore({ path:f.path, contextRead }),
+    minimalContextRawCore: openMemoryCore({ path:f.path, contextRead, rawConversations }),
+  };
+  for (const handle of Object.values(handles)) f.workspace.defer(() => handle.close());
+  return handles;
 }
