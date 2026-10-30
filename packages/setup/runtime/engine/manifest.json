@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "f1d22f946d5a678fc6e8cc94f1001873ba40c71172c2d2e6d3c90199f8b94fd1",
-  "bytes": 991605,
+  "sha256": "9a4e3bd2d03435647a0f08090a01db370e7d357d97bce68276f7a6168053167b",
+  "bytes": 991677,
   "files": [
     "LICENSE",
     "README.md",
@@ -642,7 +642,7 @@
     "core/context-product-open-diagnostic.mjs": "fcf436e5219a45ee91f629a33515e44b35523e638aaea65e326eb4853a6c0bf8",
     "core/context-product-schema.mjs": "052048d1c8300ae349778428f7d430e6a70b16a96502ac89d7efe56de494e076",
     "core/context-product-telemetry.mjs": "4601cfc76379b7daf3d26a4f9690689469687685e7289d05ddf7773ee6959f85",
-    "core/context-product-worker.mjs": "3e5691a16bc336a34e9174c7617bd586b13684ea5a833faaf47debd5dff50d15",
+    "core/context-product-worker.mjs": "74e7d897d4871aff65d796062e2197c6e85713cb88a08f661724aafed8fd9c1d",
     "core/context-read-supervisor.mjs": "8e0d3ecd984ac5b916515b8be0438ca0c1f3479e9dfa4bdab2317aff4e0f7e75",
     "core/reader-worker-lifecycle.mjs": "ce12e0d18a3a0d5274989a088afd2fd2cd93f40529c7cfbae1156e8295f99ddf",
     "docs/context-read-product.md": "1a77565784b9bbddca7148cef73802e42b663714c3df22c18224d7beb75c7415",
@@ -656,7 +656,7 @@
     "core/context-product-sqlite.mjs": "03d69f0bdb2e5e8acd1b6e08e566d3333bfbc9e22fdfac97514aa8023618c207",
     "core/content-safety.mjs": "96c3e71bbf8871403d617cdf3728487ceb49902debf00e1d41d754cb55e124c0",
     "core/context-product-index.mjs": "bd28fcf1699d038b14139610958f3586c3d58bb294d85df88ecd76afe6e19ce3",
-    "core/context-product-pump.mjs": "6bdeacb193ff98ee4c0f3875058376b98078062a39fd2eda6b97328b867eefbc",
+    "core/context-product-pump.mjs": "7be58128e6bea7cc85971af6230720e86c01a0c9c178b3879f3994960643e050",
     "docs/plans/context-read-p2b-impl.md": "aa8aa4820502d8b4002ae33ef8b734658a683ed0edd527ef3d183ddb39e9f737",
     "docs/plans/context-read-p2d-impl.md": "f4301c2126605bf2dd71c188e79dde7827741afed0cc196c294c29efc07feabd",
     "core/context-product-selection.mjs": "0e2bab9437b51d1e91f980084ef5b2b167d43646b54686927f36d6dc79f980fc",

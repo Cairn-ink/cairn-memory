@@ -274,3 +274,20 @@ nativeTest('failure/disposal error then exit: timeout remains primary and exit i
   assert.equal(d.secondaryFailureCounts.worker_exit,1,'disposal error then exit retains one pump exit secondary');
   assert.equal(r.secondaryFailureCounts.worker_error,1);assert.equal(r.secondaryFailureCounts.cleanup,1);
 });
+
+nativeTest('M2 bootstrap timeout preserves the rejected disposal cause when its promise is reused',async t=>{
+  const x=setup(t,{stage:'bootstrap',mode:'bootstrap-reject'}),opening=x.open(x.options).catch(error=>error);
+  while(!x.state[4])await realDelay(1);
+  const closeFrames=[];x.workers[0].on('message',message=>{if(message.kind==='maintenance-close-failure')closeFrames.push(message);});
+  await testClock.advance(5001,{waitForWorkers:false});const error=await opening;
+  assert.equal(error.code,'read_timeout','bootstrap timeout preserves the public opening code');
+  while(!x.state[6]&&x.workers[0].threadId!==-1)await realDelay(1);
+  x.workers[0].postMessage({fixtureRelease:true});await x.s.supervisor.drain();await x.exits[0];
+  assert.equal(x.state[5],1,'registered bootstrap close ran once');
+  const d=readerDiagnostic.maintenanceReaderFailureDiagnostic(error);
+  assert.equal(d.lastFailure.engineCode,'read_timeout','bootstrap cleanup retains the initiating timeout');
+  assert.equal(closeFrames[0]?.maintenanceFailure?.kind,'exception','cached bootstrap disposal retains its exception metadata');
+  assert.equal(closeFrames[0].maintenanceFailure.errorName,'TypeError');
+  assert.equal(d.secondaryFailureCounts.exception,1,'bootstrap cleanup TypeError reaches the reader secondary diagnostic once');
+  assert.equal(d.failureCounts.engine,1);assert.equal(d.failureCounts.exception,0);
+});

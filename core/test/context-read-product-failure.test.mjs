@@ -26,7 +26,7 @@ function setup(t,mode,{maintenance=true,fake,observation,refreshThrows=false,clo
     spawnWorker(data){opening=data;if(fake)return fake(data);
       return new Worker(new URL('../testing/context-product-failure-worker.mjs',import.meta.url),{workerData:{...data,failureMode:mode},execArgv:[],env:{},resourceLimits:{maxOldGenerationSizeMb:16,maxYoungGenerationSizeMb:2}});}});
   const renew=pump.createMaintenancePumpRuntime({now:()=>clock,setTimer,clearTimer,...(observation?{observedAt:()=>observation(clock)}:{}),
-    open:async(...args)=>{handle=await open(...args);return {...handle,refreshContextIndex:async(...call)=>{if(refreshThrows)throw new TypeError('private call text');return lastResult=await handle.refreshContextIndex(...call);},close:async()=>{await handle.close();if(closeThrows)throw new Error('private cleanup text');}};}});
+    open:async(...args)=>{const resident=await open(...args);handle=resident;return {...resident,refreshContextIndex:async(...call)=>{if(refreshThrows)throw new TypeError('private call text');return lastResult=await resident.refreshContextIndex(...call);},close:async()=>{await resident.close();if(closeThrows)throw new Error('private cleanup text');}};}});
   const config={supervisor,id:'failure-'+mode,window:{id:'failure-window',endsAtMonoMs:60100,usedItems:0,usedMs:0},budgets:{maxItems:8,maxMs:8000},quantum:{maxItems:1,maxMs:1000},pollMs:1000,renewalMs:60000,serviceCredential:token,projections:[{options,types:['memory']}]};
   return {config,renew,open,options,token,timers,get handle(){return handle;},get result(){return lastResult;},get opening(){return opening;},now:()=>clock,
     async step(){const [key,timer]=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];assert.ok(timer,'scheduled quantum exists');timers.delete(key);clock=timer.at;await timer.fn();}};
@@ -75,14 +75,14 @@ for(const kind of ['scan','item','verify','publication','gc','vacuum','begin','c
   assert.deepEqual(meter.failure?.(),{kind:'exception',errorName:'TypeError',step:attribution.maintenanceKinds.indexOf(kind)},kind+' caught exception private phase');
 });
 
-function fakeWorker(data,{identity=false,send=false,error=false}={}){
+function fakeWorker(data,{identity=false,send=false,error=false,fileIdentity='12:34'}={}){
   const worker=new EventEmitter();Object.assign(worker,{ref(){},unref(){},terminate(){return Promise.resolve(1);},postMessage(message){
     if(message.method==='close'){queueMicrotask(()=>worker.emit('exit',0));return;}
     if(send||identity)throw new RangeError('private dispatch text');
     if(error){worker.emit('error',Object.create({constructor:{name:'unsafe / constructor'}}));return;}
     worker.emit('message',{operation:message.operation,result:{ok:true,value:{status:'complete',progress:{transformed:0}}},observedAtMonoMs:Number(BigInt(message.operation.enteredMonoNs))/1e6});
   }});
-  queueMicrotask(()=>worker.emit('message',identity?{kind:'identity',operation:data.operation,fileIdentity:'12:34'}:{operation:data.operation,result:{ok:true,value:null},fileIdentity:'12:34'}));return worker;
+  queueMicrotask(()=>worker.emit('message',identity?{kind:'identity',operation:data.operation,fileIdentity}:{operation:data.operation,result:{ok:true,value:null},fileIdentity}));return worker;
 }
 for(const [mode,cause,fake] of [['spawn','spawn',()=>{throw new TypeError('private spawn text');}],['dispatch','dispatch',data=>fakeWorker(data,{send:true})],['identity','identity',data=>fakeWorker(data,{identity:true})],['bounded_error','worker_error',data=>fakeWorker(data,{error:true})]])
 test(`failure cause: ${mode} records the collapsed parent boundary`,async t=>{
@@ -189,4 +189,31 @@ test('K1 supervisor disposal preserves the last failed call before shutdown',asy
   await s.config.supervisor.close();
   assert.equal(reader.maintenanceReaderFailureDiagnostic(h).lastFailure.engineCode,'storage_busy','supervisor disposal preserves the initiating engine code');
   assert.deepEqual(reader.maintenanceReaderFailureDiagnostic(h).lastFailure,primary);assert.equal(reader.maintenanceReaderFailureDiagnostic(h).failureCounts.engine,1);
+});
+
+for(const kind of ['exception','cleanup'])test(`M1 distinct residents retain independent ${kind} close failures without ordinals`,async t=>{
+  let created=0,closes=0;
+  const s=setup(t,'resident_'+kind,{isolated:true,fake:data=>{
+    const worker=fakeWorker(data,{fileIdentity:(kind==='exception'?'101:':'201:')+ ++created}),send=worker.postMessage;
+    worker.postMessage=message=>{
+      if(message.method!=='close')return send(message);
+      closes++;
+      worker.emit('message',{kind:'maintenance-close-failure',maintenanceFailure:kind==='exception'?{kind,errorName:'TypeError',step:0}:{kind}});
+      queueMicrotask(()=>worker.emit('exit',1));
+    };return worker;
+  }});
+  const first=s.config.projections[0],second={...first,options:{...first.options,path:first.options.path+'-second'}},replacement={...first,options:{...first.options,diagnostics:true}};
+  s.config.projections=[first,second,replacement];s.config.quantum={maxItems:1,maxMs:100};s.config.pollMs=100;s.config.budgets={maxItems:600,maxMs:60000};
+  const p=s.renew(s.config);t.after(()=>p.close().catch(()=>{}));for(let i=0;i<5;i++)await s.step();
+  const final=await p.completion,d=pump.maintenancePumpDiagnostic(final),lanes=pump.maintenancePumpPhaseDiagnostic(final).projections;
+  assert.equal(created,2);assert.equal(closes,2,'two physical resident closes were attempted');assert.equal(final.error,'reader_failed');
+  // A failed registry proof adds one independent cleanup secondary per reader.
+  const perResident=kind==='cleanup'?2:1;
+  assert.equal(d.failureCounts[kind]+d.secondaryFailureCounts[kind],2*perResident,'distinct resident failures are both counted without ordinal equality');
+  for(const lane of [0,2]){
+    assert.equal(lanes[lane].failureCounts[kind]+lanes[lane].secondaryFailureCounts[kind],perResident,'each rejected resident close remains on its owning lane');
+    const failure=lanes[lane].lastFailure??lanes[lane].secondaryFailure;
+    assert.equal(failure.stage,'close');assert.equal(Object.hasOwn(failure,'ordinal'),false);
+  }
+  assert.equal(lanes[4].failureCounts[kind]+lanes[4].secondaryFailureCounts[kind],0,'replacement lane inherits no resident failure');
 });

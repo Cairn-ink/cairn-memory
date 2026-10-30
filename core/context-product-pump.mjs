@@ -167,7 +167,8 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           failedDrains.set(key,true);
           const found=maintenanceFailureDiagnostic(error),failure={...(found??maintenanceFailureRecord('cleanup',{stage:'close'})),...(number===undefined?{}:{number})};
           const primary=number!==undefined&&lastFailure?.number===number?lastFailure:undefined;
-          const samePrimary=found&&primary&&['cause','ordinal','engineCode','errorName','step','stage'].every(field=>found[field]===primary[field]);
+          // Equal values identify one call only with a valid shared ordinal.
+          const samePrimary=found&&primary&&Number.isSafeInteger(found.ordinal)&&found.ordinal>0&&['cause','ordinal','engineCode','errorName','step','stage'].every(field=>found[field]===primary[field]);
           if(!found||!seenReaderFailures.has(found)&&!samePrimary){if(primary)saveSecondary(failureLane,failure);else saveFailure(failureLane,failure);}
           if(found)seenReaderFailures.add(found);
           readerSecondary(failureLane,error,number);

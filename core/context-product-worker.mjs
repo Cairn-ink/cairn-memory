@@ -60,7 +60,8 @@ function dispose() {
 // Close never races bootstrap acquisition or an outstanding asynchronous call.
 function exitWhenIdle() {
   return exiting ??= (async () => {
-    if(workerData.maintenance){attribution?.resetFailure();failureDetail=undefined;secondaryFailureDetail=undefined;}
+    // A cached disposal promise owns its already-captured failure metadata.
+    if(workerData.maintenance&&!disposing){attribution?.resetFailure();failureDetail=undefined;secondaryFailureDetail=undefined;}
     observer.select(workerData.frame);
     try { await dispose(); sealNative(workerData.frame); phase?.mark('disposed'); }
     catch { if(workerData.maintenance)try{parentPort.postMessage({kind:'maintenance-close-failure',maintenanceFailure:attribution?.failure()??failureDetail,...(secondaryFailureDetail?{maintenanceSecondaryFailure:secondaryFailureDetail}:{})});}catch{}process.exitCode = 1; }
