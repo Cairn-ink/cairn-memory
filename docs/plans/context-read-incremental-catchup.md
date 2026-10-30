@@ -1338,6 +1338,38 @@ Preserve fix A's full uncertain reservations on crash/timeout
 snapshots protect pages; no raw descriptors/copies, companion unlinking or
 journal-mode changes.
 
+### Restart-point amendment v1 — 2026-10-30
+
+The coordinating owner's decision supersedes only the blanket scope of “Any incomplete
+comparison” above: preparation retains reusable work; closure requires coherent equality.
+Eligible UTF-8 B1 preparation resumes its authenticated cursor after a crash with unchanged bindings
+(`core/context-product-sidecar.mjs:675`); a fence change resets phase/cursor but keeps
+authenticated artifacts (`core/context-product-sidecar.mjs:677`; `docs/context-read-product.md:333`).
+B4's closure comparison, whose equality earns closure or renewal credit, restarts any
+incomplete pass as a full comparison. Sealed artifacts remain reusable; stitching is
+never allowed. Resumed preparation can **never** earn closure or renewal credit on its own.
+
+Today the whole generation, including resumed work, is covered by verification before
+publication: document/posting/statistics/audit scans (`core/context-product-sidecar.mjs:442`,
+`:453`, `:464`, `:465`) feed the verification loop (`:776`) and publication gate/commit (`:782`, `:789`).
+Contribution changes restart verification (`core/context-product-sidecar.mjs:717`);
+signed prefixes may resume (`:302`, `:343`, `:675`), and unchanged retargets retain verification
+(`:768`). Thus this means complete-generation coverage, not a fresh scan after every crash.
+
+Existing tests, inspected rather than run: `core/test/context-read-product-index.test.mjs:420`
+checks killed-batch rollback/replay and published document counts (`:435`);
+`core/test/context-read-product-retarget.test.mjs:209` blocks publication during incomplete
+reconciliation (`:214`) and retains completed verification across reopen (`:215`).
+Reset/keep plus rebuild-oracle coverage is at that file's `:116` and `:133`.
+DELETE/WAL SIGKILL old-or-new recovery and eventual publication are covered at
+`core/test/context-read-maintenance-cutoff-native.test.mjs:105`, `:145` and `:148`.
+These do not prove B4 closure/renewal credit or instrument full verification coverage
+after a mid-comparison crash. Required next package: kill preparation at a nonempty
+cursor under DELETE/WAL; assert unchanged-binding resume, fence-reset artifact reuse,
+no premature publication, verification coverage including signed prefixes, and independent rebuild equivalence.
+For B4, kill an incomplete closure pass, change an earlier input without relying on fence advance, and require a full
+coherent restart with no stitching or closure/renewal credit until equality is established.
+
 ## 6. Upgrade and qualification prerequisites
 
 New visibility/commitment/witness semantics require **new format-4 records**, not
