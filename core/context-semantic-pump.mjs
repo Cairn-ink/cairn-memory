@@ -6,8 +6,17 @@ import { semanticConfiguration } from './context-semantic-coordinator.mjs';
 import { supervisorOwner } from './context-read-supervisor.mjs';
 import { integer, usd, dollars, exact } from './context-semantic-input.mjs';
 import { fail } from './validation.mjs';
+import { resolve } from 'node:path';
 
 const key=Symbol.for('context-read-product-p2e-v1/pumps');
+// Constructor identity follows shared buffers, never their changing contents.
+const sharedOptions=new WeakMap();let sharedSerial=0;
+function optionIdentity(value) {
+  if(value instanceof SharedArrayBuffer){if(!sharedOptions.has(value))sharedOptions.set(value,++sharedSerial);return ['shared',sharedOptions.get(value)];}
+  if(Array.isArray(value))return ['array',value.map(optionIdentity)];
+  if(value&&typeof value==='object')return ['object',Object.keys(value).sort().map(k=>[k,optionIdentity(value[k])])];
+  return value;
+}
 export function semanticPump(original,{now,setTimer,clearTimer,open}) {
   const c=ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential','semanticConfig','semanticServiceCredential','firstCoverageValidation']);
   const selected=semanticConfiguration(c.semanticConfig,{maintenance:true}),coordinator=c.semanticConfig.coordinator,handle=selected.handle;
@@ -36,18 +45,27 @@ export function semanticPump(original,{now,setTimer,clearTimer,open}) {
   if((projections.length+1+2*handle.targets.length)*Math.max(c.pollMs,q.maxMs,first.maxMs)>5000)fail('invalid_input');
   // Initial targets need their independently issued public projection grants.
   if(handle.targets.some(t=>!projections.some(p=>p.options.path===t.canonicalPath&&JSON.stringify(p.options.readSet)===JSON.stringify(t.readSet)&&JSON.stringify(p.types)===JSON.stringify(t.types))))fail('invalid_input');
-  const all=globalThis[key]??=new Map(),fingerprint=JSON.stringify(projections.map(p=>[p.options.path,p.options.readSet,p.options.ownerCoverage,p.types,p.intent,p.mode,p.bindingId,p.options.host.moduleUrl,p.options.wal,p.options.sidecarJournalMode]));
+  // Intent and mode belong to calls; all constructor policies belong to a resident.
+  const residentKey=p=>{const {supervisor,semanticConfig,...options}=p.options;return JSON.stringify([p.types,optionIdentity(options)]);};
+  const all=globalThis[key]??=new Map(),fingerprint=JSON.stringify(projections.map(p=>[residentKey(p),p.intent,p.mode,p.bindingId]));
   const old=all.get(c.id);
   if(old){if(old.fingerprint!==fingerprint||old.supervisor!==c.supervisor||old.coordinator!==coordinator||old.semanticCredentialDigest!==credentialDigest(semanticCredential)||JSON.stringify(old.first)!==JSON.stringify(first))fail('read_in_progress');old.renew(c,w,b);return old.api;}
   const {owner,registry}=supervisorOwner(c.supervisor),record=registry.register(owner,{path:projections[0].options.path,domain:'context-read-product-p2e-v1/pump/'+c.id});
   let window=w,budgets=b,usedItems=w.usedItems,usedMs=w.usedMs,usedUsd=w.usedUsd,at=0,timer,running,closing,stopped=false,error=null,renewedUntil=now()+c.renewalMs,lastTick=now(),validationPending=false;
   let resolveCompletion,completion,settled=false;
   function cycle(){settled=false;completion=new Promise(resolve=>{resolveCompletion=value=>{settled=true;resolve(value);};});}cycle();
-  const handles=new Map(),completeTargets=new Set();let targetSetDigest=null,firstComplete=false,startup=true;
+  const handles=new Map(),writers=new Map(),completeTargets=new Set();let targetSetDigest=null,firstComplete=false,startup=true,residentEpoch=0,parkedUntil;
   const status=()=>Object.freeze({id:c.id,state:error?'failed':stopped?'stopped':exhausted()?'budget_exhausted':now()>=renewedUntil?'renewal_expired':'active',windowId:window.id,
     usedItems,usedMs,usedUsd,maxItems:budgets.maxItems,maxMs:budgets.maxMs,maxUsd:budgets.maxUsd,error});
   const exhausted=()=>now()>=window.endsAtMonoMs||usedMs>=budgets.maxMs||usedItems>=budgets.maxItems&&!validationPending&&!startup;
-  function schedule(){if(!stopped&&!error&&!exhausted()&&now()<renewedUntil)timer=setTimer(tick,Math.max(0,c.pollMs-(now()-lastTick)));else resolveCompletion(status());}
+  const dutyEnd=()=>Math.min(window.endsAtMonoMs,renewedUntil);
+  const turnMs=()=>!startup&&validationPending?first.maxMs:q.maxMs;
+  function fits(maxMs){if(dutyEnd()-now()>=maxMs)return true;parkedUntil=dutyEnd();return false;}
+  function schedule(){
+    if(stopped||error||exhausted()||now()>=renewedUntil){resolveCompletion(status());return;}
+    fits(turnMs()); // Park initial and renewed short tails at expiry too.
+    timer=setTimer(tick,parkedUntil===undefined?Math.max(0,c.pollMs-(now()-lastTick)):Math.max(1,Math.min(parkedUntil,dutyEnd())-now()));
+  }
   async function reserve(mode,maxItems,maxMs,maxUsd,bindingId) {
     const result=await handle.pumpCall('pumpReserve',{mode,maxItems,maxMs,bindingId,window:{...window,usedItems,usedMs,usedUsd},budgets,maxUsd,remainingMs:Math.floor(window.endsAtMonoMs-now())});
     usedItems=result.usedItems;usedMs=result.usedMs;usedUsd=result.usedUsd;return result;
@@ -55,14 +73,25 @@ export function semanticPump(original,{now,setTimer,clearTimer,open}) {
   async function finish(reservation,known) {
     const result=await handle.pumpCall('pumpFinish',{id:reservation.id,known});usedItems=result.usedItems;usedMs=result.usedMs;usedUsd=result.usedUsd;
   }
-  async function maintainer(p,maxMs) {
-    const id=JSON.stringify([p.options.path,p.options.readSet]);let h=handles.get(id);
-    if(!h){h=await open({...p.options,deadlineMs:maxMs});handles.set(id,h);}return h;
+  async function maintainer(p,maxMs,start) {
+    const id=JSON.stringify([residentKey(p),residentEpoch]),writer=JSON.stringify([resolve(p.options.path),p.options.readSet]);let h=handles.get(id);
+    if(!h){
+      const previous=writers.get(writer);
+      if(previous!==undefined){
+        // The full turn is reserved before this await. A failed close retains
+        // its handle and the existing reader's writer/quarantine proof gate.
+        try{await handles.get(previous).close();}catch{fail('reader_failed');}
+        handles.delete(previous);writers.delete(writer);
+      }
+      const remaining=Math.floor(maxMs-(now()-start));if(remaining<1)fail('read_timeout');
+      h=await open({...p.options,deadlineMs:remaining});handles.set(id,h);writers.set(writer,id);
+    }return h;
   }
   async function validation() {
     // This public method is available independently of paid item/USD capacity.
     const observation=await handle.pumpCall('firstCoverage');targetSetDigest=observation.targetSetDigest;firstComplete=observation.complete;validationPending=observation.pending;
     if(!targetSetDigest||firstComplete)return;
+    if(!fits(first.maxMs))return;
     const maxMs=Math.min(first.maxMs,budgets.maxMs-usedMs,Math.floor(window.endsAtMonoMs-now()),Math.floor(renewedUntil-now()));
     if(maxMs<1)return;const reservation=await reserve('validation',0,maxMs,'0');
     const result=await coordinator.validateOwnerSemanticCoverage({ownerId:handle.ownerId,expectedTargetDigest:targetSetDigest,budget:{maxTargets:first.maxTargets,maxMs}},semanticCredential);await finish(reservation,result.ok);
@@ -71,32 +100,38 @@ export function semanticPump(original,{now,setTimer,clearTimer,open}) {
   }
   async function tick() {
     if(stopped||error)return;if(exhausted()||now()>=renewedUntil){resolveCompletion(status());return;}
-    lastTick=now();return running=(async()=>{
+    parkedUntil=undefined;return running=(async()=>{
       try {
+        // Known validation work uses its own bound; skip before coordinator RPCs.
+        if(!fits(turnMs()))return;
+        lastTick=now();
         if(startup) {
           for(const target of handle.targets)for(const intent of ['current','history']) {
+            if(!fits(q.maxMs))return;
             const p=projections.find(p=>p.options.path===target.canonicalPath&&JSON.stringify(p.options.readSet)===JSON.stringify(target.readSet)&&JSON.stringify(p.types)===JSON.stringify(target.types)&&p.intent===intent);
-            const maxMs=Math.min(q.maxMs,budgets.maxMs-usedMs,Math.floor(window.endsAtMonoMs-now()));if(maxMs<1)return;
-            const reservation=await reserve('validation',0,maxMs,'0'),start=now();let result;
-            try{const h=await maintainer(p,maxMs),remaining=Math.floor(maxMs-(now()-start));if(remaining<1)fail('read_timeout');result=await h.getContextIndexStatus({readSet:p.options.readSet,types:p.types,intent,deadlineMs:remaining},credential);}
+            const maxMs=Math.min(q.maxMs,budgets.maxMs-usedMs,Math.floor(window.endsAtMonoMs-now()),Math.floor(renewedUntil-now()));if(maxMs<1)return;
+            const start=now(),reservation=await reserve('validation',0,maxMs,'0');let result;
+            try{const h=await maintainer(p,maxMs,start),remaining=Math.floor(maxMs-(now()-start));if(remaining<1)fail('read_timeout');result=await h.getContextIndexStatus({readSet:p.options.readSet,types:p.types,intent,deadlineMs:remaining},credential);}
             finally{await finish(reservation,result?.ok===true);}
             if(!result.ok){error=result.error.code;return;}if(result.value.lexical.state==='ready'&&result.value.semantic.coverage.status==='complete')completeTargets.add(JSON.stringify([p.options.path,p.types,intent]));
           }startup=false;
         }
         const firstObservation=await handle.pumpCall('firstCoverage');validationPending=firstObservation.pending;
         if(validationPending||completeTargets.size===handle.targets.length*2&&!firstObservation.complete)await validation();
-        if(error||exhausted()||usedItems>=budgets.maxItems)return;
-        const p=projections[at++%projections.length],isEmbedding=p.mode==='embeddings';
+        if(error||exhausted()||usedItems>=budgets.maxItems||parkedUntil!==undefined||!fits(q.maxMs))return;
+        const p=projections[at%projections.length],isEmbedding=p.mode==='embeddings';
         if(isEmbedding) {
           const admission=await handle.pumpCall('embeddingAdmission');
-          if(!admission.allowed)return;
-          if(usd(usedUsd)>=usd(budgets.maxUsd))return;
+          if(!admission.allowed){at++;return;}
+          if(usd(usedUsd)>=usd(budgets.maxUsd)){at++;return;}
         }
+        if(!fits(q.maxMs))return;
         const maxItems=Math.min(q.maxItems,budgets.maxItems-usedItems),maxMs=Math.min(q.maxMs,budgets.maxMs-usedMs,Math.floor(window.endsAtMonoMs-now()),Math.floor(renewedUntil-now()));
         if(maxItems<1||maxMs<1)return;const start=now();
         const reservation=await reserve(p.mode,maxItems,maxMs,isEmbedding?dollars(usd(q.maxUsd)<usd(budgets.maxUsd)-usd(usedUsd)?usd(q.maxUsd):usd(budgets.maxUsd)-usd(usedUsd)):'0',p.bindingId);
+        at++;
         let result;
-        try{const h=await maintainer(p,maxMs),remaining=Math.floor(maxMs-(now()-start));if(remaining<1)fail('read_timeout');result=await h.refreshContextIndex({readSet:p.options.readSet,types:p.types,intent:p.intent,mode:p.mode,budget:{maxItems,maxMs:remaining,...(isEmbedding?{maxUsd:reservation.maxUsd}:{})}},credential);}
+        try{const h=await maintainer(p,maxMs,start),remaining=Math.floor(maxMs-(now()-start));if(remaining<1)fail('read_timeout');result=await h.refreshContextIndex({readSet:p.options.readSet,types:p.types,intent:p.intent,mode:p.mode,budget:{maxItems,maxMs:remaining,...(isEmbedding?{maxUsd:reservation.maxUsd}:{})}},credential);}
         finally{await finish(reservation,result?.ok===true);}
         if(!result.ok){error=result.error.code;return;}
         if(isEmbedding){const observation=await handle.pumpCall('firstCoverage');validationPending=observation.pending;if(result.value.status==='complete')completeTargets.add(JSON.stringify([p.options.path,p.types,p.intent]));}
@@ -112,9 +147,12 @@ export function semanticPump(original,{now,setTimer,clearTimer,open}) {
   const api=Object.freeze({getStatus:status,get completion(){return completion;},close:stop});
   const entry={api,fingerprint,supervisor:c.supervisor,coordinator,semanticCredentialDigest:credentialDigest(semanticCredential),first,renew(next,w,b){
     if(stopped)fail('store_closed');if(JSON.stringify(next.quantum)!==JSON.stringify(c.quantum)||next.pollMs!==c.pollMs)fail('invalid_input');
+    // Settled item exhaustion ends resident duty even if validation can continue.
+    const inactive=now()>renewedUntil||now()>window.endsAtMonoMs||!running&&(usedMs>=budgets.maxMs||usedItems>=budgets.maxItems);
     if(w.id!==window.id){if(now()<window.endsAtMonoMs)fail('invalid_input');resolveCompletion(status());window=w;budgets=b;usedItems=w.usedItems;usedMs=w.usedMs;usedUsd=w.usedUsd;cycle();}
     else{if(JSON.stringify(b)!==JSON.stringify(budgets)||w.endsAtMonoMs!==window.endsAtMonoMs)fail('invalid_input');usedItems=Math.max(usedItems,w.usedItems);usedMs=Math.max(usedMs,w.usedMs);usedUsd=dollars(usd(usedUsd)>usd(w.usedUsd)?usd(usedUsd):usd(w.usedUsd));}
-    if(settled)cycle();renewedUntil=now()+next.renewalMs;clearTimer(timer);if(!running)schedule();
+    if(inactive)residentEpoch++;
+    if(settled)cycle();renewedUntil=now()+next.renewalMs;parkedUntil=undefined;clearTimer(timer);if(!running)schedule();
   }};
   all.set(c.id,entry);schedule();return api;
 }
