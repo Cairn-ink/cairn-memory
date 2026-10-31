@@ -37,7 +37,8 @@ test('S2h-1 split: enumerate public exports and facades; no fact-only writer is 
   t.after(() => { topic.close(); context.close(); legacy.close(); runtime.close(); core.close(); });
   const product = await configured(t,f.path,[ns]).open(), maintainer = await configured(t,f.path,[ns],{service:true}).open();
   const supervisor=api.createContextReadSupervisor();t.after(()=>supervisor.close());
-  const handles = { ...await additionalSplitFacades(t, f, ns), ...composedSplitFacades(f, config, contextRead), core,legacy,supervisor,scope:legacy.scope({ownerId:ns.ownerId,projectId:ns.projectId}),context,topic,product,maintainer,
+  const pool=api.createContextReaderPool();t.after(()=>pool.close());
+  const handles = { ...await additionalSplitFacades(t, f, ns), ...composedSplitFacades(f, config, contextRead), core,legacy,supervisor,pool,scope:legacy.scope({ownerId:ns.ownerId,projectId:ns.projectId}),context,topic,product,maintainer,
     cards:createPrivateCardFacade(runtime.privateCards,config.privateCards,runtime.ready),
     methods:createMethodPackageFacade(runtime.methodPackages,config.methodPackages,runtime.ready,config.assets),
     assets:createAssetFacade(runtime.assets,config.assets,runtime.ready),
