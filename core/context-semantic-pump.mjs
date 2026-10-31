@@ -6,6 +6,8 @@ import { semanticConfiguration } from './context-semantic-coordinator.mjs';
 import { supervisorOwner } from './context-read-supervisor.mjs';
 import { integer, usd, dollars, exact } from './context-semantic-input.mjs';
 import { fail } from './validation.mjs';
+import { productFailure, disposeProductReader, maintenanceFailureDiagnostic, maintenanceReaderFailureDiagnostic } from './context-product-reader.mjs';
+import { add, maintenanceDispatchControl, maintenanceControlState, maintenanceFailureCounts, maintenanceFailureRecord, maintenanceFailureKind, maintenanceErrorName } from './context-product-attribution.mjs';
 import { resolve } from 'node:path';
 
 const key=Symbol.for('context-read-product-p2e-v1/pumps');
@@ -19,7 +21,7 @@ function optionIdentity(value) {
   if(value&&typeof value==='object')return ['object',Object.keys(value).sort().map(k=>[k,optionIdentity(value[k])])];
   return value;
 }
-export function semanticPump(original,{now,setTimer,clearTimer,open}) {
+export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
   const c=ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential','semanticConfig','semanticServiceCredential','firstCoverageValidation']);
   const selected=semanticConfiguration(c.semanticConfig,{maintenance:true}),coordinator=c.semanticConfig.coordinator,handle=selected.handle;
   handle.validatePumpCredential(c.semanticServiceCredential);
@@ -55,98 +57,204 @@ export function semanticPump(original,{now,setTimer,clearTimer,open}) {
   if(old){if(old.fingerprint!==fingerprint||old.supervisor!==c.supervisor||old.coordinator!==coordinator||old.semanticCredentialDigest!==credentialDigest(semanticCredential)||JSON.stringify(old.first)!==JSON.stringify(first))fail('read_in_progress');old.renew(c,w,b);return old.api;}
   const {owner,registry}=supervisorOwner(c.supervisor),record=registry.register(owner,{path:projections[0].options.path,domain:'context-read-product-p2e-v1/pump/'+c.id});
   let window=w,budgets=b,usedItems=w.usedItems,usedMs=w.usedMs,usedUsd=w.usedUsd,at=0,timer,running,closing,stopped=false,error=null,renewedUntil=now()+c.renewalMs,lastTick=now(),validationPending=false;
-  let resolveCompletion,completion,settled=false;
-  function cycle(){settled=false;completion=new Promise(resolve=>{resolveCompletion=value=>{settled=true;resolve(value);};});}cycle();
+  let resolveCompletion,completion,settled=false,completionEpoch=0;
+  function cycle(){const epoch=++completionEpoch;settled=false;completion=new Promise(resolve=>{resolveCompletion=value=>{if(epoch===completionEpoch)settled=true;resolve(value);};});}cycle();
   const handles=new Map(),writers=new Map(),completeTargets=new Set();let targetSetDigest=null,firstComplete=false,startup=true,residentEpoch=0,parkedUntil;
-  const status=()=>Object.freeze({id:c.id,state:error?'failed':stopped?'stopped':exhausted()?'budget_exhausted':now()>=renewedUntil?'renewal_expired':'active',windowId:window.id,
-    usedItems,usedMs,usedUsd,maxItems:budgets.maxItems,maxMs:budgets.maxMs,maxUsd:budgets.maxUsd,error});
+  // Lifecycle ownership is independent of accounting-window settlement (PR D).
+  let generation=0,activeTurn,turnNumber=0,lastFailure=null,secondaryFailure=null,drainFailed=false;
+  const failureCounts=maintenanceFailureCounts(),secondaryFailureCounts=maintenanceFailureCounts();
+  const drains=new Map(),disposed=new WeakMap(),openings=new Set(),seenFailures=new WeakSet(),readerCounts=new WeakMap();
+  const interrupted=Symbol('retired turn');
+  const attach=value=>{
+    snapshot(value,Object.freeze({lastFailure,failureCounts:Object.freeze({...failureCounts}),secondaryFailure,secondaryFailureCounts:Object.freeze({...secondaryFailureCounts})}));return value;
+  };
+  const status=()=>{
+    const value=Object.freeze({id:c.id,state:error?'failed':stopped?'stopped':exhausted()?'budget_exhausted':now()>=renewedUntil?'renewal_expired':'active',windowId:window.id,
+      usedItems,usedMs,usedUsd,maxItems:budgets.maxItems,maxMs:budgets.maxMs,maxUsd:budgets.maxUsd,error});
+    return attach(value);
+  };
   const exhausted=()=>now()>=window.endsAtMonoMs||usedMs>=budgets.maxMs||usedItems>=budgets.maxItems&&!validationPending&&!startup;
   const dutyEnd=()=>Math.min(window.endsAtMonoMs,renewedUntil);
   const validationRequired=()=>validationPending||completeTargets.size===handle.targets.length*2&&!firstComplete;
   const turnMs=()=>!startup&&validationRequired()?first.maxMs:q.maxMs;
   const observeCoverage=observation=>{firstComplete=observation.complete;validationPending=observation.pending;};
-  function fits(maxMs){const end=dutyEnd();parkedUntil=end-now()>=maxMs?undefined:end;return parkedUntil===undefined;}
+  // The reader's closed vocabulary also governs coordinator failures. The
+  // client's timeout is the reverse of its read_timeout -> timeout translation.
+  const controlCodes=Object.freeze({timeout:'read_timeout',ledger_unavailable:'reader_failed',not_enabled:'reader_failed',purge_pending:'reader_failed',backfill_ceiling:'reader_failed',price_unavailable:'reader_failed',budget_denied:'reader_failed',provider_error:'reader_failed',rate_limited:'reader_failed',dimension_mismatch:'reader_failed',provider_unavailable:'reader_failed'});
+  const publicCode=code=>Object.hasOwn(controlCodes,code)?controlCodes[code]:productFailure(code).error.code;
+  function saveFailure(failure,secondary=false,counts) {
+    const {stall,...fields}=failure;failure=Object.freeze(fields); // Causes only; no stall reporting.
+    const kind=maintenanceFailureKind(failure),target=secondary?secondaryFailureCounts:failureCounts;
+    if(secondary)secondaryFailure=failure;else lastFailure=failure;
+    for(const key of Object.keys(target)){const n=counts?.[key]??(key===kind?1:0);if(Number.isSafeInteger(n)&&n>0)target[key]=add(target[key],n);}
+  }
+  function readerSecondary(value,ctx) {
+    const state=maintenanceReaderFailureDiagnostic(value);if(!state?.secondaryFailure)return;
+    const identity=maintenanceFailureDiagnostic(value)??value,prior=readerCounts.get(identity),counts={};let changed=false;
+    for(const key of Object.keys(secondaryFailureCounts)){counts[key]=Math.max(0,state.secondaryFailureCounts[key]-(prior?.[key]??0));changed ||= counts[key]>0;}
+    readerCounts.set(identity,state.secondaryFailureCounts);
+    if(changed)saveFailure(Object.freeze({...state.secondaryFailure,number:ctx.number}),true,counts);
+  }
+  function note(value,ctx,stage,kind,code) {
+    const found=maintenanceFailureDiagnostic(value),captured=found&&(stage==='open'||stage==='close'||found.ordinal===undefined||found.ordinal===ctx.ordinal)?found:undefined;
+    if(captured&&seenFailures.has(captured)){readerSecondary(value,ctx);return;}
+    const raw=code??value?.error?.code??value?.code;
+    const source=captured??maintenanceFailureRecord(kind??(raw===undefined?'call_error':publicCode(raw)===raw||raw==='timeout'?'engine':'unmapped'),
+      {engineCode:raw,errorName:maintenanceErrorName(value),ordinal:ctx.ordinal,stage});
+    const family=maintenanceFailureKind(source);
+    if(!ctx.failures.has(family)){saveFailure(Object.freeze({...source,stage:source.stage??stage,number:ctx.number}),ctx.failures.size>0||stage==='close'&&lastFailure!==null);ctx.failures.add(family);}
+    if(captured)seenFailures.add(captured);readerSecondary(value,ctx);
+  }
+  function drain(identity,close,ctx) {
+    if(drains.has(identity))return drains.get(identity);
+    if(typeof identity==='object'&&disposed.has(identity))return disposed.get(identity);
+    const pending=Promise.resolve().then(close).then(()=>readerSecondary(identity,ctx),failure=>{
+      note(failure,ctx,'close','cleanup');drainFailed=true;error='reader_failed';throw failure;
+    });
+    drains.set(identity,pending);if(typeof identity==='object')disposed.set(identity,pending);
+    void pending.finally(()=>drains.delete(identity)).catch(()=>{});return pending;
+  }
+  const dispose=(h,ctx)=>drain(h,()=>disposeProductReader(h,error==='read_timeout'?'read_timeout':'store_closed',ctx.until,lastFailure),ctx);
+  function owns(ctx){return !stopped&&!error&&generation===ctx.generation&&now()<ctx.end;}
+  function check(ctx){if(stopped||error)throw interrupted;if(now()>=ctx.until){expire(ctx);throw interrupted;}if(generation!==ctx.generation||now()>=ctx.end)throw interrupted;}
+  function expire(ctx){
+    if(activeTurn!==ctx||stopped||error)return;
+    note(undefined,ctx,ctx.stage,'engine','read_timeout');error='read_timeout';ctx.cancel();void stop();
+  }
+  async function wait(ctx,work,stage) {
+    check(ctx);ctx.stage=stage;
+    const result=await Promise.race([Promise.resolve().then(()=>{check(ctx);return work();}),ctx.cancelled]);check(ctx);return result;
+  }
+  async function turn(maxMs,work) {
+    maxMs=Math.min(maxMs,budgets.maxMs-usedMs);if(maxMs<1)return;
+    const control=maintenanceDispatchControl(),ctx={control,ordinal:maintenanceControlState(control).ordinal,number:turnNumber,generation,end:dutyEnd(),until:now()+maxMs,stage:'call',failures:new Set()};
+    turnNumber=add(turnNumber,1);ctx.cancelled=new Promise((_,reject)=>{ctx.cancel=()=>reject(interrupted);});activeTurn=ctx;
+    const watchdog=setTimer(()=>expire(ctx),maxMs);
+    try{return await work(ctx);}catch(e){if(e!==interrupted){note(e,ctx,ctx.stage);error??=publicCode(e.code);}}finally{clearTimer(watchdog);if(activeTurn===ctx)activeTurn=undefined;}
+  }
   function schedule(){
-    if(stopped||error||exhausted()||now()>=renewedUntil){resolveCompletion(status());return;}
-    fits(turnMs()); // Park initial and renewed short tails at expiry too.
+    if(stopped||error||exhausted()||now()>=renewedUntil){if(!stopped&&!error)resolveCompletion(status());return;}
+    fits(turnMs());
     timer=setTimer(tick,parkedUntil===undefined?Math.max(0,c.pollMs-(now()-lastTick)):Math.max(1,Math.min(parkedUntil,dutyEnd())-now()));
   }
-  async function reserve(mode,maxItems,maxMs,maxUsd,bindingId) {
-    const result=await handle.pumpCall('pumpReserve',{mode,maxItems,maxMs,bindingId,window:{...window,usedItems,usedMs,usedUsd},budgets,maxUsd,remainingMs:Math.floor(window.endsAtMonoMs-now())});
-    usedItems=result.usedItems;usedMs=result.usedMs;usedUsd=result.usedUsd;return result;
+  function fits(maxMs){const end=dutyEnd();parkedUntil=end-now()>=maxMs?undefined:end;return parkedUntil===undefined;}
+  async function control(ctx,method,input) {
+    const result=await wait(ctx,()=>handle.pumpCall(method,input,Math.max(1,Math.ceil(ctx.until-now()))),'call');check(ctx);return result;
   }
-  async function finish(reservation,known) {
-    const result=await handle.pumpCall('pumpFinish',{id:reservation.id,known});usedItems=result.usedItems;usedMs=result.usedMs;usedUsd=result.usedUsd;
+  async function reserve(ctx,mode,maxItems,maxMs,maxUsd,bindingId) {
+    const result=await control(ctx,'pumpReserve',{mode,maxItems,maxMs,bindingId,window:{...window,usedItems,usedMs,usedUsd},budgets,maxUsd,remainingMs:Math.floor(window.endsAtMonoMs-now())});
+    check(ctx);usedItems=result.usedItems;usedMs=result.usedMs;usedUsd=result.usedUsd;return result;
   }
-  async function maintainer(p,maxMs,start) {
+  async function finish(ctx,reservation,known) {
+    const result=await control(ctx,'pumpFinish',{id:reservation.id,known});check(ctx);usedItems=result.usedItems;usedMs=result.usedMs;usedUsd=result.usedUsd;
+  }
+  async function maintainer(ctx,p) {
     const id=JSON.stringify([residentKeys.get(p),residentEpoch]),writer=JSON.stringify([resolve(p.options.path),p.options.readSet]);let h=handles.get(id);
     if(!h){
       const previous=writers.get(writer);
       if(previous!==undefined){
-        // The full turn is reserved before this await. A failed close retains
-        // its handle and the existing reader's writer/quarantine proof gate.
-        try{await handles.get(previous).close();}catch{fail('reader_failed');}
-        handles.delete(previous);writers.delete(writer);
+        await wait(ctx,()=>dispose(handles.get(previous),ctx),'close');check(ctx);handles.delete(previous);writers.delete(writer);
       }
-      const remaining=Math.floor(maxMs-(now()-start));if(remaining<1)fail('read_timeout');
-      h=await open({...p.options,deadlineMs:remaining});handles.set(id,h);writers.set(writer,id);
+      check(ctx);ctx.stage='open';
+      // Observe rejection before finish can replace it. A late open belongs to
+      // completion even after its turn has lost dispatch authority.
+      const opening=Promise.resolve().then(()=>{check(ctx);const remaining=Math.floor(ctx.until-now());if(remaining<1)fail('read_timeout');return open({...p.options,deadlineMs:remaining});}).then(async opened=>{
+        if(!owns(ctx)||now()>=ctx.until){await dispose(opened,ctx);return opened;}
+        handles.set(id,opened);writers.set(writer,id);return opened;
+      },failure=>{
+        if(failure!==interrupted)note(failure,ctx,'open');
+        if(failure.cleanupId)void drain(failure.cleanupId,()=>c.supervisor.drain(failure.cleanupId),ctx);
+        throw failure;
+      });
+      openings.add(opening);void opening.finally(()=>openings.delete(opening)).catch(()=>{});
+      h=await wait(ctx,()=>opening,'open');check(ctx);
     }return h;
   }
-  async function validation() {
-    // This public method is available independently of paid item/USD capacity.
-    const observation=await handle.pumpCall('firstCoverage');targetSetDigest=observation.targetSetDigest;observeCoverage(observation);
+  async function operation(ctx,p,method,input,reservation) {
+    let result,failure;
+    try {
+      const h=await maintainer(ctx,p),remaining=Math.floor(ctx.until-now());check(ctx);if(remaining<1)fail('read_timeout');ctx.stage=method==='refreshContextIndex'?'refresh':'call';
+      const args=method==='refreshContextIndex'?{...input,budget:{...input.budget,maxMs:remaining}}:{...input,deadlineMs:remaining};
+      result=await wait(ctx,()=>h[method](args,credential,ctx.control),ctx.stage);check(ctx);
+      if(!result.ok)note(result,ctx,ctx.stage);
+    }catch(e){failure=e;if(e!==interrupted)note(e,ctx,ctx.stage);}
+    // A still-owned failed operation settles conservatively. Lost ownership
+    // leaves its full reservation charged; no late dispatch or known refund.
+    if(generation===ctx.generation&&!stopped&&now()<ctx.until&&now()<ctx.end){
+      try {
+        const settled=await control(ctx,'pumpFinish',{id:reservation.id,known:!failure&&result?.ok===true});
+        check(ctx);usedItems=settled.usedItems;usedMs=settled.usedMs;usedUsd=settled.usedUsd;
+      }catch(e){if(e!==interrupted){note(e,ctx,'call');error=publicCode(e.code);}if(!failure)failure=e;}
+    }
+    if(failure)throw failure;if(!result?.ok)error=publicCode(result?.error?.code);return result;
+  }
+  async function validation(ctx) {
+    const observation=await control(ctx,'firstCoverage');check(ctx);targetSetDigest=observation.targetSetDigest;observeCoverage(observation);
     if(!targetSetDigest||firstComplete)return;
     if(!fits(first.maxMs))return;
     const maxMs=Math.min(first.maxMs,budgets.maxMs-usedMs,Math.floor(window.endsAtMonoMs-now()),Math.floor(renewedUntil-now()));
-    if(maxMs<1)return;const reservation=await reserve('validation',0,maxMs,'0');
-    const result=await coordinator.validateOwnerSemanticCoverage({ownerId:handle.ownerId,expectedTargetDigest:targetSetDigest,budget:{maxTargets:first.maxTargets,maxMs}},semanticCredential);await finish(reservation,result.ok);
-    if(!result.ok){error=result.error.code;return;}firstComplete=result.value.status==='complete';
-    observeCoverage(await handle.pumpCall('firstCoverage'));
+    if(maxMs<1)return;const reservation=await reserve(ctx,'validation',0,maxMs,'0');check(ctx);
+    const result=await wait(ctx,()=>coordinator.validateOwnerSemanticCoverage({ownerId:handle.ownerId,expectedTargetDigest:targetSetDigest,budget:{maxTargets:first.maxTargets,maxMs:Math.max(1,Math.floor(ctx.until-now()))}},semanticCredential),'call');check(ctx);
+    if(!result.ok)note(result,ctx,'call');
+    await finish(ctx,reservation,result.ok===true);check(ctx);if(!result.ok){error=publicCode(result.error.code);return;}firstComplete=result.value.status==='complete';const current=await control(ctx,'firstCoverage');check(ctx);observeCoverage(current);
+  }
+  async function regular(ctx) {
+    if(error||stopped||exhausted()||usedItems>=budgets.maxItems||parkedUntil!==undefined||!fits(q.maxMs))return;
+    const p=projections[at%projections.length],isEmbedding=p.mode==='embeddings';
+    if(isEmbedding){const admission=await control(ctx,'embeddingAdmission');check(ctx);if(!admission.allowed||usd(usedUsd)>=usd(budgets.maxUsd)){at++;return;}}
+    check(ctx);if(!fits(q.maxMs))return;
+    const maxItems=Math.min(q.maxItems,budgets.maxItems-usedItems),maxMs=Math.min(q.maxMs,budgets.maxMs-usedMs,Math.floor(window.endsAtMonoMs-now()),Math.floor(renewedUntil-now()));
+    if(maxItems<1||maxMs<1)return;
+    const reservation=await reserve(ctx,p.mode,maxItems,maxMs,isEmbedding?dollars(usd(q.maxUsd)<usd(budgets.maxUsd)-usd(usedUsd)?usd(q.maxUsd):usd(budgets.maxUsd)-usd(usedUsd)):'0',p.bindingId);check(ctx);at++;
+    const result=await operation(ctx,p,'refreshContextIndex',{readSet:p.options.readSet,types:p.types,intent:p.intent,mode:p.mode,budget:{maxItems,...(isEmbedding?{maxUsd:reservation.maxUsd}:{})}},reservation);check(ctx);
+    if(!result?.ok||error||stopped)return;
+    if(isEmbedding){const current=await control(ctx,'firstCoverage');check(ctx);observeCoverage(current);if(result.value.status==='complete')completeTargets.add(JSON.stringify([p.options.path,p.types,p.intent]));}
   }
   async function tick() {
-    if(stopped||error)return;if(exhausted()||now()>=renewedUntil){resolveCompletion(status());return;}
-    parkedUntil=undefined;return running=(async()=>{
-      try {
-        // Known validation work uses its own bound; skip before coordinator RPCs.
-        if(!fits(turnMs()))return;
-        lastTick=now();
-        if(startup) {
-          for(const target of handle.targets)for(const intent of ['current','history']) {
-            if(!fits(q.maxMs))return;
-            const p=projections.find(p=>p.options.path===target.canonicalPath&&JSON.stringify(p.options.readSet)===JSON.stringify(target.readSet)&&JSON.stringify(p.types)===JSON.stringify(target.types)&&p.intent===intent);
-            const maxMs=Math.min(q.maxMs,budgets.maxMs-usedMs,Math.floor(window.endsAtMonoMs-now()),Math.floor(renewedUntil-now()));if(maxMs<1)return;
-            const start=now(),reservation=await reserve('validation',0,maxMs,'0');let result;
-            try{const h=await maintainer(p,maxMs,start),remaining=Math.floor(maxMs-(now()-start));if(remaining<1)fail('read_timeout');result=await h.getContextIndexStatus({readSet:p.options.readSet,types:p.types,intent,deadlineMs:remaining},credential);}
-            finally{await finish(reservation,result?.ok===true);}
-            if(!result.ok){error=result.error.code;return;}if(result.value.lexical.state==='ready'&&result.value.semantic.coverage.status==='complete')completeTargets.add(JSON.stringify([p.options.path,p.types,intent]));
-          }startup=false;
-        }
-        observeCoverage(await handle.pumpCall('firstCoverage'));
-        if(validationRequired())await validation();
-        if(error||exhausted()||usedItems>=budgets.maxItems||parkedUntil!==undefined||!fits(q.maxMs))return;
-        const p=projections[at%projections.length],isEmbedding=p.mode==='embeddings';
-        if(isEmbedding) {
-          const admission=await handle.pumpCall('embeddingAdmission');
-          if(!admission.allowed){at++;return;}
-          if(usd(usedUsd)>=usd(budgets.maxUsd)){at++;return;}
-        }
-        if(!fits(q.maxMs))return;
-        const maxItems=Math.min(q.maxItems,budgets.maxItems-usedItems),maxMs=Math.min(q.maxMs,budgets.maxMs-usedMs,Math.floor(window.endsAtMonoMs-now()),Math.floor(renewedUntil-now()));
-        if(maxItems<1||maxMs<1)return;const start=now();
-        const reservation=await reserve(p.mode,maxItems,maxMs,isEmbedding?dollars(usd(q.maxUsd)<usd(budgets.maxUsd)-usd(usedUsd)?usd(q.maxUsd):usd(budgets.maxUsd)-usd(usedUsd)):'0',p.bindingId);
-        at++;
-        let result;
-        try{const h=await maintainer(p,maxMs,start),remaining=Math.floor(maxMs-(now()-start));if(remaining<1)fail('read_timeout');result=await h.refreshContextIndex({readSet:p.options.readSet,types:p.types,intent:p.intent,mode:p.mode,budget:{maxItems,maxMs:remaining,...(isEmbedding?{maxUsd:reservation.maxUsd}:{})}},credential);}
-        finally{await finish(reservation,result?.ok===true);}
-        if(!result.ok){error=result.error.code;return;}
-        if(isEmbedding){observeCoverage(await handle.pumpCall('firstCoverage'));if(result.value.status==='complete')completeTargets.add(JSON.stringify([p.options.path,p.types,p.intent]));}
-      }catch(e){error=e.code??'reader_failed';}
-    })().finally(()=>{running=null;if(error){void stop();return;}schedule();});
+    if(stopped||error||running)return;if(exhausted()||now()>=renewedUntil){resolveCompletion(status());return;}
+    const tickGeneration=generation;parkedUntil=undefined;return running=(async()=>{
+      if(!fits(turnMs()))return;lastTick=now();
+      if(startup){
+        for(const target of handle.targets)for(const intent of ['current','history']){
+          if(stopped||error||exhausted()||!fits(q.maxMs))return;
+          const p=projections.find(p=>p.options.path===target.canonicalPath&&JSON.stringify(p.options.readSet)===JSON.stringify(target.readSet)&&JSON.stringify(p.types)===JSON.stringify(target.types)&&p.intent===intent);
+          await turn(Math.min(q.maxMs,budgets.maxMs-usedMs),async ctx=>{
+            const reservation=await reserve(ctx,'validation',0,Math.min(q.maxMs,budgets.maxMs-usedMs),'0');
+            const result=await operation(ctx,p,'getContextIndexStatus',{readSet:p.options.readSet,types:p.types,intent},reservation);check(ctx);
+            if(result?.ok&&!error&&result.value.lexical.state==='ready'&&result.value.semantic.coverage.status==='complete')completeTargets.add(JSON.stringify([p.options.path,p.types,intent]));
+          });
+          if(stopped||error||generation!==tickGeneration)return;
+        }startup=false;
+      }
+      if(stopped||error||usedMs>=budgets.maxMs||now()>=dutyEnd())return;
+      let validated=false;
+      await turn(turnMs(),async ctx=>{const current=await control(ctx,'firstCoverage');check(ctx);observeCoverage(current);if(validationRequired())validated=true;else await regular(ctx);});
+      if(validated&&!error&&!stopped&&generation===tickGeneration){
+        await turn(first.maxMs,validation);
+        if(!error&&!stopped&&generation===tickGeneration&&parkedUntil===undefined&&fits(q.maxMs))await turn(q.maxMs,regular);
+      }
+    })().finally(async()=>{await Promise.allSettled([...openings]);running=null;if(error){void stop();return;}schedule();});
   }
   function stop() {
-    if(closing)return closing;stopped=true;clearTimer(timer);registry.cleanup(record);
-    closing=(async()=>{await running;const results=await Promise.allSettled([...handles.values()].map(h=>h.close()));if(results.some(r=>r.status==='rejected'))throw Error('reader_failed');registry.finish(record);all.delete(c.id);resolveCompletion(status());})();
+    if(closing)return closing;stopped=true;generation++;activeTurn?.cancel();clearTimer(timer);registry.cleanup(record);
+    const ctx=activeTurn??{number:turnNumber,until:now(),failures:new Set()};
+    // Cancel/dispose residents before waiting for an outstanding call to settle.
+    for(const h of handles.values())void dispose(h,ctx);
+    closing=(async()=>{
+      await running;await Promise.allSettled([...openings]);
+      const results=await Promise.allSettled([...drains.values()]);
+      if(drainFailed||results.some(r=>r.status==='rejected'))throw Error('reader_failed');
+      registry.finish(record);all.delete(c.id);resolveCompletion(status());
+    })();
     closing.catch(()=>{error='reader_failed';registry.finish(record,false);all.delete(c.id);resolveCompletion(status());});return closing;
+  }
+  function completePrevious() {
+    const report=resolveCompletion,value=status(),work=running;
+    if(!work&&!openings.size&&!drains.size){report(value);return;}
+    void (async()=>{
+      await Promise.allSettled([work]);await Promise.allSettled([...openings]);await Promise.allSettled([...drains.values()]);
+      report(attach(Object.freeze({...value,...(error?{state:'failed',error}:{})})));
+    })();
   }
   record.stop=()=>{void stop();};
   const api=Object.freeze({getStatus:status,get completion(){return completion;},close:stop});
@@ -154,8 +262,9 @@ export function semanticPump(original,{now,setTimer,clearTimer,open}) {
     if(stopped)fail('store_closed');if(JSON.stringify(next.quantum)!==JSON.stringify(c.quantum)||next.pollMs!==c.pollMs)fail('invalid_input');
     // Settled item exhaustion ends resident duty even if validation can continue.
     const inactive=now()>renewedUntil||now()>window.endsAtMonoMs||!running&&(usedMs>=budgets.maxMs||usedItems>=budgets.maxItems);
-    if(w.id!==window.id){if(now()<window.endsAtMonoMs)fail('invalid_input');resolveCompletion(status());window=w;budgets=b;usedItems=w.usedItems;usedMs=w.usedMs;usedUsd=w.usedUsd;cycle();}
+    if(w.id!==window.id){if(now()<window.endsAtMonoMs)fail('invalid_input');completePrevious();window=w;budgets=b;usedItems=w.usedItems;usedMs=w.usedMs;usedUsd=w.usedUsd;cycle();}
     else{if(JSON.stringify(b)!==JSON.stringify(budgets)||w.endsAtMonoMs!==window.endsAtMonoMs)fail('invalid_input');usedItems=Math.max(usedItems,w.usedItems);usedMs=Math.max(usedMs,w.usedMs);usedUsd=dollars(usd(usedUsd)>usd(w.usedUsd)?usd(usedUsd):usd(w.usedUsd));}
+    generation++;
     if(inactive)residentEpoch++;
     if(settled)cycle();renewedUntil=now()+next.renewalMs;parkedUntil=undefined;clearTimer(timer);if(!running)schedule();
   }};
