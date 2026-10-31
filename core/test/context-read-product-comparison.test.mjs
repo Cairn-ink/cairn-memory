@@ -3,25 +3,28 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { DatabaseSync, backup } from 'node:sqlite';
 import { join } from 'node:path';
-import { chmodSync, existsSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+import { chmodSync, existsSync, writeFileSync } from 'node:fs';
 import { readTransaction, transaction } from '../database.mjs';
 import { safetyFixture, ns } from '../testing/content-safety-s2h-fixture.mjs';
 import { fixture, ok } from '../testing/context-read-fixture.mjs';
 import { attestContentSafety } from '../content-safety-schema.mjs';
 import { memorySuppressionObservationInside, writeContentSuppressionInside } from '../content-suppression-storage.mjs';
-import { canonicalJson, accessDigest, projectionDigest } from '../context-product-validation.mjs';
+import { canonicalJson, accessDigest, projectionDigest, signedRecord } from '../context-product-validation.mjs';
 import { productSidecar, PRODUCT_SIDECAR_SUFFIX } from '../context-product-sidecar.mjs';
 import { openContextProductFacade } from '../context-read-facade.mjs';
 import * as attribution from '../context-product-attribution.mjs';
 import { createProductReaderRuntime, maintenancePhaseDiagnostic } from '../context-product-reader.mjs';
 import { createContextReadSupervisor } from '../index.mjs';
+import { CONTENT_SAFETY_POLICY_REVISION } from '../content-safety.mjs';
 import { credentialDigest, PRODUCT_PROFILE } from '../context-product-control.mjs';
 
 // Base qualification reaches the intended status/root assertions rather than
 // failing module resolution before a test can execute its counterexample.
-const implementation=await import('../context-product-comparison.mjs').catch(error=>{
-  if(error.code==='ERR_MODULE_NOT_FOUND')return {};throw error;
+const loadComparison=url=>import(url.href).catch(error=>{
+  if(error.code==='ERR_MODULE_NOT_FOUND'&&error.url===url.href)return {};throw error;
 });
+const implementation=await loadComparison(new URL('../context-product-comparison.mjs',import.meta.url));
 const {maintenanceWorkFields}=attribution;
 const memoryComparisonQualified=attribution.memoryComparisonQualified??(()=>false);
 const maintenanceComparison=attribution.maintenanceComparison??(()=>undefined);
@@ -88,6 +91,7 @@ test('B3 fence-only changes bind a new root with unchanged document tuples',t=>{
 
 test('B3 coherent frozen-E oracle: writer behind the cursor is E+1, never stitched',async t=>{
   const {f,db}=setup(t,33);for(let i=0;i<130;i++)memory(db,'m'+String(i).padStart(3,'0'),'orchard '+i);
+  db.exec("UPDATE memories SET review_state='awaiting' WHERE id='m001'; UPDATE memories SET deleted=1,content=NULL WHERE id='m002'");
   const frozen=join(f.workspace.path,'frozen.sqlite');await backup(db,frozen);chmodSync(frozen,0o600);
   db.exec('PRAGMA journal_mode=WAL');
   const writer=f.connect();t.after(()=>writer.close());let changed=false,sampleBefore=false;
@@ -96,16 +100,16 @@ test('B3 coherent frozen-E oracle: writer behind the cursor is E+1, never stitch
       return (...args)=>{const value=Reflect.apply(v,s,args);if(k==='iterate'&&sql.includes('SELECT id,revision,deleted')&&!sql.includes('typeof(')&&!changed){
         changed=true;memory(writer,'a-behind','inserted behind cursor');
         writer.prepare("UPDATE memories SET content='new E text',revision=revision+1 WHERE id='m000'").run();
-        writer.exec("DELETE FROM memories WHERE id='m129'");
+        writer.exec("DELETE FROM memories WHERE id='m129'; UPDATE memories SET content='new denied body',fingerprint='new denied fingerprint' WHERE id='m001'");
       }return value;};}});};}});
   const run=runner(metered,f.storeId,{sample:()=>{assert.equal(db.isTransaction,false);sampleBefore=true;return '19';},read:work=>readTransaction(db,work)});
   const captured=run();assert.equal(captured.status,'complete/different');assert.ok(changed&&sampleBefore);
   const oracle=new DatabaseSync(frozen);t.after(()=>oracle.close());
   // Independent full SQL rebuild of this frozen fixture's input manifest. It
   // uses neither the comparator nor its cursor, eligibility or fence helpers.
-  const expectedItems=oracle.prepare('SELECT id,revision,deleted,currentness,review_state,content FROM memories ORDER BY id COLLATE BINARY').all();
+  const expectedItems=oracle.prepare('SELECT id,revision,deleted,currentness,review_state,content,fingerprint FROM memories ORDER BY id COLLATE BINARY').all();
   const expectedBinding={domain:'context-read/b3-input-v2',storeId:f.storeId,canonical:null,
-    projection:projectionDigest(selection),access:'synthetic-access',resources:'b3-capture-v1'};
+    projection:projectionDigest(selection),access:'synthetic-access',resources:'b3-capture-v1',safetyPolicyRevision:CONTENT_SAFETY_POLICY_REVISION};
   const expectedFrames=[{binding:expectedBinding,capability:'none',suppressionDomain:null},
     {fence:'suppression',owner:ns.ownerId,storeId:f.storeId,suppressionDomain:null,epoch:null},
     {fence:'namespace',namespace:[ns.ownerId,ns.scope,ns.projectId],epoch:null}];
@@ -114,13 +118,17 @@ test('B3 coherent frozen-E oracle: writer behind the cursor is E+1, never stitch
     assert.equal(oracle.prepare(`SELECT count(*) AS n FROM ${table}`).get().n,0);
     expectedFrames.push({fence:table,namespace:[ns.ownerId,ns.scope,ns.projectId],count:0,digest:hash('')});
   }
-  for(const {content,...row}of expectedItems)expectedFrames.push({item:'memory',namespace:[ns.ownerId,ns.scope,ns.projectId],
-    ...row,eligible:true,content:hash(content),suppression:{suppressed:false,capability:'none'}});
+  for(const {content,fingerprint,...row}of expectedItems){
+    const eligible=!row.deleted&&row.currentness==='current'&&row.review_state!=='awaiting';
+    expectedFrames.push({item:'memory',namespace:[ns.ownerId,ns.scope,ns.projectId],...row,eligible,
+      content:eligible?hash(content):null,contentIdentity:createHash('sha256').update(JSON.stringify([content,fingerprint])).digest('hex'),
+      suppression:{suppressed:false,capability:'none'}});
+  }
   expectedFrames.push({terminal:true,count:expectedItems.length});
   assert.equal(root(captured),hash(expectedFrames.map(canonicalJson).join('\n')+'\n'),'independent frozen database root');
-  assert.deepEqual(items(captured).map(r=>[r.id,r.revision,r.content]),expectedItems.map(r=>[r.id,r.revision,hash(r.content)]));
+  assert.deepEqual(items(captured).map(r=>[r.id,r.revision,r.content]),expectedItems.map(r=>[r.id,r.revision,!r.deleted&&r.review_state!=='awaiting'?hash(r.content):null]));
   const capturedLocations=captured.locations.flatMap(chunk=>chunk.trimEnd().split('\n').map(JSON.parse));
-  assert.equal(capturedLocations.length,expectedItems.length);
+  assert.equal(capturedLocations.length,expectedItems.filter(r=>!r.deleted&&r.review_state!=='awaiting').length);
   for(const location of capturedLocations)assert.equal(location.spans.map(span=>captured.payloads[span.chunk].slice(span.start,span.end)).join(''),expectedItems[location.item].content);
   assert.equal(JSON.parse(captured.envelope).sample,'19');
   assert.notEqual(root(run()),root(captured));
@@ -413,4 +421,120 @@ test('B3 Worker transport is private, bounded, and does not change serving resul
   const noop=await handle.refreshContextIndex({...payload,mode:'embeddings'},token);
   assert.equal(ok(noop).status,'partial');assert.equal(maintenanceComparison(noop)?.status,'complete/equal');
   assert.equal(maintenanceComparison(await handle.getContextIndexStatus({...selection,deadlineMs:5000},token)),undefined);
+});
+
+// Review regressions: content identity, physical bindings and bounded preflight.
+for(const [label,sql]of [
+  ['awaiting body',"UPDATE memories SET content='changed awaiting body'"],
+  ['eligible fingerprint',"UPDATE memories SET fingerprint='changed fingerprint'"]
+])test(`B3 F1 ${label} without a revision bump changes identity`,t=>{
+  const {db,run}=setup(t);memory(db);
+  if(label==='awaiting body')db.exec("UPDATE memories SET review_state='awaiting'");
+  const before=run();assert.equal(before.status,'complete/different');assert.equal(run().status,'complete/equal');
+  db.exec(sql);const after=run();assert.equal(after.status,'complete/different');
+  assert.notEqual(root(before),root(after));assert.notEqual(items(before)[0].contentIdentity,items(after)[0].contentIdentity);
+  if(label==='awaiting body'){assert.deepEqual(after.payloads,[]);assert.deepEqual(after.locations,[]);}
+});
+
+function comparisonStore(t){
+  const f=fixture(t);f.admit('binding orchard');const facade=openContextProductFacade(f.path,{});
+  const storage=productSidecar({path:f.path,db:facade.port.db,identity:facade.port.identity,features:facade.port.features,
+    writable:true,memoryComparison:implementation});
+  t.after(()=>{storage.close();facade.close();});
+  const p={...selection,ownerCoverage:coverage},access=accessDigest({ownerId:ns.ownerId,namespaces:{readSet:[ns]}}),budget={maxItems:1024,maxMs:5000};
+  for(let i=0;i<3;i++)storage.refresh(p,access,budget);
+  const compare=()=>storage.compare(p,access,budget).comparison;
+  assert.equal(compare().status,'complete/equal');assert.equal(compare().status,'complete/equal');
+  return {f,facade,storage,p,access,budget,compare};
+}
+for(const mutation of ['incarnation','store_id','canonical identity','representation'])test(`B3 F2 current ${mutation} mismatch rejects the basis`,t=>{
+  const c=comparisonStore(t),path=mutation==='canonical identity'?c.f.path:c.f.path+PRODUCT_SIDECAR_SUFFIX;
+  const db=new DatabaseSync(path);let original;
+  try{
+    if(['incarnation','store_id'].includes(mutation)){
+      original=db.prepare(`SELECT ${mutation} AS value FROM product_metadata`).get().value;
+      db.prepare(`UPDATE product_metadata SET ${mutation}=?`).run(randomUUID());
+    }else if(mutation==='canonical identity')db.exec('CREATE INDEX comparison_identity_probe ON memories(confidence)');
+    else {
+      const row=db.prepare('SELECT publication,record FROM validation_records').get();original=row;
+      const value=JSON.parse(row.record);delete value.mac;value.representation='different-representation';
+      db.prepare('UPDATE validation_records SET record=? WHERE publication=?').run(signedRecord(c.facade.port.identity.cursorSecret,'validation',value),row.publication);
+    }
+    assert.equal(c.compare().status,'incomplete');
+    if(['incarnation','store_id'].includes(mutation)){
+      db.prepare(`UPDATE product_metadata SET ${mutation}=?`).run(original);
+      assert.equal(c.compare().status,'complete/different','failed binding cleared the volatile basis');
+    }
+  }finally{db.close();}
+});
+
+test('B3 passing control: F2 fence retarget remains a complete comparison',t=>{
+  const c=comparisonStore(t),db=new DatabaseSync(c.f.path);t.after(()=>db.close());
+  db.exec('UPDATE namespace_epochs SET epoch=epoch+1');
+  assert.equal(c.compare().status,'complete/different');assert.equal(c.compare().status,'complete/equal');
+  const result=c.storage.refresh(c.p,c.access,c.budget);assert.notEqual(result.comparison.status,'incomplete');
+});
+
+test('B3 F3 string sizing observes cutoff during the scan',()=>{
+  let tick=0,characters=0;const original=Buffer.byteLength;
+  const account=implementation.comparisonAccount({now:()=>tick,cutoff:1000});
+  try{
+    Buffer.byteLength=function(value,...args){if(value==='x'){characters++;tick++;}return Reflect.apply(original,Buffer,[value,...args]);};
+    assert.throws(()=>implementation.comparisonJson('x'.repeat(10000),account),/comparison_incomplete/);
+  }finally{Buffer.byteLength=original;}
+  assert.ok(characters<=1100,'sizing stopped near its cutoff');
+});
+
+test('B3 F3 string sizing stops at the remaining frame allowance',()=>{
+  let characters=0;const original=Buffer.byteLength;
+  const account=implementation.comparisonAccount({now:()=>0,cutoff:10000,limits:{frame:128}});
+  try{
+    Buffer.byteLength=function(value,...args){if(value==='x')characters++;return Reflect.apply(original,Buffer,[value,...args]);};
+    assert.throws(()=>implementation.comparisonJson('x'.repeat(10000),account),/comparison_incomplete/);
+  }finally{Buffer.byteLength=original;}
+  assert.ok(characters<=128,'sizing rejected before scanning the remainder');
+});
+
+test('B3 F4 safety revision binds the root independently of projection identity',t=>{
+  const {db,run}=setup(t);memory(db);const a=run(),projection=projectionDigest(selection);
+  const b=run({safetyPolicyRevision:CONTENT_SAFETY_POLICY_REVISION+'-changed'});
+  assert.equal(b.status,'complete/different');assert.notEqual(root(a),root(b));
+  assert.equal(JSON.parse(a.envelope).binding.projection,projection);assert.equal(JSON.parse(b.envelope).binding.projection,projection);
+});
+
+function reencodeInside(source,to,encoding){
+  const quote=name=>'"'+name.replaceAll('"','""')+'"';
+  to.exec(`PRAGMA encoding='${encoding}'; PRAGMA foreign_keys=OFF; BEGIN`);
+  const schema=source.prepare("SELECT type,name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type='table' DESC,name").all();
+  for(const row of schema.filter(r=>r.type==='table'))to.exec(row.sql);
+  for(const row of schema.filter(r=>r.type==='table')){
+    const fields=source.prepare('PRAGMA table_info('+quote(row.name)+')').all().map(r=>r.name);
+    const insert=to.prepare('INSERT INTO '+quote(row.name)+'('+fields.map(quote).join(',')+') VALUES('+fields.map(()=>'?').join(',')+')');
+    for(const data of source.prepare('SELECT * FROM '+quote(row.name)).all())insert.run(...fields.map(k=>data[k]));
+  }
+  for(const row of schema.filter(r=>r.type!=='table'))to.exec(row.sql);
+  for(const name of ['application_id','user_version'])to.exec('PRAGMA '+name+'='+source.prepare('PRAGMA '+name).get()[name]);
+  to.exec('COMMIT');
+}
+for(const target of ['canonical','sidecar'])test(`B3 F5 rejects ${target} UTF-16 before variable-length materialization`,t=>{
+  const {db:source,f}=setup(t);memory(source,'unicode','ࠀ'.repeat(10000));
+  const db=new DatabaseSync(':memory:');t.after(()=>db.close());reencodeInside(source,db,'UTF-16le');
+  let materialized=0;
+  const proxy=new Proxy(db,{get(native,key){if(key!=='prepare'){const v=Reflect.get(native,key,native);return typeof v==='function'?v.bind(native):v;}
+    return sql=>{const statement=native.prepare(sql);return new Proxy(statement,{get(s,k){const method=Reflect.get(s,k,s);return typeof method==='function'?(...args)=>{if(k==='iterate'&&sql.startsWith('SELECT q.*,'))materialized++;return Reflect.apply(method,s,args);}:method;}});};}});
+  let value;
+  if(target==='canonical')value=createComparator()({db:proxy,read:work=>readTransaction(db,work),selection,identity:{storeId:f.storeId},access:'access',now:()=>0,cutoff:10000,
+    loadBase(){source.prepare('SELECT content FROM memories').get();materialized++;return null;}});
+  else {
+    const account=implementation.comparisonAccount({now:()=>0,cutoff:10000,limits:{bytes:61000}});
+    readTransaction(db,()=>assert.throws(()=>implementation.comparisonReader(proxy,account).prepare('SELECT content FROM memories').get(),/comparison_incomplete/));
+    value={status:'incomplete'};
+  }
+  assert.equal(value.status,'incomplete');assert.equal(materialized,0,'unsupported encoding fetched no variable fields');
+});
+
+test('B3 F6 transitive import errors are not comparator absence',async t=>{
+  const f=safetyFixture(t),path=join(f.workspace.path,'comparison-import.mjs');
+  writeFileSync(path,"import './missing-comparison-dependency.mjs'; export const value=1;\n");
+  await assert.rejects(()=>loadComparison(pathToFileURL(path)),{code:'ERR_MODULE_NOT_FOUND'});
 });

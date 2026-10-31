@@ -251,16 +251,16 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   const initialization=()=>({autoVacuum:'INCREMENTAL',...(sqlite ? {journalMode:sidecarJournalMode} : {}),sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=${PRODUCT_SIDECAR_FORMAT}; ${ddl} ${VECTOR_DDL}`,
     storeId:identity.storeId,profile:PRODUCT_PROFILE,incarnation:randomUUID(),
     attestation:{applicationId:APPLICATION_ID,userVersion:PRODUCT_SIDECAR_FORMAT,schema:expectedSchema}});
-  const sideIdentity = () => ({ ...productFile(sidePath), incarnation: metadata.incarnation,
-    schemaVersion: side.prepare('PRAGMA schema_version').get().schema_version });
-  function target(p, access) {
+  const sideIdentity = (reader=side,current=metadata) => ({ ...productFile(sidePath), incarnation: current.incarnation,
+    schemaVersion: reader.prepare('PRAGMA schema_version').get().schema_version });
+  function target(p, access,reader=canonical,sideReader=side,currentMetadata=metadata) {
     attribution?.step();
     let storeId;
-    try {storeId=canonical.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id;}
+    try {storeId=reader.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id;}
     catch(error){attribution?.captureFailure(error);throw error;}finally {attribution?.acquired();}
     if(storeId!==identity.storeId)unavailable('wrong_store');
-    return { projectionDigest: projectionDigest(p), accessDigest: access, ...canonicalProductFences(canonical,p),
-      canonical: canonicalProductIdentity(path,canonical), sidecar: sideIdentity() };
+    return { projectionDigest: projectionDigest(p), accessDigest: access, ...canonicalProductFences(reader,p),
+      canonical: canonicalProductIdentity(path,reader), sidecar: sideIdentity(sideReader,currentMetadata) };
   }
   function recordBindings(r, t, progress = false) {
     if (r.storeId !== identity.storeId) return 'wrong_store';
@@ -630,6 +630,11 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
           if(!side)return {checkpoint:null,base:null};
           checkpoint=read(()=>{
             const metered=memoryComparison.comparisonReader(side,account),projection=projectionDigest(p),bindings=[];
+            const currentMetadata=metered.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
+            if(!currentMetadata||currentMetadata.store_id!==identity.storeId)unavailable('wrong_store');
+            attest(metered);
+            if(currentMetadata.profile!==PRODUCT_PROFILE)unavailable('incompatible');
+            const currentTarget=canonicalRead(()=>target(p,access,memoryComparison.comparisonReader(canonical,account),metered,currentMetadata));
             for(const [table,column,purpose]of [['work','generation','progress'],['publications','publication','validation']]){
               const pointer=metered.prepare(`SELECT * FROM ${table} WHERE projection=?`).get(projection);
               if(!pointer){bindings.push(null);continue;}
@@ -646,6 +651,8 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
               if(record.storeId!==identity.storeId||g.owner!==p.readSet[0].ownerId||
                 g.projection!==projection||record.projectionDigest!==projection||record.accessDigest!==g.access||!checkpointValid||
                 g.id!==generationId(g)||g.incarnation!==incarnationOf(g)||record.generation.id!==g.id||record.generation.incarnation!==g.incarnation)throw Error('comparison_base_invalid');
+              const mismatch=recordBindings(record,currentTarget,progress);
+              if(mismatch&&!['access_changed','dependency_changed','fence_changed'].includes(mismatch))throw Error('comparison_base_binding');
               bindings.push({id:g.id,incarnation:g.incarnation,checkpoint:g.checkpoint});
             }
             return memoryComparison.comparisonJson(bindings,account);

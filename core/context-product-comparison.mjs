@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { canonicalJson, projectionDigest } from './context-product-validation.mjs';
-import { createContentReadMemo, memoryReadEligible, CONTENT_SAFETY_POLICY_REVISION } from './content-safety.mjs';
+import { createContentReadMemo, memoryReadEligible, memoryContentIdentity, CONTENT_SAFETY_POLICY_REVISION } from './content-safety.mjs';
 import { installedContentLayout, bindContentSafetyConnection } from './content-safety-schema.mjs';
 import { contentSuppressionFenceInside, memorySuppressionObservationInside } from './content-suppression-storage.mjs';
 
@@ -13,20 +13,26 @@ const stop = cause => { throw Object.assign(Error('comparison_incomplete'), { co
 export const MEMORY_COMPARISON_LIMITS = Object.freeze({ rows:131072, bytes:33554432, chunks:1024, frame:262144 });
 
 // Count JSON expansion before allocating an encoded frame or string chunk.
-function jsonBytes(value,account) {
-  let nodes=8192;
+function jsonBytes(value,account,maximum=Math.min(account.cap.frame,account.remaining())) {
+  let nodes=8192,bytes=0;
+  const add=n=>{bytes+=n;if(bytes>maximum)stop(maximum===account.cap.frame?'frame':'budget');};
   function size(v,depth=0){
     account.check();if(--nodes<0||depth>16)stop('frame');
     if(typeof v==='string'){
-      let n=2;for(const c of v){const p=c.codePointAt(0);n+=p<32?([8,9,10,12,13].includes(p)?2:6):p===34||p===92?2:Buffer.byteLength(c);}return n;
+      add(2);let scanned=0;
+      for(const c of v){
+        if((scanned++&63)===0)account.check();
+        const p=c.codePointAt(0);add(p<32?([8,9,10,12,13].includes(p)?2:6):p===34||p===92?2:Buffer.byteLength(c));
+      }
+      account.check();return;
     }
-    if(v===null)return 4;if(typeof v==='boolean')return v?4:5;
-    if(typeof v==='number'&&Number.isFinite(v))return String(v).length;
+    if(v===null){add(4);return;}if(typeof v==='boolean'){add(v?4:5);return;}
+    if(typeof v==='number'&&Number.isFinite(v)){add(String(v).length);return;}
     if(!v||typeof v!=='object')stop('frame');
-    const array=Array.isArray(v),keys=Object.keys(v);let n=2+Math.max(0,keys.length-1);
-    for(const key of keys)n+=(array?0:size(key,depth+1)+1)+size(v[key],depth+1);return n;
+    const array=Array.isArray(v),keys=Object.keys(v);add(2+Math.max(0,keys.length-1));
+    for(const key of keys){if(!array){size(key,depth+1);add(1);}size(v[key],depth+1);}
   }
-  return size(value);
+  size(value);return bytes;
 }
 function encode(value,account) {
   const bytes=jsonBytes(value,account);
@@ -40,20 +46,30 @@ export { encode as comparisonJson };
 export function comparisonAccount({ now, cutoff, limits = {}, attribution }) {
   const cap = Object.fromEntries(Object.entries(MEMORY_COMPARISON_LIMITS).map(([k,v])=>[k,
     limits[k]===undefined?v:Number.isSafeInteger(limits[k])&&limits[k]>=0?Math.min(v,limits[k]):0]));
-  let rows=0,bytes=0,source=null;
+  let rows=0,bytes=0,source=null;const encodings=new WeakSet();
   const check=()=>{if(now()>=cutoff)stop('time');};
   const charge=(r,b)=>{check();if(r<0||b<0||!Number.isSafeInteger(b)||rows+r>cap.rows||bytes+b>cap.bytes ||
     source && (rows+r-source.rows>1024 || bytes+b-source.bytes>64000))stop('budget');rows+=r;bytes+=b;};
-  return {cap,check,charge,get rows(){return rows;},get bytes(){return bytes;},remaining:()=>cap.bytes-bytes,
+  const api={cap,check,charge,get rows(){return rows;},get bytes(){return bytes;},remaining:()=>cap.bytes-bytes,
     preparing(work){check();attribution?.step();const result=work();check();return result;},
     native(work){check();attribution?.step();try{return work();}finally{attribution?.acquired();check();}},
+    encoding(db){
+      if(encodings.has(db))return;
+      // UTF-8 only, with binary inputs rejected below. The fixed encoding
+      // label is checked before any variable-length result can be fetched.
+      charge(1,64);const statement=api.preparing(()=>db.prepare('PRAGMA encoding'));
+      if(api.native(()=>statement.get()).encoding!=='UTF-8')stop('encoding');
+      encodings.add(db);
+    },
     source(work){source={rows,bytes};try{return work();}finally{source=null;}}};
+  return api;
 }
 
 // Preflight every selected field before stepping the materializing statement.
 // Safety owns its SQL and matching. This adapter only meters and validates its
 // results, including schema/control attestation and memo-prepared statements.
 export function comparisonReader(db, account) {
+  account.encoding(db);
   const reader={get isTransaction(){return db.isTransaction;},prepare(source){
     account.check();
     const sql=source.replace(/^PRAGMA (\w+)\s*$/i, 'SELECT * FROM pragma_$1');
@@ -142,7 +158,7 @@ function manifestWriter(account) {
       // before constructing even the first chunk from an already-read body.
       const maximum=Math.max(1,Math.ceil((pendingText.length+text.length)/16383));
       if(used()+2*maximum+(pending?2:0)+(pendingLocations?2:0)>account.cap.chunks)stop('chunks');
-      account.charge(0,Buffer.byteLength(text)+jsonBytes(text,account)+2*maximum+264*maximum+256);
+      account.charge(0,Buffer.byteLength(text)+jsonBytes(text,account,account.remaining())+2*maximum+264*maximum+256);
       const spans=[];let offset=0;
       // Offsets are UTF-16 code units in well-formed plain string chunks.
       // Packing is independent of item boundaries; no surrogate is split.
@@ -206,12 +222,14 @@ export function createMemoryComparator() {
   const issued=new WeakMap();
   return function capture({ db,read,selection,identity,access,now,cutoff,budget,loadBase=()=>null,
     sample=()=>String(process.hrtime.bigint()),limits,checkpoint=null,pageSize=128,
-    observeMemory=memorySuppressionObservationInside,physicalIdentity,attribution }) {
+    observeMemory=memorySuppressionObservationInside,physicalIdentity,attribution,
+    safetyPolicyRevision=CONTENT_SAFETY_POLICY_REVISION }) {
     const account=comparisonAccount({now,cutoff,limits,attribution});
     let output,bindingText,issuedRoot,retainedBytes;
     try {
       account.check();
       account.charge(0,jsonBytes({readSet:selection.readSet,types:selection.types,intent:selection.intent},account));
+      account.encoding(db);
       // Base materialization and authentication precede canonical acquisition.
       const loaded=loadBase(account),base=issued.get(loaded?.base??loaded);
       checkpoint=loaded?.checkpoint??checkpoint;
@@ -220,13 +238,12 @@ export function createMemoryComparator() {
         selection:{types:['memory','card'].filter(t=>selection.types.includes(t)),intent:selection.intent,
           ...(selection.types.includes('card')?{contentSafetyPolicy:CONTENT_SAFETY_POLICY_REVISION}:{})},rows:account.rows,bytes:account.bytes};
       const binding={domain,storeId:identity.storeId,canonical:identity.canonical??null,
-        projection:projectionDigest(selection),access,resources:'b3-capture-v1'};
+        projection:projectionDigest(selection),access,resources:'b3-capture-v1',safetyPolicyRevision};
       if(!Number.isSafeInteger(pageSize)||pageSize<1||pageSize>128)stop('budget');
       account.charge(0,jsonBytes(binding,account));
       const sampled=sample(); // Immediately before entering the attributed read seam.
       output=read(()=>{
         const reader=comparisonReader(db,account),memo=createContentReadMemo(reader);
-        if(reader.prepare('PRAGMA encoding').get().encoding!=='UTF-8')stop('encoding');
         if(physicalIdentity)binding.canonical=physicalIdentity(reader);
         bindingText=encode(binding,account);
         const layout=installedContentLayout(reader),writer=manifestWriter(account);
@@ -257,16 +274,19 @@ export function createMemoryComparator() {
               if(typeof suppression.suppressed!=='boolean'||legacy!==!layout.suppressionRevision ||
                 legacy&&suppression.suppressed || !legacy&&!/^[A-Za-z0-9_-]{43}$/.test(suppression.matchedSetDigest??''))stop('observation_contract');
               const eligible=memoryReadEligible(row,selection.intent)&&!suppression.suppressed;
-              // Metadata includes every state. Only eligible Memory content is
-              // an indexed document; no receipt observation or source text.
+              // Every state contributes S1's body/fingerprint identity. Plaintext
+              // payload capture remains eligible-only; no receipt observation.
+              const body=reader.prepare(`SELECT content,fingerprint FROM memories WHERE ${scope} AND id COLLATE BINARY=? AND revision=?`)
+                .get(...boundary(ns),row.id,row.revision);
+              if(!body || body.content!==null&&typeof body.content!=='string'||typeof body.fingerprint!=='string')stop('content');
+              account.charge(0,jsonBytes([body.content,body.fingerprint],account,account.remaining()));
+              const contentIdentity=memoryContentIdentity(body);account.check();
               let content=null,textChunks=[],contentBytes=0;
               if(eligible){
-                const body=reader.prepare(`SELECT content FROM memories WHERE ${scope} AND id COLLATE BINARY=? AND revision=?`)
-                  .get(...boundary(ns),row.id,row.revision);
-                if(!body || typeof body.content!=='string')stop('content');
+                if(typeof body.content!=='string')stop('content');
                 content=hash(body.content);contentBytes=Buffer.byteLength(body.content);textChunks=writer.text(body.content);
               }
-              writer.record({item:'memory',namespace:boundary(ns),...row,eligible,content,
+              writer.record({item:'memory',namespace:boundary(ns),...row,eligible,content,contentIdentity,
                 suppression:legacy?{suppressed:false,capability:'none'}:{suppressed:suppression.suppressed,matchedSetDigest:suppression.matchedSetDigest}});
               // Location records are supporting chunks, outside the equality
               // stream. The envelope binds their hashes without a per-item map.
