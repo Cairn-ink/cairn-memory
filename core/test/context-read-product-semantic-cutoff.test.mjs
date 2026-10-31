@@ -448,15 +448,21 @@ test('semantic parity initial short window parks at expiry without a quantum', a
   assert.equal(runtime.reservations.length, 0); assert.equal(runtime.spawned.length, 0);
 });
 
-test('semantic parity validation can fit its own bound when a regular turn cannot', async t => {
+test('semantic parity review F1 fitting validation clears stale parking at a fast poll', async t => {
   const s = await setup(t), runtime = pumpRuntime(s); runtime.config.firstCoverageValidation.maxMs = 300;
+  runtime.config.pollMs = 1;
   const pump = await validationPending(s, runtime); s.f.workspace.defer(() => pump.close());
   await guard(s.advance(runtime.config.window.endsAtMonoMs - testClock.now() - 350), 'validation-only tail');
   const before = runtime.reservations.length, dispatched = validationDispatches;
   await guard(runtime.tick(), 'full validation turn');
   assert.deepEqual(runtime.reservations.slice(before).map(r => [r.mode, r.maxMs]),
     [['validation', 300]], 'validation_uses_own_full_bound_then_parks_regular_turn');
-  assert.equal(validationDispatches, dispatched + 1); assert.equal(runtime.nextDelay, 350);
+  assert.equal(validationDispatches, dispatched + 1);
+  const status = ok(await s.coordinator.getOwnerSemanticStatus({ ownerId: ns.ownerId }, s.token));
+  assert.equal(status.firstCoverage.state, 'validating', 'validation_remains_pending');
+  assert.equal(runtime.nextDelay, 1, 'fitting_validation_clears_stale_parking');
+  await s.advance(1); await guard(runtime.tick(), 'next fitting validation');
+  assert.equal(validationDispatches, dispatched + 2, 'next_fitting_validation_is_dispatched');
   assert.equal(pump.getStatus().error, null);
 });
 
@@ -481,6 +487,31 @@ test('semantic parity incompatible constructor policies drain before replacement
   assert.equal(runtime.spawned[1].data.host.configuration.constructorTag, 'second');
   assert.equal(await runtime.spawned[0].exited, 0);
   assert.deepEqual([...runtime.spawned[0].resources], [1, 1, 0, 0], 'previous_constructor_disposed_before_open');
+});
+
+test('semantic parity review F2 signed-zero policies get distinct residents', async t => {
+  const s = await setup(t), runtime = pumpRuntime(s), p = runtime.config.projections[0];
+  runtime.config.quantum.maxMs = runtime.config.pollMs = runtime.config.firstCoverageValidation.maxMs = 400;
+  p.options.host.configuration.constructorNumber = 0;
+  runtime.config.projections.push({ ...p, options: { ...p.options, host: { ...p.options.host,
+    configuration: { ...p.options.host.configuration, constructorNumber: -0 } } } });
+  const pump = runtime.renew(runtime.config); s.f.workspace.defer(() => pump.close());
+  for (let n = 0; n < 5; n++) await guard(runtime.tick(), 'signed-zero policy turn');
+  assert.equal(runtime.spawned.length, 2, 'signed_zero_policies_get_distinct_residents');
+  assert.ok(Object.is(runtime.spawned[0].data.host.configuration.constructorNumber, 0));
+  assert.ok(Object.is(runtime.spawned[1].data.host.configuration.constructorNumber, -0));
+  assert.equal(await runtime.spawned[0].exited, 0);
+  assert.deepEqual([...runtime.spawned[0].resources], [1, 1, 0, 0], 'signed_zero_predecessor_disposed_before_open');
+});
+
+test('semantic parity review F2 renewal rejects a signed-zero policy change', async t => {
+  const s = await setup(t), runtime = pumpRuntime(s), options = runtime.config.projections[0].options;
+  options.host.configuration.constructorNumber = 0;
+  const pump = runtime.renew(runtime.config); s.f.workspace.defer(() => pump.close());
+  await guard(runtime.tick(), 'positive-zero resident');
+  const changed = { ...runtime.config, projections: [{ ...runtime.config.projections[0], options: {
+    ...options, host: { ...options.host, configuration: { ...options.host.configuration, constructorNumber: -0 } } } }] };
+  assert.throws(() => runtime.renew(changed), { code: 'read_in_progress' }, 'renewal_rejects_signed_zero_policy_change');
 });
 
 test('semantic parity renewal constructor identity follows shared buffers, not their bytes', async t => {

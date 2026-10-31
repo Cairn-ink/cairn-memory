@@ -12,6 +12,8 @@ const key=Symbol.for('context-read-product-p2e-v1/pumps');
 // Constructor identity follows shared buffers, never their changing contents.
 const sharedOptions=new WeakMap();let sharedSerial=0;
 function optionIdentity(value) {
+  // Host validation rejects other JSON-lossy scalars; retain signed zero.
+  if(Object.is(value,-0))return ['number','-0'];
   if(value instanceof SharedArrayBuffer){if(!sharedOptions.has(value))sharedOptions.set(value,++sharedSerial);return ['shared',sharedOptions.get(value)];}
   if(Array.isArray(value))return ['array',value.map(optionIdentity)];
   if(value&&typeof value==='object')return ['object',Object.keys(value).sort().map(k=>[k,optionIdentity(value[k])])];
@@ -47,7 +49,8 @@ export function semanticPump(original,{now,setTimer,clearTimer,open}) {
   if(handle.targets.some(t=>!projections.some(p=>p.options.path===t.canonicalPath&&JSON.stringify(p.options.readSet)===JSON.stringify(t.readSet)&&JSON.stringify(p.types)===JSON.stringify(t.types))))fail('invalid_input');
   // Intent and mode belong to calls; all constructor policies belong to a resident.
   const residentKey=p=>{const {supervisor,semanticConfig,...options}=p.options;return JSON.stringify([p.types,optionIdentity(options)]);};
-  const all=globalThis[key]??=new Map(),fingerprint=JSON.stringify(projections.map(p=>[residentKey(p),p.intent,p.mode,p.bindingId]));
+  const residentKeys=new Map(projections.map(p=>[p,residentKey(p)]));
+  const all=globalThis[key]??=new Map(),fingerprint=JSON.stringify(projections.map(p=>[residentKeys.get(p),p.intent,p.mode,p.bindingId]));
   const old=all.get(c.id);
   if(old){if(old.fingerprint!==fingerprint||old.supervisor!==c.supervisor||old.coordinator!==coordinator||old.semanticCredentialDigest!==credentialDigest(semanticCredential)||JSON.stringify(old.first)!==JSON.stringify(first))fail('read_in_progress');old.renew(c,w,b);return old.api;}
   const {owner,registry}=supervisorOwner(c.supervisor),record=registry.register(owner,{path:projections[0].options.path,domain:'context-read-product-p2e-v1/pump/'+c.id});
@@ -60,7 +63,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open}) {
   const exhausted=()=>now()>=window.endsAtMonoMs||usedMs>=budgets.maxMs||usedItems>=budgets.maxItems&&!validationPending&&!startup;
   const dutyEnd=()=>Math.min(window.endsAtMonoMs,renewedUntil);
   const turnMs=()=>!startup&&validationPending?first.maxMs:q.maxMs;
-  function fits(maxMs){if(dutyEnd()-now()>=maxMs)return true;parkedUntil=dutyEnd();return false;}
+  function fits(maxMs){const end=dutyEnd();parkedUntil=end-now()>=maxMs?undefined:end;return parkedUntil===undefined;}
   function schedule(){
     if(stopped||error||exhausted()||now()>=renewedUntil){resolveCompletion(status());return;}
     fits(turnMs()); // Park initial and renewed short tails at expiry too.
@@ -74,7 +77,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open}) {
     const result=await handle.pumpCall('pumpFinish',{id:reservation.id,known});usedItems=result.usedItems;usedMs=result.usedMs;usedUsd=result.usedUsd;
   }
   async function maintainer(p,maxMs,start) {
-    const id=JSON.stringify([residentKey(p),residentEpoch]),writer=JSON.stringify([resolve(p.options.path),p.options.readSet]);let h=handles.get(id);
+    const id=JSON.stringify([residentKeys.get(p),residentEpoch]),writer=JSON.stringify([resolve(p.options.path),p.options.readSet]);let h=handles.get(id);
     if(!h){
       const previous=writers.get(writer);
       if(previous!==undefined){
