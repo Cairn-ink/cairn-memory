@@ -189,7 +189,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
       deadline?.check();
       const judged = captureQualification
         ? { decisions: [], reason: items.length ? 'qualification_requires_identity' : null }
-        : await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery, deadline, validateFresh: assertSources, sourceView });
+        : await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery, deadline, validateFresh: () => { assertSources(); unwrap(operations.ordered.assertPrepared(snapshot, claim.order, prepared)); }, sourceView });
       deadline?.check();
       finished = unwrap(operations.ordered.finish(snapshot, claim.token, claim.order, prepared, judged));
     } else finished = unwrap(operations.finishAdmission({ ...owned, items }));

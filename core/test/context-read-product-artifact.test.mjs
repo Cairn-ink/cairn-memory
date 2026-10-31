@@ -38,12 +38,12 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   const manifest = JSON.parse(readFileSync(join(root, 'packaging/artifact-files.json'), 'utf8'));
   const entries = ['core/context-product-reader.mjs', 'core/context-product-worker.mjs', 'core/context-product-pump.mjs', 'core/context-product-selection.mjs', 'core/context-read-supervisor.mjs'];
   const expected = closure(root, entries);
-  // Hosted P2e closure, shared maintenance admission, private open timing and attribution, content safety and retained receipt lineage.
-  // S2h-1 adds the four storage modules behind the SQLite Worker boundary.
-  // Keep the exact closure pin and independently verify the installed edges.
-  assert.equal(expected.length, 110);
-  for (const file of ['core/content-safety-layout.mjs','core/content-safety-schema.mjs',
-    'core/content-safety-migration.mjs','core/content-suppression-storage.mjs']) assert.ok(expected.includes(file),file);
+  // The boundary, suppression grant grammar and three transaction validators
+  // extend main behind SQLite; retain the exact installed-closure pin.
+  assert.equal(expected.length, 115);
+  for (const file of ['core/content-write-changes.mjs', 'core/content-write-context.mjs', 'core/content-write-safety.mjs',
+    'core/raw-lineage-storage.mjs', 'core/raw-source-roots.mjs', 'core/content-safety-layout.mjs', 'core/content-safety-schema.mjs',
+    'core/content-safety-migration.mjs', 'core/content-suppression-storage.mjs']) assert.ok(expected.includes(file), file);
   for (const file of expected) assert.ok(manifest.includes(file), 'missing artifact file: ' + file);
   for (const file of manifest) {
     const target = join(staged, file); mkdirSync(dirname(target), { recursive: true }); copyFileSync(join(root, file), target);
@@ -79,7 +79,7 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   assert.ok(installed.includes('core/context-product-sqlite.mjs')); // P2d Worker dependency.
 
   const staticFiles = closure(artifact, ['core/context-product-reader.mjs', 'core/context-read-supervisor.mjs'], false);
-  assert.equal(staticFiles.length, 30, 'engine-only pool and private diagnostics keep the parent SQLite-free');
+  assert.equal(staticFiles.length, 31, 'suppression grant grammar preserves the SQLite-free parent and engine-only pool');
   t.diagnostic(`runtime/Worker closure cross-check: source=${expected.length}, installed=${installed.length}; static SQLite-free closure=${staticFiles.length}`);
   // Bootstrap code is supplied by the host, copied into the installed tree;
   // it imports no source-checkout module and has no network/provider dependency.

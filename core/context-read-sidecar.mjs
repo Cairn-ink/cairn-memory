@@ -1,3 +1,6 @@
+import { withContentSuppressionReadInside, contentSuppressionReasonInside, inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { contentSuppressionFenceInside, contentSuppressionRequestFenceInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { bindContentSafetyConnection, checkInstalledContentSafety, cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety, memoryReadEligible } from './content-safety.mjs';
 import { createCardCurrentStorage, cardDependencyFence } from './card-current-storage.mjs';
 import { lstatSync, unlinkSync } from 'node:fs';
@@ -149,7 +152,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
   const canonicalRead = work => {
     if (isConnectionDiscarded(canonical)) fail('store_closed');
     if (readOnly) auxiliaries(path, true);
-    return readTransaction(canonical, work);
+    return readTransaction(canonical, () => { checkInstalledContentSafety(canonical); return inContentSuppressionRequestInside(canonical,work); });
   };
   const identity = canonicalRead(() => {
     const row = canonical.prepare('SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1').get();
@@ -280,7 +283,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
 
   function supportDatabase(metrics) {
     // Source support bytes/lookups are charged separately from candidate text.
-    return { get isTransaction() { return canonical.isTransaction; }, prepare(sql) {
+    return bindContentSafetyConnection({ get isTransaction() { return canonical.isTransaction; }, prepare(sql) {
       const statement = canonical.prepare(sql);
       const charge = row => {
         for (const value of Object.values(row ?? {})) {
@@ -290,7 +293,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       };
       return { get(...args) { metrics.supportLookups++; const row = statement.get(...args); charge(row); return row; },
         all(...args) { metrics.supportLookups++; const rows = statement.all(...args); rows.forEach(charge); return rows; } };
-    } };
+    } }, canonical);
   }
   function cardEligible(ns, row, intent, metrics, readSet) {
     return contextCardEligible(supportDatabase(metrics), identity, features, ns, row, intent, { readSet });
@@ -485,12 +488,48 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     if (!fresh(p, g)) unavailable('rebuilding');
     return g;
   }
+  function candidateAllowed(item, intent, readSet) {
+    return item.type === 'card' ? contextCardEligible(canonical,identity,features,item.namespace,
+      {id:item.cardId,revision:item.revision,body_revision:item.bodyRevision},intent,{readSet}) :
+      contentReadSafety(canonical,{identity,namespace:item.namespace,ref:item,intent}).allowed;
+  }
+  function safetyEpoch(p) {
+    if (!(cachedContentLayout(canonical) ?? installedContentLayout(canonical)).suppressionRevision) return undefined;
+    if (cachedContentSuppressionRequestInside(canonical)) return contentSuppressionRequestFenceInside(canonical,p.readSet[0].ownerId);
+    return canonicalRead(() => contentSuppressionFenceInside(canonical,p.readSet[0].ownerId));
+  }
+  function visibleDocuments(p, deadlineAt = performance.now()+1000, deliver = value=>value) {
+    const epoch = safetyEpoch(p);
+    if (epoch === undefined || epoch === '0:0') return deliver(null);
+    const work=()=>canonicalRead(()=>withContentSuppressionReadInside(canonical,p.readSet,memo=>{
+      if (memo.facts?.length === 0) return deliver(null);
+      const totals=side.prepare("SELECT n,total_length FROM statistics WHERE generation=? AND term=''").get(p.id),ids=new Set();
+      let totalLength=totals.total_length;
+      const unknown=!memo.facts||memo.layout.rawLineage||p.types.includes('card')||memo.facts.some(f=>!['memory','owner','namespace','receipt'].includes(f.kind));
+      if(memo.facts)for(const fact of memo.facts){
+        if(performance.now()>=deadlineAt)unavailable('timeout');
+        if(['owner','namespace'].includes(fact.kind))unavailable('stale_index');
+        if(fact.kind!=='memory')continue;
+        const stream=p.streams.findIndex(s=>s.type==='memory'&&s.ns.scope===fact.scope&&(s.ns.projectId??'')===fact.project_id);
+        if(stream<0)continue;
+        const row=side.prepare('SELECT revision,body_revision,eligible,token_length FROM documents WHERE generation=? AND stream=? AND id=?').get(p.id,stream,fact.stable_key);
+        const key=JSON.stringify([stream,fact.stable_key]);
+        if(!row?.eligible||ids.has(key))continue;
+        if(contentSuppressionReasonInside(canonical,p.streams[stream].ns,{kind:'memory',key:fact.stable_key,revision:row.revision,
+          version:JSON.stringify(['memory-revision-v1',row.revision])})){ids.add(key);totalLength-=row.token_length;}
+      }
+      const count=unknown?null:totals.n-ids.size;
+      return deliver({ids:[...ids],unknown,byType:Object.fromEntries(p.types.map(type=>[type,{eligible:count,indexed:count}])),totalLength,n:count});
+    }));
+    return side.isTransaction?work():sideRead(work);
+  }
   function lexicalPage(input, query, limit = 24, { deadlineAt = Infinity } = {}) {
     if (typeof query !== 'string' || !query.trim() || query.length > 4000 || query.includes('\0') || !query.isWellFormed() ||
         !Number.isSafeInteger(limit) || limit < 1 || limit > 24) fail('invalid_input');
-    const p = projection(input), g = published(p), terms = [...new Set(tokenizeT1(query))];
-    const result = sideRead(() => {
-      const totals = side.prepare("SELECT n,total_length FROM statistics WHERE generation=? AND term=''").get(p.id), df = new Map(), docs = new Map();
+    const p = projection(input), g = published(p), terms = [...new Set(tokenizeT1(query))], suppressionEpoch=safetyEpoch(p);
+    const result = sideRead(() => visibleDocuments(p,deadlineAt,visible => {
+      const allowed=visible&&new Set(visible.ids);
+      const totals = visible?{n:visible.n,total_length:visible.totalLength}:side.prepare("SELECT n,total_length FROM statistics WHERE generation=? AND term=''").get(p.id), df = new Map(), docs = new Map();
       for (const term of terms) {
         if (performance.now() >= deadlineAt) unavailable('timeout');
         const frequency = side.prepare('SELECT df FROM statistics WHERE generation=? AND term=?').get(p.id, term)?.df;
@@ -505,6 +544,8 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
             ORDER BY p.stream,p.id LIMIT ?`).all(p.id, term, afterStream, afterId, batchSize);
           for (const row of rows) {
             const key = JSON.stringify([row.stream, row.id]);
+            if(allowed&&allowed.has(key))continue;
+            if(visible?.unknown&&!candidateAllowed(ref(p.streams[row.stream],row),p.intent,p.readSet))continue;
             if (!docs.has(key)) docs.set(key, { ...row, frequencies: new Map() });
             docs.get(key).frequencies.set(term, row.frequency);
           }
@@ -512,11 +553,16 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
           afterStream = rows.at(-1).stream; afterId = rows.at(-1).id;
         }
       }
+      if(visible)for(const term of terms)df.set(term,[...docs.values()].filter(row=>row.frequencies.has(term)).length);
+      if(visible?.unknown){totals.n=docs.size;totals.total_length=[...docs.values()].reduce((n,r)=>n+r.token_length,0);}
       const ranked = rankScores([...docs.values()].map(row => ({ ref: ref(p.streams[row.stream], row),
         score: scoreBM25(terms, { frequencies: row.frequencies, length: row.token_length }, { N: totals.n, totalLength: totals.total_length, df }) }))).slice(0, limit);
       if (performance.now() >= deadlineAt) unavailable('timeout');
       return { rows: ranked, matched: docs.size };
-    });
+    }));
+    if(suppressionEpoch!==safetyEpoch(p))unavailable('stale_index');
+    if(suppressionEpoch!==undefined && suppressionEpoch!=='0:0')result.rows = canonicalRead(() =>
+      result.rows.filter(({ref:item})=>candidateAllowed(item,p.intent,p.readSet)));
     const current = generation(p);
     if (!fresh(p, current) || current.sequence !== g.sequence || current.incarnation !== g.incarnation) unavailable('stale_index');
     return result;
@@ -548,14 +594,30 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       // between them; the transport batch has its own combined bound below.
       const texts = rows.map(row => {
         if (performance.now() - started >= maxMs) unavailable('timeout');
-        return canonicalRead(() => textFor(p.streams[row.stream], row.id, m));
+        return canonicalRead(() => {
+          const stream = p.streams[row.stream];
+          const current = metadata(stream, row.id, 1, p, m, true)[0];
+          if (!current?.eligible || current.revision !== row.revision || current.body_revision !== row.body_revision) unavailable('stale_index');
+          // Card metadata already crossed its sole entry in this snapshot.
+          if (stream.type === 'memory' && !candidateAllowed({type:'memory',namespace:stream.ns,
+            memoryId:row.id,revision:row.revision},p.intent,p.readSet)) unavailable('stale_index');
+          return textFor(stream, row.id, m);
+        });
       });
       if (texts.reduce((sum, text) => sum + text.length, 0) > 2_000_000) fail('context_item_too_large');
       signal?.throwIfAborted();
       guard();
       const before = generation(p);
       if (!fresh(p, before) || before.sequence !== g.sequence || before.incarnation !== g.incarnation) unavailable('stale_index');
-      const vectors = await port.embed(texts, { signal });
+      const dispatch = () => canonicalRead(() => {
+        for (const row of rows) {
+          const stream = p.streams[row.stream];
+          if (stream.type === 'card' ? !cardEligible(stream.ns,row,p.intent,m,p.readSet) :
+              !candidateAllowed({type:'memory',namespace:stream.ns,memoryId:row.id,revision:row.revision},p.intent,p.readSet)) unavailable('stale_index');
+        }
+      });
+      dispatch();
+      const vectors = await port.embed(texts, { signal, beforeDispatch: dispatch });
       signal?.throwIfAborted();
       if (closed) fail('store_closed');
       guard();
@@ -587,25 +649,30 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     const ready = Boolean(g && g.published === 1 && g.fence === current && g.access === p.access);
     const byType = Object.fromEntries(p.types.map(type => [type, { eligible: null, indexed: null }]));
     if (ready) {
-      const counts = sideRead(() => side.prepare(`SELECT stream,count(*) AS n FROM documents
+      const visible=visibleDocuments(p);
+      const counts = visible?[]:sideRead(() => side.prepare(`SELECT stream,count(*) AS n FROM documents
         WHERE generation=? AND eligible=1 GROUP BY stream`).all(p.id));
-      for (const type of p.types) byType[type] = { eligible: 0, indexed: 0 };
+      for (const type of p.types) byType[type] = visible?visible.byType[type]:{ eligible: 0, indexed: 0 };
       for (const row of counts) {
         const value = byType[p.streams[row.stream].type]; value.eligible += row.n; value.indexed += row.n;
       }
     }
     return { ready, fence: current, sequence: g?.sequence ?? null, checkpoint: g?.checkpoint ?? null, incarnation: g?.incarnation ?? null,
+      ...(safetyEpoch(p)===undefined?{}:{suppressionEpoch:safetyEpoch(p)}),
       buildState: ready ? g.reason === 'reconcile' ? 'ready' : 'rebuilt' : 'rebuilding', reason: g?.reason ?? rebuildReason ?? null, byType,
       progress: g ? { phase: g.phase, checkpoint: g.checkpoint, sequence: g.sequence, baseSequence: g.base_sequence } : null };
   }
   function assertState(input, expected, { checkpoint = true } = {}) {
     const p = projection(input), g = published(p);
+    if(expected.suppressionEpoch!==undefined&&expected.suppressionEpoch!==safetyEpoch(p))unavailable('stale_index');
     if (g.sequence !== expected.sequence || checkpoint && g.checkpoint !== expected.checkpoint ||
         g.fence !== expected.fence || g.incarnation !== expected.incarnation) unavailable('stale_index');
   }
   function semanticPreflight(input, embedder, { deadlineAt = Infinity } = {}) {
     const port = validateEmbedder(embedder), p = projection(input), g = published(p);
-    const count = sideRead(() => side.prepare("SELECT n FROM statistics WHERE generation=? AND term=''").get(p.id).n);
+    const visible=visibleDocuments(p,deadlineAt), allowed=visible&&new Set(visible.ids);
+    if(visible?.unknown)return {state:'partial_coverage',eligible:null,embedded:null,scanned:0,byType:null};
+    const count = visible?visible.n:sideRead(() => side.prepare("SELECT n FROM statistics WHERE generation=? AND term=''").get(p.id).n);
     const byType = Object.fromEntries(p.types.map(type => [type, { embedded: 0, scanned: 0 }]));
     if (!semanticCapacity(count, port).eligible) return { state: 'partial_coverage', eligible: count, embedded: null, scanned: 0, byType: null };
     let embedded = 0, afterStream = -1, afterId = '', released = false; const vectors = [];
@@ -621,6 +688,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
         WHERE d.generation=? AND d.eligible=1 AND (d.stream,d.id)>(?,?) ORDER BY d.stream,d.id LIMIT ?`)
         .all(port.id, port.revision, port.dimensions, port.normalization, p.id, afterStream, afterId, batchSize));
       for (const row of rows) {
+        if(allowed&&allowed.has(JSON.stringify([row.document_stream,row.document_id])))continue;
         if (row.embedder_id === null) continue;
         const stream = p.streams[row.document_stream];
         if (row.store_id !== identity.storeId || row.revision !== row.current_revision || row.body_revision !== row.current_body ||

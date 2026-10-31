@@ -1,3 +1,5 @@
+import { contentReadSafety } from './content-safety.mjs';
+import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHmac, randomUUID } from 'node:crypto';
 import { transaction, isStorageBusy } from './database.mjs';
 import { ADMISSION_LEASE_MS, HEX_DIGEST } from './episode-schema.mjs';
@@ -56,7 +58,7 @@ export function episodeMetadata(ns, row) {
 }
 
 /** All write seams are model-free. SE-2 owns scheduling and provider calls. */
-export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch, epoch, forgetMutation, rawCapture, sourceAuthority, sourceRoots, deleteEpisode }) {
+export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch, epoch, forgetMutation, rawCapture, sourceAuthority, sourceRoots, deleteEpisode, assertEpisodeRead }) {
   const rawControls = createRawControlStorage(db);
   // Cleanup-only callers need only exec; defer the optional schema probe until
   // a real episode publication attempt, preserving that legacy failure seam.
@@ -1017,10 +1019,12 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
   }
   function inspect(ns, input, pages) {
     return transaction(db, () => {
+      if (contentSuppressionReasonInside(db, ns)) fail('episode_not_found');
       stagedEvidence.touch(ns);
       const currentEpoch = epoch(ns);
       for (const page of Object.values(pages)) if (page.epoch !== undefined && page.epoch !== currentEpoch) fail('cursor_stale');
       const row = live(ns, input.episodeId);
+      assertEpisodeRead?.(ns, row);
       if (db.prepare('SELECT 1 FROM review_hidden_episodes WHERE id=?').get(row.id)) fail('episode_not_found');
       const sources = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? AND id>? ORDER BY id LIMIT ?')
         .all(row.id, pages.source.after ?? '', pages.source.limit+1).map(source => ({ id: source.id, digest: source.digest,
@@ -1029,8 +1033,11 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       const memories = db.prepare(`SELECT l.* FROM episode_memory_links l JOIN memories m ON m.id=l.memory_id
         WHERE l.episode_id=? AND l.id>? AND m.deleted=0 AND m.review_state!='awaiting'
           AND m.owner_id=? AND m.scope=? AND m.project_id=? ORDER BY l.id LIMIT ?`)
-        .all(row.id, pages.memory.after ?? '', ...boundary(ns), pages.memory.limit+1).map(link => ({ id: link.id, memoryId: link.memory_id,
-          admissionRevision: link.admission_revision, receiptIds: JSON.parse(link.receipt_ids).filter(id => db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(id, link.memory_id)) }));
+        .all(row.id, pages.memory.after ?? '', ...boundary(ns), pages.memory.limit+1).filter(link => {
+          const memory = db.prepare('SELECT * FROM memories WHERE id=?').get(link.memory_id);
+          return memory && contentReadSafety(db, { namespace: ns, intent: 'history', ref: { type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision } }).allowed;
+        }).map(link => ({ id: link.id, memoryId: link.memory_id,
+          admissionRevision: link.admission_revision, receiptIds: JSON.parse(link.receipt_ids).filter(id => !contentSuppressionReasonInside(db, ns, { kind: 'receipt', key: id }) && db.prepare('SELECT 1 FROM receipts WHERE id=? AND memory_id=?').get(id, link.memory_id)) }));
       const policies = db.prepare(`SELECT e.*,s.state,s.release_reason FROM episode_events e LEFT JOIN staged_capture_evidence s
         ON e.owner_id=s.owner_id AND e.scope=s.scope AND e.project_id=s.project_id AND e.client=s.client AND e.event_id=s.event_id
         WHERE e.episode_id=? AND e.position>? ORDER BY e.position LIMIT ?`)

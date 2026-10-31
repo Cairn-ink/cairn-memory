@@ -8,7 +8,7 @@ function validMetadata(row) {
 }
 /** Each step makes one indexed physical visit and at most three point validations.
  * Only one candidate and its canonical attribution survive a step/call. */
-export function createTopicMembersStorage(db) {
+export function createTopicMembersStorage(db, { memoryReadable = () => true } = {}) {
   const q = sql => db.prepare(sql.replace(/\b([a-z_]+)([>=]+)\?/g, '$1 COLLATE BINARY$2?')
     .replace(/ORDER BY ([a-z_]+)/g, 'ORDER BY $1 COLLATE BINARY'));
   const moc = q('SELECT id,owner_id,scope,project_id,revision,level FROM mocs WHERE id=?');
@@ -45,6 +45,7 @@ export function createTopicMembersStorage(db) {
       s.after = row.id;
       if (!same(row, n) || row.deleted || row.currentness !== 'current' || !['none', 'confirmed'].includes(row.review_state) ||
           !projected(pm, g, { revision: row.revision }, row.id)) return;
+      if (!memoryReadable(n, row)) return;
       validMetadata(row);
       if (!memberKinds.includes(row.kind)) fail('unsupported_database');
       if (request.kind !== null && request.kind !== row.kind) return;

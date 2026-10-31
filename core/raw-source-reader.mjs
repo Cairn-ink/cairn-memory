@@ -1,3 +1,5 @@
+import { cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
+import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { sourceReadSafety } from './content-safety.mjs';
 import { performance } from 'node:perf_hooks';
 import { createCardRawSources } from './card-raw-sources.mjs';
@@ -11,6 +13,7 @@ const freeze = value => { if (value && typeof value === 'object') { Object.value
 
 /** Uninstalled async opening seam; all canonical Card writes remain synchronous. */
 export function createRawSourceReader({ db, identity, open, partDigest }) {
+  const safety = (cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision;
   const safetyIdentity = { storeId: identity.store_id, cursorSecret: identity.cursor_secret };
   const sources = createCardRawSources(db, safetyIdentity);
   function read(work) {
@@ -69,6 +72,10 @@ export function createRawSourceReader({ db, identity, open, partDigest }) {
       const context = freeze(rawContext({ ...ns, projectId: ns.projectId ?? '' }, message.client,message.session_key,
         part.conversation_id,value,part.end));
       let text;
+      if (safety) read(() => {
+        if (contentSuppressionReasonInside(db, ns, { kind: 'raw', key: part.conversation_id,
+          messageId: part.message_id, start: part.start, end: part.end })) fail('source_unavailable');
+      });
       try {
         const result = await open({ ownerId: ns.ownerId, context, ...rawSealed({ format: part.format,keyVersion: part.key_version,
           sealed: Buffer.from(state.payloads.get(partKey(part))) }) });

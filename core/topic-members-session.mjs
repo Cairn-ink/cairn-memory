@@ -1,3 +1,4 @@
+import { contentReadSafety } from './content-safety.mjs';
 import { attestContentSafety, checkInstalledContentSafety } from './content-safety-schema.mjs';
 import { unsupportedTopicStorage } from './topic-reader-sqlite.mjs';
 import { lstatSync } from 'node:fs';
@@ -43,7 +44,7 @@ export function createTopicSession(path, topicPolicy) {
     try {
       charge(1);
       schema = configuration(opened.db);
-      attestContentSafety(opened.db, schema.version);
+      const layout = attestContentSafety(opened.db, schema.version);
       const encoding = opened.db.prepare('PRAGMA encoding').get().encoding;
       if (schema.applicationId !== APPLICATION_ID || !READ_SCHEMA_VERSIONS.includes(schema.version) || encoding !== 'UTF-8') fail('unsupported_database');
       charge(1);
@@ -55,7 +56,9 @@ export function createTopicSession(path, topicPolicy) {
       for (const [table, keys] of [['mocs', ['id']], ['index_mocs', ['generation','id']]]) assertPointPlan(opened.db, table, keys);
       opening = createTopicOpening(opened.db, schema.version);
       overview = createTopicOverviewStorage(opened.db, { exactComparisons: true });
-      const raw = createTopicMembersStorage(opened.db);
+      const raw = createTopicMembersStorage(opened.db, { memoryReadable: layout.suppressionRevision
+        ? (namespace, row) => contentReadSafety(opened.db, { namespace, ref: { type: 'memory', namespace, memoryId: row.id, revision: row.revision } }).allowed
+        : () => true });
       members = { ...raw, create: () => ({ ...raw.create(), initialization: opening.create() }),
         cost: state => state.initialization.done ? 1 : opening.cost(state.initialization),
         step(state, ...args) {

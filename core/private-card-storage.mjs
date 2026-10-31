@@ -1,9 +1,11 @@
-import { allocateContentKey, writeContentSuppressionInside } from './content-suppression-storage.mjs';
+import { cachedContentLayout } from './content-safety-schema.mjs';
+import { assertContentOutput, assertContentScopes } from './content-safety-boundary.mjs';
+import { writeContentSuppressionInside, allocateContentKey } from './content-suppression-storage.mjs';
 import { contentReadSafety, sourceReadSafety, cardContributorsInside, createContentReadMemo } from './content-safety.mjs';
 import { createCardCurrentStorage, cardDependencyFence } from './card-current-storage.mjs';
 import { CARD_CURRENT_METHODS } from './card-current-input.mjs';
 import { createOperationLedger, createPrivateEffectWriter, createPrivateCursor } from './private-operation-helpers.mjs';
-import { transaction } from './database.mjs';
+import { readTransaction, transaction } from './database.mjs';
 import { fail } from './validation.mjs';
 import { EVIDENCE_METHODS } from './private-evidence-input.mjs';
 import { createPrivateEvidenceStorage } from './private-evidence-storage.mjs';
@@ -233,6 +235,15 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
       if (size(result) > (input.responseByteLimit ?? 65536)) fail('context_item_too_large');
       return result;
     }
+    if (method === 'getPrivateCardUsage') assertContentScopes(db,[{ownerId:ns.ownerId,scope:'owner',projectId:''}]);
+    if (method === 'getPrivateCardUsage' && cachedContentLayout(db)?.suppressionRevision) {
+      const rows=db.prepare(`SELECT n.* FROM card_notes n WHERE n.owner_id=? AND n.state='available' AND EXISTS(
+        SELECT 1 FROM content_suppressions f INDEXED BY content_suppression_target WHERE f.owner_id=n.owner_id
+        AND f.scope=n.scope AND f.project_id=n.project_id AND f.kind='submitted-note' AND f.stable_key=n.id AND f.incarnation=n.id) LIMIT 129`).all(ns.ownerId);
+      if(rows.length>128)fail('source_unavailable');
+      for(const row of rows){const scope={ownerId:row.owner_id,scope:row.scope,projectId:row.project_id||null};
+        if(!sourceReadSafety(db,{identity,namespace:scope,ref:refFor(scope,row)}).allowed)fail('source_unavailable');}
+    }
     if (method === 'getPrivateCardUsage') return { version: 'submitted-note-usage-v1',
       ownerId: ns.ownerId, submittedNoteBytes: db.prepare('SELECT byte_count FROM card_note_usage WHERE owner_id=?').get(ns.ownerId)?.byte_count ?? 0,
       retainedSourceBytes: db.prepare('SELECT byte_count FROM card_note_usage WHERE owner_id=?').get(ns.ownerId)?.byte_count ?? 0,
@@ -310,7 +321,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     receiptRefInside: (ns, memory, receipt) => receiptSources.refInside(ns, memory, receipt) });
   const organization = createPrivateOrganizationStorage({ db, identity, memoryMapInside, memoryTopicInside,
     cardDetailInside: (ns, id) => detail(ns, card(ns, id)) });
-  return Object.freeze({
+  return Object.freeze({ assertContentOutput(value, scopes) { if(!cachedContentLayout(db)?.suppressionRevision)return; return db.isTransaction?assertContentOutput(db,identity,value,scopes):readTransaction(db,()=>assertContentOutput(db,identity,value,scopes)); }, assertContentScope: scopes => { ready(); assertContentScopes(db,scopes); },
     // Internal shared-read seams: caller owns scope authorization and transaction.
     cardDetailInside(ns, id, readSet, intent) { ready(); return detail(ns, card(ns, id), readSet, intent); },
     cardMetadataInside(ns, row) { ready(); const memo = createContentReadMemo(db); return row && cardSafe(ns, row, 'listCards', memo) ? metadata(ns, row, undefined, undefined, memo) : null; },
@@ -322,7 +333,8 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
         if (EVIDENCE_METHODS.includes(method)) return evidence.call(method, ns, input, context.accessGeneration);
         if (ORGANIZATION_READS.includes(method)) return organization.call(method, ns, input, context.accessGeneration);
         if (isRead) return read(method, ns, input);
-        const replay = ledger.replay(ns, input.actionId, method, payloadBinding);
+        if(cachedContentLayout(db)?.suppressionRevision&&db.prepare('SELECT 1 FROM owner_suppression_epochs WHERE owner_id=?').get(ns.ownerId)&&!/^(delete|cancel|disable)/.test(method))assertContentOutput(db,identity,input,[ns],{factsOnly:true});
+        const replay = ledger.replay(ns, input.actionId, method, payloadBinding, input);
         if (replay !== undefined) return replay;
         const result = ORGANIZATION_METHODS.includes(method) ? organization.call(method, ns, input, context.accessGeneration) : mutate(method, ns, input, context.access);
         if (size(result) > 65536) fail('context_item_too_large');

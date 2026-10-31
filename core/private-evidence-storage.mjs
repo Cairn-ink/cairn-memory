@@ -1,3 +1,4 @@
+import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety, memoryReadEligible, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
@@ -135,12 +136,19 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     const byType = Object.fromEntries(input.types.map(type => [type, { scanned: 0, included: 0, partial: true }]));
     const exhausted = new Set(), blocked = new Set(), matches = [], queryWords = words(input.query);
     function next(type, metadataOnly = false) {
-      const columns = metadataOnly ? 'id' : '*';
+      const columns = metadataOnly ? (cachedContentLayout(db)?.suppressionRevision
+        ? 'id,revision'+(type==='card'?',body_revision':'') : 'id') : '*';
       const row = type === 'memory' ? db.prepare(`SELECT ${columns} FROM memories WHERE ${where}
         AND deleted=0 AND id>? ORDER BY id LIMIT 1`).get(...boundary(ns), after[type]) :
         db.prepare(`SELECT ${columns} FROM private_cards WHERE ${where} AND state='confirmed' AND id>? ORDER BY id LIMIT 1`)
           .get(...boundary(ns), after[type]);
       return row;
+    }
+    function assertContributor(type,row) {
+      if(!row || !cachedContentLayout(db)?.suppressionRevision)return;
+      const ref={type,namespace:ns,[type==='memory'?'memoryId':'cardId']:row.id,revision:row.revision,
+        ...(type==='card'?{bodyRevision:row.body_revision}:{})};
+      if(!contentReadSafety(db,{identity,namespace:ns,ref,intent:'history',method:type==='card'?'getCard':'retrieval'}).allowed)fail('evidence_unavailable');
     }
     while (matches.length < input.limit && exhausted.size + blocked.size < input.types.length) {
       if (scannedRows >= input.scanRows) { stopped = 'row_budget'; break; }
@@ -150,6 +158,8 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       if (exhausted.has(type) || blocked.has(type)) continue;
       const row = next(type);
       if (!row) { exhausted.add(type); continue; }
+      // Scanned counts, body-unit budgets and cursor identities are outputs.
+      assertContributor(type,row);
       const text = type === 'memory' ? row.content : `${row.title}\n${row.body}`;
       if (scannedBodyUnits + text.length > input.scanBodyUnits) { blocked.add(type); stopped = 'body_budget'; continue; }
       after[type] = row.id; scannedRows++; scannedBodyUnits += text.length; byType[type].scanned++;
@@ -163,7 +173,9 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       byType[type].included++;
     }
     // A metadata-only bounded peek tells callers which streams actually ended.
-    for (const type of input.types) if (!blocked.has(type) && !next(type, true)) exhausted.add(type);
+    for (const type of input.types) if (!blocked.has(type)) {
+      const peek=next(type,true);assertContributor(type,peek);if(!peek)exhausted.add(type);
+    }
     const complete = exhausted.size === input.types.length;
     for (const type of input.types) byType[type].partial = !exhausted.has(type);
     matches.sort((left, right) => right.score - left.score || input.types.indexOf(left.type) - input.types.indexOf(right.type) ||

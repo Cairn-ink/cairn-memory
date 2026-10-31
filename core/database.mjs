@@ -1,3 +1,6 @@
+import './content-write-safety.mjs';
+import { withoutContentSuppressionReadCacheInside } from './content-suppression-storage.mjs';
+import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
 import { SAFETY_SCHEMA_VERSIONS, resolveContentLayout, assertContentFeatures } from './content-safety-layout.mjs';
 import { attestContentSafety, checkInstalledContentSafety } from './content-safety-schema.mjs';
@@ -343,20 +346,28 @@ export function readTransaction(db, work, acquisition) {
 export function transaction(db, work, check) {
   if (activeReads.has(db) || discardedConnections.has(db)) fail('storage_error');
   check?.();
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    checkInstalledContentSafety(db);
-    const result = work();
-    check?.();
-    db.exec("COMMIT");
-    return result;
-  } catch (error) {
-    db.exec("ROLLBACK");
-    if (error?.code === 'ERR_SQLITE_ERROR' && error.message === 'card_dependency_limit_reached') {
-      fail('dependency_limit_reached');
-    }
-    throw error;
-  }
+  const execute = () => {
+    db.exec("BEGIN IMMEDIATE");
+    let contentWrite;
+    try {
+      checkInstalledContentSafety(db);
+      contentWrite = beginContentWrite(db);
+      const result = work();
+      contentWrite?.validate(result);
+      contentWrite?.close();
+      contentWrite = null;
+      check?.();
+      db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      db.exec("ROLLBACK");
+      if (error?.code === 'ERR_SQLITE_ERROR' && error.message === 'card_dependency_limit_reached') {
+        fail('dependency_limit_reached');
+      }
+      throw error;
+    } finally { contentWrite?.close(); }
+  };
+  return contentWriteOperation(db) ? withoutContentSuppressionReadCacheInside(db, execute) : execute();
 }
 
 /** contentSafety:'s2h-v1' creates only a new file, at its base's safety cell.

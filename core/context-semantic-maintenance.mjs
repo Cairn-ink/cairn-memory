@@ -1,3 +1,4 @@
+import { contentSuppressionFenceInside } from './content-suppression-storage.mjs';
 import { createHmac } from 'node:crypto';
 import { openContextProductFacade } from './context-read-facade.mjs';
 import { productSidecar, canonicalProductIdentity, productFile, PRODUCT_SIDECAR_SUFFIX } from './context-product-sidecar.mjs';
@@ -162,6 +163,10 @@ export function semanticMaintenance({c,sqlite,identity,secretState}) {
     if(!p||!same(p.readSet,metadata.readSet)||p.readSet[0].ownerId!==state.ownerId||input.kind==='refresh'&&!metadata.maintenance)fail('authority_required');
     const v=open(metadata.path);
     v.facade.port.read(()=>{
+      if(input.kind==='refresh') {
+        const epoch=contentSuppressionFenceInside(v.facade.port.db,state.ownerId);
+        if(epoch!==null && p.suppressionEpoch!==epoch || epoch===null && p.suppressionEpoch!=null)fail('evidence_unavailable');
+      }
       const observed=v.storage.observe({...p,ownerCoverage:coverage(p.readSet)},p.accessDigest);
       if(observed.dto.lexical.state!=='ready'||digest(observed.publication)!==p.lexicalValidationDigest)fail('index_unavailable');
       if(input.kind==='query') {

@@ -1,6 +1,6 @@
 {
-  "version": "s2h1-reviewed-split-v1",
-  "reviewedBase": "9e99a3dd",
+  "version": "s2h2-reviewed-split-v1",
+  "reviewedBase": "0b1d1b01",
   "inventory": {
     "exports": [
       "CARD_CURRENT_METHODS",
@@ -11,6 +11,7 @@
       "createContextReadSupervisor",
       "normalizeBoundedText",
       "normalizedTextLength",
+      "openContentSuppressionReader",
       "openContextIndexMaintainer",
       "openContextProductReader",
       "openContextReader",
@@ -870,6 +871,11 @@
       "disableRoleProfile",
       "publishRoleProfileRelease",
       "readRoleTaskContext"
+    ],
+    "pull": [
+      "close",
+      "isSuppressed",
+      "listSuppressionsSince"
     ]
   },
   "capabilities": [
@@ -907,7 +913,8 @@
   "implementations": [
     {
       "file": "core/content-suppression-storage.mjs",
-      "sha256": "dd99f8120974d94dfe1c4271d30db7a7a4b90c123800921efd9a701138f49e8b"
+      "sha256": "886e6788cfff41d72a8c84ea422cdad321c182a29f26abdfc690e2a1cb52b2f9",
+      "reason": "S2h-2 adds serving/request matching and write-ack ceilings; storage DDL, writer protocol and B3 observation remain pinned."
     },
     {
       "file": "core/content-safety-migration.mjs",
@@ -915,7 +922,8 @@
     },
     {
       "file": "core/content-safety-schema.mjs",
-      "sha256": "2b205936634b6f0bb58c35b29c30373c0006d22e41a87958bff3f03fdcf2f2d8"
+      "sha256": "3bd5760eaade1e53a9d970100e15da1cad53d7fcdf22aaec6d57b32158230982",
+      "reason": "Add snapshot-local serving layout reuse; opener and attestation SQL are unchanged."
     }
   ],
   "writers": [
@@ -924,7 +932,8 @@
       "file": "core/runtime.mjs",
       "start": "  function correct(",
       "end": "  function forgetMutation(",
-      "sha256": "f40d5b46bf93790d10252ef2b6e4021e45c2422bf8ce04623e60263bfbcfe112"
+      "sha256": "129aebec8ff19ebf595e094f5295fd7fe845325bb6044a866593ad1ebff29225",
+      "reason": "S2h-2 validates canonical post-state acknowledgements and references around the existing terminal fact writer."
     },
     {
       "id": "forget",
@@ -1099,6 +1108,234 @@
     ],
     "renewContextMaintenancePump": [
       "pump"
+    ],
+    "openContentSuppressionReader": [
+      "pull"
     ]
+  },
+  "additions": {
+    "exports.openContentSuppressionReader": "Opens the separate read-only denial reconciliation handle required by D-15 and \u00a75.",
+    "pull.close": "Disposes the read-only connection and bounded reconciliation cache.",
+    "pull.isSuppressed": "Reconciles captured bound identities against authoritative denial facts.",
+    "pull.listSuppressionsSince": "Pages immutable denial keys after an authenticated owner checkpoint.",
+    "runtime.assertContentScope": "Refuses suppressed scopes at the runtime facade boundary.",
+    "runtime.contentPortGuard": "Protects external ports against suppression changes during a runtime call.",
+    "runtime.assertContentOutput": "Validates typed runtime output before facade delivery.",
+    "runtime.suppressionFence": "Binds runtime delivery to the current owner suppression epoch."
+  },
+  "moduleExports": {
+    "core/content-safety-boundary.mjs": {
+      "exports": [
+        "assertContentOutput",
+        "assertContentPort",
+        "assertContentScopes",
+        "contentReceiptCount",
+        "contentSafetyFacade",
+        "contentScopeEpochGuard",
+        "contentScopes"
+      ],
+      "additions": {
+        "assertContentOutput": "Validates every typed content reference before its response leaves a facade.",
+        "assertContentPort": "Rechecks content authority at external model and token-count ports.",
+        "assertContentScopes": "Refuses owner or namespace suppression before a facade serves content.",
+        "contentReceiptCount": "Hides aggregate receipt counts when receipt facts can affect the result.",
+        "contentSafetyFacade": "Applies the common read boundary and structural write acknowledgement lifecycle.",
+        "contentScopeEpochGuard": "Fences facade delivery against suppression facts committed by callbacks.",
+        "contentScopes": "Extracts namespace boundaries from trusted facade inputs."
+      }
+    },
+    "core/content-safety-schema.mjs": {
+      "exports": [
+        "attestContentSafety",
+        "bindContentSafetyConnection",
+        "cachedContentLayout",
+        "checkInstalledContentSafety",
+        "contentSafetyBudgetError",
+        "contentSafetyConnection",
+        "contentSafetyDDL",
+        "installedContentLayout",
+        "verifyContentSafetyDDL",
+        "withContentSafetyLayoutInside"
+      ],
+      "additions": {
+        "withContentSafetyLayoutInside": "Reuses one attested layout within a synchronous canonical snapshot."
+      }
+    },
+    "core/content-suppression-evidence.mjs": {
+      "exports": [
+        "createSuppressionEvidence"
+      ],
+      "additions": {
+        "createSuppressionEvidence": "Resolves captured identities for the separate suppression reconciliation API."
+      }
+    },
+    "core/content-suppression-input.mjs": {
+      "exports": [
+        "SUPPRESSION_LIMITS",
+        "SUPPRESSION_REASONS",
+        "SUPPRESSION_VERSION",
+        "bootstrap",
+        "checkpoint",
+        "denialKeyFromFact",
+        "denialKeyMatches",
+        "denialKeyTarget",
+        "exact",
+        "identityKey",
+        "pullOptions",
+        "sourceIdentities",
+        "suppressionGrant",
+        "uuid"
+      ],
+      "additions": {
+        "SUPPRESSION_LIMITS": "Pins the pull API byte, row, cursor and retention budgets.",
+        "SUPPRESSION_REASONS": "Pins the denial reasons accepted by the pull protocol.",
+        "SUPPRESSION_VERSION": "Pins the independent suppression reader protocol version.",
+        "bootstrap": "Validates the suppression domain and store bootstrap binding.",
+        "checkpoint": "Validates the authenticated owner suppression checkpoint.",
+        "denialKeyFromFact": "Serializes immutable facts into content-free reconciliation keys.",
+        "denialKeyMatches": "Matches a validated denial key against a captured source identity.",
+        "denialKeyTarget": "Validates and normalizes denial keys before authoritative matching.",
+        "exact": "Rejects unknown fields in the closed suppression protocol grammar.",
+        "identityKey": "Builds deterministic keys for captured suppression identities.",
+        "pullOptions": "Validates pagination and checkpoint options for pull requests.",
+        "sourceIdentities": "Validates captured identities under the separately granted pull scope.",
+        "suppressionGrant": "Validates the separate suppression grant and erasure reconciliation permission.",
+        "uuid": "Validates UUID protocol bindings without coercion."
+      }
+    },
+    "core/content-suppression-reader.mjs": {
+      "exports": [
+        "openContentSuppressionReader"
+      ],
+      "additions": {
+        "openContentSuppressionReader": "Opens the independent read-only denial reconciliation handle required by D-15."
+      }
+    },
+    "core/content-suppression-storage.mjs": {
+      "exports": [
+        "allocateContentKey",
+        "assertContentSuppressionRequestInside",
+        "cachedContentSuppressionRequestInside",
+        "contentSuppressionFenceInside",
+        "contentSuppressionMayMatchInside",
+        "contentSuppressionReasonInside",
+        "contentSuppressionRequestFenceInside",
+        "contentSuppressionRequestInside",
+        "contentSuppressionTargetMatches",
+        "hasContentSuppressionRequestInside",
+        "inContentSuppressionRequestInside",
+        "memorySuppressionObservationInside",
+        "registerContentSuppressionReadMemoInside",
+        "requireSuppressionTransaction",
+        "reserveContentIdentityInside",
+        "suppressOwnerInside",
+        "suppressReceiptsInside",
+        "suppressionEpoch",
+        "withContentSuppressionCeilingsInside",
+        "withContentSuppressionReadInside",
+        "withContentSuppressionRequest",
+        "withoutContentSuppressionReadCacheInside",
+        "writeContentSuppressionInside"
+      ],
+      "additions": {
+        "assertContentSuppressionRequestInside": "Reattests the header and owner epoch before provisional read delivery.",
+        "cachedContentSuppressionRequestInside": "Retrieves only the current request owner fact state for this connection.",
+        "contentSuppressionMayMatchInside": "Proves a scoped target cannot match the request fact set without SQL.",
+        "contentSuppressionReasonInside": "Applies durable suppression facts after the canonical S1 decision.",
+        "contentSuppressionRequestFenceInside": "Reuses the request epoch for intermediate content delivery guards.",
+        "contentSuppressionRequestInside": "Loads one scoped owner fact set keyed by request and epoch.",
+        "contentSuppressionTargetMatches": "Shares typed fact matching with causal write acknowledgement exemptions.",
+        "hasContentSuppressionRequestInside": "Detects serving request state while excluding registered writer lifecycles.",
+        "inContentSuppressionRequestInside": "Bridges existing canonical reads into their request fact view.",
+        "registerContentSuppressionReadMemoInside": "Binds lazy fact state to the lifetime of an S1 read memo.",
+        "withContentSuppressionCeilingsInside": "Restricts write validation to facts preceding the current operation.",
+        "withContentSuppressionReadInside": "Selects the scoped fact view for a synchronous canonical read.",
+        "withContentSuppressionRequest": "Bounds all serving fact caches to a single request lifecycle.",
+        "withoutContentSuppressionReadCacheInside": "Isolates nested writers from provisional serving request caches."
+      }
+    },
+    "core/content-write-changes.mjs": {
+      "exports": [
+        "contentWriteChanges"
+      ],
+      "additions": {
+        "contentWriteChanges": "Decodes SQLite changesets into structural acknowledgement references."
+      }
+    },
+    "core/content-write-context.mjs": {
+      "exports": [
+        "CONTENT_TERMINAL_ACK_FIELDS",
+        "CONTENT_TERMINAL_FIELDS",
+        "CONTENT_WRITE_METHODS",
+        "beginContentWrite",
+        "contentWriteBoundaryConnection",
+        "contentWriteMethodClass",
+        "contentWriteOperation",
+        "declareContentTerminalInside",
+        "registerContentWriteBoundary",
+        "registerContentWriteGuard",
+        "withContentWriteOperation"
+      ],
+      "additions": {
+        "CONTENT_TERMINAL_ACK_FIELDS": "Pins the typed terminal reference fields allowed in write acknowledgements.",
+        "CONTENT_TERMINAL_FIELDS": "Pins terminal targets for the explicit causal exemption rule.",
+        "CONTENT_WRITE_METHODS": "Pins which facade methods require structural write acknowledgement validation.",
+        "beginContentWrite": "Starts the registered transaction acknowledgement guard.",
+        "contentWriteBoundaryConnection": "Resolves the registered connection to isolate the whole writer facade lifecycle.",
+        "contentWriteMethodClass": "Classifies facade methods for the read or write safety boundary.",
+        "contentWriteOperation": "Resolves the active operation for a particular native connection.",
+        "declareContentTerminalInside": "Records canonical terminal targets for the same-operation exemption.",
+        "registerContentWriteBoundary": "Associates trusted facade boundaries with their canonical connections.",
+        "registerContentWriteGuard": "Installs the structural acknowledgement validator at the transaction seam.",
+        "withContentWriteOperation": "Scopes write metadata across the complete facade operation."
+      }
+    },
+    "core/content-write-safety.mjs": {
+      "exports": [
+        "beginContentWriteSafety"
+      ],
+      "additions": {
+        "beginContentWriteSafety": "Validates structural references and causal exemptions before commit."
+      }
+    },
+    "core/context-product-service.mjs": {
+      "exports": [
+        "claimMaintenanceWriter",
+        "serviceIssuance",
+        "suppressionServiceIssuance"
+      ],
+      "additions": {
+        "suppressionServiceIssuance": "Validates the independent trusted service grant for suppression reads."
+      }
+    },
+    "core/index.mjs": {
+      "exports": [
+        "CARD_CURRENT_METHODS",
+        "CARD_CURRENT_VERSION",
+        "CONTEXT_SOURCES",
+        "MemoryStoreError",
+        "SOURCE_LIMITS",
+        "createContextReadSupervisor",
+        "normalizeBoundedText",
+        "normalizedTextLength",
+        "openContentSuppressionReader",
+        "openContextIndexMaintainer",
+        "openContextProductReader",
+        "openContextReader",
+        "openContextSemanticCoordinator",
+        "openMemoryCore",
+        "openMemoryReader",
+        "openMemoryStore",
+        "renewContextMaintenancePump",
+        "roleProfileRef",
+        "roleProfileReleaseRef",
+        "roleTaskMeteredText",
+        "roleTaskToolResponse",
+        "selectContextProductNamespaces"
+      ],
+      "additions": {
+        "openContentSuppressionReader": "Opens the independent read-only denial reconciliation handle required by D-15."
+      }
+    }
   }
 }

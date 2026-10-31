@@ -33,6 +33,7 @@ export async function callModel(model, method, system, input,
   };
   const tokens = (text) => {
     check();
+    validateFresh();
     try { return countTokens(model, text); }
     catch (error) { emitDiagnostic(model, method, 'core_call', 'token_count_unavailable'); throw error; }
     finally { check(); }
@@ -42,8 +43,6 @@ export async function callModel(model, method, system, input,
   if (!Number.isSafeInteger(model.contextWindow) || model.contextWindow < 8192) reject('context_budget_exceeded');
   const request = { system, input, maxOutputTokens: MODEL_OUTPUT_TOKENS };
   if (tokens(modelRequestText(system, input)) > MODEL_INPUT_TOKENS) reject('context_budget_exceeded');
-  check();
-  validateFresh();
   check();
   controller = new AbortController();
   let timer;

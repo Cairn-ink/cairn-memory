@@ -1,3 +1,4 @@
+import { assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
 import { ROLE_WRITES, roleWriteInput } from './role-profile-input.mjs';
 import { deepFreeze, cardNamespace } from './private-card-input.mjs';
 import { verifyPrivateGrant, privateFailure } from './private-card-facade.mjs';
@@ -35,5 +36,6 @@ export function createRoleProfileFacade(storage,options,config) {
       return {ok:true,value:storage.mutate(method,namespace,payload,request.payloadBinding,fields,changeReason,options.attribution)};
     }catch(error){return privateFailure(error);}
   };
-  return {...result,readRoleTaskContext:createRoleContextReader(storage,options,config)};
+  return contentSafetyFacade({...result,readRoleTaskContext:createRoleContextReader(storage,options,config)}, { writeBoundary:storage,
+    check: scopes => { storage.ready(); assertContentScopes(storage.db,scopes); }, failure: privateFailure, validate: (method,args,result,scopes) => { if(method==='readRoleTaskContext'&&result?.ok)storage.assertContentOutput(result.value,scopes); } });
 }

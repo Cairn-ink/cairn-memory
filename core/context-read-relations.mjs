@@ -1,3 +1,6 @@
+import { bindContentSafetyConnection, cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
+import { contentReadSafety } from './content-safety.mjs';
+import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { compareCanonical, canonicalKey } from './context-read-bm25.mjs';
@@ -81,7 +84,7 @@ export function relationDiagnostic(reason) {
  * residual eligibility/revision predicates. Validate returned metadata in JS so
  * rejected/stale rows and every repeated lookup are still fully charged. */
 export function chargedSourceDatabase(db, budget) {
-  return { get isTransaction() { return db.isTransaction; }, prepare(sql) {
+  return bindContentSafetyConnection({ get isTransaction() { return db.isTransaction; }, prepare(sql) {
     const statement = db.prepare(sql);
     return { get(...args) {
       budget.ensure(2); budget.charge('lookups');
@@ -104,7 +107,7 @@ export function chargedSourceDatabase(db, budget) {
         return rows;
       } finally { iterator.return?.(); budget.release(bytes); }
     } };
-  } };
+  } }, db);
 }
 // Cache metadata only, never prose or foreign identities. One classification
 // read supplies namespace, revision and eligibility metadata. Bounded LRU hits
@@ -119,6 +122,9 @@ export function sourceScopeQuery(type, { topic = false } = {}) {
 const sourceContexts = new WeakMap();
 export function sourceReader(db, identity, features, input, budget, sharedContext) {
   const charged = chargedSourceDatabase(db, budget);
+  // Trusted feature handoff for point-only adapters; normal serving handles
+  // reuse their opener's attestation. This never reads canonical population.
+  const suppressionRevision = features.suppressionRevision ?? (cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision;
   if (!sourceContexts.has(budget)) {
     budget.hold(1024 * 1024, { required: true });
     sourceContexts.set(budget, { privateBudget: sourcePrivateBudget(budget.check), cache: sharedContext ?? createSourceContext() });
@@ -187,6 +193,7 @@ export function sourceReader(db, identity, features, input, budget, sharedContex
     if (row.deleted || ['cancelled', 'deleted'].includes(row.state)) return { reason: 'unavailable' };
     if (row.revision !== ref.revision || ref.type === 'card' && row.body_revision !== ref.bodyRevision) return { reason: 'revision' };
     if (ref.type === 'memory') {
+      if (suppressionRevision && !contentReadSafety(charged, { identity, namespace: ns, ref }).allowed) return { reason: 'unavailable' };
       if (row.currentness !== 'current' || row.review_state === 'awaiting') return { reason: 'ineligible' };
       if (projection) {
         const state = projectionState(ns);
@@ -209,7 +216,7 @@ export function sourceReader(db, identity, features, input, budget, sharedContex
     return refs.map(ref => endpoint(ref, options));
   }
   function receipt(memoryId, receiptId, expected, ns = input.readSet[0]) {
-    if (!metadata(ns, 'memory', memoryId).scoped) return false;
+    if (!metadata(ns, 'memory', memoryId).scoped || suppressionRevision && contentSuppressionReasonInside(charged, ns, { kind: 'receipt', key: receiptId })) return false;
     budget.ensure(4); privateBudget.ensure(4);
     // ID is UNIQUE. Never hide a mismatched receipt behind a memory_id WHERE
     // residual: visit/classify it once, but expose its prose only for the

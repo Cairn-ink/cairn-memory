@@ -8,7 +8,7 @@ function replace(source, before, after) {
   if (!source.includes(before)) throw Error('mutation_anchor_missing');
   return source.replace(before, after);
 }
-function runtime(source) { return replace(source, '  return Object.freeze({\n    listReviewConflicts', '  return Object.freeze({\n    ' + privacy + '\n    listReviewConflicts'); }
+function runtime(source) { return replace(source, '  return contentSafetyFacade({\n    assertContentScope,', '  return contentSafetyFacade({\n    ' + privacy + '\n    assertContentScope,'); }
 export const splitMutations = [
   { name: 'openPrivacy -> runtime.privacyErase -> suppressReceiptsInside', addedExport: 'openPrivacy',
     change: { 'core/runtime.mjs': runtime,
@@ -49,8 +49,8 @@ function sqlGetMutation(quoted) {
           .run(...boundary(ns),source.id,source.id,ns.ownerId);
       });
     },`;
-  return { 'core/runtime.mjs': source => replace(source, '  return Object.freeze({\n    listReviewConflicts',
-    '  return Object.freeze({\n    ' + method + '\n    listReviewConflicts'),
+  return { 'core/runtime.mjs': source => replace(source, '  return contentSafetyFacade({\n    assertContentScope,',
+    '  return contentSafetyFacade({\n    ' + method + '\n    assertContentScope,'),
   'core/contract.mjs': source => replace(source, '    admit, list, get, correct, forget,',
     '    admit, list, get: input => { runtime.directSqlObservation({...input.namespace,projectId:input.namespace.projectId??""},input.memoryId); return get(input); }, correct, forget,') };
 }

@@ -1,3 +1,4 @@
+import { contentSafetyFacade } from './content-safety-boundary.mjs';
 import { ASSET_METHODS,ASSET_READS,ASSET_LIMITS,ASSET_MEDIA,assetSnapshot,freezeAssetMetadata,validateAssetCall } from './asset-input.mjs';
 import { deepFreeze } from './private-card-input.mjs';
 import { verifyPrivateGrant,privateFailure } from './private-card-facade.mjs';
@@ -35,5 +36,5 @@ export function createAssetFacade(storage,options,ready) {
     refs:['asset','asset-version','asset-derivative'],mediaTypes:[...ASSET_MEDIA],limits:{...ASSET_LIMITS},parser:'unavailable',signature:'signature-matched',
     derivatives:{kinds:['caption','transcript','description','alt-text'],method:'user-provided',provenance:'asset-derivative-provenance-v1',alignment:'user-supplied-unverified'},
     usageProjection:'binary-usage-v1',usageScope:'namespace',quotaScope:'owner',modelAssisted:false,execution:false}});
-  return facade;
+  return contentSafetyFacade(facade, { writeBoundary:storage, check: scopes => storage.assertContentScope(scopes), failure: privateFailure, validate: (method,args,result,scopes) => { if(ASSET_READS.has(method)&&result?.ok)storage.assertContentOutput(result.value,scopes); }, noOwner: ['getAssetCapabilities'] });
 }

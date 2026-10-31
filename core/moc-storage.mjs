@@ -1,3 +1,5 @@
+import { contentReadSafety } from './content-safety.mjs';
+import { contentSuppressionFenceInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { randomUUID } from "node:crypto";
 import { transaction } from "./database.mjs";
 import { fail } from "./validation.mjs";
@@ -29,13 +31,16 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
   const mocById = (ns, id) => db.prepare(`SELECT * FROM mocs WHERE ${namespaceWhere} AND id = ?`)
     .get(...boundary(ns), id);
 
+  const safeMemory = (ns, row) => Boolean(row && contentReadSafety(db, { namespace: ns,
+    ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed);
   function visibleTitle(moc) {
     const sources = db.prepare(`SELECT s.memory_revision, memory.* FROM moc_title_sources s
       LEFT JOIN memories memory ON memory.id = s.memory_id WHERE s.moc_id = ?`).all(moc.id);
     if (sources.length === 0 || sources.some((source) => !source.id || source.deleted ||
         source.currentness !== 'current' || source.review_state === 'awaiting' ||
         source.owner_id !== moc.owner_id || source.scope !== moc.scope ||
-        source.project_id !== moc.project_id || source.revision !== source.memory_revision)) return null;
+        source.project_id !== moc.project_id || source.revision !== source.memory_revision ||
+        !safeMemory(publicNamespace(moc), source))) return null;
     return moc.title;
   }
 
@@ -50,7 +55,8 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       namespace: publicNamespace(moc),
       level: `L${moc.level}`,
       title: visibleTitle(moc),
-      titleSources: titleSources(moc.id).map(({ memoryId, revision }) =>
+      titleSources: titleSources(moc.id).filter(({ memoryId }) => safeMemory(publicNamespace(moc),
+        db.prepare("SELECT * FROM memories WHERE id=?").get(memoryId))).map(({ memoryId, revision }) =>
         ({ memoryId, memoryRevision: revision })),
       revision: moc.revision,
       state: "active",
@@ -147,7 +153,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       for (const item of items) {
         const memory = db.prepare(`SELECT * FROM memories WHERE ${namespaceWhere}
           AND id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current'`).get(...boundary(ns), item.memoryId);
-        if (!memory) fail("memory_not_found");
+        if (!safeMemory(ns, memory)) fail("memory_not_found");
         if (memory.revision !== expected.get(item.memoryId)) fail("revision_conflict");
         memories.set(item.memoryId, memory);
         for (const id of item.parentIds) checkedMoc(ns, id, 1);
@@ -332,11 +338,11 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       const memories = ids.map((id) => {
         const memory = db.prepare(`SELECT * FROM memories WHERE ${namespaceWhere}
           AND id = ? AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current'`).get(...boundary(ns), id);
-        if (!memory) fail("memory_not_found");
+        if (!safeMemory(ns, memory)) fail("memory_not_found");
         if (memory.revision !== expected.get(id)) fail("revision_conflict");
         return memoryDto(memory, true);
       });
-      return { memories, indexRevision: expectedIndex };
+      return { memories, indexRevision: expectedIndex, suppressionEpoch: contentSuppressionFenceInside(db, ns.ownerId) };
     });
   }
 
@@ -373,8 +379,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       // The existing partial index excludes history/tombstones before traversal.
       // Require that access path: a missing index must not trigger a full scan.
       // Projection-rejected current rows still consume the bounded allowance.
-      const receiptSources = sourceReceiptLimit === 0 ? null : db.prepare(`SELECT id,memory_id,receipt_key,
-        client,session_id,event_id,role,excerpt FROM receipts INDEXED BY capture_memory_receipts
+      const receiptSources = sourceReceiptLimit === 0 ? null : db.prepare(`SELECT * FROM receipts INDEXED BY capture_memory_receipts
         WHERE memory_id = ? ORDER BY id LIMIT ?`);
       const eligible = [];
       const scoreMemory = (memory) => {
@@ -385,6 +390,8 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
           const receipts = receiptSources.all(memory.id, sourceReceiptLimit);
           for (const receipt of receipts) {
             const source = validateSourceReceipt(memory.id, receipt, receiptKey);
+            if (!contentReadSafety(db, { namespace: ns, intent: 'history', ref: { type: 'memory', namespace: ns,
+              memoryId: memory.id, revision: memory.revision }, receipts: [receipt] }).allowed) continue;
             const receiptScore = score(source.excerpt);
             // Stable receipt-ID order and strict improvement preserve the first
             // receipt on ties and retain the body label on a body/receipt tie.
@@ -424,7 +431,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
             // The physical page has IDs only: excluded revisions never expose
             // content to the scorer or cause a receipt read.
             const memory = projected.get(...boundary(ns), physical.id, physical.revision);
-            if (!memory) continue;
+            if (!safeMemory(ns, memory)) continue;
             const candidate = scoreMemory(memory);
             if (eligible.length === top && compare(candidate, eligible.at(-1)) >= 0) {
               pruned = true;
@@ -457,7 +464,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
             AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY id LIMIT ?`)
           .all(...boundary(ns), QUERY_SCAN_LIMIT + 1);
         for (const memory of scanned.slice(0, QUERY_SCAN_LIMIT)) {
-          if (memory.deleted || memory.currentness !== 'current') continue;
+          if (!safeMemory(ns, memory)) continue;
           // Respect active-generation membership, never bypass its read authority.
           if (!projectPrepare(`SELECT id FROM memories WHERE ${namespaceWhere} AND id = ?
             AND revision = ?`).get(...boundary(ns), memory.id, memory.revision)) continue;
@@ -480,7 +487,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
           : { type: 'unfiled', ref: { memoryId: memory.id, revision: memory.revision },
             label: sourceLabel ?? memoryLabel(memory.content) } };
       });
-      return { rows, epoch: currentEpoch, scanExhausted };
+      return { rows, epoch: currentEpoch, scanExhausted, suppressionEpoch: contentSuppressionFenceInside(db, ns.ownerId) };
     });
   }
 
@@ -647,6 +654,13 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         }
       }
       return { rows: rows.map((row) => {
+        if (row.child_type === "memory") {
+          // A stale placement still refers to its recorded version. Never
+          // replace that binding with the current Memory revision.
+          const revision = row.child_revision;
+          if (contentSuppressionReasonInside(db, ns, { kind: 'memory', key: row.child_id, revision,
+            version: Number.isSafeInteger(revision) ? JSON.stringify(['memory-revision-v1', revision]) : undefined })) fail('evidence_unavailable');
+        }
         if (row.row_kind === "invalid") return { invalidRef: {
           parentId: row.parent_id, childType: row.child_type, childId: row.child_id,
           reason: row.reason,
@@ -666,7 +680,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         return { item: { type: "ref", ref,
           label: row.child_type === "memory" ? memoryLabel(row.content) : visibleTitle(
             db.prepare("SELECT * FROM mocs WHERE id = ?").get(row.child_id)) } };
-      }), epoch: currentEpoch };
+      }), epoch: currentEpoch, suppressionEpoch: contentSuppressionFenceInside(db, ns.ownerId) };
     };
     return inside ? work() : transaction(db, work);
   }
@@ -682,5 +696,9 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       if (row.revision !== ref.revision) fail('revision_conflict');
       return { id: row.id, revision: row.revision, level: `L${row.level}`, title: visibleTitle(row) };
     },
-    assertEpoch(ns, expected) { return transaction(db, () => assertEpochValue(ns, expected)); } });
+    suppressionFence(ns) { return transaction(db, () => contentSuppressionFenceInside(db, ns.ownerId)); },
+    assertEpoch(ns, expected, suppressionEpoch) { return transaction(db, () => {
+      assertEpochValue(ns, expected);
+      if (suppressionEpoch !== undefined && suppressionEpoch !== contentSuppressionFenceInside(db, ns.ownerId)) fail('cursor_stale');
+    }); } });
 }

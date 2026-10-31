@@ -6,6 +6,9 @@ import { rankMoc } from '../context-read-moc.mjs';
 import { instrumentSourceWork } from '../../tools/testing/context-read-source-work.mjs';
 import { STORAGE_BUSY_TIMEOUT_MS, readTransaction } from '../database.mjs';
 
+// Point-only work adapters receive the fixture's explicitly verified legacy capability.
+const legacySuppressionRevision = db => { assert.ok(db.prepare('PRAGMA user_version').get().user_version <= 33); return 0; };
+
 // Independent oracle: these token arrays are hand-authored T1 goldens, and all
 // BM25 / maximum-over-topics / RRF arithmetic below is separate from production.
 const key = ref => JSON.stringify([ref.namespace.ownerId, ref.namespace.scope, ref.namespace.projectId ?? '', ref.type, ref.memoryId ?? ref.cardId]);
@@ -253,7 +256,7 @@ test('C05/C08/C10 ANALYZEd 10^4 corpus plus 257 inconsistent foreign memberships
   const f = await publicMocCorpus(t), foreign = { ...ns, ownerId: 'foreign-existing-data' };
   const aliens = Array.from({ length: 257 }, (_, i) => f.admit('Foreign injected member ' + i, foreign));
   const meter = instrumentSourceWork(f.db, { readSet: [ns] }), input = { readSet: [ns], types: ['memory'], intent: 'current', query: 'needle' };
-  const rank = () => readTransaction(f.db, () => rankMoc(meter.database, {}, {}, input, Infinity));
+  const rank = () => readTransaction(f.db, () => rankMoc(meter.database, {}, { suppressionRevision: legacySuppressionRevision(f.db) }, input, Infinity));
   const before = rank(), beforeCounts = structuredClone(meter.counts);
   if (before.diagnostic.complete) { assert.equal(before.rows.length, 12); assert.equal(before.diagnostic.membersRanked, 10000); }
   else { assert.deepEqual(before.diagnostic.reasons, ['work_limit']); assert.equal(before.rows.length, 0); assert.equal(before.diagnostic.membersRanked, null); }

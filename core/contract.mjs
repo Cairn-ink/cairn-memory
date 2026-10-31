@@ -1,3 +1,5 @@
+import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
+import { contentSafetyFacade } from './content-safety-boundary.mjs';
 import { roleProfileOptions } from './role-profile-input.mjs';
 import { createRoleProfileFacade } from './role-profile-facade.mjs';
 import { assetOptions } from './asset-input.mjs';
@@ -725,6 +727,8 @@ export function createMemoryCore(input, internal) {
       countTokens(model, '');
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'map',
         p: parentRef ? JSON.stringify(parentRef) : '', f: purpose, l: count, b: budget };
+      const suppressionEpoch = runtime.suppressionFence(ns);
+      if (suppressionEpoch !== null) binding.h = suppressionEpoch;
       if (catalogOnly) binding.o = 'classification_catalog';
       if (navigation) Object.assign(binding, { o: 'recall_map',
         q: navigation.queryDigest, x: QUERY_EXCERPT_VERSION,
@@ -751,7 +755,7 @@ export function createMemoryCore(input, internal) {
           navigation.pages.set(key, snapshot);
         }
         if (cursor && cursor.e !== snapshot.epoch) throw new MemoryStoreError('cursor_stale');
-        runtime.assertEpoch(ns, snapshot.epoch);
+        runtime.assertEpoch(ns, snapshot.epoch, snapshot.suppressionEpoch);
         if (offset > snapshot.rows.length) throw new MemoryStoreError('invalid_cursor');
         page = { ...snapshot, rows: snapshot.rows.slice(offset, offset + count + 1) };
       } else {
@@ -770,7 +774,7 @@ export function createMemoryCore(input, internal) {
           indexRevision: page.epoch,
           invalidRefs: selected.filter((row) => row.invalidRef).map((row) => row.invalidRef) };
         if (countTokens(model, JSON.stringify(success(value))) <= budget) {
-          runtime.assertEpoch(ns, page.epoch);
+          runtime.assertEpoch(ns, page.epoch, page.suppressionEpoch);
           return value;
         }
       }
@@ -851,10 +855,12 @@ export function createMemoryCore(input, internal) {
       const validateFresh = (candidates = []) => runtime.recallSnapshot(candidates.map((candidate) => ({
         namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
         revision: candidate.revision,
+        receiptLimit: candidate.receiptCap ?? candidate.item?.receipts?.length ?? 0,
+        ...(candidate.receiptCap ? { receiptOrder: 'recent' } : {}),
       })), [], namespaces.flatMap((namespace) => {
         const page = navigation.pages.get(namespaceBinding(namespace));
-        return page ? [{ namespace, indexRevision: page.epoch }] : [];
-      }));
+        return page ? [{ namespace, indexRevision: page.epoch, suppressionEpoch: page.suppressionEpoch }] : [];
+      }), includeQualification);
       return success(await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
         limit: count, map: (request) => mapPage(request, navigation), fetch, includeQualification, contextMode, selectionMode,
         validateFresh,
@@ -865,7 +871,8 @@ export function createMemoryCore(input, internal) {
           ...(candidate.receiptCap ? { receiptOrder: 'recent' } : {}),
           ...(isSourceContext(contextMode) ? { sourceEvidence: candidate.item } : {}),
         })), selected, namespaces.map((namespace) => ({ namespace,
-          indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch })), includeQualification, contextMode),
+          indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch,
+          suppressionEpoch: navigation.pages.get(namespaceBinding(namespace)).suppressionEpoch })), includeQualification, contextMode),
       }));
     } catch (error) { return failure(error); }
   }
@@ -978,7 +985,7 @@ export function createMemoryCore(input, internal) {
               const ref = item.type === 'unfiled' ? item.ref : { memoryId: item.ref.childId, revision: item.ref.childRevision };
               if (!seen.has(ref.memoryId)) { seen.add(ref.memoryId); found.push(ref); }
             }
-            runtime.assertEpoch(ns, page.epoch);
+            runtime.assertEpoch(ns, page.epoch, page.suppressionEpoch);
             return { refs: found.slice(0, 6), scanExhausted: page.scanExhausted, candidatesTruncated: found.length > 6 };
           }),
           classifyPlacement: value => classifyPlacementValidated(value, deadline), applyPlacement,
@@ -988,6 +995,13 @@ export function createMemoryCore(input, internal) {
               return invoke(() => {
                 const items = admissionItems(extracted.map(({ sourceIndices, ...item }) => item));
                 return { items, discovery: runtime.discoverOrdered(ns, snapshot, order, items) };
+              });
+            },
+            assertPrepared(snapshot, order, prepared) {
+              return invoke(() => {
+                if (runtime.suppressionFence(ns) === null) return;
+                const current = runtime.discoverOrdered(ns, snapshot, order, prepared.items);
+                if (JSON.stringify(current) !== JSON.stringify(prepared.discovery)) fail('revision_conflict');
               });
             },
             finish: (snapshot, token, order, prepared, judged) =>
@@ -1083,7 +1097,10 @@ export function createMemoryCore(input, internal) {
         undefined, { catalogOnly: true });
       if (!mapped.ok) return mapped;
       if (mapped.value.indexRevision !== index) throw new MemoryStoreError('index_revision_conflict');
-      const validateFresh = () => runtime.classificationSnapshot(ns, ids, guards, index);
+      const validateFresh = () => {
+        const current = runtime.classificationSnapshot(ns, ids, guards, index);
+        if (current.suppressionEpoch !== snapshot.suppressionEpoch) fail('revision_conflict');
+      };
       deadline?.check();
       const value = await classify({ model, snapshot, map: mapped.value, validateFresh, deadline });
       deadline?.check();
@@ -1179,7 +1196,9 @@ export function createMemoryCore(input, internal) {
   }
 
   internal?.attachCapture?.((input, registration) => capture(input, undefined, registration));
-  return Object.freeze({
+  const contentReads = new Set(['get','list','map','fetch','recall','sourceSnapshot','getEpisode','listEpisodes','listMemoriesByTime',
+    'sessionStartContext','getRationale','inspectAdmission','inspectCaptureEvidence','listReviewTransitions','listReviewConflicts']);
+  return contentSafetyFacade({
     ...createMethodPackageFacade(runtime.methodPackages, methodPackages, runtime.ready,assets),
     ...createAssetFacade(runtime.assets, assets, runtime.ready),
     ...createRoleProfileFacade(runtime.roleProfiles, roleProfiles, { path: input.path, readOnly: Boolean(input.existingStore), context: internal?.roleContext, assets }),
@@ -1197,7 +1216,16 @@ export function createMemoryCore(input, internal) {
       runtime.close();
       return success(null);
     },
-  });
+  }, { check: runtime.assertContentScope, portGuard: runtime.contentPortGuard, failure, asyncMethods: ['capture'],
+    requestScope: (work, method) => contentReads.has(method) ? withContentSuppressionRequest(work) : work(),
+    isFailedCapture(result) {
+      // Admission committed before the paused classifier. After close only its
+      // failed-classification completion is deliverable; no retained identities,
+      // receipts, counts or content survive this projection.
+      return result?.ok===true&&result.value?.classification?.status==='failed';
+    },
+    validate: (method,args,result,scopes) => { if(contentReads.has(method)&&result?.ok)runtime.assertContentOutput(result.value,scopes); }, noOwner: ['close',
+    'getPrivateCardCapabilities','getAssetCapabilities','getMethodPackageCapabilities'] });
   } catch (error) {
     try { runtime.close(); } catch { /* Preserve the construction failure. */ }
     throw error;

@@ -7,6 +7,9 @@ import assert from 'node:assert/strict';
 import { sourcesFixture, ns, ok, sourceQuery, memoryRef } from '../testing/context-read-sources-fixture.mjs';
 import { denied } from '../testing/context-read-core-fixture.mjs';
 
+// Point-only work adapters receive the fixture's explicitly verified legacy capability.
+const legacySuppressionRevision = db => { assert.ok(db.prepare('PRAGMA user_version').get().user_version <= 33); return 0; };
+
 const ids = value => value.items.map(item => item.ref.memoryId ?? item.ref.cardId);
 test('C04 source expands a directly missed endpoint, adjacent to its seed, with an exact witness', async t => {
   const f = sourcesFixture(t, { sources: ['relations-one-hop-v1'] });
@@ -153,7 +156,7 @@ test('C04/C08 inconsistent foreign incident edges across physical batches leave 
   const identity = { storeId: metadata.store_id, cursorSecret: metadata.cursor_secret };
   const direct = [memoryRef(seed), card].map(ref => ({ ref }));
   const meter = instrumentSourceWork(db, { readSet: [ns] });
-  const rank = () => JSON.stringify(readTransaction(db, () => expandRelations(meter.database, identity, { cards: true, receipts: true, reviews: true },
+  const rank = () => JSON.stringify(readTransaction(db, () => expandRelations(meter.database, identity, { cards: true, receipts: true, reviews: true, suppressionRevision: legacySuppressionRevision(db) },
     { readSet: [ns], types: ['memory', 'card'], intent: 'current' }, direct, Infinity)));
   const before = rank(), counts = structuredClone(meter.counts), template = db.prepare('SELECT * FROM rationale_edges').get();
   const diagnostic = JSON.parse(before).diagnostic;

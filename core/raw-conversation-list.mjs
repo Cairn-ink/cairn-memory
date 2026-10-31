@@ -1,3 +1,5 @@
+import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
+import { cachedContentLayout, installedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { ownData, localNamespace } from './local-authority-input.mjs';
 import { rawBoundary, rawClient } from './raw-input.mjs';
@@ -8,6 +10,7 @@ const size = value => Buffer.byteLength(JSON.stringify({ ok: true, value }));
 
 /** Indexed metadata only; no source opening, history aggregates or Card grant. */
 export function createRawConversationList({ db, identity, epoch }) {
+  const safety = (cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision;
   const sign = body => createHmac('sha256', Buffer.from(identity.cursor_secret, 'hex')).update(body).digest('base64url');
   const encode = value => {
     const body = Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -41,12 +44,15 @@ export function createRawConversationList({ db, identity, epoch }) {
     db.exec('BEGIN');
     let rows, currentEpoch;
     try {
+      checkInstalledContentSafety(db);
       currentEpoch = epoch(namespace);
       if (cursor && cursor.epoch !== currentEpoch) fail('cursor_stale');
       rows = db.prepare(`SELECT id,client,revision,first_received_at,last_received_at,session_key
         FROM raw_conversations WHERE owner_id=? AND scope=? AND project_id=? AND client=?
         ${cursor ? 'AND session_key>?' : ''} ORDER BY session_key LIMIT ?`)
         .all(...rawBoundary(namespace), client, ...(cursor ? [cursor.after] : []), limit + 1);
+      // Refuse rather than encoding a suppressed row's session key in a cursor.
+      if (safety && rows.some(row => contentSuppressionReasonInside(db, namespace, { kind: 'raw', key: row.id }))) fail('conversation_not_found');
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
     const selected = rows.slice(0, limit);

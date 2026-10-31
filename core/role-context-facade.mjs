@@ -1,3 +1,5 @@
+import { cachedContentLayout } from './content-safety-schema.mjs';
+import { assertContentScopes, assertContentOutput } from './content-safety-boundary.mjs';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
@@ -198,7 +200,16 @@ export function createRoleContextReader(storage,options,config) {
         metered.receipt=issuing?encodeTaskReceipt(identity,p,true):saved?input.receipt:null;
         return metered;
       }
-      const count=metered=>{calls++;return countTokens(counter,wire(metered));};
+      // A counter is an outbound port too: recheck retained contributors after
+      // every host callback, before any further stored text is dispatched.
+      const checkStored = () => {
+        if (!cachedContentLayout(db)?.suppressionRevision) return;
+        return readTransaction(db,()=>{
+          assertContentScopes(db,input.readSet);
+          assertContentOutput(db,identity,{metered:prepared.metered,items:prepared.items},input.readSet);
+        });
+      };
+      const count=metered=>{checkStored();calls++;return countTokens(counter,wire(metered));};
       function diagnostics(metered,items,used) {
         return {version:'context-read-v1',representation:'representation-v2',policy:{id:'rank-first-whole-v1'},counter:{id:counter?.id},
           items:evidence.details(items,tokenCounts),budget:{...input.budget,used},candidates,
@@ -213,7 +224,7 @@ export function createRoleContextReader(storage,options,config) {
       if(!fits(metered,used))return {ok:false,error:{code:'budget_insufficient',retryable:false,details:{partial:true,maxTokens:input.budget.maxTokens,requiredTokens:used,requiredBytes:bounds(metered,used)}}};
       function visit(items,rows,text,minItems=[],minRows=[],minUnits=[]) {
         if(performance.now()>=deadlineAt)return false;
-        calls++;tokenCounts.set(text,countTokens(counter,text));access.check();
+        checkStored();calls++;tokenCounts.set(text,countTokens(counter,text));access.check();
         if(performance.now()>=deadlineAt)return false;
         const trial=build(items,rows),tokens=count(trial);access.check();
         if(performance.now()>=deadlineAt)return false;

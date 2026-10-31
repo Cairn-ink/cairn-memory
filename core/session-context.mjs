@@ -1,3 +1,5 @@
+import { contentReadSafety } from './content-safety.mjs';
+import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { transaction } from './database.mjs';
 import { countTokens } from './model-budget.mjs';
 import { envelopeText, memoryMetadata } from './episode-reads.mjs';
@@ -40,7 +42,7 @@ export function contextQuery(ns, group) {
     ORDER BY m.updated_at DESC,m.id ASC LIMIT ?`;
   return { sql, params };
 }
-export function createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage, decisionReview }) {
+export function createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage, decisionReview, assertEpisodeRead }) {
   function step(row) {
     const record = JSON.parse(row.record), nextStep = record.nextStep;
     const sources = [];
@@ -88,7 +90,10 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
           result.groups[group] = { identities: [], items: [] };
           continue;
         }
-        const query = contextQuery(ns, group), rows = db.prepare(query.sql).all(...query.params);
+        const query = contextQuery(ns, group), rows = db.prepare(query.sql).all(...query.params)
+          .filter(row => group === 'nextSteps' ? !contentSuppressionReasonInside(db, ns) : contentReadSafety(db, { namespace: ns,
+            ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed);
+        if (group === 'nextSteps') for (const row of rows) assertEpisodeRead?.(ns, row);
         const identities = rows.map(row => ({ id: row.id, revision: row.revision }));
         if (expected && JSON.stringify(identities) !== JSON.stringify(expected.groups[group].identities)) fail('revision_conflict');
         let items;

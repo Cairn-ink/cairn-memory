@@ -1,3 +1,5 @@
+import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
+import { contentSafetyFacade } from './content-safety-boundary.mjs';
 import { createMemoryRuntime } from "./runtime.mjs";
 import {
   fail, identifier, limit, memoryInput, namespace, object, revision,
@@ -7,6 +9,7 @@ export { MemoryStoreError, normalizeBoundedText, normalizedTextLength } from "./
 export { openMemoryCore } from "./contract.mjs";
 export { openMemoryReader } from './memory-reader.mjs';
 export { openContextReader } from './context-reader.mjs';
+export { openContentSuppressionReader } from './content-suppression-reader.mjs';
 export { openContextProductReader, openContextIndexMaintainer } from './context-product-reader.mjs';
 export { createContextReadSupervisor } from './context-read-supervisor.mjs';
 export { renewContextMaintenancePump } from './context-product-pump.mjs';
@@ -23,7 +26,7 @@ export function openMemoryStore(input) {
     runtime.ready();
     const ns = namespace(input);
 
-    return Object.freeze({
+    return contentSafetyFacade({
       remember(input) {
         runtime.ready();
         const tagged = input !== null && typeof input === 'object' && Object.hasOwn(input, 'procedural');
@@ -72,7 +75,10 @@ export function openMemoryStore(input) {
         revision(expectedRevision);
         return runtime.forget(ns, id, expectedRevision).forgotten;
       },
-    });
+    }, { check: runtime.assertContentScope, select: () => ns,
+      requestScope: (work, method) => ['get','list','search'].includes(method) ? withContentSuppressionRequest(work) : work(),
+      failure(error, method) { if (error.code !== 'memory_not_found') throw error;
+        if (method === 'get') return null; if (['list','search'].includes(method)) return []; throw error; } });
   }
 
   return Object.freeze({ scope: bindScope, close: runtime.close });

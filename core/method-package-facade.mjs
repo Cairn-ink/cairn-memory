@@ -1,3 +1,4 @@
+import { contentSafetyFacade } from './content-safety-boundary.mjs';
 import { fail } from './validation.mjs';
 import { cardNamespace, deepFreeze } from './private-card-input.mjs';
 import { verifyPrivateGrant, privateFailure } from './private-card-facade.mjs';
@@ -71,5 +72,5 @@ export function createMethodPackageFacade(storage, options, ready,assets) {
     manifestFormats:['text-v30','mixed-v1'],binaryDelivery:Boolean(assets),binaryLimits:{...METHOD_BINARY_LIMITS},
     binaryMediaTypes:[...ASSET_MEDIA],parser:'unavailable',modelAssisted: false,execution: false,sourceDerivedImports: false,
   } });
-  return result;
+  return contentSafetyFacade(result, { writeBoundary:storage, check: scopes => storage.assertContentScope(scopes), failure: privateFailure, validate: (method,args,result,scopes) => { if(METHOD_READS.has(method)&&result?.ok)storage.assertContentOutput(result.value,scopes); }, noOwner: ['getMethodPackageCapabilities'] });
 }

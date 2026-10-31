@@ -1,3 +1,4 @@
+import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety } from './content-safety.mjs';
 import { cardDependencyFence } from './card-current-storage.mjs';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
@@ -232,6 +233,14 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
     let scanned = 0;
     for (const row of rows.slice(0, 256)) {
       if (result.filter(value => value.item).length >= input.limit + 1) break;
+      if (cachedContentLayout(db)?.suppressionRevision && ['member','unfiled'].includes(row.kind)) {
+        const id=row.kind==='member'?row.b:row.a;
+        const card=row.kind==='member'
+          ? db.prepare('SELECT card_revision AS revision,body_revision FROM card_moc_refs WHERE moc_id=? AND card_id=?').get(row.a,row.b)
+          : db.prepare('SELECT revision,body_revision FROM private_cards WHERE id=?').get(id);
+        if(card && !contentReadSafety(db,{identity,namespace:ns,intent:'history',method:'getCard',
+          ref:{type:'card',namespace:ns,cardId:id,revision:card.revision,bodyRevision:card.body_revision}}).allowed)fail('evidence_unavailable');
+      }
       scanned++;
       if (row.kind === 'topic') {
         const current = topic(ns, row.a);

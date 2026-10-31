@@ -1,3 +1,5 @@
+import { cachedContentLayout } from './content-safety-schema.mjs';
+import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { allocateContentKey } from './content-suppression-storage.mjs';
 import { createHmac } from 'node:crypto';
 import { transaction } from './database.mjs';
@@ -106,10 +108,20 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
         (end < message.part.totalUnits && bytes >= message.part.totalBytes)) fail('event_payload_conflict');
     return { previous, priorPart: null };
   }
+  function assertRegistrationSources(input, conversationId) {
+    if(!cachedContentLayout(db)?.suppressionRevision)return;
+    for(const message of input.messages){
+      const start=message.part.start,end=start+message.content.length;
+      if(contentSuppressionReasonInside(db,input.namespace,{kind:'raw',key:conversationId,messageId:message.id,start,end,
+        version:JSON.stringify(['raw-span-v1',message.id,start,end,'exact',[message.part.index]])}))fail('evidence_unavailable');
+    }
+  }
   function replay(input, eventDigest) {
     const prior = event(input);
     if (prior && prior.digest !== eventDigest) fail('event_payload_conflict');
-    return prior ? JSON.parse(prior.result) : null;
+    const result=prior?JSON.parse(prior.result):null;
+    if(result)assertRegistrationSources(input,result.conversationId);
+    return result;
   }
 
   async function prepareRegistration(request) {
@@ -121,6 +133,7 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     const eventDigest = digest(['raw-event-v1',session,input]);
     const authority = policy(input), fence = durableFence(ns,input.client,session);
     const duplicate = replay(input,eventDigest), row = conversation(ns,input.client,session);
+    if(row)assertRegistrationSources(input,row.id);
     const id = row?.id ?? allocateContentKey(db, ns, 'raw'), revision = row?.revision ?? null;
     const token = Object.freeze({});
     if (duplicate) {
@@ -181,6 +194,7 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     if (duplicate) return duplicate;
     if (JSON.stringify(currentPolicy) !== JSON.stringify(authority) || JSON.stringify(currentFence) !== JSON.stringify(fence)) fail('revision_conflict');
     const current = conversation(ns,input.client,session);
+    if(current)assertRegistrationSources(input,current.id);
     if ((current?.revision ?? null) !== revision || (current && current.id !== id)) fail('revision_conflict');
     const now = clock();
     if (!current) db.prepare(`INSERT INTO raw_conversations(id,owner_id,scope,project_id,client,session_key,revision,first_received_at,last_received_at)
@@ -271,6 +285,16 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
   }
   function usageSnapshot({ ownerId }) {
     identifier(ownerId);
+    if(cachedContentLayout(db)?.suppressionRevision) {
+      const rows=db.prepare(`SELECT c.id,c.scope,c.project_id,f.message_key,f.span_start,f.span_end FROM raw_conversations c
+        JOIN content_suppressions f ON f.owner_id=c.owner_id AND f.scope=c.scope AND f.project_id=c.project_id
+        AND f.kind='raw' AND f.stable_key=c.id AND f.incarnation=c.id WHERE c.owner_id=? AND
+        (f.match_mode!='span' OR EXISTS(SELECT 1 FROM raw_parts p WHERE p.conversation_id=c.id AND p.message_id=f.message_key
+        AND p.saved=1 AND p.start<f.span_end AND p.end>f.span_start)) LIMIT 129`).all(ownerId);
+      if(rows.length>128)fail('source_unavailable');
+      for(const target of rows)if(contentSuppressionReasonInside(db,{ownerId,scope:target.scope,projectId:target.project_id},
+        {kind:'raw',key:target.id,messageId:target.message_key,start:target.span_start,end:target.span_end}))fail('source_unavailable');
+    }
     const row = usageRow(ownerId), savedBytes = row?.saved_bytes ?? 0, reservedBytes = row?.reserved_bytes ?? 0;
     const cap = row?.cap_bytes ?? capBytes, remainingBytes = Math.max(0,cap-savedBytes-reservedBytes);
     const clients = RAW_CLIENTS.map(client => {

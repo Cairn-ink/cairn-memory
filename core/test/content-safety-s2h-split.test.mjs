@@ -15,6 +15,7 @@ import { createMethodPackageFacade } from '../method-package-facade.mjs';
 import { createAssetFacade } from '../asset-facade.mjs';
 import { createRoleProfileFacade } from '../role-profile-facade.mjs';
 import { configured } from '../testing/context-product-owner-fixture.mjs';
+import { suppressionFixture } from '../testing/content-suppression-fixture.mjs';
 import { safetyFixture, ns, ok, receipt } from '../testing/content-safety-s2h-fixture.mjs';
 
 const methods = value => Reflect.ownKeys(value).filter(key => typeof value[key] === 'function').sort();
@@ -27,7 +28,7 @@ const options = path => {
     roleProfiles: { version:'role-profiles-local-v1',storage:'local-plain-v1',authority,attribution:{actorId:'synthetic',agentId:'synthetic'} } };
 };
 
-test('S2h-1 split: enumerate public exports and facades; no fact-only writer is reachable', async t => {
+test('S2h-2 split: enumerate public exports and facades; no fact-only writer is reachable', async t => {
   const f = safetyFixture(t, 33); await f.migrate();
   const config = options(f.path), core = api.openMemoryCore({ ...config,
     rawConversations:{mode:'off',readPolicy:()=>({generation:'synthetic',reason:null})} });
@@ -37,7 +38,8 @@ test('S2h-1 split: enumerate public exports and facades; no fact-only writer is 
   t.after(() => { topic.close(); context.close(); legacy.close(); runtime.close(); core.close(); });
   const product = await configured(t,f.path,[ns]).open(), maintainer = await configured(t,f.path,[ns],{service:true}).open();
   const supervisor=api.createContextReadSupervisor();t.after(()=>supervisor.close());
-  const handles = { ...await additionalSplitFacades(t, f, ns), ...composedSplitFacades(f, config, contextRead), core,legacy,supervisor,scope:legacy.scope({ownerId:ns.ownerId,projectId:ns.projectId}),context,topic,product,maintainer,
+  const pull = (await (await suppressionFixture(t)).reader()).handle;
+  const handles = { pull, ...await additionalSplitFacades(t, f, ns), ...composedSplitFacades(f, config, contextRead), core,legacy,supervisor,scope:legacy.scope({ownerId:ns.ownerId,projectId:ns.projectId}),context,topic,product,maintainer,
     cards:createPrivateCardFacade(runtime.privateCards,config.privateCards,runtime.ready),
     methods:createMethodPackageFacade(runtime.methodPackages,config.methodPackages,runtime.ready,config.assets),
     assets:createAssetFacade(runtime.assets,config.assets,runtime.ready),
@@ -53,10 +55,23 @@ test('S2h-1 split: enumerate public exports and facades; no fact-only writer is 
   }
   for (const [name,value] of Object.entries(api)) {
     assert.equal(internal.has(value),false,name);
-    assert.doesNotMatch(name,/suppression|suppressOwner|migrateContentSafety/i);
+    if (name !== 'openContentSuppressionReader') assert.doesNotMatch(name,/suppression|suppressOwner|migrateContentSafety/i);
   }
   assert.deepEqual(Object.values(splitFixture.facadeFactories).flat().sort(), Object.keys(handles).sort());
   assertSplitInventory(inventory);
+  for (const [name, reason] of Object.entries(splitFixture.additions)) assert.ok(reason.length > 20, name);
+  for (const [file, pin] of Object.entries(splitFixture.moduleExports)) {
+    const module = await import(new URL('../../' + file, import.meta.url));
+    assert.deepEqual(Object.keys(module).sort(), pin.exports, 'review module export inventory: ' + file);
+    for (const [name, reason] of Object.entries(pin.additions)) {
+      assert.ok(pin.exports.includes(name), file + ':' + name);
+      assert.ok(reason.length > 20, file + ':' + name);
+    }
+  }
+  for (const name of ['assertContentScope', 'contentPortGuard', 'assertContentOutput', 'suppressionFence']) {
+    assert.equal(typeof runtime[name], 'function', 'review runtime method: ' + name);
+    assert.ok(splitFixture.additions['runtime.' + name].length > 20);
+  }
   const graph = assertSplitGraph();
   const cli = readFileSync(new URL('../../adapters/mcp/cli.mjs',import.meta.url),'utf8');
   assert.equal([...cli.matchAll(/args\[0\]\s*===?\s*['"]safety['"]/g)].length,1,'one safety dispatch');
@@ -134,7 +149,7 @@ test('S2h-1 split normalizes SQLite insertion targets across schemas, quoting an
   t.diagnostic('SQLite-validated insertion spellings: ' + checked);
 });
 
-test('S2h-1 split: internal fact-only observations do not change S1 reads or public writes', async t => {
+test('S2h-2 split: internal facts now suppress serving reads while terminal fact writers remain guarded', async t => {
   const f = safetyFixture(t); await f.migrate();
   const core = api.openMemoryCore({ path:f.path }), db = f.connect(); t.after(() => { core.close(); db.close(); });
   const memory = ok(core.admit({ namespace:ns,memory:{content:'Synthetic S1-only content',kind:'fact'},receipts:[receipt('S1-only')] })).memory;
@@ -144,13 +159,18 @@ test('S2h-1 split: internal fact-only observations do not change S1 reads or pub
     storage.suppressOwnerInside(db,{ownerId:ns.ownerId,reason:'account_erasure',actionId:'internal-owner'});
     assert.equal(storage.memorySuppressionObservationInside(db,ns,{memoryId:memory.id,revision:memory.revision}).suppressed,true);
   });
-  // These deliberately internal facts cannot authorize a public-only rollout
-  // of fact-based enforcement. S1 still sees intact canonical contributors.
-  assert.match(JSON.stringify(ok(core.get({namespace:ns,memoryId:memory.id}))),/Synthetic S1-only content/);
-  const before = db.prepare('SELECT count(*) n FROM content_suppressions').get().n;
-  ok(core.forget({namespace:ns,memoryId:memory.id,expectedRevision:memory.revision}));
-  assert.equal(db.prepare('SELECT deleted FROM memories WHERE id=?').get(memory.id).deleted,1);
-  assert.equal(db.prepare('SELECT 1 FROM receipts WHERE id=?').get(source),undefined);
-  assert.equal(db.prepare('SELECT count(*) n FROM content_suppressions').get().n,before+2);
+  // S2h-2 deliberately retires the reads-stay-on-S1 rollout assertion.
   assert.doesNotMatch(JSON.stringify(core.get({namespace:ns,memoryId:memory.id})),/Synthetic S1-only content/);
+  const refused = core.forget({namespace:ns,memoryId:memory.id,expectedRevision:memory.revision});
+  assert.equal(refused.ok, false);
+  assert.equal(db.prepare('SELECT deleted FROM memories WHERE id=?').get(memory.id).deleted,0);
+  assert.ok(db.prepare('SELECT 1 FROM receipts WHERE id=?').get(source));
+  const live = {...ns, ownerId:'synthetic-live-split'};
+  const target = ok(core.admit({namespace:live,memory:{content:'Synthetic terminal writer control',kind:'fact'},receipts:[receipt('terminal-control')]})).memory;
+  const before = db.prepare('SELECT count(*) n FROM content_suppressions').get().n;
+  ok(core.forget({namespace:live,memoryId:target.id,expectedRevision:target.revision}));
+  assert.equal(db.prepare('SELECT deleted FROM memories WHERE id=?').get(target.id).deleted,1);
+  assert.equal(db.prepare('SELECT 1 FROM receipts WHERE memory_id=?').get(target.id),undefined);
+  assert.equal(db.prepare('SELECT count(*) n FROM content_suppressions').get().n,before+2);
+  assert.doesNotMatch(JSON.stringify(core.get({namespace:live,memoryId:target.id})),/Synthetic terminal writer control/);
 });

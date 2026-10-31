@@ -1,3 +1,6 @@
+import { assertContentScopes } from './content-safety-boundary.mjs';
+import { contentReadSafety } from './content-safety.mjs';
+import { contentSuppressionFenceInside } from './content-suppression-storage.mjs';
 import { fail } from './validation.mjs';
 
 export const OVERVIEW_STATE_BYTES = 8 * 1024 * 1024;
@@ -14,6 +17,8 @@ const binary = (left, right) => Buffer.compare(Buffer.from(left), Buffer.from(ri
 /** One generator step is a physical row/EOF visit plus <=3 indexed validations,
  * or one in-memory ancestor/count update. No body/receipt column is selected. */
 export function createTopicOverviewStorage(db, { exactComparisons = false } = {}) {
+  const safe = (ns, row) => Boolean(row && contentReadSafety(db, { namespace: ns,
+    ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed);
   const prepare = sql => db.prepare(exactComparisons ? sql.replace(/\b([a-z_]+)([>=]+)\?/g, '$1 COLLATE BINARY$2?')
     .replace(/ORDER BY ([a-z_]+)/g, 'ORDER BY $1 COLLATE BINARY') : sql);
   const stateRow = prepare(`SELECT active_generation FROM namespace_index_state WHERE ${where}`);
@@ -37,14 +42,17 @@ export function createTopicOverviewStorage(db, { exactComparisons = false } = {}
     ref: prepare('SELECT moc_revision,memory_revision FROM index_memory_refs WHERE generation=? AND moc_id=? AND memory_id=?'),
   };
   function snapshot(namespace) {
+    assertContentScopes(db, [namespace], 'index_unavailable');
     const row = stateRow.get(...boundary(namespace));
     if (row && row.active_generation === null) fail('index_unavailable');
     const active = row ? generation.get(row.active_generation) : null;
     if (row && (!same(active, namespace) || active.published !== 1)) fail('index_unavailable');
     const store = identity.get();
     if (!store || typeof store.store_id !== 'string') fail('unsupported_database');
+    const suppressionEpoch = contentSuppressionFenceInside(db, namespace.ownerId);
     return { storeId: store.store_id, indexRevision: epoch.get(...boundary(namespace))?.epoch ?? 1,
-      generation: row?.active_generation ?? null };
+      generation: row?.active_generation ?? null,
+      ...(suppressionEpoch === null ? {} : { suppressionEpoch }) };
   }
   function create(namespace, bounds, captured) {
     const nodes = new Map(), totals = { unique: counts(), unfiled: counts() };
@@ -89,7 +97,7 @@ export function createTopicOverviewStorage(db, { exactComparisons = false } = {}
           if (!binding) { yield; break; }
           last = binding.memory_id; node.sourceCount++;
           const row = memory.get(binding.memory_id);
-          if (!visible(row, namespace, binding.memory_revision) ||
+          if (!visible(row, namespace, binding.memory_revision) || !safe(namespace, row) ||
               !projected('memory', row, binding.memory_id) ||
               !projected('source', binding, node.id, binding.memory_id)) node.titleValid = false;
           yield;
@@ -116,7 +124,7 @@ export function createTopicOverviewStorage(db, { exactComparisons = false } = {}
         const row = nextMemory.get(...boundary(namespace), last);
         if (!row) { yield; break; }
         last = row.id;
-        const eligible = !row.deleted && row.currentness === 'current' && row.review_state !== 'awaiting' &&
+        const eligible = !row.deleted && row.currentness === 'current' && row.review_state !== 'awaiting' && safe(namespace, row) &&
           projected('memory', row, row.id);
         if (eligible && !kinds.includes(row.kind)) fail('unsupported_database');
         yield;

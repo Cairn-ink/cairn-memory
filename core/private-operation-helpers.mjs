@@ -1,3 +1,6 @@
+import { cachedContentLayout } from './content-safety-schema.mjs';
+import { assertContentOutput } from './content-safety-boundary.mjs';
+import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { randomUUID } from 'node:crypto';
 import { fail } from './validation.mjs';
 
@@ -8,12 +11,20 @@ export const envelopeBytes = value => Buffer.byteLength(JSON.stringify({ ok: tru
 // Table names and purposes are internal constants supplied by the owning feature.
 export function createOperationLedger(db, table) {
   return {
-    replay(ns, actionId, method, payloadBinding) {
+    replay(ns, actionId, method, payloadBinding, input) {
       const old = db.prepare(`SELECT * FROM ${table} WHERE ${privateWhere} AND action_id=?`)
         .get(...privateBoundary(ns), actionId);
       if (!old) return undefined;
       if (old.payload_binding !== payloadBinding || old.method !== method) fail('action_conflict');
-      return JSON.parse(old.result);
+      const result=JSON.parse(old.result);
+      if(cachedContentLayout(db)?.suppressionRevision&&db.prepare('SELECT 1 FROM owner_suppression_epochs WHERE owner_id=?').get(ns.ownerId)&&!/^(delete|cancel|disable)/.test(method)){
+        if(table==='card_operations'&&old.target_id&&contentSuppressionReasonInside(db,ns,{
+          kind:/SourceNote/.test(method)?'submitted-note':'card',key:old.target_id,
+          revision:result.source?.revision??result.revision,version:/SourceNote/.test(method)?JSON.stringify(['note-v1',result.source?.revision??result.revision]):undefined}))fail('evidence_unavailable');
+        const identity=db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata WHERE singleton=1').get();
+        assertContentOutput(db,identity,{result,input},[ns],{factsOnly:true});
+      }
+      return result;
     },
     record(ns, actionId, method, payloadBinding, target, result, timestamp) {
       db.prepare(`INSERT INTO ${table} VALUES(?,?,?,?,?,?,?,?,?)`)

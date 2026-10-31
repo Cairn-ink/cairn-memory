@@ -1,3 +1,6 @@
+import { contentScopeEpochGuard, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
+import { cachedContentLayout } from './content-safety-schema.mjs';
+import { contentSuppressionRequestInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, withContentSuppressionReadInside, withContentSuppressionRequest, inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { performance } from 'node:perf_hooks';
 import { randomUUID, createHash } from 'node:crypto';
 import { productSidecar } from './context-product-sidecar.mjs';
@@ -62,13 +65,18 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       maintenance:{available:maintenance,state:ready?'ready':'rebuilding',buildState:ready?'ready':'rebuilding',reason:dto.lexical.reason,progress:dto.lexical.progress},
       depths:{lexical:ready?24:0,semantic:0},omitted:{lexical:null,semantic:null,horizon:null},stops:{deadline:false,budget:false}};
   }
-  function unavailable(access,dto,assembly=false,semantic=false) {
-    const details={channels:channels(false),coverage:coverage(dto),trace:selectionTrace(semantic)};
-    return access.envelope(()=>({ok:false,error:{code:'index_unavailable',retryable:false,details:assembly?{candidates:details}:details}}));
+  function unavailable(p,access,dto,assembly=false,semantic=false,decorate) {
+    return access.envelope(()=>{
+      statusDelivery(p,dto,null);
+      const details={channels:channels(false),coverage:coverage(dto),trace:selectionTrace(semantic)};
+      decorate?.(details);
+      return {ok:false,error:{code:'index_unavailable',retryable:false,details:assembly?{candidates:details}:details}};
+    });
   }
   function final(p,access,publication,work,code='index_unavailable') {
     access.check();
-    return read(()=>{
+    return read(()=>inContentSuppressionRequestInside(db,()=>{
+      if (p.suppressionEpoch !== undefined && p.suppressionEpoch !== contentSuppressionRequestFenceInside(db,p.readSet[0].ownerId)) fail('evidence_unavailable');
       const current=storage.observe(p,access.accessGenerations);
       if (current.dto.lexical.state!=='ready' || current.publication.publicationId!==publication.publicationId) fail(code);
       if(p.vectorPublication) {
@@ -80,7 +88,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         }
       }
       return work(true);
-    });
+    },p.suppressionEpoch&&p.suppressionEpoch!=='0:0'?p.readSet:undefined));
   }
   function page(r,position,limit) {
     let end=Math.min(r.items.length,position+limit);
@@ -93,6 +101,8 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     fail('context_item_too_large');
   }
   function candidates(p,access,prepareOnly=false) {
+    const suppressionEpoch=cachedContentLayout(db)?.suppressionRevision?contentSuppressionRequestFenceInside(db,p.readSet[0].ownerId):undefined;
+    p.suppressionEpoch=suppressionEpoch;
     const observed=read(()=>storage.observe(p,access.accessGenerations));
     if (observed.dto.lexical.state!=='ready') return {observed};
     const detail=selectionTrace(p.semantic),started=performance.now();
@@ -103,8 +113,14 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       fuseCandidates(ranked.rows,[],{preset:detail.preset,limit:24,semanticState:'disabled',coverageComplete:false});
     detail.timings.fusionMs=performance.now()-fusionStarted;
     const covered=coverage(observed.dto);
+    if (ranked.counts) {
+      covered.maintenance.progress=null;
+      for(const type of p.types){Object.assign(covered.byType[type],ranked.counts.byType[type]);
+        covered.byType[type].scannedFraction=ranked.counts.byType[type].eligible===null?null:ranked.counts.byType[type].eligible?0:1;
+      }
+    }
     covered.omitted={lexical:Math.max(0,ranked.matched-24),semantic:null,horizon:Math.max(0,fused.unionSize-24)};
-    return {observed,items:fused.rows.map((row,i)=>({ref:row.ref,rank:i+1,fusionScore:row.fusionScore,channels:row.channels})),
+    return {observed,suppressionEpoch,items:fused.rows.map((row,i)=>({ref:row.ref,rank:i+1,fusionScore:row.fusionScore,channels:row.channels})),
       channels:channels(true),coverage:covered,trace:detail,...(prepareOnly?{lexical:ranked}:{})};
   }
   function assemble(p,access,c,prepareOnly=false) {
@@ -148,6 +164,34 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     };
     return prepareOnly?{complete,result}:final(p,access,c.observed.publication,complete,'snapshot_stale');
   }
+  function statusDelivery(p,dto,publication) {
+    if(!cachedContentLayout(db)?.suppressionRevision||!db.prepare('SELECT 1 FROM owner_suppression_epochs WHERE owner_id=?').get(p.readSet[0].ownerId))return dto;
+    contentSuppressionRequestInside(db,p.readSet,{refresh:true});
+    withContentSuppressionReadInside(db,p.readSet,()=>assertContentScopes(db,p.readSet));
+    const safe=storage.visibleCounts(p,publication);dto.lexical.progress=null;
+    for(const type of p.types){
+      Object.assign(dto.coverage.byType[type],safe?.byType[type]??{eligible:null,indexed:null});
+      dto.coverage.byType[type].embedded=null;
+      if(dto.semantic.coverage?.byType?.[type])Object.assign(dto.semantic.coverage.byType[type],{eligible:safe?.byType[type]?.eligible??null,embedded:null});
+    }
+    return dto;
+  }
+  function maintenanceDelivery(p,value,publication) {
+    if(!cachedContentLayout(db)?.suppressionRevision||!db.prepare('SELECT 1 FROM owner_suppression_epochs WHERE owner_id=?').get(p.readSet[0].ownerId))return value;
+    contentSuppressionRequestInside(db,p.readSet,{refresh:true});
+    withContentSuppressionReadInside(db,p.readSet,()=>assertContentScopes(db,p.readSet));
+    const safe=storage.visibleCounts(p,publication);
+    for(const type of p.types){
+      Object.assign(value.coverage.byType[type],safe?.byType[type]??{eligible:null,indexed:null});
+      value.coverage.byType[type].embedded=null;value.coverage.byType[type].embeddedFraction=null;
+      value.coverage.byType[type].scannedFraction=value.coverage.byType[type].eligible===null?null:value.coverage.byType[type].eligible?0:1;
+    }
+    value.coverage.maintenance.progress=null;value.coverage.stops.budget=null;
+    // Unknown work usage is deliberately not refunded by the existing pump:
+    // it retains the full quantum reservation rather than learning hidden work.
+    if(value.progress)value.progress={lexical:null,transformed:null,embeddingAttempts:null,embedded:null};
+    return value;
+  }
   function run(method,original,credential,cutoff=Infinity,observation) {
     if(semantic&&(method==='getContextIndexStatus'||method==='refreshContextIndex'&&original.mode==='embeddings'||['findCandidates','contextRead'].includes(method)&&original.semantic===true&&original.cursor===undefined))return runSemantic(method,original,credential,cutoff);
     let access;
@@ -160,7 +204,10 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         const knownFailure=storage.prepareObservation();access.check(); return read(()=>{
           attribution?.step();
           try {db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.acquired();}
-          return success(storage.observe(p,access.accessGenerations,{knownFailure}).dto);
+          const observed=storage.observe(p,access.accessGenerations,{knownFailure}), counts=storage.visibleCounts(p,observed.publication);
+          if(counts){observed.dto.lexical.progress=null;for(const type of p.types)Object.assign(observed.dto.coverage.byType[type],counts.byType[type]);}
+          return success(statusDelivery(p,observed.dto,observed.publication));
+
         });
       }
       if(method==='refreshContextIndex') {
@@ -183,8 +230,8 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
           const preparation=attribution?.start('serialize');
           try {
             const covered=coverage(observed.dto);covered.stops.budget=m.transformed>=p.budget.maxItems;
-            return success({status:ready&&observed.byteSafe?p.mode==='embeddings'?'partial':'complete':'rebuilding',
-              progress:{lexical:observed.dto.lexical.progress,transformed:m.transformed,embeddingAttempts:0,embedded:0},coverage:covered,channels:channels(ready)});
+            return success(maintenanceDelivery(p,{status:ready&&observed.byteSafe?p.mode==='embeddings'?'partial':'complete':'rebuilding',
+              progress:{lexical:observed.dto.lexical.progress,transformed:m.transformed,embeddingAttempts:0,embedded:0},coverage:covered,channels:channels(ready)},observed.publication));
           } catch(error){attribution?.captureFailure(error);throw error;}finally {if(attribution)attribution.end(preparation);}
         });}finally{if(observation)observation.epochObservationMs=Number(process.hrtime.bigint())/1e6-epochStarted;}
       }
@@ -195,6 +242,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         if(!token || token.v!==1 || token.binding!==binding || !Number.isSafeInteger(token.position) || token.position<1)fail('invalid_cursor');
         const r=rankings.get(token.id);
         if(!r || r.expires<=Date.now() || token.publication!==r.publication.publicationId || token.position>=r.items.length)fail('cursor_stale');
+        p.suppressionEpoch=r.suppressionEpoch;
         const result=page(r,token.position,p.limit);
         if(r.trace.semantic) {result.value.trace={...r.trace};delete result.value.trace.semantic;}
         if(r.vectorPublication){p.vectorPublication=r.vectorPublication;p.semanticSnapshot=r.semanticSnapshot;}
@@ -204,7 +252,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         });}catch(e){if(e.code==='index_unavailable')fail('cursor_stale');throw e;}
       }
       const c=candidates(p,access);
-      if(!c.items)return unavailable(access,c.observed.dto,method==='contextRead',p.semantic);
+      if(!c.items)return unavailable(p,access,c.observed.dto,method==='contextRead',p.semantic);
       if(method==='contextRead')return assemble(p,access,c);
       for(const [id,r] of rankings)if(r.expires<=Date.now())rankings.delete(id);
       while(rankings.size>=128)rankings.delete(rankings.keys().next().value);
@@ -233,8 +281,15 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     const byType=Object.fromEntries(p.types.map(t=>[t,{eligible:v?.record?.counts.byType[t].eligible??null,embedded:v?.record?.counts.byType[t].embedded??null}]));
     const dto=observed.dto;
     dto.semantic={state,reason,extension:'context-read-product-p2e-v1',enabled,ownerPolicyRevision:snapshot.policy?.revision??null,identity:snapshot.identity,coverage:{status:v?.status??'unavailable',byType}};
-    for(const t of p.types)dto.coverage.byType[t].embedded=byType[t].embedded;
-    return dto;
+    const safe=storage.visibleCounts(p,observed.publication);
+    for(const t of p.types){
+      dto.coverage.byType[t].embedded=byType[t].embedded;
+      if(safe){
+        if(observed.publication?.counts.byType[t].eligible!==safe.byType[t].eligible){byType[t].embedded=null;dto.coverage.byType[t].embedded=null;}
+        byType[t].eligible=safe.byType[t].eligible;Object.assign(dto.coverage.byType[t],safe.byType[t]);
+      }
+    }
+    return statusDelivery(p,dto,observed.publication);
   }
   async function runSemantic(method,original,credential,parentCutoff) {
     let access;
@@ -250,10 +305,12 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       const c=candidates(p,access,true);
       const preflightStart=performance.now(),snapshot=await semantic.snapshot();
       if(!c.items) {
-        const reason=semanticReason(snapshot,false),state=channelFor(reason),detail={channels:channels(false),coverage:coverage(c.observed.dto),trace:{...selectionTrace(true),family:'hosted',preset:'rrf-k10',embedder:snapshot.identity&&(({id,revision,dimensions,normalization})=>({id,revision,dimensions,normalization}))(snapshot.identity),
-          semantic:{extension:'context-read-product-p2e-v1',coverage:'unavailable',queryEmbeddingAttempts:0,queryEmbeddingBudgetMs:0,queryEmbeddingMs:0,degradedReason:reason}}};
-        detail.channels.semantic={state,causes:state==='ready'?[]:[state]};
-        return access.envelope(()=>({ok:false,error:{code:'index_unavailable',retryable:false,details:method==='contextRead'?{candidates:detail}:detail}}));
+        const reason=semanticReason(snapshot,false),state=channelFor(reason);
+        return unavailable(p,access,c.observed.dto,method==='contextRead',true,detail=>{
+          Object.assign(detail.trace,{family:'hosted',preset:'rrf-k10',embedder:snapshot.identity&&(({id,revision,dimensions,normalization})=>({id,revision,dimensions,normalization}))(snapshot.identity),
+            semantic:{extension:'context-read-product-p2e-v1',coverage:'unavailable',queryEmbeddingAttempts:0,queryEmbeddingBudgetMs:0,queryEmbeddingMs:0,degradedReason:reason}});
+          detail.channels.semantic={state,causes:state==='ready'?[]:[state]};
+        });
       }
       const detail=c.trace,lexicalItems=c.items;
       p.freshSemantic=true;
@@ -284,11 +341,20 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         }
       }
       diagnostic.degradedReason=reason;detail.semantic=diagnostic;
+      if(c.lexical?.filtered)for(const t of p.types){c.coverage.byType[t].embedded=null;c.coverage.byType[t].embeddedFraction=null;}
       const channel=channelFor(reason),causes=[...new Set([lifecycleReason,preflight?.reason,reason].filter(Boolean).map(channelFor))];c.channels.semantic={state:channel,causes};
-      if(preflight?.record)for(const t of p.types){const count=preflight.record.counts.byType[t];c.coverage.byType[t].embedded=count.embedded;c.coverage.byType[t].embeddedFraction=count.eligible?count.embedded/count.eligible:1;}
+      if(preflight?.record&&!c.lexical?.filtered)for(const t of p.types){const count=preflight.record.counts.byType[t];c.coverage.byType[t].embedded=count.embedded;c.coverage.byType[t].embeddedFraction=count.eligible?count.embedded/count.eligible:1;}
+      if(cachedContentLayout(db)?.suppressionRevision) ranked=read(()=>ranked.filter(candidate=>{
+        try{evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);return true;}
+        catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
+      }));
       const fusionStarted=performance.now(),lexical=c.lexical,fused=fuseCandidates(lexical.rows,ranked,{preset:'rrf-k10',limit:24,semanticState:channel,coverageComplete:preflight?.status==='complete'});
       detail.timings.fusionMs=performance.now()-fusionStarted;
       c.items=fused.rows.map((row,i)=>({ref:row.ref,rank:i+1,fusionScore:row.fusionScore,channels:row.channels}));
+      if(cachedContentLayout(db)?.suppressionRevision)c.items=read(()=>c.items.filter(candidate=>{
+        try{evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);return true;}
+        catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
+      }));
       detail.effective=fused.mode;c.coverage.depths.semantic=reason===null?24:0;
       c.coverage.omitted={lexical:Math.max(0,lexical.matched-24),semantic:reason===null?Math.max(0,ranked.length-24):null,horizon:Math.max(0,fused.unionSize-24)};
       const lexicalFallback=source=>({...source,items:lexicalItems,
@@ -350,9 +416,10 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         let rows=vectors.plan(p,observed.publication,snapshot,Math.min(maximum,p.budget.maxItems-attempts),quantum);if(!rows.length||!quantum.admit('embedding-item'))break;
         try {
           await quantum.measureAsync(async()=>{
-            const texts=read(()=>rows.map(r=>{const item=evidence.itemsInside(r.ref.namespace,[r.ref],p.intent,p.readSet)[0];return item.type==='memory'?item.content:item.title+'\n'+item.body;}));
+            let suppressionEpoch;
+            const texts=read(()=>{suppressionEpoch=contentSuppressionRequestFenceInside(db,p.readSet[0].ownerId);return rows.map(r=>{const item=evidence.itemsInside(r.ref.namespace,[r.ref],p.intent,p.readSet)[0];return item.type==='memory'?item.content:item.title+'\n'+item.body;});});
             while(texts.length>1&&Buffer.byteLength(JSON.stringify(texts))>240000){texts.pop();rows.pop();}
-            const result=await semantic.call('embed',{texts,kind:'refresh',expected:snapshot.policy,projection:{readSet:p.readSet,types:p.types,intent:p.intent,accessDigest:observed.publication.accessDigest,lexicalValidationDigest:digest(observed.publication)},maxUsd:dollars(usd(p.budget.maxUsd)-spent)},providerCutoff);
+            const result=await semantic.call('embed',{texts,kind:'refresh',expected:snapshot.policy,projection:{readSet:p.readSet,types:p.types,intent:p.intent,suppressionEpoch,accessDigest:observed.publication.accessDigest,lexicalValidationDigest:digest(observed.publication)},maxUsd:dollars(usd(p.budget.maxUsd)-spent)},providerCutoff);
             attempts+=rows.length;spent+=usd(result.chargedUsd);
             const guard=await semantic.snapshot();
             if(guard.policy?.purgeEpoch!==snapshot.policy.purgeEpoch||!guard.policy?.semantic){reason='purge_pending';return;}
@@ -380,9 +447,17 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();
       const current=storage.observe(p,access.accessGenerations,{knownFailure}),dto=scopedStatus(p,current,finalSnapshot),covered=coverage(dto),isReady=dto.lexical.state==='ready',complete=dto.semantic.state==='ready';
       covered.stops.budget=attempts>=p.budget.maxItems||reason==='budget_denied';
-      return success({status:isReady?complete?'complete':'partial':'rebuilding',progress:{lexical:dto.lexical.progress,transformed:0,embeddingAttempts:attempts,embedded},coverage:covered,channels:{lexical:channels(isReady).lexical,semantic:{state:complete?'ready':channelFor(isReady?reason??dto.semantic.reason:dto.semantic.reason),causes:complete?[]:[channelFor(isReady?reason??dto.semantic.reason:dto.semantic.reason)]}}});
+      return success(maintenanceDelivery(p,{status:isReady?complete?'complete':'partial':'rebuilding',progress:{lexical:dto.lexical.progress,transformed:0,embeddingAttempts:attempts,embedded},coverage:covered,channels:{lexical:channels(isReady).lexical,semantic:{state:complete?'ready':channelFor(isReady?reason??dto.semantic.reason:dto.semantic.reason),causes:complete?[]:[channelFor(isReady?reason??dto.semantic.reason:dto.semantic.reason)]}}},current.publication));
     });
   }
-  return {run,close(){storage.close();rankings.clear();},assembly:{representation:'representation-v2',defaults:ASSEMBLY_DEFAULTS,policies:ASSEMBLY_POLICIES,
+  return {run: contentSafetyFacade({ run }, { select: args => args[1],
+    check: (scopes,{delivery}) => { facade.port.ready();
+      if (!cachedContentLayout(db)?.suppressionRevision || !scopes.length) return;
+      if (delivery) assertContentSuppressionRequestInside(db, scopes);
+      else { contentSuppressionRequestInside(db, scopes); assertContentScopes(db, scopes); }
+    },
+    requestScope: withContentSuppressionRequest,
+    portGuard: scopes => maintenance ? undefined : contentScopeEpochGuard(db,scopes),
+    failure: error => failure(error.code === 'memory_not_found' ? 'evidence_unavailable' : error.code ?? 'storage_error') }).run,close(){storage.close();rankings.clear();},assembly:{representation:'representation-v2',defaults:ASSEMBLY_DEFAULTS,policies:ASSEMBLY_POLICIES,
     defaultPolicy:'rank-first-whole-v1',counter:counter?{id:counter.id}:null,limits:ASSEMBLY_LIMITS}};
 }

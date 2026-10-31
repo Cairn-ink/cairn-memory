@@ -1,0 +1,1583 @@
+{
+  "core": {
+    "abandonAdmission": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "admit": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "adoptMethodVersion": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "applyCardPlacement": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "applyPlacement": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "bindQualifiedClaim": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "cancelCardDraft": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": "private_cards.id"
+    },
+    "capture": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "captureRaw": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "checkMethodReasonRefs": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "claimAdmission": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "classifyPlacement": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "close": {
+      "kind": "no-owner-content",
+      "reason": "Closes resources; serves no owner content."
+    },
+    "closeEpisodeNextStep": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "compareMethodVersions": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "confirm": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "confirmCardDraft": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "contextRead": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "correct": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "correctEpisode": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "createAssetDerivative": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "createCardDraft": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "declareCardCurrentDependencies": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "deleteAsset": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "deleteAssetDerivative": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "deleteAssetVersion": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "deleteConversation": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": "raw_conversations.id"
+    },
+    "deleteKnowledgeCard": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": "private_cards.id"
+    },
+    "deleteMethodPackage": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "deleteMethodVersion": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "deleteRoleProfileRelease": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "deleteSourceNote": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": "card_notes.id"
+    },
+    "disableMethodBinding": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "disableRoleProfile": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "discardCaptureEvidence": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "editCardDraft": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "editKnowledgeCard": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "endEpisodeSession": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "fenceSession": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "fetch": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "fetchCandidateEvidence": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "fetchEvidence": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "findCandidates": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "finishAdmission": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "forget": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": "memories.id"
+    },
+    "forgetEpisode": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": "session_episodes.id"
+    },
+    "get": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getAssetCapabilities": {
+      "kind": "no-owner-content",
+      "reason": "Static API configuration only."
+    },
+    "getAssetUsage": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getAssetVersion": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getCaptureControl": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getCard": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getContextReadCapabilities": {
+      "kind": "no-owner-content",
+      "reason": "API and policy configuration only; no retained content or content-derived counts."
+    },
+    "getConversation": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getEpisode": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getLocalCaptureControl": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getMethodPackageCapabilities": {
+      "kind": "no-owner-content",
+      "reason": "Static API configuration only."
+    },
+    "getMethodPackageUsage": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getMethodVersion": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getPrivateCardCapabilities": {
+      "kind": "no-owner-content",
+      "reason": "Static API configuration only."
+    },
+    "getPrivateCardUsage": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getRationale": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getRawCaptureControl": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getRawUsage": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getSource": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "importAssetVersion": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "importMethodVersion": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "inspectAdmission": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "inspectCaptureEvidence": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "inspectCardOperation": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "keepEpisode": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "linkMocs": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "list": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listAssetDerivatives": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listAssetEffects": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listAssetVersions": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listAssets": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listCardEffects": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listCards": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listEpisodes": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listEvidenceMappings": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listMemoriesByTime": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listMethodBindingEvents": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listMethodEffects": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listMethodManifest": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listMethodPackages": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listMethodVersions": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listRawConversations": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listRawEffects": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listReviewConflicts": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listReviewTransitions": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "map": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "mapEvidence": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "planCaptureBatches": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "previewDeleteConversation": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "proposeEvidenceMapping": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "publishRoleProfileRelease": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "readAssetBytes": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "readAssetDerivative": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "readMethodAttachmentBytes": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "readMethodFile": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "readRoleTaskContext": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "rebuildIndex": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "recall": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "refreshCardTopic": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "refreshContextIndex": {
+      "kind": "gated",
+      "operation": "maintenance"
+    },
+    "reject": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": "memories.id"
+    },
+    "releaseEpisodeCorrection": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "resolveMethod": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "resolveMethodsForRole": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "resolveSourceReferences": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "revalidateCardCurrentDependencies": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "revalidateEvidence": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "reviewDecisionBasis": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "reviewEvidenceMapping": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "reviewRationale": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "selectEvidence": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "sessionStartContext": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "setCapturePaused": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "setLocalCaptureControl": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "setProceduralMemory": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "setProjectCapture": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "setRawCaptureControl": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "sourceSnapshot": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "submitSourceNote": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "supersede": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "transitionQualified": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "transitionQualifiedSet": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "verifyAssetBytes": {
+      "kind": "gated",
+      "operation": "read"
+    }
+  },
+  "runtime": {
+    "abandonAdmission": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "admit": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "applyInitialPlacement": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "applyPlacement": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "assertCaptureEvidence": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "assertCaptureSources": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "assertContentOutput": {
+      "kind": "no-owner-content",
+      "reason": "Internal denial-only contributor guard; serves no content."
+    },
+    "assertContentScope": {
+      "kind": "no-owner-content",
+      "reason": "Internal denial-only guard; serves no content."
+    },
+    "assertEpisodeKeep": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "assertEpoch": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "beginInitialClassification": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "bindQualifiedClaim": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "claimAdmission": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "claimCaptureEvidence": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "claimCapturedAdmission": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "claimEpisodeDraft": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "claimEpisodeWriter": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "claimOrdered": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "classificationSnapshot": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "close": {
+      "kind": "no-owner-content",
+      "reason": "Closes resources; serves no owner content."
+    },
+    "closeEpisodeNextStep": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "commitEpisodeDraft": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "commitRationale": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "contentPortGuard": {
+      "kind": "no-owner-content",
+      "reason": "Builds a denial-only callback; returns no owner data."
+    },
+    "correct": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "correctEpisode": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "deleteConversation": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": "raw_conversations.id"
+    },
+    "discardCaptureEvidence": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "discoverOrdered": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "episodeCaptureState": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "episodeDraftOutcome": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "episodeDraftSnapshot": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "episodeRange": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "episodeSessionKey": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "epoch": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "failEpisodeDraft": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "failEpisodeKeep": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "failInitialClassification": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "fetchPage": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "filterCaptureSources": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "finishAdmission": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "finishCapturedAdmission": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "finishOrdered": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "forget": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": "memories.id"
+    },
+    "forgetEpisode": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": "session_episodes.id"
+    },
+    "getCaptureControl": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getEpisode": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getPage": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getRationale": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "inspectAdmission": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "inspectCaptureEvidence": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "isAwaiting": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "legacyGet": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "legacyList": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "legacySearch": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "linkMocs": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "listPage": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listRawEffects": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listReviewConflicts": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listReviewTransitions": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "mapRows": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "pendingEpisodeSession": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "prepareEpisodeKeep": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "previewDeleteConversation": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "queryCandidateRows": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "rationaleSnapshot": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "ready": {
+      "kind": "no-owner-content",
+      "reason": "Checks native handle lifecycle only."
+    },
+    "rebuildIndex": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "recallSnapshot": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "recentReceipts": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "releaseEpisodeCorrection": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "releaseEpisodeWriter": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "reserveEpisodeBatch": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "resolveReview": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": "memories.id"
+    },
+    "sessionContextSnapshot": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "setCapturePaused": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "setEpisodePolicy": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "setProceduralMemory": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "setProjectCapture": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "settleEpisodeAttempt": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "sourceSnapshot": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "startEpisodeAttempt": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "supersede": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "suppressionFence": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "transitionQualified": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "transitionQualifiedSet": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "validateEpisodeBatch": {
+      "kind": "gated",
+      "operation": "read"
+    }
+  },
+  "legacy": {
+    "close": {
+      "kind": "no-owner-content",
+      "reason": "Closes resources; serves no owner content."
+    },
+    "scope": {
+      "kind": "no-owner-content",
+      "reason": "Binds a namespace; every scoped operation is gated."
+    }
+  },
+  "scope": {
+    "correct": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "forget": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": "memories.id"
+    },
+    "get": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "list": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "remember": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "search": {
+      "kind": "gated",
+      "operation": "read"
+    }
+  },
+  "context": {
+    "close": {
+      "kind": "no-owner-content",
+      "reason": "Closes resources; serves no owner content."
+    },
+    "contextRead": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "fetchCandidateEvidence": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "findCandidates": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getContextReadCapabilities": {
+      "kind": "no-owner-content",
+      "reason": "API and policy configuration only; no retained content or content-derived counts."
+    },
+    "refreshContextIndex": {
+      "kind": "gated",
+      "operation": "maintenance"
+    }
+  },
+  "topic": {
+    "close": {
+      "kind": "no-owner-content",
+      "reason": "Closes resources; serves no owner content."
+    },
+    "readTopicMembers": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "readTopicOverview": {
+      "kind": "gated",
+      "operation": "read"
+    }
+  },
+  "product": {
+    "close": {
+      "kind": "no-owner-content",
+      "reason": "Closes resources; serves no owner content."
+    },
+    "contextRead": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "fetchCandidateEvidence": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "findCandidates": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getContextIndexStatus": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getContextReadCapabilities": {
+      "kind": "no-owner-content",
+      "reason": "API and policy configuration only; no retained content or content-derived counts."
+    }
+  },
+  "maintainer": {
+    "close": {
+      "kind": "no-owner-content",
+      "reason": "Closes resources; serves no owner content."
+    },
+    "getContextIndexStatus": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getContextReadCapabilities": {
+      "kind": "no-owner-content",
+      "reason": "API and policy configuration only; no retained content or content-derived counts."
+    },
+    "refreshContextIndex": {
+      "kind": "gated",
+      "operation": "maintenance"
+    }
+  },
+  "pull": {
+    "close": {
+      "kind": "no-owner-content",
+      "reason": "Closes resources; serves no owner content."
+    },
+    "isSuppressed": {
+      "kind": "no-owner-content",
+      "reason": "Authorized content-free suppression reconciliation; never serves content."
+    },
+    "listSuppressionsSince": {
+      "kind": "no-owner-content",
+      "reason": "Authorized content-free suppression reconciliation; never serves content."
+    }
+  },
+  "supervisor": {
+    "ackCleanup": {
+      "kind": "no-owner-content",
+      "reason": "Supervisor disposal and resource lifecycle metadata only."
+    },
+    "close": {
+      "kind": "no-owner-content",
+      "reason": "Closes resources; serves no owner content."
+    },
+    "drain": {
+      "kind": "no-owner-content",
+      "reason": "Supervisor disposal and resource lifecycle metadata only."
+    },
+    "getCleanupStatus": {
+      "kind": "no-owner-content",
+      "reason": "Supervisor disposal and resource lifecycle metadata only."
+    }
+  },
+  "exports": {
+    "CARD_CURRENT_METHODS": {
+      "kind": "no-owner-content",
+      "reason": "Static protocol configuration."
+    },
+    "CARD_CURRENT_VERSION": {
+      "kind": "no-owner-content",
+      "reason": "Static protocol configuration."
+    },
+    "CONTEXT_SOURCES": {
+      "kind": "no-owner-content",
+      "reason": "Static protocol configuration."
+    },
+    "MemoryStoreError": {
+      "kind": "no-owner-content",
+      "reason": "Constructs an error; serves no content."
+    },
+    "SOURCE_LIMITS": {
+      "kind": "no-owner-content",
+      "reason": "Static protocol configuration."
+    },
+    "createContextReadSupervisor": {
+      "kind": "no-owner-content",
+      "reason": "Constructs a resource lifecycle supervisor."
+    },
+    "openContentSuppressionReader": {
+      "kind": "no-owner-content",
+      "reason": "Opens a handle whose methods are classified separately."
+    },
+    "openContextIndexMaintainer": {
+      "kind": "no-owner-content",
+      "reason": "Opens a handle whose methods are classified separately."
+    },
+    "openContextProductReader": {
+      "kind": "no-owner-content",
+      "reason": "Opens a handle whose methods are classified separately."
+    },
+    "openContextReader": {
+      "kind": "no-owner-content",
+      "reason": "Opens a handle whose methods are classified separately."
+    },
+    "openContextSemanticCoordinator": {
+      "kind": "no-owner-content",
+      "reason": "Opens a handle whose methods are classified separately."
+    },
+    "openMemoryCore": {
+      "kind": "no-owner-content",
+      "reason": "Opens a handle whose methods are classified separately."
+    },
+    "openMemoryReader": {
+      "kind": "no-owner-content",
+      "reason": "Opens a handle whose methods are classified separately."
+    },
+    "openMemoryStore": {
+      "kind": "no-owner-content",
+      "reason": "Opens a handle whose methods are classified separately."
+    },
+    "renewContextMaintenancePump": {
+      "kind": "no-owner-content",
+      "reason": "Returns separately enumerated lexical and semantic pump handles; renewal serves no owner content."
+    },
+    "roleProfileRef": {
+      "kind": "no-owner-content",
+      "reason": "Pure validation or formatting of caller-supplied data; no store reads."
+    },
+    "roleProfileReleaseRef": {
+      "kind": "no-owner-content",
+      "reason": "Pure validation or formatting of caller-supplied data; no store reads."
+    },
+    "roleTaskMeteredText": {
+      "kind": "no-owner-content",
+      "reason": "Pure validation or formatting of caller-supplied data; no store reads."
+    },
+    "roleTaskToolResponse": {
+      "kind": "no-owner-content",
+      "reason": "Pure validation or formatting of caller-supplied data; no store reads."
+    },
+    "selectContextProductNamespaces": {
+      "kind": "no-owner-content",
+      "reason": "Pure validation or formatting of caller-supplied data; no store reads."
+    },
+    "normalizeBoundedText": {
+      "kind": "no-owner-content",
+      "reason": "Pure caller-text normalization; does not open a store or read retained owner content."
+    },
+    "normalizedTextLength": {
+      "kind": "no-owner-content",
+      "reason": "Pure caller-text normalization; does not open a store or read retained owner content."
+    }
+  },
+  "semantic": {
+    "close": {
+      "kind": "no-owner-content",
+      "reason": "Closes resources; serves no owner content."
+    },
+    "getOwnerSemanticStatus": {
+      "kind": "no-owner-content",
+      "reason": "Trusted semantic policy and maintenance operation; no retained content delivery."
+    },
+    "purgeOwnerVectors": {
+      "kind": "no-owner-content",
+      "reason": "Trusted semantic policy and maintenance operation; no retained content delivery."
+    },
+    "setOwnerSemantic": {
+      "kind": "no-owner-content",
+      "reason": "Trusted semantic policy and maintenance operation; no retained content delivery."
+    },
+    "validateOwnerSemanticCoverage": {
+      "kind": "no-owner-content",
+      "reason": "Trusted semantic policy and maintenance operation; no retained content delivery."
+    }
+  },
+  "cards": {
+    "applyCardPlacement": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "cancelCardDraft": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": "private_cards.id"
+    },
+    "confirmCardDraft": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "createCardDraft": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "declareCardCurrentDependencies": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "deleteKnowledgeCard": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": "private_cards.id"
+    },
+    "deleteSourceNote": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": "card_notes.id"
+    },
+    "editCardDraft": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "editKnowledgeCard": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "fetchEvidence": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getCard": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getPrivateCardCapabilities": {
+      "kind": "no-owner-content",
+      "reason": "Static API configuration only."
+    },
+    "getPrivateCardUsage": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getSource": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "inspectCardOperation": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listCardEffects": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listCards": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listEvidenceMappings": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "mapEvidence": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "proposeEvidenceMapping": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "refreshCardTopic": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "resolveSourceReferences": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "revalidateCardCurrentDependencies": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "revalidateEvidence": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "reviewEvidenceMapping": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "selectEvidence": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "submitSourceNote": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    }
+  },
+  "methods": {
+    "adoptMethodVersion": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "checkMethodReasonRefs": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "compareMethodVersions": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "deleteMethodPackage": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "deleteMethodVersion": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "disableMethodBinding": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "getMethodPackageCapabilities": {
+      "kind": "no-owner-content",
+      "reason": "Static API configuration only."
+    },
+    "getMethodPackageUsage": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getMethodVersion": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "importMethodVersion": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "listMethodBindingEvents": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listMethodEffects": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listMethodManifest": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listMethodPackages": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listMethodVersions": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "readMethodAttachmentBytes": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "readMethodFile": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "resolveMethod": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "resolveMethodsForRole": {
+      "kind": "gated",
+      "operation": "read"
+    }
+  },
+  "assets": {
+    "createAssetDerivative": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "deleteAsset": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "deleteAssetDerivative": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "deleteAssetVersion": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "getAssetCapabilities": {
+      "kind": "no-owner-content",
+      "reason": "Static API configuration only."
+    },
+    "getAssetUsage": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "getAssetVersion": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "importAssetVersion": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "listAssetDerivatives": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listAssetEffects": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listAssetVersions": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "listAssets": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "readAssetBytes": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "readAssetDerivative": {
+      "kind": "gated",
+      "operation": "read"
+    },
+    "verifyAssetBytes": {
+      "kind": "gated",
+      "operation": "read"
+    }
+  },
+  "roles": {
+    "deleteRoleProfileRelease": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "disableRoleProfile": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "publishRoleProfileRelease": {
+      "kind": "gated",
+      "operation": "write",
+      "terminalField": null
+    },
+    "readRoleTaskContext": {
+      "kind": "gated",
+      "operation": "read"
+    }
+  },
+  "pumpLexical": {
+    "getStatus": {
+      "kind": "no-owner-content",
+      "reason": "Trusted pump quota and resource status, without canonical population coverage."
+    },
+    "completion": {
+      "kind": "no-owner-content",
+      "reason": "Promise of trusted quota and lifecycle status; never retained content."
+    },
+    "close": {
+      "kind": "no-owner-content",
+      "reason": "Stops scheduled work and disposes resources; no owner content."
+    }
+  },
+  "pumpSemantic": {
+    "getStatus": {
+      "kind": "no-owner-content",
+      "reason": "Trusted pump quota and resource status, without canonical population coverage."
+    },
+    "completion": {
+      "kind": "no-owner-content",
+      "reason": "Promise of trusted quota and lifecycle status; never retained content."
+    },
+    "close": {
+      "kind": "no-owner-content",
+      "reason": "Stops scheduled work and disposes resources; no owner content."
+    }
+  },
+  "preflight": {
+    "preflightContentSafetyV1": {
+      "kind": "no-owner-content",
+      "reason": "Trusted offline counts-only maintenance; never serves retained content."
+    }
+  },
+  "safetyCLI": {
+    "safetyCommand": {
+      "kind": "no-owner-content",
+      "reason": "Trusted offline preflight CLI dispatch; count-only results, no retained content."
+    }
+  },
+  "safetyMigrationCLI": {
+    "safetyMigrateCommand": {
+      "kind": "no-owner-content",
+      "reason": "Trusted explicit quiescent migration CLI; maintenance metadata only."
+    }
+  }
+}

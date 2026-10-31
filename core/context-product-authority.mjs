@@ -21,7 +21,8 @@ export function requestAuthority(host, binding, control) {
     boundedData(credential, 16384);
     if (credentialDigest(credential) !== binding.credentialDigest) fail('authority_required');
     const request = deepFreeze({ method, input: payload, ownerId: binding.ownerId, namespaces: binding.namespaces,
-      requestControl: control, credentialBindingId: binding.credentialBindingId });
+      requestControl: control, credentialBindingId: binding.credentialBindingId,
+      ...(binding.suppression ? { suppression: binding.suppression } : {}) });
     let grant;
     try {
       grant = host.authorize(request, credential);

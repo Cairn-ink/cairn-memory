@@ -7,6 +7,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { sourcesFixture, ns, ok, sourceQuery } from '../testing/context-read-sources-fixture.mjs';
 import { denied } from '../testing/context-read-core-fixture.mjs';
 
+// Point-only work adapters receive the fixture's explicitly verified legacy capability.
+const legacySuppressionRevision = db => { assert.ok(db.prepare('PRAGMA user_version').get().user_version <= 33); return 0; };
+
 function stable(value) {
   const clone = structuredClone(value); delete clone.nextCursor;
   delete clone.trace.timings; delete clone.trace.maintenance;
@@ -109,7 +112,7 @@ test('C08 foreign existing endpoint IDs are rejected before public checks; priva
   const f = sourcesFixture(t, { cards: true }), foreign = { ...ns, ownerId: 'foreign-existing-data' };
   const memory = f.admit('Foreign endpoint', foreign), card = f.card('Foreign Card', { namespace: foreign });
   const meter = instrumentSourceWork(f.db, { readSet: [ns] });
-  const budget = sourceBudget(Infinity), reader = sourceReader(meter.database, {}, { cards: true }, { readSet: [ns], types: ['memory', 'card'] }, budget);
+  const budget = sourceBudget(Infinity), reader = sourceReader(meter.database, {}, { cards: true, suppressionRevision: legacySuppressionRevision(f.db) }, { readSet: [ns], types: ['memory', 'card'] }, budget);
   const before = JSON.stringify(budget.stats());
   readTransaction(f.db, () => {
     for (const ref of [{ type: 'memory', namespace: ns, memoryId: memory.id, revision: 1 }, { ...card, namespace: ns }])

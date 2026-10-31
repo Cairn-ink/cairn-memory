@@ -1,3 +1,5 @@
+import { cachedContentLayout } from './content-safety-schema.mjs';
+import { contentReadSafety } from './content-safety.mjs';
 import { randomUUID } from "node:crypto";
 import { transaction, isStorageBusy } from "./database.mjs";
 import { fail, identifier } from "./validation.mjs";
@@ -96,7 +98,10 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
       const closed = guard('claimGuard', ns, input, row, now, serialized !== null);
       if (closed) return refuse(closed);
       if (row?.state === "completed") {
-        return { duplicate: true, memoryIds: JSON.parse(row.memory_ids),
+        const memoryIds=JSON.parse(row.memory_ids);
+        if(cachedContentLayout(db)?.suppressionRevision)for(const id of memoryIds){const current=activeRow(ns,id);
+          if(!current||!contentReadSafety(db,{namespace:ns,ref:{type:'memory',namespace:ns,memoryId:id,revision:current.revision},intent:'history'}).allowed)fail('memory_suppressed');}
+        return { duplicate: true, memoryIds,
           suppressedCount: row.suppressed_count, ...hooks?.replay() };
       }
       if (row) sourceRoots?.bindJob(ns, input, sources);

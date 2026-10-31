@@ -1,3 +1,4 @@
+import { declareContentTerminalInside } from './content-write-context.mjs';
 import { createHash } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { exceedsRelationLimit } from './relation-limits.mjs';
@@ -8,7 +9,7 @@ export function decisionReviewOption(input) {
   return input.decisionReview === 'required-v1';
 }
 
-export function createConfirmationStorage({ db, enabled, activeRow, attach, forgetMutation, advanceEpoch, resolveHeld }) {
+export function createConfirmationStorage({ db, enabled, activeRow, attach, forgetMutation, advanceEpoch, resolveHeld, assertConfirm = () => {} }) {
   return function resolve(ns, action, input) {
     if (!enabled) fail('decision_review_required');
     const key = [ns.ownerId, ns.scope, ns.projectId, input.actionId];
@@ -19,12 +20,16 @@ export function createConfirmationStorage({ db, enabled, activeRow, attach, forg
         WHERE owner_id=? AND scope=? AND project_id=? AND action_id=?`).get(...key);
       if (previous) {
         if (previous.payload_digest !== digest) fail('action_conflict');
-        return JSON.parse(previous.result);
+        const result=JSON.parse(previous.result);
+        if(action==='reject')declareContentTerminalInside(db,'memory',()=>db.prepare('SELECT * FROM memories WHERE owner_id=? AND scope=? AND project_id=? AND id=?').get(ns.ownerId,ns.scope,ns.projectId,input.memoryId));
+        if(action==='confirm')assertConfirm(ns,activeRow(ns,input.memoryId),result.memory?.revision,result);
+        return result;
       }
       const row = activeRow(ns, input.memoryId);
       if (!row) fail('memory_not_found');
       if (row.revision !== input.expectedRevision) fail('revision_conflict');
       if (row.review_state !== 'awaiting') fail('memory_not_awaiting');
+      if(action==='confirm')assertConfirm(ns,row);
       let result;
       if (action === 'reject') {
         const forgotten = forgetMutation(ns, row.id, input.expectedRevision, 'rejected');
@@ -39,6 +44,7 @@ export function createConfirmationStorage({ db, enabled, activeRow, attach, forg
         const reviewEffects = resolveHeld(ns, row);
         result = { memory: { id: row.id, revision: row.revision + 1 },
           confirmationReceiptId: insertedReceiptIds[0], reviewEffects, indexRevision: advanceEpoch(ns) };
+        assertConfirm(ns,activeRow(ns,input.memoryId),result.memory.revision,result);
       }
       db.prepare(`INSERT INTO confirmation_actions
         (owner_id,scope,project_id,action_id,payload_digest,result) VALUES(?,?,?,?,?,?)`)
