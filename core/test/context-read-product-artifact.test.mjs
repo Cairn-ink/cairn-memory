@@ -39,7 +39,11 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   const entries = ['core/context-product-reader.mjs', 'core/context-product-worker.mjs', 'core/context-product-pump.mjs', 'core/context-product-selection.mjs', 'core/context-read-supervisor.mjs'];
   const expected = closure(root, entries);
   // Hosted P2e closure, shared maintenance admission, private open timing and attribution, content safety and retained receipt lineage.
-  assert.equal(expected.length, 106);
+  // S2h-1 adds the four storage modules behind the SQLite Worker boundary.
+  // Keep the exact closure pin and independently verify the installed edges.
+  assert.equal(expected.length, 110);
+  for (const file of ['core/content-safety-layout.mjs','core/content-safety-schema.mjs',
+    'core/content-safety-migration.mjs','core/content-suppression-storage.mjs']) assert.ok(expected.includes(file),file);
   for (const file of expected) assert.ok(manifest.includes(file), 'missing artifact file: ' + file);
   for (const file of manifest) {
     const target = join(staged, file); mkdirSync(dirname(target), { recursive: true }); copyFileSync(join(root, file), target);

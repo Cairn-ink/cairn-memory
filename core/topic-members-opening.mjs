@@ -1,3 +1,4 @@
+import { resolveContentLayout } from './content-safety-layout.mjs';
 import { fail } from './validation.mjs';
 import { createPrimaryCheck, scanPrimary } from './topic-members-primary.mjs';
 
@@ -51,7 +52,8 @@ export function assertPointPlan(db, table, columns, { binary = true, index } = {
  * batch. Its entire maximum row cost is reserved before executing the query.
  * Subsequent checks over those rows are separate bounded in-memory steps.
  * Initialization checkpoints are ordinary cloneable traversal data. */
-export function createTopicOpening(db, version) {
+export function createTopicOpening(db, physical) {
+  const version = resolveContentLayout(physical).base;
   const plans = [...Object.entries(primary).map(([table, columns]) => [table, null, columns]), ...secondary];
   const tables = [...Object.keys(primary), 'store_metadata'];
   const wanted = new Set([...tables, ...markers.map(([, name]) => name), ...secondary.map(([, name]) => name)]);

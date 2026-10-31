@@ -1,3 +1,4 @@
+import { resolveContentLayout } from '../../core/content-safety-layout.mjs';
 import { randomUUID } from 'node:crypto';
 import { openSync,closeSync,readSync,writeSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
@@ -69,7 +70,7 @@ function inspectStore(path,DatabaseSync) {
     db.exec('BEGIN');
     const identity=storeIdentity(db),cursorSecret=db.prepare('SELECT cursor_secret FROM store_metadata WHERE singleton=1').get().cursor_secret;pin.check();db.exec('COMMIT');
     const fence=storeFenceOption({version:'store-fence-v1',...pin.identity,...identity});
-    return {...pin,fence,version:identity.userVersion,mac:createBinaryIdentity({...identity,cursorSecret})};
+    return {...pin,fence,version:resolveContentLayout(identity.userVersion).base,layout:resolveContentLayout(identity.userVersion),mac:createBinaryIdentity({...identity,cursorSecret})};
   }catch(error){pin.close();throw error;}
   finally{db?.close();}
 }
@@ -125,6 +126,7 @@ export async function methodCommand(args) {
       core=openMemoryCore({path:config.path,storeFence:store.fence,...(config.attachments?{assets:{version:'assets-local-v1',storage:'sqlite-blob-v1',authority:assetAuthority}}:{}),methodPackages:{version:'method-packages-local-v1',storage:'local-plain-v1',authority}});
     };
     const target=config.attachments?31:30;
+    if(store.layout.suppressionRevision&&store.version<target)fail('unsupported_database');
     if(store.version>=target)openCore();
     const read=(method,input)=>{
       const token=Object.freeze({});tokens.set(token,{method,input:structuredClone(input)});

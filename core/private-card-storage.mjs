@@ -1,7 +1,7 @@
+import { allocateContentKey, writeContentSuppressionInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, sourceReadSafety, cardContributorsInside, createContentReadMemo } from './content-safety.mjs';
 import { createCardCurrentStorage, cardDependencyFence } from './card-current-storage.mjs';
 import { CARD_CURRENT_METHODS } from './card-current-input.mjs';
-import { randomUUID } from 'node:crypto';
 import { createOperationLedger, createPrivateEffectWriter, createPrivateCursor } from './private-operation-helpers.mjs';
 import { transaction } from './database.mjs';
 import { fail } from './validation.mjs';
@@ -79,7 +79,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     const value = noteInput(input), bytes = Buffer.byteLength(value.text, 'utf8');
     const used = db.prepare('SELECT byte_count FROM card_note_usage WHERE owner_id=?').get(ns.ownerId)?.byte_count ?? 0;
     if (used + bytes > OWNER_NOTE_CAP) fail('quota_reached');
-    const id = randomUUID(), timestamp = now();
+    const id = allocateContentKey(db, ns, 'submitted-note'), timestamp = now();
     db.prepare('INSERT INTO card_notes VALUES(?,?,?,?,1,\'available\',?,?,?,?)')
       .run(id, ...boundary(ns), value.text, bytes, value.occurredAt, timestamp);
     db.prepare(`INSERT INTO card_note_usage VALUES(?,?) ON CONFLICT(owner_id)
@@ -146,6 +146,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
   const receipt = (row, effectCount = 0) => ({ id: row.id, revision: row.revision,
     state: row.state, bodyRevision: row.body_revision ?? null, effectCount });
   function purgeCard(ns, row, state, actionId) {
+    writeContentSuppressionInside(db, { namespace: ns, kind: 'card', key: row.id, reason: 'purge', actionId });
     db.prepare(`UPDATE private_cards SET state=?,revision=revision+1,title=NULL,body=NULL,
       updated_at=? WHERE id=?`).run(state, now(), row.id);
     db.prepare('DELETE FROM card_bindings WHERE card_id=?').run(row.id);
@@ -166,7 +167,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
       const selected = value.authoredInput !== undefined ? [insertNote(ns, value.authoredInput)]
         : value.memoryRefs !== undefined ? receiptSources.fromMemories(ns, value.memoryRefs) : value.sources;
       const sources = validateRefs(ns, selected);
-      const id = randomUUID(), timestamp = now();
+      const id = allocateContentKey(db, ns, 'card'), timestamp = now();
       db.prepare(`INSERT INTO private_cards VALUES(?,?,?,?,1,'draft',?,?,NULL,?,?,NULL)`)
         .run(id, ...boundary(ns), cardText(value.title, 200), cardText(value.body, 20_000), timestamp, timestamp);
       putRefs(id, sources);
@@ -177,6 +178,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
       if (!row) fail('source_not_found');
       if (row.revision !== input.expectedRevision) fail('revision_conflict');
       if (row.state !== 'available') fail('source_unavailable');
+      writeContentSuppressionInside(db, { namespace: ns, kind: 'submitted-note', key: row.id, reason: 'purge', actionId: input.actionId });
       db.prepare(`UPDATE card_notes SET text=NULL,byte_count=0,state='deleted',revision=revision+1 WHERE id=?`).run(row.id);
       db.prepare('UPDATE card_note_usage SET byte_count=byte_count-? WHERE owner_id=?').run(row.byte_count, ns.ownerId);
       // Admission caps each note at 128 live dependents. Verify the invariant

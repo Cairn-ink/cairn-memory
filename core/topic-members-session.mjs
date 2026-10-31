@@ -1,3 +1,4 @@
+import { attestContentSafety, checkInstalledContentSafety } from './content-safety-schema.mjs';
 import { unsupportedTopicStorage } from './topic-reader-sqlite.mjs';
 import { lstatSync } from 'node:fs';
 import { openReadDatabase } from './read-database.mjs';
@@ -42,6 +43,7 @@ export function createTopicSession(path, topicPolicy) {
     try {
       charge(1);
       schema = configuration(opened.db);
+      attestContentSafety(opened.db, schema.version);
       const encoding = opened.db.prepare('PRAGMA encoding').get().encoding;
       if (schema.applicationId !== APPLICATION_ID || !READ_SCHEMA_VERSIONS.includes(schema.version) || encoding !== 'UTF-8') fail('unsupported_database');
       charge(1);
@@ -77,6 +79,7 @@ export function createTopicSession(path, topicPolicy) {
     // Check inside the charged transaction, before prepared snapshot statements
     // can be invalidated by DROP/ALTER and throw an untyped native error.
     if (!same(configuration(connection.db), schema)) changed();
+    checkInstalledContentSafety(connection.db);
     return overview.snapshot(namespace);
   };
   const originBinding = (namespace, captured) => {

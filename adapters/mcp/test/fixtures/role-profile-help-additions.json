@@ -23,6 +23,36 @@
       "lines": [
         "  cairn-memory safety preflight --db ABS"
       ]
+    },
+    {
+      "feature": "S2h explicit safety maintenance entry",
+      "insertBeforePinnedLine": 30,
+      "previousPinnedLine": "  cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2 --capture-evidence staged-v1 --session-episodes episode-v1 [--session-episodes-draft-batches 8]",
+      "nextPinnedLine": "",
+      "lines": [
+        "  cairn-memory safety migrate --db ABS --backup ABS --store-id ID --base 18|23|33 --quiescent"
+      ]
+    },
+    {
+      "feature": "S2h verified quiescence and offline backup preconditions",
+      "insertBeforePinnedLine": 31,
+      "previousPinnedLine": "",
+      "nextPinnedLine": "Keep the database outside node_modules; its parent directory must exist.",
+      "lines": [
+        "For safety migration, --quiescent confirms closed admissions, stopped writers,",
+        "drained readers and closed old handles. Supply a verified offline backup.",
+        "A failed migration keeps admissions closed; backups are not serving restores.",
+        ""
+      ]
+    },
+    {
+      "feature": "S2h retained Raw exact safety pin",
+      "insertBeforePinnedLine": 36,
+      "previousPinnedLine": "--retained-raw-profile selects one existing private schema29 store and exact namespace.",
+      "nextPinnedLine": "It is exclusive, Linux/WSL + Node>=22.16, and keyless: it never inspects a model key.",
+      "lines": [
+        "Attested safety v48 stores use an exact safety capability pin."
+      ]
     }
   ]
 }

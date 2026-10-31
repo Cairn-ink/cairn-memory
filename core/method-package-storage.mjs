@@ -1,3 +1,4 @@
+import { resolveContentLayout } from './content-safety-layout.mjs';
 import { createCardCurrentStorage } from './card-current-storage.mjs';
 import { randomUUID } from 'node:crypto';
 import { createMethodBindingStorage } from './method-binding-storage.mjs';
@@ -43,7 +44,7 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
   const manifestIdentity = files => binding('method-manifest-v1', files.map(file => [file.path,file.contentIdentity,file.mediaType]));
   const manifest = rows => rows.map(row => ({ path: row.path, byteCount: row.byte_count,
     contentIdentity: row.content_identity, mediaType: row.media_type,...(row.kind?{kind:row.kind}:{}) }));
-  const attachments=createMethodAttachmentStorage({db,identity,contentIdentity,enabled:db.prepare('PRAGMA user_version').get().user_version>=31});
+  const attachments=createMethodAttachmentStorage({db,identity,contentIdentity,enabled:resolveContentLayout(db.prepare('PRAGMA user_version').get().user_version).assets});
   function targetLifecycle(ns,inputRef,check) {
     const ref = methodVersionRef(inputRef), pkg = packageRow(ns, ref.packageId, check);
     const row = pkg && versionRow(pkg.id, ref.versionId, check);

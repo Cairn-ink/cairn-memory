@@ -15,7 +15,7 @@ const compareHelp = actual => assert.equal(removeReviewedRoleHelpAdditions(actua
 
 test('C05 reviewed help additions remove only exact §20 and safety lines at the approved pinned positions', () => {
   assert.equal(allowlist.base, fixture.base); assert.equal(allowlist.output, 'cli.stdout[0]');
-  assert.equal(allowlist.additions.length, 2); assert.equal(allowlist.additions[0].insertBeforePinnedLine, 9);
+  assert.equal(allowlist.additions.length, 5); assert.equal(allowlist.additions[0].insertBeforePinnedLine, 9);
   assert.equal(allowlist.additions[0].lines.length, 4); assert.ok(allowlist.additions[0].feature.includes('bge-m3 §20'));
   assert.deepEqual(allowlist.additions[0].lines, [
     '  cairn-memory model install|verify bge-m3 --dir ABS [--check-config]',
@@ -26,6 +26,14 @@ test('C05 reviewed help additions remove only exact §20 and safety lines at the
   assert.equal(allowlist.additions[1].feature, 'S3 read-only content-safety preflight count');
   assert.equal(allowlist.additions[1].insertBeforePinnedLine, 13);
   assert.deepEqual(allowlist.additions[1].lines, ['  cairn-memory safety preflight --db ABS']);
+  assert.deepEqual(allowlist.additions.slice(2).map(({feature,insertBeforePinnedLine,lines})=>({feature,insertBeforePinnedLine,lines})),[
+    {feature:'S2h explicit safety maintenance entry',insertBeforePinnedLine:30,lines:['  cairn-memory safety migrate --db ABS --backup ABS --store-id ID --base 18|23|33 --quiescent']},
+    {feature:'S2h verified quiescence and offline backup preconditions',insertBeforePinnedLine:31,lines:[
+      'For safety migration, --quiescent confirms closed admissions, stopped writers,',
+      'drained readers and closed old handles. Supply a verified offline backup.',
+      'A failed migration keeps admissions closed; backups are not serving restores.','']},
+    {feature:'S2h retained Raw exact safety pin',insertBeforePinnedLine:36,lines:['Attested safety v48 stores use an exact safety capability pin.']},
+  ]);
   for (const addition of allowlist.additions) {
     const index = addition.insertBeforePinnedLine - 1, lines = pinned.split('\n');
     assert.equal(addition.previousPinnedLine, lines[index - 1]);
@@ -54,6 +62,11 @@ test('C05 an unlisted help change still fails the pinned byte comparison', () =>
     actual.replaceAll('\n', '\r\n'),
   ];
   for (const changed of changes) { assert.notEqual(changed, actual); assert.throws(() => compareHelp(changed)); }
+  for(const addition of allowlist.additions){
+    const bytes=addition.lines.join('\n')+'\n';assert.ok(actual.includes(bytes));
+    for(const changed of [actual.replace(bytes,bytes+bytes),bytes+actual.replace(bytes,''),actual.replace(bytes,'Unreviewed replacement\n')])
+      assert.throws(()=>compareHelp(changed),addition.feature);
+  }
 });
 
 test('C05 help allowance never exempts tools, DTOs, errors, CLI checks or schemas', () => {

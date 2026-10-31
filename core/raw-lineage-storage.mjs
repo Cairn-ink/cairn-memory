@@ -1,3 +1,4 @@
+import { writeContentSuppressionInside } from './content-suppression-storage.mjs';
 import { createHmac } from 'node:crypto';
 import { fail } from './validation.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
@@ -133,7 +134,7 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
         ELSE raw_receipt_origins.kind END`).run(receiptId, kind);
     return changed > 0 || previous === undefined || previous !== kind && kind === 'derived';
   }
-  function excludeMemory(ns, memoryId) {
+  function excludeMemory(ns, memoryId, suppression = { reason: 'purge', actionId: 'source-exclusion-'+memoryId }) {
     if (!enabled()) return;
     if (!db.isTransaction) fail('raw_transaction_required');
     // An opted-in schema may serve ordinary-only namespaces too. There is no
@@ -164,7 +165,11 @@ export function createRawLineageStorage(db, { readMemo } = {}) {
       const generation = db.prepare('SELECT generation FROM raw_exclusion_clocks WHERE owner_id=? AND scope=? AND project_id=?')
         .get(...boundary(ns)).generation;
       const insert = db.prepare('INSERT OR IGNORE INTO raw_source_exclusions VALUES(?,?,?,?,?)');
-      for (const anchor of values) insert.run(anchor.conversationId, anchor.messageId, anchor.start, anchor.end, generation);
+      for (const anchor of values) {
+        writeContentSuppressionInside(db, { namespace: ns, kind: 'raw', key: anchor.conversationId, matchMode: 'span',
+          messageId: anchor.messageId, start: anchor.start, end: anchor.end, ...suppression });
+        insert.run(anchor.conversationId, anchor.messageId, anchor.start, anchor.end, generation);
+      }
     });
   }
   function filter(ns, receipts) {
