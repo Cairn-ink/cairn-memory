@@ -1,0 +1,40 @@
+{
+  "HookStartedhook_startedHookCompletedhook_completed": {
+    "offset": 260424432,
+    "excerpt": "HookStartedhook_startedHookCompletedhook_completed"
+  },
+  "RolloutItemWiremessagereplacement_history": {
+    "offset": 265790828,
+    "excerpt": "RolloutItemWiremessagereplacement_history"
+  },
+  "internally tagged enum AgentMessageContent": {
+    "offset": 265793379,
+    "excerpt": "internally tagged enum AgentMessageContent"
+  },
+  "struct variant AgentMessageContent::Text": {
+    "offset": 265537588,
+    "excerpt": "struct variant AgentMessageContent::Text"
+  },
+  "struct variant AgentMessageContent::Text with 1 element": {
+    "offset": 265751537,
+    "excerpt": "struct variant AgentMessageContent::Text with 1 element"
+  },
+  "struct variant ThreadItem::AgentMessage with 6 elements": {
+    "offset": -1
+  },
+  "struct variant ThreadItem::UserMessage with 3 elements": {
+    "offset": -1
+  },
+  "hook_completed": {
+    "offset": 260424468,
+    "excerpt": "hook_completed"
+  },
+  "hook_started": {
+    "offset": 260424443,
+    "excerpt": "hook_started"
+  },
+  "internally tagged enum RolloutItemWire": {
+    "offset": 265790805,
+    "excerpt": "internally tagged enum RolloutItemWire"
+  }
+}

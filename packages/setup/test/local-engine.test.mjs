@@ -97,6 +97,43 @@ test('E03 packed installer inventory: npm JSON, files rules/disk, and tar agree'
     diskFiles(join(setup, 'runtime')).map(name => 'runtime/' + name));
 });
 
+test('Q10 0.6.3 and frozen 0.6.2 inventories agree by tar and npm, including the embedded engine', t => {
+  const directory = workspace(t), baseline = join(directory, 'baseline'); mkdirSync(baseline);
+  const paths = command('git', ['ls-tree', '-r', '--name-only', '34182d51', '--', 'packages/setup'], { cwd: repo }).trim().split('\n');
+  for (const path of paths) {
+    const target = join(baseline, path.replace(/^packages\/setup\//u, ''));
+    mkdirSync(dirname(target), { recursive: true });
+    const result = run('git', ['show', '34182d51:' + path], { cwd: repo, encoding: null });
+    assert.equal(result.status, 0); writeFileSync(target, result.stdout);
+  }
+  const userconfig = join(directory, 'empty.npmrc'); writeFileSync(userconfig, '', { mode: 0o600 });
+  const env = { PATH: process.env.PATH, HOME: directory, npm_config_userconfig: userconfig,
+    npm_config_cache: join(directory, 'cache'), TMPDIR: directory };
+  const pack = cwd => JSON.parse(command('npm', ['pack', '--offline', '--ignore-scripts', '--json',
+    '--pack-destination', directory], { cwd, env }))[0];
+  const previous = pack(baseline), current = pack(setup);
+  assert.equal(previous.version, '0.6.2'); assert.equal(current.version, '0.6.3');
+  for (const result of [previous, current]) {
+    countMatch(t, 'Q10 installer tar vs npm pack manifest ' + result.version,
+      tarFiles(join(directory, result.filename)), result.files.map(file => file.path));
+    assert.ok(result.files.every(file => !/(?:^|\/)(?:test|fixtures)(?:\/|$)/u.test(file.path)));
+  }
+  countMatch(t, 'Q10 outer inventory 0.6.2 vs 0.6.3', previous.files.map(file => file.path), current.files.map(file => file.path));
+  const engines = [];
+  for (const [label, source] of [['previous', join(baseline, 'runtime/engine', `${manifest.package.name}-${manifest.package.version}.tgz`)], ['current', archive]]) {
+    const extract = join(directory, label); mkdirSync(extract);
+    command('tar', ['-xzf', source, '-C', extract]);
+    const npmFiles = JSON.parse(command('npm', ['pack', '--offline', '--ignore-scripts', '--dry-run', '--json'],
+      { cwd: join(extract, 'package'), env }))[0].files.map(file => file.path);
+    const tar = tarFiles(source);
+    countMatch(t, 'Q10 embedded engine tar vs npm pack manifest ' + label, tar, npmFiles);
+    assert.ok(tar.every(name => !/(?:^|\/)(?:test|fixtures)(?:\/|$)/u.test(name)));
+    assert.equal(json(join(extract, 'package/package.json')).version, '0.0.0-preview.1');
+    engines.push(tar);
+  }
+  countMatch(t, 'Q10 embedded engine inventory 0.6.2 vs 0.6.3', ...engines);
+});
+
 // Source-checkout case: prepack imports the repository's packaging builder.
 test('E03 prepack check passes, permits archive drift, and rejects a stale manifest byte', t => {
   const directory = workspace(t);
