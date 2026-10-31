@@ -305,9 +305,9 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           const describeCutoff=outcome=>cutoffDiagnostic={ordinal,lane:index,quantum:sequence,resident:dispatchEpoch,cutoff:1,
             chargedItems:maxItems,chargedMs:maxMs,disposalMs:0,outcome,allowance:ledger.recoveries??0,cooldownUntil:0};
           const recover=()=>recovery??= (async()=>{
-            const started=now(),proofDeadline=Math.min(capability.cutoffAt,Number(BigInt(capability.operation.operationCutoffMonoNs))/1e6)+1000;
+            const started=now(),proofDeadline=()=>Math.min(capability.cutoffAt,Number(BigInt(capability.operation.operationCutoffMonoNs))/1e6)+1000;
             const domainRecovery=recoveryDomains.get(domainOf(p));
-            domainRecovery.pending++;domainRecovery.pendingUntil=Math.max(domainRecovery.pendingUntil,proofDeadline);
+            domainRecovery.pending++;domainRecovery.pendingUntil=Math.max(domainRecovery.pendingUntil,proofDeadline());
             let confirmationTimer;describeCutoff(0);
             try {
               const drainPromise=drain(key,index,sequence);pendingDrains.set(key,drainPromise);
@@ -315,11 +315,12 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
               drainPromise.then(forget,forget);
               const disposal=drainPromise.then(()=>capability.proof());
               const confirmed=await Promise.race([disposal.then(()=>true),new Promise(resolve=>{
-                confirmationTimer=setTimer(()=>resolve(false),Math.max(0,proofDeadline-now()));
+                capability.rescheduleProof=()=>{clearTimer(confirmationTimer);confirmationTimer=setTimer(()=>resolve(false),Math.max(0,proofDeadline()-now()));};
+                capability.rescheduleProof();
               }),new Promise(resolve=>{cancelRecovery=()=>{clearTimer(confirmationTimer);resolve(null);};})]);
               cutoffDiagnostic.disposalMs=Math.max(0,now()-started);
               if(confirmed===null){cutoffDiagnostic.outcome=4;return;}
-              if(!confirmed || now()>proofDeadline){cutoffDiagnostic.outcome=2;error='read_timeout';return;}
+              if(!confirmed || now()>proofDeadline()){cutoffDiagnostic.outcome=2;error='read_timeout';return;}
               for(const [writer,handle] of writers)if(handle===key)writers.delete(writer);
               if(stopped){cutoffDiagnostic.outcome=4;return;}
               if((ledger.recoveries??0)>=2){cutoffDiagnostic.outcome=5;error='read_timeout';return;}
@@ -328,7 +329,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
               domainRecovery.cooldownUntil=Math.max(domainRecovery.cooldownUntil,until);
               cutoffDiagnostic.allowance=ledger.recoveries;cutoffDiagnostic.cooldownUntil=until;cutoffDiagnostic.outcome=1;
             } catch(failure){recordFailure(failure,'disposal_proof',{stage:'disposal'});cutoffDiagnostic.outcome=3;error='reader_failed';}
-            finally {domainRecovery.pending--;clearTimer(confirmationTimer);cancelRecovery=undefined;}
+            finally {domainRecovery.pending--;clearTimer(confirmationTimer);capability.rescheduleProof=undefined;cancelRecovery=undefined;}
           })();
           quantumTimer=setTimer(()=>{
             recordStall(activeHandle);recordFailure(activeHandle,'engine',{engineCode:'read_timeout'});

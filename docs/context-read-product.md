@@ -728,15 +728,25 @@ Opening/drain cost within an admitted turn still consumes its reservation.
 
 A hard `read_timeout`, for maintenance or a request reader, detaches and settles
 the call promptly. The parent first sends the existing close command, with up to
-500 ms of grace and never beyond 1,000 ms after the triggering cutoff. A pump
-timeout carries its cutoff into disposal even if the reader already accepted a
-response before its own deadline. Ordinary idle close has the same 500 ms bound.
+10,000 ms of grace, independently bounded in real monotonic time even when an
+injected operation clock stops. A pump timeout uses this same disposal path even
+if the reader already accepted a response before its own deadline. Ordinary idle
+close, supervisor close (including an in-flight call), and idle expiry have the
+same bound. Earlier cutoffs tighten only expedited-recovery
+eligibility: proof must still arrive within 1,000 ms of the earliest cutoff.
+Late confirmed disposal avoids quarantine but earns no expedited recovery.
 The Worker stops accepting work, waits for bootstrap/current work to finish, then closes native
 resources and registered host leases/providers before exiting. The writer claim
-remains held until confirmed disposal. Late replies are rejected; an executing
-commit may finish, so existing authenticated SQLite recovery decides durable state.
+remains held until confirmed disposal. While disposal is pending, request-reader
+opens for the same store and host domain return `read_in_progress`, including
+through another supervisor. This lasts for the actual close time, at most the
+disposal bound. A closed supervisor itself continues to return `store_closed`.
+Late replies are rejected; an executing commit may finish, so existing
+authenticated SQLite recovery decides durable state.
 If grace expires, forced termination retains the existing cleanup/quarantine rules.
-A failed close, exit or unbalanced resource count never clears quarantine; changing
+A host's `close()` should finish well inside this bound. A service's own shutdown
+deadline must exceed it with margin, because supervisor close awaits confirmed
+disposal of its readers. A failed close, exit or unbalanced resource count never clears quarantine; changing
 supervisors does not bypass the process-wide registry. Confirmed disposal leaves
 pump completion `read_timeout`, permitting ordinary authorized reopening after drain,
 instead of the `reader_failed` caused by failed disposal, including failed opening

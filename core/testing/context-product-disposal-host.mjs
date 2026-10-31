@@ -8,7 +8,13 @@ export async function createContextReadHost(c) {
     await new Promise(resolve=>{const release=m=>{if(m.fixtureRelease){parentPort.off('message',release);resolve();}
       else if(m.method==='close')Atomics.store(state,6,1);};parentPort.on('message',release);Atomics.store(state,4,1);});
   }
-  return {...host,close(){
+  return {...host,authorize(request){
+    if(c.callGate && request.method==='fetchCandidateEvidence'){
+      Atomics.store(state,3,1);Atomics.notify(state,3);
+      while(!Atomics.load(state,7))Atomics.wait(state,7,0);
+    }
+    return host.authorize(request);
+  },close(){
     Atomics.store(state,0,1);Atomics.notify(state,0);
     if(c.disposalMode==='reject')throw Error('synthetic disposal refusal');
     if(c.disposalMode==='block')while(!Atomics.load(state,1))Atomics.wait(state,1,0);
