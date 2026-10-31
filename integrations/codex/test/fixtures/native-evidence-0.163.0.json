@@ -36,7 +36,7 @@
     {
       "name": "final",
       "path": "native-rollout-0.163.0-final.jsonl",
-      "sha256": "fbad8902abc788fde7f353b0b62bb961874ba0e4d85f0572174e6d0a2a43e751",
+      "sha256": "e298b9e9994c863be62801d20f77e74447eb361c15b8d1949efc560e824eb1e7",
       "messages": [
         {
           "role": "user",
@@ -53,7 +53,7 @@
     {
       "name": "two-turns",
       "path": "native-rollout-0.163.0-two-turns.jsonl",
-      "sha256": "07e073db3f5ef02c52b2a6a18e01a08d3867163156a6aa707387467fa73b8579",
+      "sha256": "41d2e6d2ddd9a6991067f94283251600aa1f4e162b140e3097fa5a901430f9e3",
       "messages": [
         {
           "role": "user",
@@ -78,7 +78,7 @@
     {
       "name": "partial-final",
       "path": "native-rollout-0.163.0-partial-final.jsonl",
-      "sha256": "5c379a22f8549294808fc7114056cbce613b88dd56b20b28ce591b4482d4024f",
+      "sha256": "03768b6f2c1a89c30f5e0626db761a39d5a2884eb2c1c0ae9395627e5d1bd8aa",
       "messages": [
         {
           "role": "user",
@@ -99,7 +99,7 @@
     {
       "name": "resume",
       "path": "native-rollout-0.163.0-resume.jsonl",
-      "sha256": "31f54c75e3b3c4071b498775f55df39f841c8a3c1ce3346e4b72dd0062c1defc",
+      "sha256": "4a68aa3f9b66b8a31798f4ccb27c52a1dba7fb520dc66d599e270b82f92b2096",
       "messages": [
         {
           "role": "user",
@@ -124,7 +124,7 @@
     {
       "name": "interrupted",
       "path": "native-rollout-0.163.0-interrupted.jsonl",
-      "sha256": "a9e29cacf6065a10a84ec262fb29df9a42988e70973b6a920bcc7329d3aa48f3",
+      "sha256": "6c61447eaf40720439947a1bc9d2dd14319a2b6a52b6f6571993fba204889123",
       "messages": [
         {
           "role": "user",
@@ -137,7 +137,7 @@
     {
       "name": "tool",
       "path": "native-rollout-0.163.0-tool.jsonl",
-      "sha256": "1c0eabd4ceb6576751d3c5eb3d007be2ee73408879ccdec40ca4f21287f470c5",
+      "sha256": "1b92115de4b444ac1b0f7d17d14b15184578e97c17c918d5b9337421227bc1e2",
       "messages": [
         {
           "role": "user",
@@ -154,7 +154,7 @@
     {
       "name": "hooks-recall",
       "path": "native-rollout-0.163.0-hooks-recall.jsonl",
-      "sha256": "b8d968ac1f95386f8ceb2e3ba6dfff177fb9abb2212345b60363c28bdb0aea21",
+      "sha256": "03dcf2223ec15c3c35c55c6acc954c4f6bf635c277bdf455d041b488889417b2",
       "messages": [
         {
           "role": "user",
@@ -171,7 +171,7 @@
     {
       "name": "compaction-before",
       "path": "native-rollout-0.163.0-compaction-before.jsonl",
-      "sha256": "897195415eec9eb5f2bf3b671b046877d6ff34becff9e34834126d54a3d9a5bf",
+      "sha256": "ba2524d8eb27fdfb181790a67f8ea36a16bfa888292c7381e9a3c95660992d82",
       "messages": [
         {
           "role": "user",
@@ -274,43 +274,43 @@
     },
     {
       "path": "native-rollout-0.163.0-final.jsonl",
-      "sha256": "fbad8902abc788fde7f353b0b62bb961874ba0e4d85f0572174e6d0a2a43e751",
-      "bytes": 8749
+      "sha256": "e298b9e9994c863be62801d20f77e74447eb361c15b8d1949efc560e824eb1e7",
+      "bytes": 8732
     },
     {
       "path": "native-rollout-0.163.0-two-turns.jsonl",
-      "sha256": "07e073db3f5ef02c52b2a6a18e01a08d3867163156a6aa707387467fa73b8579",
-      "bytes": 14035
+      "sha256": "41d2e6d2ddd9a6991067f94283251600aa1f4e162b140e3097fa5a901430f9e3",
+      "bytes": 14018
     },
     {
       "path": "native-rollout-0.163.0-partial-final.jsonl",
-      "sha256": "5c379a22f8549294808fc7114056cbce613b88dd56b20b28ce591b4482d4024f",
-      "bytes": 9851
+      "sha256": "03768b6f2c1a89c30f5e0626db761a39d5a2884eb2c1c0ae9395627e5d1bd8aa",
+      "bytes": 9834
     },
     {
       "path": "native-rollout-0.163.0-resume.jsonl",
-      "sha256": "31f54c75e3b3c4071b498775f55df39f841c8a3c1ce3346e4b72dd0062c1defc",
-      "bytes": 14694
+      "sha256": "4a68aa3f9b66b8a31798f4ccb27c52a1dba7fb520dc66d599e270b82f92b2096",
+      "bytes": 14677
     },
     {
       "path": "native-rollout-0.163.0-interrupted.jsonl",
-      "sha256": "a9e29cacf6065a10a84ec262fb29df9a42988e70973b6a920bcc7329d3aa48f3",
-      "bytes": 6599
+      "sha256": "6c61447eaf40720439947a1bc9d2dd14319a2b6a52b6f6571993fba204889123",
+      "bytes": 6582
     },
     {
       "path": "native-rollout-0.163.0-tool.jsonl",
-      "sha256": "1c0eabd4ceb6576751d3c5eb3d007be2ee73408879ccdec40ca4f21287f470c5",
-      "bytes": 11786
+      "sha256": "1b92115de4b444ac1b0f7d17d14b15184578e97c17c918d5b9337421227bc1e2",
+      "bytes": 11769
     },
     {
       "path": "native-rollout-0.163.0-hooks-recall.jsonl",
-      "sha256": "b8d968ac1f95386f8ceb2e3ba6dfff177fb9abb2212345b60363c28bdb0aea21",
-      "bytes": 9206
+      "sha256": "03dcf2223ec15c3c35c55c6acc954c4f6bf635c277bdf455d041b488889417b2",
+      "bytes": 9189
     },
     {
       "path": "native-rollout-0.163.0-compaction-before.jsonl",
-      "sha256": "897195415eec9eb5f2bf3b671b046877d6ff34becff9e34834126d54a3d9a5bf",
-      "bytes": 25597
+      "sha256": "ba2524d8eb27fdfb181790a67f8ea36a16bfa888292c7381e9a3c95660992d82",
+      "bytes": 25580
     },
     {
       "path": "native-hooks-0.163.0.json",
@@ -340,7 +340,7 @@
     "mockRequests": 0
   },
   "normalization": {
-    "scriptSha256": "6e164d34bdadba0150a0f2174543e33ba355ea8676f9b033222ffb353b1838db",
-    "note": "Path strings/keys become placeholders; native noncanonical context prose becomes synthetic excluded context. All rows, keys, discriminators and canonical completed messages are retained. Native and normalized rollout hashes are both recorded."
+    "scriptSha256": "f144903a181ea6c5c8d6d1287f9318b54b4bb6ca7b2b42ef4b0d0a27f492886c",
+    "note": "Path strings/keys become placeholders; git metadata values become synthetic scalars; native noncanonical context prose becomes synthetic excluded context. All rows, keys, discriminators and canonical completed messages are retained. Native and normalized rollout hashes are both recorded."
   }
 }

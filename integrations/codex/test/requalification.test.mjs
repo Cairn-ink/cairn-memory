@@ -52,6 +52,20 @@ test('Q01/Q02 historical hash inputs refresh only markers; every old excerpt sup
   assert.equal(fingerprint(await formatFixture('0.162.0')), fingerprint(await formatFixture('0.163.0')));
 });
 
+test('all committed rollout Git headers contain only synthetic metadata', async () => {
+  let headers = 0;
+  for (const name of (await readdir(fixtures)).filter(name => name.endsWith('.jsonl'))) {
+    for (const line of (await readFile(new URL(name, fixtures), 'utf8')).trim().split('\n')) {
+      const row = JSON.parse(line);
+      if (row.type !== 'session_meta' || !Object.hasOwn(row.payload, 'git')) continue;
+      assert.deepEqual(row.payload.git, { commit_hash: '0'.repeat(40), branch: 'synthetic-branch',
+        repository_url: 'https://example.invalid/synthetic.git' }, name);
+      headers++;
+    }
+  }
+  assert.equal(headers, 32);
+});
+
 for (const version of versions) test(`Q01–Q04 ${version}: strict markers, exact schema changes, native cases and provenance`, async () => {
   const manifest = await json(`native-evidence-${version}.json`), evidence = await formatFixture(version);
   assert.ok(KNOWN_FORMATS.includes(fingerprint(evidence)));

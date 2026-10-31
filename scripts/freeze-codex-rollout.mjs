@@ -13,8 +13,13 @@ if (manifest.failure || manifest.unexpected.length || manifest.exits.some(row =>
 const version = manifest.version, files = [], sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const replacements = [[join(from, 'home/.codex'), '<CODEX_HOME>'], [join(from, 'project'), '<CWD>'],
   [join(from, 'home'), '<HOME>'], [from, '<PROBE_ROOT>'], [seeded, '<SEEDED_ROOT>']];
+const syntheticGit = { commit_hash: '0'.repeat(40), branch: 'synthetic-branch', repository_url: 'https://example.invalid/synthetic.git' };
 function sanitize(value, key = '') {
   if (Array.isArray(value)) return value.map(child => sanitize(child, key));
+  if (key === 'git' && value && typeof value === 'object') return Object.fromEntries(Object.keys(value).map(name => {
+    if (!Object.hasOwn(syntheticGit, name)) throw new Error('native_git_key_unsupported');
+    return [name, syntheticGit[name]];
+  }));
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([name, child]) => [sanitize(name), sanitize(child, name)]));
   if (typeof value !== 'string') return value;
   let text = value;
@@ -58,6 +63,6 @@ await save(`native-evidence-${version}.json`, { ...manifest, cases, files: [...f
   seededReadback: { scriptSha256: history.scriptSha256, isolationScriptSha256: history.isolationScriptSha256,
     exits: history.exits, modelCalls: history.modelCalls, mockRequests: history.mockRequests },
   normalization: { scriptSha256: sha(await readFile(new URL(import.meta.url))),
-    note: 'Path strings/keys become placeholders; native noncanonical context prose becomes synthetic excluded context. All rows, keys, discriminators and canonical completed messages are retained. Native and normalized rollout hashes are both recorded.' },
+    note: 'Path strings/keys become placeholders; git metadata values become synthetic scalars; native noncanonical context prose becomes synthetic excluded context. All rows, keys, discriminators and canonical completed messages are retained. Native and normalized rollout hashes are both recorded.' },
 }, { sanitizeValue: false });
 console.log(JSON.stringify({ version, files: fileCount + 1, bytes: files.reduce((total, file) => total + file.bytes, 0) }));
