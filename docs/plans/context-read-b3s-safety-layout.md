@@ -1042,3 +1042,48 @@ This addendum scopes the guarantees above. It changes no storage, writer or pull
 - **Basis:** this matches the existing trust boundary. Same-database DML is trusted only through the coordinated maintenance writer, and arbitrary same-user edits and undetected bit rot are not certified (`docs/plans/context-read-product.md:419`). Cooperative locks do not attest against malicious same-user filesystem or SQL edits (`docs/limitations.md:209`).
 - **Consequence for §5.3:** batch and list contiguity checks detect gaps inside the interval they verify. They do not re-verify facts at or before the caller's authenticated checkpoint, which the caller already received and must retain. No schema-cookie binding is added: a legitimate external `ANALYZE` or `PRAGMA optimize` would otherwise brick a store permanently.
 - Observed corruption, such as malformed rows, broken intervals or failed attestation, still always refuses.
+
+## Revision 3.4 addendum (2026-10-31)
+
+### R2 exception E1: awaited caller-port boundaries
+
+Decision: e9, 2026-10-31. This is the sole exception to R2's zero
+per-item statement rule. The original R2 text remains unchanged. E1 applies
+only when the engine invokes a caller-supplied port: Raw `openRaw` for each
+retained part, and the token counter during assembly. A future caller port
+must follow the same boundary. Engine-internal awaits receive no exception.
+
+A request reads its layout/header and owner epoch once in a transaction the
+path already opens. A path without a transaction uses autocommit SELECTs.
+The bounded owner fact set and completed decisions belong only to that request.
+Selection and output validation share the decision for each bound identity;
+output validation opens no transaction. The fixed zero-fact budget remains
+at most six executed statements and zero additional BEGINs, including any
+independent delivery header and owner-epoch fence.
+
+After each caller-port invocation returns, the engine reads exactly one owner
+epoch before inspecting the return value or making another port call. This
+observation is an autocommit SELECT, with no header read, fact query,
+`assertContentScopes`, BEGIN or COMMIT. It must never run in a read transaction
+held across the callback. A changed epoch refuses the request before protected
+text can be delivered or another payload sent to a port. WAL must observe the
+callback's committed epoch; DELETE must allow that commit to complete.
+Synchronous token counters use the same return boundary. Pinning the already
+captured request epoch before dispatch adds no port calls or per-call SQL.
+
+The exact statement gates are:
+
+- Raw with *n* opened parts: legacy baseline + fixed budget (at most six) + *n*.
+- Lexical context assembly: legacy baseline + fixed budget (at most six) +
+  the existing assembly algorithm's exact counter-call count.
+- Each boundary observation adds zero BEGINs. Safety adds no counter calls.
+  Existing pre-open Raw transactions remain in the legacy baseline and close
+  before caller code; the E1 observation never opens or reuses one.
+
+Account erasure, a single-Memory forget and correction all insert suppression
+facts. The `safety_suppression_advance` trigger advances the owner's epoch on
+every insertion. Regressions commit each mutation inside crypto and counter
+callbacks in both DELETE and WAL mode, and require refusal before another
+port call and absence of protected text. Owners with facts keep the canonical
+S1 decision followed by the shared fact matcher; an empty owner proof never
+bypasses canonical ancestry checks.

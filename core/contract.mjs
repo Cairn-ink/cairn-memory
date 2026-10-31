@@ -1,3 +1,4 @@
+import { contentWriteMethodClass } from './content-write-context.mjs';
 import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { contentSafetyFacade } from './content-safety-boundary.mjs';
 import { roleProfileOptions } from './role-profile-input.mjs';
@@ -1217,7 +1218,7 @@ export function createMemoryCore(input, internal) {
       return success(null);
     },
   }, { check: runtime.assertContentScope, portGuard: runtime.contentPortGuard, failure, asyncMethods: ['capture'],
-    requestScope: (work, method) => contentReads.has(method) ? withContentSuppressionRequest(work) : work(),
+    requestScope: (work, method) => contentWriteMethodClass(method) === 'read' ? withContentSuppressionRequest(work) : work(),
     isFailedCapture(result) {
       // Admission committed before the paused classifier. After close only its
       // failed-classification completion is deliverable; no retained identities,

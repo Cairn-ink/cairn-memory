@@ -563,7 +563,6 @@
   },
   "core/raw-source-reader.mjs": {
     "key:id": 1,
-    "key:messageId": 1,
     "key:ownerId": 1,
     "key:projectId": 1,
     "key:storeId": 1
@@ -675,7 +674,7 @@
     "key:eventId": 5,
     "key:id": 5,
     "key:invalidRef": 1,
-    "key:memoryId": 15,
+    "key:memoryId": 16,
     "key:ownerId": 9,
     "key:projectId": 11,
     "key:receiptId": 1,
@@ -1345,6 +1344,8 @@
   "core/content-safety.mjs": {
     "key:eventId": 1,
     "key:messageId": 2,
+    "key:ownerId": 1,
+    "key:projectId": 1,
     "key:sessionId": 1
   },
   "core/context-product-index.mjs": {

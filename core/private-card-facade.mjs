@@ -92,5 +92,5 @@ export function createPrivateCardFacade(storage, options, ready, rawReader) {
     ...(options.currentDependencies ? { currentDependencies: { version: CARD_CURRENT_VERSION, methods: [...CARD_CURRENT_METHODS], maxPackages: 16, maxVectorBytes: 32768, actionClass: 'explicit-user' } } : {}),
     raw: Boolean(rawReader), modelAssisted: false, publication: false,
   } });
-  return contentSafetyFacade(result, { writeBoundary:storage, check: scopes => storage.assertContentScope(scopes), failure: privateFailure, validate: (method,args,result,scopes) => { if(CARD_READS.has(method)&&result?.ok)storage.assertContentOutput(result.value,scopes); }, noOwner: ['getPrivateCardCapabilities'] });
+  return contentSafetyFacade(result, { writeBoundary:storage, check: (scopes,phase) => storage.assertContentScope(scopes,phase), failure: privateFailure, validate: (method,args,result,scopes) => { if(CARD_READS.has(method)&&result?.ok)storage.assertContentOutput(result.value,scopes); }, noOwner: ['getPrivateCardCapabilities'] });
 }

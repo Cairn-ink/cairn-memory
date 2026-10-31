@@ -1,3 +1,4 @@
+import { contentScopeEpochGuard, assertContentPort } from './content-safety-boundary.mjs';
 import { checkInstalledContentSafety } from './content-safety-schema.mjs';
 import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHmac, timingSafeEqual } from 'node:crypto';
@@ -29,8 +30,7 @@ export function createRawReads({ db,identity,epoch,open,partDigest }) {
     } catch { fail('invalid_cursor'); }
   }
   const readRow = (ns,id) => db.prepare('SELECT * FROM raw_conversations WHERE owner_id=? AND scope=? AND project_id=? AND id=?').get(...rawBoundary(ns),id);
-  const denied = (ns,id,parts = []) => contentSuppressionReasonInside(db, ns, { kind: 'raw', key: id }) ||
-    parts.some(part => contentSuppressionReasonInside(db, ns, { kind: 'raw', key: id, messageId: part.message_id, start: part.start, end: part.end }));
+  const denied = (ns,id) => contentSuppressionReasonInside(db, ns, { kind: 'raw', key: id });
   function snapshot(ns,id,limit,cursor) {
     // A short read transaction gives one coherent view, closed before the port.
     db.exec('BEGIN');
@@ -54,7 +54,8 @@ export function createRawReads({ db,identity,epoch,open,partDigest }) {
         FROM raw_parts p JOIN raw_messages m ON m.conversation_id=p.conversation_id AND m.message_id=p.message_id
         WHERE p.conversation_id=?${cursor ? ' AND (m.ordinal>? OR (m.ordinal=? AND p.part_index>?))' : ''}
         ORDER BY m.ordinal,p.part_index LIMIT ?`).all(id,...(cursor ? [cursor.ordinal,cursor.ordinal,cursor.index] : []),limit+1);
-      if (denied(ns,id,parts)) { db.exec('COMMIT'); return null; }
+      if (parts.some(part => contentSuppressionReasonInside(db, ns, { kind: 'raw', key: id,
+        messageId: part.message_id, start: part.start, end: part.end }))) { db.exec('COMMIT'); return null; }
       db.exec('COMMIT');
       return { row,epoch: currentEpoch,counts,bytes,reasons,parts };
     } catch (error) { db.exec('ROLLBACK'); throw error; }
@@ -78,6 +79,7 @@ export function createRawReads({ db,identity,epoch,open,partDigest }) {
     const cursor = input.cursor === undefined ? null : decode(input.cursor,binding);
     const view = snapshot(ns,id,limit,cursor);
     if (!view) return missing();
+    const portGuard = contentScopeEpochGuard(db,[ns]);
     const values = [];
     for (const row of view.parts.slice(0,limit)) {
       let text = null;
@@ -87,17 +89,16 @@ export function createRawReads({ db,identity,epoch,open,partDigest }) {
         const message = { id: row.message_id,role: row.role,occurredAt: row.occurred_at,messageOrdinal: row.ordinal,
           part: { index: row.part_index,start: row.start,totalUnits: row.total_units,totalBytes: row.total_bytes } };
         const context = frozen(rawContext(ns,view.row.client,view.row.session_key,id,message,row.end));
-        // Another part's asynchronous opening may have committed a fact.
-        // Recheck before every retained payload handed to the crypto port.
+        // Preserve the legacy pre-open transaction pair. The initial snapshot
+        // already decided this part; E1 fences every intervening caller return.
+        // Neither the fact check nor a header is repeated per invocation.
         db.exec('BEGIN');
-        try {
-          checkInstalledContentSafety(db);
-          if (denied(ns,id,[row])) fail('revision_conflict');
-          db.exec('COMMIT');
-        } catch (error) { db.exec('ROLLBACK'); throw error; }
+        db.exec('COMMIT');
         try {
           const sealed = rawSealed({ format: row.format,keyVersion: row.key_version,sealed: row.sealed });
-          const result = await open({ ownerId: ns.ownerId,context,...sealed });
+          let result;
+          try { result = await assertContentPort({invoke:()=>open({ ownerId: ns.ownerId,context,...sealed })}); }
+          finally { portGuard?.(); }
           object(result,['text']); text = rawText(result.text);
           if (text.length !== row.end-row.start || Buffer.byteLength(text) !== row.byte_count ||
               partDigest({ ...message,content: text }) !== row.digest) fail('raw_crypto_unavailable');
@@ -136,7 +137,8 @@ export function createRawReads({ db,identity,epoch,open,partDigest }) {
     db.exec('BEGIN');
     try {
       checkInstalledContentSafety(db);
-      if (denied(ns,id,view.parts)) fail('revision_conflict');
+      // Reuse the initial fact decisions. E1 and the independent facade
+      // delivery epoch refuse any advance; canonical manifests are reread here.
       const current = readRow(ns,id);
       if (!current || current.revision !== view.row.revision || epoch(ns) !== view.epoch) fail('revision_conflict');
       for (const previous of view.parts) {

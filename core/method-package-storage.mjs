@@ -1,3 +1,4 @@
+import { contentSuppressionRequestInside, hasContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, sourceReadSafety } from './content-safety.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { assertContentOutput, assertContentScopes } from './content-safety-boundary.mjs';
@@ -326,8 +327,8 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
         packageRevision:found.pkg.revision,versionRevision:found.row.revision})};
   }
   return Object.freeze({
-    assertContentOutput(value, scopes) { if(!cachedContentLayout(db)?.suppressionRevision)return; return db.isTransaction?assertContentOutput(db,identity,value,scopes):readTransaction(db,()=>assertContentOutput(db,identity,value,scopes)); },
-    assertContentScope: scopes => { ready(); assertContentScopes(db,scopes); },
+    assertContentOutput(value, scopes) { if(!cachedContentLayout(db)?.suppressionRevision)return; return assertContentOutput(db,identity,value,scopes); },
+    assertContentScope: (scopes,{delivery=false}={}) => { ready(); if(!cachedContentLayout(db)?.suppressionRevision)return; if(!delivery && scopes.length && hasContentSuppressionRequestInside(db) && !db.isTransaction) { contentSuppressionRequestInside(db,scopes,{defer:true}); return; } assertContentScopes(db,scopes); },
     // Internal synchronous seam: caller owns the one shared read transaction.
     roleRead: Object.freeze({ stateFor: bindings.stateFor, decode: bindings.decode, adoption: bindings.adoption,
       packageRow, targetMetadata, targetLifecycle, verifyFile, reasonAvailable, currentRoleRelatedAvailable,

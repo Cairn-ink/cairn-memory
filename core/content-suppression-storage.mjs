@@ -113,13 +113,14 @@ function servingFacts(db, ns) {
   const snapshot = requestFacts.getStore(), native = contentSafetyConnection(db);
   const request = snapshot?.native === native && snapshot.owner === ns.ownerId ? snapshot : cachedContentSuppressionRequestInside(db, ns.ownerId);
   if (request) return request;
+  if (hasContentSuppressionRequestInside(db)) return contentSuppressionRequestInside(db, [ns]);
   const owners = readMemoFacts.get(db);
   if (!owners) return undefined;
   if (!owners.has(ns.ownerId)) owners.set(ns.ownerId, contentSuppressionRequestInside(db, [ns]));
   return owners.get(ns.ownerId);
 }
 
-export const withContentSuppressionRequest = work => requestAccount.getStore()
+export const withContentSuppressionRequest = (work, { fresh = false } = {}) => requestAccount.getStore() && !fresh
   ? work() : requestAccount.run({ selected: new Map(), facts: new Map(), reads: new Map() }, work);
 
 // A serving request may span canonical snapshots. Its denial set is provisional
@@ -133,8 +134,13 @@ export const cachedContentSuppressionRequestInside = (db, owner) => {
 };
 const coversNamespace = (state, ns) => state.owner === ns.ownerId && (state.epoch === '0:0' || state.readSet.some(selected =>
   selected.scope === 'owner' || JSON.stringify(boundary(selected)) === JSON.stringify(boundary(ns))));
-export function contentSuppressionRequestInside(db, readSet, { refresh = false } = {}) {
+export function contentSuppressionRequestInside(db, readSet, { refresh = false, defer = false } = {}) {
   const native = contentSafetyConnection(db), account = requestAccount.getStore(), owner = readSet[0].ownerId;
+  if (defer && account) {
+    const selected = account.selected.get(native) ?? [];
+    account.selected.set(native, [...new Map([...selected, ...readSet].map(ns => [JSON.stringify(boundary(ns)), ns])).values()]);
+    return;
+  }
   let owners = account?.reads.get(native);
   const primary = owners?.get(owner);
   if (primary && !refresh && readSet.every(ns => coversNamespace(primary, ns))) return primary;
@@ -169,6 +175,7 @@ export function contentSuppressionRequestInside(db, readSet, { refresh = false }
     ownerSets.set(key, facts);
   }
   const state = { native, owner, epoch, readSet, layout, facts };
+  readMemoFacts.get(db)?.set(owner, state);
   if (!owners) { owners = new Map(); account?.reads.set(native, owners); }
   // New scoped views retain the original delivery epoch. Only metadata-only
   // delivery builders may explicitly refresh after their final authority sample.
@@ -257,9 +264,9 @@ function* matchingContentSuppressionsInside(db, ns, target, layout, ordered = fa
   // intersection only after its S1 decision has checked canonical lineage.
   if (!ordered && memo?.native === contentSafetyConnection(db) && memo.owner === ns.ownerId &&
       memo.facts?.length === 0 && coversNamespace(memo, ns) && (!layout.rawLineage || !['memory','receipt'].includes(kind) || target.ancestryChecked)) return;
-  if (!ordered && !layout.rawLineage && !contentSuppressionMayMatchInside(db, ns, target)) return;
+  if (!ordered && (!layout.rawLineage || target.ancestryChecked) && !contentSuppressionMayMatchInside(db, ns, target)) return;
   if(memo?.native===contentSafetyConnection(db) && memo.owner===ns.ownerId && memo.readSet.some(n=>JSON.stringify(boundary(n))===JSON.stringify(boundary(ns))) && memo.facts &&
-      !(layout.rawLineage && ['memory','receipt'].includes(kind))) {
+      !(layout.rawLineage && ['memory','receipt'].includes(kind) && (!target.ancestryChecked || memo.facts.some(f=>f.kind==='raw')))) {
     const facts=memo.facts.filter(f=>f.scope==='owner'||f.scope===ns.scope&&f.project_id===(ns.projectId??'')&&
       (f.kind==='namespace'||f.kind===kind&&f.stable_key===(key??'')&&f.incarnation===(key??'')))
       .sort((a,b)=>a.epoch_hi-b.epoch_hi||a.epoch_lo-b.epoch_lo);

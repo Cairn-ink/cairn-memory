@@ -1,3 +1,4 @@
+import { contentSuppressionRequestInside, hasContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { assertContentOutput, assertContentScopes } from './content-safety-boundary.mjs';
 import { randomUUID } from 'node:crypto';
@@ -178,7 +179,7 @@ export function createAssetStorage({db,identity,ready}) {
         assetRevision:asset.revision,versionRevision:row.revision})};
   }
   const derivatives=createAssetDerivativeStorage({db,mac,target,assetRow,effect,epoch,encode,page});
-  return {assertContentOutput(value, scopes) { if(!cachedContentLayout(db)?.suppressionRevision)return; return db.isTransaction?assertContentOutput(db,identity,value,scopes):readTransaction(db,()=>assertContentOutput(db,identity,value,scopes)); },assertContentScope: scopes => { ready(); assertContentScopes(db,scopes); },prepare(method,ns,input) {
+  return {assertContentOutput(value, scopes) { if(!cachedContentLayout(db)?.suppressionRevision)return; return assertContentOutput(db,identity,value,scopes); },assertContentScope: (scopes,{delivery=false}={}) => { ready(); if(!cachedContentLayout(db)?.suppressionRevision)return; if(!delivery && scopes.length && hasContentSuppressionRequestInside(db) && !db.isTransaction) { contentSuppressionRequestInside(db,scopes,{defer:true}); return; } assertContentScopes(db,scopes); },prepare(method,ns,input) {
     const prepared=prepare(method,ns,input);
     if(method==='createAssetDerivative')prepared.derivative=derivatives.prepare(ns,input);
     if(method==='verifyAssetBytes') {

@@ -1,4 +1,4 @@
-import { contentSuppressionReasonInside, registerContentSuppressionReadMemoInside } from './content-suppression-storage.mjs';
+import { contentSuppressionReasonInside, registerContentSuppressionReadMemoInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { bindContentSafetyConnection, cachedContentLayout, contentSafetyConnection } from './content-safety-schema.mjs';
 import { createHash, createHmac } from 'node:crypto';
 import { createCardRawSources } from './card-raw-sources.mjs';
@@ -99,6 +99,8 @@ export function receiptReadSafety(db, options) {
       if (fact) result = denied(fact);
     }
     memo?.receipts.set(key, result);
+    const state = result.allowed ? cachedContentSuppressionRequestInside(db, namespace.ownerId) : null;
+    if (state && result.allowed) (state.completed ??= new Set()).add(JSON.stringify([...boundary(namespace),'receipt',receipt.id,null]));
     return result;
   });
 }
@@ -179,7 +181,17 @@ export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = fa
     const rawTargets = [];
     const remember = (result, value, memory) => {
       if (result.allowed) { const fact = memory?.invalid_raw_ancestry ? 'ineligible' : sourceSuppression(db, ns, ref, rawTargets, memory && Object.hasOwn(memory, 'invalid_raw_ancestry')); if (fact) result = denied(fact); }
-      memo?.sources.set(key, { result, value, memory }); return result;
+      memo?.sources.set(key, { result, value, memory });
+      const state = cachedContentSuppressionRequestInside(db, ns.ownerId);
+      if (state && result.allowed) {
+        (state.sourcesChecked ??= new Set()).add(key);
+        const completed = state.completed ??= new Set();
+        if (ref.type === 'receipt') {
+          completed.add(JSON.stringify([...boundary(ns),'memory',ref.memoryId,ref.memoryRevision]));
+          completed.add(JSON.stringify([...boundary(ns),'receipt',ref.receiptId,null]));
+        } else if (ref.type === 'submitted-note') completed.add(JSON.stringify([...boundary(ns),ref.type,ref.sourceId,ref.revision]));
+      }
+      return result;
     };
     if (ref.type === 'receipt') {
       const memoryKey = JSON.stringify([ns, ref.memoryId]);
@@ -229,16 +241,17 @@ export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = fa
 }
 
 function canonicalContentReadSafety(db, { identity, namespace: ns, ref, method = 'retrieval', intent = 'current',
-  currentCardEligible, rawRows, expectedMemoryIdentity, receipts = [], memo, factObservation }) {
+  currentCardEligible, rawRows, expectedMemoryIdentity, receipts = [], memo, factObservation, selectedMemory }) {
   db = memo?.db ?? db;
   if (!ref || !sameNamespace(ns, ref.namespace)) return denied('ineligible');
   const type = ref.type;
   if (!['current', 'history'].includes(intent)) return denied('ineligible');
   if (!['memory', 'card'].includes(type)) return denied('ineligible');
   const columns = type === 'memory' ? 'id,revision,deleted,currentness,review_state' + (expectedMemoryIdentity ? ',content,fingerprint' : '') : 'id,revision,state,body_revision';
-  const row = db.prepare(`SELECT ${columns}${type === 'memory' ? rawAncestryColumn(db, 'memories') : ''} FROM ${type === 'memory' ? 'memories' : 'private_cards'} WHERE ${where} AND id=?`)
+  const row = type === 'memory' && selectedMemory ? selectedMemory : db.prepare(`SELECT ${columns}${type === 'memory' ? rawAncestryColumn(db, 'memories') : ''} FROM ${type === 'memory' ? 'memories' : 'private_cards'} WHERE ${where} AND id=?`)
     .get(...boundary(ns), ref.memoryId ?? ref.cardId);
   if (!row) return denied('missing');
+  if (type === 'memory' && selectedMemory && (row.id !== ref.memoryId || !sameNamespace(ns,{ownerId:row.owner_id,scope:row.scope,projectId:row.project_id}))) return denied('identity_mismatch');
   if (factObservation) { factObservation.ancestryChecked = Object.hasOwn(row, 'invalid_raw_ancestry'); factObservation.invalidAncestry = row.invalid_raw_ancestry; }
   if (row.deleted) return denied(memorySuppression(db, ns, row, ref.revision));
   if (['deleted', 'cancelled'].includes(row.state)) return denied('purge');
@@ -297,6 +310,9 @@ export function contentReadSafety(db, options) {
       if (fact) result = denied(fact);
     }
     decisions?.set(key, result);
+    const state = result.allowed ? cachedContentSuppressionRequestInside(db, namespace.ownerId) : null;
+    if (state && result.allowed && memo?.retainOutputDecisions !== false) (state.completed ??= new Set()).add(JSON.stringify([
+      ...boundary(namespace), ref.type, ref.memoryId ?? ref.cardId, ref.revision]));
     return result;
   });
 }

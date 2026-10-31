@@ -1,4 +1,5 @@
-import { contentReadSafety } from './content-safety.mjs';
+import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
+import { contentReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { attestContentSafety, checkInstalledContentSafety } from './content-safety-schema.mjs';
 import { unsupportedTopicStorage } from './topic-reader-sqlite.mjs';
 import { lstatSync } from 'node:fs';
@@ -17,7 +18,7 @@ const configuration = db => ({ version: db.prepare('PRAGMA user_version').get().
 /** The native handle is lazy; all opening queries run after the caller installs
  * its work meter. The full schema walk resumes from acknowledged traversal data. */
 export function createTopicSession(path, topicPolicy) {
-  let connection, schema, opening, overview, members, dirty = false;
+  let connection, schema, opening, overview, members, readMemo, dirty = false;
   function dispose() {
     connection?.db.close(); connection = opening = overview = members = undefined; dirty = false;
   }
@@ -56,8 +57,11 @@ export function createTopicSession(path, topicPolicy) {
       for (const [table, keys] of [['mocs', ['id']], ['index_mocs', ['generation','id']]]) assertPointPlan(opened.db, table, keys);
       opening = createTopicOpening(opened.db, schema.version);
       overview = createTopicOverviewStorage(opened.db, { exactComparisons: true });
-      const raw = createTopicMembersStorage(opened.db, { memoryReadable: layout.suppressionRevision
-        ? (namespace, row) => contentReadSafety(opened.db, { namespace, ref: { type: 'memory', namespace, memoryId: row.id, revision: row.revision } }).allowed
+      const raw = createTopicMembersStorage(opened.db, { rawAncestry: Boolean(layout.suppressionRevision && layout.rawLineage), memoryReadable: layout.suppressionRevision
+        ? (namespace, row) => {
+          readMemo.decisions?.clear();
+          return contentReadSafety(opened.db, { namespace, selectedMemory: row, memo: readMemo, ref: { type: 'memory', namespace, memoryId: row.id, revision: row.revision } }).allowed;
+        }
         : () => true });
       members = { ...raw, create: () => ({ ...raw.create(), initialization: opening.create() }),
         cost: state => state.initialization.done ? 1 : opening.cost(state.initialization),
@@ -73,9 +77,11 @@ export function createTopicSession(path, topicPolicy) {
     }
   }
   function transaction(work) {
-    connection.db.exec('BEGIN');
-    try { const value = work(); connection.db.exec('COMMIT'); return value; }
-    catch (error) { connection.db.exec('ROLLBACK'); throw error; }
+    return withContentSuppressionRequest(() => {
+      connection.db.exec('BEGIN');
+      try { const value = work(); connection.db.exec('COMMIT'); return value; }
+      catch (error) { connection.db.exec('ROLLBACK'); throw error; }
+    });
   }
   const snapshot = namespace => {
     try { connection.assertFile(); } catch { changed(); }
@@ -83,6 +89,7 @@ export function createTopicSession(path, topicPolicy) {
     // can be invalidated by DROP/ALTER and throw an untyped native error.
     if (!same(configuration(connection.db), schema)) changed();
     checkInstalledContentSafety(connection.db);
+    readMemo = createContentReadMemo(connection.db); readMemo.retainOutputDecisions = false;
     return overview.snapshot(namespace);
   };
   const originBinding = (namespace, captured) => {

@@ -1,3 +1,4 @@
+import { contentSuppressionRequestInside, hasContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { assertContentOutput, assertContentScopes } from './content-safety-boundary.mjs';
 import { writeContentSuppressionInside, allocateContentKey } from './content-suppression-storage.mjs';
@@ -5,7 +6,7 @@ import { contentReadSafety, sourceReadSafety, cardContributorsInside, createCont
 import { createCardCurrentStorage, cardDependencyFence } from './card-current-storage.mjs';
 import { CARD_CURRENT_METHODS } from './card-current-input.mjs';
 import { createOperationLedger, createPrivateEffectWriter, createPrivateCursor } from './private-operation-helpers.mjs';
-import { readTransaction, transaction } from './database.mjs';
+import { transaction } from './database.mjs';
 import { fail } from './validation.mjs';
 import { EVIDENCE_METHODS } from './private-evidence-input.mjs';
 import { createPrivateEvidenceStorage } from './private-evidence-storage.mjs';
@@ -321,7 +322,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     receiptRefInside: (ns, memory, receipt) => receiptSources.refInside(ns, memory, receipt) });
   const organization = createPrivateOrganizationStorage({ db, identity, memoryMapInside, memoryTopicInside,
     cardDetailInside: (ns, id) => detail(ns, card(ns, id)) });
-  return Object.freeze({ assertContentOutput(value, scopes) { if(!cachedContentLayout(db)?.suppressionRevision)return; return db.isTransaction?assertContentOutput(db,identity,value,scopes):readTransaction(db,()=>assertContentOutput(db,identity,value,scopes)); }, assertContentScope: scopes => { ready(); assertContentScopes(db,scopes); },
+  return Object.freeze({ assertContentOutput(value, scopes) { if(!cachedContentLayout(db)?.suppressionRevision)return; return assertContentOutput(db,identity,value,scopes); }, assertContentScope: (scopes,{delivery=false}={}) => { ready(); if(!cachedContentLayout(db)?.suppressionRevision)return; if(!delivery && scopes.length && hasContentSuppressionRequestInside(db) && !db.isTransaction) { contentSuppressionRequestInside(db,scopes,{defer:true}); return; } assertContentScopes(db,scopes); },
     // Internal shared-read seams: caller owns scope authorization and transaction.
     cardDetailInside(ns, id, readSet, intent) { ready(); return detail(ns, card(ns, id), readSet, intent); },
     cardMetadataInside(ns, row) { ready(); const memo = createContentReadMemo(db); return row && cardSafe(ns, row, 'listCards', memo) ? metadata(ns, row, undefined, undefined, memo) : null; },

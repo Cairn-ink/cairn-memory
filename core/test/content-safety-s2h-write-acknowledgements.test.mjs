@@ -208,8 +208,11 @@ test('r4 terminal rejection and its verified replay exempt only their own held r
 
 test('r4 every literal identity-shaped acknowledgement field and projection occurrence requires classification',()=>{
   // Include projections after storage returns, and string keys used by computed
-  // objects. A new occurrence of an existing name also requires review. This
-  // independent ratchet complements the native guard's fail-closed walker.
+  // objects. A new occurrence of an existing name also requires review.
+  // R2 round 2: selected-row namespace validation adds existing owner/project
+  // keys; Memory selection adds an existing memoryId; the redundant Raw
+  // per-port fact projection is removed. These are reads, not new ack fields.
+  // These changes retain the native guard's fail-closed walker.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));
   const actual={};

@@ -917,8 +917,8 @@
   "implementations": [
     {
       "file": "core/content-suppression-storage.mjs",
-      "sha256": "886e6788cfff41d72a8c84ea422cdad321c182a29f26abdfc690e2a1cb52b2f9",
-      "reason": "S2h-2 adds serving/request matching and write-ack ceilings; storage DDL, writer protocol and B3 observation remain pinned."
+      "sha256": "e1f225ce9c116a99f581b008e302ad5eec1ee04b64705871bea43c83c8955b3e",
+      "reason": "R2 round 2 changes request-scoped read proofs and fact matching only; all insertion helpers, DDL and canonical writer regions remain unchanged."
     },
     {
       "file": "core/content-safety-migration.mjs",

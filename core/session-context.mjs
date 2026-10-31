@@ -117,8 +117,8 @@ export function assembleSessionContext({ runtime, model, ns, config }) {
     try { return countTokens(model, text); }
     catch { fail('token_count_unavailable'); }
   };
-  count(''); // Reject invalid counters before reading source content.
   const snapshot = runtime.sessionContextSnapshot(ns, config.groups);
+  count(''); // The existing snapshot establishes the request proof before ports.
   const value = { framing: SESSION_FRAMING, namespace: { ...ns, projectId: ns.projectId || null },
     indexRevision: snapshot.indexRevision,
     groups: Object.fromEntries(selectedNames.map(name => [name, {

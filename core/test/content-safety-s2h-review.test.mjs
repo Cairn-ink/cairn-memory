@@ -33,6 +33,18 @@ async function setup(t, base = 18) {
 }
 const hide = value => assert.doesNotMatch(JSON.stringify(value), /Synthetic protected body|Synthetic protected receipt|Synthetic protected title|Synthetic parent title/);
 const owner = f => transaction(f.db,() => suppressOwnerInside(f.db,{ ownerId:ns.ownerId,reason:'account_erasure',actionId:'synthetic-erasure' }));
+
+test('R2 direct overview snapshots use autocommit and refresh their owner proof',async t=>{
+  const f=safetyFixture(t);await f.migrate();const db=f.connect();t.after(()=>db.close());
+  const overview=createTopicOverviewStorage(db),exec=db.exec;let active=false,begins=0;
+  db.exec=function(sql){if(active&&/^BEGIN\b/i.test(sql))begins++;return exec.call(this,sql);};
+  try {
+    active=true;assert.equal(overview.snapshot(ns).suppressionEpoch,'0:0');active=false;
+    transaction(db,()=>suppressOwnerInside(db,{ownerId:ns.ownerId,reason:'account_erasure',actionId:'direct-overview-erasure'}));
+    active=true;assert.throws(()=>overview.snapshot(ns),{code:'index_unavailable'});
+    assert.equal(begins,0);assert.equal(db.isTransaction,false);
+  } finally {db.exec=exec;}
+});
 function fact(f, mode) {
   return transaction(f.db,() => writeContentSuppressionInside(f.db,{ namespace:ns,kind:mode==='namespace'?'namespace':'memory',
     key:mode==='namespace'?'':f.memory.id,matchMode:mode,reason:'privacy_erase',actionId:'synthetic-'+mode,
@@ -219,4 +231,76 @@ test('R5 cookie race',async t=>{const f=await setup(t),other=f.connect();t.after
   assert.match(child.stdout,/# tests 5\b/);assert.match(child.stdout,/# fail 5\b/);
   for(const marker of ['R1_map_fact_gate','R2_retained_embedder','R3_receipt_fact_gate','R4_handle_refused','R5_cookie_race'])assert.ok(child.stdout.includes(marker),marker+' did not fail its intended assertion\n'+child.stdout);
   t.diagnostic('d0d88512 frozen runtime: five intended regression assertions fail; child exit=1; no Git history required');
+});
+
+// E1 v1 (2026-10-31): a callback's commit must be visible before any next
+// payload dispatch. WAL specifically rejects a pre-await read snapshot fence.
+for (const journal of ['DELETE','WAL']) for (const method of ['getConversation','resolveSourceReferences'])
+for (const mutation of ['account erasure','forget','correct']) test(`E1 ${journal} ${method}: callback ${mutation} advances epoch and stops after one open`,async t=>{
+  const f=safetyFixture(t,33);await f.migrate();const db=f.connect();
+  assert.equal(db.prepare('PRAGMA journal_mode='+journal).get().journal_mode.toUpperCase(),journal);
+  const host=cardHost(),base=localPlainPort();let armed=false,calls=0,core,target,epochAdvanced=false;
+  const epoch=()=>{const row=db.prepare('SELECT epoch_hi,epoch_lo FROM owner_suppression_epochs WHERE owner_id=?').get(ns.ownerId);return row?BigInt(row.epoch_hi)*4294967296n+BigInt(row.epoch_lo):0n;};
+  const port={...base,async openRaw(value){
+    if(armed)calls++;
+    const result=await base.openRaw(value);
+    if(armed&&calls===1){
+      const before=epoch();
+      if(mutation==='account erasure')transaction(db,()=>suppressOwnerInside(db,{ownerId:ns.ownerId,reason:'account_erasure',actionId:'callback-erasure'}));
+      else ok(mutation==='forget'?core.forget({namespace:ns,memoryId:target.id,expectedRevision:target.revision}):
+        core.correct({namespace:ns,memoryId:target.id,expectedRevision:target.revision,content:'Synthetic replacement',kind:'fact',receipt:receipt('callback-replacement')}));
+      epochAdvanced=epoch()>before;
+      assert.ok(epochAdvanced,'writer commit advances the owner epoch');
+    }
+    return result;
+  }};
+  core=openRawCaptureCore({path:f.path,privateCards:host.options,model:{...rationaleModel(),extract:()=>({items:[]})}},
+    {mode:'raw-v1',port,sources:true,readPolicy:()=>({generation:'synthetic',reason:null})});
+  t.after(()=>{core.close();db.close();});
+  target=ok(core.admit({namespace:ns,memory:{content:'Synthetic callback target',kind:'fact'},receipts:[receipt('callback-target')]})).memory;
+  const text='Synthetic protected multi part retained source',parts=splitRaw(text,{size:12});let raw;
+  for(let i=0;i<parts.length;i++)raw=ok(await core.captureRaw(request(parts[i],{namespace:ns,client:'codex',sessionId:'epoch-source',eventId:'epoch-'+i})));
+  const conversationId=raw.raw.conversationId,revision=db.prepare('SELECT revision FROM raw_conversations WHERE id=?').get(conversationId).revision;
+  armed=true;
+  const result=method==='getConversation'?await core.getConversation({namespace:ns,conversationId}):await host.call(core,method,{namespace:ns,anchors:[{rawAnchor:{conversationId,messageId:parts[0].id,start:0,end:text.length,precision:'exact'},expectedConversationRevision:revision}]});
+  assert.equal(epochAdvanced,true,'the callback committed and advanced the epoch; callback assertions cannot be swallowed');
+  assert.equal(result.ok,false);assert.equal(calls,1);assert.doesNotMatch(JSON.stringify(result),/Synthetic protected|multi part retained/);
+});
+
+for(const journal of ['DELETE','WAL'])for(const mutation of ['account erasure','forget','correct'])test(`E1 ${journal} counter: ${mutation} commit refuses before the next counter call`,async t=>{
+  const f=safetyFixture(t);await f.migrate();const db=f.connect();
+  assert.equal(db.prepare('PRAGMA journal_mode='+journal).get().journal_mode.toUpperCase(),journal);
+  let armed=false,fired=false,afterCommit=0,target,core;
+  const epoch=()=>db.prepare('SELECT epoch_hi,epoch_lo FROM owner_suppression_epochs WHERE owner_id=?').get(ns.ownerId);
+  const model={countTokens(text){
+    if(fired)afterCommit++;
+    if(armed&&!fired&&text.includes('E1 protected counter')){
+      const before=epoch();
+      if(mutation==='account erasure')transaction(db,()=>suppressOwnerInside(db,{ownerId:ns.ownerId,reason:'account_erasure',actionId:'counter-erasure'}));
+      else ok(mutation==='forget'?core.forget({namespace:ns,memoryId:target.id,expectedRevision:target.revision}):
+        core.correct({namespace:ns,memoryId:target.id,expectedRevision:target.revision,content:'Synthetic replacement',kind:'fact',receipt:receipt('counter-replacement')}));
+      assert.notDeepEqual(epoch(),before);fired=true;
+    }
+    return 1;
+  }};
+  core=openMemoryCore({path:f.path,model});t.after(()=>{core.close();db.close();});
+  target=ok(core.admit({namespace:ns,memory:{content:'E1 protected counter',kind:'fact'},receipts:[receipt('counter-target')]})).memory;
+  armed=true;const result=core.map({namespace:ns,tokenBudget:100});
+  assert.equal(fired,true);assert.equal(afterCommit,0);assert.equal(result.ok,false);assert.doesNotMatch(JSON.stringify(result),/E1 protected counter/);
+});
+
+test('E1 caller re-entry receives a fresh read proof rather than trusted internal forwarding',async t=>{
+ const f=safetyFixture(t);await f.migrate();const db=f.connect();let armed=false,core,memory,nested;
+ const model={countTokens(text){
+  if(armed&&text.includes('Synthetic re-entry protected')){
+   armed=false;
+   transaction(db,()=>suppressOwnerInside(db,{ownerId:ns.ownerId,reason:'account_erasure',actionId:'reentry-erasure'}));
+   nested=core.get({namespace:ns,memoryId:memory.id});
+  }
+  return 1;
+ }};
+ core=openMemoryCore({path:f.path,model});t.after(()=>{core.close();db.close();});
+ memory=ok(core.admit({namespace:ns,memory:{content:'Synthetic re-entry protected',kind:'fact'},receipts:[receipt('re-entry')]})).memory;
+ armed=true;const result=core.map({namespace:ns,tokenBudget:100});
+ assert.equal(nested.ok,false);assert.equal(result.ok,false);assert.doesNotMatch(JSON.stringify({nested,result}),/Synthetic re-entry protected/);
 });

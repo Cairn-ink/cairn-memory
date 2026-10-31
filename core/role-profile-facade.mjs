@@ -1,3 +1,5 @@
+import { cachedContentLayout } from './content-safety-schema.mjs';
+import { hasContentSuppressionRequestInside, contentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
 import { ROLE_WRITES, roleWriteInput } from './role-profile-input.mjs';
 import { deepFreeze, cardNamespace } from './private-card-input.mjs';
@@ -37,5 +39,5 @@ export function createRoleProfileFacade(storage,options,config) {
     }catch(error){return privateFailure(error);}
   };
   return contentSafetyFacade({...result,readRoleTaskContext:createRoleContextReader(storage,options,config)}, { writeBoundary:storage,
-    check: scopes => { storage.ready(); assertContentScopes(storage.db,scopes); }, failure: privateFailure, validate: (method,args,result,scopes) => { if(method==='readRoleTaskContext'&&result?.ok)storage.assertContentOutput(result.value,scopes); } });
+    check: (scopes,{delivery}) => { storage.ready(); if (!delivery && scopes.length && cachedContentLayout(storage.db)?.suppressionRevision && hasContentSuppressionRequestInside(storage.db) && !storage.db.isTransaction) { contentSuppressionRequestInside(storage.db,scopes,{defer:true}); return; } assertContentScopes(storage.db,scopes); }, failure: privateFailure, validate: (method,args,result,scopes) => { if(method==='readRoleTaskContext'&&result?.ok)storage.assertContentOutput(result.value,scopes); } });
 }

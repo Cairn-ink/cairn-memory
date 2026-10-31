@@ -835,7 +835,8 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     return canonical.isTransaction?inspect():readTransaction(canonical,inspect);
   }
   function visibleCounts(p,publication) {
-    if(!publication||!cachedContentLayout(canonical)?.suppressionRevision)return null;
+    if(!publication||!cachedContentLayout(canonical)?.suppressionRevision||
+      contentSuppressionRequestFenceInside(canonical,p.readSet[0].ownerId)==='0:0')return null;
     return read(()=>suppressionRequest(p,publication,visible=>visible?.counts??null));
   }
   function candidateAllowed(ref, p) {

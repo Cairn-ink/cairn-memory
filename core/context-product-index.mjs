@@ -101,9 +101,9 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     fail('context_item_too_large');
   }
   function candidates(p,access,prepareOnly=false) {
+    const observed=read(()=>storage.observe(p,access.accessGenerations));
     const suppressionEpoch=cachedContentLayout(db)?.suppressionRevision?contentSuppressionRequestFenceInside(db,p.readSet[0].ownerId):undefined;
     p.suppressionEpoch=suppressionEpoch;
-    const observed=read(()=>storage.observe(p,access.accessGenerations));
     if (observed.dto.lexical.state!=='ready') return {observed};
     const detail=selectionTrace(p.semantic),started=performance.now();
     const ranked=storage.lexical(p,observed.publication,p.query);
@@ -457,7 +457,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     check: (scopes,{delivery}) => { facade.port.ready();
       if (!cachedContentLayout(db)?.suppressionRevision || !scopes.length) return;
       if (delivery) assertContentSuppressionRequestInside(db, scopes);
-      else { contentSuppressionRequestInside(db, scopes); assertContentScopes(db, scopes); }
+      else { contentSuppressionRequestInside(db, scopes, { defer: true }); }
     },
     requestScope: withContentSuppressionRequest,
     portGuard: scopes => maintenance ? undefined : contentScopeEpochGuard(db,scopes),

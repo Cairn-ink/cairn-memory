@@ -1,5 +1,5 @@
 import './content-write-safety.mjs';
-import { withoutContentSuppressionReadCacheInside } from './content-suppression-storage.mjs';
+import { inContentSuppressionRequestInside, withoutContentSuppressionReadCacheInside } from './content-suppression-storage.mjs';
 import { beginContentWrite, contentWriteOperation } from './content-write-context.mjs';
 import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
 import { SAFETY_SCHEMA_VERSIONS, resolveContentLayout, assertContentFeatures } from './content-safety-layout.mjs';
@@ -315,7 +315,7 @@ export function readTransaction(db, work, acquisition) {
     began = true;
     // Private maintenance hook; request readers leave it unset.
     acquisition?.readReady();
-    value = work();
+    value = inContentSuppressionRequestInside(db, work);
     try { materializedRead(value); } catch (failure) { unsafeResult = true; throw failure; }
     if (!db.isTransaction) fail('storage_error');
     db.exec('COMMIT');
@@ -352,7 +352,7 @@ export function transaction(db, work, check) {
     try {
       checkInstalledContentSafety(db);
       contentWrite = beginContentWrite(db);
-      const result = work();
+      const result = inContentSuppressionRequestInside(db, work);
       contentWrite?.validate(result);
       contentWrite?.close();
       contentWrite = null;

@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { contentReadSafety, sourceReadSafety } from './content-safety.mjs';
 import { types } from 'node:util';
 import { cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
-import { contentSuppressionFenceInside, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside, contentSuppressionRequestInside, withoutContentSuppressionReadCacheInside } from './content-suppression-storage.mjs';
+import { contentSuppressionFenceInside, contentSuppressionReasonInside, contentSuppressionMayMatchInside, contentSuppressionRequestFenceInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside, contentSuppressionRequestInside, withoutContentSuppressionReadCacheInside, withContentSuppressionRequest } from './content-suppression-storage.mjs';
 import { fail } from './validation.mjs';
 
 /** Capture primitive scope bindings before any caller callback or await. Never
@@ -50,21 +50,39 @@ export function assertContentScopes(db, scopes, code = 'evidence_unavailable') {
 // boundary. Its identity survives nested facades without certifying caller data.
 const closedCaptureControl = Object.freeze({ok:true,value:Object.freeze({classification:Object.freeze({status:'failed'})})});
 
+const activeReadBoundaries = new AsyncLocalStorage();
+
 /** One entry/delivery boundary, shared by synchronous and asynchronous facades.
  * New methods are gated by default; the independently frozen test inventory
  * requires an explicit classification whenever the public method set changes. */
 export function contentSafetyFacade(api, { check, noOwner = [], failure, select = args => args[0], asyncMethods = [], validate, portGuard, requestScope, isFailedCapture, writeBoundary = check }) {
-  const exempt = new Set(noOwner);
+  const exempt = new Set(noOwner), facadeToken = {};
   return Object.freeze(Object.fromEntries(Object.entries(api).map(([method, value]) => {
     if (typeof value !== 'function' || exempt.has(method)) return [method, value];
     const asynchronous = types.isAsyncFunction(value) || asyncMethods.includes(method);
     return [method, function(...args) {
+      const native = contentWriteBoundaryConnection(writeBoundary);
+      const enclosing = activeReadBoundaries.getStore();
+      const reentered = native && enclosing?.get(native)?.has(facadeToken);
+      const nestedRead = native && enclosing?.has(native) && !reentered && contentWriteMethodClass(method) === 'read';
       const execute = () => {
+        let scopes, delivering = false;
+        const rejected = error => {
+          // A deferred scope proof must also cover a method that fails before
+          // reaching its ordinary snapshot. No protected result is delivered.
+          if (scopes && !delivering) {
+            delivering = true;
+            try { check(scopes,{delivery:true}); } catch (denial) { error = denial; }
+          }
+          if (failure) return failure(error,method);
+          throw error;
+        };
         try {
-          const scopes = contentScopes(select(args, method));
+          scopes = contentScopes(select(args, method));
           check(scopes,{delivery:false});
           const deliver = result => {
-            try { check(scopes,{delivery:true}); }
+            delivering = true;
+            try { if (!nestedRead) check(scopes,{delivery:true}); }
             catch(error) {
               if(method==='capture'&&error.code==='store_closed'&&
                   (result===closedCaptureControl||isFailedCapture?.(result)))return closedCaptureControl;
@@ -74,14 +92,21 @@ export function contentSafetyFacade(api, { check, noOwner = [], failure, select 
           };
           const invoke = () => withContentWriteOperation(method,scopes,()=>Reflect.apply(value,api,args),writeBoundary);
           const result = portGuard ? contentPorts.run(portGuard(scopes),invoke) : invoke();
-          return types.isPromise(result) ? result.then(deliver).catch(error => { if (failure) return failure(error, method); throw error; }) : deliver(result);
+          return types.isPromise(result) ? result.then(deliver).catch(rejected) : deliver(result);
         } catch (error) {
-          if (failure) { const result = failure(error, method); return asynchronous ? Promise.resolve(result) : result; }
+          if (failure) { const result = rejected(error); return asynchronous ? Promise.resolve(result) : result; }
+          if (scopes && !delivering) { delivering = true; check(scopes,{delivery:true}); }
           if (asynchronous) return Promise.reject(error);
           throw error;
         }
       };
-      const start = () => requestScope ? requestScope(execute, method) : execute();
+      const scoped = () => {
+        if (!native) return execute();
+        const boundaries = new Map(enclosing);
+        boundaries.set(native,new Set([...(enclosing?.get(native) ?? []),facadeToken]));
+        return activeReadBoundaries.run(boundaries,execute);
+      };
+      const start = () => reentered ? withContentSuppressionRequest(scoped,{fresh:true}) : requestScope ? requestScope(scoped, method) : contentWriteMethodClass(method) === 'read' ? withContentSuppressionRequest(scoped) : scoped();
       const connection = contentWriteMethodClass(method) === 'write' && contentWriteBoundaryConnection(writeBoundary);
       return connection ? withoutContentSuppressionReadCacheInside(connection, start) : start();
     }];
@@ -92,15 +117,26 @@ export function contentSafetyFacade(api, { check, noOwner = [], failure, select 
 // Preserve the entry fence through awaits; do not dispatch retained text again
 // after any fact advanced. Legacy stores acquire no additional SQL statements.
 const contentPorts = new AsyncLocalStorage();
-export function assertContentPort() { contentPorts.getStore()?.(); }
+export function assertContentPort(phase) {
+  // Caller re-entry is a new read request, not trusted facade forwarding.
+  if (phase?.invoke) return activeReadBoundaries.exit(() => withContentSuppressionRequest(phase.invoke,{fresh:true}));
+  contentPorts.getStore()?.(phase);
+}
 export function contentScopeEpochGuard(db, scopes) {
   if (!db || !(cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision) return undefined;
   const owners = [...new Set(scopes.map(ns => ns.ownerId))];
-  const expected = owners.map(owner => contentSuppressionRequestFenceInside(db,owner));
-  return () => {
+  let expected = hasContentSuppressionRequestInside(db) ? null : owners.map(owner => contentSuppressionRequestFenceInside(db,owner));
+  return ({ before = false } = {}) => {
+    if (before) { expected ??= owners.map(owner => contentSuppressionRequestFenceInside(db,owner)); return; }
     if (db.isOpen === false) fail('store_closed');
-    assertContentScopes(db,scopes);
-    if (owners.some((owner,i) => contentSuppressionFenceInside(db,owner) !== expected[i])) fail('evidence_unavailable');
+    if (db.isTransaction) fail('storage_error');
+    for (const [i,owner] of owners.entries()) {
+      const before = expected?.[i] ?? contentSuppressionRequestFenceInside(db,owner);
+      // E1: this autocommit SELECT runs after the caller returns, before its
+      // result is inspected or another protected payload reaches a caller port.
+      const row = db.prepare('SELECT epoch_hi,epoch_lo FROM owner_suppression_epochs WHERE owner_id=?').get(owner);
+      if ((row ? `${row.epoch_hi}:${row.epoch_lo}` : '0:0') !== before) fail('evidence_unavailable');
+    }
   };
 }
 
@@ -133,10 +169,12 @@ export function assertContentOutput(db, identity, value, scopes = [], { factsOnl
   const seen = new Set();
   const fact = (namespace,kind,key,revision,extra={}) => {
     if(typeof key!=='string'||!namespace)return;
+    const state = cachedContentSuppressionRequestInside(db, namespace.ownerId);
+    if (state?.completed?.has(JSON.stringify([namespace.ownerId,namespace.scope,namespace.projectId??'',kind,key,revision]))) return;
     const tag={memory:'memory-revision-v1','submitted-note':'note-v1'}[kind];
     const version=tag&&Number.isSafeInteger(revision)?JSON.stringify([tag,revision]):undefined;
     if(contentSuppressionReasonInside(db,namespace,{kind,key,revision,version,...extra}))fail('evidence_unavailable');
-    if (kind==='raw' && (!extra.messageId || !Number.isSafeInteger(extra.start) || !Number.isSafeInteger(extra.end)) &&
+    if (kind==='raw' && contentSuppressionMayMatchInside(db,namespace,{kind,key}) && (!extra.messageId || !Number.isSafeInteger(extra.start) || !Number.isSafeInteger(extra.end)) &&
         db.prepare(`SELECT 1 FROM content_suppressions INDEXED BY content_suppression_target
           WHERE owner_id=? AND scope=? AND project_id=? AND kind='raw' AND stable_key=? AND incarnation=? AND match_mode='span' LIMIT 1`)
           .get(namespace.ownerId,namespace.scope,namespace.projectId??'',key,key)) fail('evidence_unavailable');
@@ -154,7 +192,7 @@ export function assertContentOutput(db, identity, value, scopes = [], { factsOnl
       (node.receiptId||node.sourceId||node.conversationId)) {
       if(factsOnly)fact(namespace,node.type,node.receiptId??node.sourceId??node.conversationId,node.revision,
         {messageId:node.messageId,start:node.span?.start,end:node.span?.end});
-      else if(!sourceReadSafety(db,{identity,namespace,ref:node}).allowed)fail('evidence_unavailable');
+      else if(!cachedContentSuppressionRequestInside(db,namespace.ownerId)?.sourcesChecked?.has(JSON.stringify(node)) && !sourceReadSafety(db,{identity,namespace,ref:node}).allowed)fail('evidence_unavailable');
     }
     if(namespace) {
       if(node.id && node.revision) {

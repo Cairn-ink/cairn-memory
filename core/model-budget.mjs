@@ -5,9 +5,11 @@ import { fail } from './validation.mjs';
 export function countTokens(model, text) {
   const counter = model?.countTokens;
   if (typeof counter !== 'function') fail('token_count_unavailable');
-  assertContentPort();
+  assertContentPort({before:true});
   let count;
-  try { count = Reflect.apply(counter,model,[text]); } catch { fail('token_count_unavailable'); }
+  try { count = assertContentPort({invoke:()=>Reflect.apply(counter,model,[text])}); }
+  catch { fail('token_count_unavailable'); }
+  finally { assertContentPort(); }
   if (!Number.isSafeInteger(count) || count < 0) fail('token_count_unavailable');
   return count;
 }

@@ -1,7 +1,7 @@
 import { registerContentWriteBoundary } from './content-write-context.mjs';
 import { contentScopeEpochGuard, assertContentOutput, contentReceiptCount, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
 import { cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
-import { writeContentSuppressionInside, suppressReceiptsInside, requireSuppressionTransaction, allocateContentKey, contentSuppressionReasonInside, contentSuppressionFenceInside, assertContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { writeContentSuppressionInside, suppressReceiptsInside, requireSuppressionTransaction, allocateContentKey, contentSuppressionReasonInside, contentSuppressionFenceInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, hasContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { roleProfileOptions } from './role-profile-input.mjs';
 import { createRoleProfileStorage } from './role-profile-storage.mjs';
@@ -74,13 +74,13 @@ export function createMemoryRuntime(input, internal) {
   const roleStorage = roleProfiles ? createRoleProfileStorage({db,identity,ready,methods:methodStorage.roleRead}) : undefined;
   const assetStorage = assets ? createAssetStorage({ db, identity, ready }) : undefined;
 
-  function activeRow(ns, id) {
-    return db.prepare(`SELECT * FROM memories WHERE ${where} AND id = ? AND deleted = 0`)
+  function activeRow(ns, id, contentRead = false) {
+    return db.prepare(`SELECT memories.*${contentRead ? memoryAncestry() : ''} FROM memories WHERE ${where} AND id = ? AND deleted = 0`)
       .get(...boundary(ns), id);
   }
 
-  function visibleRow(ns, id) {
-    const row = activeRow(ns, id);
+  function visibleRow(ns, id, contentRead = false) {
+    const row = activeRow(ns, id, contentRead);
     return row?.review_state !== 'awaiting' ? row : undefined;
   }
 
@@ -89,8 +89,8 @@ export function createMemoryRuntime(input, internal) {
       ref:{type:'memory',namespace:ns,memoryId:row.id,revision:row.revision},intent:'history'}).allowed)fail('memory_suppressed');
     return row;
   }
-  function currentRow(ns, id) {
-    const row = visibleRow(ns, id);
+  function currentRow(ns, id, contentRead = false) {
+    const row = visibleRow(ns, id, contentRead);
     return row?.currentness === 'current' ? row : undefined;
   }
 
@@ -154,10 +154,20 @@ export function createMemoryRuntime(input, internal) {
     return changes;
   }
 
+  // Selection already owns the canonical row. Its S1 decision and fact stage
+  // are reused by output validation in this request; no second read is needed.
   function privacyMemoryDenied(memory) {
-    return contentSuppressionReasonInside(db, { ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id },
-      { kind: 'memory', key: memory.id, revision: memory.revision, version: JSON.stringify(['memory-revision-v1', memory.revision]) });
+    if (!cachedContentLayout(db)?.suppressionRevision) return false;
+    const namespace = { ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id };
+    return !contentReadSafety(db, { namespace, intent: 'history', selectedMemory: memory,
+      ref: { type: 'memory', namespace, memoryId: memory.id, revision: memory.revision } }).allowed;
   }
+  const memoryAncestry = () => cachedContentLayout(db)?.suppressionRevision && cachedContentLayout(db)?.rawLineage
+    ? `,EXISTS(SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id
+        LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id
+        WHERE ar.memory_id=memories.id AND (ac.owner_id IS NOT memories.owner_id
+          OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry` : '';
+
 
   function legacyDto(memory) {
     if (!memory || privacyMemoryDenied(memory)) return null;
@@ -426,19 +436,19 @@ export function createMemoryRuntime(input, internal) {
 
   function legacyGet(ns, id) {
     ready();
-    return transaction(db, () => legacyDto(currentRow(ns, id)));
+    return transaction(db, () => legacyDto(currentRow(ns, id, true)));
   }
 
   function legacyList(ns, count) {
     ready();
-    return transaction(db, () => db.prepare(`SELECT * FROM memories WHERE ${where}
+    return transaction(db, () => db.prepare(`SELECT memories.*${memoryAncestry()} FROM memories WHERE ${where}
       AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current' ORDER BY updated_at DESC, id LIMIT ?`)
       .all(...boundary(ns), count).map(legacyDto).filter(Boolean));
   }
 
   function legacySearch(ns, terms, count) {
     ready();
-    return transaction(db, () => db.prepare(`SELECT * FROM memories WHERE ${where}
+    return transaction(db, () => db.prepare(`SELECT memories.*${memoryAncestry()} FROM memories WHERE ${where}
       AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current'`).all(...boundary(ns))
       .map((memory) => ({ memory, score: terms.reduce((n, term) =>
         n + Number(memory.content.toLowerCase().includes(term)), 0) }))
@@ -454,7 +464,7 @@ export function createMemoryRuntime(input, internal) {
     return transaction(db, () => {
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && currentEpoch !== expectedEpoch) fail("cursor_stale");
-      let sql = `SELECT memories.*, (SELECT count(*) FROM receipts
+      let sql = `SELECT memories.*${memoryAncestry()}, (SELECT count(*) FROM receipts
         WHERE receipts.memory_id = memories.id) AS receipt_count
         FROM memories WHERE ${where} AND deleted = 0
         AND review_state ${reviewState === 'awaiting' ? "= 'awaiting'" : "!= 'awaiting'"}
@@ -481,7 +491,7 @@ export function createMemoryRuntime(input, internal) {
     return transaction(db, () => {
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && currentEpoch !== expectedEpoch) fail("cursor_stale");
-      const memory = db.prepare(`SELECT memories.*, (SELECT count(*) FROM receipts
+      const memory = db.prepare(`SELECT memories.*${memoryAncestry()}, (SELECT count(*) FROM receipts
         WHERE receipts.memory_id = memories.id) AS receipt_count FROM memories
         WHERE ${where} AND id = ? AND deleted = 0`).get(...boundary(ns), id);
       if (!memory || privacyMemoryDenied(memory) || (memory.review_state === 'awaiting' && !(decisionReview && includeAwaiting))) fail("memory_not_found");
@@ -728,6 +738,10 @@ export function createMemoryRuntime(input, internal) {
     } });
 
   const assertContentScope = (scopes, { delivery = false } = {}) => { ready();
+    if (!cachedContentLayout(db)?.suppressionRevision) return;
+    if (!delivery && scopes.length && hasContentSuppressionRequestInside(db) && !db.isTransaction) {
+      contentSuppressionRequestInside(db, scopes, { defer: true }); return;
+    }
     if (delivery) assertContentSuppressionRequestInside(db, scopes);
     assertContentScopes(db, scopes, 'memory_not_found');
   };
@@ -736,7 +750,7 @@ export function createMemoryRuntime(input, internal) {
     assertContentScope,
     contentPortGuard(scopes) { ready(); return contentScopeEpochGuard(db,scopes); },
     assertContentOutput(value, scopes) { ready(); if (!(cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision) return;
-      return readTransaction(db,()=>assertContentOutput(db,identity,value,scopes)); },
+      return assertContentOutput(db,identity,value,scopes); },
     listReviewConflicts(ns, count, status, after, expectedEpoch) {
       ready();
       if (!decisionReview) fail('decision_review_required');

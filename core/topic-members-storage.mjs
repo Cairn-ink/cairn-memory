@@ -8,11 +8,16 @@ function validMetadata(row) {
 }
 /** Each step makes one indexed physical visit and at most three point validations.
  * Only one candidate and its canonical attribution survive a step/call. */
-export function createTopicMembersStorage(db, { memoryReadable = () => true } = {}) {
+export function createTopicMembersStorage(db, { memoryReadable = () => true, createReadMemo = () => undefined, rawAncestry = false } = {}) {
+  const safetyMemos = new WeakMap();
   const q = sql => db.prepare(sql.replace(/\b([a-z_]+)([>=]+)\?/g, '$1 COLLATE BINARY$2?')
     .replace(/ORDER BY ([a-z_]+)/g, 'ORDER BY $1 COLLATE BINARY'));
   const moc = q('SELECT id,owner_id,scope,project_id,revision,level FROM mocs WHERE id=?');
-  const nextSQL = `SELECT id,owner_id,scope,project_id,revision,kind,deleted,currentness,review_state FROM memories INDEXED BY index_memory_keyset
+  const ancestry = rawAncestry
+    ? `,EXISTS(SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id
+        LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id
+        AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry` : '';
+  const nextSQL = `SELECT id,owner_id,scope,project_id,revision,kind,deleted,currentness,review_state${ancestry} FROM memories INDEXED BY index_memory_keyset
     WHERE owner_id=? AND scope=? AND project_id=? AND id>? ORDER BY id LIMIT 1`;
   const next = q(nextSQL), first = q(nextSQL.replace('id>?', 'id>=?'));
   const ref = q(`SELECT moc_id,moc_revision,memory_revision FROM moc_memory_refs INDEXED BY memory_moc_refs
@@ -45,7 +50,8 @@ export function createTopicMembersStorage(db, { memoryReadable = () => true } = 
       s.after = row.id;
       if (!same(row, n) || row.deleted || row.currentness !== 'current' || !['none', 'confirmed'].includes(row.review_state) ||
           !projected(pm, g, { revision: row.revision }, row.id)) return;
-      if (!memoryReadable(n, row)) return;
+      safetyMemos.get(s)?.decisions?.clear();
+      if (!memoryReadable(n, row, safetyMemos.get(s))) return;
       validMetadata(row);
       if (!memberKinds.includes(row.kind)) fail('unsupported_database');
       if (request.kind !== null && request.kind !== row.kind) return;
@@ -82,5 +88,5 @@ export function createTopicMembersStorage(db, { memoryReadable = () => true } = 
       s.row = null; s.attribution = null; s.phase = 'memory';
     }
   }
-  return { target, step, create: () => ({ phase: 'memory', after: '', done: false, pending: null }) };
+  return { target, step, create() { const state = { phase: 'memory', after: '', done: false, pending: null }; const memo = createReadMemo(); if (memo) memo.retainOutputDecisions = false; safetyMemos.set(state,memo); return state; } };
 }

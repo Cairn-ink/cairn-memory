@@ -2,7 +2,7 @@ import { cachedContentLayout } from './content-safety-schema.mjs';
 import { assertContentOutput } from './content-safety-boundary.mjs';
 import { releaseRef as parseReleaseRef } from './role-profile-input.mjs';
 import { randomUUID } from 'node:crypto';
-import { readTransaction, transaction } from './database.mjs';
+import { transaction } from './database.mjs';
 import { keyed, cardText } from './private-card-input.mjs';
 import { privateBoundary as boundary, privateWhere as where, createOperationLedger } from './private-operation-helpers.mjs';
 import { canonicalJSON, canonicalObject } from './task-receipt.mjs';
@@ -98,5 +98,5 @@ export function createRoleProfileStorage({db,identity,ready,methods}) {
       ledger.record(ns,input.actionId,method,binding,profile.profileId,result,timestamp);return result;
     });
   }
-  return Object.freeze({db,identity,ready,methods,assertContentOutput(value,scopes){if(!cachedContentLayout(db)?.suppressionRevision)return;return readTransaction(db,()=>assertContentOutput(db,identity,value,scopes));},bind,registry,resolve,release,releaseRow,reason,mutate});
+  return Object.freeze({db,identity,ready,methods,assertContentOutput(value,scopes){if(!cachedContentLayout(db)?.suppressionRevision)return;return assertContentOutput(db,identity,value,scopes);},bind,registry,resolve,release,releaseRow,reason,mutate});
 }
