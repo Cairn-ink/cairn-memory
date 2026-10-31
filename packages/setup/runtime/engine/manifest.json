@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "be9c8da38fac936861666cdc4b651569b591af36d12f776e33cd6269e0f90562",
-  "bytes": 1013199,
+  "sha256": "28d5b14c9eecfe2125db6dec94e8a1268a26f21da5e90ad511ac72228d13c649",
+  "bytes": 1021878,
   "files": [
     "LICENSE",
     "README.md",
@@ -108,6 +108,7 @@
     "core/content-suppression-storage.mjs",
     "core/context-product-attribution.mjs",
     "core/context-product-authority.mjs",
+    "core/context-product-comparison.mjs",
     "core/context-product-control.mjs",
     "core/context-product-index.mjs",
     "core/context-product-manifest.mjs",
@@ -645,13 +646,13 @@
     "docs/plans/topic-reader-wal-fix.md": "ff375d11f558b7c60245ee44a65020f1888a2fdc24e8def7d68dd4b47c3b57f0",
     "core/context-product-authority.mjs": "8eda367985cfbcfcb52a3c7f3300e162b47cd7077bad921632106739eb5de765",
     "core/context-product-control.mjs": "83f036d20faa2515ba98d270d88a92b641c778f124dd51bbfbee7a931a9c7744",
-    "core/context-product-reader.mjs": "fb3c0168c20be2f200bae5afa9c326dfcd056f316e8ac358dbcf063e9cb52010",
+    "core/context-product-reader.mjs": "4635f9318026910f00dcf58d726f144a83308ea8fe863c0d9188c17a7870868e",
     "core/context-product-reader-pool.mjs": "2c08a09693a92c84588d408539d693559e565eec66e3867da658b688f0452b4e",
     "core/context-product-reader-pool-worker.mjs": "a39dd2e00b8a223794560090eede6b555bb4bc24044afa8d00a2e92553ca3394",
     "core/context-product-open-diagnostic.mjs": "fcf436e5219a45ee91f629a33515e44b35523e638aaea65e326eb4853a6c0bf8",
     "core/context-product-schema.mjs": "b8a9eb35749c5d167b9c6a9660443b53284be40c317f3b436aa373ffbba8bece",
     "core/context-product-telemetry.mjs": "4601cfc76379b7daf3d26a4f9690689469687685e7289d05ddf7773ee6959f85",
-    "core/context-product-worker.mjs": "c870d220e12bfa8ee6c9ae81ee5488ae1dea20029eb5d5390b5b3610cae5382d",
+    "core/context-product-worker.mjs": "4dc49b3d28c53ed8a7e97cec3565cd98d5ed851efe63fd3d3ae8a3a55c1c02a1",
     "core/context-read-supervisor.mjs": "99b25857493d4ac38fb723e8347188ae448a845e80123cf8ad1830cff7524a42",
     "core/reader-worker-lifecycle.mjs": "ce12e0d18a3a0d5274989a088afd2fd2cd93f40529c7cfbae1156e8295f99ddf",
     "docs/context-read-product.md": "124d435850055567923082821bc3c853f38ff96f4a2b83409b7643d96f2d249c",
@@ -659,13 +660,14 @@
     "core/context-product-validation.mjs": "1e4433bbc9978c89e5ea46d640038c190e002f16f960eef463ddd406e8b96a88",
     "core/context-product-manifest.mjs": "0c4f17c610ee79ad843180f85870d55e51bb0416d7819b85c1b68c31dd11c954",
     "core/context-product-service.mjs": "2dcb6741a5ed313717df83d6b784a09731366401f15c2956ffcd6bdb2d1f2a3e",
-    "core/context-product-sidecar.mjs": "b092e590133cf5d08bbfde58e21ef1bae2a4098a02890835b600502bae66486c",
+    "core/context-product-sidecar.mjs": "1ad93af26c2a3021d42a6fec2cf1760ec923e52a1c4151c8547684b2e5bb32d4",
+    "core/context-product-comparison.mjs": "ec340185793d622b8e48445c378bfd40fe9c5f1606e49bd589db1d6bf162cd46",
     "core/context-product-quantum.mjs": "b43d2c3386e4a9704831b6aa6667378a3148593bc09ff5848914ef3c706d2659",
-    "core/context-product-attribution.mjs": "9ef27f4daf8f59786bdca12ec24e265d26078f377ef92a83c921b11aa66e0a10",
+    "core/context-product-attribution.mjs": "9d5d7d4ad99b4bfe6854d730541b947520873e770f35094c39fb35bce12b4f34",
     "core/context-product-sqlite.mjs": "03d69f0bdb2e5e8acd1b6e08e566d3333bfbc9e22fdfac97514aa8023618c207",
     "core/content-safety.mjs": "96c3e71bbf8871403d617cdf3728487ceb49902debf00e1d41d754cb55e124c0",
-    "core/context-product-index.mjs": "bd28fcf1699d038b14139610958f3586c3d58bb294d85df88ecd76afe6e19ce3",
-    "core/context-product-pump.mjs": "91864e88ad93e49d6d078923a37f15f9d93f37f6cbd24e7c57304df668de08d0",
+    "core/context-product-index.mjs": "be6ae05be9f476408b4be37dc6e4c7ae3915e67ec512c647d498bd13cba5a105",
+    "core/context-product-pump.mjs": "13cd9c14287670f9bfa61b316e9d5305d9daee8faa8459272c642414fe484eac",
     "docs/plans/context-read-p2b-impl.md": "aa8aa4820502d8b4002ae33ef8b734658a683ed0edd527ef3d183ddb39e9f737",
     "docs/plans/context-read-p2d-impl.md": "f4301c2126605bf2dd71c188e79dde7827741afed0cc196c294c29efc07feabd",
     "core/context-product-selection.mjs": "0e2bab9437b51d1e91f980084ef5b2b167d43646b54686927f36d6dc79f980fc",
@@ -699,7 +701,7 @@
     "licenses/tiktoken-LICENSE": "1432b164b5be63a7fe11b89a5b5ca87a26153d0db1d6855cd89ef27c728f433b"
   },
   "generatedHashes": {
-    "package.json": "033ac8b6398e1ac371695ca4776e85a9fffc05fd33bc9c15910bc5ac18fd61bb",
+    "package.json": "b4421a4fd232d2fde183567fb73ae99283f7a6704af70269aab7a97aaa42977d",
     "npm-shrinkwrap.json": "1bcaa3995fdde15843828c31616051431ce95fff4bf5350f887f5bf2a66e9dc8"
   }
 }
