@@ -1115,3 +1115,32 @@ The host owns consent and privacy integration: **hosted embeddings need owner ap
 tests authorize no transmission or rollout. E.9 registration, real hosted
 quality/latency evidence, deployment gates and the owner's enablement decision
 remain separate from implementation.
+
+## Suppression-aware progress (S2h-2, contract v1, 2026-10-31)
+
+On safety layouts v34, v38 and v48, when the selected owner has a nonzero
+suppression epoch, refresh returns `null` for each of
+`progress.lexical`, `progress.transformed`, `progress.embeddingAttempts` and
+`progress.embedded`; `coverage.stops.budget` and
+`coverage.maintenance.progress` are also `null`. For every requested type,
+`coverage.byType[type].embedded` and `embeddedFraction` are `null`. Status
+returns `lexical.progress:null` and
+`coverage.byType[type].embedded:null` (including semantic coverage's embedded
+count when present). These rules apply even when the projection is `ready`,
+refresh is `complete`, no hidden item matches the query, or the fact's cleanup
+has completed. An owner epoch is retained after cleanup; it is not evidence
+that physical cleanup finished or that a particular item remains hidden.
+
+`eligible` and `indexed` count only visible items, after the serving predicate;
+they never include suppressed items. If a bounded visibility proof cannot
+establish a count, that count is `null`. Other existing reasons for unknown
+counts and progress still apply. Owners with no suppression epoch keep the
+ordinary progress contract; legacy layouts have no suppression epoch. These
+rules describe permitted result DTOs; an erased owner or namespace still
+refuses the request.
+
+Null usage prevents hidden-population disclosure. The existing maintenance pump
+cannot refund an unknown `progress.transformed`: it keeps the full item and time
+reservation for that quantum, including an idle quantum. This contract changes
+neither the pump nor its inputs. Reservation/refund policy is pending the
+separate performance-track decision.

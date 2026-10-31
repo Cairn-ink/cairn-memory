@@ -344,14 +344,17 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       if(c.lexical?.filtered)for(const t of p.types){c.coverage.byType[t].embedded=null;c.coverage.byType[t].embeddedFraction=null;}
       const channel=channelFor(reason),causes=[...new Set([lifecycleReason,preflight?.reason,reason].filter(Boolean).map(channelFor))];c.channels.semantic={state:channel,causes};
       if(preflight?.record&&!c.lexical?.filtered)for(const t of p.types){const count=preflight.record.counts.byType[t];c.coverage.byType[t].embedded=count.embedded;c.coverage.byType[t].embeddedFraction=count.eligible?count.embedded/count.eligible:1;}
-      if(cachedContentLayout(db)?.suppressionRevision) ranked=read(()=>ranked.filter(candidate=>{
+      // The request's zero owner epoch proves every retained candidate has no
+      // fact to match. Delivery still independently fences facts added during
+      // semantic callbacks; a safety layout alone is not a populated fact set.
+      if(c.suppressionEpoch && c.suppressionEpoch !== '0:0' && ranked.length) ranked=read(()=>ranked.filter(candidate=>{
         try{evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);return true;}
         catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
       }));
       const fusionStarted=performance.now(),lexical=c.lexical,fused=fuseCandidates(lexical.rows,ranked,{preset:'rrf-k10',limit:24,semanticState:channel,coverageComplete:preflight?.status==='complete'});
       detail.timings.fusionMs=performance.now()-fusionStarted;
       c.items=fused.rows.map((row,i)=>({ref:row.ref,rank:i+1,fusionScore:row.fusionScore,channels:row.channels}));
-      if(cachedContentLayout(db)?.suppressionRevision)c.items=read(()=>c.items.filter(candidate=>{
+      if(c.suppressionEpoch && c.suppressionEpoch !== '0:0' && c.items.length)c.items=read(()=>c.items.filter(candidate=>{
         try{evidence.itemsInside(candidate.ref.namespace,[candidate.ref],p.intent,p.readSet);return true;}
         catch(error){if(['evidence_unavailable','revision_conflict'].includes(error.code))return false;throw error;}
       }));

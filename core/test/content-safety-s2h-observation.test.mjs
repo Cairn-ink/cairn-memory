@@ -5,7 +5,8 @@ import { safetyFixture, ns } from '../testing/content-safety-s2h-fixture.mjs';
 import { transaction, readTransaction } from '../database.mjs';
 import { attestContentSafety } from '../content-safety-schema.mjs';
 import * as publicApi from '../index.mjs';
-import { contentSuppressionFenceInside, memorySuppressionObservationInside,
+import { contentReadSafety } from '../content-safety.mjs';
+import { contentSuppressionFenceInside, contentSuppressionReasonInside, memorySuppressionObservationInside,
   writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 
 const digest = rows => createHash('sha256').update(JSON.stringify(rows)).digest('base64url');
@@ -20,6 +21,7 @@ function memory(db, namespace = ns, revision = 6) {
 }
 function observe(db, namespace, ref, options) {
   const value = memorySuppressionObservationInside(db,namespace,ref,options);
+  if (value.complete) assert.equal(value.suppressed,!contentReadSafety(db,{namespace,ref:{type:'memory',namespace,...ref},intent:'history'}).allowed);
   return value;
 }
 function expected(db, facts) {
@@ -65,7 +67,7 @@ for(const base of [18,23,33])test(`S2h observation ${base}: legacy capability sh
     assert.ok(stats.sql.every(sql=>!/^\s*(?:BEGIN|COMMIT|CREATE|INSERT|UPDATE|DELETE)/i.test(sql)));
   });
 });
-for(const base of [18,23,33])test(`S2h observation ${base}: complete envelope, match modes, highest epoch and independent digest`,async t=>{
+for(const base of [18,23,33])test(`S2h observation ${base}: complete envelope, match modes, highest epoch, independent digest and serving parity`,async t=>{
   const f=safetyFixture(t,base);await f.migrate();const db=f.connect();t.after(()=>db.close());attestContentSafety(db);
   for(const mode of ['none','incarnation','version','revision-through','namespace','owner']){
     const namespace={...ns,ownerId:'synthetic-'+mode},ref=transaction(db,()=>memory(db,namespace));
@@ -136,6 +138,8 @@ test('S2h observation: Raw spans overlap only in the bound conversation and mess
     assert.deepEqual(observe(db,ns,ref),empty);
     const span=write({start:7,end:9}),incarnation=write({matchMode:'incarnation',messageId:'',start:0,end:0});
     assert.deepEqual(observe(db,ns,ref),expected(db,[span,incarnation]));
+    // Receipt callers use the exact same enumerator as Memory observations.
+    assert.equal(contentSuppressionReasonInside(db,ns,{kind:'receipt',key:'span-receipt'}),'privacy_erase');
   });
 });
 test('S2h observation: canonical fence advances on inserts, never on cleanup transitions',async t=>{

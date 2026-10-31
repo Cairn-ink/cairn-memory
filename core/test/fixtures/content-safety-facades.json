@@ -1215,6 +1215,10 @@
     "normalizedTextLength": {
       "kind": "no-owner-content",
       "reason": "Pure caller-text normalization; does not open a store or read retained owner content."
+    },
+    "createContextReaderPool": {
+      "kind": "no-owner-content",
+      "reason": "Returns a frozen close-only lifecycle handle; opens no database and exposes no fact writer."
     }
   },
   "semantic": {
@@ -1578,6 +1582,12 @@
     "safetyMigrateCommand": {
       "kind": "no-owner-content",
       "reason": "Trusted explicit quiescent migration CLI; maintenance metadata only."
+    }
+  },
+  "pool": {
+    "close": {
+      "kind": "no-owner-content",
+      "reason": "Disposes service reader resources; opens no database and exposes no fact writer."
     }
   }
 }

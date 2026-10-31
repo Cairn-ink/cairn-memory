@@ -7,7 +7,7 @@ import { createRawLineageStorage } from '../raw-lineage-storage.mjs';
 import { transaction } from '../database.mjs';
 import { contentSafetyInventory } from '../content-safety-migration.mjs';
 import { contentReadSafety } from '../content-safety.mjs';
-import { memorySuppressionObservationInside } from '../content-suppression-storage.mjs';
+import { memorySuppressionObservationInside, suppressOwnerInside } from '../content-suppression-storage.mjs';
 import { cardHost } from '../testing/raw-source-fixtures.mjs';
 import { request, splitRaw, localPlainPort } from '../testing/raw-capture-fixtures.mjs';
 import { safetyFixture, ns, ok, receipt } from '../testing/content-safety-s2h-fixture.mjs';
@@ -56,6 +56,9 @@ for (const base of [18, 23, 33]) for (const mutation of ['forget', 'correct', 'r
     assert.deepEqual(JSON.parse(rows[0].source_version), ['memory-revision-through-v1', memory.revision]);
     const identity = db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get();
     assert.equal(transaction(db, () => memorySuppressionObservationInside(db, ns, { memoryId: memory.id, revision: memory.revision })).reason, reason);
+    // S1 rejects a stale revision before the fact stage. B3 above pins the
+    // causal reason; serving must still refuse the old content.
+    assert.equal(contentReadSafety(db, { identity, namespace: ns, intent: 'history', ref: { type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision } }).allowed, false);
     assert.equal(contentReadSafety(db, { identity, namespace: ns, ref: { type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision + 1 } }).allowed, true);
   }
 });
@@ -119,12 +122,24 @@ for (const mutation of ['forget', 'correct', 'delete', 'remove-receipt', 'exclud
   }
   if (['forget','correct','exclude'].includes(mutation)) {
     assert.ok(rows.some(row => row.kind === 'raw' && row.match_mode === 'span'));
-    // The canonical exclusion is written with the fact. Raw delivery fact checks
-    // belong to S2h-2; this test only verifies the retained storage.
     assert.ok(db.prepare('SELECT 1 FROM raw_source_exclusions WHERE conversation_id=?').get(conversationId));
     db.prepare('DELETE FROM raw_source_exclusions WHERE conversation_id=?').run(conversationId);
     assert.ok(inspect(db).some(row => row.kind === 'raw' && row.match_mode === 'span'));
+    assert.doesNotMatch(JSON.stringify(await core.getConversation({ namespace: ns, conversationId })), /Synthetic retained Raw input/);
   } else assert.ok(rows.some(row => row.kind === 'raw' && row.match_mode === 'incarnation'));
+});
+
+test('S2h trusted owner seam denies both intents, preserves epochs after rollback and never exposes reason', async t => {
+  const f = safetyFixture(t); await f.migrate(); const core = openMemoryCore({ path: f.path }), db = f.connect(); t.after(() => { core.close(); db.close(); });
+  const memory = admit(core, 'Synthetic owner content'), identity = db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get();
+  inject(db, true); const before = contentSafetyInventory(db);
+  assert.throws(() => transaction(db, () => suppressOwnerInside(db, { ownerId: ns.ownerId, reason: 'account_erasure', actionId: 'erase' })));
+  assert.equal(contentSafetyInventory(db), before); inject(db, false);
+  transaction(db, () => suppressOwnerInside(db, { ownerId: ns.ownerId, reason: 'account_erasure', actionId: 'erase' }));
+  for (const intent of ['current','history']) assert.deepEqual(contentReadSafety(db, { identity, namespace: ns, intent,
+    ref: { type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision } }), { allowed: false, reason: 'account_erasure' });
+  assert.doesNotMatch(JSON.stringify(core.get({ namespace: ns, memoryId: memory.id })), /Synthetic owner content|account_erasure/);
+  assert.equal(core.list({ namespace: ns }).ok,false);
 });
 
 test('S2h a later fact failure and a COMMIT failure roll back facts, reservations, counters and tombstones', async t => {
@@ -169,6 +184,8 @@ test('S2h same-byte correction retires old receipt incarnations and every earlie
   assert.ok(inspect(db).some(row => row.kind === 'receipt' && row.stable_key === oldReceipt && row.reason === 'correction_supersession'));
   const identity = db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get();
   for (const revision of [1,2]) assert.equal(transaction(db, () => memorySuppressionObservationInside(db, ns, { memoryId: memory.id, revision })).reason, 'correction_supersession');
+  for (const revision of [1,2]) assert.equal(contentReadSafety(db, { identity, namespace: ns, intent: 'history',
+    ref: { type: 'memory', namespace: ns, memoryId: memory.id, revision } }).allowed, false);
   assert.equal(contentReadSafety(db, { identity, namespace: ns, intent: 'history',
     ref: { type: 'memory', namespace: ns, memoryId: memory.id, revision: 3 } }).allowed, true);
 });
@@ -202,4 +219,21 @@ for (const base of [23,33]) test(`S2h ${base}: confirmed Card keeps intact super
   const evidence = ok(host.call(core, 'fetchEvidence', { namespace: ns, intent: 'history',
     refs: [{ type: 'card', namespace: ns, cardId: draft.id, revision: row.revision, bodyRevision: row.body_revision }] }));
   assert.equal(evidence.items[0].body,'Synthetic intact historical body');
+});
+
+for (const stage of ['before','during-open']) test(`S2h owner erasure ${stage} Raw read denies plaintext through the existing final snapshot`, async t => {
+  const f = safetyFixture(t,33); await f.migrate(); const db = f.connect(), basePort = localPlainPort(); let armed = false;
+  const erase = () => transaction(db, () => suppressOwnerInside(db, { ownerId: ns.ownerId, reason: 'account_erasure', actionId: 'erase-raw' }));
+  const port = { ...basePort, async openRaw(input) { const result = await basePort.openRaw(input); if (armed) { armed = false; erase(); } return result; } };
+  const core = openRawCaptureCore({ path: f.path, model: { ...rationaleModel(), extract: () => ({ items: [] }) } },
+    { mode: 'raw-v1', lineage: true, deletion: true, port, readPolicy: () => ({ generation: 'synthetic', reason: null }) });
+  t.after(() => { core.close(); db.close(); });
+  const source = ok(await core.captureRaw(request(splitRaw('Synthetic Raw owner secret')[0], { namespace: ns, client: 'codex', eventId: 'owner-raw' })));
+  const input = { namespace: ns, conversationId: source.raw.conversationId };
+  assert.match(JSON.stringify(ok(await core.getConversation(input))), /Synthetic Raw owner secret/);
+  if (stage === 'before') erase(); else armed = true;
+  const result = await core.getConversation(input);
+  assert.doesNotMatch(JSON.stringify(result), /Synthetic Raw owner secret|account_erasure/);
+  assert.equal(result.ok,false);
+  assert.ok(['memory_not_found','evidence_unavailable'].includes(result.error.code));
 });

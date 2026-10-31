@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { safetyFixture, ns } from '../testing/content-safety-s2h-fixture.mjs';
 import { transaction } from '../database.mjs';
 import { attestContentSafety } from '../content-safety-schema.mjs';
-import { writeContentSuppressionInside, suppressOwnerInside, reserveContentIdentityInside, suppressionEpoch } from '../content-suppression-storage.mjs';
+import { writeContentSuppressionInside, suppressOwnerInside, reserveContentIdentityInside, suppressionEpoch, contentSuppressionReasonInside } from '../content-suppression-storage.mjs';
 
 const fact = (patch = {}) => ({ namespace: ns, kind: 'memory', key: 'synthetic-memory', reason: 'purge', actionId: 'synthetic-action', ...patch });
 for (const base of [18, 23, 33]) test(`S2h ${base}: immutable facts, reservations, retries and exact owner epochs`, async t => {
@@ -30,8 +30,10 @@ for (const base of [18, 23, 33]) test(`S2h ${base}: immutable facts, reservation
   const target = db.prepare('SELECT fact_id FROM content_suppressions WHERE owner_id=? ORDER BY epoch_lo LIMIT 1').get(ns.ownerId).fact_id;
   db.prepare("UPDATE content_suppressions SET cleanup_status='failed',cleanup_attempt=cleanup_attempt+1 WHERE fact_id=?").run(target);
   assert.equal(db.prepare('SELECT reason FROM content_suppressions WHERE fact_id=?').get(target).reason, 'purge');
+  assert.equal(contentSuppressionReasonInside(db, ns, { kind: 'memory', key: 'synthetic-memory' }), 'purge');
   db.prepare("UPDATE content_suppressions SET cleanup_status='complete',cleanup_attempt=cleanup_attempt+1 WHERE fact_id=?").run(target);
   assert.equal(db.prepare('SELECT reason FROM content_suppressions WHERE fact_id=?').get(target).reason, 'purge');
+  assert.equal(contentSuppressionReasonInside(db, ns, { kind: 'memory', key: 'synthetic-memory' }), 'purge');
   assert.equal(suppressionEpoch(db.prepare('SELECT * FROM owner_suppression_epochs WHERE owner_id=?').get(ns.ownerId)), 3n);
   assert.throws(() => db.prepare("UPDATE content_suppressions SET cleanup_status='pending',cleanup_attempt=cleanup_attempt+1 WHERE fact_id=?").run(target));
 });

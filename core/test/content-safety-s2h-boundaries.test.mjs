@@ -81,6 +81,8 @@ for(const mode of ['owner','namespace'])test(`r2 mechanical facade inventory and
   const maintenanceConfig=configured(t,f.path,[ns],{service:true}),maintainer=await maintenanceConfig.open();
   const pullFixture=await suppressionFixture(t),pull=(await pullFixture.reader()).handle;
   const supervisor=api.createContextReadSupervisor();t.after(()=>supervisor.close());
+  const pool=api.createContextReaderPool();t.after(()=>pool.close());
+  assert.ok(Object.isFrozen(pool));assert.deepEqual(methods(pool),['close']);
   const cards=createPrivateCardFacade(runtime.privateCards,config.privateCards,runtime.ready,{prepare(){assert.fail('erased scope reached the Raw source port');}}),methodsFacade=createMethodPackageFacade(runtime.methodPackages,config.methodPackages,runtime.ready,config.assets),assets=createAssetFacade(runtime.assets,config.assets,runtime.ready),roles=createRoleProfileFacade(runtime.roleProfiles,config.roleProfiles,{path:f.path,context:contextRead,assets:config.assets});
   const semantic=await semanticCoordinator(t,f,supervisor);
   // Enumerate both real return profiles of the exported factory, including its
@@ -96,7 +98,7 @@ for(const mode of ['owner','namespace'])test(`r2 mechanical facade inventory and
     window:{...pumpInput.window,id:randomUUID(),usedUsd:'0'},budgets:{...pumpInput.budgets,maxUsd:'0.01'},
     quantum:{...pumpInput.quantum,maxUsd:'0.01'},projections:[{options:{...pumpOptions,semanticConfig},types:['memory']}]});
   await Promise.all([pumpLexical.close(),pumpSemantic.close()]);
-  const handles={pumpLexical,pumpSemantic,semantic,core,runtime,cards,methods:methodsFacade,assets,roles,legacy:store,scope:store.scope({ownerId:ns.ownerId,projectId:ns.projectId}),context,topic,product,maintainer,pull,supervisor,preflight,safetyCLI,safetyMigrationCLI};
+  const handles={pumpLexical,pumpSemantic,semantic,core,runtime,cards,methods:methodsFacade,assets,roles,legacy:store,scope:store.scope({ownerId:ns.ownerId,projectId:ns.projectId}),context,topic,product,maintainer,pull,supervisor,pool,preflight,safetyCLI,safetyMigrationCLI};
   // Factory returns form a tree (exports -> handles -> scope/pump returns).
   // Recurse containers and compare every discovered handle, never synthesize
   // its method list from the classification fixture.

@@ -86,7 +86,16 @@ class ProbeWorker extends EventEmitter{
  constructor(data){super();this.data=data;this.stdout={resume(){}};this.stderr={resume(){}};queueMicrotask(()=>{try{
  const authorize=(m,p,c)=>requestAuthority({authorize:()=>data.binding,isCurrent:()=>true},data.binding,data.request)(m,p,c);
  this.facade=openContextProductFacade(path,{authorize});
- this.index=openProductIndex({path,facade:this.facade,authorize,ownerCoverage,maintenance:false});
+ this.index=openProductIndex({path,facade:this.facade,authorize,ownerCoverage,maintenance:false,
+   ...(process.argv[7]?.startsWith('semantic')?{semantic:{snapshot:async()=>{
+     if(process.argv[7]==='semantic-late-fact' && !expectedFailure){
+       canonical.exec('PRAGMA query_only=OFF');
+       transaction(canonical,()=>suppressOwnerInside(canonical,{ownerId:ns.ownerId,reason:'account_erasure',actionId:'during-semantic-snapshot'}));
+       canonical.exec('PRAGMA query_only=ON');expectedFailure=true;
+     }
+     return {policy:{semantic:false},identity:null};
+   }},
+     operation:()=>({operationCutoffMonoNs:String(process.hrtime.bigint()+5000000000n)})}:{})});
  this.emit('message',{operation:data.operation,result:{ok:true,value:null},fileIdentity:this.facade.fileIdentity});
  }catch(e){console.error(e);this.emit('error',e);}});}
  postMessage(msg){if(msg.method==='close'){queueMicrotask(()=>this.terminate());return;}queueMicrotask(async()=>{try{const r=await this.index.run(msg.method,msg.input,msg.credential);this.emit('message',{operation:msg.operation,result:r});}catch(e){console.error(e);this.emit('error',e);}});}
@@ -110,7 +119,7 @@ async function measure(label,query){
  return result;
 }
 for(const intent of ['current','history']){
- const query={readSet:[ns],types:['memory'],intent,query:process.argv[6]==='absent'?'absentterm':'probecommon',limit:12,deadlineMs:5000};
+ const query={readSet:[ns],types:['memory'],intent,query:process.argv[6]==='absent'?'absentterm':'probecommon',limit:12,deadlineMs:5000,...(process.argv[7]?.startsWith('semantic')?{semantic:true}:{})};
  const first=await measure(intent+'-first',query);await measure(intent+'-repeat',query);
  if(first.ok&&first.value.nextCursor)await measure(intent+'-cursor',{...query,cursor:first.value.nextCursor});
 }

@@ -1323,6 +1323,7 @@
         "MemoryStoreError",
         "SOURCE_LIMITS",
         "createContextReadSupervisor",
+        "createContextReaderPool",
         "normalizeBoundedText",
         "normalizedTextLength",
         "openContentSuppressionReader",
@@ -1341,7 +1342,8 @@
         "selectContextProductNamespaces"
       ],
       "additions": {
-        "openContentSuppressionReader": "Opens the independent read-only denial reconciliation handle required by D-15."
+        "openContentSuppressionReader": "Opens the independent read-only denial reconciliation handle required by D-15.",
+        "createContextReaderPool": "Returns a frozen close-only lifecycle handle with no database access or path to a fact writer."
       }
     }
   }
