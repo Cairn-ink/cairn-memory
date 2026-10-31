@@ -606,7 +606,11 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       });if(found)rendezvous('gc');},'gc');
       if(!found)break;
     }
-    if(quantum.admit('gc'))quantum.measure(()=>side.exec('PRAGMA incremental_vacuum(32)'),'gc','vacuum');
+    if(quantum.admit('gc'))quantum.measure(()=>{
+      try {side.exec('PRAGMA incremental_vacuum(32)');}
+      catch(e) {if(e.code!=='ERR_SQLITE_ERROR' || (e.errcode&255)!==5)throw e;}
+      // Optional BUSY skips reclamation; attribution counts admitted attempts.
+    },'gc','vacuum');
   }
   function refresh(p,access,budget,quantum) {
     if (!writable) fail('invalid_input');
