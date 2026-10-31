@@ -123,7 +123,10 @@ try {
   phase?.mark('facadeOpened');
   const { openProductIndex } = await import('./context-product-index.mjs'); within(opening);
   phase?.mark('indexImported');
-  index = openProductIndex({path:workerData.path,facade,authorize,ownerCoverage:workerData.ownerCoverage,observer,sqlite,sidecarJournalMode:workerData.sidecarJournalMode,maintenance:workerData.maintenance,counter:host.counter,semantic,operation:()=>currentOperation,attribution});
+  let comparison=null;
+  if(workerData.memoryComparison===true){comparison=await import('./context-product-comparison.mjs');within(opening);}
+  index = openProductIndex({path:workerData.path,facade,authorize,ownerCoverage:workerData.ownerCoverage,observer,sqlite,sidecarJournalMode:workerData.sidecarJournalMode,maintenance:workerData.maintenance,counter:host.counter,semantic,operation:()=>currentOperation,attribution,
+    storageOptions:{memoryComparison:comparison}});
   phase?.mark('indexOpened');
   within(opening);
   // The opening telemetry remains unsealed until connection disposal.
@@ -184,8 +187,9 @@ parentPort.on('message', async message => {
     if(attribution) {
       const preparationStarted=Number(process.hrtime.bigint())/1e6;
       within(operation);sealNative(frame);
-      const {at,...detail}=observation,metrics=attribution.snapshot();
+      const {at,comparison,...detail}=observation,metrics=attribution.snapshot();
       attribution.serialize(()=>result(operation,response,{...(at===undefined?{}:{observedAtMonoMs:at}),
+        ...(comparison?{comparison:response.ok?comparison:{status:'incomplete',cause:'operation_failed',rows:comparison.rows,bytes:comparison.bytes}}:{}),
         maintenancePhases:{...detail,...metrics,...(message.maintenanceOrdinal===null?{}:{ordinal:message.maintenanceOrdinal}),
           dispatchMs:receivedAt-Number(mono(operation.enteredMonoNs))/1e6,
           resultPreparationMs:metrics.resultPreparationMs+Number(process.hrtime.bigint())/1e6-preparationStarted,finishedAtMonoMs:Number(process.hrtime.bigint())/1e6}}));

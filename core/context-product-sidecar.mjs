@@ -16,6 +16,7 @@ import { maintenanceQuantum } from './context-product-quantum.mjs';
 import { ManifestHash } from './context-product-manifest.mjs';
 import { fail } from './validation.mjs';
 import { VECTOR_DDL } from './context-product-vectors.mjs';
+import { comparisonWorkFields } from './context-product-attribution.mjs';
 
 export const PRODUCT_SIDECAR_FORMAT = 3;
 export const PRODUCT_SIDECAR_SUFFIX = '.context-read-product-v1.1.sqlite';
@@ -114,11 +115,13 @@ export function canonicalProductIdentity(path, db) {
 // Construction acquires no sidecar. Only a separately authorized operation
 // invokes observe/refresh, including when the file is missing or malformed.
 export function productSidecar({ path, db: canonicalDatabase, identity, features, observer, sqlite, sidecarJournalMode = 'DELETE', writable = false,
-  now = () => performance.now(), rendezvous = () => {}, attribution }) {
+  now = () => performance.now(), rendezvous = () => {}, attribution, memoryComparison = null, comparisonOptions = {} }) {
   const canonical=canonicalDatabase;
   const canonicalRead=work=>attribution ? attribution.transaction(canonicalDatabase,work,readTransaction) : readTransaction(canonicalDatabase,work);
   features={...features,reviews:features.cards,receipts:features.cards};
   const sidePath = path + PRODUCT_SIDECAR_SUFFIX;
+  const compare=memoryComparison?memoryComparison.createMemoryComparator():null;
+  let comparisonBase=null;
   let sideFormat, side, sideWritable, sideFiles, sideMode, openedIdentity, closed = false, metadata, lifecycle, lockIdentity, observedMissing=false, guardDepth=0;
   const lockPath=sidePath+'.lifecycle-lock.sqlite';
   const stamp=()=>{const s=sqliteFileStat(sidePath);return [s.dev,s.ino,s.size,s.mtimeNs,s.ctimeNs].join(':');};
@@ -248,16 +251,16 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
   const initialization=()=>({autoVacuum:'INCREMENTAL',...(sqlite ? {journalMode:sidecarJournalMode} : {}),sql:`PRAGMA application_id=${APPLICATION_ID}; PRAGMA user_version=${PRODUCT_SIDECAR_FORMAT}; ${ddl} ${VECTOR_DDL}`,
     storeId:identity.storeId,profile:PRODUCT_PROFILE,incarnation:randomUUID(),
     attestation:{applicationId:APPLICATION_ID,userVersion:PRODUCT_SIDECAR_FORMAT,schema:expectedSchema}});
-  const sideIdentity = () => ({ ...productFile(sidePath), incarnation: metadata.incarnation,
-    schemaVersion: side.prepare('PRAGMA schema_version').get().schema_version });
-  function target(p, access) {
+  const sideIdentity = (reader=side,current=metadata) => ({ ...productFile(sidePath), incarnation: current.incarnation,
+    schemaVersion: reader.prepare('PRAGMA schema_version').get().schema_version });
+  function target(p, access,reader=canonical,sideReader=side,currentMetadata=metadata) {
     attribution?.step();
     let storeId;
-    try {storeId=canonical.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id;}
+    try {storeId=reader.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id;}
     catch(error){attribution?.captureFailure(error);throw error;}finally {attribution?.acquired();}
     if(storeId!==identity.storeId)unavailable('wrong_store');
-    return { projectionDigest: projectionDigest(p), accessDigest: access, ...canonicalProductFences(canonical,p),
-      canonical: canonicalProductIdentity(path,canonical), sidecar: sideIdentity() };
+    return { projectionDigest: projectionDigest(p), accessDigest: access, ...canonicalProductFences(reader,p),
+      canonical: canonicalProductIdentity(path,reader), sidecar: sideIdentity(sideReader,currentMetadata) };
   }
   function recordBindings(r, t, progress = false) {
     if (r.storeId !== identity.storeId) return 'wrong_store';
@@ -612,6 +615,61 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       // Optional BUSY skips reclamation; attribution counts admitted attempts.
     },'gc','vacuum');
   }
+  function compareInputs(p,access,budget,quantum,baseUnavailable=false) {
+    const m={};
+    if(compare){
+      // Load/authenticate the immutable volatile input map and the current
+      // sidecar seals before acquiring the comparison's canonical snapshot.
+      // Legacy signed records authenticate only their own B1 state; they never
+      // substitute for a complete B3 input manifest.
+      let checkpoint;
+      const comparison=quantum.measure(()=>compare({db:canonical,read:canonicalRead,selection:p,identity:{storeId:identity.storeId},access,
+        now,cutoff:quantum.cutoff-quantum.reserve,budget,attribution,physicalIdentity:reader=>canonicalProductIdentity(path,reader),
+        ...comparisonOptions,loadBase:account=>{
+          if(baseUnavailable)throw Error('comparison_base_unavailable');
+          if(!side)return {checkpoint:null,base:null};
+          checkpoint=read(()=>{
+            const metered=memoryComparison.comparisonReader(side,account),projection=projectionDigest(p),bindings=[];
+            const currentMetadata=metered.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
+            if(!currentMetadata||currentMetadata.store_id!==identity.storeId)unavailable('wrong_store');
+            attest(metered);
+            if(currentMetadata.profile!==PRODUCT_PROFILE)unavailable('incompatible');
+            const currentTarget=canonicalRead(()=>target(p,access,memoryComparison.comparisonReader(canonical,account),metered,currentMetadata));
+            for(const [table,column,purpose]of [['work','generation','progress'],['publications','publication','validation']]){
+              const pointer=metered.prepare(`SELECT * FROM ${table} WHERE projection=?`).get(projection);
+              if(!pointer){bindings.push(null);continue;}
+              const g=metered.prepare('SELECT * FROM generations WHERE id=?').get(pointer.generation);
+              const text=metered.prepare(`SELECT record FROM ${purpose==='progress'?'progress_records':'validation_records'} WHERE ${column}=?`).get(pointer[column])?.record;
+              if(!g||!text)throw Error('comparison_base_missing');
+              if([text,g.fences,g.verify].some(value=>typeof value!=='string'||Buffer.byteLength(value)>262144))throw Error('comparison_base_frame');
+              account.charge(0,4*Buffer.byteLength(text));
+              const record=verifiedRecord(identity.cursorSecret,purpose,text,attribution);
+              const progress=purpose==='progress',checkpointValid=progress
+                ? !g.published&&record.kind===g.kind&&Object.entries(progressOf(g)).every(([k,v])=>record.progress[k]===v)
+                : g.published===1&&record.generation.sequence===g.sequence&&record.generation.checkpoint===g.checkpoint&&
+                  record.publicationId===pointer.publication&&record.manifestDigest===g.manifest;
+              if(record.storeId!==identity.storeId||g.owner!==p.readSet[0].ownerId||
+                g.projection!==projection||record.projectionDigest!==projection||record.accessDigest!==g.access||!checkpointValid||
+                g.id!==generationId(g)||g.incarnation!==incarnationOf(g)||record.generation.id!==g.id||record.generation.incarnation!==g.incarnation)throw Error('comparison_base_invalid');
+              const mismatch=recordBindings(record,currentTarget,progress);
+              if(mismatch&&!['access_changed','dependency_changed','fence_changed'].includes(mismatch))throw Error('comparison_base_binding');
+              bindings.push({id:g.id,incarnation:g.incarnation,checkpoint:g.checkpoint});
+            }
+            return memoryComparison.comparisonJson(bindings,account);
+          });
+          return {checkpoint,base:comparisonBase?.checkpoint===checkpoint?comparisonBase.output:null};
+        }}),'comparison','scan');
+      m.comparison=comparison;
+      Object.assign(m,Object.fromEntries(comparisonWorkFields.map(k=>[k,0])),{comparisonAttempts:1,
+        comparisonComplete:Number(comparison.status!=='incomplete'),comparisonEqual:Number(comparison.status==='complete/equal'),
+        comparisonDifferent:Number(comparison.status==='complete/different'),comparisonIncomplete:Number(comparison.status==='incomplete'),
+        comparisonRows:comparison.rows,comparisonBytes:comparison.bytes});
+      // Incompletion retains no partial map or clock. A restart drops this
+      // volatile basis; no format, certificate, publication or serving change.
+      comparisonBase=comparison.status==='incomplete'?null:{checkpoint,output:comparison};
+    }
+    return m;
+  }
   function refresh(p,access,budget,quantum) {
     if (!writable) fail('invalid_input');
     const m = { transformed:0,canonicalRows:0,metadataBytes:0,textRows:0,textBytes:0,supportLookups:0,supportBytes:0,verifiedRows:0,
@@ -642,6 +700,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       connection(true);
     }
     rendezvous('opened');
+    if(compare)Object.assign(m,compareInputs(p,access,budget,quantum));
     // The merge's byte comparator and both indexed TEXT cursors must have
     // identical BINARY order. Other encodings retain the append-only builder.
     const canonicalUtf8=canonical.prepare('PRAGMA encoding').get().encoding==='UTF-8',
@@ -874,6 +933,14 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       const quantum=maintenanceQuantum({now,cutoff,maxMs:budget.maxMs,attribution});
       return guarded(()=>refresh(p,access,budget,quantum),true);
     },
+    compare:(p,access,budget,quantum)=>{
+      if(!compare)return null;
+      const started=now();p=projection(p);
+      quantum??=maintenanceQuantum({now,cutoff:Math.min(p.deadlineAt??Infinity,started+budget.maxMs),maxMs:budget.maxMs,attribution});
+      return guarded(()=>{let failed=false;try{connection(false);}catch{comparisonBase=null;failed=true;}
+        return compareInputs(p,access,budget,quantum,failed);
+      });
+    },
     lexical:(p,...args)=>{p=projection(p);return guarded(()=>lexical(p,...args));},
     prepareObservation() {
     try {return guarded(()=>{ connection(false);return null; }); }
@@ -885,10 +952,11 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         return [11,26].includes(e.errcode&255)?'corrupt':(e.errcode&255)===1?'incompatible':'storage_unavailable';
       throw e;
     }
-  },close() { closed=true;const lock=lifecycle;lifecycle=null;cleaned(()=>close(),()=>lock?.close()); },
+  },close() { closed=true;comparisonBase=null;const lock=lifecycle;lifecycle=null;cleaned(()=>close(),()=>lock?.close()); },
     // Explicit restore gate; callers must have already drained all clients.
     reset() {return guarded(()=>{
       if (!writable) fail('invalid_input');
+      comparisonBase=null;
       if (!connection(true)) return;
       write(() => {
         side.exec('DELETE FROM vector_publications; DELETE FROM vector_work; DELETE FROM vector_rows; DELETE FROM semantic_vectors; DELETE FROM vector_validation_records; DELETE FROM vector_generations; DELETE FROM vector_purge_checkpoints; DELETE FROM publications; DELETE FROM work; DELETE FROM validation_records; DELETE FROM progress_records; DELETE FROM postings; DELETE FROM documents; DELETE FROM statistics; DELETE FROM generations; DELETE FROM selections;');
