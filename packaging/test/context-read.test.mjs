@@ -40,6 +40,11 @@ async function run(workspace,args,options){const result=await child(workspace,ar
 
 test('R01/R03/R12/R13 actual artifact: captured sources, fresh lexical MCP, opener matrix and independently derived shipped closure',{timeout:120000},async t=>{
   const workspace=createTestWorkspace(t,{prefix:'installed-context-'}),f=await installedMethods(workspace);
+  const engine=await import(pathToFileURL(join(f.root,'core/index.mjs')));
+  assert.equal(typeof engine.createContextReaderPool,'function','installed_mcp_runtime_exports_service_pool');
+  const pool=engine.createContextReaderPool();
+  try { await engine.createContextReadSupervisor({readerWorkerPool:pool}).close(); }
+  finally { await pool.close(); }
   const captured=ok(await run(workspace,[fixture,f.root,f.path,JSON.stringify({mode:'capture',texts})]));
   assert.equal(captured.modelCalls,texts.length);assert.notEqual(captured.pid,process.pid);assert.equal(captured.memories.length,texts.length);
   const trace=join(workspace.path,'context-loaded.jsonl'),preload='data:text/javascript,'+encodeURIComponent(`

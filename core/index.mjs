@@ -8,7 +8,7 @@ export { openMemoryCore } from "./contract.mjs";
 export { openMemoryReader } from './memory-reader.mjs';
 export { openContextReader } from './context-reader.mjs';
 export { openContextProductReader, openContextIndexMaintainer } from './context-product-reader.mjs';
-export { createContextReadSupervisor } from './context-read-supervisor.mjs';
+export { createContextReadSupervisor, createContextReaderPool } from './context-read-supervisor.mjs';
 export { renewContextMaintenancePump } from './context-product-pump.mjs';
 export { openContextSemanticCoordinator } from './context-semantic-coordinator.mjs';
 // U5c-2 public configuration constants; storage readers remain internal.

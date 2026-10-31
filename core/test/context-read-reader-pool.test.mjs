@@ -8,8 +8,8 @@ import { readlinkSync, readdirSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { createReaderWorkerPool, READER_POOL_BOOTSTRAP, READER_POOL_COMPATIBILITY } from '../context-product-reader-pool.mjs';
-import { createSupervisorRegistry, createContextReadSupervisor, supervisorOwner, readerPoolDiagnostic } from '../context-read-supervisor.mjs';
+import { createReaderWorkerPool, createReaderPoolRuntime, READER_POOL_BOOTSTRAP, READER_POOL_COMPATIBILITY } from '../context-product-reader-pool.mjs';
+import { createSupervisorRegistry, createContextReadSupervisor, createContextReaderPool, supervisorOwner, readerPoolDiagnostic } from '../context-read-supervisor.mjs';
 import { createProductReaderRuntime, productOpenPhaseDiagnostic } from '../context-product-reader.mjs';
 import { openContextProductReader, openContextIndexMaintainer } from '../index.mjs';
 import { fixture, ok } from '../testing/context-read-fixture.mjs';
@@ -37,8 +37,9 @@ function fakePool() {
       });
       workers.push(worker); maxLive = Math.max(maxLive, workers.filter(w => w.threadId !== -1).length); return worker;
     } });
-  return { pool, workers, timers, get terminated() { return terminated; }, get maxLive() { return maxLive; },
-    async close() { const closing = pool.close(); for (const w of workers) w.release(); await closing; },
+  const handle = createReaderPoolRuntime(() => pool)();
+  return { pool, handle, workers, timers, get terminated() { return terminated; }, get maxLive() { return maxLive; },
+    async close() { const closing = handle.close(); for (const w of workers) w.release(); await closing; },
     async retry() { const timer = [...timers].find(t => t.ms <= 1000); assert.ok(timer); timers.delete(timer); timer.fn(); await flush(); } };
 }
 
@@ -82,7 +83,7 @@ test('startup timeout, bad generation, pre-assignment crash and backoff stay bou
 
 test('shutdown cancels queued refill, awaits all reaping, and never restarts', async () => {
   const h = fakePool(); h.workers[0].ready();
-  let stopped = false; const closing = h.pool.close().then(() => { stopped = true; }); await flush();
+  let stopped = false; const closing = h.handle.close().then(() => { stopped = true; }); await flush();
   assert.equal(stopped, false); assert.equal(h.workers.length, 1, 'queued_refill_does_not_spawn_after_close');
   h.workers[0].release(); await closing; await flush(); assert.equal(h.workers.length, 1);
   assert.equal(h.pool.take(engine), undefined); assert.equal(h.timers.size, 0);
@@ -129,29 +130,33 @@ function nativeHarness(t, { trap = false } = {}) {
     const original=sqlite.DatabaseSync;sqlite.DatabaseSync=class {constructor(){throw Error('database_open_before_identity_ack');}};syncBuiltinESMExports();
     parentPort.on('message',m=>{if(m.kind==='identity-ack'){sqlite.DatabaseSync=original;syncBuiltinESMExports();}});
     await import(${JSON.stringify(entry.href)});`));
-  const registry = createSupervisorRegistry({ createPool: () => createReaderWorkerPool({ spawnWorker(data, options) {
+  const pool = createReaderPoolRuntime(() => createReaderWorkerPool({ spawnWorker(data, options) {
     assert.deepEqual(Object.keys(data).sort(), ['compatibility', 'generation'], 'parked_bootstrap_has_no_request_or_host');
     const worker = new Worker(trap ? trapEntry : entry, { ...options, workerData: data }); workers.push(worker);
+    assert.ok(workers.filter(w => w.threadId !== -1 && !packets.some(p => p.worker === w)).length <= 3, 'service_pool_owned_worker_bound');
     worker.on('message', m => { if (m.kind === 'context-reader-pool-ready') { counts.ready++; for (const [n, gate] of ready) if (counts.ready >= n) gate.resolve(); } });
     const post = worker.postMessage.bind(worker), ref = worker.ref.bind(worker);
     worker.postMessage = (m, list) => { if (m.kind === READER_POOL_BOOTSTRAP) packets.push({ worker, message: m });
       if (m.kind === 'identity-ack' && onAck) return onAck(() => post(m, list));
       const result = post(m, list); if (m.kind === READER_POOL_BOOTSTRAP) onBootstrap?.(worker); return result; };
     worker.ref = () => { ref(); onRef?.(worker); return worker; }; return worker;
-  } }) });
-  const supervisor = registry.supervisor({ readerWorkerPool: true });
-  const h = { supervisor, registry, workers, packets, ready: waiting, allowFailed: false,
-    onRef(fn) { onRef = fn; }, onBootstrap(fn) { onBootstrap = fn; }, onAck(fn) { onAck = fn; }, make(f, patch = {}, service = false) {
-      const c = configured({ after() {} }, f.path, [personal], { supervisor, service });
+  } }))();
+  const registry = createSupervisorRegistry(), supervisors = [];
+  const newSupervisor = () => { const s = registry.supervisor({ readerWorkerPool: pool }); supervisors.push(s); return s; };
+  const supervisor = newSupervisor();
+  const h = { pool, supervisor, registry, supervisors, newSupervisor, workers, packets, ready: waiting, allowFailed: false,
+    onRef(fn) { onRef = fn; }, onBootstrap(fn) { onBootstrap = fn; }, onAck(fn) { onAck = fn; }, make(f, patch = {}, service = false, requestSupervisor = supervisor) {
+      const c = configured({ after() {} }, f.path, [personal], { supervisor: requestSupervisor, service });
       const probe = new SharedArrayBuffer(48); c.probe = new Int32Array(probe);
       c.options.host = { moduleUrl: pathToFileURL(host).href, configuration: { ...c.options.host.configuration, probe, ...patch } };
       // The harness owns shutdown, including deliberately quarantined records.
       c.open = () => openContextProductReader(c.options); return c;
     } };
   t.after(async () => {
-    const result = await Promise.allSettled([supervisor.close()]);
+    const result = await Promise.allSettled([...supervisors.map(s => s.close()), pool.close()]);
     await Promise.all(workers.filter(w => w.threadId !== -1).map(w => w.terminate()));
-    if (!h.allowFailed && result[0].status === 'rejected') throw result[0].reason;
+    const failed = result.find(r => r.status === 'rejected');
+    if (!h.allowFailed && failed) throw failed.reason;
   });
   return h;
 }
@@ -169,7 +174,7 @@ test('static pool import and default-off supervisors create no Workers, timers o
     globalThis.setTimeout=()=>assert.fail('default_off_timeout');
     globalThis.setInterval=()=>assert.fail('default_off_interval');
     const {createContextReadSupervisor,supervisorOwner,readerPoolDiagnostic}=await import(${JSON.stringify(new URL('../context-read-supervisor.mjs', import.meta.url).href)});
-    for(const options of [undefined,{readerWorkerPool:false}]){
+    for(const options of [undefined,{readerWorkerPool:undefined}]){
       const supervisor=createContextReadSupervisor(options),{registry,owner}=supervisorOwner(supervisor);
       assert.equal(owner.readerPool,undefined);assert.equal(readerPoolDiagnostic(supervisor),undefined);
       assert.deepEqual(registry.counters(),{live:0,completed:0,metadataBytes:0,diagnosticBytes:0,reservations:0,records:0});
@@ -185,13 +190,13 @@ test('opted-in parent stays SQLite-free while its real Workers finish preloading
     const Module=createRequire(import.meta.url)('node:module'),load=Module._load;
     Module._load=function(id,...args){if(id==='node:sqlite')throw Error('parent_sqlite_require');return Reflect.apply(load,this,[id,...args]);};
     register('data:text/javascript,'+encodeURIComponent("export async function resolve(s,c,n){if(s==='node:sqlite')throw Error('parent_sqlite_import');return n(s,c);}"),import.meta.url);
-    const {createContextReadSupervisor}=await import(${JSON.stringify(new URL('../context-read-supervisor.mjs', import.meta.url).href)});
+    const {createContextReadSupervisor,createContextReaderPool}=await import(${JSON.stringify(new URL('../context-read-supervisor.mjs', import.meta.url).href)});
     const Native=threads.Worker;let count=0,resolve;const ready=new Promise(r=>resolve=r);
     threads.Worker=class extends Native{constructor(...args){super(...args);this.on('message',m=>{if(m.kind==='context-reader-pool-ready'&&++count===2)resolve();});}};syncBuiltinESMExports();
-    const supervisor=createContextReadSupervisor({readerWorkerPool:true});let timer;
+    const pool=createContextReaderPool(),supervisor=createContextReadSupervisor({readerWorkerPool:pool});let timer;
     try{await Promise.race([ready,new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('parent_import_watchdog')),10000))]);
       assert.deepEqual(process.moduleLoadList.filter(s=>/sqlite/i.test(s)),[]);}
-    finally{clearTimeout(timer);await supervisor.close();threads.Worker=Native;syncBuiltinESMExports();}`;
+    finally{clearTimeout(timer);await supervisor.close();await pool.close();threads.Worker=Native;syncBuiltinESMExports();}`;
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', source], { env: {}, encoding: 'utf8', timeout: 30000 });
   assert.equal(result.status, 0, 'pool_parent_does_not_link_sqlite: ' + result.stderr);
 });
@@ -203,13 +208,17 @@ nativeTest('parked preloads construct no database or host; default-off evidence 
   assert.deepEqual([...c.probe], Array(12).fill(0), 'no_host_import_construction_acl_before_bootstrap');
   const warm = await c.open(), warmResult = await warm.fetchCandidateEvidence(input(memory), c.token);
   assert.deepEqual([...c.probe.slice(0, 4)], [1, 1, 1, 2]);
+  await h.pool.close();
+  assert.ok(h.packets[0].worker.threadId !== -1, 'service_close_leaves_assigned_reader_alive');
+  assert.ok(h.workers.filter(w => w !== h.packets[0].worker).every(w => w.threadId === -1));
+  assert.equal(JSON.stringify(await warm.fetchCandidateEvidence(input(memory), c.token)), JSON.stringify(warmResult));
   await warm.close();
   assert.ok(h.workers[0].threadId === -1, 'assigned_worker_exits_at_close');
   const phase = productOpenPhaseDiagnostic(warm); assert.equal(Object.keys(phase).length, 40);
   assert.ok(Object.values(phase).every(Number.isFinite));
   const results = [warmResult], keys = [Reflect.ownKeys(warm)];
-  for (const enabled of [undefined, false]) {
-    const supervisor = createContextReadSupervisor(enabled === undefined ? undefined : { readerWorkerPool: false }); t.after(() => supervisor.close());
+  for (const options of [undefined, { readerWorkerPool: undefined }]) {
+    const supervisor = createContextReadSupervisor(options); t.after(() => supervisor.close());
     const cold = h.make(f); cold.options.supervisor = supervisor;
     const reader = await cold.open(); results.push(await reader.fetchCandidateEvidence(input(memory), cold.token)); keys.push(Reflect.ownKeys(reader));
     assert.deepEqual(ok(await reader.fetchCandidateEvidence({ readSet: [personal], snapshot: ok(warmResult).snapshot }, cold.token)), ok(warmResult));
@@ -217,7 +226,15 @@ nativeTest('parked preloads construct no database or host; default-off evidence 
   }
   assert.equal(JSON.stringify(results[0]), JSON.stringify(results[1])); assert.equal(JSON.stringify(results[1]), JSON.stringify(results[2]));
   assert.deepEqual(keys[0], keys[1]); assert.deepEqual(keys[1], keys[2]);
-  assert.deepEqual(Object.keys(readerPoolDiagnostic(h.supervisor)), ['hits', 'misses', 'startupFailures']);
+  const closedSupervisor = h.newSupervisor(), closed = h.make(f, {}, false, closedSupervisor);
+  const request = structuredClone(closed.options.requestControl), reservation = closed.options.host.configuration.requestReservation;
+  const fallback = await closed.open();
+  assert.equal(Atomics.load(new Int32Array(reservation), 0), 1, 'closed_pool_consumes_one_reservation');
+  assert.equal(supervisorOwner(closedSupervisor).owner.records.size, 1, 'closed_pool_registers_one_opening_record');
+  assert.deepEqual(closed.options.requestControl, request, 'closed_pool_preserves_request_cutoffs');
+  assert.equal(JSON.stringify(await fallback.fetchCandidateEvidence(input(memory), closed.token)), JSON.stringify(warmResult));
+  await fallback.close(); assert.equal(readerPoolDiagnostic(h.pool).misses, 1);
+  assert.deepEqual(Object.keys(readerPoolDiagnostic(h.pool)), ['hits', 'misses', 'startupFailures']);
   assert.ok((await h.supervisor.drain()).every(r => r.state === 'complete' && r.leasesReleased && r.providersSettled));
 });
 
@@ -233,18 +250,28 @@ nativeTest('host import and database construction wait for the original identity
 
 nativeTest('two simultaneous borrowers exhaust ready stock; third open is cold with no queue', async t => {
   const f = fixture(t), h = nativeHarness(t); await h.ready(2);
-  const configs = [h.make(f), h.make(f), h.make(f)], readers = await Promise.all(configs.map(c => c.open()));
-  assert.deepEqual(readerPoolDiagnostic(h.supervisor), { hits: 2, misses: 1, startupFailures: 0 });
+  const supervisors = [h.supervisor, ...Array.from({ length: 49 }, () => h.newSupervisor())];
+  assert.equal(h.workers.length, 2, 'fifty_supervisors_share_two_ready_workers');
+  const initial = new Set(h.workers), configs = supervisors.slice(0, 3).map(s => h.make(f, {}, false, s));
+  const readers = await Promise.all(configs.map(c => c.open()));
+  assert.ok(initial.has(h.packets[1].worker), 'second_supervisor_uses_service_warm_stock');
+  assert.deepEqual(readerPoolDiagnostic(h.pool), { hits: 2, misses: 1, startupFailures: 0 });
   assert.equal(h.registry.counters().live, 3); assert.equal(h.packets.length, 2);
   assert.equal(new Set(configs.map(c => c.probe[10])).size, 3);
-  await Promise.all(readers.map(r => r.close()));
+  await readers[0].close(); await h.supervisor.close();
+  assert.equal((await readers[1].getContextReadCapabilities()).ok, true, 'other_request_survives_supervisor_close');
+  await Promise.all(readers.slice(1).map(r => r.close()));
+  await h.ready(4);
+  const next = await h.make(f, {}, false, supervisors[49]).open(); await next.close();
+  assert.equal(readerPoolDiagnostic(h.pool).hits, 3, 'service_pool_serves_after_request_supervisor_close');
 });
 
-nativeTest('supervisor shutdown during handoff never sends authority or leaves a refill', async t => {
+nativeTest('supervisor shutdown during handoff never sends authority and leaves service stock alive', async t => {
   const f = fixture(t), h = nativeHarness(t); await h.ready(2); const c = h.make(f); let closing;
   h.onRef(() => { h.onRef(undefined); closing = h.supervisor.close(); });
   await assert.rejects(c.open(), { code: 'store_closed' }); await closing;
-  assert.equal(h.packets.length, 0); assert.ok(h.workers.every(w => w.threadId === -1));
+  assert.equal(h.packets.length, 0); assert.ok(h.workers.some(w => w.threadId !== -1));
+  await h.pool.close(); assert.ok(h.workers.every(w => w.threadId === -1));
 });
 
 nativeTest('cold incompatibility keeps one opening record/reservation; maintenance never borrows', async t => {
@@ -254,9 +281,9 @@ nativeTest('cold incompatibility keeps one opening record/reservation; maintenan
   assert.equal(bootstrap.request.requestId, c.options.requestControl.requestId);
   assert.equal(Atomics.load(new Int32Array(c.options.host.configuration.requestReservation), 0), 1);
   assert.equal(h.registry.counters().records, 1, 'cold_fallback_reuses_opening_record');
-  assert.deepEqual(readerPoolDiagnostic(h.supervisor), { hits: 0, misses: 1, startupFailures: 0 });
+  assert.deepEqual(readerPoolDiagnostic(h.pool), { hits: 0, misses: 1, startupFailures: 0 });
   const service = h.make(f, {}, true), maintainer = await openContextIndexMaintainer(service.options); await maintainer.close();
-  assert.deepEqual(readerPoolDiagnostic(h.supervisor), { hits: 0, misses: 1, startupFailures: 0 });
+  assert.deepEqual(readerPoolDiagnostic(h.pool), { hits: 0, misses: 1, startupFailures: 0 });
   assert.equal(h.packets.length, 0, 'no_maintenance_admission_from_pool');
 });
 
@@ -271,7 +298,7 @@ nativeTest('issuance and reservation replay never borrow; each credential gets a
   await assert.rejects(a.open(), { code: 'authority_required' });
   await h.ready(3); const c = h.make(f), third = await c.open(); await third.close();
   assert.equal(new Set(h.packets.map(p => p.worker)).size, 3, 'never_assigns_a_second_credential');
-  assert.equal(readerPoolDiagnostic(h.supervisor).hits, 3);
+  assert.equal(readerPoolDiagnostic(h.pool).hits, 3);
   for (const packet of h.packets) assert.equal(packet.message.data.operation.enteredMonoNs, packet.message.data.request.admittedMonoNs);
 });
 
@@ -282,7 +309,7 @@ for (const cause of ['expiry', 'abort']) nativeTest('handoff ' + cause + ' sends
   assert.equal(error.code, cause === 'abort' ? 'read_cancelled' : 'read_timeout'); assert.equal(typeof error.cleanupId, 'string');
   await testClock.advance(1001, { waitForWorkers: false }); await h.supervisor.drain(error.cleanupId);
   assert.equal(h.packets.length, 0, 'no_authority_after_handoff_revocation');
-  assert.equal(h.registry.counters().records, 1); assert.equal(readerPoolDiagnostic(h.supervisor).hits, 1);
+  assert.equal(h.registry.counters().records, 1); assert.equal(readerPoolDiagnostic(h.pool).hits, 1);
 });
 
 nativeTest('timeout during module handoff reaches the unchanged graceful close listener', async t => {
@@ -303,7 +330,7 @@ for (const cause of ['expiry', 'abort']) nativeTest('loading ' + cause + ' stays
   const error = await opening; assert.equal(error.code, cause === 'expiry' ? 'read_timeout' : 'read_cancelled');
   if (cause === 'expiry') { await h.supervisor.drain(error.cleanupId); assert.equal(h.supervisor.getCleanupStatus(error.cleanupId).state, 'complete'); assert.deepEqual([...c.probe.slice(4, 6)], [1, 1]); }
   else { await assert.rejects(h.supervisor.drain(error.cleanupId), { code: 'reader_failed' }); assert.equal(h.supervisor.getCleanupStatus(error.cleanupId).state, 'failed'); }
-  assert.equal(readerPoolDiagnostic(h.supervisor).hits, 0); assert.equal(readerPoolDiagnostic(h.supervisor).misses, 1);
+  assert.equal(readerPoolDiagnostic(h.pool).hits, 0); assert.equal(readerPoolDiagnostic(h.pool).misses, 1);
 });
 
 nativeTest('pooled timeout retains merged graceful disposal for leases and providers', async t => {
@@ -323,45 +350,45 @@ for (const failure of ['duplicate', 'crash', 'provider']) nativeTest('assigned '
   if (failure === 'duplicate') await new Promise(resolve => h.packets[0].worker.once('exit', resolve));
   await assert.rejects(reader.close(), { code: 'reader_failed' });
   const next = h.make(f); await assert.rejects(next.open(), { code: 'reader_failed' });
-  assert.equal(readerPoolDiagnostic(h.supervisor).hits, 1); assert.equal(readerPoolDiagnostic(h.supervisor).startupFailures, 0);
+  assert.equal(readerPoolDiagnostic(h.pool).hits, 1); assert.equal(readerPoolDiagnostic(h.pool).startupFailures, 0);
   assert.ok((await h.supervisor.drain()).some(r => r.state === 'failed'));
 });
 
 nativeTest('failed opening cleanup ID proves disposal; idle crash refills without authority', async t => {
   const f = fixture(t), h = nativeHarness(t); await h.ready(2);
   await h.workers[0].terminate(); await testClock.advance(25, { waitForWorkers: false }); await h.ready(3);
-  assert.equal(readerPoolDiagnostic(h.supervisor).startupFailures, 1);
+  assert.equal(readerPoolDiagnostic(h.pool).startupFailures, 1);
   const c = h.make(f, { throwAtCreate: true }), error = await c.open().catch(e => e);
   assert.equal(error.code, 'reader_failed'); assert.equal((await h.supervisor.drain(error.cleanupId)).state, 'complete');
   assert.deepEqual([...c.probe.slice(4, 6)], [1, 1]);
 });
 
 nativeTest('public supervisors share 256 records; a pool supplies no admission quota', async t => {
-  const supervisor = createContextReadSupervisor({ readerWorkerPool: true }), other = createContextReadSupervisor();
+  const pool = createContextReaderPool(), supervisor = createContextReadSupervisor({ readerWorkerPool: pool }), other = createContextReadSupervisor();
   const { registry, owner } = supervisorOwner(other), records = [];
-  t.after(async () => { for (const r of records) registry.finish(r); await Promise.all([supervisor.close(), other.close()]); });
+  t.after(async () => { for (const r of records) registry.finish(r); await Promise.all([supervisor.close(), other.close(), pool.close()]); });
   for (let i = 0; i < 256; i++) records.push(registry.register(owner, { path: 'synthetic-quota', domain: 'synthetic-quota' }));
   const f = fixture(t), c = configured(t, f.path, [personal], { supervisor });
   await assert.rejects(openContextProductReader(c.options), { code: 'read_in_progress' });
-  assert.deepEqual(readerPoolDiagnostic(supervisor), { hits: 0, misses: 0, startupFailures: 0 });
+  assert.deepEqual(readerPoolDiagnostic(pool), { hits: 0, misses: 0, startupFailures: 0 });
 });
 
 for (const reason of ['restore', 'erasure']) nativeTest(reason + ' shutdown drains idle/loading and assigned resources before fresh issuance', async t => {
   const f = fixture(t), h = nativeHarness(t); await h.ready(2); const c = h.make(f), reader = await c.open();
   // The product publishes denial before closing all service owners.
-  Atomics.store(c.view, 0, 0); await reader.close(); await h.supervisor.close();
+  Atomics.store(c.view, 0, 0); await reader.close(); await h.supervisor.close(); await h.pool.close();
   assert.ok(h.workers.every(w => w.threadId === -1));
   await assert.rejects(c.open(), { code: 'authority_required' });
   await assert.rejects(h.make(f).open(), { code: 'store_closed' }, 'closed_generation_refuses_fresh_issuance');
   const fresh = nativeHarness(t); await fresh.ready(2); const next = fresh.make(f), replacement = await next.open(); await replacement.close();
-  assert.equal(readerPoolDiagnostic(fresh.supervisor).hits, 1);
+  assert.equal(readerPoolDiagnostic(fresh.pool).hits, 1);
 });
 
 for(const stage of ['idle','opening'])nativeTest(`assigned pool supervisor close ${stage} disposes leases and providers`,async t=>{
   const f=fixture(t),h=nativeHarness(t);h.allowFailed=true;await h.ready(2);
   const c=h.make(f,stage==='opening'?{openGate:true}:{}),opening=c.open().catch(e=>e);
   if(stage==='opening')await flag(c.probe,8);else assert.equal(typeof (await opening).close,'function');
-  const assigned=h.packets[0].worker;assert.equal(readerPoolDiagnostic(h.supervisor).hits,1);
+  const assigned=h.packets[0].worker;assert.equal(readerPoolDiagnostic(h.pool).hits,1);
   const closed=await h.supervisor.close().catch(e=>e),result=await opening;
   if(stage==='opening')assert.equal(result.code,'store_closed');
   assert.equal(c.probe[6],1,'assigned_pool_supervisor_close_runs_host_close');
