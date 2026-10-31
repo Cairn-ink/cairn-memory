@@ -177,11 +177,14 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     if (!maintenance && (!types.isSharedArrayBuffer(reservation) || Reflect.apply(sharedLength, reservation, []) !== 4 ||
         Atomics.compareExchange(new Int32Array(reservation), 0, 0, 1) !== 0)) fail('authority_required');
     const resource = registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, request: maintenance ? undefined : request, frame, resources });
-    let closed = false, terminal, idle, closePromise, ready = false, releaseWriter, writerReleased = false, gracefulClose = false, cutoffCapability, forcedCleanup = false, disposalWorkerError = false;
+    let closed = false, terminal, idle, closePromise, ready = false, releaseWriter, writerReleased = false, cutoffCapability, forcedCleanup = false, disposalWorkerError = false;
     const epoch = 1;
     // Timeout delivery remains prompt; disposal owns a separate bounded grace.
     function stopWorker(instance) {
-      if (terminal !== 'read_timeout' && !gracefulClose) return instance.terminate();
+      // Only read_timeout and store_closed (handle/supervisor close or idle
+      // expiry) trust the Worker to dispose. Cancellation, protocol/identity
+      // violations and every other failure terminate immediately.
+      if (terminal !== 'read_timeout' && terminal !== 'store_closed') return instance.terminate();
       const until = Number(now()) / 1e6 + DISPOSAL_GRACE_MS;
       return new Promise((resolve, reject) => {
         let timer, safety, live = true, realUntil = Infinity;
@@ -227,7 +230,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         if (slot?.record && slot.record !== resource) registry.finish(slot.record);
       }, () => registry.finish(resource, false));
     } });
-    resource.stop = code => closePromise ?? shutdown(code);
+    resource.stop = code => { const stopped = dispose(code); void stopped.catch(() => {}); return stopped; };
     if(maintenance)void resource.delivery.catch(error=>{
       if(!maintenanceFailures.has(error)){
         if(forcedCleanup)attachFailure(error,terminalFailure??callFailure);
@@ -355,7 +358,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       if (slot.open) phase?.mark('openAccepted');
       else if (slot.method === 'fetchCandidateEvidence') phase?.mark('readAccepted');
       lifecycle.finish(slot, result);
-      instance.unref(); idle = setTimer(() => shutdown('store_closed'), 60000); idle.unref?.(); lifecycle.idle = idle;
+      instance.unref(); idle = setTimer(() => { void dispose('store_closed').catch(() => {}); }, 60000); idle.unref?.(); lifecycle.idle = idle;
     }
     function dispatch(method, payload, credential, control, entered, opening = false) {
       if (closed){const result=productFailure(terminal === 'read_timeout' || terminal === 'read_cancelled' ? 'store_closed' : terminal ?? 'store_closed');if(maintenance&&terminalFailure){maintenanceFailures.set(result,terminalFailure);maintenanceReaderFailures.set(result,failureState);}return Promise.resolve(result);}
@@ -469,8 +472,6 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       if(semantic)Atomics.store(new Int32Array(semantic.configuration.cancellation),0,1);
       return closePromise ??= (async () => {
         phase?.mark('closeEntered');
-        // Idle close uses the same bounded acknowledgement as timeout disposal.
-        gracefulClose = !lifecycle.pending;
         await shutdown(code).catch(() => {});
         phase?.mark('closeExited');
         await resource.delivery;

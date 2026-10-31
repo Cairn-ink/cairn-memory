@@ -356,3 +356,16 @@ for (const reason of ['restore', 'erasure']) nativeTest(reason + ' shutdown drai
   const fresh = nativeHarness(t); await fresh.ready(2); const next = fresh.make(f), replacement = await next.open(); await replacement.close();
   assert.equal(readerPoolDiagnostic(fresh.supervisor).hits, 1);
 });
+
+for(const stage of ['idle','opening'])nativeTest(`assigned pool supervisor close ${stage} disposes leases and providers`,async t=>{
+  const f=fixture(t),h=nativeHarness(t);h.allowFailed=true;await h.ready(2);
+  const c=h.make(f,stage==='opening'?{openGate:true}:{}),opening=c.open().catch(e=>e);
+  if(stage==='opening')await flag(c.probe,8);else assert.equal(typeof (await opening).close,'function');
+  const assigned=h.packets[0].worker;assert.equal(readerPoolDiagnostic(h.supervisor).hits,1);
+  const closed=await h.supervisor.close().catch(e=>e),result=await opening;
+  if(stage==='opening')assert.equal(result.code,'store_closed');
+  assert.equal(c.probe[6],1,'assigned_pool_supervisor_close_runs_host_close');
+  assert.equal(c.probe[4],1,'assigned_pool_supervisor_close_releases_lease');assert.equal(c.probe[5],1,'assigned_pool_supervisor_close_settles_provider');
+  assert.notEqual(closed?.code,'reader_failed');assert.equal(assigned.threadId,-1);
+  assert.ok((await h.supervisor.drain()).every(r=>r.state==='complete'&&r.workerStopped&&r.nativeDisposed&&r.leasesReleased&&r.providersSettled));
+});
