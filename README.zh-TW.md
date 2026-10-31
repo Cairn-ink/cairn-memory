@@ -93,7 +93,8 @@ Cairn 提供工具，讓你把這些偏好或決定存成記憶，下次可以�
 npx @cairn-ink/memory setup
 ```
 
-Installer 0.6.1 已於 2026-10-28 發布，可直接用上方指令；第一次互動安裝會問要用本機
+這份原始碼已更新到 Installer **0.6.3**，修正 Codex 0.164.0–0.166.0 的格式資格，
+可用 `node packages/setup/bin/memory.mjs setup` 執行，npm 發布另行處理。第一次互動安裝會問要用本機
 MCP 工具，或登入 cairn.ink 使用雲端自動記憶，也可用 `setup --local`／
 `setup --cloud` 直接選擇，首次非互動執行時需指定 `--local`／`--cloud`；
 本機模式目前不會自動保存或回想。

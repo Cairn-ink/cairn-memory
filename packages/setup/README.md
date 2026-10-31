@@ -4,7 +4,10 @@ Set up Cairn memory for Claude Code and Codex: local MCP tools or cloud
 automatic memory.
 Requires Node ≥22.16 and the selected CLI on PATH. The installer itself has no
 runtime dependencies.
-This README describes **installer 0.6.2**. The Claude plugin is **0.3.3**.
+This README describes **installer 0.6.3**. The Claude plugin is **0.3.3**.
+0.6.3 requalifies Codex 0.164.0–0.166.0; the engine is unchanged from 0.6.2
+except the Codex format qualification modules. Existing EOF boundaries,
+pending batches and permanent format latches keep their behaviour.
 
 ## Setup / 安裝
 
@@ -62,7 +65,7 @@ Restart the tools after setup. If Node moves, rerun `setup --local`.
 兩個工具共用資料庫與 owner，並使用 Node 的絕對路徑。安裝後請重開工具；
 Node 路徑變動時，重跑 `setup --local`。
 
-**0.6.1 local mode has no automatic capture or automatic recall.** Use the five
+**0.6.3 local mode has no automatic capture or automatic recall.** Use the five
 explicit MCP tools: `remember_memory`, `recall_memory`, `inspect_memory`,
 `correct_memory`, `forget_memory`. Saving, inspecting, correcting and forgetting
 need no model key. Semantic recall needs a model key; without one it reports
@@ -74,7 +77,7 @@ it reads the Claude registration configuration file `~/.claude.json` with a
 `cairn-local` MCP registrations. It does not access credential stores or use
 authentication fields. Unrelated entries and file contents are never printed.
 
-**0.6.1 本機模式不會自動記下對話，也不會自動回想。** 請明確呼叫上面五個
+**0.6.3 本機模式不會自動記下對話，也不會自動回想。** 請明確呼叫上面五個
 MCP 工具。保存、查看、更正與遺忘不需要模型金鑰；語意回想需要模型金鑰，
 沒有時回報 `model_not_configured`。若工具的環境已有 `OPENAI_API_KEY`，
 引擎會用它回想，並把選取的文字傳給該模型供應商，本機儲存不代表所有處理
