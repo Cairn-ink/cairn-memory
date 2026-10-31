@@ -815,12 +815,25 @@ if renewal occurs during dispatch; neither renewal nor restart erases charges.
 Persist the full outstanding reservation before process replacement whenever
 settlement is uncertain. Counters never refund unknown work.
 
-The admission, cadence, observation-timing, miss-recovery, quantum-watchdog
-and known-usage refund rules above apply to the lexical maintenance pump. An
-embedding-enabled pump (below) does not yet implement them: it schedules a
-nominal sweep from its own ticks, treats any unsuccessful turn as terminal and
-settles USD only. Bring it to parity before qualifying or enabling semantic
-maintenance in production.
+The observation-cadence, quantum-watchdog and known-usage refund rules above
+remain lexical-only. An embedding-enabled pump (below) also skips window/renewal
+tails that cannot fit its configured quantum, without reserving or advancing
+round-robin position; validation uses its own configured time bound. Its resident cache
+includes constructor policy. Continuous renewal reuses residents; inactive renewal
+retires them inside the next reserved turn, draining before a replacement opens.
+It still schedules a nominal sweep from its own ticks. Actual-observation cadence,
+spacing/pacing, miss accounting, startup/validation cursors, opening-cleanup
+drains and late-await ownership, parent watchdogs, control-failure mapping/cause
+aggregation and item/ms refunds remain parity work.
+Time-accounting parity must charge the full parent-monotonic reserve-to-finish
+span, including open, drain and control RPCs; only validated known usage permits
+refunds. Unknown USD tails and legacy records without refund metadata stay charged.
+Canonical selection/intent observation duty belongs to lexical refreshes only;
+embedding, status and validation work use capacity without earning observation
+credit. Semantic coverage lag concerns recall. Unsuccessful turns and genuine
+semantic cutoffs remain terminal. The lexical cutoff exception stays disabled.
+The dedicated semantic provider key channel and bounded coordinator disposal
+also remain separate work.
 
 A recognized canonical/dependency fence change during a batch rolls back that
 batch and returns successful `rebuilding` progress. Earlier committed batches
