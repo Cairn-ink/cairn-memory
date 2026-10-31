@@ -34,23 +34,23 @@ function harness({ expiry = null, openAt = 0, stall = false, terminationFails = 
     clearTimer(timer) { timers.delete(timer); },
     spawnWorker(data) {
       order.push('spawn');
-      const worker = new EventEmitter(), gate = deferred(), messages = [];
+      const worker = new EventEmitter(), gate = deferred(), messages = []; let active = false;
       Object.assign(worker, { data, messages, gate, ref() {}, unref() {},
         postMessage(message) {
           const prior = messages.at(-1)?.operation ?? data.operation;
           messages.push(message);
           if (message.method === 'close') {
-            // Timeout close remains gated just like forced termination. Keep
+            // Close waits for outstanding work or expiry, just like forced termination. Keep
             // these fault cases' intentionally incomplete native telemetry.
-            if (time >= BigInt(prior.operationCutoffMonoNs)) void gate.promise.then(() => {
+            if (active || time >= BigInt(prior.operationCutoffMonoNs)) void gate.promise.then(() => {
               if (terminationFails) worker.emit('error', Error('synthetic close failure'));
               else worker.emit('exit', 0);
             });
             else { sealNative(data.frame); worker.emit('exit', 0); }
-          }
+          } else active = true;
         },
         terminate() { return gate.promise.then(() => { if (terminationFails) throw Error('synthetic'); return 1; }); },
-        reply(result, operation = messages.at(-1)?.operation ?? data.operation) { worker.emit('message', { operation, result, fileIdentity: '1:2' }); },
+        reply(result, operation = messages.at(-1)?.operation ?? data.operation) { active = false; worker.emit('message', { operation, result, fileIdentity: '1:2' }); },
       });
       actors.push(worker);
       if (!stall) queueMicrotask(() => { time = BigInt(openAt) * 1000000n; worker.reply({ ok: true, value: null }); });
@@ -560,7 +560,7 @@ for (const opening of [true, false]) test(`P2-03 close during abort registration
       : reader.fetchCandidateEvidence(input, h.credential, { signal: controller.signal });
   } finally { Object.defineProperty(prototype, hook, original); }
   if (opening) await assert.rejects(pending, { code: 'store_closed' });
-  else { denied(await pending, 'store_closed'); assert.equal(h.actors[0].messages.length, 0); h.actors[0].gate.resolve(); }
+  else { denied(await pending, 'store_closed'); assert.deepEqual(h.actors[0].messages.map(m=>m.method), ['close'], 'supervisor_close_sends_only_cleanup_before_dispatch'); h.actors[0].gate.resolve(); }
   assert.ok(closing); await closing; await reader?.close();
   assert.equal(h.actors.length, opening ? 0 : 1); assert.equal(h.registry.counters().live, 0);
   assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
