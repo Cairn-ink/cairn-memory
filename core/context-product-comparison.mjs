@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { TextDecoder } from 'node:util';
 import { canonicalJson, projectionDigest } from './context-product-validation.mjs';
 import { createContentReadMemo, memoryReadEligible, memoryContentIdentity, CONTENT_SAFETY_POLICY_REVISION } from './content-safety.mjs';
 import { installedContentLayout, bindContentSafetyConnection } from './content-safety-schema.mjs';
@@ -9,6 +10,7 @@ const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const scope = 'owner_id COLLATE BINARY=? AND scope COLLATE BINARY=? AND project_id COLLATE BINARY=?';
 const hash = text => createHash('sha256').update(text).digest('base64url');
 const quote = name => '"' + name.replaceAll('"', '""') + '"';
+const utf8 = new TextDecoder('utf-8', {fatal:true,ignoreBOM:true});
 const stop = cause => { throw Object.assign(Error('comparison_incomplete'), { code:'read_budget_exceeded', cause }); };
 export const MEMORY_COMPARISON_LIMITS = Object.freeze({ rows:131072, bytes:33554432, chunks:1024, frame:262144 });
 
@@ -78,7 +80,9 @@ export function comparisonReader(db, account) {
     const statement=prepare(sql),columns=account.preparing(()=>statement.columns()).map(c=>c.name);
     if(!columns.length || new Set(columns).size!==columns.length || columns.some(c=>c.startsWith('__b3_')))stop('reader_contract');
     const lengths=prepare(`SELECT ${columns.map((c,i)=>`typeof(q.${quote(c)}) AS t${i},length(CAST(q.${quote(c)} AS BLOB)) AS n${i}`).join(',')} FROM (${sql}) q`);
-    const material=prepare(`SELECT q.*,${columns.map((c,i)=>`hex(CAST(q.${quote(c)} AS BLOB)) AS __b3_${i}`).join(',')} FROM (${sql}) q`);
+    // Fetch TEXT as raw bytes: native replacement decoding can expand invalid
+    // input beyond the reserved bound. Type labels have fixed bounded size.
+    const material=prepare(`SELECT ${columns.map((c,i)=>`CASE WHEN typeof(q.${quote(c)})='text' THEN CAST(q.${quote(c)} AS BLOB) ELSE q.${quote(c)} END AS ${quote(c)},typeof(q.${quote(c)}) AS __b3_${i}`).join(',')} FROM (${sql}) q`);
     function* stream(statement,args){
       const iterator=statement.iterate(...args);
       try{while(true){
@@ -109,8 +113,14 @@ export function comparisonReader(db, account) {
           const row=account.native(()=>actual.next()).value;if(!row)break;
           if(++returned>count)stop('snapshot');
           for(let i=0;i<columns.length;i++){
-            const value=row[columns[i]],hex=row['__b3_'+i];
-            if(typeof value==='string' && (!value.isWellFormed() || Buffer.from(value).toString('hex').toUpperCase()!==hex))stop('encoding');
+            const value=row[columns[i]],type=row['__b3_'+i];
+            if(type==='text'){
+              if(!(value instanceof Uint8Array))stop('encoding');
+              let text;try{text=utf8.decode(value);}catch{stop('encoding');}
+              // Preserve the existing NUL refusal for SQLite text bindings.
+              if(text.includes('\0'))stop('encoding');
+              row[columns[i]]=text;
+            }else if(!['integer','real','null'].includes(type))stop('encoding');
             delete row['__b3_'+i];
           }
           account.check();yield row;if(first)break;

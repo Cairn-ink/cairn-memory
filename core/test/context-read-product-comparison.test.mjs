@@ -97,7 +97,7 @@ test('B3 coherent frozen-E oracle: writer behind the cursor is E+1, never stitch
   const writer=f.connect();t.after(()=>writer.close());let changed=false,sampleBefore=false;
   const metered=new Proxy(db,{get(target,key){if(key!=='prepare'){const v=Reflect.get(target,key,target);return typeof v==='function'?v.bind(target):v;}
     return sql=>{const statement=target.prepare(sql);return new Proxy(statement,{get(s,k){const v=Reflect.get(s,k,s);if(typeof v!=='function')return v;
-      return (...args)=>{const value=Reflect.apply(v,s,args);if(k==='iterate'&&sql.includes('SELECT id,revision,deleted')&&!sql.includes('typeof(')&&!changed){
+      return (...args)=>{const value=Reflect.apply(v,s,args);if(k==='iterate'&&sql.includes('SELECT id,revision,deleted')&&sql.includes(' AS __b3_0')&&!changed){
         changed=true;memory(writer,'a-behind','inserted behind cursor');
         writer.prepare("UPDATE memories SET content='new E text',revision=revision+1 WHERE id='m000'").run();
         writer.exec("DELETE FROM memories WHERE id='m129'; UPDATE memories SET content='new denied body',fingerprint='new denied fingerprint' WHERE id='m001'");
@@ -176,7 +176,7 @@ for(const column of ['id','reference','dependency','body','sealed'])test(`B3 pre
   let materialized=0;
   const proxy=new Proxy(db,{get(target,key){if(key!=='prepare'){const v=Reflect.get(target,key,target);return typeof v==='function'?v.bind(target):v;}
     return sql=>{const statement=target.prepare(sql);return new Proxy(statement,{get(s,k){const v=Reflect.get(s,k,s);if(typeof v!=='function')return v;
-      return (...args)=>{if(k==='iterate'&&sql.startsWith('SELECT q.*,'))materialized++;return Reflect.apply(v,s,args);};}});};}});
+      return (...args)=>{if(k==='iterate'&&sql.includes(' AS __b3_0'))materialized++;return Reflect.apply(v,s,args);};}});};}});
   readTransaction(db,()=>{
     const account=makeAccount({now:()=>0,cutoff:10000,limits:{bytes:1024}});
     assert.throws(()=>boundedReader(proxy,account).prepare(`SELECT ${column} FROM records`).get(),/comparison_incomplete/);
@@ -521,7 +521,7 @@ for(const target of ['canonical','sidecar'])test(`B3 F5 rejects ${target} UTF-16
   const db=new DatabaseSync(':memory:');t.after(()=>db.close());reencodeInside(source,db,'UTF-16le');
   let materialized=0;
   const proxy=new Proxy(db,{get(native,key){if(key!=='prepare'){const v=Reflect.get(native,key,native);return typeof v==='function'?v.bind(native):v;}
-    return sql=>{const statement=native.prepare(sql);return new Proxy(statement,{get(s,k){const method=Reflect.get(s,k,s);return typeof method==='function'?(...args)=>{if(k==='iterate'&&sql.startsWith('SELECT q.*,'))materialized++;return Reflect.apply(method,s,args);}:method;}});};}});
+    return sql=>{const statement=native.prepare(sql);return new Proxy(statement,{get(s,k){const method=Reflect.get(s,k,s);return typeof method==='function'?(...args)=>{if(k==='iterate'&&sql.includes(' AS __b3_0'))materialized++;return Reflect.apply(method,s,args);}:method;}});};}});
   let value;
   if(target==='canonical')value=createComparator()({db:proxy,read:work=>readTransaction(db,work),selection,identity:{storeId:f.storeId},access:'access',now:()=>0,cutoff:10000,
     loadBase(){source.prepare('SELECT content FROM memories').get();materialized++;return null;}});
@@ -537,4 +537,79 @@ test('B3 F6 transitive import errors are not comparator absence',async t=>{
   const f=safetyFixture(t),path=join(f.workspace.path,'comparison-import.mjs');
   writeFileSync(path,"import './missing-comparison-dependency.mjs'; export const value=1;\n");
   await assert.rejects(()=>loadComparison(pathToFileURL(path)),{code:'ERR_MODULE_NOT_FOUND'});
+});
+
+// Observe native result values before the charged reader can decode or reject
+// them. Preflight rows do not have the selected payload column.
+function materializationMeter(column){
+  const seen={rows:0,maximum:0,replacement:false};
+  return {seen,statement:statement=>new Proxy(statement,{get(target,key){
+    const value=Reflect.get(target,key,target);
+    if(typeof value!=='function')return value;
+    if(key!=='iterate')return value.bind(target);
+    return (...args)=>{
+      const iterator=Reflect.apply(value,target,args);
+      return {next(){
+        const result=iterator.next();
+        if(!result.done&&Object.hasOwn(result.value,column)){
+          seen.rows++;let bytes=0;
+          for(const v of Object.values(result.value)){
+            if(typeof v==='string'){bytes+=Buffer.byteLength(v);seen.replacement||=v.includes('\ufffd');}
+            else if(ArrayBuffer.isView(v))bytes+=v.byteLength;
+            else if(typeof v==='number')bytes+=8;
+          }
+          seen.maximum=Math.max(seen.maximum,bytes);
+        }
+        return result;
+      },return:()=>iterator.return(),[Symbol.iterator](){return this;}};
+    };
+  }})};
+}
+function meteredDatabase(db,meter){
+  return new Proxy(db,{get(target,key){
+    if(key==='prepare')return sql=>meter.statement(target.prepare(sql));
+    const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
+  }});
+}
+
+test('B3 malformed UTF-8 full capture stays inside its reserved byte bound',t=>{
+  const {db,f}=setup(t);memory(db);
+  db.prepare('UPDATE memories SET content=CAST(? AS TEXT)').run(Buffer.alloc(10000,0x80));
+  const meter=materializationMeter('content'),cap=40000;
+  const value=runner(meteredDatabase(db,meter),f.storeId,{read:work=>readTransaction(db,work)})({limits:{bytes:cap}});
+  assert.equal(value.status,'incomplete');assert.equal(value.cause,'encoding');assert.ok(meter.seen.rows>0);
+  assert.ok(meter.seen.maximum<=cap,'native materialization stayed within the capture cap');
+  assert.ok(meter.seen.maximum<=value.bytes,'native materialization stayed within its charged reservation');
+  assert.equal(meter.seen.replacement,false,'no native replacement decoding');
+  assert.equal(Object.hasOwn(value,'payloads'),false);
+});
+
+for(const column of ['content','fingerprint'])test(`B3 malformed UTF-8 ${column} fails before replacement decoding`,t=>{
+  const {db,f}=setup(t);memory(db);
+  db.prepare(`UPDATE memories SET ${column}=CAST(? AS TEXT)`).run(Buffer.from([0xed,0xa0,0x80]));
+  const meter=materializationMeter(column);
+  const value=runner(meteredDatabase(db,meter),f.storeId,{read:work=>readTransaction(db,work)})();
+  assert.equal(value.status,'incomplete');assert.equal(value.cause,'encoding');assert.ok(meter.seen.rows>0);
+  assert.equal(meter.seen.replacement,false,'malformed text stayed raw');
+  assert.equal(Object.hasOwn(value,'manifest'),false);assert.equal(Object.hasOwn(value,'payloads'),false);
+});
+
+test('B3 malformed UTF-8 sidecar record fails before replacement decoding',t=>{
+  const c=comparisonStore(t),db=new DatabaseSync(c.f.path+PRODUCT_SIDECAR_SUFFIX);t.after(()=>db.close());
+  db.prepare('UPDATE validation_records SET record=CAST(? AS TEXT)').run(Buffer.alloc(1000,0x80));
+  const meter=materializationMeter('record'),prepare=DatabaseSync.prototype.prepare;
+  t.mock.method(DatabaseSync.prototype,'prepare',function(sql){return meter.statement(Reflect.apply(prepare,this,[sql]));});
+  const value=c.compare();assert.equal(value.status,'incomplete');assert.equal(value.cause,'encoding');
+  assert.ok(meter.seen.rows>0);assert.equal(meter.seen.replacement,false,'sidecar text stayed raw');
+});
+
+test('B3 passing control: valid multi-byte UTF-8 near the cap preserves equality and BOM',t=>{
+  const {db,run}=setup(t),text='\ufeff'+'é😀\ufffd'.repeat(1000);memory(db,'unicode-control',text);
+  const cap=3*Buffer.byteLength(text)+160;
+  const account=implementation.comparisonAccount({now:()=>0,cutoff:10000,limits:{bytes:cap}});
+  const decoded=readTransaction(db,()=>implementation.comparisonReader(db,account).prepare('SELECT content FROM memories').get().content);
+  assert.equal(decoded,text);assert.ok(cap-account.bytes<=32,'valid text fits near the existing reservation');
+  const first=run(),second=run();assert.equal(first.status,'complete/different');assert.equal(second.status,'complete/equal');
+  assert.equal(root(first),root(second));assert.equal(first.payloads.join(''),text);
+  assert.equal(items(first)[0].contentIdentity,createHash('sha256').update(JSON.stringify([text,'unicode-control'])).digest('hex'));
 });
