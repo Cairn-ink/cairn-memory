@@ -1,6 +1,25 @@
 // Service-owned, authority-free standby resources. Never a request queue.
 import { Worker } from 'node:worker_threads';
 import { randomUUID } from 'node:crypto';
+import { fail } from './validation.mjs';
+
+const pools = new WeakMap();
+// Internal seam for deterministic Worker/clock tests; never a public option.
+export function createReaderPoolRuntime(createPool = createReaderWorkerPool) {
+  return function createContextReaderPool(...args) {
+    if (args.length) fail('invalid_input');
+    const pool = createPool(), handle = Object.freeze({ close: () => pool.close() });
+    pools.set(handle, pool);
+    return handle;
+  };
+}
+export const createContextReaderPool = createReaderPoolRuntime();
+export function readerPoolOwner(handle) {
+  const pool = pools.get(handle);
+  if (!pool) fail('invalid_input');
+  return pool;
+}
+export const readerPoolDiagnostic = handle => pools.get(handle)?.diagnostic();
 
 // Compatibility identity only: directory URL construction loads no module.
 const engine = new URL('.', import.meta.url).href + 'context-product-worker.mjs';

@@ -103,12 +103,19 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
     }
   };
   syncBuiltinESMExports();
-  let supervisor; const timeout = new AbortController();
+  let supervisor, pool; const timeout = new AbortController();
   try {
-    supervisor = api.createContextReadSupervisor({ readerWorkerPool: true }); t.after(() => supervisor.close());
+    assert.equal(typeof api.createContextReaderPool, 'function', 'installed_runtime_exports_service_pool');
+    pool = api.createContextReaderPool(); t.after(() => pool.close());
+    supervisor = api.createContextReadSupervisor({ readerWorkerPool: pool }); t.after(() => supervisor.close());
     await Promise.race([ready, delay(30000, undefined, { signal: timeout.signal }).then(() => assert.fail('installed_pool_ready_watchdog'))]);
   } finally { timeout.abort(); threads.Worker = OriginalWorker; syncBuiltinESMExports(); }
   const { readerPoolDiagnostic } = await import(pathToFileURL(join(artifact, 'core/context-read-supervisor.mjs')));
+  const source = await import('../index.mjs'), foreignPool = source.createContextReaderPool();
+  try {
+    assert.throws(() => api.createContextReadSupervisor({ readerWorkerPool: foreignPool }), { code: 'invalid_input' });
+    assert.throws(() => source.createContextReadSupervisor({ readerWorkerPool: pool }), { code: 'invalid_input' });
+  } finally { await foreignPool.close(); }
   const credential = { nonce: randomUUID() }, requestControl = { requestId: randomUUID(), handleId: randomUUID(), credentialBindingId: randomUUID(), credentialExpiresUtcMs: null, requestMaxMs: 5000 };
   const ownerCoverage = { policy: 'recent-projects-v1', selectionRevision: 'fixture', requestedNamespaces: 4, selectedNamespaces: 4, omittedNamespaces: 0 };
   const { requestMaxMs, ...ids } = requestControl;
@@ -125,11 +132,11 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
       assert.equal(result.status,'complete');
     }
   } finally {await maintainer.close();}
-  assert.deepEqual(readerPoolDiagnostic(supervisor), { hits: 0, misses: 0, startupFailures: 0 });
+  assert.deepEqual(readerPoolDiagnostic(pool), { hits: 0, misses: 0, startupFailures: 0 });
   const reader = await api.openContextProductReader({ supervisor, path: f.path, version: 'context-read-v1', profile: PRODUCT_PROFILE,
     readSet: [...readSet].reverse(), ownerCoverage, requestControl, wal: true, diagnostics: true, host: { moduleUrl: pathToFileURL(join(artifact, 'host.mjs')).href, configuration: { requestBinding: binding, state, requestReservation: new SharedArrayBuffer(4) } } });
   try {
-    assert.equal(readerPoolDiagnostic(supervisor).hits, 1, 'installed_engine_pool_supplies_reader');
+    assert.equal(readerPoolDiagnostic(pool).hits, 1, 'installed_engine_pool_supplies_reader');
     assert.equal(ok(await reader.getContextReadCapabilities()).execution, 'worker');
     assert.deepEqual(ok(await reader.getContextReadCapabilities()).sidecarJournals, ['DELETE','WAL']);
     const evidence = ok(await reader.fetchCandidateEvidence({ readSet, refs: [{ type: 'memory', namespace: ns, memoryId: memory.id, revision: memory.revision }], intent: 'current' }, credential));

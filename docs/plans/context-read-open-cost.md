@@ -1,6 +1,6 @@
 # Fresh context reader open cost
 
-Status: stage 1 is implemented behind the service-owned `readerWorkerPool:true` opt-in; stage 2 remains a proposal. Q1: fresh `open → fetch → close` p95 ≤150 ms,
+Status: stage 1 is implemented with a service-owned `createContextReaderPool()` handle shared by request supervisors; stage 2 remains a proposal. Q1: fresh `open → fetch → close` p95 ≤150 ms,
 where fetch is `fetchCandidateEvidence`. No authority-bearing reader may survive between HTTP requests.
 
 ## Method and limits
@@ -216,7 +216,8 @@ The process-wide supervisor keeps its 256-live-record limit, shared with mainten
 plus a read can occupy two records. Pool capacity is no extra admission quota. Duplicate request/handle/binding
 reservations retain existing cutoffs; consumed reservations are never reset or retried. Opening failures after
 registration retain their cleanupId and drain-by-ID behavior. Parked Workers have no request record: track them in a
-separately bounded service-owned idle ledger, awaited by supervisor close. Assignment transfers exactly one resource to
+separately bounded service-owned idle ledger, awaited by pool close. Request supervisors share one branded service
+pool handle; closing a request supervisor settles only its records. Assignment transfers exactly one resource to
 one registered reader. Uncertain native/external disposal preserves existing quarantine; Worker exit does not prove
 leases/providers released. Failed safety records do not expire or release capacity. Cleanup history limits, TTL and
 disposal-proof recovery remain unchanged.
@@ -228,7 +229,7 @@ assignment under the service owner; after assignment fail the request and follow
 failure makes that slot unusable, with bounded retry/backoff and observability, not a ready slot. Refill needs startup
 deadlines and error/exit observers. Shutdown stops admissions/refill, reaps idle/loading Workers, then awaits registered
 readers and external delivery promises; repeated shutdown is idempotent. No parked or loading Worker may outlive
-supervisor close. Failed cleanup stays visible to its owner.
+service pool close; assigned readers remain owned by their request supervisors. Failed cleanup stays visible to its owner.
 
 Before restore/erasure, deny admissions, publish revocation, stop pool/pump, and drain all registered clients and
 idle/loading Workers. Invalidate old bindings/certificates through existing product integration. Resume with fresh

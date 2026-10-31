@@ -227,14 +227,25 @@ ordinary tests use mock clocks and rendezvous.
 
 ## Optional engine-only reader prewarming
 
-A service may opt in once with `createContextReadSupervisor({readerWorkerPool:true})`.
-This is an **interface change for product adoption**: select it in trusted service
-construction, never from HTTP input or reader request options. The default is off;
-`false` also keeps the existing cold path. The returned supervisor and reader DTOs
-are unchanged. No maintenance Worker is admitted from this pool.
+A service may opt in once at trusted startup:
 
-The supervisor owns at most two ready Workers and one loading refill, with no
-request queue. A loading/exhausted/incompatible pool falls back immediately to the
+```js
+const pool = createContextReaderPool(); // service-owned, shared across requests
+const supervisor = createContextReadSupervisor({ readerWorkerPool: pool }); // per request
+await supervisor.close(); // settles this request; keeps the service pool warm
+await pool.close(); // service shutdown, after stopping admission
+```
+
+This is an **interface change for adopters**. The service, not the request, owns
+the pool. The public factory takes no options and returns a frozen handle with
+only `close()`. Select it in trusted service construction, never from HTTP input
+or reader request options. Only an authentic handle from the same engine module
+instance is accepted; booleans, forged objects, proxies and foreign handles fail
+`invalid_input`. Omitting `readerWorkerPool` or supplying `undefined` preserves the
+cold path. Supervisor and reader DTOs are unchanged. Maintenance never borrows.
+
+Each pool owns at most two ready Workers and one loading refill, however many
+supervisors share it, with no request queue. A closed/loading/exhausted/incompatible pool falls back immediately to the
 ordinary cold Worker using the same opening record, consumed reservation and
 original cutoffs. Assignment follows issuance, reservation CAS and registration.
 Every assigned Worker accepts one bootstrap, is never returned, and uses the
@@ -249,19 +260,22 @@ Empty env/execArgv isolation and the 192 MiB old-generation limit remain in forc
 that heap limit is not an RSS cap. Imports/refill still consume CPU/native memory.
 
 Pool compatibility binds the engine entry URL, bootstrap protocol, Node runtime,
-192 MiB policy and supervisor generation. Engine upgrades require service restart;
+192 MiB policy and pool generation. Engine upgrades require service restart;
 there is no hot retargeting. Private aggregate hit/miss/startup-failure counters
-carry no authority/content and are not exported by the public core entry.
+are per pool, carry no authority/content and are not exported by the public core entry.
 Startup failures/crashes are reaped with bounded retry/backoff, never assigned.
 With `diagnostics:true`, the existing phase names remain request-scoped. On a hit,
 spawn-to-first-statement covers lookup/bootstrap handoff; parked time is excluded.
 Engine import intervals measure the cached imports during that same request.
 
-Await `supervisor.close()` on shutdown: it stops refill and awaits idle/loading
-termination plus the ordinary assigned-record deliveries. Unconfirmed cleanup
-still rejects; the 256 live-record ceiling and cleanup IDs are unchanged. Before
-restore/erasure, deny admission, publish revocation and close/drain every service
-supervisor (including its pool), then resume with fresh issuance and a new supervisor.
+Await each request's `supervisor.close()` to stop and await its own assigned
+records. It neither closes the pool nor waits for idle Worker reaping. Idempotent
+`pool.close()` stops refill and awaits idle/loading termination; assigned readers
+remain owned by their supervisors. Service shutdown must await both pool close
+and all request supervisors. Unconfirmed cleanup still rejects; the shared 256
+live-record ceiling and cleanup IDs are unchanged. Before restore/erasure, deny
+admission, publish revocation, close the service pool and close/drain every request
+supervisor, then resume with fresh issuance, a new pool and new supervisors.
 No native-host latency claim follows from enabling this option; qualification of
 hits, misses, refill contention and bursts is a separate step.
 
