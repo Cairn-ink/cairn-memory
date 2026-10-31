@@ -9,6 +9,7 @@
       "MemoryStoreError",
       "SOURCE_LIMITS",
       "createContextReadSupervisor",
+      "createContextReaderPool",
       "normalizeBoundedText",
       "normalizedTextLength",
       "openContextIndexMaintainer",
@@ -758,6 +759,9 @@
       "close",
       "scope"
     ],
+    "pool": [
+      "close"
+    ],
     "supervisor": [
       "ackCleanup",
       "close",
@@ -1081,6 +1085,9 @@
     ],
     "createContextReadSupervisor": [
       "supervisor"
+    ],
+    "createContextReaderPool": [
+      "pool"
     ],
     "openContextReader": [
       "context"
