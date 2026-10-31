@@ -17,7 +17,7 @@ import { createMaintenancePumpRuntime } from '../context-product-pump.mjs';
 import { semanticHandle } from '../context-semantic-coordinator.mjs';
 import { supervisorOwner } from '../context-read-supervisor.mjs';
 import { createContextReadSupervisor, openContextSemanticCoordinator,
-  openContextIndexMaintainer } from '../index.mjs';
+  openContextIndexMaintainer, openMemoryCore } from '../index.mjs';
 
 const hostUrl = new URL('./fixtures/context-semantic-pump-cutoff-host.mjs', import.meta.url).href;
 const coverage = { policy: 'recent-projects-v1', selectionRevision: 'synthetic',
@@ -585,6 +585,40 @@ test('semantic parity blocked retirement holds the writer until confirmed dispos
   Atomics.store(s.control, 15, 1); Atomics.notify(s.control, 15); await guard(turn, 'retirement completion');
   assert.equal(runtime.spawned.length, 2, 'confirmed_close_allows_replacement');
   assert.deepEqual([...runtime.spawned[0].resources], [1, 1, 0, 0]);
+});
+
+for (const [validationMs, quantumMs, remainder] of [[700, 500, 600], [500, 300, 350]])
+test(`semantic parity review R2 invalidated validation parks ${validationMs}/${quantumMs}/${remainder}`, async t => {
+  const s = await setup(t), runtime = pumpRuntime(s);
+  runtime.config.firstCoverageValidation.maxMs = validationMs;
+  runtime.config.quantum.maxMs = quantumMs; runtime.config.pollMs = 1;
+  const pump = await validationPending(s, runtime); s.f.workspace.defer(() => pump.close());
+  const core = openMemoryCore({ path: s.f.path });
+  try {
+    ok(core.admit({ namespace: ns, memory: { content: 'semantic validation canonical change', kind: 'fact' },
+      receipts: [{ client: 'synthetic', sessionId: 'parking', eventId: randomUUID(), role: 'user', excerpt: 'semantic validation canonical change' }] }));
+  } finally { core.close(); }
+  const state = ok(await s.coordinator.getOwnerSemanticStatus({ ownerId: ns.ownerId }, s.token));
+  ok(await s.coordinator.validateOwnerSemanticCoverage({ ownerId: ns.ownerId,
+    expectedTargetDigest: state.firstCoverage.targetSetDigest, budget: { maxTargets: 1, maxMs: validationMs } }, s.token));
+  await guard(runtime.tick(), 'observe invalidated receipt while validation fits');
+  const observed = await semanticHandle(s.coordinator).pumpCall('firstCoverage');
+  assert.equal(observed.pending, false, 'invalidated_receipt_clears_pending');
+  assert.equal(observed.complete, false, 'invalidated_coverage_still_requires_validation');
+  await s.advance(runtime.config.window.endsAtMonoMs - testClock.now() - remainder);
+  const before = { reserves: runtime.reservations.length, controls: runtime.controlCalls.length,
+    opens: runtime.spawned.length, dispatches: dispatchCount(runtime), validations: validationDispatches, status: pump.getStatus() };
+  await guard(runtime.tick(), 'validation cannot fit');
+  assert.equal(runtime.reservations.length, before.reserves, 'invalidated_validation_tail_has_no_reservation');
+  assert.equal(runtime.nextDelay, remainder, 'invalidated_validation_preserves_parking');
+  for (let n = 0; n < 2; n++) await guard(runtime.tick(), 'early callback during parked validation');
+  assert.equal(runtime.controlCalls.length, before.controls, 'parked_validation_has_no_repeated_control_rpcs');
+  assert.equal(runtime.reservations.length, before.reserves);
+  assert.equal(runtime.spawned.length, before.opens); assert.equal(dispatchCount(runtime), before.dispatches);
+  assert.equal(validationDispatches, before.validations); assert.deepEqual(pump.getStatus(), before.status);
+  assert.equal(runtime.nextDelay, remainder);
+  await s.advance(remainder); await runtime.tick();
+  assert.equal((await pump.completion).state, 'budget_exhausted');
 });
 
 // Last: the deliberately failed proof retains process-wide inode quarantine.

@@ -62,7 +62,9 @@ export function semanticPump(original,{now,setTimer,clearTimer,open}) {
     usedItems,usedMs,usedUsd,maxItems:budgets.maxItems,maxMs:budgets.maxMs,maxUsd:budgets.maxUsd,error});
   const exhausted=()=>now()>=window.endsAtMonoMs||usedMs>=budgets.maxMs||usedItems>=budgets.maxItems&&!validationPending&&!startup;
   const dutyEnd=()=>Math.min(window.endsAtMonoMs,renewedUntil);
-  const turnMs=()=>!startup&&validationPending?first.maxMs:q.maxMs;
+  const validationRequired=()=>validationPending||completeTargets.size===handle.targets.length*2&&!firstComplete;
+  const turnMs=()=>!startup&&validationRequired()?first.maxMs:q.maxMs;
+  const observeCoverage=observation=>{firstComplete=observation.complete;validationPending=observation.pending;};
   function fits(maxMs){const end=dutyEnd();parkedUntil=end-now()>=maxMs?undefined:end;return parkedUntil===undefined;}
   function schedule(){
     if(stopped||error||exhausted()||now()>=renewedUntil){resolveCompletion(status());return;}
@@ -92,14 +94,14 @@ export function semanticPump(original,{now,setTimer,clearTimer,open}) {
   }
   async function validation() {
     // This public method is available independently of paid item/USD capacity.
-    const observation=await handle.pumpCall('firstCoverage');targetSetDigest=observation.targetSetDigest;firstComplete=observation.complete;validationPending=observation.pending;
+    const observation=await handle.pumpCall('firstCoverage');targetSetDigest=observation.targetSetDigest;observeCoverage(observation);
     if(!targetSetDigest||firstComplete)return;
     if(!fits(first.maxMs))return;
     const maxMs=Math.min(first.maxMs,budgets.maxMs-usedMs,Math.floor(window.endsAtMonoMs-now()),Math.floor(renewedUntil-now()));
     if(maxMs<1)return;const reservation=await reserve('validation',0,maxMs,'0');
     const result=await coordinator.validateOwnerSemanticCoverage({ownerId:handle.ownerId,expectedTargetDigest:targetSetDigest,budget:{maxTargets:first.maxTargets,maxMs}},semanticCredential);await finish(reservation,result.ok);
     if(!result.ok){error=result.error.code;return;}firstComplete=result.value.status==='complete';
-    validationPending=(await handle.pumpCall('firstCoverage')).pending;
+    observeCoverage(await handle.pumpCall('firstCoverage'));
   }
   async function tick() {
     if(stopped||error)return;if(exhausted()||now()>=renewedUntil){resolveCompletion(status());return;}
@@ -119,8 +121,8 @@ export function semanticPump(original,{now,setTimer,clearTimer,open}) {
             if(!result.ok){error=result.error.code;return;}if(result.value.lexical.state==='ready'&&result.value.semantic.coverage.status==='complete')completeTargets.add(JSON.stringify([p.options.path,p.types,intent]));
           }startup=false;
         }
-        const firstObservation=await handle.pumpCall('firstCoverage');validationPending=firstObservation.pending;
-        if(validationPending||completeTargets.size===handle.targets.length*2&&!firstObservation.complete)await validation();
+        observeCoverage(await handle.pumpCall('firstCoverage'));
+        if(validationRequired())await validation();
         if(error||exhausted()||usedItems>=budgets.maxItems||parkedUntil!==undefined||!fits(q.maxMs))return;
         const p=projections[at%projections.length],isEmbedding=p.mode==='embeddings';
         if(isEmbedding) {
@@ -137,7 +139,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open}) {
         try{const h=await maintainer(p,maxMs,start),remaining=Math.floor(maxMs-(now()-start));if(remaining<1)fail('read_timeout');result=await h.refreshContextIndex({readSet:p.options.readSet,types:p.types,intent:p.intent,mode:p.mode,budget:{maxItems,maxMs:remaining,...(isEmbedding?{maxUsd:reservation.maxUsd}:{})}},credential);}
         finally{await finish(reservation,result?.ok===true);}
         if(!result.ok){error=result.error.code;return;}
-        if(isEmbedding){const observation=await handle.pumpCall('firstCoverage');validationPending=observation.pending;if(result.value.status==='complete')completeTargets.add(JSON.stringify([p.options.path,p.types,p.intent]));}
+        if(isEmbedding){observeCoverage(await handle.pumpCall('firstCoverage'));if(result.value.status==='complete')completeTargets.add(JSON.stringify([p.options.path,p.types,p.intent]));}
       }catch(e){error=e.code??'reader_failed';}
     })().finally(()=>{running=null;if(error){void stop();return;}schedule();});
   }
