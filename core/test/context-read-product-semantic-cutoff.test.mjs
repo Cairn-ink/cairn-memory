@@ -758,6 +758,34 @@ test('semantic lifecycle idle cleanup preserves its initiating control failure',
   const other=s.newSupervisor();s.f.workspace.defer(()=>other.close());for(const supervisor of [s.supervisor,other])await assert.rejects(openContextIndexMaintainer(s.configure(supervisor,false).options),{code:'reader_failed'});
 });
 
+test('semantic lifecycle distinct resident cleanup failures are counted separately',async t=>{
+  const s=await setup(t,{isolated:true,expectedCleanupFailure:true}),other=fixture({after:fn=>retainedWorkspaces.push(fn)});other.admit('second resident');other.core.close();
+  const runtime=pumpRuntime(s),projection=runtime.config.projections[0];projection.modes=['lexical'];
+  runtime.config.projections.push({...projection,options:{...projection.options,path:other.path}});
+  const pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close().catch(()=>{}));for(let n=0;n<3;n++)await runtime.tick();
+  assert.equal(runtime.spawned.length,2,'two_independent_native_residents');Atomics.store(s.control,13,2);
+  const client=semanticHandle(s.coordinator),call=client.pumpCall;client.pumpCall=(method,...args)=>method==='firstCoverage'?Promise.reject(Object.assign(new Error('private control'),{code:'ledger_unavailable'})):call(method,...args);
+  await runtime.tick();const terminal=await guard(pump.completion,'two cleanup failures');assert.equal(terminal.error,'reader_failed');
+  const diagnostic=maintenancePumpDiagnostic(terminal);assert.ok(diagnostic,'distinct_disposals_have_private_counts');
+  assert.equal(diagnostic.lastFailure.cause,'unmapped:ledger_unavailable');assert.equal(diagnostic.secondaryFailureCounts.exception,2,'distinct_disposal_failures_count_each_resident');
+  assert.equal(Object.hasOwn(diagnostic.secondaryFailure,'ordinal'),false,'idle_disposal_never_borrows_active_ordinal');
+  await assert.rejects(pump.close());assert.deepEqual(maintenancePumpDiagnostic(pump.getStatus()),diagnostic);
+});
+
+test('semantic lifecycle an active timeout never lends its ordinal to idle residents',async t=>{
+  const s=await setup(t,{isolated:true,expectedCleanupFailure:true}),other=fixture({after:fn=>retainedWorkspaces.push(fn)});other.admit('idle resident');other.core.close();
+  const hooks={},runtime=pumpRuntime(s,hooks),projection=runtime.config.projections[0];projection.modes=['lexical'];runtime.config.projections.push({...projection,options:{...projection.options,path:other.path}});
+  const pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close().catch(()=>{}));for(let n=0;n<3;n++)await runtime.tick();assert.equal(runtime.opened.length,2);
+  const gate=replyGate();hooks.refresh=()=>gate.hold();const ticking=runtime.tick();await gate.entered;Atomics.store(s.control,13,2);
+  try{await s.advance(500,{waitForWorkers:false});runtime.fireWatchdog();await ticking;}finally{gate.release();}
+  const terminal=await guard(pump.completion,'active and idle cleanup');assert.equal(terminal.error,'reader_failed');
+  const diagnostic=maintenancePumpDiagnostic(terminal);assert.ok(diagnostic,'active_timeout_has_private_cause');
+  const idle=maintenanceReaderFailureDiagnostic(runtime.opened[0]),active=maintenanceReaderFailureDiagnostic(runtime.opened[1]);
+  assert.equal(Object.hasOwn(idle.lastFailure,'ordinal'),false,'idle_resident_does_not_borrow_active_ordinal');
+  assert.equal(active.lastFailure.ordinal,diagnostic.lastFailure.ordinal,'active_resident_joins_its_own_dispatch');assert.ok(Number.isSafeInteger(active.lastFailure.ordinal));
+  assert.equal(diagnostic.secondaryFailureCounts.exception,2);
+});
+
 test('semantic lifecycle exhausted ordinal allocator omits the join',async t=>{
   const s=await setup(t,{isolated:true}),runtime=pumpRuntime(s),pump=runtime.renew(runtime.config);s.f.workspace.defer(()=>pump.close());await runtime.tick();
   const client=semanticHandle(s.coordinator),call=client.pumpCall,state=globalThis[Symbol.for('context-read-product/maintenance-dispatch-ordinal')],previous=state.next;

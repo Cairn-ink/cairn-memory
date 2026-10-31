@@ -97,7 +97,8 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
   }
   function note(value,ctx,stage,kind,code) {
     const found=maintenanceFailureDiagnostic(value),captured=found&&(stage==='open'||stage==='close'||found.ordinal===undefined||found.ordinal===ctx.ordinal)?found:undefined;
-    if(captured&&seenFailures.has(captured)){readerSecondary(value,ctx);return;}
+    const samePrimary=stage==='close'&&captured&&Number.isSafeInteger(captured.ordinal)&&captured.ordinal>0&&lastFailure&&['cause','ordinal','engineCode','errorName','step','stage'].every(key=>captured[key]===lastFailure[key]);
+    if(captured&&(seenFailures.has(captured)||samePrimary)){seenFailures.add(captured);readerSecondary(value,ctx);return;}
     const raw=code??value?.error?.code??value?.code;
     const source=captured??maintenanceFailureRecord(kind??(raw===undefined?'call_error':publicCode(raw)===raw||raw==='timeout'?'engine':'unmapped'),
       {engineCode:raw,errorName:maintenanceErrorName(value),ordinal:ctx.ordinal,stage});
@@ -108,13 +109,14 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
   function drain(identity,close,ctx) {
     if(drains.has(identity))return drains.get(identity);
     if(typeof identity==='object'&&disposed.has(identity))return disposed.get(identity);
-    const pending=Promise.resolve().then(close).then(()=>readerSecondary(identity,ctx),failure=>{
-      note(failure,ctx,'close','cleanup');drainFailed=true;error='reader_failed';throw failure;
+    const disposal={...ctx,ordinal:identity===ctx.handle?ctx.ordinal:undefined,failures:new Set()};
+    const pending=Promise.resolve().then(close).then(()=>readerSecondary(identity,disposal),failure=>{
+      note(failure,disposal,'close','cleanup');drainFailed=true;error='reader_failed';throw failure;
     });
     drains.set(identity,pending);if(typeof identity==='object')disposed.set(identity,pending);
     void pending.finally(()=>drains.delete(identity)).catch(()=>{});return pending;
   }
-  const dispose=(h,ctx)=>drain(h,()=>disposeProductReader(h,error==='read_timeout'?'read_timeout':'store_closed',ctx.until,lastFailure),ctx);
+  const dispose=(h,ctx)=>drain(h,()=>disposeProductReader(h,error==='read_timeout'?'read_timeout':'store_closed',ctx.until,ctx.handle===h?lastFailure:undefined),ctx);
   function owns(ctx){return !stopped&&!error&&generation===ctx.generation&&now()<ctx.end;}
   function check(ctx){if(stopped||error)throw interrupted;if(now()>=ctx.until){expire(ctx);throw interrupted;}if(generation!==ctx.generation||now()>=ctx.end)throw interrupted;}
   function expire(ctx){
@@ -173,7 +175,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
   async function operation(ctx,p,method,input,reservation) {
     let result,failure;
     try {
-      const h=await maintainer(ctx,p),remaining=Math.floor(ctx.until-now());check(ctx);if(remaining<1)fail('read_timeout');ctx.stage=method==='refreshContextIndex'?'refresh':'call';
+      const h=await maintainer(ctx,p),remaining=Math.floor(ctx.until-now());check(ctx);if(remaining<1)fail('read_timeout');ctx.handle=h;ctx.stage=method==='refreshContextIndex'?'refresh':'call';
       const args=method==='refreshContextIndex'?{...input,budget:{...input.budget,maxMs:remaining}}:{...input,deadlineMs:remaining};
       result=await wait(ctx,()=>h[method](args,credential,ctx.control),ctx.stage);check(ctx);
       if(!result.ok)note(result,ctx,ctx.stage);
