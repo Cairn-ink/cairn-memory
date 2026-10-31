@@ -1,5 +1,6 @@
 import { maintenanceFailureCounts, maintenanceFailureRecord, maintenanceFailureKind, maintenanceErrorName } from './context-product-attribution.mjs';
 import { attributionFields, maintenanceWorkFields, maintenanceKinds, add, maintenanceDispatchControl, maintenanceControlState } from './context-product-attribution.mjs';
+import { maintenanceComparison } from './context-product-attribution.mjs';
 import { openContextIndexMaintainer, disposeProductReader, maintenanceObservation, maintenancePhaseDiagnostic, maintenanceStallDiagnostic, maintenanceCutoffQualified, authorizeMaintenanceCutoff, snapshotMaintenanceCutoff, maintenanceFailureDiagnostic, maintenanceReaderFailureDiagnostic } from './context-product-reader.mjs';
 import { supervisorOwner } from './context-read-supervisor.mjs';
 import { ownData } from './local-authority-input.mjs';
@@ -368,6 +369,8 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
           // Worker response delivery/validation and pump accounting. These
           // overlapping durations must not be summed as a quantum breakdown.
           const detail=phasesOf(result);
+          const comparison=maintenanceComparison(result);
+          if(comparison)lane.comparison={status:comparison.status,rows:comparison.rows,bytes:comparison.bytes};
           if(detail){
             recordPhase(lane.phases.dispatch,detail.dispatchMs);
             recordPhase(lane.phases.epochObservation,detail.epochObservationMs);
