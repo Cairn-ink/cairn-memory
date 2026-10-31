@@ -15,6 +15,7 @@ import { canonicalProductIdentity, productFile, PRODUCT_SIDECAR_SUFFIX } from '.
 import { mono } from './context-product-control.mjs';
 import { maintenanceQuantum } from './context-product-quantum.mjs';
 import { usd, dollars, queryEmbeddingCutoff } from './context-semantic-input.mjs';
+import { maintenanceWorkFields } from './context-product-attribution.mjs';
 
 const success = value => ({ok:true,value});
 const failure = code => ({ok:false,error:{code,retryable:code==='storage_busy'}});
@@ -149,7 +150,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     return prepareOnly?{complete,result}:final(p,access,c.observed.publication,complete,'snapshot_stale');
   }
   function run(method,original,credential,cutoff=Infinity,observation) {
-    if(semantic&&(method==='getContextIndexStatus'||method==='refreshContextIndex'&&original.mode==='embeddings'||['findCandidates','contextRead'].includes(method)&&original.semantic===true&&original.cursor===undefined))return runSemantic(method,original,credential,cutoff);
+    if(semantic&&(method==='getContextIndexStatus'||method==='refreshContextIndex'&&original.mode==='embeddings'||['findCandidates','contextRead'].includes(method)&&original.semantic===true&&original.cursor===undefined))return runSemantic(method,original,credential,cutoff,observation);
     let access;
     try {
       facade.port.ready();
@@ -164,8 +165,9 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         });
       }
       if(method==='refreshContextIndex') {
-        const m=p.mode==='lexical'?storage.refresh(p,access.accessGenerations,p.budget):{transformed:0};
-        if(observation)for(const name of ['transformed','canonicalRows','metadataBytes','textRows','textBytes','supportLookups','supportBytes','verifiedRows','reused','replaced','removed','copied','tokenized','retargets','verificationRestarts','verificationKept']){
+        const m=p.mode==='lexical'?storage.refresh(p,access.accessGenerations,p.budget):{transformed:0,...storage.compare(p,access.accessGenerations,p.budget)};
+        if(observation&&m.comparison)observation.comparison=m.comparison;
+        if(observation)for(const name of maintenanceWorkFields){
           if(Number.isSafeInteger(m[name])&&m[name]>=0)observation[name]=m[name];
         }
         const knownFailure=storage.prepareObservation();access.check();
@@ -236,7 +238,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
     for(const t of p.types)dto.coverage.byType[t].embedded=byType[t].embedded;
     return dto;
   }
-  async function runSemantic(method,original,credential,parentCutoff) {
+  async function runSemantic(method,original,credential,parentCutoff,observation) {
     let access;
     try {
       facade.port.ready();const {payload,input}=validate(method,original);access=authorize(method,payload,credential);
@@ -246,7 +248,7 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
         const snapshot=await semantic.snapshot(),knownFailure=storage.prepareObservation();access.check();
         return read(()=>{db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get();return success(scopedStatus(p,storage.observe(p,access.accessGenerations,{knownFailure}),snapshot));});
       }
-      if(method==='refreshContextIndex')return await embeddingRefresh(p,access,cutoff);
+      if(method==='refreshContextIndex')return await embeddingRefresh(p,access,cutoff,observation);
       const c=candidates(p,access,true);
       const preflightStart=performance.now(),snapshot=await semantic.snapshot();
       if(!c.items) {
@@ -331,10 +333,12 @@ export function openProductIndex({ path, facade, authorize, ownerCoverage, obser
       });
     }catch(error){attribution?.captureFailure(error);attribution?.selectFailure(error);return failure(error.code==='ERR_SQLITE_ERROR'?[5,6].includes(error.errcode&255)?'storage_busy':'storage_error':error.code??'storage_error');}
   }
-  async function embeddingRefresh(p,access,cutoff) {
+  async function embeddingRefresh(p,access,cutoff,observation) {
     // Start before opening or any authority/provider work; the parent window
     // cannot be reset by dispatch, expensive open or asynchronous settlement.
     const quantum=maintenanceQuantum({now,cutoff:Math.min(p.deadlineAt,now()+p.budget.maxMs),maxMs:p.budget.maxMs});
+    const comparison=storage.compare(p,access.accessGenerations,p.budget,quantum);
+    if(observation&&comparison){Object.assign(observation,comparison);}
     const localProviderCutoff=process.hrtime.bigint()+BigInt(Math.max(0,Math.floor((quantum.cutoff-now()-quantum.reserve)*1e6)));
     const parentProviderCutoff=cutoff-BigInt(Math.ceil(quantum.reserve*1e6));
     const providerCutoff=localProviderCutoff<parentProviderCutoff?localProviderCutoff:parentProviderCutoff;
