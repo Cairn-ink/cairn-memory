@@ -4,8 +4,8 @@
     "name": "cairn-memory-local-preview",
     "version": "0.0.0-preview.1"
   },
-  "sha256": "00b7791075ee18fdf26d9660dea478d79ade3a96b50c376d214cac8312379b7f",
-  "bytes": 1031899,
+  "sha256": "e74d0e52037a2d4f63eb2a23f931ee97ba9eb3548a438db4b32b6345d97f978a",
+  "bytes": 1031983,
   "files": [
     "LICENSE",
     "README.md",
@@ -647,7 +647,7 @@
     "docs/plans/topic-reader-wal-fix.md": "ff375d11f558b7c60245ee44a65020f1888a2fdc24e8def7d68dd4b47c3b57f0",
     "core/context-product-authority.mjs": "8eda367985cfbcfcb52a3c7f3300e162b47cd7077bad921632106739eb5de765",
     "core/context-product-control.mjs": "83f036d20faa2515ba98d270d88a92b641c778f124dd51bbfbee7a931a9c7744",
-    "core/context-product-reader.mjs": "629b8d7be4cd004b7da2df64fa6e2cd3c9c952d7f8754222b0cc0ff40c26d10f",
+    "core/context-product-reader.mjs": "4e2fc16e2a05599e43bd302919f2dd9b455924ab6aa3cbe33ccf6401613cc67f",
     "core/context-product-reader-pool.mjs": "2c08a09693a92c84588d408539d693559e565eec66e3867da658b688f0452b4e",
     "core/context-product-reader-pool-worker.mjs": "a39dd2e00b8a223794560090eede6b555bb4bc24044afa8d00a2e92553ca3394",
     "core/context-product-open-diagnostic.mjs": "fcf436e5219a45ee91f629a33515e44b35523e638aaea65e326eb4853a6c0bf8",
