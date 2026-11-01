@@ -62,21 +62,21 @@ test('Worker gate and fixed private commit transport; shortage cap survives reop
   assert.equal(new Int32Array(pauses)[0],2,'both real Worker startups completed the controlled pause');
 }));
 
-for(const mode of ['DELETE','WAL'])test(`verification Worker preserves primary and rollback causes ${mode}`,async t=>realWatchdog(async()=>{
+for(const mode of ['DELETE','WAL'])for(const coded of [false,true])test(`verification Worker preserves ${coded?'coded ':''}primary and rollback causes ${mode}`,async t=>realWatchdog(async()=>{
   const f=fixture(t);for(let i=0;i<40;i++)f.admit('verification failure evidence '+i);
   const warm=local(f.path,{mode});try{warm.prepare();}finally{warm.close();}
   const before=inspect(f.path,snapshot),service=configured(t,f.path,[ns],{service:true}),faults=new Int32Array(new SharedArrayBuffer(32));
   const options={...service.options,...(mode==='WAL'?{wal:true}:{}),sidecarJournalMode:mode,host:{...service.options.host,
     moduleUrl:new URL('../testing/context-product-verification-fault-host.mjs',import.meta.url).href,
-    configuration:{...service.options.host.configuration,verificationFault:faults.buffer}}};
+    configuration:{...service.options.host.configuration,verificationFault:faults.buffer,verificationCodedPrimary:coded}}};
   const open=createProductReaderRuntime({maintenance:true,verificationQualified:()=>true}),h=await open(options);t.after(()=>h.close());
   const result=await h.refreshContextIndex({readSet:[ns],types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:1024,maxMs:5000}},service.token);
   assert.equal(faults[1],1,'verification COMMIT fault executed');assert.equal(faults[2],1,'rollback fault executed');
   assert.equal(JSON.stringify(result),'{"ok":false,"error":{"code":"storage_error","retryable":false}}','public result is unchanged');
-  assert.equal(maintenanceFailureDiagnostic(result)?.cause,'exception:TypeError','initiating exception stays primary');
+  if(!coded)assert.equal(maintenanceFailureDiagnostic(result)?.cause,'exception:TypeError','initiating exception stays primary');
   const diagnostic=maintenanceReaderFailureDiagnostic(result);
   assert.equal(diagnostic?.secondaryFailure?.cause,'exception:RangeError','rollback exception reaches the bounded private secondary channel');
-  assert.equal(diagnostic.failureCounts.exception,1);assert.equal(diagnostic.secondaryFailureCounts.exception,1);
+  if(!coded)assert.equal(diagnostic.failureCounts.exception,1);assert.equal(diagnostic.secondaryFailureCounts.exception,1);
   assert.equal(faults[3],0,'secondary error is not inspected under a SQLite transaction');assert.ok(faults[4]>0);
   assert.deepEqual(inspect(f.path,snapshot),before,'closing after rollback failure leaves the durable checkpoint intact');
 }));

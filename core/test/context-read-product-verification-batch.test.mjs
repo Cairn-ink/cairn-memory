@@ -98,30 +98,46 @@ test(`SIGKILL ${mode} ${stage} ${point}: independent old-or-new document prefix 
   }
   expected.hash=hash.state();
   const entry=new URL('../testing/context-product-verification-process.mjs',import.meta.url).pathname;
-  let child,trace='',stderr='',pid,stopped,nativeChunks;
+  let child,trace='',stderr='',pid,stopped,nativeChunks,maintenanceReaped=false;
   if(point==='native'){
     // External ptrace injects SIGSTOP at the first sync *inside* native COMMIT.
-    child=spawn('strace',['-e','trace=fdatasync,fsync','-e','inject=fdatasync:signal=SIGSTOP:when=1','-e','inject=fsync:signal=SIGSTOP:when=1',process.execPath,entry,f.path,mode,point],{env:{},stdio:['ignore','pipe','pipe']});
-    stopped=new Promise(resolve=>{const check=()=>{if(/SIGSTOP/.test(stderr)&&pid&&nativeChunks!==undefined)resolve({chunks:nativeChunks});};child.stdout.on('data',b=>{trace+=b;const started=/maintenance-pid (\d+)/.exec(trace);if(started)pid=Number(started[1]);const m=/native-commit (\d+) (\d+)/.exec(trace);if(m){pid=Number(m[1]);nativeChunks=Number(m[2]);}check();});child.stderr.on('data',b=>{stderr+=b;check();});});
+    const supervisor=new URL('../testing/context-product-verification-trace.mjs',import.meta.url).pathname;
+    child=spawn('strace',['-f','-e','trace=fdatasync,fsync','-e','inject=fdatasync:signal=SIGSTOP:when=1','-e','inject=fsync:signal=SIGSTOP:when=1',process.execPath,supervisor,f.path,mode,point],{env:{},stdio:['ignore','pipe','pipe']});
+    stopped=new Promise(resolve=>{const check=()=>{if(/SIGSTOP/.test(stderr)&&pid&&nativeChunks!==undefined)resolve({chunks:nativeChunks});};child.stdout.on('data',b=>{trace+=b;const started=/maintenance-pid (\d+)/.exec(trace);if(started)pid=Number(started[1]);const m=/native-commit (\d+) (\d+)/.exec(trace);if(m){pid=Number(m[1]);nativeChunks=Number(m[2]);}maintenanceReaped=/maintenance-reaped /.test(trace);check();});child.stderr.on('data',b=>{stderr+=b;check();});});
   } else {
     child=fork(entry,[f.path,mode,point],{env:{},execArgv:[],stdio:['ignore','ignore','pipe','ipc']});
     stopped=once(child,'message').then(([message])=>{pid=message.pid;return message;});child.stderr.on('data',b=>stderr+=b);
   }
-  let exited=false;const reaped=once(child,'exit').then(([code,signal])=>{exited=true;return {code,signal};});
-  const stop=()=>{if(exited)return;if(pid)try{process.kill(pid,'SIGKILL');}catch(e){if(e.code!=='ESRCH')throw e;}if(!exited)child.kill('SIGKILL');};
-  f.workspace.defer(async()=>{stop();if(!exited)await reaped;});
+  let exited=false;const reaped=once(child,'exit').then(([code,signal])=>{exited=true;if(point!=='native')maintenanceReaped=true;return {code,signal};});
+  const closed=once(child,'close');
+  const stop=()=>{
+    if(pid&&!maintenanceReaped)try{process.kill(pid,'SIGKILL');}catch(e){if(e.code!=='ESRCH')throw e;}
+    if(!exited)child.kill('SIGKILL');
+  };
+  f.workspace.defer(async()=>{stop();await closed;});
   const timer=setTimeout(stop,30000);
-  let barrier;try{barrier=await Promise.race([stopped,reaped.then(result=>assert.fail('child exited before barrier '+JSON.stringify(result)+' '+stderr))]);}finally{clearTimeout(timer);}
+  let barrier;try{barrier=await Promise.race([stopped,reaped.then(result=>assert.fail('crash harness: '+(point==='native'?'tracer/supervisor':'maintenance child')+' exited before barrier '+JSON.stringify(result)+' '+stderr))]);}finally{clearTimeout(timer);}
   if(point!=='native')assert.equal(barrier.cacheSize,1,'non-native barriers force bounded cache spill');
   if(implemented)assert.ok(barrier.chunks>=(point==='mid'?1:2),'crash reaches a transaction with multiple admitted chunks');
-  process.kill(pid,'SIGKILL');const exit=await reaped; // Recovery only after reaping the maintenance child.
-  if(point==='native')assert.match(stderr,/(?:fdatasync|fsync)\(.*\)[\s\S]*SIGSTOP/,'external rendezvous is inside native sync');
-  t.diagnostic(JSON.stringify({maintenanceChild:point==='native'?'traced':'direct',...exit}));
+  process.kill(pid,'SIGKILL');
+  const deadline=setTimeout(stop,30000);
+  let exit;try{exit=await reaped;await closed;}finally{clearTimeout(deadline);}
+  let maintenanceExit={pid:child.pid,...exit};
+  if(point==='native') {
+    assert.deepEqual(exit,{code:0,signal:null},'crash harness: tracer/supervisor failed: '+stderr);
+    const acknowledgement=/maintenance-reaped (.+)/.exec(trace);
+    assert.ok(acknowledgement,'crash harness: missing maintenance-child reaping acknowledgement');
+    maintenanceExit=JSON.parse(acknowledgement[1]);
+    assert.deepEqual(maintenanceExit,{pid,code:null,signal:'SIGKILL'},'crash harness: maintenance child termination was not confirmed');
+    assert.match(stderr,/(?:fdatasync|fsync)\(.*\)[\s\S]*SIGSTOP/,'external rendezvous is inside native sync');
+  } else assert.deepEqual(exit,{code:null,signal:'SIGKILL'},'crash harness: direct maintenance child was not reaped after SIGKILL');
+  t.diagnostic(JSON.stringify({maintenanceChild:point==='native'?'supervisor-reaped':'direct-reaped',maintenanceExit,...(point==='native'?{tracer:exit}:{})}));
   const recovered=inspect(f.path,snapshot),actual=JSON.parse(recovered.generation.verify);
   if(point==='mid'||point==='before')assert.deepEqual(recovered,old,'interrupted transaction leaves exact durable state');
   else if(point==='after')assert.deepEqual(actual,expected,'lost reply retains complete independently computed prefix');
   else assert.ok(JSON.stringify(actual)===JSON.stringify(v)||JSON.stringify(actual)===JSON.stringify(expected),'native interruption is old or complete new');
   const isNew=JSON.stringify(actual)===JSON.stringify(expected);
+  if(point==='native')t.diagnostic('recovery after confirmed child reaping: '+(isNew?'complete new':'old'));
   assert.equal(recovered.generation.checkpoint,g.checkpoint+Number(isNew));
   assert.deepEqual(recovered.documents,old.documents);assert.deepEqual(recovered.postings,old.postings);assert.deepEqual(recovered.statistics,isNew?expectedStatistics:old.statistics);
   const resumed=local(f.path,{mode,enabled:true});f.workspace.defer(()=>resumed.close());authenticate(resumed,recovered);

@@ -47,7 +47,7 @@ function result(operation, result, extra = {}) {
   const secondary=!result.ok&&attribution?.takeSecondaryFailure();
   if(secondary)try{nativeFailure(secondary.error,false,true,secondary.step);}catch{noteFailure('exception',undefined,secondary.error,false,true,secondary.step);}
   const failure=workerData.maintenance&&!result.ok&&!(closing&&result.error?.code==='store_closed')?(attribution?.failure()??failureDetail):undefined;
-  parentPort.postMessage({ operation, result, ...extra,...(failure?{maintenanceFailure:failure,...(secondaryFailureDetail?{maintenanceSecondaryFailure:secondaryFailureDetail}:{})}:{}) });
+  parentPort.postMessage({ operation, result, ...extra,...(failure?{maintenanceFailure:failure}:{}),...(!result.ok&&secondaryFailureDetail?{maintenanceSecondaryFailure:secondaryFailureDetail}:{}) });
 }
 function dispose() {
   return disposing ??= (async () => {

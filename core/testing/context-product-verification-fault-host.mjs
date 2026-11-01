@@ -16,7 +16,9 @@ export async function createContextReadHost(configuration) {
     DatabaseSync.prototype.exec=function(sql) {
       if(sql==='BEGIN IMMEDIATE'&&this.prepare('PRAGMA application_id').get().application_id===0x43525032)writers.add(this);
       if(writers.has(this)&&Atomics.load(state,0)) {
-        if(sql==='COMMIT'&&Atomics.compareExchange(state,1,0,1)===0)throw new TypeError('initiating verification failure');
+        if(sql==='COMMIT'&&Atomics.compareExchange(state,1,0,1)===0)throw configuration.verificationCodedPrimary
+          ?Object.assign(new Error('initiating verification failure'),{code:'ERR_SQLITE_ERROR',errcode:10})
+          :new TypeError('initiating verification failure');
         if(sql==='ROLLBACK'&&Atomics.load(state,1)&&Atomics.compareExchange(state,2,0,1)===0) {
           const db=this,record=()=>Atomics.add(state,db.isOpen&&db.isTransaction?3:4,1);
           // Fail before rollback; the write helper must close before reflection.
