@@ -1,6 +1,6 @@
 import { cachedContentLayout } from './content-safety-schema.mjs';
-import { hasContentSuppressionRequestInside, contentSuppressionRequestInside } from './content-suppression-storage.mjs';
-import { assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
+import { hasContentSuppressionRequestInside, contentSuppressionRequestInside, assertContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { assertContentScopes, contentSafetyFacade, contentScopeEpochGuard, contentAuthorityPort } from './content-safety-boundary.mjs';
 import { ROLE_WRITES, roleWriteInput } from './role-profile-input.mjs';
 import { deepFreeze, cardNamespace } from './private-card-input.mjs';
 import { verifyPrivateGrant, privateFailure } from './private-card-facade.mjs';
@@ -12,6 +12,7 @@ export function roleAccess(port,request,token,scopes) {
   if(!token||typeof token!=='object')fail('authority_required');
   const grants=[];
   const authorize=(namespace,primary=false,selectedPort=port)=>{
+    selectedPort=contentAuthorityPort(selectedPort);
     const selected=deepFreeze(primary?{...request,namespace}:{...request,namespace,actionClass:'read',actionId:null,targetId:null,expectedRevision:null});
     let grant,generation;
     try {grant=selectedPort.authorize(selected,token);if(!grant||typeof grant!=='object'||typeof grant.then==='function')fail('authority_required');generation=verifyPrivateGrant(selectedPort.isCurrent(grant,selected),selected);}catch{fail('authority_required');}
@@ -38,6 +39,6 @@ export function createRoleProfileFacade(storage,options,config) {
       return {ok:true,value:storage.mutate(method,namespace,payload,request.payloadBinding,fields,changeReason,options.attribution)};
     }catch(error){return privateFailure(error);}
   };
-  return contentSafetyFacade({...result,readRoleTaskContext:createRoleContextReader(storage,options,config)}, { writeBoundary:storage,
-    check: (scopes,{delivery}) => { storage.ready(); if (!delivery && scopes.length && cachedContentLayout(storage.db)?.suppressionRevision && hasContentSuppressionRequestInside(storage.db) && !storage.db.isTransaction) { contentSuppressionRequestInside(storage.db,scopes,{defer:true}); return; } assertContentScopes(storage.db,scopes); }, failure: privateFailure, validate: (method,args,result,scopes) => { if(method==='readRoleTaskContext'&&result?.ok)storage.assertContentOutput(result.value,scopes); } });
+  return contentSafetyFacade({...result,readRoleTaskContext:createRoleContextReader(storage,options,config)}, { writeBoundary:storage, portGuard:scopes=>contentScopeEpochGuard(storage.db,scopes),
+    check: (scopes,{delivery}) => { storage.ready(); if (!delivery && scopes.length && cachedContentLayout(storage.db)?.suppressionRevision && hasContentSuppressionRequestInside(storage.db) && !storage.db.isTransaction) { contentSuppressionRequestInside(storage.db,scopes,{defer:true}); return; } if(delivery)assertContentSuppressionRequestInside(storage.db,scopes); assertContentScopes(storage.db,scopes); }, failure: privateFailure, validate: (method,args,result,scopes) => { if(method==='readRoleTaskContext'&&result?.ok)storage.assertContentOutput(result.value,scopes); } });
 }

@@ -1,10 +1,15 @@
+import { sourceRef, snapshot as authoritySnapshot } from './private-card-input.mjs';
 import { withContentWriteOperation, contentWriteMethodClass, contentWriteBoundaryConnection } from './content-write-context.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { contentReadSafety, sourceReadSafety } from './content-safety.mjs';
 import { types } from 'node:util';
 import { cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
 import { contentSuppressionFenceInside, contentSuppressionReasonInside, contentSuppressionMayMatchInside, contentSuppressionRequestFenceInside, cachedContentSuppressionRequestInside, hasContentSuppressionRequestInside, contentSuppressionRequestInside, withoutContentSuppressionReadCacheInside, withContentSuppressionRequest } from './content-suppression-storage.mjs';
-import { fail } from './validation.mjs';
+import { fail, MemoryStoreError } from './validation.mjs';
+// This boundary is in the CLI's static import closure. Keep error framing free
+// of the database module so help/configuration never links node:sqlite.
+const isStorageBusy = error => error?.code === 'ERR_SQLITE_ERROR' &&
+  Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 0xff);
 
 /** Capture primitive scope bindings before any caller callback or await. Never
  * inspect credentials, invoke accessors, or infer a namespace from current rows. */
@@ -34,7 +39,7 @@ export function assertContentScopes(db, scopes, code = 'evidence_unavailable') {
   if (!db || !(cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision) return;
   // installedContentLayout reattests changed metadata and shares native refusal.
   if (scopes.length && hasContentSuppressionRequestInside(db)) contentSuppressionRequestInside(db, scopes);
-  else installedContentLayout(db);
+  else if (!cachedContentSuppressionRequestInside(db)) installedContentLayout(db);
   for (const ns of scopes) {
     if (contentSuppressionReasonInside(db, ns)) fail(code);
     // Owner-only APIs aggregate namespaces: any erased namespace makes an
@@ -51,6 +56,7 @@ export function assertContentScopes(db, scopes, code = 'evidence_unavailable') {
 const closedCaptureControl = Object.freeze({ok:true,value:Object.freeze({classification:Object.freeze({status:'failed'})})});
 
 const activeReadBoundaries = new AsyncLocalStorage();
+const callerPortReads = new AsyncLocalStorage();
 
 /** One entry/delivery boundary, shared by synchronous and asynchronous facades.
  * New methods are gated by default; the independently frozen test inventory
@@ -78,6 +84,9 @@ export function contentSafetyFacade(api, { check, noOwner = [], failure, select 
           throw error;
         };
         try {
+          // An engine snapshot held by a synchronous host callback cannot
+          // certify a new caller read after another connection commits a fact.
+          if(callerPortReads.getStore()&&native?.isOpen!==false&&native?.isTransaction&&contentWriteMethodClass(method)==='read')fail('evidence_unavailable');
           scopes = contentScopes(select(args, method));
           check(scopes,{delivery:false});
           const deliver = result => {
@@ -106,7 +115,12 @@ export function contentSafetyFacade(api, { check, noOwner = [], failure, select 
         boundaries.set(native,new Set([...(enclosing?.get(native) ?? []),facadeToken]));
         return activeReadBoundaries.run(boundaries,execute);
       };
-      const start = () => reentered ? withContentSuppressionRequest(scoped,{fresh:true}) : requestScope ? requestScope(scoped, method) : contentWriteMethodClass(method) === 'read' ? withContentSuppressionRequest(scoped) : scoped();
+      const begin = () => requestScope ? requestScope(scoped, method) : contentWriteMethodClass(method) === 'read' ? withContentSuppressionRequest(scoped) : scoped();
+      // A caller port may issue multiple independent reads. Its fresh callback
+      // context is not itself a read request: each outermost facade invocation
+      // must obtain a new proof, even when that callback is still awaiting.
+      const start = () => reentered || callerPortReads.getStore() && native && !enclosing?.has(native) && contentWriteMethodClass(method)==='read'
+        ? withContentSuppressionRequest(begin,{fresh:true}) : begin();
       const connection = contentWriteMethodClass(method) === 'write' && contentWriteBoundaryConnection(writeBoundary);
       return connection ? withoutContentSuppressionReadCacheInside(connection, start) : start();
     }];
@@ -117,10 +131,85 @@ export function contentSafetyFacade(api, { check, noOwner = [], failure, select 
 // Preserve the entry fence through awaits; do not dispatch retained text again
 // after any fact advanced. Legacy stores acquire no additional SQL statements.
 const contentPorts = new AsyncLocalStorage();
+export const hasContentPortBoundary = () => Boolean(contentPorts.getStore());
 export function assertContentPort(phase) {
   // Caller re-entry is a new read request, not trusted facade forwarding.
-  if (phase?.invoke) return activeReadBoundaries.exit(() => withContentSuppressionRequest(phase.invoke,{fresh:true}));
+  if (phase?.invoke) return callerPortReads.run(true,()=>activeReadBoundaries.exit(() => withContentSuppressionRequest(phase.invoke,{fresh:true})));
   contentPorts.getStore()?.(phase);
+}
+// Materialize caller data while still inside its port boundary. Property,
+// Proxy and iterator hooks run here, before the single epoch observation. No
+// caller prototype, accessor, iterator or coercion hook survives the copy.
+export function inertContentPortValue(value, code = 'invalid_input') {
+  let remaining = 3_000_000;
+  const active = new Set();
+  function copy(input, depth = 0) {
+    if (--remaining < 0 || depth > 32) fail(code);
+    if (input === null || ['undefined','string','number','boolean','bigint'].includes(typeof input)) return input;
+    if (typeof input !== 'object' || active.has(input)) fail(code);
+    active.add(input);
+    try {
+      if (Array.isArray(input) || ArrayBuffer.isView(input)) {
+        const length = input.length;
+        if (!Number.isSafeInteger(length) || length < 0 || length > remaining) fail(code);
+        const result = [];
+        for (const item of input) {
+          if (result.length >= length) fail(code);
+          result.push(copy(item, depth + 1));
+        }
+        if (result.length !== length) fail(code);
+        // Keep enumerable non-index fields so downstream shape validation
+        // does not accidentally accept an array it previously refused.
+        for (const key of Object.keys(input)) {
+          const index=Number(key);
+          if (Number.isInteger(index) && index>=0 && index<length && String(index)===key) continue;
+          Object.defineProperty(result,key,{value:copy(input[key],depth+1),enumerable:true,writable:true,configurable:true});
+        }
+        return result;
+      }
+      const result = {};
+      for (const key of Object.keys(input)) Object.defineProperty(result, key, {
+        value: copy(input[key], depth + 1), enumerable: true, writable: true, configurable: true,
+      });
+      return result;
+    } finally { active.delete(input); }
+  }
+  try { return copy(value); }
+  catch { fail(code); }
+}
+
+// Preserve opaque grant identity only inside the next host invocation. Engine
+// checks receive plain snapshots; no host getter or Proxy survives that return.
+const authorityPorts=new WeakMap(),promiseThen=Promise.prototype.then;
+export function contentAuthorityPort(port, snapshotValue = authoritySnapshot) {
+  if(!port||!['object','function'].includes(typeof port))fail('authority_required');
+  let ports=authorityPorts.get(snapshotValue);if(!ports){ports=new WeakMap();authorityPorts.set(snapshotValue,ports);}
+  if(ports.has(port))return ports.get(port);
+  const grants=new WeakMap(),methods={};
+  for(const name of ['authorize','isCurrent']){
+    let method;
+    for(let value=port;value;value=Object.getPrototypeOf(value)){
+      if(types.isProxy(value))fail('authority_required');
+      const descriptor=Object.getOwnPropertyDescriptor(value,name);
+      if(descriptor){if(!Object.hasOwn(descriptor,'value'))fail('authority_required');method=descriptor.value;break;}
+    }
+    if(typeof method!=='function'||types.isAsyncFunction(method))fail('authority_required');
+    methods[name]=(...input)=>assertContentPort({invoke:()=>{
+      try{
+        const args=[...input];if(name==='isCurrent'&&grants.has(args[0]))args[0]=grants.get(args[0]);
+        const value=Reflect.apply(method,port,args);
+        if(types.isPromise(value)){Reflect.apply(promiseThen,value,[undefined,()=>{}]);fail('authority_required');}
+        let snapshot;try{snapshot=snapshotValue(value);}catch{fail('authority_required');}
+        if(snapshot&&typeof snapshot==='object')grants.set(snapshot,value);
+        return snapshot;
+      }catch(error){
+        let code='storage_error';
+        try{if(isStorageBusy(error))code='storage_busy';else{const candidate=error instanceof MemoryStoreError?error.code:undefined;if(typeof candidate==='string')code=candidate;}}catch{}
+        throw new MemoryStoreError(code);
+      }
+    }});
+  }
+  const bound=Object.freeze(methods);ports.set(port,bound);ports.set(bound,bound);return bound;
 }
 export function contentScopeEpochGuard(db, scopes) {
   if (!db || !(cachedContentLayout(db) ?? installedContentLayout(db)).suppressionRevision) return undefined;
@@ -192,7 +281,7 @@ export function assertContentOutput(db, identity, value, scopes = [], { factsOnl
       (node.receiptId||node.sourceId||node.conversationId)) {
       if(factsOnly)fact(namespace,node.type,node.receiptId??node.sourceId??node.conversationId,node.revision,
         {messageId:node.messageId,start:node.span?.start,end:node.span?.end});
-      else if(!cachedContentSuppressionRequestInside(db,namespace.ownerId)?.sourcesChecked?.has(JSON.stringify(node)) && !sourceReadSafety(db,{identity,namespace,ref:node}).allowed)fail('evidence_unavailable');
+      else if(!cachedContentSuppressionRequestInside(db,namespace.ownerId)?.sourcesChecked?.has(JSON.stringify(node)) && !cachedContentSuppressionRequestInside(db,namespace.ownerId)?.sourcesChecked?.has(JSON.stringify(sourceRef(node,namespace,true))) && !sourceReadSafety(db,{identity,namespace,ref:node}).allowed)fail('evidence_unavailable');
     }
     if(namespace) {
       if(node.id && node.revision) {

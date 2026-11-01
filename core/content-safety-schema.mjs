@@ -197,9 +197,12 @@ export const contentSafetyBudgetError = error =>
   ['source_budget_exceeded','read_budget_exceeded','budget_exceeded','read_timeout'].includes(error?.code) ||
   ['deadline','work_limit','state_limit'].includes(error?.reason);
 const servingLayout = new AsyncLocalStorage();
-export function withContentSafetyLayoutInside(db, work) {
+export function withContentSafetyLayoutInside(db, work, proof) {
   if(!db.isTransaction)fail('storage_error');
-  const layout=installedContentLayout(db);
+  // A request proof is reused only inside engine-owned synchronous work. The
+  // public delivery fence still reattests the header independently.
+  cachedContentLayout(db);
+  const layout=proof ?? installedContentLayout(db);
   return servingLayout.run({native:contentSafetyConnection(db),layout},()=>work(layout));
 }
 const layouts = new WeakMap();

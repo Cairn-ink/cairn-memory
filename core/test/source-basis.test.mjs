@@ -189,9 +189,10 @@ test('SB5 receipt mutation during model call or output compilation invalidates t
         return output();
       }
       if (when === 'call') { mutate(); return output(); }
-      const value = output(); return { get units() { if (++reads === 2) mutate(); return value.units; }, links: value.links };
+      const value = output(); return { get units() { if (++reads === 1) mutate(); return value.units; }, links: value.links };
     };
     assert.equal((await f.review()).error.code, when === 'corruption' ? 'storage_error' : 'revision_conflict');
+    if(when==='compilation')assert.equal(reads,1,'provider getter runs once during inert materialization');
     assert.equal(f.db.prepare('SELECT count(*) n FROM rationale_edges').get().n, 0);
   }
 });
@@ -245,8 +246,9 @@ test('SB10 changing output getters cannot bypass the compiled proposal token bud
   let reads = 0;
   const model = { contextWindow: 8192, countTokens: text => text.length,
     reviewBasis: () => ({ get units() { return ++reads === 1 ? [] : units; }, links: [] }) };
-  await assert.rejects(reviewSourceBasis(model, sources, () => {}), { code: 'invalid_model_output' });
-  assert.equal(reads, 2);
+  assert.deepEqual(await reviewSourceBasis(model, sources, () => {}),{units:[],links:[]},'count and compile consume the same inert return');
+  assert.equal(reads,1,'no later caller getter can change the compiled proposal');
+  await assert.rejects(reviewSourceBasis({...model,reviewBasis:()=>({units,links:[]})},sources,()=>{}),{code:'invalid_model_output'},'the actual oversized proposal still fails the token budget');
 });
 test('SB11 challenges require a support chain to a decision, not just compatible endpoint roles', async t => {
   const f = fixture(t); const before = f.stored();

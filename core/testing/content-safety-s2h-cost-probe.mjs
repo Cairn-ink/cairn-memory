@@ -1,52 +1,15 @@
-// Synthetic in-memory transport reproduces the frozen query-cost fixture.
-// Production query SQL is loaded unchanged; only file/Worker plumbing is adapted.
-
-import {register} from 'node:module';
-import {DatabaseSync} from 'node:sqlite';
-import {readFileSync} from 'node:fs';
-import {fileURLToPath} from 'node:url';
-import {randomUUID} from 'node:crypto';
-import {EventEmitter} from 'node:events';
+// Explicit product query/assembly/status cost probes. SQL uses the production
+// dispatcher; the harness substitutes only file/Worker transport plumbing.
+import { initializeProbe } from './content-safety-s2h-probe-harness.mjs';
+import { DatabaseSync } from 'node:sqlite';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import assert from 'node:assert/strict';
 const root=fileURLToPath(new URL('../../',import.meta.url));
-register('data:text/javascript,'+encodeURIComponent("\nimport {readFile} from 'node:fs/promises';\nconst root=ROOT;\nexport async function resolve(spec,ctx,next){\n if(spec==='node:worker_threads' && ctx.parentURL?.endsWith('/core/context-product-reader.mjs'))return {url:'probe:/shim-worker',shortCircuit:true};\n if(spec==='node:fs' && ctx.parentURL?.startsWith('probe:/') && !ctx.parentURL.includes('/shim-'))return {url:'probe:/shim-fs',shortCircuit:true};\n if(spec==='node:sqlite' && ctx.parentURL?.startsWith('probe:/') && !ctx.parentURL.includes('/shim-'))return {url:'probe:/shim-sqlite',shortCircuit:true};\n if(spec.startsWith('probe:'))return {url:spec,shortCircuit:true};\n if(spec.startsWith('.')&&ctx.parentURL?.startsWith('probe:/'))return {url:new URL(spec,ctx.parentURL).href,shortCircuit:true};\n return next(spec,ctx);\n}\nexport async function load(url,ctx,next){\n if(url==='probe:/shim-worker')return {format:'module',shortCircuit:true,source:`export * from 'node:worker_threads';export class Worker{constructor(url,options){return new globalThis.__probe.ProbeWorker(options.workerData)}}`};\n if(url==='probe:/shim-fs')return {format:'module',shortCircuit:true,source:`export * from 'node:fs';import * as fs from 'node:fs';export function lstatSync(p,o){return globalThis.__probe.stat(p,o,fs.lstatSync)};export function readFileSync(p,o){return globalThis.__probe.read(p,o,fs.readFileSync)};`};\n if(url==='probe:/shim-sqlite')return {format:'module',shortCircuit:true,source:`export * from 'node:sqlite';export function DatabaseSync(p,o){return globalThis.__probe.open(p,o)};`};\n if(url.endsWith('/core/sqlite-journal-probe.mjs'))return {format:'module',shortCircuit:true,source:`export const sqliteFileStat=p=>globalThis.__probe.stat(p,{bigint:true});export const probeRollbackJournal=()=>({mode:'delete',code:0});export function createExclusiveSqliteFile(){throw Error('unexpected file creation')}`};\n if(url.startsWith('probe:/')){\n const m=/^probe:\\/([^/]+)\\/(.+)$/.exec(url);if(!m)throw Error(url);\n const source=await readFile(root+'/'+m[2],'utf8');\n return {format:'module',source,shortCircuit:true};\n }\n return next(url,ctx);\n}\n".replace('ROOT',JSON.stringify(root))),import.meta.url);
-const rev=process.argv[2]??'f0563088', n=Number(process.argv[3]??300), physical=Number(process.argv[4]??34), factCount=process.argv[5]??'0';
-const load=p=>import('probe:/'+rev+'/core/'+p+'.mjs');
-const dbs=new Map(), originals=new Map();let memorySerial=0;
-globalThis.__probe={
- read(p,o,actual){if(!String(p).startsWith('probe:/'))return actual(p,o);const m=/^probe:\/([^/]+)\/(.+)$/.exec(String(p));return readFileSync(root+'/'+m[2],o);},
- open(p,o){
-  if(p===':memory:'){const db=new DatabaseSync(':memory:');globalThis.__probe.latest=db;return db;}
-  p=String(p).replace(/^file:\/\//,'').split('?')[0];
-  if(!dbs.has(p))throw Error('unknown synthetic DB '+p);
-  return dbs.get(p);
- },
- stat(p,o,actual){
-  p=String(p);if(!p.startsWith('/synthetic/')){if(actual)return actual(p,o);throw Error('unexpected path '+p);}
-  if(!dbs.has(p))throw Object.assign(Error('synthetic absent'),{code:'ENOENT'});
-  const big=o?.bigint;const num=x=>big?BigInt(x):x;
-  return {dev:num(1),ino:num([...dbs.keys()].indexOf(p)+1),size:num(8192),mode:num(0o100600),mtimeNs:num(1),ctimeNs:num(1),isFile:()=>true,isSymbolicLink:()=>false};
- }
-};
-const {openMemoryCore}=await load('contract');
-const {openDatabase,transaction}=await load('database');
-const authority={authorize:()=>null,isCurrent:()=>null};
-const rawBase=[23,33,38,48].includes(physical)?{privateCards:{version:'private-cards-local-v1',source:'submitted-note-v1',storage:'local-plain-v1',disclosure:'explicit-submitted-note-v1',authority,currentDependencies:{version:'card-current-dependencies-v1'}},methodPackages:{version:'method-packages-local-v1',storage:'local-plain-v1',authority}}:{};
-if ([23,38].includes(physical)) { delete rawBase.methodPackages; delete rawBase.privateCards.currentDependencies; }
-const core=openMemoryCore({path:':memory:',...rawBase});const canonical=__probe.latest;
-const ns={ownerId:'synthetic-probe-owner',scope:'personal',projectId:null};
-const memories=[];
-for(let i=0;i<n;i++){
- const r=core.admit({namespace:ns,memory:{content:'probecommon synthetic memory '+String(i).padStart(5,'0'),kind:'fact'},receipts:[{client:'synthetic',sessionId:'probe',eventId:String(i),role:'user',excerpt:'synthetic receipt '+i}]});
- assert.equal(r.ok,true,JSON.stringify(r));memories.push(r.value.memory);
-}
-const base=[33,48].includes(physical)?33:[23,38].includes(physical)?23:18;
-assert.equal(canonical.prepare('PRAGMA user_version').get().user_version,base);
-if([34,38,48].includes(physical)){
- const {installContentSafetyInside,contentSafetyInventory}=await load('content-safety-migration');
- transaction(canonical,()=>installContentSafetyInside(canonical,base,contentSafetyInventory(canonical)));
-}
-const {attestContentSafety}=await load('content-safety-schema');attestContentSafety(canonical);
+export async function runProductProbe({kind='query',physical,n,factCount='0',absent=false,mode='lexical',limitItems=12}) {
+const {core,canonical,load,dbs,originals,ns,memories,transaction,rev}=await initializeProbe({physical,n,factCount});
 const path='/synthetic/store.sqlite', suffix='.context-read-product-v1.1.sqlite', side=new DatabaseSync(':memory:'), lock=new DatabaseSync(':memory:');
 const source=readFileSync(root+'/core/context-product-sidecar.mjs','utf8');
 const ddl=/const ddl = `([\s\S]*?)`;/.exec(source)[1],{VECTOR_DDL}=await load('context-product-vectors');
@@ -65,6 +28,20 @@ const bindService={...baseBinding,kind:'service',serviceId:randomUUID(),credenti
 const authorizer=b=>requestAuthority({authorize:()=>b,isCurrent:()=>true},b,{});
 const maintainAuth=authorizer(bindService),maintainFacade=openContextProductFacade(path,{authorize:maintainAuth});
 const maintainer=openProductIndex({path,facade:maintainFacade,authorize:maintainAuth,ownerCoverage,maintenance:true,sidecarJournalMode:'DELETE'});
+if(kind==='maintenance') {
+ const {measureContentRead}=await import('./content-safety-cost-meter.mjs');
+ canonical.exec('PRAGMA query_only=OFF');
+ if(Number(factCount)){
+  const {writeContentSuppressionInside}=await load('content-suppression-storage');
+  transaction(canonical,()=>{for(let i=0;i<Number(factCount);i++)writeContentSuppressionInside(canonical,{namespace:{...ns,scope:'project',projectId:'unrelated'},kind:'memory',key:'unrelated-'+i,reason:'purge',actionId:'fact-'+i});});
+ }
+ for(const intent of ['current','history'])for(const phase of ['first','repeat']){
+  const row=await measureContentRead('refreshContextIndex',intent+'-'+phase,()=>maintainer.run('refreshContextIndex',{readSet:[ns],types:['memory'],intent,mode:'lexical',budget:{maxItems:1024,maxMs:5000}},token));
+  assert.equal(row.result.ok,true,JSON.stringify(row.result));assert.equal(row.result.value.status,'complete');
+  console.log(JSON.stringify({phase:'maintenance',n,physical,factCount,...row,result:undefined}));
+ }
+ maintainer.close();maintainFacade.close();core.close();for(const [db,close]of originals)close();return;
+}
 for(const intent of ['current','history']){
  let complete=false;
  for(let i=0;i<100;i++){
@@ -86,9 +63,9 @@ class ProbeWorker extends EventEmitter{
  constructor(data){super();this.data=data;this.stdout={resume(){}};this.stderr={resume(){}};queueMicrotask(()=>{try{
  const authorize=(m,p,c)=>requestAuthority({authorize:()=>data.binding,isCurrent:()=>true},data.binding,data.request)(m,p,c);
  this.facade=openContextProductFacade(path,{authorize});
- this.index=openProductIndex({path,facade:this.facade,authorize,ownerCoverage,maintenance:false,
-   ...(process.argv[7]?.startsWith('semantic')?{semantic:{snapshot:async()=>{
-     if(process.argv[7]==='semantic-late-fact' && !expectedFailure){
+ this.index=openProductIndex({path,facade:this.facade,authorize,ownerCoverage,maintenance:false,counter:{id:"synthetic",countTokens:()=>{if(active)active.counterCalls=(active.counterCalls??0)+1;return 1;}},
+   ...(mode.startsWith('semantic')?{semantic:{snapshot:async()=>{
+     if(mode==='semantic-late-fact' && !expectedFailure){
        canonical.exec('PRAGMA query_only=OFF');
        transaction(canonical,()=>suppressOwnerInside(canonical,{ownerId:ns.ownerId,reason:'account_erasure',actionId:'during-semantic-snapshot'}));
        canonical.exec('PRAGMA query_only=ON');expectedFailure=true;
@@ -98,7 +75,7 @@ class ProbeWorker extends EventEmitter{
      operation:()=>({operationCutoffMonoNs:String(process.hrtime.bigint()+5000000000n)})}:{})});
  this.emit('message',{operation:data.operation,result:{ok:true,value:null},fileIdentity:this.facade.fileIdentity});
  }catch(e){console.error(e);this.emit('error',e);}});}
- postMessage(msg){if(msg.method==='close'){queueMicrotask(()=>this.terminate());return;}queueMicrotask(async()=>{try{const r=await this.index.run(msg.method,msg.input,msg.credential);this.emit('message',{operation:msg.operation,result:r});}catch(e){console.error(e);this.emit('error',e);}});}
+ postMessage(msg){if(msg.method==='close'){queueMicrotask(()=>this.terminate());return;}queueMicrotask(async()=>{try{const fetch=()=>{const {deadlineMs,...input}=msg.input;return this.facade.fetchCandidateEvidence(input,msg.credential,msg.input);};const r=msg.method==='fetchCandidateEvidence'?fetch():await this.index.run(msg.method,msg.input,msg.credential);this.emit('message',{operation:msg.operation,result:r});}catch(e){console.error(e);this.emit('error',e);}});}
  unref(){}ref(){}async terminate(){this.index?.close();this.facade?.close();this.emit('exit',0);return 0;}
 }
 __probe.ProbeWorker=ProbeWorker;
@@ -112,19 +89,25 @@ DatabaseSync.prototype.prepare=function(sql){const connection=this;record('prepa
 DatabaseSync.prototype.exec=function(sql){if(active)for(const s of sql.split(';').filter(x=>x.trim()))record('exec',s,this);return nativeExec.call(this,sql);};
 async function measure(label,query){
  active={prepare:0,get:0,all:0,iterate:0,run:0,exec:0,sql:{},stacks:[],safetyTrace:[]};
- const result=await reader.findCandidates(query,token);const c=active;active=null;
+ const result=kind==='evidence'?await reader.fetchCandidateEvidence({readSet:[ns],...(query.snapshot?{snapshot:query.snapshot}:{intent:query.intent,refs:memories.slice(Number(factCount)>0?5:0,(Number(factCount)>0?5:0)+limitItems).map(m=>({type:'memory',namespace:ns,memoryId:m.id,revision:m.revision}))})},token):kind==='context' ? await reader.contextRead((({limit,...input})=>({...input,budget:{maxTokens:4000,maxItems:limitItems}}))(query),token)
+   : kind==='status' ? await reader.getContextIndexStatus({readSet:[ns],types:['memory'],intent:query.intent},token)
+   : await reader.findCandidates(query,token);const c=active;active=null;
  const executed=c.get+c.all+c.iterate+c.run;
- console.log(JSON.stringify({phase:'query',label,node:process.version,rev,n,physical,factCount,prepare:c.prepare,executed,exec:c.exec,totalExecuted:executed+c.exec,preparePlusExecuted:c.prepare+executed+c.exec,ok:result.ok,error:result.error?.code,items:result.value?.items.length,eligible:result.value?.coverage.byType.memory.eligible,safetyTrace:c.safetyTrace,sqlSummary:Object.entries(c.sql).map(([sql,v])=>({sql,prepare:v.prepare,executions:v.get+v.all+v.iterate+v.run,exec:v.exec})),stacks:c.stacks}));
- if(factCount==='owner'||expectedFailure)assert.equal(result.error?.code,'evidence_unavailable');else {assert.equal(result.ok,true,JSON.stringify(result));assert.equal(result.value.coverage.byType.memory.eligible,physical===48&&Number(factCount)>0?null:n-effectiveFacts);}
+ console.log(JSON.stringify({phase:'query',label,node:process.version,rev,n,physical,factCount,method:kind==='context'?'contextRead':kind==='status'?'getContextIndexStatus':kind==='evidence'?'fetchCandidateEvidence':'findCandidates',case:label,counterCalls:c.counterCalls??0,prepare:c.prepare,executed,exec:c.exec,totalExecuted:executed+c.exec,preparePlusExecuted:c.prepare+executed+c.exec,ok:result.ok,error:result.error?.code,items:kind==='context'?result.value?.metered?.items?.length:result.value?.items?.length,empty:kind==='status'?null:kind==='context'?result.value?.metered?.items?.length===0:result.value?.items?.length===0,eligible:result.value?.coverage?.byType?.memory?.eligible,safetyTrace:c.safetyTrace,sqlSummary:Object.entries(c.sql).map(([sql,v])=>({sql,prepare:v.prepare,executions:v.get+v.all+v.iterate+v.run,exec:v.exec})),stacks:c.stacks}));
+ if(factCount==='owner'||expectedFailure)assert.equal(result.error?.code,'evidence_unavailable');else {assert.equal(result.ok,true,JSON.stringify(result));if(kind==='query')assert.equal(result.value.coverage.byType.memory.eligible,physical===48&&Number(factCount)>0?null:n-effectiveFacts);if(absent&&kind!=='status'&&kind!=='evidence')assert.equal(kind==='context'?result.value.metered.items.length:result.value.items.length,0);}
  return result;
 }
 for(const intent of ['current','history']){
- const query={readSet:[ns],types:['memory'],intent,query:process.argv[6]==='absent'?'absentterm':'probecommon',limit:12,deadlineMs:5000,...(process.argv[7]?.startsWith('semantic')?{semantic:true}:{})};
+ const query={readSet:[ns],types:['memory'],intent,query:absent?'absentterm':'probecommon',limit:12,deadlineMs:5000,...(mode.startsWith('semantic')?{semantic:true}:{})};
  const first=await measure(intent+'-first',query);await measure(intent+'-repeat',query);
- if(first.ok&&first.value.nextCursor)await measure(intent+'-cursor',{...query,cursor:first.value.nextCursor});
+ if(kind==='evidence'&&first.ok)await measure(intent+'-snapshot',{...query,snapshot:first.value.snapshot});
+ if(kind==='query'&&first.ok&&first.value.nextCursor)await measure(intent+'-cursor',{...query,cursor:first.value.nextCursor});
 }
 
 DatabaseSync.prototype.prepare=nativePrepare;DatabaseSync.prototype.exec=nativeExec;
 await reader.close();await supervisor.close();
 for(const [db,close]of originals)close();
 console.log(JSON.stringify({phase:'done'}));
+
+}
+if(process.argv[1]===fileURLToPath(import.meta.url))await runProductProbe({n:Number(process.argv[3]??300),physical:Number(process.argv[4]??34),factCount:process.argv[5]??'0',absent:process.argv[6]==='absent',mode:process.argv[7]??'lexical'});

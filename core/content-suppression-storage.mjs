@@ -209,7 +209,10 @@ export function inContentSuppressionRequestInside(db, work, fallbackReadSet) {
 // One bounded owner set per request and epoch; a larger set uses indexed seeks.
 export function withContentSuppressionReadInside(db, readSet, work) {
   const state = cachedContentSuppressionRequestInside(db, readSet[0].ownerId);
-  if (state) { const view = contentSuppressionRequestInside(db, readSet); return requestFacts.run(view, () => work(view)); }
+  if (state) {
+    const view=contentSuppressionRequestInside(db,readSet),invoke=()=>requestFacts.run(view,()=>work(view));
+    return db.isTransaction ? withContentSafetyLayoutInside(db,invoke,view.layout) : invoke();
+  }
   return withContentSafetyLayoutInside(db, () => {
     const snapshot = contentSuppressionRequestInside(db, readSet);
     return requestFacts.run(snapshot, () => work(snapshot));

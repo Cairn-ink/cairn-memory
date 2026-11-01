@@ -1,3 +1,4 @@
+import { contentSuppressionReasonInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety, memoryReadEligible, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { createHash, timingSafeEqual } from 'node:crypto';
@@ -136,19 +137,34 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     const byType = Object.fromEntries(input.types.map(type => [type, { scanned: 0, included: 0, partial: true }]));
     const exhausted = new Set(), blocked = new Set(), matches = [], queryWords = words(input.query);
     function next(type, metadataOnly = false) {
-      const columns = metadataOnly ? (cachedContentLayout(db)?.suppressionRevision
+      const layout=cachedContentLayout(db);
+      let columns = metadataOnly ? (layout?.suppressionRevision
         ? 'id,revision'+(type==='card'?',body_revision':'') : 'id') : '*';
+      if(type==='memory'&&layout?.suppressionRevision&&layout.rawLineage)columns+=`,EXISTS(
+        SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id
+        LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=memories.id
+        AND (ac.owner_id IS NOT memories.owner_id OR ac.scope IS NOT memories.scope OR ac.project_id IS NOT memories.project_id)) AS invalid_raw_ancestry`;
       const row = type === 'memory' ? db.prepare(`SELECT ${columns} FROM memories WHERE ${where}
         AND deleted=0 AND id>? ORDER BY id LIMIT 1`).get(...boundary(ns), after[type]) :
         db.prepare(`SELECT ${columns} FROM private_cards WHERE ${where} AND state='confirmed' AND id>? ORDER BY id LIMIT 1`)
           .get(...boundary(ns), after[type]);
       return row;
     }
-    function assertContributor(type,row) {
-      if(!row || !cachedContentLayout(db)?.suppressionRevision)return;
-      const ref={type,namespace:ns,[type==='memory'?'memoryId':'cardId']:row.id,revision:row.revision,
-        ...(type==='card'?{bodyRevision:row.body_revision}:{})};
-      if(!contentReadSafety(db,{identity,namespace:ns,ref,intent:'history',method:type==='card'?'getCard':'retrieval'}).allowed)fail('evidence_unavailable');
+    function assertContributor(type,row,peek=false) {
+      const layout=cachedContentLayout(db);
+      if(!row || !layout?.suppressionRevision)return;
+      if(type==='memory'){
+        if(row.invalid_raw_ancestry||contentSuppressionReasonInside(db,ns,{kind:'memory',key:row.id,
+          revision:row.revision,version:JSON.stringify(['memory-revision-v1',row.revision]),
+          ancestryChecked:!layout.rawLineage||Object.hasOwn(row,'invalid_raw_ancestry')}))fail('evidence_unavailable');
+        return;
+      }
+      const proof=cachedContentSuppressionRequestInside(db,ns.ownerId);
+      if(peek&&proof?.facts?.length===0&&proof.readSet.some(n=>n.scope==='owner'||n.scope===ns.scope&&(n.projectId??'')===(ns.projectId??'')))return;
+      // Share this decision with the existing detail read, including its
+      // contributor/source memo. No extra canonical pass per scanned Card.
+      if(!contentReadSafety(db,{identity,namespace:ns,memo,method:'getCard',
+        ref:{type:'card',namespace:ns,cardId:row.id,revision:row.revision,bodyRevision:row.body_revision}}).allowed)fail('evidence_unavailable');
     }
     while (matches.length < input.limit && exhausted.size + blocked.size < input.types.length) {
       if (scannedRows >= input.scanRows) { stopped = 'row_budget'; break; }
@@ -174,7 +190,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     }
     // A metadata-only bounded peek tells callers which streams actually ended.
     for (const type of input.types) if (!blocked.has(type)) {
-      const peek=next(type,true);assertContributor(type,peek);if(!peek)exhausted.add(type);
+      const peek=next(type,true);assertContributor(type,peek,true);if(!peek)exhausted.add(type);
     }
     const complete = exhausted.size === input.types.length;
     for (const type of input.types) byType[type].partial = !exhausted.has(type);

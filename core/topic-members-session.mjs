@@ -1,4 +1,4 @@
-import { withContentSuppressionRequest } from './content-suppression-storage.mjs';
+import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { attestContentSafety, checkInstalledContentSafety } from './content-safety-schema.mjs';
 import { unsupportedTopicStorage } from './topic-reader-sqlite.mjs';
@@ -18,7 +18,7 @@ const configuration = db => ({ version: db.prepare('PRAGMA user_version').get().
 /** The native handle is lazy; all opening queries run after the caller installs
  * its work meter. The full schema walk resumes from acknowledged traversal data. */
 export function createTopicSession(path, topicPolicy) {
-  let connection, schema, opening, overview, members, readMemo, dirty = false;
+  let connection, schema, opening, overview, members, readMemo, requestNamespace, dirty = false;
   function dispose() {
     connection?.db.close(); connection = opening = overview = members = undefined; dirty = false;
   }
@@ -27,6 +27,7 @@ export function createTopicSession(path, topicPolicy) {
     fail('cursor_stale');
   }
   function prepare({ charge, request }) {
+    requestNamespace = request.namespace;
     if (connection) {
       try { connection.assertFile(); } catch (error) {
         if (!['cursor_stale', 'database_not_found', 'unsafe_database_file'].includes(error.code)) throw error;
@@ -79,7 +80,7 @@ export function createTopicSession(path, topicPolicy) {
   function transaction(work) {
     return withContentSuppressionRequest(() => {
       connection.db.exec('BEGIN');
-      try { const value = work(); connection.db.exec('COMMIT'); return value; }
+      try { const value = inContentSuppressionRequestInside(connection.db,work,requestNamespace ? [requestNamespace] : undefined); connection.db.exec('COMMIT'); return value; }
       catch (error) { connection.db.exec('ROLLBACK'); throw error; }
     });
   }
@@ -96,7 +97,11 @@ export function createTopicSession(path, topicPolicy) {
     const stat = lstatSync(path);
     return { namespace, captured, file: [stat.dev, stat.ino], schema, configuration: 'topic-snapshot-v1/topic-members-v1' };
   };
-  return { prepare, transaction, snapshot, originBinding, dispose,
+  const assertDelivery = namespace => {
+    try { assertContentSuppressionRequestInside(connection.db,[namespace]); }
+    catch(error) { if(error.code==='evidence_unavailable')fail('cursor_stale');throw error; }
+  };
+  return { prepare, transaction, snapshot, originBinding, dispose, assertDelivery,
     storage: { create: () => members.create(), target: (...args) => members.target(...args),
       cost: state => members.cost(state), step: (...args) => members.step(...args) },
     accept: state => opening.accept(state?.initialization),

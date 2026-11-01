@@ -1,3 +1,4 @@
+import { inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety } from './content-safety.mjs';
 import { randomUUID } from "node:crypto";
@@ -10,7 +11,11 @@ const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, in
 
 /** Content-free job state around the shared admission mutation transaction. */
 export function createAdmissionStorage({ db, admitMutation, isSuppressed, activeRow, epoch,
-  conflictStorage, stagedEvidence, classificationJournal, episodes, proceduralStorage, assertSources, sourceRoots }) {
+  conflictStorage, stagedEvidence, classificationJournal, episodes, proceduralStorage, assertSources, sourceRoots, memoryAncestry = () => '', privacyMemoryDenied = row => {
+    if(!cachedContentLayout(db)?.suppressionRevision)return false;
+    const namespace={ownerId:row.owner_id,scope:row.scope,projectId:row.project_id};
+    return !contentReadSafety(db,{namespace,selectedMemory:row,intent:'history',ref:{type:'memory',namespace,memoryId:row.id,revision:row.revision}}).allowed;
+  } }) {
   // A current feature-off connection may predate another connection's optional
   // migration. Cache presence, never absence, so persisted guards still apply.
   let rawCaptureAvailable = false;
@@ -46,10 +51,11 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
     // A deferred read transaction gives claim state and every member one
     // consistent snapshot without acquiring an admission lease or write lock.
     db.exec('BEGIN');
+    let result;
     try {
+      inContentSuppressionRequestInside(db,()=>{
       const row = db.prepare(`SELECT state, memory_ids, suppressed_count FROM admission_claims WHERE ${where}`)
         .get(...key(ns, input));
-      let result;
       if (!row) result = { status: 'absent', classification: { status: 'unknown' } };
       else if (row.state === 'pending' || row.state === 'reserved') result = { status: 'pending', classification: { status: 'unknown' } };
       else {
@@ -59,11 +65,12 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
           !Number.isInteger(row.suppressed_count) || row.suppressed_count < 0 ||
           row.suppressed_count > 5 || new Set(ids).size !== ids.length) fail('storage_error');
         try { ids.forEach(identifier); } catch { fail('storage_error'); }
-        const findCurrent = db.prepare(`SELECT revision, filing_status FROM memories
+        const findCurrent = db.prepare(`SELECT memories.*${memoryAncestry()} FROM memories
           WHERE owner_id = ? AND scope = ? AND project_id = ? AND id = ?
             AND deleted = 0 AND review_state != 'awaiting' AND currentness = 'current'`);
         const members = ids.map((id) => {
           const current = findCurrent.get(ns.ownerId, ns.scope, ns.projectId, id);
+          if (current && privacyMemoryDenied(current)) fail('evidence_unavailable');
           return current ? { status: 'current', memoryId: id, revision: current.revision,
             filing: { status: current.filing_status } } : { status: 'closed' };
         });
@@ -72,6 +79,7 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
       }
       if (input.includeInitialClassification === true) result.initialClassification =
         row?.state === 'completed' ? classificationJournal.inspect(ns, input) : { status: 'unknown' };
+      });
       db.exec('COMMIT');
       return result;
     } catch (error) {

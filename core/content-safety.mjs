@@ -185,6 +185,7 @@ export function sourceReadSafety(db, { identity, namespace: ns, ref, strict = fa
       const state = cachedContentSuppressionRequestInside(db, ns.ownerId);
       if (state && result.allowed) {
         (state.sourcesChecked ??= new Set()).add(key);
+        state.sourcesChecked.add(JSON.stringify(sourceRef(ref,ns,true)));
         const completed = state.completed ??= new Set();
         if (ref.type === 'receipt') {
           completed.add(JSON.stringify([...boundary(ns),'memory',ref.memoryId,ref.memoryRevision]));
@@ -281,6 +282,10 @@ function canonicalContentReadSafety(db, { identity, namespace: ns, ref, method =
         strict: Boolean(policy.current?.(intent)), memo, rawBudget: source.type === 'raw' ? raw.budget(64000, rawRows ?? 1024) : undefined });
       if (!result.allowed) return result;
     }
+    // Every contributor has already completed the canonical source decision
+    // and its fact stage in this snapshot. The Card fact stage needs only its
+    // own identity; repeating contributor SQL would revalidate the same proof.
+    if (factObservation) factObservation.ancestryChecked = true;
   }
   if (type === 'card' && policy.current?.(intent) && !currentCardEligible?.()) return denied('ineligible');
   return allowed;

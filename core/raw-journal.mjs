@@ -1,9 +1,11 @@
+import { assertContentPort, inertContentPortValue } from './content-safety-boundary.mjs';
+import { inContentSuppressionRequestInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { allocateContentKey } from './content-suppression-storage.mjs';
 import { createHmac } from 'node:crypto';
-import { transaction } from './database.mjs';
-import { fail, identifier, object } from './validation.mjs';
+import { transaction, isStorageBusy } from './database.mjs';
+import { fail, identifier, object, MemoryStoreError } from './validation.mjs';
 import { rawBoundary, rawClient, rawContext, rawNamespace, rawPolicy, rawRegistration, rawSealed, RAW_CLIENTS } from './raw-input.mjs';
 import { createRawReads } from './raw-reads.mjs';
 import { createRawConversationList } from './raw-conversation-list.mjs';
@@ -74,7 +76,14 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     const current = local?.check(localAuthority,input.namespace,input.client);
     // This callback is host-owned, synchronous, model-free authority; wire data
     // has no policy fields. The same authority is checked at preparation/commit.
-    const result = rawPolicy(readPolicy(freeze({ namespace: { ...input.namespace, projectId: input.namespace.projectId || null }, client: input.client })));
+    const result = assertContentPort({invoke:()=>{
+      try{return rawPolicy(inertContentPortValue(readPolicy(freeze({namespace:{...input.namespace,projectId:input.namespace.projectId||null},client:input.client})),'invalid_input'));}
+      catch(error){
+        let code='storage_error';
+        try{if(isStorageBusy(error))code='storage_busy';else{const candidate=error instanceof MemoryStoreError?error.code:undefined;if(typeof candidate==='string')code=candidate;}}catch{}
+        throw new MemoryStoreError(code);
+      }
+    }});
     // The trusted synchronous policy can still change durable settings. A
     // revoked snapshot must not reach even the first sealing callback.
     local?.check(localAuthority,input.namespace,input.client);
@@ -177,7 +186,16 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
       // An earlier asynchronous seal can change authority before this dispatch.
       local?.check(localAuthority,input.namespace,input.client);
       try {
-        const result = rawSealed(await seal({ ownerId: ns.ownerId,context,text: message.content }));
+        let result;
+        try {
+          result = await assertContentPort({invoke:async()=>{
+            const value = await seal({ ownerId: ns.ownerId,context,text: message.content });
+            object(value,['format','keyVersion','sealed']);
+            // Read host properties once. rawSealed copies the bytes while any
+            // typed-array hooks still belong to the caller invocation.
+            return rawSealed({format:value.format,keyVersion:value.keyVersion,sealed:value.sealed});
+          }});
+        } finally { assertContentPort(); }
         if (result.format === 'local-plain-v1' && !result.sealed.equals(Buffer.from(message.content))) fail('raw_crypto_unavailable');
         sealedParts.set(message.id,result);
       } catch { fail('raw_crypto_unavailable'); }
@@ -285,7 +303,9 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
   }
   function usageSnapshot({ ownerId }) {
     identifier(ownerId);
-    if(cachedContentLayout(db)?.suppressionRevision) {
+    const proof = cachedContentSuppressionRequestInside(db,ownerId);
+    const rawFactsAbsent = proof?.facts && proof.readSet.some(ns=>ns.scope==='owner') && !proof.facts.some(f=>f.kind==='raw');
+    if(cachedContentLayout(db)?.suppressionRevision && !rawFactsAbsent) {
       const rows=db.prepare(`SELECT c.id,c.scope,c.project_id,f.message_key,f.span_start,f.span_end FROM raw_conversations c
         JOIN content_suppressions f ON f.owner_id=c.owner_id AND f.scope=c.scope AND f.project_id=c.project_id
         AND f.kind='raw' AND f.stable_key=c.id AND f.incarnation=c.id WHERE c.owner_id=? AND
@@ -311,7 +331,7 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     object(input,['ownerId']);
     if (db.isTransaction) return usageSnapshot(input);
     db.exec('BEGIN');
-    try { const result = usageSnapshot(input); db.exec('COMMIT'); return result; }
+    try { const result = inContentSuppressionRequestInside(db,()=>usageSnapshot(input)); db.exec('COMMIT'); return result; }
     catch (error) { db.exec('ROLLBACK'); throw error; }
   }
   const getConversation = createRawReads({ db,identity,epoch,open,digest,partDigest });

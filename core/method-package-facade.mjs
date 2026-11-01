@@ -1,4 +1,4 @@
-import { contentSafetyFacade } from './content-safety-boundary.mjs';
+import { contentSafetyFacade, contentAuthorityPort } from './content-safety-boundary.mjs';
 import { fail } from './validation.mjs';
 import { cardNamespace, deepFreeze } from './private-card-input.mjs';
 import { verifyPrivateGrant, privateFailure } from './private-card-facade.mjs';
@@ -9,6 +9,7 @@ import { mixedMethodFiles,METHOD_BINARY_LIMITS } from './method-attachment-input
 
 export function createMethodPackageFacade(storage, options, ready,assets) {
   if (!options) return {};
+  options={...options,authority:contentAuthorityPort(options.authority)};
   const result = {};
   for (const method of METHOD_METHODS) result[method] = (input, authority) => {
     try {
@@ -27,6 +28,7 @@ export function createMethodPackageFacade(storage, options, ready,assets) {
       if (!authority || typeof authority !== 'object') fail('authority_required');
       const grants = [], readGrants = new Map();
       function authorize(selected,port=options.authority) {
+        port=contentAuthorityPort(port);
         const grant = port.authorize(selected,authority);
         if (!grant || typeof grant !== 'object' || typeof grant.then === 'function') fail('authority_required');
         const current = port.isCurrent(grant,selected);

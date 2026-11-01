@@ -917,8 +917,8 @@
   "implementations": [
     {
       "file": "core/content-suppression-storage.mjs",
-      "sha256": "e1f225ce9c116a99f581b008e302ad5eec1ee04b64705871bea43c83c8955b3e",
-      "reason": "R2 round 2 changes request-scoped read proofs and fact matching only; all insertion helpers, DDL and canonical writer regions remain unchanged."
+      "sha256": "3b45e29926945c9134c79d6769ef58324e229ad0ccc9049b8dd80cad12441320",
+      "reason": "Round 3 reuses the request layout only inside synchronous engine transactions; the independent delivery header/epoch fence and both B3 helper bodies are unchanged."
     },
     {
       "file": "core/content-safety-migration.mjs",
@@ -926,8 +926,8 @@
     },
     {
       "file": "core/content-safety-schema.mjs",
-      "sha256": "3bd5760eaade1e53a9d970100e15da1cad53d7fcdf22aaec6d57b32158230982",
-      "reason": "Add snapshot-local serving layout reuse; opener and attestation SQL are unchanged."
+      "sha256": "6c99506158d5dee895e0da50ab0444e6bf55ef7300720e0d87a2c20be9dd01e6",
+      "reason": "Round 3 reuses the request layout only inside synchronous engine transactions; the independent delivery header/epoch fence and both B3 helper bodies are unchanged."
     }
   ],
   "writers": [
@@ -1136,10 +1136,13 @@
         "assertContentOutput",
         "assertContentPort",
         "assertContentScopes",
+        "contentAuthorityPort",
         "contentReceiptCount",
         "contentSafetyFacade",
         "contentScopeEpochGuard",
-        "contentScopes"
+        "contentScopes",
+        "hasContentPortBoundary",
+        "inertContentPortValue"
       ],
       "additions": {
         "assertContentOutput": "Validates every typed content reference before its response leaves a facade.",
@@ -1148,7 +1151,10 @@
         "contentReceiptCount": "Hides aggregate receipt counts when receipt facts can affect the result.",
         "contentSafetyFacade": "Applies the common read boundary and structural write acknowledgement lifecycle.",
         "contentScopeEpochGuard": "Fences facade delivery against suppression facts committed by callbacks.",
-        "contentScopes": "Extracts namespace boundaries from trusted facade inputs."
+        "contentScopes": "Extracts namespace boundaries from trusted facade inputs.",
+        "inertContentPortValue": "Copy caller return data inside its port boundary, before the single owner epoch read; no caller hooks survive.",
+        "hasContentPortBoundary": "Distinguish a protected owner read when a synchronous diagnostic observer returns asynchronous work; no database access or writer capability.",
+        "contentAuthorityPort": "Snapshots synchronous authority returns inside the caller boundary and preserves opaque grant identity through a private WeakMap used only by the next host invocation."
       }
     },
     "core/content-safety-schema.mjs": {
@@ -1344,6 +1350,27 @@
       "additions": {
         "openContentSuppressionReader": "Opens the independent read-only denial reconciliation handle required by D-15.",
         "createContextReaderPool": "Returns a frozen close-only lifecycle handle with no database access or path to a fact writer."
+      }
+    },
+    "core/model-budget.mjs": {
+      "exports": [
+        "countTokens",
+        "engineProjectionCounter",
+        "modelPortValue"
+      ],
+      "additions": {
+        "engineProjectionCounter": "Creates only fixed engine code over a primitive Map snapshot; a private WeakSet exempts that code from caller E1 observations.",
+        "modelPortValue": "Reads callback data descriptors and refuses accessors or Proxy prototype chains before any retained dispatch."
+      }
+    },
+    "core/context-read-budget.mjs": {
+      "exports": [
+        "consumeLocalReservation",
+        "contextBudget",
+        "isBudgetEmbeddingPort"
+      ],
+      "additions": {
+        "isBudgetEmbeddingPort": "Recognizes only fixed ledger wrappers through a module-private WeakSet; their real embedder still receives its single E1 fence."
       }
     }
   }

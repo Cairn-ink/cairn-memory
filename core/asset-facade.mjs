@@ -1,4 +1,4 @@
-import { contentSafetyFacade } from './content-safety-boundary.mjs';
+import { contentSafetyFacade, contentAuthorityPort } from './content-safety-boundary.mjs';
 import { ASSET_METHODS,ASSET_READS,ASSET_LIMITS,ASSET_MEDIA,assetSnapshot,freezeAssetMetadata,validateAssetCall } from './asset-input.mjs';
 import { deepFreeze } from './private-card-input.mjs';
 import { verifyPrivateGrant,privateFailure } from './private-card-facade.mjs';
@@ -7,6 +7,7 @@ import { fail } from './validation.mjs';
 
 export function createAssetFacade(storage,options,ready) {
   if(!options)return {};
+  options={...options,authority:contentAuthorityPort(options.authority)};
   const facade={};
   for(const method of ASSET_METHODS)facade[method]=(input,authority)=>{
     try {

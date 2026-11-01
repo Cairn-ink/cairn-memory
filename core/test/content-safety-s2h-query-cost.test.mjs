@@ -17,8 +17,13 @@ function measure(physical, n, facts = 0, absent = false, mode = 'lexical') {
   assert.equal(child.error,undefined); assert.equal(child.signal,null);
   assert.equal(child.status,0,child.stderr+'\n'+child.stdout.slice(-5000));
   const samples = child.stdout.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line));
+  const queries=samples.filter(row=>row.phase==='query');
+  const cursors=!absent&&facts!=='owner'&&mode!=='semantic-late-fact'&&n-Number(facts)>12;
+  assert.deepEqual(queries.map(row=>row.label),['current-first','current-repeat',...(cursors?['current-cursor']:[]),'history-first','history-repeat',...(cursors?['history-cursor']:[])],'exact public query method/case/cell inventory');
+  for(const query of queries){assert.equal(query.method,'findCandidates');if(absent){assert.equal(query.ok,true);assert.equal(query.items,0,'successful, correctly empty no-hit DTO');}}
   const row = samples.find(row => row.label === 'current-repeat');
   assert.equal(samples.find(row => row.label === 'history-repeat').totalExecuted,row.totalExecuted,'current/history counts');
+  row.cases=queries.map(r=>({label:r.label,statements:r.totalExecuted,begin:r.sqlSummary.filter(s=>/^BEGIN/.test(s.sql)).reduce((n,s)=>n+s.exec,0)}));
   cache.set(key,row); return row;
 }
 
@@ -35,6 +40,7 @@ for (const [physical,base] of bases) test(`R2 v${physical}: zero-fact constant b
   t.diagnostic('R2_QUERY_COUNTS '+JSON.stringify(rows));
   const delta = zero.map((row,i) => row.totalExecuted-legacy[i].totalExecuted);
   assert.equal(delta[0],delta[1],'zero facts add no corpus-dependent SQL');
+  for(const [i,row]of zero.entries()){assert.deepEqual(row.cases.map(r=>r.label),legacy[i].cases.map(r=>r.label));for(const [j,page]of row.cases.entries()){const old=legacy[i].cases[j];assert.equal(page.statements-old.statements,4,'R2 query page '+page.label);assert.equal(page.begin,old.begin);}}
   assert.ok(delta[0]>=0 && delta[0]<=budget,`incremental executed statements ${delta} exceed ${budget}`);
   assert.deepEqual(zero.map(row=>row.exec),legacy.map(row=>row.exec),'zero additional transactions or configuration exec');
   const fences = [];
@@ -67,6 +73,7 @@ for (const [physical,base] of bases) test(`R2 semantic fallback v${physical}: em
   t.diagnostic('R2_SEMANTIC_COUNTS '+JSON.stringify(counts));
   for(const row of counts) {
     assert.equal(row.zero-row.legacy,4,'header and owner epoch at entry and delivery only');
+    const after=measure(physical,row.n,0,false,'semantic'),before=measure(base,row.n,0,false,'semantic');for(const [i,page]of after.cases.entries()){assert.equal(page.statements-before.cases[i].statements,4,page.label);assert.equal(page.begin,before.cases[i].begin);}
     assert.equal(row.zeroExec,row.legacyExec,'no safety-only transactions');
     assert.equal(row.zeroBegin,row.legacyBegin,'no extra BEGIN');
   }

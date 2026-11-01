@@ -321,7 +321,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     cardDetailInside: (ns, id, readSet, options) => detail(ns, card(ns, id), readSet, options),
     receiptRefInside: (ns, memory, receipt) => receiptSources.refInside(ns, memory, receipt) });
   const organization = createPrivateOrganizationStorage({ db, identity, memoryMapInside, memoryTopicInside,
-    cardDetailInside: (ns, id) => detail(ns, card(ns, id)) });
+    cardDetailInside: (ns, id, readSet, options) => detail(ns, card(ns, id), readSet, options) });
   return Object.freeze({ assertContentOutput(value, scopes) { if(!cachedContentLayout(db)?.suppressionRevision)return; return assertContentOutput(db,identity,value,scopes); }, assertContentScope: (scopes,{delivery=false}={}) => { ready(); if(!cachedContentLayout(db)?.suppressionRevision)return; if(!delivery && scopes.length && hasContentSuppressionRequestInside(db) && !db.isTransaction) { contentSuppressionRequestInside(db,scopes,{defer:true}); return; } assertContentScopes(db,scopes); },
     // Internal shared-read seams: caller owns scope authorization and transaction.
     cardDetailInside(ns, id, readSet, intent) { ready(); return detail(ns, card(ns, id), readSet, intent); },

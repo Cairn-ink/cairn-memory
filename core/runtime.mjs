@@ -1,7 +1,7 @@
 import { registerContentWriteBoundary } from './content-write-context.mjs';
 import { contentScopeEpochGuard, assertContentOutput, contentReceiptCount, assertContentScopes, contentSafetyFacade } from './content-safety-boundary.mjs';
 import { cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
-import { writeContentSuppressionInside, suppressReceiptsInside, requireSuppressionTransaction, allocateContentKey, contentSuppressionReasonInside, contentSuppressionFenceInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, hasContentSuppressionRequestInside } from './content-suppression-storage.mjs';
+import { writeContentSuppressionInside, suppressReceiptsInside, requireSuppressionTransaction, allocateContentKey, contentSuppressionReasonInside, contentSuppressionRequestFenceInside, assertContentSuppressionRequestInside, contentSuppressionRequestInside, hasContentSuppressionRequestInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, memoryContentIdentity, receiptReadSafety, anchoredReadSafety, createContentReadMemo } from './content-safety.mjs';
 import { roleProfileOptions } from './role-profile-input.mjs';
 import { createRoleProfileStorage } from './role-profile-storage.mjs';
@@ -95,6 +95,17 @@ export function createMemoryRuntime(input, internal) {
   }
 
   function epoch(ns) {
+    const proof=cachedContentSuppressionRequestInside(db,ns.ownerId);
+    if(proof?.layout.suppressionRevision){
+      // Fold the fresh denial fence into this existing canonical read. In
+      // particular, caller-queued microtasks must be observed before a model
+      // invocation resumes; this adds no statement or E1 allowance.
+      const row=db.prepare(`SELECT n.epoch,coalesce(f.epoch_hi,0) epoch_hi,coalesce(f.epoch_lo,0) epoch_lo
+        FROM (SELECT 1) anchor LEFT JOIN namespace_epochs n ON n.owner_id=? AND n.scope=? AND n.project_id=?
+        LEFT JOIN owner_suppression_epochs f ON f.owner_id=?`).get(...boundary(ns),ns.ownerId);
+      if(`${row.epoch_hi}:${row.epoch_lo}`!==proof.epoch)fail('evidence_unavailable');
+      return row.epoch??1;
+    }
     return db.prepare(`SELECT epoch FROM namespace_epochs WHERE
       owner_id = ? AND scope = ? AND project_id = ?`).get(...boundary(ns))?.epoch ?? 1;
   }
@@ -657,7 +668,7 @@ export function createMemoryRuntime(input, internal) {
       });
       for (const { namespace, indexRevision, suppressionEpoch } of namespaces) {
         indexStorage.assertAvailable(namespace);
-        if (epoch(namespace) !== indexRevision || suppressionEpoch !== undefined && suppressionEpoch !== contentSuppressionFenceInside(db, namespace.ownerId)) fail('index_revision_conflict');
+        if (epoch(namespace) !== indexRevision || suppressionEpoch !== undefined && suppressionEpoch !== contentSuppressionRequestFenceInside(db, namespace.ownerId)) fail('index_revision_conflict');
       }
       if (isSourceContext(contextMode)) {
         const sources = rows.map((row, index) => {
@@ -721,7 +732,7 @@ export function createMemoryRuntime(input, internal) {
   deletion = createRawDeletionStorage({ db, roots: sourceRoots, episodes, forgetMutation, removeReceipts, advanceEpoch });
   const admissionStorage = createAdmissionStorage({
     db, admitMutation, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
-    classificationJournal, episodes, proceduralStorage, assertSources: rawLineage.assertReceipts, sourceRoots,
+    classificationJournal, episodes, proceduralStorage, assertSources: rawLineage.assertReceipts, sourceRoots, memoryAncestry, privacyMemoryDenied,
   });
   const orderedStorage = createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
     supersessionStorage, receiptKey, isSuppressed });

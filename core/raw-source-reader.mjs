@@ -1,4 +1,4 @@
-import { contentScopeEpochGuard, assertContentPort } from './content-safety-boundary.mjs';
+import { contentScopeEpochGuard, assertContentPort, inertContentPortValue } from './content-safety-boundary.mjs';
 import { sourceReadSafety } from './content-safety.mjs';
 import { performance } from 'node:perf_hooks';
 import { createCardRawSources } from './card-raw-sources.mjs';
@@ -73,8 +73,9 @@ export function createRawSourceReader({ db, identity, open, partDigest }) {
       let text;
       try {
         let result;
-        try { result = await assertContentPort({invoke:()=>open({ ownerId: ns.ownerId, context, ...rawSealed({ format: part.format,keyVersion: part.key_version,
-          sealed: Buffer.from(state.payloads.get(partKey(part))) }) })}); }
+        try { result = await assertContentPort({invoke:async()=>inertContentPortValue(await open({ ownerId: ns.ownerId, context, ...rawSealed({ format: part.format,keyVersion: part.key_version,
+          sealed: Buffer.from(state.payloads.get(partKey(part))) }) }), 'raw_crypto_unavailable')}); }
+        catch { fail('raw_crypto_unavailable'); }
         finally { portGuard?.(); }
         object(result,['text']); text = rawText(result.text);
         if (text.length !== part.end-part.start || Buffer.byteLength(text) !== part.byte_count ||

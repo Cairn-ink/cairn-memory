@@ -53,7 +53,9 @@
   },
   "core/admission-storage.mjs": {
     "key:insertedReceiptIds": 1,
-    "key:memoryId": 2
+    "key:memoryId": 3,
+    "key:ownerId": 1,
+    "key:projectId": 1
   },
   "core/local-authority-input.mjs": {
     "key:expectedStoreId": 1,
@@ -291,13 +293,11 @@
     "literal:projectId": 2
   },
   "core/private-evidence-storage.mjs": {
-    "key:cardId": 2,
+    "key:cardId": 3,
     "key:memoryId": 4,
     "key:receiptId": 1,
     "key:triggerMemoryRefs": 1,
-    "literal:cardId": 1,
-    "literal:id": 1,
-    "literal:memoryId": 1
+    "literal:id": 1
   },
   "core/private-organization-input.mjs": {
     "key:cardId": 1,
@@ -377,6 +377,9 @@
   },
   "core/context-read-assembly.mjs": {
     "key:id": 3
+  },
+  "core/context-read-budget.mjs": {
+    "key:id": 1
   },
   "core/context-read-embedder.mjs": {
     "key:id": 2,
@@ -635,6 +638,9 @@
     "key:projectId": 1,
     "key:sourceIds": 2,
     "literal:invalid": 7
+  },
+  "core/model-budget.mjs": {
+    "key:id": 1
   },
   "core/model-call.mjs": {
     "literal:adapter_output_invalid": 1
@@ -1056,7 +1062,7 @@
     "key:pid": 1
   },
   "core/role-context-evidence.mjs": {
-    "key:id": 2
+    "key:id": 1
   },
   "core/role-context-facade.mjs": {
     "key:actionId": 1,
@@ -1428,8 +1434,8 @@
     "key:storeId": 1
   },
   "core/content-safety-schema.mjs": {
-    "literal:migration_id": 1,
-    "key:applicationId": 1
+    "key:applicationId": 1,
+    "literal:migration_id": 1
   },
   "core/content-suppression-storage.mjs": {
     "key:messageId": 1,

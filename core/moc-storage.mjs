@@ -1,5 +1,6 @@
+import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety } from './content-safety.mjs';
-import { contentSuppressionFenceInside, contentSuppressionReasonInside } from './content-suppression-storage.mjs';
+import { contentSuppressionRequestFenceInside, contentSuppressionReasonInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { randomUUID } from "node:crypto";
 import { transaction } from "./database.mjs";
 import { fail } from "./validation.mjs";
@@ -23,11 +24,12 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
   assertIndexAvailable, rationaleStorage, receiptKey, classificationJournal }) {
   // Read authority is generation-owned; writes below continue targeting declarations.
   // Title validity deliberately consults every original source binding.
-  function projectPrepare(sql) {
-    return db.prepare(sql.replace(/\bmoc_memory_refs\b/g, 'index_read_memory_refs')
+  function projectSQL(sql) {
+    return sql.replace(/\bmoc_memory_refs\b/g, 'index_read_memory_refs')
       .replace(/\bmoc_edges\b/g, 'index_read_edges').replace(/\bmocs\b/g, 'index_read_mocs')
-      .replace(/\bmemories\b/g, 'index_read_memories'));
+      .replace(/\bmemories\b/g, 'index_read_memories');
   }
+  const projectPrepare = sql => db.prepare(projectSQL(sql));
   const mocById = (ns, id) => db.prepare(`SELECT * FROM mocs WHERE ${namespaceWhere} AND id = ?`)
     .get(...boundary(ns), id);
 
@@ -342,7 +344,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         if (memory.revision !== expected.get(id)) fail("revision_conflict");
         return memoryDto(memory, true);
       });
-      return { memories, indexRevision: expectedIndex, suppressionEpoch: contentSuppressionFenceInside(db, ns.ownerId) };
+      return { memories, indexRevision: expectedIndex, suppressionEpoch: contentSuppressionRequestFenceInside(db, ns.ownerId) };
     });
   }
 
@@ -487,7 +489,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
           : { type: 'unfiled', ref: { memoryId: memory.id, revision: memory.revision },
             label: sourceLabel ?? memoryLabel(memory.content) } };
       });
-      return { rows, epoch: currentEpoch, scanExhausted, suppressionEpoch: contentSuppressionFenceInside(db, ns.ownerId) };
+      return { rows, epoch: currentEpoch, scanExhausted, suppressionEpoch: contentSuppressionRequestFenceInside(db, ns.ownerId) };
     });
   }
 
@@ -498,6 +500,18 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && expectedEpoch !== currentEpoch) fail("cursor_stale");
       const count = limit + 1;
+      // Carry a canonical ancestry proof in the existing page statement. The
+      // direct check below still binds stale placements to their stored version.
+      const memoryPage = sql => {
+        const layout = cachedContentLayout(db);
+        return db.prepare(layout?.suppressionRevision && layout.rawLineage ? `SELECT page.*, EXISTS(
+          SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id
+          JOIN memories am ON am.id=ar.memory_id
+          LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id
+          WHERE page.child_type='memory' AND ar.memory_id=page.child_id AND
+            (ac.owner_id IS NOT am.owner_id OR ac.scope IS NOT am.scope OR ac.project_id IS NOT am.project_id)
+        ) AS invalid_raw_ancestry FROM (${projectSQL(sql)}) page` : projectSQL(sql));
+      };
       let rows;
       if (catalogOnly) {
         // Classification needs the complete topic catalog, not every placement or
@@ -590,7 +604,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
                 AND valid_ref.memory_revision = memory.revision))
         ) SELECT * FROM candidates ORDER BY sort_level, sort_title, sort_id, sort_ref
           LIMIT ? OFFSET ?`;
-        rows = projectPrepare(sql).all(...boundary(ns), recall, ...boundary(ns), recall,
+        rows = memoryPage(sql).all(...boundary(ns), recall, ...boundary(ns), recall,
           ...boundary(ns), ...boundary(ns), count, offset);
       } else {
         const parent = projectPrepare(`SELECT * FROM mocs WHERE ${namespaceWhere} AND id = ?`)
@@ -598,7 +612,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         if (!parent) fail("moc_not_found");
         if (parent.revision !== parentRef.revision) fail("revision_conflict");
         if (parent.level === 1) {
-          rows = projectPrepare(`SELECT
+          rows = memoryPage(`SELECT
             CASE WHEN memory.id IS NULL THEN 'invalid'
               WHEN memory.owner_id != moc.owner_id OR memory.scope != moc.scope
                 OR memory.project_id != moc.project_id THEN 'invalid'
@@ -655,11 +669,15 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       }
       return { rows: rows.map((row) => {
         if (row.child_type === "memory") {
+          if (row.invalid_raw_ancestry) fail('evidence_unavailable');
           // A stale placement still refers to its recorded version. Never
           // replace that binding with the current Memory revision.
           const revision = row.child_revision;
-          if (contentSuppressionReasonInside(db, ns, { kind: 'memory', key: row.child_id, revision,
+          if (contentSuppressionReasonInside(db, ns, { kind: 'memory', key: row.child_id, revision, ancestryChecked: Object.hasOwn(row, 'invalid_raw_ancestry'),
             version: Number.isSafeInteger(revision) ? JSON.stringify(['memory-revision-v1', revision]) : undefined })) fail('evidence_unavailable');
+          // Output validation consumes this same versioned metadata decision.
+          const proof = cachedContentSuppressionRequestInside(db, ns.ownerId);
+          if (proof) (proof.completed ??= new Set()).add(JSON.stringify([ns.ownerId,ns.scope,ns.projectId ?? '', 'memory',row.child_id,revision]));
         }
         if (row.row_kind === "invalid") return { invalidRef: {
           parentId: row.parent_id, childType: row.child_type, childId: row.child_id,
@@ -680,7 +698,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         return { item: { type: "ref", ref,
           label: row.child_type === "memory" ? memoryLabel(row.content) : visibleTitle(
             db.prepare("SELECT * FROM mocs WHERE id = ?").get(row.child_id)) } };
-      }), epoch: currentEpoch, suppressionEpoch: contentSuppressionFenceInside(db, ns.ownerId) };
+      }), epoch: currentEpoch, suppressionEpoch: contentSuppressionRequestFenceInside(db, ns.ownerId) };
     };
     return inside ? work() : transaction(db, work);
   }
@@ -696,9 +714,9 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       if (row.revision !== ref.revision) fail('revision_conflict');
       return { id: row.id, revision: row.revision, level: `L${row.level}`, title: visibleTitle(row) };
     },
-    suppressionFence(ns) { return transaction(db, () => contentSuppressionFenceInside(db, ns.ownerId)); },
+    suppressionFence(ns) { return transaction(db, () => contentSuppressionRequestFenceInside(db, ns.ownerId)); },
     assertEpoch(ns, expected, suppressionEpoch) { return transaction(db, () => {
       assertEpochValue(ns, expected);
-      if (suppressionEpoch !== undefined && suppressionEpoch !== contentSuppressionFenceInside(db, ns.ownerId)) fail('cursor_stale');
+      if (suppressionEpoch !== undefined && suppressionEpoch !== contentSuppressionRequestFenceInside(db, ns.ownerId)) fail('cursor_stale');
     }); } });
 }

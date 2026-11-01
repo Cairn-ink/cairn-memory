@@ -212,6 +212,9 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // R2 round 2: selected-row namespace validation adds existing owner/project
   // keys; Memory selection adds an existing memoryId; the redundant Raw
   // per-port fact projection is removed. These are reads, not new ack fields.
+  // R3: admission scope and Card source memo keys reuse canonical read proofs;
+  // the two internal counter/embedding wrapper ids are configuration metadata.
+  // The terminal writer and acknowledgement field guard are unchanged.
   // These changes retain the native guard's fail-closed walker.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
   const files=JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url),'utf8'));

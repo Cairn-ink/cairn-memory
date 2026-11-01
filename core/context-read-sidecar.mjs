@@ -1,3 +1,6 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { assertContentPort, inertContentPortValue, hasContentPortBoundary } from './content-safety-boundary.mjs';
+import { isBudgetEmbeddingPort } from './context-read-budget.mjs';
 import { withContentSuppressionReadInside, contentSuppressionReasonInside, inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { contentSuppressionFenceInside, contentSuppressionRequestFenceInside, cachedContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { bindContentSafetyConnection, checkInstalledContentSafety, cachedContentLayout, installedContentLayout } from './content-safety-schema.mjs';
@@ -18,6 +21,14 @@ import { cosine, encodeVector, loadVector, semanticCapacity, validateEmbedder } 
 
 export const SIDECAR_FORMAT = 1;
 const APPLICATION_ID = 0x43525831;
+// Keep AsyncResource private: exposing a bound callback's .asyncResource
+// would let a caller execute arbitrary work in the engine's request context.
+function engineGuard(work) {
+  const bound = AsyncLocalStorage.bind(work);
+  return function beforeDispatch(...args) { return Reflect.apply(bound,undefined,args); };
+}
+const throwIfAborted=AbortSignal.prototype.throwIfAborted;
+const checkSignal=signal=>{if(signal)assertContentPort({invoke:()=>{try{Reflect.apply(throwIfAborted,signal,[]);}catch(error){if(!hasContentPortBoundary())throw error;fail('timeout');}}});};
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -152,7 +163,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
   const canonicalRead = work => {
     if (isConnectionDiscarded(canonical)) fail('store_closed');
     if (readOnly) auxiliaries(path, true);
-    return readTransaction(canonical, () => { checkInstalledContentSafety(canonical); return inContentSuppressionRequestInside(canonical,work); });
+    return readTransaction(canonical, () => inContentSuppressionRequestInside(canonical, () => { checkInstalledContentSafety(canonical); return work(); }));
   };
   const identity = canonicalRead(() => {
     const row = canonical.prepare('SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1').get();
@@ -262,13 +273,24 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     open();
   }
 
-  function fence(p) {
+  function fence(p, validate) {
     return canonicalRead(() => {
       const store = canonical.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id;
       if (store !== identity.storeId) unavailable('wrong_store');
       if (p.types.includes('card') && !features.cards) fail('invalid_input');
-      return p.readSet.map(ns => ({ memory: canonical.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch ?? 1,
-        ...(p.types.includes('card') ? { card: canonical.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1, ...cardDependencyFence(canonical, ns, p.readSet) } : {}) }));
+      const values=p.readSet.map(ns => {
+        const proof=cachedContentSuppressionRequestInside(canonical,ns.ownerId);
+        let memory;
+        if(proof?.layout.suppressionRevision){
+          const row=canonical.prepare(`SELECT n.epoch,coalesce(f.epoch_hi,0) epoch_hi,coalesce(f.epoch_lo,0) epoch_lo
+            FROM (SELECT 1) anchor LEFT JOIN namespace_epochs n ON n.owner_id=? AND n.scope=? AND n.project_id=?
+            LEFT JOIN owner_suppression_epochs f ON f.owner_id=?`).get(...boundary(ns),ns.ownerId);
+          if(`${row.epoch_hi}:${row.epoch_lo}`!==proof.epoch)fail('evidence_unavailable');
+          memory=row.epoch??1;
+        }else memory=canonical.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch??1;
+        return {memory,...(p.types.includes('card') ? { card: canonical.prepare(`SELECT generation FROM card_epochs WHERE ${where}`).get(...boundary(ns))?.generation ?? 1, ...cardDependencyFence(canonical, ns, p.readSet) } : {})};
+      });
+      validate?.();return values;
     });
   }
   const generation = p => sideRead(() => side.prepare('SELECT * FROM generations WHERE id=?').get(p.id));
@@ -277,8 +299,8 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     if (!current || current.sequence !== g.sequence || current.checkpoint !== g.checkpoint ||
         current.fence !== g.fence || current.access !== g.access || current.incarnation !== g.incarnation) unavailable('stale_index');
   }
-  function fresh(p, g) {
-    return g && g.published === 1 && g.access === p.access && g.fence === JSON.stringify(fence(p));
+  function fresh(p, g, validate) {
+    return g && g.published === 1 && g.access === p.access && g.fence === JSON.stringify(fence(p,validate));
   }
 
   function supportDatabase(metrics) {
@@ -483,9 +505,9 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       coverage: ready ? sideRead(() => ({ ...side.prepare("SELECT n,total_length FROM statistics WHERE generation=? AND term=''").get(p.id) })) : { n: null, total_length: null } };
   }
 
-  function published(p) {
+  function published(p, validate) {
     const g = generation(p);
-    if (!fresh(p, g)) unavailable('rebuilding');
+    if (!fresh(p, g, validate)) unavailable('rebuilding');
     return g;
   }
   function candidateAllowed(item, intent, readSet) {
@@ -498,9 +520,14 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     if (cachedContentSuppressionRequestInside(canonical)) return contentSuppressionRequestFenceInside(canonical,p.readSet[0].ownerId);
     return canonicalRead(() => contentSuppressionFenceInside(canonical,p.readSet[0].ownerId));
   }
+  function emptyRequestFacts(p) {
+    const state=cachedContentSuppressionRequestInside(canonical,p.readSet[0].ownerId);
+    return state?.facts?.length===0 && p.readSet.every(ns=>state.readSet.some(selected=>
+      selected.scope==='owner' || selected.scope===ns.scope && (selected.projectId??'')===(ns.projectId??'')));
+  }
   function visibleDocuments(p, deadlineAt = performance.now()+1000, deliver = value=>value) {
     const epoch = safetyEpoch(p);
-    if (epoch === undefined || epoch === '0:0') return deliver(null);
+    if (epoch === undefined || epoch === '0:0' || emptyRequestFacts(p)) return deliver(null);
     const work=()=>canonicalRead(()=>withContentSuppressionReadInside(canonical,p.readSet,memo=>{
       if (memo.facts?.length === 0) return deliver(null);
       const totals=side.prepare("SELECT n,total_length FROM statistics WHERE generation=? AND term=''").get(p.id),ids=new Set();
@@ -561,7 +588,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       return { rows: ranked, matched: docs.size };
     }));
     if(suppressionEpoch!==safetyEpoch(p))unavailable('stale_index');
-    if(suppressionEpoch!==undefined && suppressionEpoch!=='0:0')result.rows = canonicalRead(() =>
+    if(result.rows.length && suppressionEpoch!==undefined && suppressionEpoch!=='0:0' && !emptyRequestFacts(p))result.rows = canonicalRead(() =>
       result.rows.filter(({ref:item})=>candidateAllowed(item,p.intent,p.readSet)));
     const current = generation(p);
     if (!fresh(p, current) || current.sequence !== g.sequence || current.incarnation !== g.incarnation) unavailable('stale_index');
@@ -605,22 +632,36 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
         });
       });
       if (texts.reduce((sum, text) => sum + text.length, 0) > 2_000_000) fail('context_item_too_large');
-      signal?.throwIfAborted();
+      checkSignal(signal);
       guard();
       const before = generation(p);
       if (!fresh(p, before) || before.sequence !== g.sequence || before.incarnation !== g.incarnation) unavailable('stale_index');
-      const dispatch = () => canonicalRead(() => {
+      const dispatch = engineGuard(() => canonicalRead(() => {
         for (const row of rows) {
           const stream = p.streams[row.stream];
           if (stream.type === 'card' ? !cardEligible(stream.ns,row,p.intent,m,p.readSet) :
               !candidateAllowed({type:'memory',namespace:stream.ns,memoryId:row.id,revision:row.revision},p.intent,p.readSet)) unavailable('stale_index');
         }
-      });
+      }));
       dispatch();
-      const vectors = await port.embed(texts, { signal, beforeDispatch: dispatch });
-      signal?.throwIfAborted();
+      let vectors;
+      const budgetPort=isBudgetEmbeddingPort(embedder);
+      assertContentPort({before:true});
+      try {
+        const invoke=async()=>{try{return inertContentPortValue(await port.embed(texts, { signal, beforeDispatch: dispatch }), 'invalid_input');}
+          catch(error){
+            if(budgetPort||!hasContentPortBoundary())throw error;
+            let frame;try{frame=inertContentPortValue({code:error?.code,name:error?.name,status:error?.status,reason:error?.reason},'invalid_input');}catch{fail('invalid_input');}
+            const safe=Object.assign(new Error('provider_error'),{code:typeof frame.code==='string'?frame.code:'provider_error'});
+            for(const key of ['name','reason'])if(typeof frame[key]==='string')safe[key]=frame[key];
+            if(typeof frame.status==='number')safe.status=frame.status;throw safe;
+          }};
+        vectors=await (budgetPort?invoke():assertContentPort({invoke}));
+      } finally {
+        // Authority callbacks finish before the invocation's sole epoch read.
+        try { guard();checkSignal(signal); } finally { if(!budgetPort||embedder.didInvoke())assertContentPort(); }
+      }
       if (closed) fail('store_closed');
-      guard();
       if (performance.now() - started >= maxMs) unavailable('timeout');
       const after = generation(p);
       if (!fresh(p, after) || after.sequence !== g.sequence || after.incarnation !== g.incarnation) unavailable('stale_index');
@@ -662,8 +703,8 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       buildState: ready ? g.reason === 'reconcile' ? 'ready' : 'rebuilt' : 'rebuilding', reason: g?.reason ?? rebuildReason ?? null, byType,
       progress: g ? { phase: g.phase, checkpoint: g.checkpoint, sequence: g.sequence, baseSequence: g.base_sequence } : null };
   }
-  function assertState(input, expected, { checkpoint = true } = {}) {
-    const p = projection(input), g = published(p);
+  function assertState(input, expected, { checkpoint = true, validate } = {}) {
+    const p = projection(input), g = published(p,validate);
     if(expected.suppressionEpoch!==undefined&&expected.suppressionEpoch!==safetyEpoch(p))unavailable('stale_index');
     if (g.sequence !== expected.sequence || checkpoint && g.checkpoint !== expected.checkpoint ||
         g.fence !== expected.fence || g.incarnation !== expected.incarnation) unavailable('stale_index');

@@ -1,4 +1,4 @@
-import { contentSafetyFacade } from './content-safety-boundary.mjs';
+import { contentSafetyFacade, contentAuthorityPort } from './content-safety-boundary.mjs';
 import { CARD_CURRENT_VERSION, CARD_CURRENT_METHODS } from './card-current-input.mjs';
 import { authorizeCardCurrentDependencies } from './card-current-facade.mjs';
 import { isStorageBusy } from './database.mjs';
@@ -25,6 +25,7 @@ export function privateFailure(error) {
 
 export function createPrivateCardFacade(storage, options, ready, rawReader) {
   if (!options) return {};
+  options={...options,authority:contentAuthorityPort(options.authority)};
   const result = {};
   const methods = [...CARD_METHODS, ...(options.currentDependencies ? CARD_CURRENT_METHODS : []), ...(rawReader ? ['resolveSourceReferences'] : [])];
   for (const method of methods) {

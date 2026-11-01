@@ -1,3 +1,4 @@
+import { assertContentCostDiscovery } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -60,6 +61,7 @@ test('S2h-2 split: enumerate public exports and facades; no fact-only writer is 
   }
   assert.deepEqual(Object.values(splitFixture.facadeFactories).flat().sort(), Object.keys(handles).sort());
   assertSplitInventory(inventory);
+  t.diagnostic('R3_COST_DISCOVERY '+JSON.stringify(assertContentCostDiscovery({...inventory,runtime:methods(runtime)})));
   for (const [name, reason] of Object.entries(splitFixture.additions)) assert.ok(reason.length > 20, name);
   for (const [file, pin] of Object.entries(splitFixture.moduleExports)) {
     const module = await import(new URL('../../' + file, import.meta.url));
@@ -174,4 +176,10 @@ test('S2h-2 split: internal facts now suppress serving reads while terminal fact
   assert.equal(db.prepare('SELECT 1 FROM receipts WHERE memory_id=?').get(target.id),undefined);
   assert.equal(db.prepare('SELECT count(*) n FROM content_suppressions').get().n,before+2);
   assert.doesNotMatch(JSON.stringify(core.get({namespace:live,memoryId:target.id})),/Synthetic terminal writer control/);
+});
+
+test('R3 cost inventory refuses any declared but ungated retained-read variant',()=>{
+ const inventory=JSON.parse(readFileSync(new URL('./fixtures/content-safety-s2h-cost-inventory.json',import.meta.url),'utf8'));
+ const missing=Object.entries(inventory.reads).flatMap(([method,entry])=>entry.missing.map(variant=>({method,variant})));
+ assert.deepEqual(missing,[],'a recorded gap is a package blocker, never an exemption or a passing gate');
 });

@@ -1,4 +1,4 @@
-import { contentScopeEpochGuard, assertContentPort } from './content-safety-boundary.mjs';
+import { contentScopeEpochGuard, assertContentPort, inertContentPortValue } from './content-safety-boundary.mjs';
 import { checkInstalledContentSafety } from './content-safety-schema.mjs';
 import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { createHmac, timingSafeEqual } from 'node:crypto';
@@ -97,7 +97,8 @@ export function createRawReads({ db,identity,epoch,open,partDigest }) {
         try {
           const sealed = rawSealed({ format: row.format,keyVersion: row.key_version,sealed: row.sealed });
           let result;
-          try { result = await assertContentPort({invoke:()=>open({ ownerId: ns.ownerId,context,...sealed })}); }
+          try { result = await assertContentPort({invoke:async()=>inertContentPortValue(await open({ ownerId: ns.ownerId,context,...sealed }), 'raw_crypto_unavailable')}); }
+          catch { fail('raw_crypto_unavailable'); }
           finally { portGuard?.(); }
           object(result,['text']); text = rawText(result.text);
           if (text.length !== row.end-row.start || Buffer.byteLength(text) !== row.byte_count ||

@@ -350,9 +350,11 @@ export function transaction(db, work, check) {
     db.exec("BEGIN IMMEDIATE");
     let contentWrite;
     try {
-      checkInstalledContentSafety(db);
-      contentWrite = beginContentWrite(db);
-      const result = inContentSuppressionRequestInside(db, work);
+      const result = inContentSuppressionRequestInside(db, () => {
+        checkInstalledContentSafety(db);
+        contentWrite = beginContentWrite(db);
+        return work();
+      });
       contentWrite?.validate(result);
       contentWrite?.close();
       contentWrite = null;

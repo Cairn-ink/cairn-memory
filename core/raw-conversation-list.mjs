@@ -1,4 +1,4 @@
-import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
+import { contentSuppressionReasonInside, inContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { cachedContentLayout, installedContentLayout, checkInstalledContentSafety } from './content-safety-schema.mjs';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { ownData, localNamespace } from './local-authority-input.mjs';
@@ -44,6 +44,7 @@ export function createRawConversationList({ db, identity, epoch }) {
     db.exec('BEGIN');
     let rows, currentEpoch;
     try {
+      inContentSuppressionRequestInside(db,()=>{
       checkInstalledContentSafety(db);
       currentEpoch = epoch(namespace);
       if (cursor && cursor.epoch !== currentEpoch) fail('cursor_stale');
@@ -53,6 +54,7 @@ export function createRawConversationList({ db, identity, epoch }) {
         .all(...rawBoundary(namespace), client, ...(cursor ? [cursor.after] : []), limit + 1);
       // Refuse rather than encoding a suppressed row's session key in a cursor.
       if (safety && rows.some(row => contentSuppressionReasonInside(db, namespace, { kind: 'raw', key: row.id }))) fail('conversation_not_found');
+      });
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
     const selected = rows.slice(0, limit);

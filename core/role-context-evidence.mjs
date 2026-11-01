@@ -6,6 +6,7 @@ import { createPrivateCardStorage } from './private-card-storage.mjs';
 import { createPrivateEvidenceStorage } from './private-evidence-storage.mjs';
 import { createCardReceiptSources } from './card-receipt-sources.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
+import { engineProjectionCounter } from './model-budget.mjs';
 import { assembleContext } from './context-read-assembly.mjs';
 import { keyed } from './private-card-input.mjs';
 import { fail } from './validation.mjs';
@@ -45,7 +46,7 @@ export function roleEvidence(storage,config) {
   }
   function assembled(items,tokenCounts=new Map()) {
     const prepared=items.map(item=>({...item,sourcesComplete:item.canonicalSourcesComplete&&item.sources.length===item.canonicalSourceCount}));
-    return assembleContext({prepared,counter:{id:'internal-projection',countTokens:text=>tokenCounts.get(text)??0},policy:{id:'rank-first-whole-v1'},
+    return assembleContext({prepared,counter:engineProjectionCounter(tokenCounts),policy:{id:'rank-first-whole-v1'},
       budget:{maxTokens:Number.MAX_SAFE_INTEGER,maxItems:24},deadlineAt:Infinity,snapshotOf:()=>null});
   }
   return {item,search,project:items=>assembled(items).metered.items,details:(items,tokens)=>assembled(items,tokens).diagnostics.items};
