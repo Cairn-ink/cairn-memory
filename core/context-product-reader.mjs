@@ -232,7 +232,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       });
     }
     const lifecycle = createReaderWorkerLifecycle({ clearTimer, stopWorker, onStop(termination) {
-      registry.cleanup(resource);
+      registry.cleanup(resource, terminal);
       termination.then(() => {
         releaseSemanticWriter();
         registry.finish(resource); if (resource.state === 'complete') releaseWriter?.();
@@ -288,11 +288,11 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       const stopped = lifecycle.stop();
       if (!lifecycle.worker && !resource.cleaning) {
         openingData.semanticPort?.close(); // A held opening never transferred it.
-        registry.cleanup(resource); registry.finish(resource);
+        registry.cleanup(resource, terminal); registry.finish(resource);
       }
       if (slot) {
         if (slot.record !== resource) {
-          registry.cleanup(slot.record);
+          registry.cleanup(slot.record, terminal);
           stopped.then(() => registry.finish(slot.record), () => registry.finish(slot.record, false));
         }
         const failure=productFailure(terminal);
@@ -316,7 +316,9 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         // Retain only the validated bounded frame, never arbitrary IPC extras.
         const retained = { operation: slot.operation, fileIdentity: message.fileIdentity };
         if (message.kind === 'identity') retained.kind = 'identity';
-        else { try { boundedData(message.result, 65536); retained.result = structuredClone(message.result); }
+        else { try { boundedData(message.result, 65536); retained.result = structuredClone(message.result);
+          const result = retained.result;
+          if (typeof result.ok !== 'boolean' || result.ok && !Object.hasOwn(result, 'value') || !result.ok && !codes.has(result.error?.code)) fail('reader_failed'); }
           catch { shutdown('reader_failed',undefined,{kind:'protocol'}); return; } }
         gate(slot, resource, message.fileIdentity, messageAccepted.bind(null, instance, retained), true); return;
       }

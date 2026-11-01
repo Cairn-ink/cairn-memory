@@ -356,14 +356,14 @@ for(const delay of [600,2000])for(const stage of ['open','refresh'])nativeTest(`
   if(stage==='refresh'){const first=await x.tick();await first.pending;}
   const turn=await x.tick();while(!x.state[0]&&x.workers.at(-1).threadId!==-1)await realDelay(1);
   assert.equal(p.getStatus().error,'read_timeout','slow_close_never_delays_public_timeout');
-  const before=x.spawned,probe=holdProbe(x.open(x.options));await flush();assert.equal(probe.settled,false,'pending_disposal_waits_before_spawn');assert.equal(x.spawned,before);
+  const originalExit=x.exits.at(-1),before=x.spawned,probe=holdProbe(x.open(x.options));await flush();assert.equal(probe.settled,false,'pending_disposal_waits_before_spawn');assert.equal(x.spawned,before);
   await testClock.advance(delay,{waitForWorkers:false});
   assert.equal(x.forced,0,'slow_successful_close_is_not_forced_at_old_grace');
   Atomics.store(x.state,1,1);Atomics.notify(x.state,1);await turn.pending;
   assert.equal((await p.completion).error,'read_timeout','slow_confirmed_disposal_preserves_timeout');
   await (await probe.promise).close();
   const records=await x.s.supervisor.drain();assert.ok(records.every(r=>r.state==='complete'&&['workerStopped','nativeDisposed','leasesReleased','providersSettled'].every(k=>r[k])));
-  assert.equal(await x.exits.at(-1),0);await x.retries(false);
+  assert.equal(await originalExit,0,'original_timeout_worker_exits_successfully');await x.retries(false);
 });
 
 for(const delay of [600,2000])nativeTest(`disposal slow idle close ${delay} ms: confirmed cleanup permits successors`,async t=>{

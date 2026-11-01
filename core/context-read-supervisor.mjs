@@ -102,7 +102,7 @@ export function createSupervisorRegistry({ now = () => Number(process.hrtime.big
   }
   function finalize(record, fields, diagnostics) {
     if (record.expiresAt !== null || record.state === 'failed') return;
-    const waiting = waiters.get(record); if (waiting) endWait(waiting, waiting.now() >= waiting.cutoff ? 3 : 4);
+    const waiting = waiters.get(record); if (waiting) endWait(waiting, 4);
     Object.assign(record, fields);
     record.telemetry = diagnostics.coverage;
     record.diagnostics = diagnostics = deepFreeze(diagnostics);
@@ -199,7 +199,7 @@ export function createSupervisorRegistry({ now = () => Number(process.hrtime.big
     takeHoldDiagnostic(record) { const value = holdStats.get(record); holdStats.delete(record); return value; },
     waiting: () => waiters.size,
     bind(record, identity) { quarantine(record.key, identity, record.domain); record.identity = identity; },
-    cleanup(record) { record.cleaning = true; record.safety = true; const entry = waiters.get(record); if (entry) endWait(entry, entry.now() >= entry.cutoff ? 3 : 4); },
+    cleanup(record, reason) { record.cleaning = true; record.safety = true; const entry = waiters.get(record); if (entry) endWait(entry, reason === 'read_timeout' ? 3 : 4); },
     finalize,
     finish(record, stopped = true) {
       record.cleaning = true;

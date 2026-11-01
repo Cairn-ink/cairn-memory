@@ -141,3 +141,33 @@ nativeTest('registry hold supervisor close detaches a waiting call before gracef
   assert.equal(s.captures[1].sent.some(m=>m.method==='getContextIndexStatus'),false);assert.deepEqual([...s.captures[1].resources],[1,1,0,0]);
   s.release(a);await closing.promise;
 });
+
+
+nativeTest('registry hold malformed opening keeps its protocol failure before admission',async t=>{
+  const s=await setup(t,{failed:true}),a=s.configuration(0,{mode:'block'}),b=s.configuration(1,{service:true}),ah=await s.open(a);let closing;
+  const open=s.runtime(true,m=>{
+    if(m.result?.ok===true&&m.result.value===null&&!closing){delete m.result.value;closing=tracked(ah.close());}
+  });
+  const pending=tracked(open({...b.options,deadlineMs:100}));
+  await until(()=>a.state[0]===1&&Boolean(closing),'malformed opening during cleanup');await flush();
+  await testClock.advance(100,{waitForWorkers:false});const error=await guard(pending.promise,'protocol failure');
+  s.release(a);await closing.promise;
+  assert.equal(error.code,'reader_failed','malformed_opening_is_protocol_failure_before_wait');
+  assert.equal(reader.maintenanceReaderFailureDiagnostic(error).lastFailure.cause,'protocol','malformed_opening_retains_protocol_cause');
+  assert.equal(s.registry.waiting(),0);assert.equal(s.captures.length,2);
+});
+
+for(const action of ['abort','supervisor'])for(const first of ['stop','deadline'])nativeTest(`registry hold ${action}: ${first} settles before delayed competing callback`,async t=>{
+  const s=await setup(t),a=s.configuration(0,{mode:'block'}),b=s.configuration(1),ah=await s.open(a),closing=await s.closing(a,ah),abort=new AbortController();
+  const pending=tracked(s.runtime()({...b.options,deadlineMs:100},{signal:abort.signal}));await flush();assert.equal(pending.settled,false);
+  if(first==='stop'){
+    // Advance the sampled clock without delivering the already-due timer.
+    let elapsed=0;testClock.bind(t,()=>elapsed);elapsed=100;
+  }else await testClock.advance(100,{waitForWorkers:false});
+  if(action==='abort')abort.abort();else await b.options.supervisor.close();
+  const error=await pending.promise;
+  assert.equal(error.code,first==='deadline'?'read_in_progress':action==='abort'?'read_cancelled':'store_closed');
+  assert.equal(reader.readerRegistryHoldDiagnostic(error).outcome,first==='deadline'?3:4,'hold_outcome_matches_first_settlement');
+  assert.equal(s.registry.waiting(),0);s.release(a);await closing.promise;await flush();
+  assert.equal(s.captures.length,1,'later_callback_never_admits_the_stopped_waiter');
+});

@@ -336,6 +336,9 @@ the opening snapshot on a handle and the operation snapshot on each result/error
 `waits`, cumulative `waitMs`, `lastWaitMs` and numeric `outcome`: complete=1,
 failed=2, deadline=3, cancelled/closed=4. Counts/durations are bounded; no identity,
 path, owner, credential or content is recorded. Public DTOs/codes are unchanged.
+The first settlement determines the outcome: an explicit cancel/close records 4
+even after the cutoff if its timer has not run; a deadline callback first records
+3, and later cancellation/closure does not rewrite it.
 The four-bit proof, failed/unproven quarantine, disposal grace, writer exclusion,
 cutoff gate, authority samples, reservation charging and cleanup/history caps stay
 unchanged. **Hypothesis:** when ordinary disposal fits the caller's remaining
