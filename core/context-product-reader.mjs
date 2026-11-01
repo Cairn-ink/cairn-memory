@@ -310,23 +310,30 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       const slot = lifecycle.pending;
       // Old/duplicate frames are ignored. Conflicting current frames fail closed.
       if (message?.operation?.operationId !== slot.operation.operationId || message?.operation?.workerEpoch !== epoch) return;
-      if (JSON.stringify(message.operation) !== JSON.stringify(slot.operation)) { shutdown('reader_failed',undefined,{kind:'protocol'}); return; }
+      if (JSON.stringify(message.operation) !== JSON.stringify(slot.operation)) { shutdown('reader_failed',undefined,{kind:'protocol',protocolKind:'frame_conflict'}); return; }
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
       if (slot.open && message.kind !== 'identity' && !admitted) phase?.mark('openReceived');
       if (!admitted && (message.kind === 'identity' || slot.open && message.result?.ok === true)) {
-        if (typeof message.fileIdentity !== 'string' || !/^[0-9]+:[0-9]+$/.test(message.fileIdentity)) { shutdown('reader_failed',undefined,{kind:'protocol'}); return; }
+        if (typeof message.fileIdentity !== 'string' || !/^[0-9]+:[0-9]+$/.test(message.fileIdentity)) { shutdown('reader_failed',undefined,{kind:'protocol',protocolKind:message.kind==='identity'?'identity_shape':'open_identity'}); return; }
         // Retain only the validated bounded frame, never arbitrary IPC extras.
         const retained = { operation: slot.operation, fileIdentity: message.fileIdentity };
         if (message.kind === 'identity') retained.kind = 'identity';
-        else { try { boundedData(message.result, 65536); retained.result = structuredClone(message.result);
-          const result = retained.result;
-          if (typeof result.ok !== 'boolean' || result.ok && !Object.hasOwn(result, 'value') || !result.ok && !codes.has(result.error?.code)) fail('reader_failed'); }
-          catch { shutdown('reader_failed',undefined,{kind:'protocol'}); return; } }
+        else {
+          let invalidCause={kind:'protocol',protocolKind:'result_bounds'};
+          try {
+            boundedData(message.result, 65536);
+            invalidCause={kind:'protocol',protocolKind:'result_clone'};
+            retained.result = structuredClone(message.result);
+            invalidCause={kind:'protocol',protocolKind:'result_shape'};
+            const result = retained.result;
+            if (typeof result.ok !== 'boolean' || result.ok && !Object.hasOwn(result, 'value') || !result.ok && !codes.has(result.error?.code)) fail('reader_failed');
+          } catch { shutdown('reader_failed',undefined,invalidCause); return; }
+        }
         gate(slot, resource, message.fileIdentity, messageAccepted.bind(null, instance, retained), true, slot.open && retained.kind !== 'identity'); return;
       }
       if (message.kind === 'identity') {
         try {
-          if (typeof message.fileIdentity !== 'string' || !/^[0-9]+:[0-9]+$/.test(message.fileIdentity)){shutdown('reader_failed',undefined,{kind:'protocol'});return;}
+          if (typeof message.fileIdentity !== 'string' || !/^[0-9]+:[0-9]+$/.test(message.fileIdentity)){shutdown('reader_failed',undefined,{kind:'protocol',protocolKind:'identity_shape'});return;}
           registry.bind(resource, message.fileIdentity);
           if (maintenance) {
             const release = claimMaintenanceWriter(message.fileIdentity,readSet);
@@ -337,17 +344,22 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         return;
       }
       if (!slot.open && slot.method === 'fetchCandidateEvidence') phase?.mark('readDelivered');
-      let result,invalidCause={kind:'protocol'};
+      let result,invalidCause={kind:'protocol',protocolKind:'result_bounds'};
       try {
         boundedData(message.result, 65536);
+        invalidCause={kind:'protocol',protocolKind:'result_clone'};
         result = structuredClone(message.result);
+        invalidCause={kind:'protocol',protocolKind:'result_shape'};
         if(result?.ok===false&&!codes.has(result.error?.code))invalidCause={kind:'unmapped',engineCode:result.error?.code};
         if (typeof result.ok !== 'boolean' || result.ok && !Object.hasOwn(result, 'value') || !result.ok && !codes.has(result.error?.code)) fail('reader_failed');
         if (slot.open && result.ok) {
-          if (typeof message.fileIdentity !== 'string' || !/^[0-9]+:[0-9]+$/.test(message.fileIdentity)){shutdown('reader_failed',undefined,{kind:'protocol'});return;}
-          registry.bind(resource, message.fileIdentity); ready = true;
+          if (typeof message.fileIdentity !== 'string' || !/^[0-9]+:[0-9]+$/.test(message.fileIdentity)){shutdown('reader_failed',undefined,{kind:'protocol',protocolKind:'open_identity'});return;}
         }
       } catch { shutdown('reader_failed',undefined,invalidCause); return; }
+      if (slot.open && result.ok) {
+        try { registry.bind(resource, message.fileIdentity); ready = true; }
+        catch (error) { shutdown(error.code ?? 'reader_failed',undefined,{kind:'identity'}); return; }
+      }
       // Acceptance is checked again after bounded response validation.
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
       if (signalCancelled(slot.signal)) result = productFailure('read_cancelled');
@@ -397,7 +409,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
               Object.freeze(c.manifest);Object.freeze(c.payloads);Object.freeze(c.locations);Object.freeze(c);
               attachMaintenanceComparison(result,c);
             }
-          } catch {shutdown('reader_failed',undefined,{kind:'protocol'});return;}
+          } catch {shutdown('reader_failed',undefined,{kind:'protocol',protocolKind:'result_shape'});return;}
           if(now()>=mono(slot.operation.operationCutoffMonoNs)){shutdown('read_timeout');return;}
         }
         if(result.error?.code==='read_timeout'){

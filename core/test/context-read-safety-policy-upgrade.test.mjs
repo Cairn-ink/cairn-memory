@@ -26,6 +26,7 @@ const legacyValidation = moduleUrl(`export * from ${JSON.stringify(validationUrl
   import { PRODUCT_PROFILE } from ${JSON.stringify(controlUrl)};
   export const projectionDigest = ${legacyProjection.toString()};`);
 const legacyEligibility = moduleUrl(`import { contextCardEligible as current } from ${JSON.stringify(eligibilityUrl)};
+  export { contextReadDeleteJournal } from ${JSON.stringify(eligibilityUrl)};
   export const contextCardEligible = (db, identity, features, ns, row, intent, options) =>
     intent === 'history' ? row.state === 'confirmed' : current(db, identity, features, ns, row, intent, options);`);
 const sidecarUrl = new URL('../context-product-sidecar.mjs', import.meta.url);

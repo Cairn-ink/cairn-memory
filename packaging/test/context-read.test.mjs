@@ -41,6 +41,8 @@ async function run(workspace,args,options){const result=await child(workspace,ar
 test('R01/R03/R12/R13 actual artifact: captured sources, fresh lexical MCP, opener matrix and independently derived shipped closure',{timeout:120000},async t=>{
   const workspace=createTestWorkspace(t,{prefix:'installed-context-'}),f=await installedMethods(workspace);
   const engine=await import(pathToFileURL(join(f.root,'core/index.mjs')));
+  const {createContextReadAccess}=await import(pathToFileURL(join(f.root,'adapters/mcp/context-read-access.mjs')));
+  const openerAccess=createContextReadAccess(ns);workspace.defer(()=>openerAccess.revoke());
   assert.equal(typeof engine.createContextReaderPool,'function','installed_mcp_runtime_exports_service_pool');
   const pool=engine.createContextReaderPool();
   try { await engine.createContextReadSupervisor({readerWorkerPool:pool}).close(); }
@@ -124,7 +126,22 @@ test('R01/R03/R12/R13 actual artifact: captured sources, fresh lexical MCP, open
         for(const database of [f.path,f.path+'.context-read-v1.sqlite'])for(const suffix of ['-journal','-wal','-shm']) {
           writeFileSync(database+suffix,'synthetic unsupported auxiliary',{mode:0o600});
           try {const refused=await observeDatabaseFiles({path:f.path,workspace},async()=>{
-            assert.equal((await run(workspace,[fixture,f.root,f.path,JSON.stringify({mode,storeId})])).error.code,'index_unavailable');
+            if(suffix==='-journal') {
+              // Inspect the real installed opener throw; the child wrapper fabricates retryable:false.
+              const options={path:f.path,contextRead:openerAccess.configuration};let opened;
+              try {
+                assert.throws(()=>{opened=mode==='read-only'?engine.openContextReader(options):
+                  engine.openMemoryCore({...options,existingStore:{version:'schema30-existing-v1',storeId}});},error=>{
+                  assert.equal(error.code,'storage_busy');
+                  assert.equal(Object.hasOwn(error,'retryable'),false,'opener throws have no retryable DTO field');
+                  return true;
+                });
+              } finally {opened?.close();}
+            } else {
+              const result=await run(workspace,[fixture,f.root,f.path,JSON.stringify({mode,storeId})]);
+              assert.equal(result.ok,false);assert.equal(result.error.code,'index_unavailable');
+              assert.equal(result.error.retryable,false);
+            }
           });assert.deepEqual(refused.events,[]);}finally{unlinkSync(database+suffix);}
         }
       }

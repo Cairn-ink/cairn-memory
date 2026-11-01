@@ -3,9 +3,10 @@ import { DatabaseSync } from 'node:sqlite';
 import { types } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
+import { dirname } from 'node:path';
 import { createExclusiveSqliteFile, probeRollbackJournal, sqliteFileStat } from './sqlite-journal-probe.mjs';
 import { readTransaction } from './database.mjs';
-import { contextCardEligible } from './context-read-sidecar.mjs';
+import { contextCardEligible, contextReadDeleteJournal } from './context-read-sidecar.mjs';
 import { cardDependencyFence } from './card-current-storage.mjs';
 import { termFrequencies, tokenizeT1, TOKENIZER_VERSION, REPRESENTATION_VERSION } from './context-read-tokenize.mjs';
 import { scoreBM25, rankScores } from './context-read-bm25.mjs';
@@ -79,15 +80,37 @@ function attest(db) {
   if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID ||
       db.prepare('PRAGMA user_version').get().user_version !== PRODUCT_SIDECAR_FORMAT || !same(schema(db), expectedSchema)) unavailable('incompatible');
 }
-export function productFile(path, optional = false) {
+function productStat(path, optional = false) {
   let s;
   try { s = sqliteFileStat(path); } catch (e) { if (optional && e.code === 'ENOENT') return null; unavailable('storage_unavailable'); }
   if (!s.isFile() || s.isSymbolicLink() || (s.mode & 0o777n) !== 0o600n) unavailable('storage_unavailable');
-  return { device: String(s.dev), inode: String(s.ino) };
+  return s;
 }
-function auxiliaries(path, writable) {
+export function productFile(path, optional = false) {
+  const s = productStat(path, optional);
+  return s ? { device: String(s.dev), inode: String(s.ino) } : null;
+}
+function auxiliaries(path, writable, expectedIdentity, observer) {
+  let journal;
   for (const suffix of ['-wal','-shm','-journal']) {
-    if (productFile(path + suffix, true) && (!writable || suffix !== '-journal')) unavailable('storage_unavailable');
+    const entry = productStat(path + suffix, true);
+    if (!entry) continue;
+    if (!writable && suffix === '-journal') { journal = entry; continue; }
+    if (!writable || suffix !== '-journal') unavailable('storage_unavailable');
+  }
+  if (journal) {
+    let main, directory;
+    try { main = productStat(path); directory = sqliteFileStat(dirname(path)); } catch { unavailable('storage_unavailable'); }
+    if (expectedIdentity && (String(main.dev) !== expectedIdentity.device || String(main.ino) !== expectedIdentity.inode)) unavailable('storage_unavailable');
+    const uid = process.getuid?.();
+    if (main.nlink !== 1n || journal.nlink !== 1n || !directory.isDirectory() || directory.isSymbolicLink() ||
+        process.platform !== 'win32' && ((directory.mode & 0o777n) !== 0o700n ||
+          uid === undefined || [main, journal, directory].some(entry => entry.uid !== BigInt(uid)))) unavailable('storage_unavailable');
+    if (!contextReadDeleteJournal(path, observer, { main, directory, expectedIdentity })) unavailable('storage_unavailable');
+    const current = productStat(path + '-journal', true);
+    if (current && !['dev','ino','mode','uid','nlink'].every(key => current[key] === journal[key])) unavailable('storage_unavailable');
+    for (const suffix of ['-wal','-shm']) if (productStat(path + suffix, true)) unavailable('storage_unavailable');
+    fail('storage_busy');
   }
 }
 const generationId = g => digest({seed:g.seed,sequence:g.sequence,baseSequence:g.base_sequence,projection:g.projection});
@@ -208,7 +231,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
           sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});
           if(wantsWrite && sideMode!==sidecarJournalMode)unavailable('storage_unavailable');
         } catch(error) {attribution?.captureFailure(error);try{close();}catch{}throw error;}
-      } else auxiliaries(sidePath, wantsWrite);
+      } else auxiliaries(sidePath, wantsWrite, openedIdentity, observer);
       if (create) read(() => {
         sideFormat=side.prepare('PRAGMA user_version').get().user_version;
         metadata=side.prepare('SELECT * FROM product_metadata WHERE singleton=1').get();
@@ -219,7 +242,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       return true;
     }
     close();
-    if(!sqlite)auxiliaries(sidePath, wantsWrite);
+    if(!sqlite)auxiliaries(sidePath, wantsWrite, openedIdentity, observer);
     if (!physical) {
       if (!writable) unavailable('missing');
       // The child publishes the complete format before any connection opens it.
@@ -700,7 +723,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       if(sqlite && sideMode!=='DELETE')unavailable('storage_unavailable');
       // Repair is explicit maintenance, never a read fallback. Refuse live or
       // unsafe companions; SQLite alone performs journal recovery on opening.
-      auxiliaries(sidePath,false);
+      auxiliaries(sidePath,false,openedIdentity,observer);
       const old=productFile(sidePath);
       if(!repairIdentity || !same(old,repairIdentity))unavailable('storage_unavailable');
       try {

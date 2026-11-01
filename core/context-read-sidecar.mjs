@@ -2,7 +2,8 @@ import { contentReadSafety, memoryReadEligible } from './content-safety.mjs';
 import { createCardCurrentStorage, cardDependencyFence } from './card-current-storage.mjs';
 import { lstatSync, unlinkSync } from 'node:fs';
 import { probeRollbackJournal, createExclusiveSqliteFile } from './sqlite-journal-probe.mjs';
-import { isAbsolute } from 'node:path';
+import { isAbsolute, dirname } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { performance } from 'node:perf_hooks';
 import { readTransaction, isConnectionDiscarded } from './database.mjs';
@@ -45,10 +46,66 @@ function walHeader(path, observer) {
   return result.code === 14 || result.mode !== 'delete';
 }
 
+// A recovery refusal does not distinguish DELETE from WAL. Read the fixed
+// header in a child with no SQLite connection, so its raw descriptor close
+// cannot release this process's SQLite locks.
+export function contextReadDeleteJournal(path, observer, validated) {
+  try {
+    const before = lstatSync(path, { bigint: true }), directory = lstatSync(dirname(path), { bigint: true });
+    const fields = ['dev','ino','mode','uid','gid','nlink'];
+    const matches = (actual, expected) => fields.every(key =>
+      (typeof expected[key] === 'bigint' || Number.isSafeInteger(expected[key])) && actual[key] === BigInt(expected[key]));
+    const baseline = validated ?? { main: before, directory };
+    // Retain the caller's protection/identity proof rather than resetting it.
+    if (!matches(before, baseline.main) || !matches(directory, baseline.directory) ||
+        baseline.expectedIdentity && (String(before.dev) !== baseline.expectedIdentity.device ||
+          String(before.ino) !== baseline.expectedIdentity.inode)) return false;
+    const timeout = Math.min(5000, Math.floor(observer?.journalRemainingMs?.() ?? 5000));
+    if (!(timeout >= 1)) fail('read_timeout');
+    const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      import { openSync, readSync, closeSync, fstatSync, constants } from 'node:fs';
+      let fd;
+      try {
+        fd = openSync(process.argv[1], constants.O_RDONLY | constants.O_NOFOLLOW);
+        const opened = fstatSync(fd, { bigint: true });
+        const header = Buffer.alloc(20), length = readSync(fd, header, 0, 20, 0);
+        process.stdout.write(JSON.stringify({ device: String(opened.dev), inode: String(opened.ino),
+          mode: length === 20 && header.subarray(0,16).equals(Buffer.from('SQLite format 3\\0')) &&
+          header[18] === 1 && header[19] === 1 ? 'delete' : 'other' }));
+      } finally { if (fd !== undefined) closeSync(fd); }
+    `, path], { encoding: 'utf8', env: {}, timeout, maxBuffer: 1024 });
+    if (child.error?.code === 'ETIMEDOUT') fail('read_timeout');
+    if (child.error || child.status !== 0) return false;
+    const opened = JSON.parse(child.stdout);
+    const after = lstatSync(path, { bigint: true }), currentDirectory = lstatSync(dirname(path), { bigint: true });
+    // A writer may commit while the child starts. Content timestamps can
+    // change; replacement or protection changes must retain the refusal.
+    return opened.mode === 'delete' && opened.device === String(before.dev) && opened.inode === String(before.ino) &&
+      matches(after, baseline.main) && matches(currentDirectory, baseline.directory);
+  } catch (error) { if (error?.code === 'read_timeout') throw error; return false; }
+}
+
 function auxiliaries(path, readOnly, observer) {
+  let journal;
   for (const suffix of ['-wal', '-shm', '-journal']) {
     const entry = protectedFile(path + suffix, false);
+    if (entry && readOnly && suffix === '-journal') { journal = entry; continue; }
     if (entry && (readOnly || suffix !== '-journal')) unavailable('auxiliary_file');
+  }
+  if (journal) {
+    // Refuse the operation; only a protected DELETE journal is contention.
+    // The isolated header check cannot recover or admit a read through it.
+    let main, directory;
+    try { main = protectedFile(path); directory = stat(dirname(path)); } catch { unavailable('auxiliary_file'); }
+    const uid = process.getuid?.();
+    if (main.nlink !== 1 || journal.nlink !== 1 || !directory?.isDirectory() || directory.isSymbolicLink() ||
+        process.platform !== 'win32' && ((directory.mode & 0o777) !== 0o700 ||
+          uid === undefined || [main, journal, directory].some(entry => entry.uid !== uid))) unavailable('auxiliary_file');
+    if (!contextReadDeleteJournal(path, observer, { main, directory })) unavailable('auxiliary_file');
+    const current = protectedFile(path + '-journal', false);
+    if (current && !['dev','ino','mode','uid','nlink'].every(key => current[key] === journal[key])) unavailable('auxiliary_file');
+    for (const suffix of ['-wal','-shm']) if (protectedFile(path + suffix, false)) unavailable('auxiliary_file');
+    fail('storage_busy');
   }
   // A checkpointed WAL database can have no auxiliary files. Inspect its
   // mode through isolated SQLite before a host connection can create WAL/SHM.
