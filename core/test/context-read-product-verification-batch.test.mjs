@@ -224,10 +224,14 @@ for(const mode of ['DELETE','WAL'])test(`preparation nonempty-cursor SIGKILL ${m
   const crashed=workRow(f.path);assert.equal(crashed.id,before.id);assert.notEqual(crashed.last_key,before.last_key);
   const docs=inspect(f.path,db=>db.prepare('SELECT identity FROM documents WHERE generation=? ORDER BY identity').all(crashed.storage_id));
   assert.equal(docs.length,2,'committed preparation prefix survives lost reply');
-  const db=new DatabaseSync(f.path);try{db.exec('UPDATE namespace_epochs SET epoch=epoch+1');}finally{db.close();}
   const resumed=local(f.path,{mode,enabled:true});f.workspace.defer(()=>resumed.close());
   resumed.setHook(point=>{if(point==='checkpoint')resumed.setClock(900);});
-  const result=resumed.step(1);assert.equal(result.retargets,1);assert.equal(result.reused,2,'reset comparison reuses authenticated artifacts');
+  const unchanged=resumed.step(1),advanced=workRow(f.path);
+  assert.equal(unchanged.reused,0,'unchanged crash bindings resume after the durable cursor');
+  assert.equal(advanced.id,crashed.id);assert.equal(advanced.checkpoint,crashed.checkpoint+1);assert.notEqual(advanced.last_key,crashed.last_key);
+  assert.equal(resumed.observe().publication,null,'resumed preparation earns no publication or closure credit');
+  const db=new DatabaseSync(f.path);try{db.exec('UPDATE namespace_epochs SET epoch=epoch+1');}finally{db.close();}
+  const result=resumed.step(1);assert.equal(result.retargets,1);assert.equal(result.reused,3,'reset comparison reuses authenticated artifacts');
   assert.equal(workRow(f.path).id,crashed.id);assert.equal(resumed.observe().publication,null,'preparation cannot publish or earn closure credit');
   const verified=new Set(),prepare=DatabaseSync.prototype.prepare;
   t.mock.method(DatabaseSync.prototype,'prepare',function(sql){const statement=prepare.call(this,sql);
