@@ -51,7 +51,7 @@ for (const mode of ['full', 'incremental', 'single']) for (const kind of mode ==
       if (mode === 'full' && kind === 'delta') assert.equal(readFileSync(path + '-journal').subarray(0, 8).toString('hex'), 'd9d505f920a163d7');
       const before = readdirSync(f.workspace.path).sort();
       const observed = await observeDatabaseFiles(f, () => {
-        assert.throws(() => f.index({ readOnly: true }), { code: 'index_unavailable' });
+        assert.throws(() => f.index({ readOnly: true }), { code: 'storage_busy' });
       });
       assert.deepEqual(readdirSync(f.workspace.path).sort(), before); assert.deepEqual(observed.events, []);
     }

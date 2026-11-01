@@ -80,8 +80,15 @@ test('A10 both read-only assembly openers refuse canonical and sidecar hazards w
       // U5a's process helper probes the inherited opener/search refusal. The
       // assembly attempt uses the same state with its trusted counter supplied.
       const observed = await observeDatabaseFiles(selected, async () => {
-        denied(await mutateProcess(selected, { mode, storeId, method: 'findCandidates', input: query({ query: 'assembly' }), envelope: true }), 'index_unavailable');
-        denied(await assemblyAttempt(selected, mode, storeId), 'index_unavailable');
+        const code = scenario.suffix === '-journal' ? 'storage_busy' : 'index_unavailable';
+        const candidates = await mutateProcess(selected, { mode, storeId, method: 'findCandidates', input: query({ query: 'assembly' }), envelope: true });
+        denied(candidates, code);
+        const assembly = await assemblyAttempt(selected, mode, storeId);
+        denied(assembly, code);
+        if (scenario.suffix === '-journal') {
+          assert.deepEqual(candidates.error, { code }, 'the opener error envelope carries only code');
+          assert.deepEqual(assembly.error, { code }, 'the opener error envelope carries only code');
+        }
       });
       assert.deepEqual(observed.events, [], 'read-only paths create, change or delete no database files');
       assert.deepEqual(diskSnapshot(selected.path), before, 'canonical, sidecar and auxiliary bytes are untouched');
@@ -113,7 +120,9 @@ test('A10 auxiliary arrival during counting refuses in both opener modes without
     } } };
     try {
       const observed = await observeDatabaseFiles(selected, async () => {
-        denied(await assemblyAttempt(selected, mode, storeId, config), 'index_unavailable');
+        const result = await assemblyAttempt(selected, mode, storeId, config);
+        denied(result, 'storage_busy');
+        assert.equal(result.error.retryable, true);
       });
       assert.equal(injected, true); assert.ok(calls > 0);
       assert.deepEqual(observed.events, control.events, 'no reader events beyond the controlled test-writer arrival');
