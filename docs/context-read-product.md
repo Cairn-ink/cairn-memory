@@ -352,7 +352,13 @@ resumable stage, not a monotonic completion percentage. The complete ordered
 comparison reuses exact contributions and reconciles replacements and absences.
 Verification resumes at its saved cursor when that comparison changes nothing,
 and restarts on the first contribution change. Access changes or invalid work
-records start a new generation. These preparation checkpoints do not certify
+records start a new generation. Verification commit batching exists behind a disabled
+internal qualification gate; public options cannot enable it. With that gate off,
+verification retains its page checkpoints and accounting. With it on, bounded
+chunks share a transaction and one signed checkpoint; tentative state is copied,
+and a fence race discards the entire open batch. FULL durability and publication's
+certificate transaction are unchanged. Any progress or convergence benefit is a
+**hypothesis** pending paired qualification. These preparation checkpoints do not certify
 readiness; the usual fresh post-commit status check still controls it.
 
 Other database encodings use the append-only builder and start a new generation
@@ -449,7 +455,10 @@ estimate for each kind of work starts at 10 ms and retains twice its largest
 observed cost in that quantum; item work includes tokenization and posting
 writes. Metadata batches have their own estimate so an expensive scan cannot
 block a cheap first item forever. Verification and GC yield too. This is cooperative admission, so an unexpectedly expensive
-indivisible operation can still reach the hard cutoff.
+indivisible operation can still reach the hard cutoff. The disabled verification-batching
+gate preserves ordinary work admission. When enabled internally, verification can
+raise its call-local reserve within the effective deadline; finalization spends
+that reserve without applying ordinary work admission a second time.
 
 On `read_timeout`, retain the cutoff outcome, await supervised cleanup and
 inspect durable status on a later authorized call before resuming. Do not
@@ -632,11 +641,12 @@ the shared operation marker before termination. No public DTO changes.
 | Fields | Unit | Measurement |
 | --- | --- | --- |
 | `unitCount`, `scanUnits`, `itemUnits`, `verificationUnits`, `publicationUnits`, `gcUnits` | admitted units | Existing measured scans/items/verification/GC and admitted publication; counts include attempts rolled back later. Vacuum uses the existing GC admission unit. |
-| `scanRows`, `itemRows`, `verificationRows`, `publicationRows`, `gcRows` | rows | Returned scan rows (including verification scans), completed comparison rows, verified/reset rows, published generation, and SQLite deletion changes across GC tables. |
+| `scanRows`, `itemRows`, `verificationRows`, `publicationRows`, `gcRows` | rows | Returned scan rows (including verification scans and gated length preflights), completed comparison rows, verified/reset rows, published generation, and SQLite deletion changes across GC tables. |
 | `lastUnitKind`, `longestUnitKind` | enum | Last completed admitted unit and longest measured unit; ties choose the latest. |
 | `lastUnitMs`, `longestUnitMs` | ms | Unit entry through return, including nested operations. |
 | `beginWaitMaxMs`, `beginWaitSumMs` | ms | Sidecar `BEGIN IMMEDIATE` entry through return. |
-| `commitMaxMs`, `commitSumMs` | ms | Sidecar `COMMIT` entry through return, including lock wait and sync. |
+| `commitMaxMs`, `commitSumMs` | ms | Sidecar `COMMIT` entry through return, including lock wait and sync; each actual COMMIT is measured separately. |
+| `{verification,comparison,publication,setup,gc}CommitAttempts`, corresponding `Commits` and `Rollbacks` | counts | Private fixed saturating counters for explicit `write()` transactions (bootstrap-child and implicit-vacuum commits are outside this family): attempts count native COMMIT entry, successful commits count its normal return, rollbacks count outer ROLLBACK entry (including failed rollback). Setup includes selection/allocation/reset; savepoint rejection is not an outer rollback. Lost replies do not imply failure or authorize replay; cutoff can lose the sample. |
 | `canonicalReadWaitMaxMs` | ms | Canonical transaction startup plus its first existing canonical statement step, excluding intervening sidecar connection/snapshot/schema work. The marker leaves canonical-read during that gap; no added query. |
 | `saveSigningMs` | ms | Sum of progress incarnation/signing intervals in `save()`, excluding SQL updates. |
 | `gcSliceMs`, `vacuumMs` | ms | Sum of existing GC deletion slice intervals and `incremental_vacuum` intervals, respectively. |

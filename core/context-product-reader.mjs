@@ -2,7 +2,7 @@ import { setTimeout as safetyDelay } from 'node:timers/promises';
 import { hrtime } from 'node:process';
 import { maintenanceFailureCounts, maintenanceFailureRecord, maintenanceFailureKind, readMaintenanceFailure, maintenanceErrorName } from './context-product-attribution.mjs';
 import { maintenanceMarker, readMaintenanceMarker, prepareMaintenanceMarker, claimMaintenanceOrdinal, maintenanceControlState, bindMaintenanceControl, serializationDiagnostic, attributionFields, maintenanceWorkFields } from './context-product-attribution.mjs';
-import { memoryComparisonQualified, attachMaintenanceComparison } from './context-product-attribution.mjs';
+import { memoryComparisonQualified, verificationBatchingQualified, verificationBatchControl, attachMaintenanceComparison } from './context-product-attribution.mjs';
 import { types } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { serviceIssuance, claimMaintenanceWriter } from './context-product-service.mjs';
@@ -115,7 +115,7 @@ const nativeWorker = data => new Worker(new URL('./context-product-worker.mjs', 
 });
 export function createProductReaderRuntime({ now = () => process.hrtime.bigint(), utc = () => Date.now(),
   setTimer = setTimeout, clearTimer = clearTimeout, spawnWorker = nativeWorker, maintenance = false,
-  comparisonQualified = memoryComparisonQualified } = {}) {
+  comparisonQualified = memoryComparisonQualified, verificationQualified = verificationBatchingQualified } = {}) {
   return async function openContextProductReader(original, controls = {}) {
     // These samples precede even option reflection/validation.
     const admitted = now(), admissionUtc = utc();
@@ -173,6 +173,10 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     if(maintenance)openingData.maintenanceMarker=marker;
     // Internal qualification seam, never a public reader/pump input knob.
     if(maintenance&&comparisonQualified())openingData.memoryComparison=true;
+    if(maintenance&&verificationQualified()) {
+      openingData.verificationBatching=true;
+      openingData.verificationBatchState=verificationBatchControl(options.supervisor);
+    }
     if(semantic) {
       openingData.semanticConfig=semantic.configuration;
       openingData.semanticPort=semantic.handle.attach({ownerId:readSet[0].ownerId,path:options.path,readSet,maintenance,bindingId:issuedBinding.credentialBindingId,cancellation:semantic.configuration.cancellation});
@@ -420,7 +424,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       const ordinal=maintenance ? opening ? firstOrdinal : claimMaintenanceOrdinal(control) : undefined;
       const outbound = opening ? openingData : { method, input, credential: token, request: callRequest, operation, frame: callFrame };
       if(maintenance){
-        const {maintenanceMarker:internalMarker,semanticPort,openPhases,memoryComparison:internalComparison,...data}=outbound;operationMessage(data);
+        const {maintenanceMarker:internalMarker,semanticPort,openPhases,memoryComparison:internalComparison,verificationBatching:internalBatching,verificationBatchState:internalBatchState,...data}=outbound;operationMessage(data);
         outbound.maintenanceOrdinal=ordinal;bindMaintenanceControl(control,marker);prepareMaintenanceMarker(marker,ordinal,entered);
       }else if(opening && (semantic || phaseBuffer)) {const {semanticPort,openPhases,...data}=outbound;operationMessage(data);}else operationMessage(outbound);
       const record = opening ? resource : registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, parent: resource, frame: callFrame });

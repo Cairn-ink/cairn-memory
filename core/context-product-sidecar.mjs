@@ -16,6 +16,7 @@ import { maintenanceQuantum } from './context-product-quantum.mjs';
 import { ManifestHash } from './context-product-manifest.mjs';
 import { fail } from './validation.mjs';
 import { VECTOR_DDL } from './context-product-vectors.mjs';
+import { verificationBatch, verificationMeter, verificationBound } from './context-product-verification-batch.mjs';
 import { comparisonWorkFields } from './context-product-attribution.mjs';
 
 export const PRODUCT_SIDECAR_FORMAT = 3;
@@ -115,7 +116,7 @@ export function canonicalProductIdentity(path, db) {
 // Construction acquires no sidecar. Only a separately authorized operation
 // invokes observe/refresh, including when the file is missing or malformed.
 export function productSidecar({ path, db: canonicalDatabase, identity, features, observer, sqlite, sidecarJournalMode = 'DELETE', writable = false,
-  now = () => performance.now(), rendezvous = () => {}, attribution, memoryComparison = null, comparisonOptions = {} }) {
+  now = () => performance.now(), rendezvous = () => {}, attribution, memoryComparison = null, comparisonOptions = {}, verificationBatching = false, verificationBatchState = verificationBatching ? new SharedArrayBuffer(8) : null }) {
   const canonical=canonicalDatabase;
   const canonicalRead=work=>attribution ? attribution.transaction(canonicalDatabase,work,readTransaction) : readTransaction(canonicalDatabase,work);
   features={...features,reviews:features.cards,receipts:features.cards};
@@ -174,17 +175,27 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     catch (error) {attribution?.captureFailure(error); if(sqlite)sqlite.openingFailure(error);throw error; }
   };
   function close() { if (side?.isOpen) side.close(); side = null; metadata = null; sideFiles = null; }
-  function write(work) {
+  function write(work, kind='setup', beforeCommit) {
     sideFiles?.({betweenSnapshots:sideMode==='DELETE' && !side.isTransaction});
     const beginning=attribution?.start('begin');
     try {attribution?.checkpoint('begin');side.exec('BEGIN IMMEDIATE');}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.end(beginning);}
     try {
-      verifyOpened();const result=work();rendezvous('batch');
+      verifyOpened();const result=work();rendezvous('batch');beforeCommit?.();
       const committing=attribution?.start('commit');
-      try {attribution?.checkpoint('commit');side.exec('COMMIT');}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.end(committing);}
+      try {attribution?.checkpoint('commit');attribution?.add(kind+'CommitAttempts',1);side.exec('COMMIT');attribution?.add(kind+'Commits',1);}catch(error){attribution?.captureFailure(error);throw error;}finally{attribution?.end(committing);}
       return result;
     }
-    catch (e) {attribution?.captureFailure(e); if (side.isTransaction) side.exec('ROLLBACK'); if(e.reason==='storage_unavailable')close();throw e; }
+    catch (e) {attribution?.captureFailure(e);
+      if(side.isTransaction) {attribution?.add(kind+'Rollbacks',1);
+        if(verificationBatching&&kind==='verification'){try {side.exec('ROLLBACK');}catch(rollbackError) {
+          if(e!==verificationBound&&e!==fenceChanged)attribution?.captureSecondaryFailure?.(rollbackError);
+          try {close();}catch {}
+          if(e===verificationBound||e===fenceChanged){attribution?.captureFailure(rollbackError);throw rollbackError;}
+        }}
+        else side.exec('ROLLBACK');
+      }
+      if(e!==fenceChanged && e!==verificationBound && e.reason==='storage_unavailable')close();throw e;
+    }
   }
   function connection(create = false) {
     if (closed) fail('store_closed');
@@ -426,50 +437,51 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     side.prepare("UPDATE statistics SET n=n-?,total_length=total_length-? WHERE generation=? AND term=''").run(old.eligible,old.token_length,g.storage_id);
     side.prepare('DELETE FROM documents WHERE generation=? AND doc=?').run(g.storage_id,old.doc);
   }
-  function verifyPage(g, p, m, quantum) {
+  function verifyPage(g, p, m, quantum, db=side, maximum=128, repeatBytes) {
     const v=g.verify;
     if(v.phase===1 && !v.resetDone) {
       // Counters are derived verification state, never unchecked input. Reset
       // them in bounded primary-key ranges before counting any postings.
-      const reset=quantum.measure(()=>side.prepare(`UPDATE statistics SET verified_df=0 WHERE generation=? AND term_id IN
-        (SELECT term_id FROM statistics WHERE generation=? ${v.resetLast===undefined?'':'AND term_id>?'} ORDER BY term_id LIMIT 128)
+      const reset=quantum.measure(()=>db.prepare(`UPDATE statistics SET verified_df=0 WHERE generation=? AND term_id IN
+        (SELECT term_id FROM statistics WHERE generation=? ${v.resetLast===undefined?'':'AND term_id>?'} ORDER BY term_id LIMIT ${maximum})
         RETURNING term_id`).all(g.storage_id,g.storage_id,...(v.resetLast===undefined?[]:[v.resetLast])),'verification-reset');
       m.verifiedRows+=reset.length;attribution?.add('verificationRows',reset.length);
       if(reset.length)v.resetLast=Math.max(...reset.map(row=>row.term_id));
-      if(reset.length===128)return;
+      if(reset.length===maximum)return;
       v.resetDone=true;
       if(!quantum.admit('verify-scan') || !quantum.admit('verification'))return;
     }
     const hash=new ManifestHash(v.hash), phase=v.statisticsDone ? 3 : v.phase, last=v.last;
     let rows, exhausted=false;
     quantum.measure(()=>{
-      if(phase===0) rows=side.prepare(`SELECT * FROM documents WHERE generation=? ${last.length?'AND identity>?':''} ORDER BY identity LIMIT 128`).all(g.storage_id,...last);
+      if(phase===0) rows=db.prepare(`SELECT * FROM documents WHERE generation=? ${last.length?'AND identity>?':''} ORDER BY identity LIMIT ${maximum}`).all(g.storage_id,...last);
       else if(phase===1) {
-        // Fill the same 128 logical posting rows as the manifest stream,
+        // Fill a bounded prefix of the same logical manifest posting stream,
         // using bounded covering integer ranges for each document. Empty
-        // documents count against a separate 128-document scan bound. Each
+        // documents count against a separate bounded document scan. Each
         // completed document is an ordered verification item too: even an
         // empty document must be checked before the durable cursor passes it.
         rows=[];
-        let document=side.prepare(`SELECT * FROM documents WHERE generation=? ${last.length?`AND identity${v.documentDone?'>':'>='}?`:''} ORDER BY identity LIMIT 1`).get(g.storage_id,...(last.length?[last[0]]:[]));
+        let document=db.prepare(`SELECT * FROM documents WHERE generation=? ${last.length?`AND identity${v.documentDone?'>':'>='}?`:''} ORDER BY identity LIMIT 1`).get(g.storage_id,...(last.length?[last[0]]:[]));
         let visited=0,postings=0;
-        while(document && postings<128 && visited++<128) {
-          const page=side.prepare(`SELECT p.term AS term_id,p.position,p.frequency,s.term FROM postings p INDEXED BY product_document_order
+        while(document && postings<maximum && visited++<maximum) {
+          const page=db.prepare(`SELECT p.term AS term_id,p.position,p.frequency,s.term FROM postings p INDEXED BY product_document_order
             LEFT JOIN statistics s ON s.generation=p.generation AND s.term_id=p.term
-            WHERE p.generation=? AND p.doc=? AND p.position>? ORDER BY p.position LIMIT 128`).all(g.storage_id,document.doc,document.identity===last[0] ? last[1] ?? 0 : 0);
-          const selected=page.slice(0,128-postings);
+            WHERE p.generation=? AND p.doc=? AND p.position>? ORDER BY p.position LIMIT ${maximum}`).all(g.storage_id,document.doc,document.identity===last[0] ? last[1] ?? 0 : 0);
+          const selected=page.slice(0,maximum-postings);
+          repeatBytes?.(document.identity,selected.length);
           rows.push(...selected.map(row=>({...row,document})));
           postings+=selected.length;
-          if(postings===128)break;
+          if(postings===maximum)break;
           rows.push({document,complete:true});
-          document=side.prepare('SELECT * FROM documents WHERE generation=? AND identity>? ORDER BY identity LIMIT 1').get(g.storage_id,document.identity);
+          document=db.prepare('SELECT * FROM documents WHERE generation=? AND identity>? ORDER BY identity LIMIT 1').get(g.storage_id,document.identity);
         }
         exhausted=!document;
-      } else if(phase===2) rows=side.prepare(`SELECT * FROM statistics WHERE generation=? ${last.length?'AND term>?':''} ORDER BY term LIMIT 128`).all(g.storage_id,...last);
-      else rows=side.prepare(`SELECT p.doc,p.term,d.eligible,s.term AS text FROM postings p
+      } else if(phase===2) rows=db.prepare(`SELECT * FROM statistics WHERE generation=? ${last.length?'AND term>?':''} ORDER BY term LIMIT ${maximum}`).all(g.storage_id,...last);
+      else rows=db.prepare(`SELECT p.doc,p.term,d.eligible,s.term AS text FROM postings p
         LEFT JOIN documents d ON d.generation=p.generation AND d.doc=p.doc
         LEFT JOIN statistics s ON s.generation=p.generation AND s.term_id=p.term
-        WHERE p.generation=? ${last.length?'AND (p.doc,p.term)>(?,?)':''} ORDER BY p.doc,p.term LIMIT 128`).all(g.storage_id,...last);
+        WHERE p.generation=? ${last.length?'AND (p.doc,p.term)>(?,?)':''} ORDER BY p.doc,p.term LIMIT ${maximum}`).all(g.storage_id,...last);
       attribution?.add('scanRows',rows.length);rendezvous('verify-scan');
     },'verify-scan');
     let processed=0;
@@ -503,7 +515,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
             }
             if(!r.term || !r.document.eligible || (v.previousTerm && Buffer.compare(Buffer.from(v.previousTerm),Buffer.from(r.term))>=0))unavailable('corrupt');
             v.documentLength+=r.frequency;v.previousTerm=r.term;v.postings=(v.postings ?? 0)+1;
-            side.prepare('UPDATE statistics SET verified_df=verified_df+1 WHERE generation=? AND term_id=?').run(g.storage_id,r.term_id);
+            db.prepare('UPDATE statistics SET verified_df=verified_df+1 WHERE generation=? AND term_id=?').run(g.storage_id,r.term_id);
             tuple=['posting',JSON.parse(r.document.identity),r.term,r.frequency];v.last=[r.document.identity,r.position];delete v.documentDone;
           }
         } else if(phase===2) {
@@ -522,12 +534,12 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     v.hash=hash.state();
     if(phase===1) {
       if(processed===rows.length && exhausted){v.phase++;v.last=[];delete v.documentDone;}
-    } else if(processed===rows.length && rows.length<128) {
+    } else if(processed===rows.length && rows.length<maximum) {
       if(phase===2) {
         v.statisticsDone=true;v.last=[];
         // Fold the bounded referential audit into this checkpoint when it
         // fits. Its cursor resumes durably without adding a public phase.
-        if(quantum.admit('verify-scan') && quantum.admit('verification')) {verifyPage(g,p,m,quantum);return;}
+        if(maximum===128 && quantum.admit('verify-scan') && quantum.admit('verification')) {verifyPage(g,p,m,quantum);return;}
       } else {
         if(phase===3 && (v.checkedPostings ?? 0)!==(v.postings ?? 0))unavailable('corrupt');
         v.phase++;v.last=[];
@@ -607,7 +619,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         gcChanges(side.prepare('DELETE FROM validation_records WHERE generation=?').run(g.id));
         gcChanges(side.prepare('DELETE FROM progress_records WHERE generation=?').run(g.id));
         gcChanges(side.prepare('DELETE FROM generations WHERE id=?').run(g.id));
-      });if(found)rendezvous('gc');},'gc');
+      },'gc');if(found)rendezvous('gc');},'gc');
       if(!found)break;
     }
     if(quantum.admit('gc'))quantum.measure(()=>{
@@ -834,13 +846,77 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
         }
         if(rebinding){m.retargets++;rebinding=false;}
         g.checkpoint++;save(g,t);
-      }); } catch(e) {attribution?.captureFailure(e); if(e===fenceChanged)return m;throw e; }
+      },'comparison'); } catch(e) {attribution?.captureFailure(e); if(e===fenceChanged)return m;throw e; }
       rendezvous('checkpoint');
     }
-    while (g.phase>=g.streams.length && g.verify.phase<3 && quantum.admit('verify-scan') && quantum.admit('verification') &&
-      (g.verify.phase!==1 || g.verify.resetDone || quantum.admit('verification-reset'))) {
+    const verificationAdmitted=()=>g.phase>=g.streams.length && g.verify.phase<3 && quantum.admit('verify-scan') && quantum.admit('verification') &&
+      (g.verify.phase!==1 || g.verify.resetDone || quantum.admit('verification-reset'));
+    const batching=verificationBatching && verificationBatch({now,quantum,state:verificationBatchState});
+    const legacyVerification=()=>{
+      let finalized;
+      const copy={...g,verify:structuredClone(g.verify)};
+      if(now()>=quantum.cutoff)fail('read_timeout');
+      if(!verificationAdmitted()||!batching.admitLegacy())return false;
+      const tail=batching.begin();
+      try {write(()=>{
+        verifyPage(copy,p,m,quantum);
+        if(same(copy.verify,g.verify))throw verificationBound;
+        finalized=now();tail.tail();
+        if(!fresh(t,p,access))throw fenceChanged;copy.checkpoint++;save(copy,t);
+      },'verification',()=>{
+        tail.tail();if(!fresh(t,p,access))throw fenceChanged;tail.tail();
+      });}
+      catch(error){if(error===verificationBound||error===fenceChanged){attribution?.resetFailure();return false;}throw error;}
+      g=copy;batching.observe(finalized);return true;
+    };
+    while (verificationAdmitted()) {
       if (!fresh(t,p,access)) return m;
-      write(() => { verifyPage(g,p,m,quantum); g.checkpoint++; save(g,t); });
+      if(!batching) {
+        write(() => { verifyPage(g,p,m,quantum); g.checkpoint++; save(g,t); },'verification');
+      } else if(batching.legacy(g.verify.statisticsDone?3:g.verify.phase)) {
+        if(!legacyVerification())return m;
+      } else {
+        const durable=g, tentative={...g,verify:structuredClone(g.verify)}, before=JSON.stringify(g.verify);
+        let meter;const batch=batching.begin();
+        if(!batch.work())break;
+        let chunks=0, fallback=false;
+        try {write(()=>{
+          if(!batch.work())throw verificationBound;
+          try {meter=verificationMeter(side,attribution,Buffer.byteLength(before),
+            2*(5+p.readSet.length*(p.types.includes('card')?4+p.readSet.length:1)));}
+          catch(error){if(error===verificationBound)fallback=true;throw error;}
+          while(chunks<batch.width && tentative.verify.phase<3 && batch.work()) {
+            const previous=structuredClone(tentative.verify), phase=tentative.phase;
+            side.exec('SAVEPOINT verification_chunk');
+            try {
+              verifyPage(tentative,p,m,batch.quantum,meter.db,32,meter.repeat);
+              side.exec('RELEASE verification_chunk');
+            } catch(error) {
+              if(error!==verificationBound)throw error;
+              side.exec('ROLLBACK TO verification_chunk; RELEASE verification_chunk');
+              tentative.verify=previous;tentative.phase=phase;
+              fallback=chunks===0;attribution?.resetFailure();break;
+            }
+            if(same(previous,tentative.verify))break;
+            chunks++;rendezvous('verification-chunk');
+          }
+          if(JSON.stringify(tentative.verify)===before)throw verificationBound;
+          batch.tail();if(!fresh(t,p,access))throw fenceChanged;
+          tentative.checkpoint++;save(tentative,t);
+        },'verification',()=>{batch.tail();if(!fresh(t,p,access))throw fenceChanged;batch.tail();});
+        } catch(error) {
+          // Reload through authenticated observation on the next call; never keep tentative aliases.
+          g=durable;
+          if(error===verificationBound) {
+            attribution?.resetFailure();
+            if(batch.shortage)return m;
+            if(!fallback)break;
+            batching.fallback(g.verify.statisticsDone?3:g.verify.phase);
+            if(!legacyVerification())return m;
+          } else if(error===fenceChanged){attribution?.resetFailure();return m;}else throw error;
+        }
+        if(chunks && !fallback){g=tentative;batch.committed();}
+      }
       rendezvous('verification');
     }
     if (g.phase>=g.streams.length && g.verify.phase===3 && quantum.admit('publication') && fresh(t,p,access)) {
@@ -863,7 +939,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
           side.prepare('INSERT INTO validation_records VALUES(?,?,?)').run(publicationId,g.id,record);
           side.prepare('INSERT OR REPLACE INTO publications VALUES(?,?,?)').run(g.projection,g.id,publicationId);
           side.prepare('DELETE FROM work WHERE projection=?').run(g.projection);
-        });
+        },'publication');
         attribution?.add('publicationRows',1);rendezvous('published');
       },'publication');
     }
@@ -932,6 +1008,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
       const started=now();p=projection(p);
       const cutoff=Math.min(p.deadlineAt ?? Infinity,started+budget.maxMs);
       const quantum=maintenanceQuantum({now,cutoff,maxMs:budget.maxMs,attribution});
+      if(verificationBatching)quantum.batchStart=started;
       return guarded(()=>refresh(p,access,budget,quantum),true);
     },
     compare:(p,access,budget,quantum)=>{
