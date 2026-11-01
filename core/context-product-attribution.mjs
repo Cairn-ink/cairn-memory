@@ -72,6 +72,7 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
   const v=view(buffer),fields=new Float64Array(attributionFields.length);
   const operationStarts=new Float64Array(8),operationKinds=new Uint8Array(8),operationPrevious=new BigUint64Array(8);
   let operationDepth=0,failureStep,failureError,rawFailureError,failureCaptured=false,failureSelected=false,failureResolved=false,failureDetail;
+  let secondaryFailure;
   let current=0n,elapsed=0,readState=0,readStart=0,readElapsed=0,readPrevious=0n;
   const publish=value=>{current=value;if(v)Atomics.store(v,0,value);};
   const restore=previous=>publish((previous&15n)===0n ? hrtime()/1000n<<4n : previous);
@@ -91,7 +92,7 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
       if(v){Atomics.store(v,1,0n);Atomics.store(v,2,0n);Atomics.store(v,3,0n);}publish(hrtime()/1000n<<4n);
       if(v)Atomics.store(v,5,markerOrdinal(ordinal));
     },
-    resetFailure(){failureStep=undefined;failureError=undefined;rawFailureError=undefined;failureCaptured=false;failureSelected=false;failureResolved=false;failureDetail=undefined;},
+    resetFailure(){failureStep=undefined;failureError=undefined;rawFailureError=undefined;failureCaptured=false;failureSelected=false;failureResolved=false;failureDetail=undefined;secondaryFailure=undefined;},
     start(kind){
       if(operationDepth===operationStarts.length)return -1;
       const at=operationDepth++;operationStarts[at]=now();operationKinds[at]=maintenanceKinds.indexOf(kind);operationPrevious[at]=enter(kind);return at;
@@ -101,6 +102,9 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
     // These slots can be written under a SQLite lock. Never inspect the error
     // until failure() is called after the transaction has unwound.
     captureFailure(error){if(failureSelected||failureCaptured&&error===failureError)return;failureError=error;rawFailureError=error;failureStep=Number(current&15n);failureCaptured=true;failureResolved=false;failureDetail=undefined;},
+    // Retain only the first secondary error; reflection waits until SQLite unwinds.
+    captureSecondaryFailure(error){secondaryFailure??={error,step:Number(current&15n)};},
+    takeSecondaryFailure(){const value=secondaryFailure;secondaryFailure=undefined;return value;},
     mapFailure(error,mapped){if(failureCaptured&&failureError===error)failureError=mapped;return mapped;},
     selectFailure(error){if(!failureCaptured||failureError!==error){failureCaptured=false;rawFailureError=undefined;failureStep=undefined;failureResolved=false;failureDetail=undefined;}failureError=undefined;failureSelected=true;},
     failure(){

@@ -188,6 +188,7 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     catch (e) {attribution?.captureFailure(e);
       if(side.isTransaction) {attribution?.add(kind+'Rollbacks',1);
         if(verificationBatching&&kind==='verification'){try {side.exec('ROLLBACK');}catch(rollbackError) {
+          if(e!==verificationBound&&e!==fenceChanged)attribution?.captureSecondaryFailure?.(rollbackError);
           try {close();}catch {}
           if(e===verificationBound||e===fenceChanged){attribution?.captureFailure(rollbackError);throw rollbackError;}
         }}

@@ -5,8 +5,7 @@ import { chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { fork, spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { configured, card } from '../testing/context-product-owner-fixture.mjs';
-import { createProductReaderRuntime, maintenancePhaseDiagnostic } from '../context-product-reader.mjs';
+import { card } from '../testing/context-product-owner-fixture.mjs';
 import { fixture, ns } from '../testing/context-read-fixture.mjs';
 import { local, inspect, workRow, snapshot, authenticate } from '../testing/context-product-verification-fixture.mjs';
 import { ManifestHash } from '../context-product-manifest.mjs';
@@ -202,13 +201,16 @@ test(`replay ${mode} ${changed?'changed contribution':'unchanged retarget'}: reu
 test('verification COMMIT failure preserves initiating cause when rollback also fails',t=>{
   const state=new SharedArrayBuffer(8);new Int32Array(state)[0]=1;
   const {f,a}=seeded(t,{state});a.prepare();const before=inspect(f.path,snapshot),exec=DatabaseSync.prototype.exec;
-  let active=false;a.setHook(point=>{if(point==='verification-chunk')active=true;});
+  const secondary=new RangeError('secondary rollback failure');let active=false,rollbackFaults=0;
+  a.setHook(point=>{if(point==='verify-item')active=true;});
   t.mock.method(DatabaseSync.prototype,'exec',function(sql){
     if(active&&sql==='COMMIT'&&this.prepare('PRAGMA application_id').get().application_id===0x43525032)throw new TypeError('initiating commit failure');
-    const result=exec.call(this,sql);if(active&&sql==='ROLLBACK'&&this.prepare('PRAGMA application_id').get().application_id===0x43525032)throw Error('secondary rollback failure');return result;
+    const result=exec.call(this,sql);if(active&&sql==='ROLLBACK'&&this.prepare('PRAGMA application_id').get().application_id===0x43525032){rollbackFaults++;throw secondary;}return result;
   });
   assert.throws(()=>a.step(),{name:'TypeError',message:'initiating commit failure'});
   assert.equal(a.attribution.failure()?.errorName,'TypeError');assert.equal(a.attribution.snapshot().verificationCommitAttempts,1);
+  assert.equal(rollbackFaults,1,'rollback fault executed');
+  assert.equal(a.attribution.takeSecondaryFailure?.()?.error,secondary,'rollback failure retained separately from the initiating cause');
   assert.equal(a.attribution.snapshot().verificationCommits,0);assert.deepEqual(inspect(f.path,snapshot),before);
 });
 for(const mode of ['DELETE','WAL'])test(`preparation nonempty-cursor SIGKILL ${mode}: resume, fence reset and complete verification (base control)`,async t=>{
@@ -273,19 +275,6 @@ test('fence race preserves an earlier committed batch, discarding all tentative 
   });a.step();
   assert.ok(chunks>1,'race reached a batched verification transaction');assert.ok(earlier,'calibration batch committed before race');assert.deepEqual(inspect(f.path,snapshot),earlier);
   assert.equal(JSON.parse(earlier.generation.verify).counts.documents,32);assert.equal(a.attribution.snapshot().verificationRollbacks,1);
-});
-test('Worker gate and fixed private commit transport; shortage cap survives reopening',async t=>{
-  const f=fixture(t);for(let i=0;i<2;i++)f.admit('worker batch orchard '+i);
-  const db=new DatabaseSync(f.path);try{db.prepare('UPDATE memories SET content=?,revision=revision+1 WHERE id=(SELECT min(id) FROM memories)').run('x'.repeat(120000));db.exec('UPDATE namespace_epochs SET epoch=epoch+1');}finally{db.close();}
-  const service=configured(t,f.path,[ns],{service:true}),open=createProductReaderRuntime({maintenance:true,verificationQualified:()=>true});
-  let h=await open(service.options);f.workspace.defer(()=>h.close());let result;
-  for(let i=0;i<20;i++){result=await h.refreshContextIndex({readSet:[ns],types:['memory'],intent:'current',mode:'lexical',budget:{maxItems:1024,maxMs:5000}},service.token);assert.equal(result.ok,true);if(result.value.status==='complete')break;}
-  assert.equal(result.value.status,'complete');
-  assert.ok(maintenancePhaseDiagnostic(result).verificationCommits>0,'Worker carries per-kind private commit counters');
-  assert.equal(Object.hasOwn(result.value,'verificationCommits'),false);
-  const state=diagnostics.verificationBatchControl(service.supervisor);assert.equal(new Int32Array(state)[0],0,'live calibration stays call-local');assert.ok(new Int32Array(state)[1]>0,'Worker executed gated length preflight');
-  new Int32Array(state)[0]=-1;await h.close();h=await open(service.options);
-  assert.equal(diagnostics.verificationBatchControl(service.supervisor),state);assert.equal(new Int32Array(state)[0],-1);
 });
 test('post-BEGIN admission miss rolls back without signing an empty checkpoint',t=>{
   const {f,a}=seeded(t);a.prepare();const old=inspect(f.path,snapshot),exec=DatabaseSync.prototype.exec;

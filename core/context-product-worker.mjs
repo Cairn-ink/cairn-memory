@@ -34,16 +34,18 @@ const startSqlite = op => sqlite?.start(Number(mono(op.operationCutoffMonoNs)) /
 // Match the legacy native mapping without linking SQLite into bootstrap.
 // Keep the initiating call and the first disposal failure independent.
 let failureDetail,secondaryFailureDetail,disposalFailureDetail;
-const noteFailure=(kind,engineCode,error,disposal=false)=>{if(!workerData.maintenance)return;const detail={kind,...(kind==='engine'||kind==='unmapped'?{engineCode:maintenanceFailureCode(engineCode)}:{}),...(kind==='exception'?{errorName:maintenanceErrorName(error),step:attribution?.stepKind??0}:{})};if(disposal)disposalFailureDetail??=detail;else failureDetail??=detail;};
-const nativeFailure = (error, disposal = false) => {
+const noteFailure=(kind,engineCode,error,disposal=false,secondary=false,step=attribution?.stepKind??0)=>{if(!workerData.maintenance)return;const detail={kind,...(kind==='engine'||kind==='unmapped'?{engineCode:maintenanceFailureCode(engineCode)}:{}),...(kind==='exception'?{errorName:maintenanceErrorName(error),step}:{})};if(secondary)secondaryFailureDetail??=detail;else if(disposal)disposalFailureDetail??=detail;else failureDetail??=detail;};
+const nativeFailure = (error, disposal = false, secondary = false, step) => {
   const code=error?.code === 'ERR_SQLITE_ERROR'
     ? Number.isInteger(error.errcode) && [5,6].includes(error.errcode&255) ? 'storage_busy':'storage_error' : error?.code;
   const response=productFailure(code);
-  if(!(closing&&code==='store_closed'))noteFailure(code===undefined?'exception':code===response.error.code?'engine':'unmapped',code,error,disposal);
+  if(!(closing&&code==='store_closed'))noteFailure(code===undefined?'exception':code===response.error.code?'engine':'unmapped',code,error,disposal,secondary,step);
   return response;
 };
 const within = op => { if (closing) fail('store_closed'); if (process.hrtime.bigint() >= mono(op.operationCutoffMonoNs)) fail('read_timeout'); };
 function result(operation, result, extra = {}) {
+  const secondary=!result.ok&&attribution?.takeSecondaryFailure();
+  if(secondary)try{nativeFailure(secondary.error,false,true,secondary.step);}catch{noteFailure('exception',undefined,secondary.error,false,true,secondary.step);}
   const failure=workerData.maintenance&&!result.ok&&!(closing&&result.error?.code==='store_closed')?(attribution?.failure()??failureDetail):undefined;
   parentPort.postMessage({ operation, result, ...extra,...(failure?{maintenanceFailure:failure,...(secondaryFailureDetail?{maintenanceSecondaryFailure:secondaryFailureDetail}:{})}:{}) });
 }
