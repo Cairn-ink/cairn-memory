@@ -3,6 +3,8 @@ import { testClock } from '../testing/context-product-test-clock.mjs';
 import assert from 'node:assert/strict';
 import { linkSync } from 'node:fs';
 import { join } from 'node:path';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import * as reader from '../context-product-reader.mjs';
 import { nativeTest, setup, guard, until, tracked, flush } from './fixtures/context-read-registry-hold-fixture.mjs';
 const bits = ['workerStopped','nativeDisposed','leasesReleased','providersSettled'];
@@ -131,6 +133,20 @@ nativeTest('registry hold admission stop control: identity deadline has no lease
   await guard(capture.exited,'identity refusal exit');const cleanup=await b.options.supervisor.drain(bp.record.id);
   assert.equal(capture.forced,1);assert.equal(capture.sent.some(m=>m.method==='close'),false);assert.equal(cleanup.state,'complete');assert.ok(bits.every(bit=>cleanup[bit]));
   s.release(a);await closing.promise;const ch=await s.open(s.configuration(2));await ch.close();
+});
+
+nativeTest('registry hold cancelled opening with rejected close has no uncaught cleanup exception',async t=>{
+  // Isolate the process-level failure: node:test makes an uncaught exception in
+  // the child fail its exit status, even if the public cancellation has settled.
+  const env={...process.env};delete env.NODE_TEST_CONTEXT;
+  const child=spawn(process.execPath,[fileURLToPath(new URL('./fixtures/context-read-held-cancel-rejection.mjs',import.meta.url))],{env,stdio:['ignore','pipe','pipe']});
+  let output='';for(const stream of [child.stdout,child.stderr])stream.on('data',data=>{output=(output+data).slice(-16384);});
+  t.after(()=>{if(child.exitCode===null)child.kill('SIGKILL');});
+  const exited=new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',(code,signal)=>resolve({code,signal}));});
+  const result=await guard(exited,'rejecting cancellation child');
+  if(result.code!==0)t.diagnostic(output);
+  assert.equal(result.signal,null,'cancel_cleanup_child_was_not_killed');
+  assert.equal(result.code,0,'held_cancel_cleanup_has_no_uncaught_exception');
 });
 
 for(const service of [false,true])for(const stage of ['open','call'])nativeTest(`registry hold two owners ${service?'maintenance':'request'} ${stage}`,async t=>{

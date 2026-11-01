@@ -460,7 +460,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
             shutdown('read_timeout', slot.cutoff); return slot.cutoff.attested;
           }, () => writerReleased);
         }
-        const abort = () => shutdown('read_cancelled');
+        const abort = () => { void shutdown('read_cancelled'); };
         try {
           clearTimer(idle);
           if (signalCancelled(signal)) { shutdown('read_cancelled'); return; }
