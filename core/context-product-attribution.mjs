@@ -1,6 +1,12 @@
 // Private, fixed numeric maintenance telemetry. Never supplies admission proof.
 export const maintenanceKinds = Object.freeze(['idle','scan','item','verify','publication','gc','vacuum','begin','commit','save','canonical-read','serialize']);
-export const maintenanceWorkFields = Object.freeze(['transformed','canonicalRows','metadataBytes','textRows','textBytes','supportLookups','supportBytes','verifiedRows','reused','replaced','removed','copied','tokenized','retargets','verificationRestarts','verificationKept']);
+export const comparisonWorkFields = Object.freeze(['comparisonAttempts','comparisonComplete','comparisonEqual','comparisonDifferent','comparisonIncomplete','comparisonRows','comparisonBytes']);
+export const maintenanceWorkFields = Object.freeze(['transformed','canonicalRows','metadataBytes','textRows','textBytes','supportLookups','supportBytes','verifiedRows','reused','replaced','removed','copied','tokenized','retargets','verificationRestarts','verificationKept',...comparisonWorkFields]);
+// B4 has not activated consumption. No public option or environment enables it.
+export const memoryComparisonQualified = () => false;
+const comparisons=new WeakMap();
+export const maintenanceComparison = value => comparisons.get(value);
+export const attachMaintenanceComparison = (value,comparison) => {if(comparison)comparisons.set(value,comparison);};
 export const attributionFields = Object.freeze(['unitCount','scanUnits','itemUnits','verificationUnits','publicationUnits','gcUnits',
   'scanRows','itemRows','verificationRows','publicationRows','gcRows','lastUnitKind','lastUnitMs','longestUnitKind','longestUnitMs',
   'beginWaitMaxMs','beginWaitSumMs','commitMaxMs','commitSumMs','canonicalReadWaitMaxMs','saveSigningMs','gcSliceMs','vacuumMs',

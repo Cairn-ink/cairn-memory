@@ -2,6 +2,7 @@ import { setTimeout as safetyDelay } from 'node:timers/promises';
 import { hrtime } from 'node:process';
 import { maintenanceFailureCounts, maintenanceFailureRecord, maintenanceFailureKind, readMaintenanceFailure, maintenanceErrorName } from './context-product-attribution.mjs';
 import { maintenanceMarker, readMaintenanceMarker, prepareMaintenanceMarker, claimMaintenanceOrdinal, maintenanceControlState, bindMaintenanceControl, serializationDiagnostic, attributionFields, maintenanceWorkFields } from './context-product-attribution.mjs';
+import { memoryComparisonQualified, attachMaintenanceComparison } from './context-product-attribution.mjs';
 import { types } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { serviceIssuance, claimMaintenanceWriter } from './context-product-service.mjs';
@@ -113,7 +114,8 @@ const nativeWorker = data => new Worker(new URL('./context-product-worker.mjs', 
   resourceLimits: { maxOldGenerationSizeMb: 192 },
 });
 export function createProductReaderRuntime({ now = () => process.hrtime.bigint(), utc = () => Date.now(),
-  setTimer = setTimeout, clearTimer = clearTimeout, spawnWorker = nativeWorker, maintenance = false } = {}) {
+  setTimer = setTimeout, clearTimer = clearTimeout, spawnWorker = nativeWorker, maintenance = false,
+  comparisonQualified = memoryComparisonQualified } = {}) {
   return async function openContextProductReader(original, controls = {}) {
     // These samples precede even option reflection/validation.
     const admitted = now(), admissionUtc = utc();
@@ -169,6 +171,8 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     // Internal fixed storage does not consume the caller's bootstrap allowance.
     if (phaseBuffer) openingData.openPhases = phaseBuffer;
     if(maintenance)openingData.maintenanceMarker=marker;
+    // Internal qualification seam, never a public reader/pump input knob.
+    if(maintenance&&comparisonQualified())openingData.memoryComparison=true;
     if(semantic) {
       openingData.semanticConfig=semantic.configuration;
       openingData.semanticPort=semantic.handle.attach({ownerId:readSet[0].ownerId,path:options.path,readSet,maintenance,bindingId:issuedBinding.credentialBindingId,cancellation:semantic.configuration.cancellation});
@@ -348,6 +352,31 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         if(slot.ordinal!==null)safe.ordinal=slot.ordinal;
         safe.returnMs=Number(now()-mono(slot.operation.enteredMonoNs))/1e6;
         maintenancePhases.set(result,Object.freeze(safe));
+        if(openingData.memoryComparison&&message.comparison){
+          try {
+            const c=message.comparison;
+            if(c.status==='incomplete')attachMaintenanceComparison(result,boundedData(c));
+            else {
+              if(!result.ok)fail('reader_failed');
+              if(!['complete/equal','complete/different'].includes(c.status)||typeof c.envelope!=='string')fail('reader_failed');
+              if(Buffer.byteLength(c.envelope)>262144)fail('reader_failed');
+              const envelope=boundedData(JSON.parse(c.envelope));
+              if(envelope.domain!=='context-read/b3-input-v2'||
+                !Number.isSafeInteger(c.rows)||c.rows<0||c.rows>131072||!Number.isSafeInteger(c.bytes)||c.bytes<0||c.bytes>33554432||
+                envelope.usage?.rows!==c.rows||envelope.usage?.bytes!==c.bytes||
+                !Array.isArray(c.manifest)||!Array.isArray(c.payloads)||!Array.isArray(c.locations)||!Array.isArray(envelope.descriptors)||
+                c.manifest.length+c.payloads.length+c.locations.length+envelope.descriptors.length>1024)fail('reader_failed');
+              let bytes=Buffer.byteLength(c.envelope);
+              for(const chunks of [c.manifest,c.payloads,c.locations])for(const chunk of chunks){
+                if(typeof chunk!=='string'||!chunk.isWellFormed()||Buffer.byteLength(chunk)>262144||(bytes+=Buffer.byteLength(chunk))>33554432)fail('reader_failed');
+                boundedData(chunk);
+              }
+              Object.freeze(c.manifest);Object.freeze(c.payloads);Object.freeze(c.locations);Object.freeze(c);
+              attachMaintenanceComparison(result,c);
+            }
+          } catch {shutdown('reader_failed',undefined,{kind:'protocol'});return;}
+          if(now()>=mono(slot.operation.operationCutoffMonoNs)){shutdown('read_timeout');return;}
+        }
         if(result.error?.code==='read_timeout'){
           const stall=readMaintenanceMarker(marker,now());if(stall)maintenanceStalls.set(result,stall);
         }
@@ -391,7 +420,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       const ordinal=maintenance ? opening ? firstOrdinal : claimMaintenanceOrdinal(control) : undefined;
       const outbound = opening ? openingData : { method, input, credential: token, request: callRequest, operation, frame: callFrame };
       if(maintenance){
-        const {maintenanceMarker:internalMarker,semanticPort,openPhases,...data}=outbound;operationMessage(data);
+        const {maintenanceMarker:internalMarker,semanticPort,openPhases,memoryComparison:internalComparison,...data}=outbound;operationMessage(data);
         outbound.maintenanceOrdinal=ordinal;bindMaintenanceControl(control,marker);prepareMaintenanceMarker(marker,ordinal,entered);
       }else if(opening && (semantic || phaseBuffer)) {const {semanticPort,openPhases,...data}=outbound;operationMessage(data);}else operationMessage(outbound);
       const record = opening ? resource : registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, parent: resource, frame: callFrame });

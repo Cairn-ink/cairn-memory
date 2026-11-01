@@ -88,7 +88,11 @@ export async function openContextSemanticCoordinator(original,controls={}) {
     if(owner.closed)failOpening('store_closed');
     if(closed){await ready;fail('store_closed');}
     resource.workerStopped=false;resource.nativeDisposed=false;
-    worker=new Worker(new URL('./context-semantic-worker.mjs',import.meta.url),{workerData:{...data,resources},env:{},execArgv:[],stdout:true,stderr:true,resourceLimits:{maxOldGenerationSizeMb:192}});
+    // Only this dedicated runtime credential enters the trusted service host.
+    // Read at each Worker start; never copy it into engine data or messages.
+    const apiKey=process.env.CAIRN_CONTEXT_SEMANTIC_OPENAI_API_KEY;
+    const env=typeof apiKey==='string'&&apiKey.length>0?{CAIRN_CONTEXT_SEMANTIC_OPENAI_API_KEY:apiKey}:{};
+    worker=new Worker(new URL('./context-semantic-worker.mjs',import.meta.url),{workerData:{...data,resources},env,execArgv:[],stdout:true,stderr:true,resourceLimits:{maxOldGenerationSizeMb:192}});
     worker.stdout.resume();worker.stderr.resume();
     worker.on('error',()=>reject('reader_failed'));
     worker.on('exit',code=>{exited=true;if(!closed){closed=true;registry.cleanup(resource);registry.finish(resource,true);all.delete(key);reject('reader_failed',true);}});

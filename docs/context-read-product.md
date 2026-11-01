@@ -181,6 +181,7 @@ reports the descriptor in `coverage.namespaces`; ready status is partial on
 overflow. An empty selected-projection match remains partial for the owner.
 Missing/incomplete/stale projections remain unavailable even on overflow;
 scope partial coverage never permits searching incomplete lexical statistics.
+Every `unavailable` lexical status has a closed reason: `wrong_store`, `incompatible`, `corrupt`, `validation_missing`, `validation_invalid` or `storage_unavailable`; unrecognized storage failures use `storage_unavailable`, and progress is null.
 Evidence keeps exactly `{items,snapshot}`; the product carries the selection
 descriptor/partial status separately in HTTP/tool metadata outside model text.
 
@@ -815,16 +816,32 @@ if renewal occurs during dispatch; neither renewal nor restart erases charges.
 Persist the full outstanding reservation before process replacement whenever
 settlement is uncertain. Counters never refund unknown work.
 
-The observation-cadence, quantum-watchdog and known-usage refund rules above
-remain lexical-only. An embedding-enabled pump (below) also skips window/renewal
+The observation-cadence and known-usage refund rules above remain
+lexical-only. An embedding-enabled pump (below) also skips window/renewal
 tails that cannot fit its configured quantum, without reserving or advancing
-round-robin position; validation uses its own configured time bound. Its resident cache
-includes constructor policy. Continuous renewal reuses residents; inactive renewal
-retires them inside the next reserved turn, draining before a replacement opens.
+round-robin position; validation uses its own configured time bound. Its
+resident cache includes constructor policy. Continuous renewal reuses
+residents; inactive renewal retires them inside the next reserved turn,
+draining before a replacement opens. Opening failures retain their cleanup IDs
+even when accounting settlement also fails. Completion waits for opening
+disposal; a failed or unproven drain makes completion `reader_failed`,
+retaining the initiating cause privately. Late open, control and reservation
+replies lose dispatch authority after close or renewal; a late handle is
+drained. A parent watchdog bounds each turn, including coordinator control
+overhead. A coordinator control timeout, including the turn watchdog and
+validation’s own deadline, reports `timeout`. Hosts should retire and reopen
+the coordinator on that code: the engine does not yet close a timed-out
+coordinator. Reader cutoffs report `read_timeout`. Resident disposal and its
+proof are unchanged by this public-code distinction. `ledger_unavailable` maps to `reader_failed`.
+Existing coordinator codes (including `budget_denied`, `provider_error` and
+`rate_limited`) and public reader codes stay unchanged. Unknown or missing
+codes map to `reader_failed`. Bounded private initiating and secondary cause
+counters use the existing sanitized failure records and valid process-wide
+ordinals; public DTOs are unchanged.
 It still schedules a nominal sweep from its own ticks. Actual-observation cadence,
-spacing/pacing, miss accounting, startup/validation cursors, opening-cleanup
-drains and late-await ownership, parent watchdogs, control-failure mapping/cause
-aggregation and item/ms refunds remain parity work.
+spacing/pacing, miss accounting, startup/validation cursors and item/ms refunds
+remain parity work. Durable window-fenced settlement and monotone usage floors
+remain accounting work.
 Time-accounting parity must charge the full parent-monotonic reserve-to-finish
 span, including open, drain and control RPCs; only validated known usage permits
 refunds. Unknown USD tails and legacy records without refund metadata stay charged.
@@ -832,8 +849,7 @@ Canonical selection/intent observation duty belongs to lexical refreshes only;
 embedding, status and validation work use capacity without earning observation
 credit. Semantic coverage lag concerns recall. Unsuccessful turns and genuine
 semantic cutoffs remain terminal. The lexical cutoff exception stays disabled.
-The dedicated semantic provider key channel and bounded coordinator disposal
-also remain separate work.
+Bounded coordinator disposal also remains separate work.
 
 A recognized canonical/dependency fence change during a batch rolls back that
 batch and returns successful `rebuilding` progress. Earlier committed batches
@@ -949,8 +965,16 @@ objects. The Worker-local host factory constructs the injected
 computes conservative token/cost bounds from the reviewed price table. The
 optional transport at `adapters/openai/product-embedding.mjs` exposes
 `createProductOpenAIEmbedder`; construct it inside that factory with a runtime
-credential closure and the validated selection. Its endpoint is fixed, redirects
-are refused, requests are guarded, and there are no retries or provider fallbacks.
+credential closure reading `process.env.CAIRN_CONTEXT_SEMANTIC_OPENAI_API_KEY`
+and the validated selection. This is the only environment variable admitted to
+the semantic service Worker, and only when it is a non-empty string. There is no
+fallback to `OPENAI_API_KEY` or any other variable. The parent reads it at each
+Worker start, so a rotated value applies to the next open. Ordinary product
+Workers still receive an empty environment. The allowlist keeps the key out of
+engine-owned outputs; it doesn't isolate the key from the trusted host module
+and its dependencies, which run in that Worker and can read it.
+The transport's endpoint is fixed, redirects are refused, requests are guarded,
+and there are no retries or provider fallbacks.
 The transport reports validated input-token usage through `settleInputTokens`.
 
 Product-profile local selection and a local runtime with `localStatus` refuse

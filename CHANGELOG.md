@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — semantic provider key channel
+
+- Admit only `CAIRN_CONTEXT_SEMANTIC_OPENAI_API_KEY`, when non-empty, to the
+  semantic service Worker at each start. There is no generic-key fallback;
+  ordinary product Workers retain an empty environment. The key stays outside
+  engine-owned outputs and is readable by the trusted Worker-local host and its
+  dependencies.
+
 ## Unreleased — Cairn Memory discovery metadata
 
 - Add focused npm search keywords and point the package homepage to Cairn.ink.

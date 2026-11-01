@@ -30,6 +30,7 @@ for (const [mode, client] of [['layouts', 'claude-code'], ['raw', 'claude-code']
     assert.ok(graph.eager.includes('core/context-product-reader-pool.mjs'));
     assert.ok(graph.lazy.includes('core/context-product-reader-pool-worker.mjs'));
     assert.ok(graph.lazy.includes('core/context-product-worker.mjs'));
+    assert.ok(graph.lazy.includes('core/context-product-comparison.mjs'));
     const child = spawnSync(process.execPath, [fixture, installed, workspace.path, mode, client], { cwd: workspace.path, encoding: 'utf8', timeout: 30000, maxBuffer: 262144,
       env: { PATH: dirname(process.execPath), HOME: home, TMPDIR: workspace.path, TMP: workspace.path, TEMP: workspace.path,
         NODE_NO_WARNINGS: '1', NODE_DISABLE_COMPILE_CACHE: '1' } });
