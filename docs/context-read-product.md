@@ -893,7 +893,9 @@ settlement cannot refund twice. Recognized rolled-back attempts stay charged.
 Elapsed milliseconds round up from parent reserve entry through finish-receipt
 delivery, including resident opening, drain and control overhead. A full-charge
 finish receipt precedes item/ms reconciliation on the next reserved admission,
-whose own span charges that reconciliation overhead. The parent can report the
+whose own span charges that reconciliation overhead. A refused admission keeps
+the prior full charge and leaves reconciliation for a later reserved turn.
+The parent can report the
 known refund on receipt; until the next admission the durable ledger retains
 the full charge. Losing the receipt or acknowledgement retains that charge.
 USD settlement is unchanged: success or zero committed vectors alone never

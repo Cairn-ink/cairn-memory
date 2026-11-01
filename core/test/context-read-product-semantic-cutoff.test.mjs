@@ -1289,6 +1289,25 @@ test('semantic durable unknown accounting version is rejected on authenticated r
   await assert.rejects(client.pumpCall('pumpFinish',{id:r.id,known:false}),{code:'ledger_unavailable'},'unknown_accounting_version_is_rejected_before_settlement');
 });
 
+test('semantic durable unfunded reconciliation waits for a reserved admission',async t=>{
+  const s=await setup(t,{isolated:true}),client=semanticHandle(s.coordinator),a=accountingInput(s);
+  const first=await client.pumpCall('pumpReserve',a);
+  const receipt={id:first.id,windowId:a.window.id,generation:0,known:true,floors:{items:0,ms:0}};
+  await client.pumpCall('pumpFinish',receipt);await s.advance(a.remainingMs);
+  const denied=accountingInput(s);denied.window.usedMs=denied.budgets.maxMs;denied.accounting.floors.ms=denied.budgets.maxMs;
+  const reconcile={...receipt,usage:{version:1,items:0,elapsedMs:0}};
+  await client.pumpCall('pumpReserve',{...denied,reconcile}).catch(error=>{assert.equal(error.code,'budget_denied');});
+  const kept=accountingState(s).windows[a.window.id];
+  assert.equal(kept.usedItems,8,'unfunded_reconciliation_keeps_previous_full_item_charge');
+  assert.equal(kept.usedMs,500,'unfunded_reconciliation_keeps_previous_full_time_charge');
+  if(kept.quanta[first.id].accounting)assert.equal(kept.quanta[first.id].accounting.stage,'receipt','denied_admission_keeps_acknowledgement_eligible');
+  await s.advance(denied.remainingMs);
+  await client.pumpCall('pumpReserve',{...accountingInput(s),reconcile});
+  const settled=accountingState(s).windows[a.window.id];
+  assert.equal(settled.usedItems,0,'funded_admission_applies_captured_window_refund');
+  assert.equal(settled.usedMs,0,'funded_admission_persists_known_elapsed_usage');
+});
+
 // Last: the deliberately failed proof retains process-wide inode quarantine.
 test('semantic parity rejected retirement keeps reader_failed and quarantine', async t => {
   const s = await setup(t, { expectedCleanupFailure: true }), runtime = pumpRuntime(s), pump = runtime.renew(runtime.config);

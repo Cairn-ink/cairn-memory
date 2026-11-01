@@ -177,7 +177,7 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
     a.items+=maxItems;a.ms+=maxMs;usedItems=a.items;usedMs=a.ms;
     const result=await control(ctx,'pumpReserve',{mode,maxItems,maxMs,bindingId,window:sentWindow,budgets,maxUsd,remainingMs,...(pending?{reconcile:{...pending.input,floors:floors(pending.account)}}:{}),
       accounting:{version:1,generation:ctx.generation,floors:floors(a),endsMonoNs:a.endsMonoNs}});
-    apply(ctx,result);check(ctx);if(pendingUsage===pending)pendingUsage=undefined;if(result.exhausted){windowExhausted=true;throw interrupted;}return {...result,mode,maxItems,maxMs};
+    apply(ctx,result);check(ctx);if(result.exhausted){windowExhausted=true;throw interrupted;}if(pendingUsage===pending)pendingUsage=undefined;return {...result,mode,maxItems,maxMs};
   }
   async function finish(ctx,reservation,known,items) {
     const input={id:reservation.id,known,windowId:ctx.account.id,generation:ctx.generation,floors:floors(ctx.account)};

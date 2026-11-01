@@ -289,9 +289,16 @@ async function internalCall(message,metadata) {
     if(!['lexical','embeddings','validation'].includes(input.mode))fail('invalid_input');
     const id=randomUUID();let result;
     await change(s=>{
+      let undoUsage;
       if(input.reconcile){
         const r=input.reconcile,w=s.windows[r.windowId],q=w?.quanta[r.id];
-        if(!q||q.status!=='settled')fail('invalid_input');pumpFloors(w,r.floors);pumpUsage(w,q,r);
+        if(!q||q.status!=='settled')fail('invalid_input');pumpFloors(w,r.floors);
+        const before={items:w.usedItems,ms:w.usedMs,accounting:q.accounting&&structuredClone(q.accounting)};
+        pumpUsage(w,q,r);
+        undoUsage=()=>{
+          w.usedItems=Math.max(w.accounting?.floorItems??0,before.items);w.usedMs=Math.max(w.accounting?.floorMs??0,before.ms);
+          if(before.accounting)q.accounting=before.accounting;
+        };
       }
       const time=utc(),expiry=input.accounting?pumpExpiry(input.accounting,time,process.hrtime.bigint()):time+Math.max(0,input.remainingMs),old=s.activeWindowId&&s.windows[s.activeWindowId];
       if(old&&old.id!==input.window.id&&time<old.endsUtcMs)fail('invalid_input');
@@ -305,6 +312,9 @@ async function internalCall(message,metadata) {
       s.activeWindowId=w.id;
       const amount=usd(input.maxUsd),reserved=Object.values(w.quanta).filter(q=>q.status==='reserved').reduce((sum,q)=>sum+BigInt(q.maxUsd),0n);
       if(time>=w.endsUtcMs||w.usedItems+input.maxItems>w.maxItems||w.usedMs+input.maxMs>w.maxMs||amount+reserved+BigInt(w.usedUsd)>maxUsd){
+        // Reconciliation needs this admission's reserved span. A refusal keeps
+        // the previous full charge and its receipt eligible for a later turn.
+        undoUsage?.();
         result={exhausted:true,windowId:w.id,generation:input.accounting?.generation,floors:{items:w.accounting?.floorItems??0,ms:w.accounting?.floorMs??0},usedItems:w.usedItems,usedMs:w.usedMs,usedUsd:dollars(BigInt(w.usedUsd)+reserved)};return;
       }
       w.usedItems+=input.maxItems;w.usedMs+=input.maxMs;
