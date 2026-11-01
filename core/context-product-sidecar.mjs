@@ -273,16 +273,17 @@ export function productSidecar({ path, db: canonicalDatabase, identity, features
     return null;
   }
   const canMerge=()=>canonical.prepare('PRAGMA encoding').get().encoding==='UTF-8' && side.prepare('PRAGMA encoding').get().encoding==='UTF-8';
-  function status(p, state, reason, progress = null, counts = null) {
+  function status(p, state, reason = null, progress = null, counts = null) {
     const ready = state === 'ready';
-    return { profile: PRODUCT_PROFILE, lexical: { state,reason,progress }, semantic: { state:'disabled',reason:'not_enabled' },
+    return { profile: PRODUCT_PROFILE, lexical: { state,reason:reason ?? null,progress:progress ?? null }, semantic: { state:'disabled',reason:'not_enabled' },
       coverage: { status: ready ? p.ownerCoverage.omittedNamespaces ? 'partial' : 'complete' : 'unavailable',
         freshness: ready ? 'current' : ['stale','catching_up'].includes(state) ? 'stale' : 'unverified',
         byType: Object.fromEntries(['memory','card'].filter(t => p.types.includes(t)).map(t => [t,
           { eligible: ready ? counts.byType[t].eligible : null, indexed: ready ? counts.byType[t].indexed : null, embedded:null }])),
         namespaces: p.ownerCoverage } };
   }
-  function invalid(p, reason) { return { dto: status(p,'unavailable',reason), publication:null }; }
+  function invalid(p, reason) { return { dto: status(p,'unavailable',
+    ['wrong_store','incompatible','corrupt','validation_missing','validation_invalid','storage_unavailable'].includes(reason) ? reason : 'storage_unavailable'), publication:null }; }
   // Caller supplies the canonical transaction. Pointer, generation and record
   // are read under one independent sidecar transaction, with no deep scans.
   function observe(p, access, {forWrite=false,knownFailure=null,workOnly=false,mergeOrder}={}) {

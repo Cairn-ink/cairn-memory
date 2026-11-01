@@ -181,6 +181,7 @@ reports the descriptor in `coverage.namespaces`; ready status is partial on
 overflow. An empty selected-projection match remains partial for the owner.
 Missing/incomplete/stale projections remain unavailable even on overflow;
 scope partial coverage never permits searching incomplete lexical statistics.
+Every `unavailable` lexical status has a closed reason: `wrong_store`, `incompatible`, `corrupt`, `validation_missing`, `validation_invalid` or `storage_unavailable`; unrecognized storage failures use `storage_unavailable`, and progress is null.
 Evidence keeps exactly `{items,snapshot}`; the product carries the selection
 descriptor/partial status separately in HTTP/tool metadata outside model text.
 

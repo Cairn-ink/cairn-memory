@@ -1,4 +1,4 @@
-import { fail } from './validation.mjs';
+import { fail, MemoryStoreError } from './validation.mjs';
 import { SQLITE_STAGES, SQLITE_STATEMENTS } from './topic-reader-sqlite.mjs';
 
 export const NATIVE_PROTOCOL = 'context-native-v1';
@@ -118,7 +118,7 @@ export function nativeObserver(initialFrame) {
           code:Number.isInteger(value.errcode)?'ERR_SQLITE_ERROR':value.error,
           ...(Number.isInteger(value.errcode)?{errcode:value.errcode}:{}),published:value.published,
         });
-        if(!valid)fail('index_unavailable');
+        if(!valid)throw Object.assign(new MemoryStoreError('index_unavailable'),{reason:'storage_unavailable'});
         return value;
       } finally {
         if(v && !received)Atomics.store(v,6,1);
@@ -171,7 +171,7 @@ export function nativeObserver(initialFrame) {
         const policySignal = valid && result.value.stage === 'query' &&
           [8, 11, 14, 26].includes(firstFailure?.errcode & 255);
         if (firstFailure && !policySignal) throw firstFailure;
-        if (!valid) fail('index_unavailable');
+        if (!valid) throw Object.assign(new MemoryStoreError('index_unavailable'),{reason:'storage_unavailable'});
         return result.value;
       } finally {
         if (v && !received) Atomics.store(v, 6, 1);
