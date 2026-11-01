@@ -832,8 +832,7 @@ Canonical selection/intent observation duty belongs to lexical refreshes only;
 embedding, status and validation work use capacity without earning observation
 credit. Semantic coverage lag concerns recall. Unsuccessful turns and genuine
 semantic cutoffs remain terminal. The lexical cutoff exception stays disabled.
-The dedicated semantic provider key channel and bounded coordinator disposal
-also remain separate work.
+Bounded coordinator disposal also remains separate work.
 
 A recognized canonical/dependency fence change during a batch rolls back that
 batch and returns successful `rebuilding` progress. Earlier committed batches
@@ -949,8 +948,16 @@ objects. The Worker-local host factory constructs the injected
 computes conservative token/cost bounds from the reviewed price table. The
 optional transport at `adapters/openai/product-embedding.mjs` exposes
 `createProductOpenAIEmbedder`; construct it inside that factory with a runtime
-credential closure and the validated selection. Its endpoint is fixed, redirects
-are refused, requests are guarded, and there are no retries or provider fallbacks.
+credential closure reading `process.env.CAIRN_CONTEXT_SEMANTIC_OPENAI_API_KEY`
+and the validated selection. This is the only environment variable admitted to
+the semantic service Worker, and only when it is a non-empty string. There is no
+fallback to `OPENAI_API_KEY` or any other variable. The parent reads it at each
+Worker start, so a rotated value applies to the next open. Ordinary product
+Workers still receive an empty environment. The allowlist keeps the key out of
+engine-owned outputs; it doesn't isolate the key from the trusted host module
+and its dependencies, which run in that Worker and can read it.
+The transport's endpoint is fixed, redirects are refused, requests are guarded,
+and there are no retries or provider fallbacks.
 The transport reports validated input-token usage through `settleInputTokens`.
 
 Product-profile local selection and a local runtime with `localStatus` refuse
