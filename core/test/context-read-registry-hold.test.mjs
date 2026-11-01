@@ -14,6 +14,80 @@ function diagnostic(value,outcome,ms) {
   assert.equal(Object.hasOwn(value,'registryHold'),false,'public_DTO_has_no_hold_field');
 }
 
+async function openingResultDuringClose(t,{service,expires=false}) {
+  const s=await setup(t,{failed:true}),a=s.configuration(0,{mode:'block'}),b=s.configuration(1,{service}),ah=await s.open(a),ap=s.proof(a);
+  assert.notEqual(a.binding.ownerId,b.binding.ownerId);assert.notDeepEqual(a.options.readSet,b.options.readSet);
+  assert.equal(a.options.path,b.options.path);assert.equal(a.options.host.moduleUrl,b.options.host.moduleUrl);
+  let closing,acknowledgedWithoutHold=false,validResult=false;
+  const open=s.runtime(service,(message,capture)=>{
+    if(message.result?.ok===true&&Object.hasOwn(message.result,'value')&&!closing){
+      acknowledgedWithoutHold=capture.sent.some(m=>m.kind==='identity-ack')&&!ap.record.safety;
+      validResult=typeof message.fileIdentity==='string'&&/^[0-9]+:[0-9]+$/.test(message.fileIdentity);
+      // This listener runs before the reader's result listener. Identity has
+      // already been acknowledged, but the valid opening result is not accepted.
+      closing=tracked(ah.close());
+    }
+  });
+  const pending=tracked(open({...b.options,deadlineMs:expires?100:3000}));
+  await until(()=>a.state[0]===1&&Boolean(closing),'valid result during normal close');await flush();
+  const bp=s.proof(b),capture=s.captures[1],before={settled:pending.settled,error:pending.error?.code,
+    cause:reader.maintenanceReaderFailureDiagnostic(pending.error)?.lastFailure?.cause};
+  assert.equal(acknowledgedWithoutHold,true,'opening_identity_ack_precedes_other_owner_hold');
+  assert.equal(validResult,true,'opening_result_is_valid_before_hold_admission');
+  if(before.settled){
+    // Preserve downstream evidence when run against the pre-wait runtime,
+    // before failing the admission assertion rather than during teardown.
+    await guard(capture.exited,'original opening exit');
+    const cleanup=await b.options.supervisor.drain(bp.record.id).catch(error=>error.cleanup);
+    s.release(a);await guard(closing.promise,'other owner proof');
+    const third=await s.open(s.configuration(2)).catch(error=>error);
+    t.diagnostic(JSON.stringify({sequence:'valid-opening-during-close',service,expires,...before,
+      cleanup:Object.fromEntries(['state',...bits].map(key=>[key,cleanup[key]])),thirdCode:third.code}));
+    if(typeof third.close==='function')await third.close();
+  }
+  assert.equal(before.settled,false,'valid_opening_waits_without_protocol_failure');
+  assert.equal(before.cause,undefined,'valid_opening_has_no_protocol_cause');
+  assert.equal(closing.settled,false,'other_owner_proof_is_still_pending');
+  assert.equal(capture.forced,0,'held_valid_opening_is_not_force_terminated');
+  assert.equal(capture.resources[0],1,'held_opening_already_owns_a_host_lease');
+  const identity=bp.record.identity,bind=s.registry.bind;let rebinds=0;
+  s.registry.bind=(record,...args)=>{if(record===bp.record)rebinds++;return bind(record,...args);};
+  if(expires){
+    await testClock.advance(100,{waitForWorkers:false});const error=await guard(pending.promise,'opening hold cutoff');
+    assert.equal(error.code,'read_in_progress','valid_opening_hold_expires_with_read_in_progress');
+    assert.equal(reader.maintenanceReaderFailureDiagnostic(error).lastFailure.cause,'identity','hold_deadline_is_not_protocol_failure');
+    diagnostic(error,3,100);await guard(capture.exited,'expired opening exit');
+    const cleanup=await b.options.supervisor.drain(bp.record.id).catch(error=>error.cleanup);
+    // read_in_progress is an immediate-stop reason. An already-open lease is
+    // unproven after termination, so this deadline must retain quarantine.
+    assert.equal(capture.forced,1);assert.equal(cleanup.state,'failed');
+    assert.deepEqual(bits.map(bit=>cleanup[bit]),[true,true,false,true],'expired_opening_keeps_unproven_lease_quarantine');
+    s.release(a);await guard(closing.promise,'other owner proof');await flush();
+    assert.equal(pending.error,error,'expired_opening_never_accepts_a_late_result');
+    assert.equal(bp.record.identity,identity,'identity_binding_is_unchanged');
+    assert.equal(rebinds,0,'expired_opening_never_binds_after_hold_release');
+    const beforeThird=s.captures.length;
+    await assert.rejects(s.open(s.configuration(2)),{code:'reader_failed'},'third_owner_refused_by_expired_opening_quarantine');
+    assert.equal(s.captures.length,beforeThird,'quarantined_third_owner_never_spawns');
+    return;
+  }
+  await testClock.advance(600,{waitForWorkers:false});
+  assert.equal(pending.settled,false,'valid_opening_stays_pending_until_four_bit_proof');
+  assert.equal(rebinds,0,'valid_opening_does_not_bind_before_disposal_proof');
+  s.release(a);await guard(closing.promise,'other owner proof');
+  assert.ok(bits.every(bit=>ap.status()[bit]),'other_owner_completes_four_bit_proof');
+  const bh=await guard(pending.promise,'valid opening resumes');assert.equal(pending.error,undefined,'valid_opening_succeeds_after_proof');
+  assert.equal(rebinds,1,'valid_opening_binds_only_after_disposal_proof');
+  diagnostic(bh,1,600);assert.equal(capture.forced,0,'resumed_opening_worker_is_never_force_terminated');
+  await bh.close();assert.equal(await capture.exited,0);assert.equal(capture.forced,0);
+  const c=s.configuration(2),ch=await s.open(c),cp=s.proof(c);await ch.close();
+  for(const proof of [ap,bp,cp]){assert.equal(proof.status().state,'complete','no_owner_cleanup_record_failed');assert.ok(bits.every(bit=>proof.status()[bit]));}
+  assert.equal(s.registry.counters().live,0,'all_three_owners_dispose_without_quarantine');
+}
+
+for(const service of [true,false])nativeTest(`registry hold valid ${service?'maintenance':'request'} opening result after identity acknowledgement`,t=>openingResultDuringClose(t,{service}));
+nativeTest('registry hold valid maintenance opening result reaches its deadline after identity acknowledgement',t=>openingResultDuringClose(t,{service:true,expires:true}));
+
 for(const service of [false,true])for(const stage of ['open','call'])nativeTest(`registry hold two owners ${service?'maintenance':'request'} ${stage}`,async t=>{
   const s=await setup(t,{global:!service&&stage==='open'}),a=s.configuration(0,{service,mode:'block'}),b=s.configuration(1,{service});
   assert.notEqual(a.binding.ownerId,b.binding.ownerId);assert.notDeepEqual(a.options.readSet,b.options.readSet);
