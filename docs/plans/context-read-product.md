@@ -313,7 +313,14 @@ late proof cannot spawn, dispatch or acknowledge an expired/cancelled operation.
 Identity acknowledgement waits before the Worker opens its facade. Opening
 acceptance retains its existing identity/protocol checks. An undispatched call's
 refusal completes only its borrower record, leaving its healthy resident open.
-Already-started opening shutdown retains the existing disposal policy.
+
+A bounded, validated opening result held in admission means the Worker has
+finished opening work. Its admission deadline (`read_in_progress`) or cancellation
+(`read_cancelled`) MUST use the existing 10,000 ms graceful disposal path,
+including the real-time safety fallback, without delaying the public refusal.
+Cancellation before that result or during a dispatched call, malformed results,
+protocol/identity violations and conflicting frames retain immediate termination.
+Grace expiry still forces termination; unproven disposal still quarantines the file.
 
 One waiter per live record bounds waiters by the existing process-wide 256 live
 slots, including waiting records and failed safety pins. No additional queue
