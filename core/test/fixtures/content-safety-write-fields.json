@@ -1340,12 +1340,21 @@
   "core/context-product-sidecar.mjs": {
     "key:applicationId": 2,
     "key:base_id": 1,
-    "key:id": 8,
-    "key:storeId": 3,
+    "key:id": 9,
+    "key:storeId": 4,
     "literal:cardId": 2,
+    "literal:comparison_base_invalid": 1,
     "literal:memoryId": 2,
     "literal:term_id": 1,
-    "literal:validation_invalid": 5
+    "literal:validation_invalid": 6
+  },
+  "core/context-product-comparison.mjs": {
+    "key:comparisonId": 1,
+    "key:memoryId": 1,
+    "key:storeId": 2,
+    "literal:conversation_id": 1,
+    "literal:id": 1,
+    "literal:message_id": 1
   },
   "core/content-safety.mjs": {
     "key:eventId": 1,
@@ -1404,7 +1413,7 @@
   },
   "core/context-semantic-pump.mjs": {
     "key:bindingId": 1,
-    "key:id": 2,
+    "key:id": 3,
     "key:ownerId": 1,
     "key:windowId": 1,
     "literal:id": 1

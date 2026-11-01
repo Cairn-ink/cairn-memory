@@ -214,6 +214,10 @@ test('r4 every literal identity-shaped acknowledgement field and projection occu
   // per-port fact projection is removed. These are reads, not new ack fields.
   // R3: admission scope and Card source memo keys reuse canonical read proofs;
   // the two internal counter/embedding wrapper ids are configuration metadata.
+  // Main merge: the B3 comparison module is a read-side manifest. Its ids are
+  // the envelope id, store binding, observation input and fence-row columns.
+  // The sidecar adds the comparison store binding, base generation ids and two
+  // reason strings; the pump adds a reservation id. None is an ack field.
   // The terminal writer and acknowledgement field guard are unchanged.
   // These changes retain the native guard's fail-closed walker.
   const expected=JSON.parse(readFileSync(new URL('./fixtures/content-safety-write-fields.json',import.meta.url),'utf8'));
