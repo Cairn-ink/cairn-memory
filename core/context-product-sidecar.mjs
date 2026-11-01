@@ -106,7 +106,7 @@ function auxiliaries(path, writable, expectedIdentity, observer) {
     if (main.nlink !== 1n || journal.nlink !== 1n || !directory.isDirectory() || directory.isSymbolicLink() ||
         process.platform !== 'win32' && ((directory.mode & 0o777n) !== 0o700n ||
           uid === undefined || [main, journal, directory].some(entry => entry.uid !== BigInt(uid)))) unavailable('storage_unavailable');
-    if (!contextReadDeleteJournal(path, observer)) unavailable('storage_unavailable');
+    if (!contextReadDeleteJournal(path, observer, { main, directory, expectedIdentity })) unavailable('storage_unavailable');
     const current = productStat(path + '-journal', true);
     if (current && !['dev','ino','mode','uid','nlink'].every(key => current[key] === journal[key])) unavailable('storage_unavailable');
     for (const suffix of ['-wal','-shm']) if (productStat(path + suffix, true)) unavailable('storage_unavailable');

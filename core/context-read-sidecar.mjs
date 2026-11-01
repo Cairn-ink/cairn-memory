@@ -49,9 +49,17 @@ function walHeader(path, observer) {
 // A recovery refusal does not distinguish DELETE from WAL. Read the fixed
 // header in a child with no SQLite connection, so its raw descriptor close
 // cannot release this process's SQLite locks.
-export function contextReadDeleteJournal(path, observer) {
+export function contextReadDeleteJournal(path, observer, validated) {
   try {
     const before = lstatSync(path, { bigint: true }), directory = lstatSync(dirname(path), { bigint: true });
+    const fields = ['dev','ino','mode','uid','gid','nlink'];
+    const matches = (actual, expected) => fields.every(key =>
+      (typeof expected[key] === 'bigint' || Number.isSafeInteger(expected[key])) && actual[key] === BigInt(expected[key]));
+    const baseline = validated ?? { main: before, directory };
+    // Retain the caller's protection/identity proof rather than resetting it.
+    if (!matches(before, baseline.main) || !matches(directory, baseline.directory) ||
+        baseline.expectedIdentity && (String(before.dev) !== baseline.expectedIdentity.device ||
+          String(before.ino) !== baseline.expectedIdentity.inode)) return false;
     const timeout = Math.min(5000, Math.floor(observer?.journalRemainingMs?.() ?? 5000));
     if (!(timeout >= 1)) fail('read_timeout');
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
@@ -73,8 +81,7 @@ export function contextReadDeleteJournal(path, observer) {
     // A writer may commit while the child starts. Content timestamps can
     // change; replacement or protection changes must retain the refusal.
     return opened.mode === 'delete' && opened.device === String(before.dev) && opened.inode === String(before.ino) &&
-      ['dev','ino','mode','uid','gid','nlink'].every(key => before[key] === after[key]) &&
-      ['dev','ino','mode','uid','gid'].every(key => directory[key] === currentDirectory[key]);
+      matches(after, baseline.main) && matches(currentDirectory, baseline.directory);
   } catch (error) { if (error?.code === 'read_timeout') throw error; return false; }
 }
 
@@ -94,7 +101,7 @@ function auxiliaries(path, readOnly, observer) {
     if (main.nlink !== 1 || journal.nlink !== 1 || !directory?.isDirectory() || directory.isSymbolicLink() ||
         process.platform !== 'win32' && ((directory.mode & 0o777) !== 0o700 ||
           uid === undefined || [main, journal, directory].some(entry => entry.uid !== uid))) unavailable('auxiliary_file');
-    if (!contextReadDeleteJournal(path, observer)) unavailable('auxiliary_file');
+    if (!contextReadDeleteJournal(path, observer, { main, directory })) unavailable('auxiliary_file');
     const current = protectedFile(path + '-journal', false);
     if (current && !['dev','ino','mode','uid','nlink'].every(key => current[key] === journal[key])) unavailable('auxiliary_file');
     for (const suffix of ['-wal','-shm']) if (protectedFile(path + suffix, false)) unavailable('auxiliary_file');

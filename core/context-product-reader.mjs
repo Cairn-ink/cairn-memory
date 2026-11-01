@@ -354,9 +354,12 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         if (typeof result.ok !== 'boolean' || result.ok && !Object.hasOwn(result, 'value') || !result.ok && !codes.has(result.error?.code)) fail('reader_failed');
         if (slot.open && result.ok) {
           if (typeof message.fileIdentity !== 'string' || !/^[0-9]+:[0-9]+$/.test(message.fileIdentity)){shutdown('reader_failed',undefined,{kind:'protocol',protocolKind:'open_identity'});return;}
-          registry.bind(resource, message.fileIdentity); ready = true;
         }
       } catch { shutdown('reader_failed',undefined,invalidCause); return; }
+      if (slot.open && result.ok) {
+        try { registry.bind(resource, message.fileIdentity); ready = true; }
+        catch (error) { shutdown(error.code ?? 'reader_failed',undefined,{kind:'identity'}); return; }
+      }
       // Acceptance is checked again after bounded response validation.
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
       if (signalCancelled(slot.signal)) result = productFailure('read_cancelled');

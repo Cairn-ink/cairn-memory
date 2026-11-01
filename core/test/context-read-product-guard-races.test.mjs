@@ -4,7 +4,8 @@ import { once } from 'node:events';
 import childProcess from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { Worker } from 'node:worker_threads';
-import { writeFileSync,unlinkSync,renameSync,chmodSync,symlinkSync,existsSync } from 'node:fs';
+import fs, { writeFileSync,unlinkSync,renameSync,chmodSync,symlinkSync,existsSync,linkSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { fixture,ns,ok } from '../testing/context-read-fixture.mjs';
 import { configured,descriptor } from '../testing/context-product-owner-fixture.mjs';
 import { openContextProductFacade } from '../context-read-facade.mjs';
@@ -12,6 +13,7 @@ import { productSidecar,PRODUCT_SIDECAR_SUFFIX } from '../context-product-sideca
 import { accessDigest } from '../context-product-validation.mjs';
 import { assertContextReadCanonicalDelete,contextReadDeleteJournal } from '../context-read-sidecar.mjs';
 import { createProductReaderRuntime } from '../context-product-reader.mjs';
+import { nativeObserver } from '../context-product-telemetry.mjs';
 
 const other={...ns,ownerId:'synthetic-guard-writer'};
 const input={readSet:[ns],types:['memory'],intent:'current',deadlineMs:5000};
@@ -63,6 +65,37 @@ test(`guard proof: ${kind}, ${race}`,t=>{
     assert.throws(s.check,{code:race==='journal removed'?'storage_busy':'index_unavailable'},race==='journal removed'?'passing control: disappearance stays contention':'post-child proof must refuse the changed file');
     assert.equal(reached,true,'mutation occurs across the actual header child');
   } finally {for(const suffix of ['-journal','-wal','-shm'])if(existsSync(s.path+suffix))unlinkSync(s.path+suffix);}
+});
+
+for(const kind of ['canonical','sidecar'])for(const race of ['main mode','main link','main replacement','directory mode','directory symlink'])
+test(`guard caller baseline: ${kind}, ${race}`,t=>{
+  const s=setup(t,kind),journal=s.path+'-journal',directory=dirname(s.path),original=directory+'.original';s.check();
+  if(race==='main replacement') {
+    const copy=nativeSpawn(process.execPath,[new URL('./fixtures/context-product-wal-process.mjs',import.meta.url).pathname,'copy',s.path,s.path+'.replacement'],{env:{},encoding:'utf8',timeout:5000,maxBuffer:1024});
+    assert.equal(copy.status,0,copy.stderr);
+  }
+  writeFileSync(journal,'synthetic protected journal',{mode:0o600});const native=fs.lstatSync;let changed=false;
+  t.mock.method(fs,'lstatSync',function(path,...args){
+    if(!changed&&path===s.path&&new Error().stack.includes('contextReadDeleteJournal')) {
+      changed=true;
+      if(race==='main mode')chmodSync(s.path,0o644);
+      if(race==='main link')linkSync(s.path,s.path+'.link');
+      if(race==='main replacement'){renameSync(s.path,s.path+'.original');renameSync(s.path+'.replacement',s.path);}
+      if(race==='directory mode')chmodSync(directory,0o755);
+      if(race==='directory symlink'){renameSync(directory,original);symlinkSync(original,directory);}
+    }
+    return Reflect.apply(native,this,[path,...args]);
+  });syncBuiltinESMExports();
+  try {
+    assert.throws(s.check,{code:'index_unavailable',reason:kind==='canonical'?'auxiliary_file':'storage_unavailable'},'helper samples must retain the caller protection proof');
+    assert.equal(changed,true);
+  } finally {
+    t.mock.restoreAll();syncBuiltinESMExports();
+    if(race==='directory symlink'&&changed){unlinkSync(directory);renameSync(original,directory);}
+    if(race==='main replacement'&&changed){renameSync(s.path,s.path+'.replacement');renameSync(s.path+'.original',s.path);unlinkSync(s.path+'.replacement');}
+    chmodSync(directory,0o700);chmodSync(s.path,0o600);
+    if(existsSync(s.path+'.link'))unlinkSync(s.path+'.link');if(existsSync(journal))unlinkSync(journal);
+  }
 });
 
 test('guard child timeout: remaining cutoff bounds spawn and timeout refuses',t=>{
@@ -120,4 +153,32 @@ for(const kind of ['canonical','sidecar'])test(`guard Worker cutoff supplier rea
     assert.ok(timeout>0&&timeout<=250,'Worker must pass remaining operation cutoff to its header child');
     assert.deepEqual(result,{ok:false,error:{code:'read_timeout',retryable:false}},'timed-out child never admits the status read');
   } finally {unlinkSync(journal);await h.close();}
+});
+
+for(const method of ['fetchCandidateEvidence','findCandidates','contextRead','getContextIndexStatus','refreshContextIndex'])
+test(`guard timeout mapping: real Worker ${method}`,async t=>{
+  const f=fixture(t),memory=f.admit('timeout mapping needle'),maintenance=method==='refreshContextIndex';
+  const c=configured(t,f.path,[ns],{service:maintenance}),state=new SharedArrayBuffer(4);c.options.host.configuration.guardTimeout=state;
+  const h=await instrumented(maintenance)(c.options);t.after(()=>h.close());
+  const journal=f.path+'-journal';writeFileSync(journal,'synthetic protected journal',{mode:0o600});
+  try {
+    const payload=method==='fetchCandidateEvidence'?{readSet:[ns],intent:'current',deadlineMs:250,refs:[{type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision}]}:
+      method==='refreshContextIndex'?{...refresh,budget:{maxItems:1024,maxMs:250}}:
+      {...input,deadlineMs:250,...(method!=='getContextIndexStatus'?{query:'needle'}:{}),...(method==='contextRead'?{budget:{maxItems:8,maxTokens:2000}}:{})};
+    const result=await h[method](payload,c.token);assert.ok(Atomics.load(new Int32Array(state),0)>0,'actual Worker guard reaches the header child seam');
+    assert.deepEqual(result,{ok:false,error:{code:'read_timeout',retryable:false}},'every product method preserves the guard timeout');
+  } finally {unlinkSync(journal);await h.close();}
+});
+test('guard timeout mapping: facade exact fetch preserves expired supplier',t=>{
+  const f=fixture(t),memory=f.admit('expired guard'),observer=nativeObserver();observer.journalRemainingMs=()=>0;
+  const facade=openContextProductFacade(f.path,{observer});writeFileSync(f.path+'-journal','synthetic protected journal',{mode:0o600});
+  try {assert.deepEqual(facade.fetchCandidateEvidence({readSet:[ns],intent:'current',refs:[{type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision}]},{}),
+    {ok:false,error:{code:'read_timeout',retryable:false}});}
+  finally {unlinkSync(f.path+'-journal');facade.close();}
+});
+test('guard timeout mapping control: unrelated facade timeout remains storage_error',t=>{
+  const f=fixture(t),memory=f.admit('non-guard timeout'),facade=openContextProductFacade(f.path,{authorize(){throw Object.assign(Error('synthetic host timeout'),{code:'read_timeout'});}});
+  try {assert.deepEqual(facade.fetchCandidateEvidence({readSet:[ns],intent:'current',refs:[{type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision}]},{}),
+    {ok:false,error:{code:'storage_error',retryable:false}});}
+  finally {facade.close();}
 });

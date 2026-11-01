@@ -32,8 +32,10 @@ if(role === 'pin-journal') {
     db.prepare('SELECT id FROM memories').all(); db.exec('ROLLBACK'); db.close();
   } else if (role === 'mode') {
     db.exec('PRAGMA journal_mode='+mode); db.close();
-  } else if (role === 'hot') {
-    db.exec("PRAGMA journal_mode=DELETE; PRAGMA cache_size=1; BEGIN IMMEDIATE; UPDATE memories SET content=printf('%.*c',1000000,'x')");
+  } else if (role === 'hot' || role === 'hot-sidecar') {
+    db.exec('PRAGMA journal_mode=DELETE; PRAGMA cache_size=1; BEGIN IMMEDIATE');
+    db.exec(role==='hot' ? "UPDATE memories SET content=printf('%.*c',1000000,'x')" :
+      "UPDATE product_metadata SET profile=printf('%.*c',1000000,'x')");
     // Deliberate crash after a cache spill leaves a real hot rollback journal.
     process.exit(0);
   } else {

@@ -502,19 +502,25 @@ statement boundaries. Concurrent external journal-mode changes or uncoordinated
 file replacement are unsupported. A protected active DELETE journal retains zero SQLite busy wait. Canonical connections
 are read-only and refuse a hot journal requiring recovery. With the WAL SQLite
 policy, explicit sidecar maintenance can recover its own rollback journal.
-Without that policy, a protected DELETE `-journal` alone refuses request reads, maintenance
-refresh and status with retryable `storage_busy`; the engine neither reads
-through it nor retries. A genuinely hot journal also remains busy until a
-read-write writer recovers it, so hosts must bound retries. WAL/SHM companions,
+Without that policy, non-write canonical and sidecar checks refuse a protected
+DELETE `-journal` alone with retryable `storage_busy`, including request and
+status paths and maintenance's non-write checks; the engine neither reads through
+it nor retries. Explicit writable sidecar maintenance retains SQLite's existing
+hot-journal recovery behaviour. A read-only refusal remains busy until a
+read-write writer recovers the journal, so hosts must bound retries. WAL/SHM companions,
 WAL headers and unsafe files retain their existing non-retryable refusals.
 The isolated header child uses the remaining operation cutoff, capped at 5,000 ms;
 an expired cutoff or child timeout refuses with `read_timeout`, without retrying.
 Its verdict is bound to the opened inode and rechecked main/directory metadata;
 journal identity/protection and WAL/SHM absence are checked again afterward.
 An in-place header change after that read remains a residual race: once the
-journal disappears, the next retry reaches the existing WAL-header probe and
-refuses non-retryably. The guard does not loop or admit a read through a journal.
-Unsafe/unusable WAL arrangements report `index_unavailable`;
+journal disappears, a new sidecar connection refuses the WAL header or its
+companions non-retryably. A warm sidecar connection reuses its handle
+without that probe and can return `ready` after the unsupported mode switch,
+creating WAL/SHM; no next-retry refusal is guaranteed for that cached handle.
+The canonical guard checks the header again. The guard does not loop or admit
+a read through a journal.
+Detected unsafe/unusable WAL arrangements report `index_unavailable`;
 there is no writable-canonical fallback.
 
 The maintainer establishes the configured mode only while initializing a new

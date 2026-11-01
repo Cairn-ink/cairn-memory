@@ -108,7 +108,11 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   let retainedSourceBytes = 0;
   const rankings = new Map(), controllers = new Set(), indexes = new Map(), dispatch = contextBudget(options);
   const memoryOnly = path === ':memory:';
-  const guardAuxiliaries = () => { if (readOnly && !options.product?.sqlite) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path, options.product?.observer); };
+  const guardTimeouts = new WeakSet();
+  const guardAuxiliaries = () => {
+    try { if (readOnly && !options.product?.sqlite) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path, options.product?.observer); }
+    catch (error) { if (options.product && error?.code === 'read_timeout') guardTimeouts.add(error); throw error; }
+  };
   const db = database?.db;
   function ready() {
     if (closed || db && (!db.isOpen || isConnectionDiscarded(db))) fail('store_closed');
@@ -722,7 +726,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         if (bytes(success(result)) > input.responseByteLimit) fail('context_item_too_large');
         return success(result);
       });
-    } catch (error) { return failure(error); }
+    } catch (error) {
+      return guardTimeouts.has(error) ? { ok: false, error: { code: 'read_timeout', retryable: false } } : failure(error);
+    }
   }
   return { fileIdentity: database?.fileIdentity, productCapabilities: { types: supportedTypes },
     ...(options.product ? { productPort: { db, read, ready, evidence, bind, encode, decode, identity, features: info, canonicalFence } } : {}),
