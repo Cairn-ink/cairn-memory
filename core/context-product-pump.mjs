@@ -49,7 +49,7 @@ export function createMaintenancePumpRuntime({now=()=>Number(process.hrtime.bigi
   // Test-only dependency seam on this internal factory; public renewal never reaches it.
   const recoveryEnabled=cutoffQualified();
   return function renewContextMaintenancePump(original) {
-    if(ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential','semanticConfig','semanticServiceCredential','firstCoverageValidation']).semanticConfig!==undefined)return semanticPump(original,{now,setTimer,clearTimer,open});
+    if(ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential','semanticConfig','semanticServiceCredential','firstCoverageValidation']).semanticConfig!==undefined)return semanticPump(original,{now,setTimer,clearTimer,open,snapshot:(value,diagnostic)=>pumpDiagnostics.set(value,diagnostic)});
     const c=ownData(original,['supervisor','id','window','budgets','quantum','pollMs','renewalMs','projections','serviceCredential']);
     const {owner,registry}=supervisorOwner(c.supervisor);
     if(owner.closed)fail('store_closed');
