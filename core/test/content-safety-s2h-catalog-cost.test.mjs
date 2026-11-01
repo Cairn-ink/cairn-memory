@@ -1,7 +1,7 @@
-import { assertCostGateCases, assertCostGateCell, assertCostGateCells } from '../testing/content-safety-s2h-cost-inventory.mjs';
+import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { openMemoryCore } from '../index.mjs';
+import { openCostMemoryCore as openMemoryCore } from '../testing/content-safety-cost-hosts.mjs';
 import { METHOD_READS } from '../method-package-input.mjs';
 import { ASSET_READS } from '../asset-input.mjs';
 import { safetyFixture, ns, ok } from '../testing/content-safety-s2h-fixture.mjs';
@@ -31,7 +31,7 @@ export function catalogCases(m,a,d) {
 
 test('R2 Method/Asset catalog: all 22 read identities, zero/five facts and cursor pages',async t=>{
  const measured=[];
- for(const safety of [false,true])for(const facts of safety?[0,5]:[0]) {
+ for(const [safety,facts]of costGatePopulations()) {
   const f=safetyFixture(t,33);if(safety)await f.migrate();const db=f.connect();
   const core=openMemoryCore({path:f.path,methodPackages:{version:'method-packages-local-v1',storage:'local-plain-v1',authority},assets:{version:'assets-local-v1',storage:'sqlite-blob-v1',authority}});
   t.after(()=>{core.close();db.close();});
@@ -70,7 +70,7 @@ test('R2 Method/Asset catalog: all 22 read identities, zero/five facts and curso
   measured.push({safety,facts,records});
  }
  t.diagnostic('R3_CATALOG_COUNTS '+JSON.stringify(measured));
- assertCostGateCells(measured);
+ if(assertCostGateCells(measured))return;
  const [legacy,zero,five]=measured;
  for(const current of [zero,five]) {
   assert.deepEqual(current.records.map(r=>[r.method,r.variant]),legacy.records.map(r=>[r.method,r.variant]),'exact method/case/cell inventory');

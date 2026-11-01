@@ -1,0 +1,543 @@
+{
+  "revision": "R2-A1 / 3.5",
+  "decision": "e9, 2026-11-01 17:15",
+  "source": "fixb_s2h2/fix3/artifacts/native-zero-five-table.csv",
+  "sourceSha256": "d651818229f0c26d78907ccd488a79e2fb18d2918a4dee6d6cec21dafcf98f5e",
+  "measuredNodes": [
+    "22.16.0",
+    "24.15.0"
+  ],
+  "nodeDifferences": {},
+  "caps": {
+    "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,12,false,\"refreshContextIndex\",\"refresh\",5]": [
+      407,
+      34,
+      0
+    ],
+    "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,12,false,\"findCandidates\",\"hit\",5]": [
+      373,
+      20,
+      0
+    ],
+    "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,12,false,\"contextRead\",\"hit\",5]": [
+      563,
+      23,
+      50
+    ],
+    "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,12,false,\"findCandidates\",\"lexical-absent\",5]": [
+      135,
+      19,
+      0
+    ],
+    "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,12,false,\"contextRead\",\"lexical-absent\",5]": [
+      156,
+      22,
+      2
+    ],
+    "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,24,false,\"refreshContextIndex\",\"refresh\",5]": [
+      635,
+      46,
+      0
+    ],
+    "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,24,false,\"findCandidates\",\"hit\",5]": [
+      493,
+      20,
+      0
+    ],
+    "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,24,false,\"contextRead\",\"hit\",5]": [
+      803,
+      23,
+      50
+    ],
+    "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,24,false,\"findCandidates\",\"lexical-absent\",5]": [
+      135,
+      19,
+      0
+    ],
+    "[\"embedded same-namespace facts v18 semantic=false: five-fact slope and no-hit\",18,24,false,\"contextRead\",\"lexical-absent\",5]": [
+      156,
+      22,
+      2
+    ],
+    "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,12,true,\"refreshContextIndex\",\"refresh\",5]": [
+      774,
+      76,
+      1
+    ],
+    "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,12,true,\"findCandidates\",\"hit\",5]": [
+      561,
+      48,
+      1
+    ],
+    "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,12,true,\"contextRead\",\"hit\",5]": [
+      751,
+      51,
+      51
+    ],
+    "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,12,true,\"findCandidates\",\"lexical-absent\",5]": [
+      135,
+      19,
+      0
+    ],
+    "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,12,true,\"contextRead\",\"lexical-absent\",5]": [
+      156,
+      22,
+      2
+    ],
+    "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,24,true,\"refreshContextIndex\",\"refresh\",5]": [
+      1182,
+      100,
+      1
+    ],
+    "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,24,true,\"findCandidates\",\"hit\",5]": [
+      573,
+      48,
+      1
+    ],
+    "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,24,true,\"contextRead\",\"hit\",5]": [
+      763,
+      51,
+      51
+    ],
+    "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,24,true,\"findCandidates\",\"lexical-absent\",5]": [
+      135,
+      19,
+      0
+    ],
+    "[\"embedded same-namespace facts v18 semantic=true: five-fact slope and no-hit\",18,24,true,\"contextRead\",\"lexical-absent\",5]": [
+      156,
+      22,
+      2
+    ],
+    "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,12,false,\"refreshContextIndex\",\"refresh\",5]": [
+      407,
+      34,
+      0
+    ],
+    "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,12,false,\"findCandidates\",\"hit\",5]": [
+      373,
+      20,
+      0
+    ],
+    "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,12,false,\"contextRead\",\"hit\",5]": [
+      563,
+      23,
+      50
+    ],
+    "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,12,false,\"findCandidates\",\"lexical-absent\",5]": [
+      135,
+      19,
+      0
+    ],
+    "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,12,false,\"contextRead\",\"lexical-absent\",5]": [
+      156,
+      22,
+      2
+    ],
+    "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,24,false,\"refreshContextIndex\",\"refresh\",5]": [
+      635,
+      46,
+      0
+    ],
+    "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,24,false,\"findCandidates\",\"hit\",5]": [
+      493,
+      20,
+      0
+    ],
+    "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,24,false,\"contextRead\",\"hit\",5]": [
+      803,
+      23,
+      50
+    ],
+    "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,24,false,\"findCandidates\",\"lexical-absent\",5]": [
+      135,
+      19,
+      0
+    ],
+    "[\"embedded same-namespace facts v23 semantic=false: five-fact slope and no-hit\",23,24,false,\"contextRead\",\"lexical-absent\",5]": [
+      156,
+      22,
+      2
+    ],
+    "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,12,true,\"refreshContextIndex\",\"refresh\",5]": [
+      774,
+      76,
+      1
+    ],
+    "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,12,true,\"findCandidates\",\"hit\",5]": [
+      561,
+      48,
+      1
+    ],
+    "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,12,true,\"contextRead\",\"hit\",5]": [
+      751,
+      51,
+      51
+    ],
+    "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,12,true,\"findCandidates\",\"lexical-absent\",5]": [
+      135,
+      19,
+      0
+    ],
+    "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,12,true,\"contextRead\",\"lexical-absent\",5]": [
+      156,
+      22,
+      2
+    ],
+    "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,24,true,\"refreshContextIndex\",\"refresh\",5]": [
+      1182,
+      100,
+      1
+    ],
+    "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,24,true,\"findCandidates\",\"hit\",5]": [
+      573,
+      48,
+      1
+    ],
+    "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,24,true,\"contextRead\",\"hit\",5]": [
+      763,
+      51,
+      51
+    ],
+    "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,24,true,\"findCandidates\",\"lexical-absent\",5]": [
+      135,
+      19,
+      0
+    ],
+    "[\"embedded same-namespace facts v23 semantic=true: five-fact slope and no-hit\",23,24,true,\"contextRead\",\"lexical-absent\",5]": [
+      156,
+      22,
+      2
+    ],
+    "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,12,false,\"refreshContextIndex\",\"refresh\",5]": [
+      407,
+      34,
+      0
+    ],
+    "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,12,false,\"findCandidates\",\"hit\",5]": [
+      673,
+      20,
+      0
+    ],
+    "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,12,false,\"contextRead\",\"hit\",5]": [
+      995,
+      23,
+      50
+    ],
+    "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,12,false,\"findCandidates\",\"lexical-absent\",5]": [
+      135,
+      19,
+      0
+    ],
+    "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,12,false,\"contextRead\",\"lexical-absent\",5]": [
+      156,
+      22,
+      2
+    ],
+    "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,24,false,\"refreshContextIndex\",\"refresh\",5]": [
+      635,
+      46,
+      0
+    ],
+    "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,24,false,\"findCandidates\",\"hit\",5]": [
+      961,
+      20,
+      0
+    ],
+    "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,24,false,\"contextRead\",\"hit\",5]": [
+      1535,
+      23,
+      50
+    ],
+    "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,24,false,\"findCandidates\",\"lexical-absent\",5]": [
+      135,
+      19,
+      0
+    ],
+    "[\"embedded same-namespace facts v33 semantic=false: five-fact slope and no-hit\",33,24,false,\"contextRead\",\"lexical-absent\",5]": [
+      156,
+      22,
+      2
+    ],
+    "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,12,true,\"refreshContextIndex\",\"refresh\",5]": [
+      755,
+      73,
+      1
+    ],
+    "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,12,true,\"findCandidates\",\"hit\",5]": [
+      702,
+      24,
+      0
+    ],
+    "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,12,true,\"contextRead\",\"hit\",5]": [
+      1024,
+      27,
+      50
+    ],
+    "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,12,true,\"findCandidates\",\"lexical-absent\",5]": [
+      135,
+      19,
+      0
+    ],
+    "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,12,true,\"contextRead\",\"lexical-absent\",5]": [
+      156,
+      22,
+      2
+    ],
+    "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,24,true,\"refreshContextIndex\",\"refresh\",5]": [
+      1163,
+      97,
+      1
+    ],
+    "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,24,true,\"findCandidates\",\"hit\",5]": [
+      990,
+      24,
+      0
+    ],
+    "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,24,true,\"contextRead\",\"hit\",5]": [
+      1564,
+      27,
+      50
+    ],
+    "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,24,true,\"findCandidates\",\"lexical-absent\",5]": [
+      135,
+      19,
+      0
+    ],
+    "[\"embedded same-namespace facts v33 semantic=true: five-fact slope and no-hit\",33,24,true,\"contextRead\",\"lexical-absent\",5]": [
+      156,
+      22,
+      2
+    ],
+    "[\"R2 temporal/admission/review v18 1 items\",18,1,null,\"getEpisode\",\"hit\",0]": [
+      20,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v18 1 items\",18,1,null,\"getEpisode\",\"hit\",5]": [
+      22,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v18 1 items\",18,1,null,\"listEpisodes\",\"hit\",0]": [
+      11,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v18 1 items\",18,1,null,\"listEpisodes\",\"hit\",5]": [
+      13,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v18 1 items\",18,1,null,\"listEpisodes\",\"absent\",0]": [
+      8,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v18 1 items\",18,1,null,\"listEpisodes\",\"absent\",5]": [
+      10,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"getEpisode\",\"hit\",0]": [
+      20,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"getEpisode\",\"hit\",5]": [
+      22,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"listEpisodes\",\"hit\",0]": [
+      14,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"listEpisodes\",\"hit\",5]": [
+      16,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"listEpisodes\",\"cursor\",0]": [
+      14,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"listEpisodes\",\"cursor\",5]": [
+      16,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"listEpisodes\",\"absent\",0]": [
+      8,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v18 12 items\",18,12,null,\"listEpisodes\",\"absent\",5]": [
+      10,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v23 1 items\",23,1,null,\"getEpisode\",\"hit\",0]": [
+      20,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v23 1 items\",23,1,null,\"getEpisode\",\"hit\",5]": [
+      22,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v23 1 items\",23,1,null,\"listEpisodes\",\"hit\",0]": [
+      11,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v23 1 items\",23,1,null,\"listEpisodes\",\"hit\",5]": [
+      13,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v23 1 items\",23,1,null,\"listEpisodes\",\"absent\",0]": [
+      8,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v23 1 items\",23,1,null,\"listEpisodes\",\"absent\",5]": [
+      10,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"getEpisode\",\"hit\",0]": [
+      20,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"getEpisode\",\"hit\",5]": [
+      22,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"listEpisodes\",\"hit\",0]": [
+      14,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"listEpisodes\",\"hit\",5]": [
+      16,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"listEpisodes\",\"cursor\",0]": [
+      14,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"listEpisodes\",\"cursor\",5]": [
+      16,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"listEpisodes\",\"absent\",0]": [
+      8,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v23 12 items\",23,12,null,\"listEpisodes\",\"absent\",5]": [
+      10,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v33 1 items\",33,1,null,\"getEpisode\",\"hit\",0]": [
+      24,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v33 1 items\",33,1,null,\"getEpisode\",\"hit\",5]": [
+      26,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v33 1 items\",33,1,null,\"listEpisodes\",\"hit\",0]": [
+      15,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v33 1 items\",33,1,null,\"listEpisodes\",\"hit\",5]": [
+      17,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v33 1 items\",33,1,null,\"listEpisodes\",\"absent\",0]": [
+      8,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v33 1 items\",33,1,null,\"listEpisodes\",\"absent\",5]": [
+      10,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"getEpisode\",\"hit\",0]": [
+      24,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"getEpisode\",\"hit\",5]": [
+      26,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"listEpisodes\",\"hit\",0]": [
+      22,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"listEpisodes\",\"hit\",5]": [
+      24,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"listEpisodes\",\"cursor\",0]": [
+      22,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"listEpisodes\",\"cursor\",5]": [
+      24,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"listEpisodes\",\"absent\",0]": [
+      8,
+      1,
+      0
+    ],
+    "[\"R2 temporal/admission/review v33 12 items\",33,12,null,\"listEpisodes\",\"absent\",5]": [
+      10,
+      1,
+      0
+    ],
+    "[\"role modes R2: 12 items, now/refresh/compare/file and empty namespace\",33,12,null,\"readRoleTaskContext\",\"now\",5]": [
+      897,
+      24,
+      50
+    ],
+    "[\"role modes R2: 12 items, now/refresh/compare/file and empty namespace\",33,12,null,\"readRoleTaskContext\",\"refresh\",5]": [
+      897,
+      24,
+      50
+    ],
+    "[\"role modes R2: 24 items, now/refresh/compare/file and empty namespace\",33,24,null,\"readRoleTaskContext\",\"now\",5]": [
+      1509,
+      24,
+      98
+    ],
+    "[\"role modes R2: 24 items, now/refresh/compare/file and empty namespace\",33,24,null,\"readRoleTaskContext\",\"refresh\",5]": [
+      1509,
+      24,
+      98
+    ]
+  }
+}

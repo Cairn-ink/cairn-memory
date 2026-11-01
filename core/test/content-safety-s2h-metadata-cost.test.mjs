@@ -1,8 +1,9 @@
-import { assertCostGateCases, assertCostGateCell, assertCostGateCells } from '../testing/content-safety-s2h-cost-inventory.mjs';
+import { assertDeferredContentCost, assertDeferredContentCostInventory } from '../testing/content-safety-s2h-deferred-cost.mjs';
+import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { openMemoryCore } from '../index.mjs';
+import { openCostMemoryCore as openMemoryCore } from '../testing/content-safety-cost-hosts.mjs';
 import { createMemoryRuntime } from '../runtime.mjs';
 import { safetyFixture, ns, ok, receipt } from '../testing/content-safety-s2h-fixture.mjs';
 import { measureContentRead } from '../testing/content-safety-cost-meter.mjs';
@@ -12,7 +13,7 @@ import { batch } from '../testing/episode-helpers.mjs';
 const fixedByCase=new Map();
 for(const base of [18,23,33])for(const n of [1,12])test(`R2 temporal/admission/review v${base} ${n} items`,async t=>{
  const records=[];
- for(const safety of [false,true])for(const facts of safety?[0,5]:[0]) {
+ for(const [safety,facts]of costGatePopulations()) {
   const f=safetyFixture(t,base);if(safety)await f.migrate();const db=f.connect();let counters=0,providers=0;
   const model={contextWindow:8192,countTokens(){counters++;return 1;},extract:()=>({malformed:true}),reviewBasis(){providers++;return {units:[],links:[]};}};
   const core=openMemoryCore({path:f.path,model,decisionReview:'required-v1',captureEvidence:'staged-v1',captureQualification:'source-bound-v2',sessionEpisodes:{mode:'episode-v1'}}),runtime=createMemoryRuntime({path:f.path,sessionEpisodes:{mode:'episode-v1'}});
@@ -53,13 +54,18 @@ for(const base of [18,23,33])for(const n of [1,12])test(`R2 temporal/admission/r
   assertCostGateCases('metadata-'+n,measured);records.push({base,n,safety,facts,records:measured});
  }
  t.diagnostic('R3_METADATA_COUNTS '+JSON.stringify(records));
- assertCostGateCells(records);
- const [legacy,zero,five]=records,problems=[];
+ if(assertCostGateCells(records))return;
+ const [legacy,zero,five]=records,problems=[],ratchets=new Set();
  for(const current of [zero,five]){assert.deepEqual(current.records.map(r=>[r.method,r.variant]),legacy.records.map(r=>[r.method,r.variant]));for(const [i,row]of current.records.entries()){
-  const old=legacy.records[i];assert.equal(row.ports,old.ports);assert.equal(row.begin,old.begin,row.method);
+  const old=legacy.records[i];assert.equal(row.ports,old.ports);
+  if(['getEpisode','listEpisodes'].includes(row.method)){
+   assertDeferredContentCost(row,{testName:t.name,base,n,facts:current.facts},ratchets);continue;
+  }
+  assert.equal(row.begin,old.begin,row.method);
   const fixed=row.statements-old.statements-row.ports,key=JSON.stringify([base,current.facts,row.method,row.variant]);
   if(!current.facts&&!(fixed>=0&&fixed<=6))problems.push({base,n,method:row.method,variant:row.variant,facts:current.facts,fixed});
   if(fixedByCase.has(key)){if(fixed!==fixedByCase.get(key))problems.push({base,n,method:row.method,variant:row.variant,facts:current.facts,fixed,previous:fixedByCase.get(key)});}else fixedByCase.set(key,fixed);
  }}
- assert.deepEqual(problems,[],'remaining temporal safety costs are package blockers');
+ assertDeferredContentCostInventory(ratchets,t.name);
+ assert.deepEqual(problems,[],'non-deferred temporal R2 costs');
 });

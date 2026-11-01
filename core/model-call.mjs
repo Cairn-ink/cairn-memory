@@ -1,4 +1,4 @@
-import { assertContentPort, inertContentPortValue } from './content-safety-boundary.mjs';
+import { assertContentPort, inertContentPortValue, hasLegacyContentReadBoundary } from './content-safety-boundary.mjs';
 import { countTokens, modelPortValue } from './model-budget.mjs';
 import { fail, MemoryStoreError } from './validation.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
@@ -19,6 +19,7 @@ export const modelRequestText = (system, input) =>
 /** A bounded adapter call. No database transaction may surround this helper. */
 export async function callModel(model, method, system, input,
   { validateFresh = () => {}, failureCode = 'recall_failed', deadline } = {}) {
+  const legacyFreshness = hasLegacyContentReadBoundary();
   const reject = (code, reason = code) => { emitDiagnostic(model, method, 'core_call', reason); fail(code); };
   let controller;
   let aborted=false;
@@ -39,7 +40,7 @@ export async function callModel(model, method, system, input,
   };
   const tokens = (text) => {
     check();
-    validateFresh();
+    if (!legacyFreshness) validateFresh();
     try { return countTokens(model, text); }
     catch (error) { emitDiagnostic(model, method, 'core_call', 'token_count_unavailable'); throw error; }
     finally { check(); }
@@ -51,6 +52,7 @@ export async function callModel(model, method, system, input,
   const request = { system, input, maxOutputTokens: MODEL_OUTPUT_TOKENS };
   if (tokens(modelRequestText(system, input)) > MODEL_INPUT_TOKENS) reject('context_budget_exceeded');
   check();
+  if (legacyFreshness) { validateFresh(); check(); }
   controller = new AbortController();
   let timer;
   let output;
@@ -140,14 +142,16 @@ export async function callModel(model, method, system, input,
   } finally { clearTimeout(timer); }
   check();
   if (output === freshnessFailure) throw freshnessError;
-  validateFresh();
+  // S2h captures this same S1 snapshot after serialization, immediately
+  // before the output counter. E1 already fenced the provider return.
+  if (legacyFreshness || output === serializationFailure) validateFresh();
   check();
   if (output === serializationFailure) reject('invalid_model_output', 'output_serialization');
   let text;
   try { text = JSON.stringify(output); }
-  catch { check(); reject('invalid_model_output', 'output_serialization'); }
+  catch { check(); if (!legacyFreshness) validateFresh(); reject('invalid_model_output', 'output_serialization'); }
   check();
-  if (typeof text !== 'string' || text.length > 40_000) reject('invalid_model_output', 'output_bounds');
+  if (typeof text !== 'string' || text.length > 40_000) { if (!legacyFreshness) validateFresh(); reject('invalid_model_output', 'output_bounds'); }
   if (tokens(text) > 1024) reject('invalid_model_output', 'output_bounds');
   check();
   validateFresh();

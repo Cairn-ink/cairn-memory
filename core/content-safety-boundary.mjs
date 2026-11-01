@@ -132,6 +132,13 @@ export function contentSafetyFacade(api, { check, noOwner = [], failure, select 
 // after any fact advanced. Legacy stores acquire no additional SQL statements.
 const contentPorts = new AsyncLocalStorage();
 export const hasContentPortBoundary = () => Boolean(contentPorts.getStore());
+// Only an attested legacy facade may use its original model freshness order.
+// A standalone helper call has no such proof and keeps the pre-counter check.
+export const hasLegacyContentReadBoundary = () => {
+  const boundaries = activeReadBoundaries.getStore();
+  return Boolean(boundaries?.size && [...boundaries.keys()].every(db =>
+    cachedContentLayout(db)?.suppressionRevision === 0));
+};
 export function assertContentPort(phase) {
   // Caller re-entry is a new read request, not trusted facade forwarding.
   if (phase?.invoke) return callerPortReads.run(true,()=>activeReadBoundaries.exit(() => withContentSuppressionRequest(phase.invoke,{fresh:true})));

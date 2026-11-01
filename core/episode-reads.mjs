@@ -1,3 +1,4 @@
+import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety } from './content-safety.mjs';
 import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { transaction } from './database.mjs';
@@ -95,9 +96,9 @@ export function createEpisodeReads({ db, epoch, decisionReview, assertEpisodeRea
           return { item, key: { time: filter.timeBasis === 'event' ? item.eventEnd : item.firstReceivedAt, id: row.id } };
         }
         const receipt = filter.timeBasis === 'receipt';
-        if (!contentReadSafety(db, { namespace: ns, intent: 'history',
+        if (cachedContentLayout(db)?.suppressionRevision && (!contentReadSafety(db, { namespace: ns, intent: 'history',
           ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed ||
-          receipt && contentSuppressionReasonInside(db, ns, { kind: 'receipt', key: row.receipt_id })) fail('revision_conflict');
+          receipt && contentSuppressionReasonInside(db, ns, { kind: 'receipt', key: row.receipt_id }))) fail('revision_conflict');
         return { item: { memory: memoryMetadata(row, decisionReview), ...(receipt ? { receipt: {
           id: row.receipt_id, createdAt: row.receipt_time, client: row.receipt_client } } : {}) },
           key: receipt ? { time: row.receipt_time, id: row.receipt_id, memoryId: row.id } : { time: row.updated_at, id: row.id } };

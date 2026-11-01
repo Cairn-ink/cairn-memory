@@ -606,6 +606,10 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     const maximum = input.budget?.maxItems, maxMs = input.budget?.maxMs;
     if (!Number.isInteger(maximum) || maximum < 1 || maximum > 1024 || !Number.isInteger(maxMs) || maxMs < 1 || maxMs > 5000) fail('invalid_input');
     if (maxBatchDocuments !== undefined && maxBatchDocuments !== 1) fail('invalid_input');
+    const safetyLayout = Boolean((cachedContentLayout(canonical) ?? installedContentLayout(canonical)).suppressionRevision);
+    // The budget port already fences namespace and owner epochs before each
+    // dispatch. Its scoped-empty proof needs no per-document fact recheck.
+    const checkCandidates = safetyLayout && !(isBudgetEmbeddingPort(embedder) && emptyRequestFacts(p));
     const started = performance.now(); let attempted = 0, embedded = 0;
     while (attempted < maximum && performance.now() - started < maxMs) {
       guard();
@@ -621,6 +625,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       // between them; the transport batch has its own combined bound below.
       const texts = rows.map(row => {
         if (performance.now() - started >= maxMs) unavailable('timeout');
+        if (!checkCandidates) return canonicalRead(() => textFor(p.streams[row.stream], row.id, m));
         return canonicalRead(() => {
           const stream = p.streams[row.stream];
           const current = metadata(stream, row.id, 1, p, m, true)[0];
@@ -636,7 +641,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       guard();
       const before = generation(p);
       if (!fresh(p, before) || before.sequence !== g.sequence || before.incarnation !== g.incarnation) unavailable('stale_index');
-      const dispatch = engineGuard(() => canonicalRead(() => {
+      const dispatch = !checkCandidates ? () => {} : engineGuard(() => canonicalRead(() => {
         for (const row of rows) {
           const stream = p.streams[row.stream];
           if (stream.type === 'card' ? !cardEligible(stream.ns,row,p.intent,m,p.readSet) :

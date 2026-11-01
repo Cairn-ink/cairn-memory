@@ -3,8 +3,8 @@ import { contentWriteMethodClass } from '../content-write-context.mjs';
 import { readFileSync } from 'node:fs';
 const inventory=JSON.parse(readFileSync(new URL('../test/fixtures/content-safety-s2h-cost-inventory.json',import.meta.url),'utf8'));
 
-// Discovery is intentionally distinct from coverage: a listed gap is never an
-// exemption or a passing cost gate. Report both missing names and variants.
+// Discovery distinguishes gated, exempt and explicitly deferred variants.
+// Unmapped and stale names or variants remain errors.
 export function assertContentCostDiscovery(actual) {
  for(const [surface,names]of Object.entries(inventory.surfaces))assert.deepEqual(actual[surface],names,'cost inventory: new or stale '+surface+' method');
  const live=new Set(Object.values(actual).flat());
@@ -24,8 +24,9 @@ export function assertContentCostDiscovery(actual) {
   assert.ok(entry.gates.length||entry.missing.length||entry.exemption?.length>20,'unmapped read name: '+name);
   for(const {gate,variants}of entry.gates){assert.ok(variants.length);readFileSync(new URL('../test/content-safety-s2h-'+gate+'.test.mjs',import.meta.url));}
  }
+ const deferred=assertContentCostDeferrals(inventory);
  const entries=Object.entries(inventory.reads);
- return {surfaceNames:live.size,surfaceClasses:classified,total:entries.length,gated:entries.filter(([,e])=>e.gates.length).length,
+ return {surfaceNames:live.size,surfaceClasses:classified,total:entries.length,deferred,unmapped:0,gated:entries.filter(([,e])=>e.gates.length).length,
   exempt:entries.filter(([,e])=>e.exemption).map(([name,e])=>({name,reason:e.exemption})),
   missingNames:entries.filter(([,e])=>!e.gates.length&&!e.exemption).map(([name])=>name),
   missingVariants:entries.filter(([,e])=>e.missing.length).map(([name,e])=>({name,variants:e.missing}))};
@@ -49,5 +50,36 @@ export function assertCostGateCell(db,base,safety,facts,ownerId,dimensions={}) {
  return cell;
 }
 export function assertCostGateCells(cells) {
+ if(unmigratedCostOnly){assert.deepEqual(cells.map(c=>[c.safety,c.facts]),[[false,0]]);return true;}
  assert.deepEqual(cells.map(c=>[c.safety,c.facts]),[[false,0],[true,0],[true,5]],'exact legacy/zero/five cell records; no omitted or duplicate cell');
+}
+
+// Measurement mode changes fixture populations only, never production code.
+export const unmigratedCostOnly = process.env.CAIRN_S2H_UNMIGRATED_ONLY === '1';
+export const costGatePopulations = () => unmigratedCostOnly ? [[false,0]] : [[false,0],[true,0],[true,5]];
+
+// This decision authorizes exactly three coverage deferrals. They are never
+// exemptions, and do not turn an unmeasured hosted execution into a zero.
+export function assertContentCostDeferrals(candidate=inventory) {
+ const reference='e9, 2026-11-01 17:15',message='deferred → S2h-3, e9 11-01 17:15';
+ const scopes={
+  refreshContextIndex:'S2h-3: hosted semantic worker E1/inert returns and enabled product refresh cost gate',
+  findCandidates:'S2h-3: product query suppressionEpoch projection and enabled semantic candidate cost gate',
+  contextRead:'S2h-3: product query suppressionEpoch projection and enabled semantic assembly cost gate',
+ };
+ const deferred=[];
+ for(const [method,entry]of Object.entries(candidate.reads)){
+  assert.deepEqual(entry.missing,[],'unmapped retained-read variant: '+method);
+  for(const item of entry.deferred??[]){
+   assert.equal(item.category,'deferred',message+': distinct category');
+   assert.equal(item.decisionReference,reference,message+': decision reference for '+method);
+   assert.equal(item.scopeItem,scopes[method],message+': S2h-3 scope item for '+method);
+   assert.ok(Object.hasOwn(scopes,method),message+': undeclared method '+method);
+   assert.equal(item.variant,'product enabled semantic',message+': undeclared variant '+method);
+   assert.equal(entry.exemption,undefined,message+': a deferral is not an exemption');
+   deferred.push({method,...item});
+  }
+ }
+ assert.deepEqual(deferred.map(r=>r.method+':'+r.variant).sort(),Object.keys(scopes).map(name=>name+':product enabled semantic').sort(),message+': exact non-stale deferral set');
+ return deferred;
 }

@@ -1,7 +1,7 @@
-import { assertCostGateCases, assertCostGateCell, assertCostGateCells } from '../testing/content-safety-s2h-cost-inventory.mjs';
+import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { openRawCaptureCore } from '../raw-capture.mjs';
+import { openCostRawCaptureCore as openRawCaptureCore } from '../testing/content-safety-cost-hosts.mjs';
 import { cardHost } from '../testing/raw-source-fixtures.mjs';
 import { request, splitRaw, localPlainPort } from '../testing/raw-capture-fixtures.mjs';
 import { safetyFixture, ns, ok } from '../testing/content-safety-s2h-fixture.mjs';
@@ -10,7 +10,7 @@ import { transaction } from '../database.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 for(const n of [1,12])test(`R2 Raw metadata ${n} conversations, cursor and successful empty pages`,async t=>{
  const records=[];
- for(const safety of [false,true])for(const facts of safety?[0,5]:[0]) {
+ for(const [safety,facts]of costGatePopulations()) {
   const f=safetyFixture(t,33);if(safety)await f.migrate();const db=f.connect(),h=cardHost();
   const core=openRawCaptureCore({path:f.path,privateCards:h.options,model:{contextWindow:8192,countTokens:()=>1,extract:()=>({items:[]})}},
    {mode:'raw-v1',port:localPlainPort(),sources:true,readPolicy:()=>({generation:'synthetic',reason:null})});t.after(()=>{core.close();db.close();});
@@ -32,7 +32,7 @@ for(const n of [1,12])test(`R2 Raw metadata ${n} conversations, cursor and succe
   assert.deepEqual(measured.map(r=>[r.method,r.variant]),cases.map(([m,,v])=>[m,v]));assertCostGateCases('raw-metadata-'+n,measured);records.push({safety,facts,n,records:measured});
  }
  t.diagnostic('R3_RAW_METADATA_COUNTS '+JSON.stringify(records));
- assertCostGateCells(records);
+ if(assertCostGateCells(records))return;
  const [legacy,zero,five]=records;
  for(const current of [zero,five])for(const [i,row]of current.records.entries()){
   const old=legacy.records[i];assert.equal(row.begin,old.begin);

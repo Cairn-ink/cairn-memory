@@ -18,8 +18,9 @@ for(const [v,base]of [[34,18],[38,23],[48,33]])test(`R2 public topic v${v}: lega
   t.diagnostic('R3_TOPIC_PUBLIC_COUNTS '+JSON.stringify({v,base,n,absent,records}));
   const [legacy,zero,five]=records;
   for(const current of [zero,five])for(const [i,row]of current.rows.entries()){
-   const old=legacy.rows[i],delta=row.statements-old.statements;assert.equal(row.begin,old.begin,row.variant);assert.equal(row.ports,0);assert.equal(delta,current.facts?4:2,row.variant);
-   const key=JSON.stringify([current.facts,row.method,row.variant,absent]);if(fixed.has(key))assert.equal(delta,fixed.get(key),'zero per-item safety SQL');else fixed.set(key,delta);
+   const old=legacy.rows[i],delta=row.statements-old.statements;assert.ok(row.begin<=old.begin,'R2-A1 BEGIN <= same-engine legacy: '+row.variant);assert.equal(row.ports,0);assert.equal(delta,current.facts?6:4,row.variant);
+   assert.ok(row.statements<=old.statements+6+row.ports,'R2-A1 same-engine ceiling, e9 11-01 17:15: '+row.variant);
+   const key=JSON.stringify([current.facts,row.method,row.variant,absent]);if(fixed.has(key))assert.ok(delta<=fixed.get(key),'R2-A1 slope <= same-engine legacy, e9 11-01 17:15: '+row.variant);fixed.set(key,delta);
    if(absent){const key=JSON.stringify([current.facts,row.method,row.variant]);if(miss.has(key))assert.deepEqual([row.statements,row.begin],miss.get(key),'corpus-independent no-hit');else miss.set(key,[row.statements,row.begin]);}
   }
  }

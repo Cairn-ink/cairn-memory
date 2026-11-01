@@ -1087,3 +1087,84 @@ callbacks in both DELETE and WAL mode, and require refusal before another
 port call and absence of protected text. Owners with facts keep the canonical
 S1 decision followed by the shared fact matcher; an empty owner proof never
 bypasses canonical ancestry checks.
+
+## Revision 3.5 addendum: R2-A1 and S2h-3 deferrals (2026-11-01)
+
+Decision: **e9, 2026-11-01 17:15**. This append-only addendum supersedes
+R2(a)'s requirement for the **same constant at both sizes** and its historical
+comparator. The original R2 text and the E1 addendum remain unchanged.
+
+For non-deferred R2(a) zero-fact cells, let L(n) be executed statements in the legacy cell
+measured with the **same engine, probe and fixture**, S(n) the safety cell, and
+E1(n) the actual caller-port invocations. R2-A1 requires:
+
+- S(n) ≤ L(n) + 6 + E1(n).
+- The per-item slope must not exceed the legacy slope. At the paired
+  n12/n24 item fixtures with the same variant and limit,
+  S(24) − S(12) ≤ L(24) − L(12). A lower slope is allowed.
+  All other measured population/corpus cells retain the ceiling and BEGIN
+  bounds; their overhead after the existing E1 allowance must not grow.
+- Safety BEGIN must not exceed the same-engine legacy BEGIN.
+- The comparator is always that same-engine legacy cell, never historical
+  numbers. Exact safety-cell count pins remain regression checks.
+
+The S2h-3 deferral has two conditions. First, every gated method/variant on
+unmigrated v18, v23 and v33 must add **no statements, BEGIN or host-port
+invocations** over main `a546ee43`; lower values are allowed. The permanent
+unmigrated fixture records main's SHA and measurement date. Second, deferred
+gates remain executable ratchets at their round 3 measured values; none is
+skipped or marked todo. Lower current measurements do not tighten those caps.
+
+**Known limitation:** On migrated stores, reads by owners with facts cost more
+than R2 until S2h-3. This only affects local users who chose `safety migrate`,
+and it is a cost issue, not a correctness issue.
+
+The following caps are executed statements/BEGIN; E1 invocation caps and every
+method/variant/cell/n are also pinned in
+`core/test/fixtures/content-safety-s2h-deferred-counts.json` (106 ratchets,
+source: round 3's `native-zero-five-table.csv`). Node 22.16.0 and 24.15.0 agree
+on every cap; no cross-engine maximum adjustment was needed.
+Each assertion names `deferred → S2h-3, e9 11-01 17:15`.
+
+| Episode path | v34/v38 zero / five facts | v48 zero / five facts |
+| --- | --- | --- |
+| getEpisode, n1/n12 hit | 20/1 / 22/1 | 24/1 / 26/1 |
+| listEpisodes, n1 hit | 11/1 / 13/1 | 15/1 / 17/1 |
+| listEpisodes, n12 hit/cursor | 14/1 / 16/1 | 22/1 / 24/1 |
+| listEpisodes, n1/n12 absent | 8/1 / 10/1 | 8/1 / 10/1 |
+
+| Same-namespace five-fact Role, v48 | Cap | E1 cap |
+| --- | --- | --- |
+| now/refresh, n12 | 897/24 | 50 |
+| now/refresh, n24 | 1509/24 | 98 |
+
+The Role five-fact additions are 87/147 statements above the corresponding
+zero-fact cells, and three BEGIN above legacy. The absolute caps above come
+from the tables. Total additions over legacy also include the fixed and E1 costs.
+
+| Same-namespace five-fact embedded cell | Semantic | n | refreshContextIndex | findCandidates hit | contextRead hit |
+| --- | --- | --- | --- | --- | --- |
+| v34/v38 | off | 12 | 407/34 | 373/20 | 563/23 |
+| v34/v38 | off | 24 | 635/46 | 493/20 | 803/23 |
+| v34/v38 | on | 12 | 774/76 | 561/48 | 751/51 |
+| v34/v38 | on | 24 | 1182/100 | 573/48 | 763/51 |
+| v48 | off | 12 | 407/34 | 673/20 | 995/23 |
+| v48 | off | 24 | 635/46 | 961/20 | 1535/23 |
+| v48 | on | 12 | 755/73 | 702/24 | 1024/27 |
+| v48 | on | 24 | 1163/97 | 990/24 | 1564/27 |
+
+Embedded lexical-absent caps remain 135/19 for findCandidates and 156/22 for
+contextRead at both sizes and all three cells, with E1 caps 0 and 2. Maintenance
+privacy refusals and correctly empty no-hit results remain required; a cost
+ratchet cannot turn a refusal into success or relax a content check.
+
+The inventory has exactly three **deferred** product enabled-semantic variants:
+refreshContextIndex, findCandidates and contextRead. These are coverage
+deferrals, not exemptions or measured runtime zeroes. Each entry records this
+decision and its S2h-3 scope item. The hosted semantic worker/ledger E1 and inert
+return work, the product query suppressionEpoch projection, and those three
+product enabled-semantic variants belong to S2h-3. No additional name or variant
+may enter the deferred category without a new decision. Stale and unmapped
+inventory entries still fail.
+
+Denial, zero tolerance, inert-port, E1 and R1 acceptance remain unchanged.

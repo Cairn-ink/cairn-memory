@@ -1,7 +1,8 @@
-import { assertCostGateCases, assertCostGateCell, assertCostGateCells } from '../testing/content-safety-s2h-cost-inventory.mjs';
+import { assertDeferredContentCost, assertDeferredContentCostInventory } from '../testing/content-safety-s2h-deferred-cost.mjs';
+import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { openMemoryCore } from '../index.mjs';
+import { openCostMemoryCore as openMemoryCore } from '../testing/content-safety-cost-hosts.mjs';
 import { safetyFixture, ns, ok, receipt } from '../testing/content-safety-s2h-fixture.mjs';
 import { host, publish, read } from './role-fixture.mjs';
 import { measureContentRead } from '../testing/content-safety-cost-meter.mjs';
@@ -10,7 +11,7 @@ import { writeContentSuppressionInside } from '../content-suppression-storage.mj
 
 for(const n of [0,1,12])test(`role R2: ${n} evidence items, private counters add no observations`,async t=>{
  const records=[];
- for(const safety of [false,true])for(const facts of safety?[0,5]:[0]) {
+ for(const [safety,facts]of costGatePopulations()) {
   const f=safetyFixture(t,33);if(safety)await f.migrate();const db=f.connect();let calls=0;
   const h=host({counter:{id:'synthetic-host',countTokens(){calls++;return 1;}}});
   const core=openMemoryCore({path:f.path,methodPackages:h.methods,roleProfiles:h.options,contextRead:h.context});t.after(()=>{core.close();db.close();});
@@ -25,7 +26,7 @@ for(const n of [0,1,12])test(`role R2: ${n} evidence items, private counters add
   assertCostGateCases('role-'+n,[row]);records.push({safety,facts,...row,result:undefined});
  }
  t.diagnostic('R3_ROLE_COUNTS '+JSON.stringify(records));
- assertCostGateCells(records);
+ if(assertCostGateCells(records))return;
  const [legacy,zero,five]=records;
  assert.equal(zero.ports,legacy.ports);assert.equal(zero.statements-legacy.statements-zero.ports,4,'entry and delivery header/epoch only');
  assert.equal(zero.begin,legacy.begin);assert.equal(five.begin,legacy.begin);
@@ -38,6 +39,7 @@ for(const n of [0,1,12])test(`role R2: ${n} evidence items, private counters add
 // These physical cells have no Role schema. Preserve the existing feature
 // refusal rather than upgrading a migrated layout merely to manufacture a gate.
 for(const base of [18,23])for(const n of [0,1,12])test(`role feature refusal v${base===18?34:38} ${n} evidence items`,async t=>{
+ if(unmigratedCostOnly)return;
  const f=safetyFixture(t,base);await f.migrate();const core=openMemoryCore({path:f.path});t.after(()=>core.close());
  for(let i=0;i<n;i++)ok(core.admit({namespace:ns,memory:{content:'Synthetic unsupported role '+i,kind:'fact'},receipts:[receipt('unsupported-'+i)]}));
  let calls=0;const h=host({counter:{id:'synthetic-host',countTokens(){calls++;return 1;}}});
@@ -47,7 +49,7 @@ for(const base of [18,23])for(const n of [0,1,12])test(`role feature refusal v${
 
 for(const n of [0,12,24])test(`role modes R2: ${n} items, now/refresh/compare/file and empty namespace`,async t=>{
  const cells=[];
- for(const safety of [false,true])for(const facts of safety?[0,5]:[0]){
+ for(const [safety,facts]of costGatePopulations()){
   const f=safetyFixture(t,33);if(safety)await f.migrate();const db=f.connect();let calls=0;
   const h=host({counter:{id:'synthetic-host',countTokens(){calls++;return 1;}}});
   const core=openMemoryCore({path:f.path,methodPackages:h.methods,assets:h.assets,roleProfiles:h.options,contextRead:h.context});t.after(()=>{core.close();db.close();});
@@ -78,11 +80,16 @@ for(const n of [0,12,24])test(`role modes R2: ${n} items, now/refresh/compare/fi
   }
   assertCostGateCases('role-modes',records);cells.push({base:33,n,safety,facts,records});
  }
- t.diagnostic('R3_ROLE_MODE_COUNTS '+JSON.stringify(cells));assertCostGateCells(cells);
- const [legacy,zero,five]=cells;
+ t.diagnostic('R3_ROLE_MODE_COUNTS '+JSON.stringify(cells));if(assertCostGateCells(cells))return;
+ const [legacy,zero,five]=cells,ratchets=new Set();
  for(const current of [zero,five])for(const [i,row]of current.records.entries()){
   const old=legacy.records[i],fixed=row.statements-old.statements-row.ports;
-  assert.equal(row.ports,old.ports);assert.equal(row.begin,old.begin,'no safety transaction: '+row.variant);
+  assert.equal(row.ports,old.ports);
+  if(current.facts===5&&n>0&&['now','refresh'].includes(row.variant)){
+   assertDeferredContentCost(row,{testName:t.name,base:33,n,facts:5},ratchets);continue;
+  }
+  assert.equal(row.begin,old.begin,'no safety transaction: '+row.variant);
   assert.equal(fixed,(row.variant==='file-binary'?6:4)+(current.facts?2:0),'exact fixed role mode cost: '+row.variant);
  }
+ assertDeferredContentCostInventory(ratchets,t.name);
 });

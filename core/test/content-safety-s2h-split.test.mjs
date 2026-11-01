@@ -1,4 +1,4 @@
-import { assertContentCostDiscovery } from '../testing/content-safety-s2h-cost-inventory.mjs';
+import { assertContentCostDiscovery, assertContentCostDeferrals } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -181,5 +181,16 @@ test('S2h-2 split: internal facts now suppress serving reads while terminal fact
 test('R3 cost inventory refuses any declared but ungated retained-read variant',()=>{
  const inventory=JSON.parse(readFileSync(new URL('./fixtures/content-safety-s2h-cost-inventory.json',import.meta.url),'utf8'));
  const missing=Object.entries(inventory.reads).flatMap(([method,entry])=>entry.missing.map(variant=>({method,variant})));
- assert.deepEqual(missing,[],'a recorded gap is a package blocker, never an exemption or a passing gate');
+ assert.deepEqual(missing,[],'unmapped retained-read variants remain blockers');
+ assert.equal(assertContentCostDeferrals(inventory).length,3);
+ for(const field of ['decisionReference','scopeItem']){
+  const changed=structuredClone(inventory);delete changed.reads.contextRead.deferred[0][field];
+  assert.throws(()=>assertContentCostDeferrals(changed),/deferred → S2h-3, e9 11-01 17:15/,field);
+ }
+ const changed=structuredClone(inventory);changed.reads.contextRead.deferred[0].variant='unmapped semantic variant';
+ assert.throws(()=>assertContentCostDeferrals(changed),/undeclared variant/);
+ const unmapped=structuredClone(inventory);unmapped.reads.get.missing.push('unknown read variant');
+ assert.throws(()=>assertContentCostDeferrals(unmapped),/unmapped retained-read variant/);
+ const stale=structuredClone(inventory);stale.reads.contextRead.deferred=[];
+ assert.throws(()=>assertContentCostDeferrals(stale),/exact non-stale deferral set/);
 });

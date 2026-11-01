@@ -1,3 +1,4 @@
+import { cachedContentLayout } from './content-safety-schema.mjs';
 import { contentReadSafety } from './content-safety.mjs';
 import { contentSuppressionReasonInside } from './content-suppression-storage.mjs';
 import { transaction } from './database.mjs';
@@ -28,14 +29,18 @@ export function contextInput(input) {
     ...(groups.background ? { background: true } : {}) }, maxTokens, maxChars,
     ...(groups.background ? { backgroundBudget: { maxTokens: backgroundTokens, maxChars: backgroundChars } } : {}) };
 }
-export function contextQuery(ns, group) {
+export function contextQuery(ns, group, { rawAncestry = false } = {}) {
   const params = [ns.ownerId, ns.scope, ns.projectId, 13];
+  const ancestry = rawAncestry ? `,EXISTS(
+    SELECT 1 FROM receipts ar JOIN raw_receipt_lineage al ON al.receipt_id=ar.id
+    LEFT JOIN raw_conversations ac ON ac.id=al.conversation_id WHERE ar.memory_id=m.id
+    AND (ac.owner_id IS NOT m.owner_id OR ac.scope IS NOT m.scope OR ac.project_id IS NOT m.project_id)) AS invalid_raw_ancestry` : '';
   const sql = group === 'nextSteps' ? `SELECT e.* FROM session_episodes e INDEXED BY episode_open_step_read
     WHERE e.owner_id=? AND e.scope=? AND e.project_id=? AND e.deleted=0
       AND e.id NOT IN (SELECT id FROM review_hidden_episodes)
       AND json_extract(e.record,'$.processing.state')='ready' AND json_extract(e.record,'$.nextStep.status')='open'
     ORDER BY json_extract(e.record,'$.nextStep.receiptOrdinal') DESC,e.id ASC LIMIT ?`
-    : `SELECT m.* FROM memories m INDEXED BY namespace_memories
+    : `SELECT m.*${ancestry} FROM memories m INDEXED BY namespace_memories
     WHERE m.owner_id=? AND m.scope=? AND m.project_id=? AND m.deleted=0 AND m.review_state!='awaiting' AND m.currentness='current'
       AND ${group === 'background' ? "m.kind IN ('fact','context')" : `(m.kind='instruction' OR (m.kind='preference' AND EXISTS
         (SELECT 1 FROM procedural_tags p WHERE p.memory_id=m.id AND p.positive=1)))`}
@@ -90,9 +95,10 @@ export function createSessionContextStorage({ db, epoch, indexStorage, readSourc
           result.groups[group] = { identities: [], items: [] };
           continue;
         }
-        const query = contextQuery(ns, group), rows = db.prepare(query.sql).all(...query.params)
-          .filter(row => group === 'nextSteps' ? !contentSuppressionReasonInside(db, ns) : contentReadSafety(db, { namespace: ns,
-            ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed);
+        const layout = cachedContentLayout(db), safety = Boolean(layout?.suppressionRevision);
+        const query = contextQuery(ns, group, { rawAncestry: safety && layout.rawLineage }), rows = db.prepare(query.sql).all(...query.params)
+          .filter(row => !safety || (group === 'nextSteps' ? !contentSuppressionReasonInside(db, ns) : contentReadSafety(db, { namespace: ns, selectedMemory: row,
+            ref: { type: 'memory', namespace: ns, memoryId: row.id, revision: row.revision } }).allowed));
         if (group === 'nextSteps') for (const row of rows) assertEpisodeRead?.(ns, row);
         const identities = rows.map(row => ({ id: row.id, revision: row.revision }));
         if (expected && JSON.stringify(identities) !== JSON.stringify(expected.groups[group].identities)) fail('revision_conflict');
@@ -117,8 +123,10 @@ export function assembleSessionContext({ runtime, model, ns, config }) {
     try { return countTokens(model, text); }
     catch { fail('token_count_unavailable'); }
   };
+  const safety = runtime.suppressionFence?.(ns, true) === true;
+  if (!safety) count('');
   const snapshot = runtime.sessionContextSnapshot(ns, config.groups);
-  count(''); // The existing snapshot establishes the request proof before ports.
+  if (safety) count(''); // The existing snapshot establishes the request proof before ports.
   const value = { framing: SESSION_FRAMING, namespace: { ...ns, projectId: ns.projectId || null },
     indexRevision: snapshot.indexRevision,
     groups: Object.fromEntries(selectedNames.map(name => [name, {

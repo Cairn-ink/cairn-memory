@@ -1040,8 +1040,14 @@
           ]
         }
       ],
-      "missing": [
-        "product enabled semantic"
+      "missing": [],
+      "deferred": [
+        {
+          "category": "deferred",
+          "variant": "product enabled semantic",
+          "decisionReference": "e9, 2026-11-01 17:15",
+          "scopeItem": "S2h-3: product query suppressionEpoch projection and enabled semantic assembly cost gate"
+        }
       ]
     },
     "fetch": {
@@ -1145,8 +1151,14 @@
           ]
         }
       ],
-      "missing": [
-        "product enabled semantic"
+      "missing": [],
+      "deferred": [
+        {
+          "category": "deferred",
+          "variant": "product enabled semantic",
+          "decisionReference": "e9, 2026-11-01 17:15",
+          "scopeItem": "S2h-3: product query suppressionEpoch projection and enabled semantic candidate cost gate"
+        }
       ]
     },
     "get": {
@@ -1936,8 +1948,14 @@
           ]
         }
       ],
-      "missing": [
-        "product enabled semantic"
+      "missing": [],
+      "deferred": [
+        {
+          "category": "deferred",
+          "variant": "product enabled semantic",
+          "decisionReference": "e9, 2026-11-01 17:15",
+          "scopeItem": "S2h-3: hosted semantic worker E1/inert returns and enabled product refresh cost gate"
+        }
       ]
     },
     "resolveMethod": {
@@ -3287,5 +3305,11 @@
       "kind": "read",
       "entry": "verifyAssetBytes"
     }
+  },
+  "unmigratedGate": {
+    "gate": "unmigrated-cost",
+    "fixture": "content-safety-s2h-unmigrated-counts.json",
+    "main": "a546ee43",
+    "measured": "2026-11-01"
   }
 }

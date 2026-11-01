@@ -1,16 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { openMemoryCore } from '../index.mjs';
+import { openCostMemoryCore as openMemoryCore } from '../testing/content-safety-cost-hosts.mjs';
 import { createMemoryRuntime } from '../runtime.mjs';
 import { safetyFixture, ns, ok, receipt } from '../testing/content-safety-s2h-fixture.mjs';
 import { measureContentRead } from '../testing/content-safety-cost-meter.mjs';
-import { assertCostGateCases, assertCostGateCell, assertCostGateCells } from '../testing/content-safety-s2h-cost-inventory.mjs';
+import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import { transaction } from '../database.mjs';
 import { writeContentSuppressionInside } from '../content-suppression-storage.mjs';
 const fixed=new Map();
 for(const base of [18,23,33])for(const n of [1,12])test(`R2 direct runtime recentReceipts v${base} ${n} receipts`,async t=>{
  const cells=[];
- for(const safety of [false,true])for(const facts of safety?[0,5]:[0]){
+ for(const [safety,facts]of costGatePopulations()){
   const f=safetyFixture(t,base);if(safety)await f.migrate();const db=f.connect(),core=openMemoryCore({path:f.path}),runtime=createMemoryRuntime({path:f.path});
   t.after(()=>{runtime.close();core.close();db.close();});
   let memory;
@@ -27,7 +27,7 @@ for(const base of [18,23,33])for(const n of [1,12])test(`R2 direct runtime recen
   }
   assertCostGateCases('runtime-reads',records);cells.push({base,n,safety,facts,records});
  }
- t.diagnostic('R3_RUNTIME_COUNTS '+JSON.stringify(cells));assertCostGateCells(cells);
+ t.diagnostic('R3_RUNTIME_COUNTS '+JSON.stringify(cells));if(assertCostGateCells(cells))return;
  const [legacy,zero,five]=cells;
  for(const cell of [zero,five])for(const [i,row]of cell.records.entries()){
   const old=legacy.records[i],addition=row.statements-old.statements,key=JSON.stringify([base,cell.facts,row.variant]);

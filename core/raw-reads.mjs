@@ -89,11 +89,8 @@ export function createRawReads({ db,identity,epoch,open,partDigest }) {
         const message = { id: row.message_id,role: row.role,occurredAt: row.occurred_at,messageOrdinal: row.ordinal,
           part: { index: row.part_index,start: row.start,totalUnits: row.total_units,totalBytes: row.total_bytes } };
         const context = frozen(rawContext(ns,view.row.client,view.row.session_key,id,message,row.end));
-        // Preserve the legacy pre-open transaction pair. The initial snapshot
-        // already decided this part; E1 fences every intervening caller return.
-        // Neither the fact check nor a header is repeated per invocation.
-        db.exec('BEGIN');
-        db.exec('COMMIT');
+        // The initial snapshot decided this part; E1 observes each caller
+        // return without opening a safety-only transaction.
         try {
           const sealed = rawSealed({ format: row.format,keyVersion: row.key_version,sealed: row.sealed });
           let result;

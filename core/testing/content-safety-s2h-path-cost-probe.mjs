@@ -1,3 +1,4 @@
+import { trackContentHostOptions, contentHostInvocations } from './content-safety-cost-hosts.mjs';
 // Explicit probes: method dispatch and expected variants are data, never
 // unchecked String.replace operations on executable source.
 import { initializeProbe } from './content-safety-s2h-probe-harness.mjs';
@@ -33,7 +34,7 @@ const close=canonical.close.bind(canonical);canonical.close=()=>{};
 const store=openMemoryStore({path:legacyPath}),scope=store.scope({ownerId:ns.ownerId,...(absent?{projectId:'absent'}:{})});
 const scoped=(method,call)=>{const value=call();return {ok:true,value,empty:method==='get'?value===null:value.length===0};};
 const tasks=[['scope.get',()=>scoped('get',()=>scope.get(memories[0].id))],['scope.list',()=>scoped('list',()=>scope.list({limit:limitItems}))],['scope.search',()=>scoped('search',()=>scope.search(absent?'absentterm':'probecommon',{limit:limitItems}))],['sourceSnapshot',()=>core.sourceSnapshot({readSet:[absent?{...ns,scope:'project',projectId:'absent'}:ns],limit:Math.min(12,limitItems)})],['get',()=>core.get({namespace:absent?{...ns,scope:'project',projectId:'absent'}:ns,memoryId:memories[0].id})],['list',()=>core.list({namespace:absent?{...ns,scope:'project',projectId:'absent'}:ns,limit:limitItems})],['map',()=>core.map({namespace:absent?{...ns,scope:'project',projectId:'absent'}:ns,limit:limitItems})],['fetch',()=>core.fetch({namespace:absent?{...ns,scope:'project',projectId:'absent'}:ns,refs:memories.slice(0,12).map(m=>({memoryId:m.id,revision:m.revision}))})],['recall',()=>core.recall({readSet:[absent?{...ns,scope:'project',projectId:'absent'}:ns],query:'probecommon',limit:6})],['session',()=>core.sessionStartContext({namespace:absent?{...ns,scope:'project',projectId:'absent'}:ns,groups:{nextSteps:false,procedural:false,background:true},maxTokens:2000})]];
-for(const [method,call]of tasks){for(const k of Object.keys(counter))counter[k]=0;sql.clear();headerStacks=[];globalThis.__counterCalls=0;globalThis.__providerCalls=0;active=true;const r=await call();active=false;console.log(JSON.stringify({node:process.version,physical,facts:actualFacts,n,method,case:absent?(method==='get'?'missing-ref':'absent'):method==='sourceSnapshot'&&n>Math.min(12,limitItems)?'overflow':'hit',empty:r.empty??emptyResult(method,r),portCalls:globalThis.__counterCalls+globalThis.__providerCalls,counterCalls:globalThis.__counterCalls,providerCalls:globalThis.__providerCalls,ok:r.ok,error:r.error?.code,...(process.env.CAIRN_S2H_STACKS?{headerStacks}:{}),counts:{...counter},total:Object.values(counter).reduce((a,b)=>a+b),begin:[...sql].filter(([q])=>/^BEGIN/.test(q)).reduce((a,[,b])=>a+b,0),safety:[...sql].filter(([q])=>/content_suppression|owner_suppression|schema_version AS cookie/.test(q)).map(([q,c])=>({q,c}))}));}
+for(const [method,call]of tasks){for(const k of Object.keys(counter))counter[k]=0;sql.clear();headerStacks=[];globalThis.__counterCalls=0;globalThis.__providerCalls=0;const hostBefore=contentHostInvocations();active=true;const r=await call();active=false;console.log(JSON.stringify({node:process.version,physical,facts:actualFacts,n,method,case:absent?(method==='get'?'missing-ref':'absent'):method==='sourceSnapshot'&&n>Math.min(12,limitItems)?'overflow':'hit',empty:r.empty??emptyResult(method,r),hostInvocations:contentHostInvocations()-hostBefore,portCalls:globalThis.__counterCalls+globalThis.__providerCalls,counterCalls:globalThis.__counterCalls,providerCalls:globalThis.__providerCalls,ok:r.ok,error:r.error?.code,...(process.env.CAIRN_S2H_STACKS?{headerStacks}:{}),counts:{...counter},total:Object.values(counter).reduce((a,b)=>a+b),begin:[...sql].filter(([q])=>/^BEGIN/.test(q)).reduce((a,[,b])=>a+b,0),safety:[...sql].filter(([q])=>/content_suppression|owner_suppression|schema_version AS cookie/.test(q)).map(([q,c])=>({q,c}))}));}
 DatabaseSync.prototype.prepare=p;DatabaseSync.prototype.exec=e;store.close();canonical.close=close;core.close();
 
 }
@@ -51,7 +52,7 @@ const namespace=absent?{...ns,scope:'project',projectId:'absent'}:{...ns,project
 const members=createTopicMembersStorage(canonical,{rawAncestry:physical===48,createReadMemo:()=>createContentReadMemo(canonical),memoryReadable:[18,23,33].includes(physical)?()=>true:(namespace,row,memo)=>contentReadSafety(canonical,{namespace,memo,selectedMemory:row,ref:{type:'memory',namespace,memoryId:row.id,revision:row.revision}}).allowed});
 const overview=createTopicOverviewStorage(canonical);
 for(const kind of ['members','overview']){
- total=factSql=headerSql=0,begins=0;let items=[];active=true;
+ total=factSql=headerSql=0,begins=0;let items=[];const hostBefore=contentHostInvocations();active=true;
  readTransaction(canonical,()=>{
   if(kind==='members'){
    const state=members.create(),r={namespace,selection:{type:'unfiled'},kind:null},captured={generation:null};
@@ -62,7 +63,7 @@ for(const kind of ['members','overview']){
  });active=false;
  assert.ok(Array.isArray(items),'actual topic storage result');
  if(absent)assert.deepEqual(items,[],'topic no-hit result is observed, never inferred from the request');
- console.log(JSON.stringify({node:process.version,physical,facts:actualFacts,n,kind,method:kind==='members'?'readTopicMembers':'readTopicOverview',case:absent?'absent':'hit',ok:true,empty:items.length===0,total,factSql,headerSql,begins}));
+ console.log(JSON.stringify({node:process.version,physical,facts:actualFacts,n,kind,method:kind==='members'?'readTopicMembers':'readTopicOverview',case:absent?'absent':'hit',ok:true,empty:items.length===0,total,factSql,headerSql,begins,hostInvocations:contentHostInvocations()-hostBefore}));
 }
 DatabaseSync.prototype.prepare=nativePrepare;DatabaseSync.prototype.exec=nativeExec;core.close();
 
@@ -77,7 +78,7 @@ const actualFacts=[34,38,48].includes(physical)?canonical.prepare('SELECT count(
 const nativePrepare=DatabaseSync.prototype.prepare,nativeExec=DatabaseSync.prototype.exec;let active=false,count=0,begins=0,factSql=0;
 DatabaseSync.prototype.prepare=function(sql){const stmt=nativePrepare.call(this,sql);return new Proxy(stmt,{get(t,k){const v=Reflect.get(t,k,t);return typeof v!=='function'?v:(...args)=>{if(active&&['get','all','iterate','run'].includes(k)){count++;if(/FROM content_suppressions/.test(sql))factSql++;}return v.apply(t,args);};}});};
 DatabaseSync.prototype.exec=function(sql){if(active)for(const x of sql.split(';').filter(x=>x.trim())){count++;if(/^BEGIN/.test(x))begins++;}return nativeExec.call(this,sql);};
-for(const method of ['getCard','listCards']){count=begins=factSql=0;active=true;const r=await core[method]({namespace:ns,...(method==='getCard'?{cardId:absent?'absent':cards[0].id}:{states:[absent?'confirmed':'draft'],limit:50})},{});active=false;assert.equal(r.ok,true,JSON.stringify(r));console.log(JSON.stringify({node:process.version,physical,facts:actualFacts,cards:cards.length,method,case:absent?'absent':'hit',ok:r.ok,empty:emptyResult(method,r),count,begins,factSql}));}
+for(const method of ['getCard','listCards']){count=begins=factSql=0;const hostBefore=contentHostInvocations();active=true;const r=await core[method]({namespace:ns,...(method==='getCard'?{cardId:absent?'absent':cards[0].id}:{states:[absent?'confirmed':'draft'],limit:50})},{});active=false;assert.equal(r.ok,true,JSON.stringify(r));console.log(JSON.stringify({node:process.version,physical,facts:actualFacts,cards:cards.length,method,case:absent?'absent':'hit',ok:r.ok,empty:emptyResult(method,r),count,begins,factSql,hostInvocations:contentHostInvocations()-hostBefore}));}
 DatabaseSync.prototype.prepare=nativePrepare;DatabaseSync.prototype.exec=nativeExec;core.close();
 
 }
@@ -89,14 +90,14 @@ const actualClose=canonical.close.bind(canonical);canonical.close=()=>{};core.cl
 const {localPlainPort,splitRaw,rawRequest}=await load('testing/raw-fixtures'),basePort=localPlainPort();let opened=0;
 const port={...basePort,async sealRaw(input){assert.equal(canonical.isTransaction,false);return basePort.sealRaw(input);},async openRaw(input){assert.equal(canonical.isTransaction,false);opened++;return basePort.openRaw(input);}};
 const {openMemoryCore}=await load('contract');
-const live=openMemoryCore({path:':memory:',model:{contextWindow:8192,countTokens:()=>1,extract:()=>({items:[]})},rawConversations:{mode:'raw-v1',port,capBytes:1048576,readPolicy:()=>({generation:'synthetic',reason:null})}});
+const live=openMemoryCore(trackContentHostOptions({path:':memory:',model:{contextWindow:8192,countTokens:()=>1,extract:()=>({items:[]})},rawConversations:{mode:'raw-v1',port,capBytes:1048576,readPolicy:()=>({generation:'synthetic',reason:null})}}));
 let id;for(const part of splitRaw('abcd',{id:'message',size:1})){const r=await live.captureRaw(rawRequest(part,{namespace:ns,client:'codex',sessionId:'raw-probe',eventId:'raw-'+part.part.index}));assert.equal(r.ok,true,JSON.stringify(r));id=r.value.raw.conversationId;}
 if(facts){const {writeContentSuppressionInside}=await load('content-suppression-storage');transaction(canonical,()=>{for(let i=0;i<facts;i++)writeContentSuppressionInside(canonical,{namespace:ns,kind:'memory',key:'unrelated-'+i,reason:'purge',actionId:'unrelated-'+i});});}
 const actualFacts=[34,38,48].includes(physical)?canonical.prepare('SELECT count(*) n FROM content_suppressions WHERE owner_id=?').get(ns.ownerId).n:0;assert.equal(actualFacts,facts);
 const nativePrepare=DatabaseSync.prototype.prepare,nativeExec=DatabaseSync.prototype.exec;let active=false,count=0,begins=0;
 DatabaseSync.prototype.prepare=function(sql){const stmt=nativePrepare.call(this,sql);return new Proxy(stmt,{get(t,k){const v=Reflect.get(t,k,t);return typeof v!=='function'?v:(...args)=>{if(active&&['get','all','iterate','run'].includes(k))count++;return v.apply(t,args);};}});};
 DatabaseSync.prototype.exec=function(sql){if(active)for(const x of sql.split(';').filter(x=>x.trim())){count++;if(/^BEGIN/.test(x))begins++;}return nativeExec.call(this,sql);};
-for(const limit of [1,4]){count=begins=opened=0;active=true;const r=await live.getConversation({namespace:ns,conversationId:absent?'absent':id,limit});active=false;assert.equal(r.ok,true,JSON.stringify(r));console.log(JSON.stringify({node:process.version,physical,facts:actualFacts,limit,method:'getConversation',case:absent?'absent':'hit',ok:r.ok,empty:emptyResult('getConversation',r),count,begins,opened}));}
+for(const limit of [1,4]){count=begins=opened=0;const hostBefore=contentHostInvocations();active=true;const r=await live.getConversation({namespace:ns,conversationId:absent?'absent':id,limit});active=false;assert.equal(r.ok,true,JSON.stringify(r));console.log(JSON.stringify({node:process.version,physical,facts:actualFacts,limit,method:'getConversation',case:absent?'absent':'hit',ok:r.ok,empty:emptyResult('getConversation',r),count,begins,opened,hostInvocations:contentHostInvocations()-hostBefore}));}
 DatabaseSync.prototype.prepare=nativePrepare;DatabaseSync.prototype.exec=nativeExec;live.close();actualClose();
 
 }

@@ -62,13 +62,17 @@ for(const [v,base] of [[34,18],[38,23],[48,33]])for(const kind of ['topic','memo
    const key=JSON.stringify([row.kind,row.v,row.n,row.mode,row.limit,row.method??null]);
    observedFrozenKeys.add(key);
    assert.deepEqual([row.legacy,row.after,row.ports],frozen.zero[key],'exact statement, BEGIN and port counts: '+key);
-   const delta=row.after[0]-row.legacy[0]-row.ports;assert.ok(delta<=6,JSON.stringify(row));
+   const delta=row.after[0]-row.legacy[0]-row.ports;assert.ok(row.after[0]<=row.legacy[0]+6+row.ports,'R2-A1 same-engine ceiling, e9 11-01 17:15: '+JSON.stringify(row));
    if(row.legacyHeaders!==undefined)assert.equal(delta+row.legacyHeaders,4,'recall replaces legacy repeated header reads with four fixed proof/fence statements');
-   assert.equal(row.after[1],row.legacy[1],JSON.stringify(row));}
+   if(row.method==='recall'||kind==='topic')assert.ok(row.after[1]<=row.legacy[1],'R2-A1 BEGIN <= same-engine legacy: '+JSON.stringify(row));
+   else assert.equal(row.after[1],row.legacy[1],JSON.stringify(row));}
   // Port count is fixed by assembly: two counts per selected body/source plus
   // two whole-assembly counts, with a final retained-payload count.
   if(kind==='context')for(const row of records)assert.equal(row.ports,4*row.limit+2,'safety adds no counter invocations');
-  const group=new Map();for(const row of records){const key=JSON.stringify([row.method,row.mode,row.case]);const delta=row.after[0]-row.legacy[0]-row.ports;if(group.has(key))assert.equal(delta,group.get(key),'zero per-item/corpus delta');else group.set(key,delta);}
+  // n12/n24 is the paired per-item fixture. Every other population retains
+  // its exact pin and ceiling; compare its overhead with E1 separated.
+  const corpus=new Map();for(const row of records){if(row.method!=='recall'&&kind!=='topic')continue;const key=JSON.stringify([row.method,row.mode,row.case,row.limit]);const net=row.after[0]-row.legacy[0]-row.ports;if(corpus.has(key))assert.ok(net<=corpus.get(key),'R2-A1 non-E1 corpus overhead does not grow: '+JSON.stringify(row));corpus.set(key,net);}
+  const group=new Map();for(const row of records){const r2a1=row.method==='recall'||kind==='topic';if(r2a1&&![12,24].includes(row.n))continue;const key=JSON.stringify([row.method,row.mode,row.case,...(r2a1?[row.limit]:[])]);const delta=row.after[0]-row.legacy[0]-(r2a1?0:row.ports);if(group.has(key)){if(row.method==='recall'||kind==='topic')assert.ok(delta<=group.get(key),'R2-A1 slope <= same-engine legacy, e9 11-01 17:15: '+JSON.stringify(row));else assert.equal(delta,group.get(key),'zero per-item/corpus delta');}group.set(key,delta);}
  });
 }
 

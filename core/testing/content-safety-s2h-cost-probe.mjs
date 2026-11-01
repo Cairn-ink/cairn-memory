@@ -1,3 +1,4 @@
+import { trackContentHostOptions, contentHostInvocations } from './content-safety-cost-hosts.mjs';
 // Explicit product query/assembly/status cost probes. SQL uses the production
 // dispatcher; the harness substitutes only file/Worker transport plumbing.
 import { initializeProbe } from './content-safety-s2h-probe-harness.mjs';
@@ -7,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import assert from 'node:assert/strict';
-const root=fileURLToPath(new URL('../../',import.meta.url));
+const root=process.env.CAIRN_PROBE_SOURCE_ROOT??fileURLToPath(new URL('../../',import.meta.url));
 export async function runProductProbe({kind='query',physical,n,factCount='0',absent=false,mode='lexical',limitItems=12}) {
 const {core,canonical,load,dbs,originals,ns,memories,transaction,rev}=await initializeProbe({physical,n,factCount});
 const path='/synthetic/store.sqlite', suffix='.context-read-product-v1.1.sqlite', side=new DatabaseSync(':memory:'), lock=new DatabaseSync(':memory:');
@@ -25,7 +26,7 @@ const {requestAuthority}=await load('context-product-authority');
 const token={opaque:'synthetic-token'},ownerCoverage={policy:'recent-projects-v1',selectionRevision:'synthetic-inventory',requestedNamespaces:1,selectedNamespaces:1,omittedNamespaces:0};
 const baseBinding={credentialDigest:credentialDigest(token),ownerId:ns.ownerId,namespaces:{readSet:[ns],ownerCoverage},issuedAt:0};
 const bindService={...baseBinding,kind:'service',serviceId:randomUUID(),credentialBindingId:randomUUID(),credentialExpiresUtcMs:null};
-const authorizer=b=>requestAuthority({authorize:()=>b,isCurrent:()=>true},b,{});
+const authorizer=b=>requestAuthority(trackContentHostOptions({authorize:()=>b,isCurrent:()=>true}),b,{});
 const maintainAuth=authorizer(bindService),maintainFacade=openContextProductFacade(path,{authorize:maintainAuth});
 const maintainer=openProductIndex({path,facade:maintainFacade,authorize:maintainAuth,ownerCoverage,maintenance:true,sidecarJournalMode:'DELETE'});
 if(kind==='maintenance') {
@@ -61,9 +62,9 @@ console.log(JSON.stringify({phase:'setup',node:process.version,rev,n,physical,fa
 const {openContextProductReader}=await load('context-product-reader');
 class ProbeWorker extends EventEmitter{
  constructor(data){super();this.data=data;this.stdout={resume(){}};this.stderr={resume(){}};queueMicrotask(()=>{try{
- const authorize=(m,p,c)=>requestAuthority({authorize:()=>data.binding,isCurrent:()=>true},data.binding,data.request)(m,p,c);
+ const authorize=(m,p,c)=>requestAuthority(trackContentHostOptions({authorize:()=>data.binding,isCurrent:()=>true}),data.binding,data.request)(m,p,c);
  this.facade=openContextProductFacade(path,{authorize});
- this.index=openProductIndex({path,facade:this.facade,authorize,ownerCoverage,maintenance:false,counter:{id:"synthetic",countTokens:()=>{if(active)active.counterCalls=(active.counterCalls??0)+1;return 1;}},
+ this.index=openProductIndex({path,facade:this.facade,authorize,ownerCoverage,maintenance:false,counter:trackContentHostOptions({id:"synthetic",countTokens:()=>{if(active)active.counterCalls=(active.counterCalls??0)+1;return 1;}}),
    ...(mode.startsWith('semantic')?{semantic:{snapshot:async()=>{
      if(mode==='semantic-late-fact' && !expectedFailure){
        canonical.exec('PRAGMA query_only=OFF');
@@ -88,12 +89,13 @@ function record(kind,sql,connection){if(!active)return;active[kind]=(active[kind
 DatabaseSync.prototype.prepare=function(sql){const connection=this;record('prepare',sql,connection);const stmt=nativePrepare.call(this,sql);return new Proxy(stmt,{get(t,k){const v=Reflect.get(t,k,t);if(typeof v!=='function')return v;return(...args)=>{if(['get','all','iterate','run'].includes(k))record(k,sql,connection);return v.apply(t,args);};}});};
 DatabaseSync.prototype.exec=function(sql){if(active)for(const s of sql.split(';').filter(x=>x.trim()))record('exec',s,this);return nativeExec.call(this,sql);};
 async function measure(label,query){
+ const hostBefore=contentHostInvocations();
  active={prepare:0,get:0,all:0,iterate:0,run:0,exec:0,sql:{},stacks:[],safetyTrace:[]};
  const result=kind==='evidence'?await reader.fetchCandidateEvidence({readSet:[ns],...(query.snapshot?{snapshot:query.snapshot}:{intent:query.intent,refs:memories.slice(Number(factCount)>0?5:0,(Number(factCount)>0?5:0)+limitItems).map(m=>({type:'memory',namespace:ns,memoryId:m.id,revision:m.revision}))})},token):kind==='context' ? await reader.contextRead((({limit,...input})=>({...input,budget:{maxTokens:4000,maxItems:limitItems}}))(query),token)
    : kind==='status' ? await reader.getContextIndexStatus({readSet:[ns],types:['memory'],intent:query.intent},token)
    : await reader.findCandidates(query,token);const c=active;active=null;
  const executed=c.get+c.all+c.iterate+c.run;
- console.log(JSON.stringify({phase:'query',label,node:process.version,rev,n,physical,factCount,method:kind==='context'?'contextRead':kind==='status'?'getContextIndexStatus':kind==='evidence'?'fetchCandidateEvidence':'findCandidates',case:label,counterCalls:c.counterCalls??0,prepare:c.prepare,executed,exec:c.exec,totalExecuted:executed+c.exec,preparePlusExecuted:c.prepare+executed+c.exec,ok:result.ok,error:result.error?.code,items:kind==='context'?result.value?.metered?.items?.length:result.value?.items?.length,empty:kind==='status'?null:kind==='context'?result.value?.metered?.items?.length===0:result.value?.items?.length===0,eligible:result.value?.coverage?.byType?.memory?.eligible,safetyTrace:c.safetyTrace,sqlSummary:Object.entries(c.sql).map(([sql,v])=>({sql,prepare:v.prepare,executions:v.get+v.all+v.iterate+v.run,exec:v.exec})),stacks:c.stacks}));
+ console.log(JSON.stringify({phase:'query',label,node:process.version,rev,n,physical,factCount,method:kind==='context'?'contextRead':kind==='status'?'getContextIndexStatus':kind==='evidence'?'fetchCandidateEvidence':'findCandidates',case:label,hostInvocations:contentHostInvocations()-hostBefore,counterCalls:c.counterCalls??0,prepare:c.prepare,executed,exec:c.exec,totalExecuted:executed+c.exec,preparePlusExecuted:c.prepare+executed+c.exec,ok:result.ok,error:result.error?.code,items:kind==='context'?result.value?.metered?.items?.length:result.value?.items?.length,empty:kind==='status'?null:kind==='context'?result.value?.metered?.items?.length===0:result.value?.items?.length===0,eligible:result.value?.coverage?.byType?.memory?.eligible,safetyTrace:c.safetyTrace,sqlSummary:Object.entries(c.sql).map(([sql,v])=>({sql,prepare:v.prepare,executions:v.get+v.all+v.iterate+v.run,exec:v.exec})),stacks:c.stacks}));
  if(factCount==='owner'||expectedFailure)assert.equal(result.error?.code,'evidence_unavailable');else {assert.equal(result.ok,true,JSON.stringify(result));if(kind==='query')assert.equal(result.value.coverage.byType.memory.eligible,physical===48&&Number(factCount)>0?null:n-effectiveFacts);if(absent&&kind!=='status'&&kind!=='evidence')assert.equal(kind==='context'?result.value.metered.items.length:result.value.items.length,0);}
  return result;
 }

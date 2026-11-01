@@ -1,3 +1,4 @@
+import { cachedContentLayout } from './content-safety-schema.mjs';
 import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { createTopicSqlitePolicy, unsupportedTopicStorage } from './topic-reader-sqlite.mjs';
 import { parentPort, workerData } from 'node:worker_threads';
@@ -35,6 +36,11 @@ function snapshot(request, expected) {
   return current;
 }
 function transaction(work) {
+  if (!cachedContentLayout(connection.db)?.suppressionRevision) {
+    connection.db.exec('BEGIN');
+    try { const value = work(); connection.db.exec('COMMIT'); return value; }
+    catch (error) { connection.db.exec('ROLLBACK'); throw error; }
+  }
   return withContentSuppressionRequest(()=>{
     connection.db.exec('BEGIN');
     try { const value = inContentSuppressionRequestInside(connection.db,work,[requestNamespace]); connection.db.exec('COMMIT'); return value; }
@@ -193,7 +199,7 @@ parentPort.on('message', async message => {
       // Worker yields are engine work, never E1 ports. One request proof spans
       // their snapshots; a single independent delivery fence follows all work.
       if (request.method === 'members' || request.snapshotVersion) topicSession.assertDelivery(requestNamespace);
-      else try { assertContentSuppressionRequestInside(connection.db,[requestNamespace]); }
+      else if (cachedContentLayout(connection.db)?.suppressionRevision) try { assertContentSuppressionRequestInside(connection.db,[requestNamespace]); }
       catch(error) { if(error.code==='evidence_unavailable')fail('cursor_stale');throw error; }
       parentPort.postMessage(result);
     },{fresh:true});

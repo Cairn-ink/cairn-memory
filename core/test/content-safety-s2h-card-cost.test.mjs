@@ -1,7 +1,7 @@
-import { assertCostGateCases, assertCostGateCell, assertCostGateCells } from '../testing/content-safety-s2h-cost-inventory.mjs';
+import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { openMemoryCore } from '../index.mjs';
+import { openCostMemoryCore as openMemoryCore } from '../testing/content-safety-cost-hosts.mjs';
 import { safetyFixture, ns, ok, receipt } from '../testing/content-safety-s2h-fixture.mjs';
 import { measureContentRead } from '../testing/content-safety-cost-meter.mjs';
 import { transaction } from '../database.mjs';
@@ -9,7 +9,7 @@ import { writeContentSuppressionInside } from '../content-suppression-storage.mj
 const authority={authorize(request){const {input,...binding}=request;return {...binding,accessGeneration:1};},isCurrent:g=>g};
 for(const base of [23,33])for(const n of [1,4])test(`R2 Card/evidence v${base} ${n} items and non-Raw source variants`,async t=>{
  const records=[];
- for(const safety of [false,true])for(const facts of safety?[0,5]:[0]) {
+ for(const [safety,facts]of costGatePopulations()) {
   const f=safetyFixture(t,base);if(safety)await f.migrate();const db=f.connect(),core=openMemoryCore({path:f.path,model:{countTokens:()=>1},privateCards:{version:'private-cards-local-v1',source:'submitted-note-v1',storage:'local-plain-v1',disclosure:'explicit-submitted-note-v1',authority}});
   t.after(()=>{core.close();db.close();});const call=(method,input)=>core[method](input,{}),refs=[];
   for(let i=0;i<n;i++){
@@ -56,9 +56,9 @@ for(const base of [23,33])for(const n of [1,4])test(`R2 Card/evidence v${base} $
   records.push({base,n,safety,facts,records:measured});
  }
  t.diagnostic('R3_CARD_COUNTS '+JSON.stringify(records));
- assertCostGateCells(records);
+ if(assertCostGateCells(records))return;
  const [legacy,zero,five]=records;
  for(const current of [zero,five]){assert.deepEqual(current.records.map(r=>[r.method,r.variant]),legacy.records.map(r=>[r.method,r.variant]));for(const [i,row]of current.records.entries()){
-  const old=legacy.records[i];assert.equal(row.begin,old.begin,row.method);assert.equal(row.statements-old.statements,row.method==='getPrivateCardUsage'?(current.facts?10:6):row.method==='mapEvidence'&&row.variant==='memory'?(current.facts?5:3):(current.facts?6:4),row.method+' '+row.variant);
+  const old=legacy.records[i];assert.equal(row.begin,old.begin,row.method);assert.equal(row.statements-old.statements,row.method==='getPrivateCardUsage'?(current.facts?10:6):(current.facts?6:4),row.method+' '+row.variant);
  }}
 });

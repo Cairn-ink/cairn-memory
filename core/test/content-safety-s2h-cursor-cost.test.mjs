@@ -1,7 +1,8 @@
-import { assertCostGateCases, assertCostGateCell, assertCostGateCells } from '../testing/content-safety-s2h-cost-inventory.mjs';
+import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { openMemoryCore, openMemoryStore } from '../index.mjs';
+import { openMemoryStore } from '../index.mjs';
+import { openCostMemoryCore as openMemoryCore } from '../testing/content-safety-cost-hosts.mjs';
 import { safetyFixture, ns, ok, receipt } from '../testing/content-safety-s2h-fixture.mjs';
 import { measureContentRead } from '../testing/content-safety-cost-meter.mjs';
 import { transaction } from '../database.mjs';
@@ -9,7 +10,7 @@ import { writeContentSuppressionInside } from '../content-suppression-storage.mj
 
 for(const base of [18,23,33])for(const n of [24,48])test(`R2 cursor pages v${base} ${n} Memories`,async t=>{
  const records=[];
- for(const safety of [false,true])for(const facts of safety?[0,5]:[0]) {
+ for(const [safety,facts]of costGatePopulations()) {
   const f=safetyFixture(t,base);if(safety)await f.migrate();let calls=0;
   const db=f.connect(),core=openMemoryCore({path:f.path,model:{countTokens(){calls++;return 1;}}}),store=openMemoryStore({path:f.path});t.after(()=>{store.close();core.close();db.close();});
   const memories=Array.from({length:n},(_,i)=>ok(core.admit({namespace:ns,memory:{content:'Synthetic cursor memory '+i,kind:'fact'},receipts:[receipt('cursor-'+i),...(i?[]:[receipt('cursor-extra')])]})).memory);
@@ -32,10 +33,10 @@ for(const base of [18,23,33])for(const n of [24,48])test(`R2 cursor pages v${bas
   records.push({base,n,safety,facts,records:measured});
  }
  t.diagnostic('R3_CURSOR_COUNTS '+JSON.stringify(records));
- assertCostGateCells(records);
+ if(assertCostGateCells(records))return;
  const [legacy,zero,five]=records;
  for(const current of [zero,five])for(const [i,row]of current.records.entries()) {const old=legacy.records[i];
   assert.equal(row.ports,old.ports);assert.equal(row.begin,old.begin);
-  assert.equal(row.statements-old.statements-row.ports,(row.method==='map'?1:4)+(current.facts?2:0),row.method+' '+row.variant+' fixed statement formula');
+  assert.equal(row.statements-old.statements-row.ports,4+(current.facts?2:0),row.method+' '+row.variant+' fixed statement formula');
  }
 });

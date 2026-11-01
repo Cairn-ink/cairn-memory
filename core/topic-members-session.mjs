@@ -1,6 +1,6 @@
 import { withContentSuppressionRequest, inContentSuppressionRequestInside, assertContentSuppressionRequestInside } from './content-suppression-storage.mjs';
 import { contentReadSafety, createContentReadMemo } from './content-safety.mjs';
-import { attestContentSafety, checkInstalledContentSafety } from './content-safety-schema.mjs';
+import { attestContentSafety, checkInstalledContentSafety, cachedContentLayout } from './content-safety-schema.mjs';
 import { unsupportedTopicStorage } from './topic-reader-sqlite.mjs';
 import { lstatSync } from 'node:fs';
 import { openReadDatabase } from './read-database.mjs';
@@ -78,6 +78,11 @@ export function createTopicSession(path, topicPolicy) {
     }
   }
   function transaction(work) {
+    if (!cachedContentLayout(connection.db)?.suppressionRevision) {
+      connection.db.exec('BEGIN');
+      try { const value = work(); connection.db.exec('COMMIT'); return value; }
+      catch (error) { connection.db.exec('ROLLBACK'); throw error; }
+    }
     return withContentSuppressionRequest(() => {
       connection.db.exec('BEGIN');
       try { const value = inContentSuppressionRequestInside(connection.db,work,requestNamespace ? [requestNamespace] : undefined); connection.db.exec('COMMIT'); return value; }
@@ -98,6 +103,7 @@ export function createTopicSession(path, topicPolicy) {
     return { namespace, captured, file: [stat.dev, stat.ino], schema, configuration: 'topic-snapshot-v1/topic-members-v1' };
   };
   const assertDelivery = namespace => {
+    if (!cachedContentLayout(connection.db)?.suppressionRevision) return;
     try { assertContentSuppressionRequestInside(connection.db,[namespace]); }
     catch(error) { if(error.code==='evidence_unavailable')fail('cursor_stale');throw error; }
   };

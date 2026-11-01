@@ -292,7 +292,7 @@ export function createMemoryCore(input, internal) {
     return `${body}.${signature}`;
   }
 
-  function decodeCursor(cursor, binding) {
+  function decodeCursor(cursor, binding, suppressionEpoch = false) {
     if (typeof cursor !== "string" || cursor.length > 8_192) {
       throw new MemoryStoreError("invalid_cursor");
     }
@@ -314,13 +314,14 @@ export function createMemoryCore(input, internal) {
     } catch {
       throw new MemoryStoreError("invalid_cursor");
     }
-    const allowedKeys = [...Object.keys(binding), "e", "a"];
+    const allowedKeys = [...Object.keys(binding), "e", "a", ...(suppressionEpoch ? ["h"] : [])];
     if (!payload || typeof payload !== "object" || Array.isArray(payload) ||
         Object.keys(payload).length !== allowedKeys.length ||
         Object.keys(payload).some((key) => !allowedKeys.includes(key)) ||
         Object.keys(binding).some((key) => payload[key] !== binding[key])) {
       throw new MemoryStoreError("invalid_cursor");
     }
+    if (suppressionEpoch && typeof payload.h !== "string") throw new MemoryStoreError("invalid_cursor");
     if (!Number.isSafeInteger(payload.e) || payload.e < 1 || !payload.a ||
         typeof payload.a !== "object" || Array.isArray(payload.a)) {
       throw new MemoryStoreError("invalid_cursor");
@@ -726,11 +727,10 @@ export function createMemoryCore(input, internal) {
       }
       // Require a counter before accessing content, even for an empty map.
       if(typeof modelPortValue(model,'countTokens','token_count_unavailable')!=='function')throw new MemoryStoreError('token_count_unavailable');
-      const suppressionEpoch = runtime.suppressionFence(ns);
-      countTokens(model, '');
+      const safetyLayout = runtime.suppressionFence(ns, true);
+      if (!safetyLayout) countTokens(model, '');
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'map',
         p: parentRef ? JSON.stringify(parentRef) : '', f: purpose, l: count, b: budget };
-      if (suppressionEpoch !== null) binding.h = suppressionEpoch;
       if (catalogOnly) binding.o = 'classification_catalog';
       if (navigation) Object.assign(binding, { o: 'recall_map',
         q: navigation.queryDigest, x: QUERY_EXCERPT_VERSION,
@@ -742,7 +742,7 @@ export function createMemoryCore(input, internal) {
         physicalPage: BOUNDED_KEYSET_SOURCE_CANDIDATES.page,
         top: BOUNDED_KEYSET_SOURCE_CANDIDATES.top,
       });
-      const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
+      const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding, safetyLayout);
       if (cursor && (!Number.isSafeInteger(cursor.a.offset) || cursor.a.offset < 0 ||
           Object.keys(cursor.a).length !== 1)) throw new MemoryStoreError('invalid_cursor');
       const offset = cursor?.a.offset ?? 0;
@@ -756,13 +756,22 @@ export function createMemoryCore(input, internal) {
             ...(navigation.sourceCandidatePolicy ? { sourceCandidatePolicy: navigation.sourceCandidatePolicy } : {}) });
           navigation.pages.set(key, snapshot);
         }
+        if (safetyLayout && cursor && cursor.h !== snapshot.suppressionEpoch) throw new MemoryStoreError('invalid_cursor');
         if (cursor && cursor.e !== snapshot.epoch) throw new MemoryStoreError('cursor_stale');
         runtime.assertEpoch(ns, snapshot.epoch, snapshot.suppressionEpoch);
         if (offset > snapshot.rows.length) throw new MemoryStoreError('invalid_cursor');
         page = { ...snapshot, rows: snapshot.rows.slice(offset, offset + count + 1) };
       } else {
-        page = runtime.mapRows(ns, { purpose, parentRef, limit: count, offset, expectedEpoch: cursor?.e,
+        page = runtime.mapRows(ns, { purpose, parentRef, limit: count, offset, expectedEpoch: cursor?.e, expectedSuppressionEpoch: safetyLayout ? cursor?.h : undefined,
           catalogOnly });
+      }
+      if (safetyLayout) {
+        if (cursor && cursor.h !== page.suppressionEpoch) throw new MemoryStoreError('invalid_cursor');
+        binding.h = page.suppressionEpoch;
+        // The existing page transaction captures the request proof before any
+        // caller port. The availability check above is inert; caller code runs
+        // only after that transaction closes, with its normal E1 observation.
+        countTokens(model, '');
       }
       const capacity = Math.min(count, page.rows.length);
       for (let take = capacity; take >= 0; take--) {

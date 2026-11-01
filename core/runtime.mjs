@@ -668,7 +668,7 @@ export function createMemoryRuntime(input, internal) {
       });
       for (const { namespace, indexRevision, suppressionEpoch } of namespaces) {
         indexStorage.assertAvailable(namespace);
-        if (epoch(namespace) !== indexRevision || suppressionEpoch !== undefined && suppressionEpoch !== contentSuppressionRequestFenceInside(db, namespace.ownerId)) fail('index_revision_conflict');
+        if (epoch(namespace) !== indexRevision || cachedContentLayout(db)?.suppressionRevision && suppressionEpoch !== undefined && suppressionEpoch !== contentSuppressionRequestFenceInside(db, namespace.ownerId)) fail('index_revision_conflict');
       }
       if (isSourceContext(contextMode)) {
         const sources = rows.map((row, index) => {
@@ -893,7 +893,9 @@ export function createMemoryRuntime(input, internal) {
     classificationSnapshot(ns, ids, guards, index) {
       ready(); return mocStorage.classificationSnapshot(ns, ids, guards, index);
     },
-    suppressionFence(ns) { ready(); return mocStorage.suppressionFence(ns); },
+    suppressionFence(ns, layoutOnly = false) { ready();
+      if (layoutOnly) return cachedContentLayout(db)?.suppressionRevision === 1;
+      return mocStorage.suppressionFence(ns); },
     assertEpoch(ns, index, suppressionEpoch) { ready(); return mocStorage.assertEpoch(ns, index, suppressionEpoch); },
     epoch(ns) { ready(); return epoch(ns); },
     close() { if (!closed) { if (db.isOpen) db.close(); closed = true; } },

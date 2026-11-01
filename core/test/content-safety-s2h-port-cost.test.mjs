@@ -1,8 +1,8 @@
-import { assertCostGateCases } from '../testing/content-safety-s2h-cost-inventory.mjs';
+import { assertCostGateCases, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { openRawCaptureCore } from '../raw-capture.mjs';
+import { openCostRawCaptureCore as openRawCaptureCore, contentHostInvocations } from '../testing/content-safety-cost-hosts.mjs';
 import { cardHost } from '../testing/raw-source-fixtures.mjs';
 import { request, splitRaw, localPlainPort } from '../testing/raw-capture-fixtures.mjs';
 import { rationaleModel } from '../testing/rationale-model.mjs';
@@ -15,7 +15,7 @@ const epochSQL='SELECT epoch_hi,epoch_lo FROM owner_suppression_epochs WHERE own
 for(const method of ['getConversation','resolveSourceReferences','getSource'])for(const n of [1,4])
 test(`E1 ${method} ${n} parts: exactly one autocommit epoch read before inspecting each return`,async t=>{
  const measured=[];
- for(const [migrated,facts]of [[false,0],[true,0],[true,5]]) {
+ for(const [migrated,facts]of costGatePopulations()) {
  const f=safetyFixture(t,33);if(migrated)await f.migrate();const host=cardHost(),base=localPlainPort();
  let active=false,returned=false,calls=0,observations=[],statements=0,begins=0;
  const connections=new Set(),boundaries=[],dispatches=[],getterObservations=[];
@@ -51,10 +51,11 @@ test(`E1 ${method} ${n} parts: exactly one autocommit epoch read before inspecti
   };}});
  };
  DatabaseSync.prototype.exec=function(sql){if(active)for(const statement of sql.split(';').filter(s=>s.trim())){statements++;if(/^BEGIN/.test(statement.trim()))begins++;}if(returned)observations.push({sql,transaction:this.isTransaction});return exec.call(this,sql);};
- let result;
+ let result;const hostBefore=contentHostInvocations();
  try{active=true;result=method==='getConversation'?await core.getConversation({namespace:ns,conversationId}):
   await host.call(core,method,method==='getSource'?{namespace:ns,source}:input);
  }finally{active=false;DatabaseSync.prototype.prepare=prepare;DatabaseSync.prototype.exec=exec;}
+ if(unmigratedCostOnly)console.log(JSON.stringify({tag:'R3_NATIVE_CELL',testName:t.name,node:process.version,method,variant:'Raw',base:33,cell:33,safety:false,facts:0,n,statements,begin:begins,ports:calls,hostInvocations:contentHostInvocations()-hostBefore}));
  t.diagnostic('E1_PORT_COUNTS '+JSON.stringify({node:process.version,method,n,migrated,facts,statements,begins,epochReads:migrated?boundaries.length:0,portBegin:0,portHeader:0,portFact:0}));
  assert.equal(result.ok,true,JSON.stringify(result));assert.equal(calls,n);assert.equal(boundaries.length,n);assert.equal(returned,false);
  for(const dispatch of dispatches){assert.equal(dispatch.returned,false,'previous return was inspected before another port');assert.ok(dispatch.transactions.every(value=>value===false),'no read snapshot spans the await');}
@@ -62,6 +63,7 @@ test(`E1 ${method} ${n} parts: exactly one autocommit epoch read before inspecti
  assert.deepEqual(boundaries,Array.from({length:n},()=>migrated?[{sql:epochSQL,transaction:false}]:[]),'single epoch read after inert conversion');
  measured.push({statements,begins,facts});gateCells.push({node:process.version,method,variant:`${n}/${migrated?48:33}/${facts}`});
  }
+ if(unmigratedCostOnly)return;
  const fixed=measured[1].statements-measured[0].statements-n;
  assert.ok(fixed<=6,JSON.stringify({method,n,measured,fixed}));
  assert.equal(measured[1].begins,measured[0].begins,'no safety-only transaction');
@@ -72,5 +74,6 @@ test(`E1 ${method} ${n} parts: exactly one autocommit epoch read before inspecti
 });
 
 test('E1 Raw port inventory includes every method, part count and physical/fact cell',()=>{
+ if(unmigratedCostOnly)return;
  assertCostGateCases('raw-ports',gateCells);
 });

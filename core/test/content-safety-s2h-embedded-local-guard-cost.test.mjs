@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assertCostGateCases, assertCostGateCell, assertCostGateCells } from '../testing/content-safety-s2h-cost-inventory.mjs';
+import { assertCostGateCases, assertCostGateCell, assertCostGateCells, costGatePopulations, unmigratedCostOnly } from '../testing/content-safety-s2h-cost-inventory.mjs';
 const from=name=>import(new URL('../'+name+'.mjs',import.meta.url));
-const {openMemoryCore}=await from('index');
+const {openCostMemoryCore:openMemoryCore}=await from('testing/content-safety-cost-hosts');
 const {safetyFixture,ns,ok,receipt}=await from('testing/content-safety-s2h-fixture');
 const {measureContentRead}=await from('testing/content-safety-cost-meter');
 const {createFakeEmbedder}=await from('context-read-embedder');
@@ -11,7 +11,7 @@ const {writeContentSuppressionInside}=await from('content-suppression-storage');
 const authority={authorize(request){const {input,...binding}=request;return {...binding,accessGeneration:1};},isCurrent:g=>g};
 for(const base of [18,23,33])for(const n of [2,4])test(`enabled embedded local guard v${base} ${n}`,async t=>{
  const cells=[];
- for(const safety of [false,true])for(const facts of safety?[0,5]:[0]) {
+ for(const [safety,facts]of costGatePopulations()) {
  const f=safetyFixture(t,base);if(safety)await f.migrate();let counters=0,embeds=0,exposedEngineContext=false;
  const fake=createFakeEmbedder({dimensions:8});
  const db=f.connect();
@@ -38,7 +38,7 @@ for(const base of [18,23,33])for(const n of [2,4])test(`enabled embedded local g
  assertCostGateCases('embedded-semantic',records);cells.push({base,n,safety,facts,records});
  }
  t.diagnostic('R3_ENABLED_COUNTS '+JSON.stringify(cells));
- assertCostGateCells(cells);
+ if(assertCostGateCells(cells))return;
  const [legacy,zero,five]=cells;
  for(const cell of [zero,five])for(const [i,row]of cell.records.entries()){
   const old=legacy.records[i];assert.equal(row.begin,old.begin,row.method+' '+row.variant);assert.equal(row.ports,old.ports);
