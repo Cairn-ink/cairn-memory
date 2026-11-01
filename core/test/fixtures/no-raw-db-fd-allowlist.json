@@ -1658,5 +1658,15 @@
     "path": "core/content-safety-files-child.mjs",
     "source": "const fd = openSync(path + suffix, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);",
     "reason": "Entry-guarded SQLite-free child, spawned by content-safety-preflight.mjs in a separate process. Reads stdin configuration and hashes database/companion bytes only in that child; never imports the engine or SQLite, so its descriptor closes cannot drop host SQLite locks."
+  },
+  {
+    "path": "core/context-read-sidecar.mjs",
+    "source": "import { openSync, readSync, closeSync, constants } from 'node:fs'",
+    "reason": "Fixed header only in a SQLite-free child; the raw descriptor never shares a process with a SQLite connection."
+  },
+  {
+    "path": "core/context-read-sidecar.mjs",
+    "source": "fd = openSync(process.argv[1], constants.O_RDONLY | constants.O_NOFOLLOW);",
+    "reason": "Fixed header only in a SQLite-free child; the raw descriptor never shares a process with a SQLite connection."
   }
 ]

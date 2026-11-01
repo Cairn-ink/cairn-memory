@@ -499,9 +499,15 @@ owner-owned and single-linked. Directory, file and companion symlinks refuse.
 The owner must allow SQLite to create WAL/SHM and read marks even for a read-only
 handle. Metadata-only identity checks precede SQLite access and repeat at
 statement boundaries. Concurrent external journal-mode changes or uncoordinated
-file replacement are unsupported. A protected active DELETE journal retains zero wait. Canonical connections
-are read-only and refuse a hot journal requiring recovery; only explicit
-sidecar maintenance can recover its own rollback journal. Unsafe/unusable WAL arrangements report `index_unavailable`;
+file replacement are unsupported. A protected active DELETE journal retains zero SQLite busy wait. Canonical connections
+are read-only and refuse a hot journal requiring recovery. With the WAL SQLite
+policy, explicit sidecar maintenance can recover its own rollback journal.
+Without that policy, a protected DELETE `-journal` alone refuses request reads, maintenance
+refresh and status with retryable `storage_busy`; the engine neither reads
+through it nor retries. A genuinely hot journal also remains busy until a
+read-write writer recovers it, so hosts must bound retries. WAL/SHM companions,
+WAL headers and unsafe files retain their existing non-retryable refusals.
+Unsafe/unusable WAL arrangements report `index_unavailable`;
 there is no writable-canonical fallback.
 
 The maintainer establishes the configured mode only while initializing a new
@@ -714,9 +720,19 @@ for explicit idle disposal with no triggering quantum. `stage` is one of `open`,
 `stall` when captured from an active dispatch. Idle/close failures without an
 active dispatch omit those fields, rather than accepting the last call's marker.
 A primary captured during a call keeps its original step, ordinal, stall and
-stage even if disposal later fails. Log optional `step` for caught exceptions,
+stage even if disposal later fails. Log optional `step` for captured failures,
 `exitCode` for `worker_exit`, bounded constructor `errorName` for `worker_error`,
 `spawn`, `dispatch` or `call_error`, and `engineCode` for a known `engine` failure.
+`engineCode:index_unavailable` records also carry a closed private `reason`:
+`storage_unavailable`, `auxiliary_file`, `unsafe_file`, `incompatible`,
+`wrong_store`, `missing`, `corrupt`, `validation_missing`, `validation_invalid`,
+`memory_store`, `replaced`, `stale_index`, `rebuilding` or `timeout`; other or
+unavailable values become `other`. Protocol records carry private `protocolKind`:
+`frame_conflict`, `identity_shape`, `result_bounds`, `result_clone`, `result_shape`
+or `open_identity`; an unknown sub-kind is omitted. These fields never enter
+public DTOs or codes.
+An exception mapped to `index_unavailable` keeps its original private exception
+cause and captured step alongside the closed reason.
 Secondary records have the same field optionality; their counts use the same
 fixed cause-family buckets as primary counts, with no unbounded history.
 
@@ -731,7 +747,7 @@ the existing maintenance-kind enum above, sampled before unwinding the measured
 operation. Resume/checkpoint validation outside an admitted unit can be `idle`.
 Inner error-to-code conversions retain this metadata; existing public mappings,
 including `storage_error` in the lexical catch, stay unchanged. Only sanitized
-kind/name/code/step fields accompany a failed Worker envelope; none enter the
+kind/name/code/reason/protocol-kind/step fields accompany a failed Worker envelope; none enter the
 public result, serializers, public exports, or request-reader transport.
 
 `lastFailure` is immutable and retained across later success; a new reader or

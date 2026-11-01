@@ -444,7 +444,7 @@ test('R12 real-process read-only/managed matrix creates no transient database au
       const journal = f.path + '.context-read-v1.sqlite-journal';
       writeFileSync(journal, 'synthetic auxiliary', { mode: 0o600 });
       const refused = await observeDatabaseFiles(f, async () => {
-        denied(await mutateProcess(f, { mode, storeId, method: 'findCandidates', input: query(), envelope: true }), 'index_unavailable');
+        denied(await mutateProcess(f, { mode, storeId, method: 'findCandidates', input: query(), envelope: true }), 'storage_busy');
       });
       assert.deepEqual(refused.events, []); unlinkSync(journal);
   }

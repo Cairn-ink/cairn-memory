@@ -71,7 +71,7 @@ export function serializationDiagnostic(buffer, nowNs=process.hrtime.bigint()) {
 export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrtime.bigint())/1e6,hrtime=()=>process.hrtime.bigint(),rendezvous}={}) {
   const v=view(buffer),fields=new Float64Array(attributionFields.length);
   const operationStarts=new Float64Array(8),operationKinds=new Uint8Array(8),operationPrevious=new BigUint64Array(8);
-  let operationDepth=0,failureStep,failureError,rawFailureError,failureCaptured=false,failureSelected=false,failureResolved=false,failureDetail;
+  let operationDepth=0,failureStep,failureError,rawFailureError,classifiedFailureError,failureCaptured=false,failureSelected=false,failureResolved=false,failureDetail;
   let secondaryFailure;
   let current=0n,elapsed=0,readState=0,readStart=0,readElapsed=0,readPrevious=0n;
   const publish=value=>{current=value;if(v)Atomics.store(v,0,value);};
@@ -92,7 +92,7 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
       if(v){Atomics.store(v,1,0n);Atomics.store(v,2,0n);Atomics.store(v,3,0n);}publish(hrtime()/1000n<<4n);
       if(v)Atomics.store(v,5,markerOrdinal(ordinal));
     },
-    resetFailure(){failureStep=undefined;failureError=undefined;rawFailureError=undefined;failureCaptured=false;failureSelected=false;failureResolved=false;failureDetail=undefined;secondaryFailure=undefined;},
+    resetFailure(){failureStep=undefined;failureError=undefined;rawFailureError=undefined;classifiedFailureError=undefined;failureCaptured=false;failureSelected=false;failureResolved=false;failureDetail=undefined;secondaryFailure=undefined;},
     start(kind){
       if(operationDepth===operationStarts.length)return -1;
       const at=operationDepth++;operationStarts[at]=now();operationKinds[at]=maintenanceKinds.indexOf(kind);operationPrevious[at]=enter(kind);return at;
@@ -101,22 +101,23 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
     checkpoint(kind){try{rendezvous?.(kind);}catch(error){api.captureFailure(error);throw error;}},
     // These slots can be written under a SQLite lock. Never inspect the error
     // until failure() is called after the transaction has unwound.
-    captureFailure(error){if(failureSelected||failureCaptured&&error===failureError)return;failureError=error;rawFailureError=error;failureStep=Number(current&15n);failureCaptured=true;failureResolved=false;failureDetail=undefined;},
+    captureFailure(error){if(failureSelected||failureCaptured&&error===failureError)return;failureError=error;rawFailureError=error;classifiedFailureError=undefined;failureStep=Number(current&15n);failureCaptured=true;failureResolved=false;failureDetail=undefined;},
     // Retain only the first secondary error; reflection waits until SQLite unwinds.
     captureSecondaryFailure(error){secondaryFailure??={error,step:Number(current&15n)};},
     takeSecondaryFailure(){const value=secondaryFailure;secondaryFailure=undefined;return value;},
     mapFailure(error,mapped){if(failureCaptured&&failureError===error)failureError=mapped;return mapped;},
-    selectFailure(error){if(!failureCaptured||failureError!==error){failureCaptured=false;rawFailureError=undefined;failureStep=undefined;failureResolved=false;failureDetail=undefined;}failureError=undefined;failureSelected=true;},
+    selectFailure(error){if(!failureCaptured||failureError!==error){failureCaptured=false;rawFailureError=undefined;failureStep=undefined;failureResolved=false;failureDetail=undefined;}classifiedFailureError=failureCaptured?error:undefined;failureError=undefined;failureSelected=true;},
     failure(){
       if(failureResolved)return failureDetail;
       failureResolved=true;
       if(!failureCaptured)return undefined;
-      const error=rawFailureError;rawFailureError=undefined;failureError=undefined;
+      const error=rawFailureError,classified=classifiedFailureError??failureError??error;rawFailureError=undefined;failureError=undefined;classifiedFailureError=undefined;
+      const indexFailure=maintenanceIndexFailure(classified);
       try{for(let object=Object(error);object;object=Object.getPrototypeOf(object)){
         const code=Object.getOwnPropertyDescriptor(object,'code');
-        if(code){if(!Object.hasOwn(code,'value')||code.value!==undefined)return undefined;break;}
+        if(code){if(!Object.hasOwn(code,'value')||code.value!==undefined)return indexFailure?failureDetail={...indexFailure,step:failureStep}:undefined;break;}
       }}catch{return undefined;}
-      return failureDetail={kind:'exception',errorName:maintenanceErrorName(error),step:failureStep};
+      return failureDetail={kind:'exception',errorName:maintenanceErrorName(error),step:failureStep,...(indexFailure?{reason:indexFailure.reason}:{})};
     },
     get stepKind(){return Number(current&15n);},
     snapshot:()=>Object.fromEntries(attributionFields.map((name,i)=>[name,fields[i]])),
@@ -159,16 +160,30 @@ export function createMaintenanceAttribution({buffer,now=()=>Number(process.hrti
 export const maintenanceFailureKinds=Object.freeze(['none','worker_heap_limit','worker_exit','worker_error','protocol','unmapped','exception','observation_timing','engine','spawn','dispatch','call_error','identity','worker_state','cleanup','disposal_proof']);
 const failureCode=/^[a-z][a-z0-9_]{0,47}$/,failureName=/^[A-Za-z][A-Za-z0-9_]{0,47}$/;
 export const maintenanceFailureCode=value=>typeof value==='string'&&failureCode.test(value)?value:'other';
+const indexReasons=Object.freeze(['storage_unavailable','auxiliary_file','unsafe_file','incompatible','wrong_store','missing','corrupt','validation_missing','validation_invalid',
+  'memory_store','replaced','stale_index','rebuilding','timeout']);
+const protocolKinds=Object.freeze(['frame_conflict','identity_shape','result_bounds','result_clone','result_shape','open_identity']);
+export const maintenanceFailureReason=value=>indexReasons.includes(value)?value:'other';
+function failureData(error,key){
+  try {for(let object=Object(error),depth=0;object&&depth<8;object=Object.getPrototypeOf(object),depth++){
+    const property=Object.getOwnPropertyDescriptor(object,key);
+    if(property)return Object.hasOwn(property,'value')?property.value:undefined;
+  }}catch{}return undefined;
+}
+export const maintenanceIndexFailure=error=>failureData(error,'code')==='index_unavailable'
+  ?{kind:'engine',engineCode:'index_unavailable',reason:maintenanceFailureReason(failureData(error,'reason'))}:undefined;
 export const maintenanceFailureCounts=()=>Object.fromEntries(maintenanceFailureKinds.slice(1).map(kind=>[kind,0]));
 export function maintenanceErrorName(error){
   try {const constructor=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(error),'constructor')?.value,name=constructor&&Object.getOwnPropertyDescriptor(constructor,'name')?.value;return typeof name==='string'&&failureName.test(name)?name:'other';}catch{return 'other';}
 }
-export function maintenanceFailureRecord(kind,{engineCode,errorName,exitCode,ordinal,stage,stall,step}={}) {
+export function maintenanceFailureRecord(kind,{engineCode,errorName,exitCode,ordinal,stage,stall,step,reason,protocolKind:protocol}={}) {
   if(!maintenanceFailureKinds.includes(kind)||kind==='none')kind='call_error';
   const code=maintenanceFailureCode(engineCode);
   return Object.freeze({cause:kind==='unmapped'?'unmapped:'+code:kind==='exception'?'exception:'+(typeof errorName==='string'&&failureName.test(errorName)?errorName:'other'):kind,
     ...(Number.isInteger(step)&&step>=0&&step<maintenanceKinds.length?{step}:{}),
     ...(kind==='engine'?{engineCode:code}:{}),
+    ...(kind==='engine'&&code==='index_unavailable'||kind==='exception'&&reason!==undefined?{reason:maintenanceFailureReason(reason)}:{}),
+    ...(kind==='protocol'&&protocolKinds.includes(protocol)?{protocolKind:protocol}:{}),
     ...(kind==='worker_error'||kind==='spawn'||kind==='dispatch'||kind==='call_error'?{errorName:typeof errorName==='string'&&failureName.test(errorName)?errorName:'other'}:{}),
     ...(kind==='worker_exit'&&Number.isSafeInteger(exitCode)?{exitCode}:{}),
     ...(Number.isSafeInteger(ordinal)&&ordinal>0?{ordinal}:{}),
@@ -177,7 +192,8 @@ export function maintenanceFailureRecord(kind,{engineCode,errorName,exitCode,ord
 export const maintenanceFailureKind=record=>record.cause.startsWith('unmapped:')?'unmapped':record.cause.startsWith('exception:')?'exception':record.cause;
 export function readMaintenanceFailure(value){
   if(!value||typeof value!=='object'||!maintenanceFailureKinds.includes(value.kind)||value.kind==='none')return undefined;
-  const safe=maintenanceFailureRecord(value.kind,{engineCode:value.engineCode,errorName:value.errorName,step:value.step});
+  const safe=maintenanceFailureRecord(value.kind,{engineCode:value.engineCode,errorName:value.errorName,step:value.step,reason:value.reason,protocolKind:value.protocolKind});
   return {kind:value.kind,...(value.kind==='unmapped'?{engineCode:maintenanceFailureCode(value.engineCode)}:{}),
-    ...(safe.engineCode?{engineCode:safe.engineCode}:{}),...(value.kind==='exception'?{errorName:safe.cause.slice(10)}:{}),...(safe.step===undefined?{}:{step:safe.step})};
+    ...(safe.engineCode?{engineCode:safe.engineCode}:{}),...(safe.reason?{reason:safe.reason}:{}),...(safe.protocolKind?{protocolKind:safe.protocolKind}:{}),
+    ...(value.kind==='exception'?{errorName:safe.cause.slice(10)}:{}),...(safe.step===undefined?{}:{step:safe.step})};
 }

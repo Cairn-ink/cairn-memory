@@ -1,4 +1,4 @@
-import { maintenanceErrorName, maintenanceFailureCode } from './context-product-attribution.mjs';
+import { maintenanceErrorName, maintenanceFailureCode, maintenanceIndexFailure } from './context-product-attribution.mjs';
 import { createMaintenanceAttribution } from './context-product-attribution.mjs';
 import { performance } from 'node:perf_hooks';
 import { parentPort, workerData } from 'node:worker_threads';
@@ -34,7 +34,9 @@ const startSqlite = op => sqlite?.start(Number(mono(op.operationCutoffMonoNs)) /
 // Match the legacy native mapping without linking SQLite into bootstrap.
 // Keep the initiating call and the first disposal failure independent.
 let failureDetail,secondaryFailureDetail,disposalFailureDetail;
-const noteFailure=(kind,engineCode,error,disposal=false,secondary=false,step=attribution?.stepKind??0)=>{if(!workerData.maintenance)return;const detail={kind,...(kind==='engine'||kind==='unmapped'?{engineCode:maintenanceFailureCode(engineCode)}:{}),...(kind==='exception'?{errorName:maintenanceErrorName(error),step}:{})};if(secondary)secondaryFailureDetail??=detail;else if(disposal)disposalFailureDetail??=detail;else failureDetail??=detail;};
+const noteFailure=(kind,engineCode,error,disposal=false,secondary=false,step=attribution?.stepKind??0)=>{if(!workerData.maintenance)return;const detail={kind,...(kind==='engine'||kind==='unmapped'?{engineCode:maintenanceFailureCode(engineCode)}:{}),
+  ...(kind==='engine'&&engineCode==='index_unavailable'?maintenanceIndexFailure(error)??{reason:'other'}:{}),
+  ...(kind==='protocol'?{protocolKind:'frame_conflict'}:{}),...(kind==='exception'?{errorName:maintenanceErrorName(error),step}:{})};if(secondary)secondaryFailureDetail??=detail;else if(disposal)disposalFailureDetail??=detail;else failureDetail??=detail;};
 const nativeFailure = (error, disposal = false, secondary = false, step) => {
   const code=error?.code === 'ERR_SQLITE_ERROR'
     ? Number.isInteger(error.errcode) && [5,6].includes(error.errcode&255) ? 'storage_busy':'storage_error' : error?.code;
