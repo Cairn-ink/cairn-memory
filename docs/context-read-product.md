@@ -763,9 +763,11 @@ Late confirmed disposal avoids quarantine but earns no expedited recovery.
 The Worker stops accepting work, waits for bootstrap/current work to finish, then closes native
 resources and registered host leases/providers before exiting. The writer claim
 remains held until confirmed disposal. While disposal is pending, request-reader
-opens for the same store and host domain return `read_in_progress`, including
-through another supervisor. This lasts for the actual close time, at most the
-disposal bound. A closed supervisor itself continues to return `store_closed`.
+opens and calls for the same store and host domain wait before admission,
+including across owners and supervisors. Confirmed proof releases the hold after
+a re-check; failed proof refuses `reader_failed`. The caller's original cutoff
+ends the wait with `read_in_progress`, with no late dispatch. Waiting consumes
+the existing live/request capacity; capacity refusal is immediate. A closed supervisor itself continues to return `store_closed`.
 Late replies are rejected; an executing commit may finish, so existing
 authenticated SQLite recovery decides durable state.
 If grace expires, forced termination retains the existing cleanup/quarantine rules.

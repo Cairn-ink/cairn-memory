@@ -270,7 +270,7 @@ Cleanup status is exactly `{cleanupId,state,workerStopped,nativeDisposed,leasesR
 
 The existing `leasesReleased` lifecycle field is retained unchanged for any **outer host resource/drain attribution** used by the adapter, and is true when none was acquired. It does not imply or require an authority lease. Public settlement must not release that attribution, a native resource or provider capacity while its underlying work is still alive. These ownership rules survive the authority revision in full.
 
-All supervisors participate in **one process-wide resource registry**, with fixed global resource limits, not per-request isolated quotas. Register a normalized path/profile/stable-host-ownership-domain key before open, then bind it to validated canonical device/inode identity; aliases of an already identified file share the quarantine. The host ownership domain is resource attribution, not an authority realm/generation registry; it cannot be changed by minting a new request credential or request ID. A pending failed-opening/terminated-operation cleanup blocks replacement opens for that store/domain with `read_in_progress`, even through a newly created supervisor. Unconfirmed failed cleanup latches `reader_failed` for that identity until explicit operator recovery after actual resource disposal; creating another supervisor/handle is not recovery. Healthy independent request handles may coexist within the process-wide limits; the quarantine is not a permanent one-reader-per-store lock.
+All supervisors participate in **one process-wide resource registry**, with fixed global resource limits, not per-request isolated quotas. Register a normalized path/profile/stable-host-ownership-domain key before open, then bind it to validated canonical device/inode identity; aliases of an already identified file share the quarantine. The host ownership domain is resource attribution, not an authority realm/generation registry; it cannot be changed by minting a new request credential or request ID. A pending cleanup holds new opening/call admission for that store/domain across supervisors until proof or the caller's existing cutoff (§4.4.2). Unconfirmed failed cleanup latches `reader_failed` for that identity until explicit operator recovery after actual resource disposal; creating another supervisor/handle is not recovery. Healthy independent request handles may coexist within the process-wide limits; the quarantine is not a permanent one-reader-per-store lock.
 
 Service shutdown must close the supervisor even if the HTTP constructor rejected and no handle exists. Its owned termination handlers retain live supervision until cleanup completes/fails; no detached PID/log constitutes supervision. Request settlement and shutdown drain are separate promises: the former meets +50 ms, while the latter awaits native cleanup off the host thread. After a bootstrap failure following resource acquisition, release only confirmed-disposed resources. No ordinary SQLite writer is gated by this registry; monitor any native read-lock lag against existing writer busy/operation bounds.
 
@@ -287,6 +287,59 @@ Shared resources have one handle-owned record: a successful constructor promotes
 - If finalized diagnostics are evicted/expire before a measurement consumer obtains them, that operation's diagnostic coverage is **incomplete** and its measurement cell is invalid, even if the cleanup state was complete. The measurement parent independently retains its attempt ledger and must drain/ack each operation promptly; it cannot interpret expired IDs as zero native failures. Ack/expiry does not erase already exported raw measurement evidence. Safety disposal and diagnostic completeness remain separate claims.
 
 This bounds both metadata and retained telemetry under repeated fresh open/read/close traffic. Ordinary deterministic tests use a mock monotonic clock and registry counters for expiry/capacity/ack behavior; they do not add elapsed-time or heap-timing gates to ordinary suites.
+
+#### 4.4.2 Registry hold across owners
+
+The hold protects a file while a former reader's native connections, host leases
+or providers remain unproven; that Worker could still be executing or committing.
+It matches the existing host-module domain and either resolved path or validated
+device/inode identity, never owner ID, readSet or credential. Keep that scope.
+Other already-admitted operations and ordinary canonical writers are unchanged.
+
+A new reader/maintainer or call reserves its ordinary registry record first,
+including existing request replay reservations. Before spawn, call dispatch,
+identity acknowledgement or successful opening rebind, admission MUST check the
+hold. Pending disposal waits within the original opening/operation cutoff.
+Complete four-bit disposal ends that record's hold: the Worker exited, native
+connections closed, and all registered leases/providers settled. A forced exit
+alone is insufficient. A failed hold refuses `reader_failed`; expiry while
+waiting refuses `read_in_progress`. Capacity refusal remains immediate. An
+already-failed hold retains its immediate registration refusal without new
+records or request-ID reservations.
+
+Every wake MUST re-check all matching holds and the cutoff before its synchronous
+admission action. Another cleanup can keep it waiting. No timer grants permission;
+late proof cannot spawn, dispatch or acknowledge an expired/cancelled operation.
+Identity acknowledgement waits before the Worker opens its facade. Opening
+acceptance retains its existing identity/protocol checks. An undispatched call's
+refusal completes only its borrower record, leaving its healthy resident open.
+Already-started opening shutdown retains the existing disposal policy.
+
+One waiter per live record bounds waiters by the existing process-wide 256 live
+slots, including waiting records and failed safety pins. No additional queue
+quota or replay allowance exists. Entries retain fixed control state and only a
+bounded opening result (64 KiB); identity metadata exceeding 128 characters cannot
+enter the queue and retains `read_in_progress`. Native device/inode identities fit.
+No per-blocker promise listeners or append-only wait history are retained.
+Completed/failed proof schedules one coalesced notification; absolute-deadline
+wakeups rearm if early. Cleanup/cancellation removes its waiter and timer. A pre-spawn stop closes its
+untransferred internal semantic port without closing the shared coordinator.
+
+Notify queued admissions in insertion order after disposal finalization returns,
+so the existing writer release finishes before a successor claims it. This is
+bounded FIFO notification, not an exclusive file lock or cross-owner scheduling
+guarantee; repeated cleanup can exhaust a caller's deadline. Request paths and
+maintenance share the rule because both own native resources on the same file.
+
+Private `readerRegistryHoldDiagnostic(handle/result/openingError)` snapshots
+the opening snapshot on a handle and the operation snapshot on each result/error:
+`waits`, cumulative `waitMs`, `lastWaitMs` and numeric `outcome`: complete=1,
+failed=2, deadline=3, cancelled/closed=4. Counts/durations are bounded; no identity,
+path, owner, credential or content is recorded. Public DTOs/codes are unchanged.
+The four-bit proof, failed/unproven quarantine, disposal grace, writer exclusion,
+cutoff gate, authority samples, reservation charging and cleanup/history caps stay
+unchanged. **Hypothesis:** when ordinary disposal fits the caller's remaining
+budget, waiting avoids a terminal refusal; no latency qualification is claimed.
 
 ### 4.5 Native telemetry independent of result delivery (audit F5)
 

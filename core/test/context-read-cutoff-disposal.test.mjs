@@ -22,6 +22,9 @@ function nativeTest(name,body){test(name,async t=>{
   try{await Promise.race([body(t),nativeDelay(60000,undefined,{signal:abort.signal}).then(async()=>{await testClock.advance(10000,{waitForWorkers:false});assert.fail('disposal_test_watchdog');})]);}
   finally{abort.abort();}
 });}
+function holdProbe(promise) {
+  const p={settled:false};p.promise=promise.then(value=>{p.settled=true;return value;},error=>{p.settled=true;return error;});return p;
+}
 function setup(t,{stage='open',mode='normal',request=false,tail,parentGap=false,delayedGrace,qualified=false,callGate=false}={}) {
   // Pin canonical identities until all process-wide quarantine probes finish.
   const f=fixture({after:fn=>retained.push(fn)}),memory=f.admit('Synthetic lease disposal memory.',personal),supervisors=[],pumps=[];
@@ -109,9 +112,9 @@ nativeTest('disposal close rendezvous: call settles before lease release and rep
   while(!x.state[0] && x.workers[0].threadId!==-1)await realDelay(1);
   assert.equal(x.state[0],1,'registered_close_runs_before_forced_termination');
   assert.equal(p.getStatus().error,'read_timeout','timeout_is_visible_while_disposal_waits');
-  const before=x.spawned;await assert.rejects(x.open(x.options),{code:'read_in_progress'});assert.equal(x.spawned,before);
+  const before=x.spawned,probe=holdProbe(x.open(x.options));await flush();assert.equal(probe.settled,false,'pending_disposal_waits_before_spawn');assert.equal(x.spawned,before);
   Atomics.store(x.state,1,1);Atomics.notify(x.state,1);await turn.pending;
-  assert.equal((await p.completion).error,'read_timeout');await x.retries(false);
+  assert.equal((await p.completion).error,'read_timeout');await (await probe.promise).close();await x.retries(false);
 });
 nativeTest('disposal bootstrap rendezvous: close waits for in-flight host construction',async t=>{
   const x=setup(t,{stage:'bootstrap'}),opening=x.open(x.options).catch(e=>e);
@@ -353,11 +356,12 @@ for(const delay of [600,2000])for(const stage of ['open','refresh'])nativeTest(`
   if(stage==='refresh'){const first=await x.tick();await first.pending;}
   const turn=await x.tick();while(!x.state[0]&&x.workers.at(-1).threadId!==-1)await realDelay(1);
   assert.equal(p.getStatus().error,'read_timeout','slow_close_never_delays_public_timeout');
-  const before=x.spawned;await assert.rejects(x.open(x.options),{code:'read_in_progress'});assert.equal(x.spawned,before);
+  const before=x.spawned,probe=holdProbe(x.open(x.options));await flush();assert.equal(probe.settled,false,'pending_disposal_waits_before_spawn');assert.equal(x.spawned,before);
   await testClock.advance(delay,{waitForWorkers:false});
   assert.equal(x.forced,0,'slow_successful_close_is_not_forced_at_old_grace');
   Atomics.store(x.state,1,1);Atomics.notify(x.state,1);await turn.pending;
   assert.equal((await p.completion).error,'read_timeout','slow_confirmed_disposal_preserves_timeout');
+  await (await probe.promise).close();
   const records=await x.s.supervisor.drain();assert.ok(records.every(r=>r.state==='complete'&&['workerStopped','nativeDisposed','leasesReleased','providersSettled'].every(k=>r[k])));
   assert.equal(await x.exits.at(-1),0);await x.retries(false);
 });
@@ -414,8 +418,11 @@ nativeTest(`disposal lifecycle ${action} ${delay}: lease cleanup controls quaran
   assert.ok([...supervisorOwner(x.s.supervisor).owner.records].every(r=>r.cleaning&&r.state==='pending'),'opening_and_call_records_wait_for_actual_disposal');
   const freshOptions=supervisor=>{const s=configured({after(){}},x.f.path,[personal],{supervisor});return {...s.options,host:{moduleUrl:hostUrl,configuration:{...s.options.host.configuration,disposalState:x.state.buffer}}};};
   const other=createContextReadSupervisor();t.after(()=>other.close().catch(()=>{}));const before=x.spawned;
-  await assert.rejects(x.open(freshOptions(x.s.supervisor)),{code:closedOwner?'store_closed':'read_in_progress'},'original_supervisor_preserves_closed_or_pending_contract');
-  await assert.rejects(x.open(freshOptions(other)),{code:'read_in_progress'},'pending_disposal_blocks_request_opens_across_supervisors');assert.equal(x.spawned,before);
+  const oldIds=new Set([...supervisorOwner(x.s.supervisor).owner.records].map(r=>r.id)),probes=[];
+  if(closedOwner)await assert.rejects(x.open(freshOptions(x.s.supervisor)),{code:'store_closed'},'closed_supervisor_still_refuses');
+  else probes.push(holdProbe(x.open(freshOptions(x.s.supervisor))));
+  probes.push(holdProbe(x.open(freshOptions(other))));await flush();
+  assert.ok(probes.every(p=>!p.settled),'pending_disposal_waits_for_proof_across_supervisors');assert.equal(x.spawned,before);
   if(delay==='hang'){
     await testClock.advance(9999,{waitForWorkers:false});assert.equal(x.forced,0,'lifecycle_hang_keeps_full_grace');
     await testClock.advance(1,{waitForWorkers:false});assert.equal(x.forced,1,'lifecycle_hang_forces_at_disposal_bound');
@@ -424,7 +431,8 @@ nativeTest(`disposal lifecycle ${action} ${delay}: lease cleanup controls quaran
     await testClock.advance(delay,{waitForWorkers:false});assert.equal(x.forced,0,'lifecycle_slow_close_is_not_forced');
     Atomics.store(x.state,1,1);Atomics.notify(x.state,1);assert.notEqual((await closing)?.code,'reader_failed');
   }
-  const records=await x.s.supervisor.drain();assert.equal(records.length,action==='in-flight'?2:1,'opening_and_call_records_share_disposal_proof');
+  for(const probe of probes){const value=await probe.promise;if(delay==='hang')assert.equal(value.code,'read_in_progress','unproven_disposal_refuses_at_caller_deadline');else await value.close();}
+  const records=(await x.s.supervisor.drain()).filter(r=>oldIds.has(r.cleanupId));assert.equal(records.length,action==='in-flight'?2:1,'opening_and_call_records_share_disposal_proof');
   assert.ok(records.every(r=>r.workerStopped&&r.nativeDisposed));
   if(delay==='hang')assert.ok(records.some(r=>r.state==='failed'&&!r.leasesReleased),'unproven_resource_keeps_store_quarantined');
   else assert.ok(records.every(r=>r.state==='complete'&&r.leasesReleased&&r.providersSettled));

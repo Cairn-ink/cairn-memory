@@ -343,10 +343,12 @@ for (const { kind, rendezvous } of [
     const advanced = s.advance(cutoffMs);
     if (kind === 'opening') {
       // Synchronous admission happens before releasing the opening barrier.
-      // This is the expected temporary quarantine, not a failed disposal.
+      // Pending cleanup holds admission; only confirmed proof may release it.
       const c = s.configure(s.supervisor, false);
+      c.options.host.configuration.leaseTiming=new SharedArrayBuffer(24);
       const probe = openContextIndexMaintainer(c.options);
-      const observed = assert.rejects(probe, error => { transient = error.code; return error.code === 'read_in_progress'; });
+      let settled=false;const observed=probe.then(async handle=>{settled=true;transient='waited';await handle.close();},error=>{settled=true;throw error;});
+      void observed.catch(()=>{});for(let n=0;n<8;n++)await Promise.resolve();assert.equal(settled,false,'opening_probe_waits_for_disposal');
       release(control);
       await guard(observed, 'opening cleanup transient probe');
     }
@@ -604,10 +606,13 @@ test('semantic parity blocked retirement holds the writer until confirmed dispos
   assert.equal(runtime.reservations.at(-1).maxMs, 500, 'replacement_reserves_before_drain');
   assert.equal(pump.getStatus().usedMs, 500, 'retirement_turn_is_fully_reserved');
   const other = createContextReadSupervisor(); s.f.workspace.defer(() => other.close());
-  for (const supervisor of [s.supervisor, other]) {
-    const c = s.configure(supervisor, false);
-    await assert.rejects(openContextIndexMaintainer(c.options), { code: 'read_in_progress' }, 'blocked_close_keeps_writer_exclusion');
-  }
+  const client=semanticHandle(s.coordinator),attach=client.attach;let unusedPortsClosed=0;
+  client.attach=(...args)=>{const port=attach(...args);port.once('close',()=>unusedPortsClosed++);return port;};
+  const probes=[s.supervisor,other].map(supervisor=>{const c=s.configure(supervisor),p={settled:false};p.promise=openContextIndexMaintainer({...c.options,deadlineMs:100}).then(value=>{p.settled=true;return value;},error=>{p.settled=true;return error;});return p;});
+  for(let n=0;n<8;n++)await Promise.resolve();assert.ok(probes.every(p=>!p.settled),'blocked_close_holds_admissions_until_deadline');
+  await s.advance(100,{waitForWorkers:false});
+  for(const probe of probes)assert.equal((await probe.promise).code,'read_in_progress','blocked_close_keeps_writer_exclusion_until_deadline');
+  await until(()=>unusedPortsClosed===2,'unused semantic channels close');client.attach=attach;
   Atomics.store(s.control, 15, 1); Atomics.notify(s.control, 15); await guard(turn, 'retirement completion');
   assert.equal(runtime.spawned.length, 2, 'confirmed_close_allows_replacement');
   assert.deepEqual([...runtime.spawned[0].resources], [1, 1, 0, 0]);
