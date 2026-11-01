@@ -46,14 +46,16 @@ jobs:
       CAIRN_QUAL_PACK: ${{ inputs[matrix.pack_input] }}
       CAIRN_QUAL_MANIFEST: ${{ inputs.manifest_sha256 }}
       CAIRN_QUAL_EXPECTED_NODE: ${{ matrix.node }}
-      CAIRN_QUAL_DIR: ${{ runner.temp }}/cairn-local-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
-      CAIRN_QUAL_REPORT: ${{ runner.temp }}/cairn-local-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}/measurement.json
       CAIRN_QUAL_COMMIT: ${{ github.sha }}
     steps:
       - name: Initialize job-private evidence before checkout or admission
         shell: bash
+        env:
+          CAIRN_QUAL_DIR: ${{ runner.temp }}/cairn-local-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
+          CAIRN_QUAL_REPORT: ${{ runner.temp }}/cairn-local-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}/measurement.json
         run: |
           set -euo pipefail
+          printf 'CAIRN_QUAL_DIR=%s\nCAIRN_QUAL_REPORT=%s\n' "$CAIRN_QUAL_DIR" "$CAIRN_QUAL_REPORT" >> "$GITHUB_ENV"
           mkdir -p "$CAIRN_QUAL_DIR"
           chmod 700 "$CAIRN_QUAL_DIR"
           printf 'not-run\n' > "$CAIRN_QUAL_DIR/exit-code.txt"
