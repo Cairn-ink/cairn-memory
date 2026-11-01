@@ -21,7 +21,6 @@ export async function createContextReadHost(configuration) {
           const db=this,record=()=>Atomics.add(state,db.isOpen&&db.isTransaction?3:4,1);
           // Fail before rollback; the write helper must close before reflection.
           throw new Proxy(new RangeError('secondary verification failure'),{
-            get(target,key){if(key==='code'){record();throw Error('unreadable secondary code');}return Reflect.get(target,key);},
             getPrototypeOf(target){record();return Reflect.getPrototypeOf(target);},
             getOwnPropertyDescriptor(target,key){record();return Reflect.getOwnPropertyDescriptor(target,key);}
           });
