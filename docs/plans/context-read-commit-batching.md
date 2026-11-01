@@ -6,6 +6,29 @@ and GC batching are independently optional follow-ups. Keep publication separate
 Do not change public APIs, schema, semantic maintenance, reader-pool admission,
 authority, writer ownership, cutoff eligibility or journal deployment defaults.
 
+## Implementation status — primary package
+
+Verification batching is implemented behind a disabled internal qualification gate.
+Candidate P remains unqualified; comparison/GC batching and vacuum cadence are not
+implemented by this package. FULL and the independent publication transaction stay.
+The implementation uses smaller bounded verification prefixes, length preflight
+and per-chunk savepoints: a denied chunk rolls back to its savepoint, then earlier
+complete chunks may finalize. Metadata reads and discarded attempts stay charged.
+This is a conservative deviation from predicting the entire next chunk before entry.
+Calibration conservatively repeats at each call, so a fresh lane never inherits
+a wider first batch. The shortage cap is supervisor-wide, rather than per lane/kind;
+it survives resident replacement in private shared state and has no public reset.
+An oversized verification kind retains a bounded supervisor-wide preference for
+the unbatched path until policy reset. That path rechecks ordinary admission;
+a deferred fallback skips the rejected probe next call, including after replacement.
+The reserve and finalization estimates remain call-local. The initial finalization
+estimate includes two default work estimates (from the quantum's private estimate),
+then follows observed finalization plus estimated delivery headroom; it provides no
+native I/O deadline guarantee. Binding-check and checkpoint allowances are reserved
+inside the logical bounds; an indivisible prefix beyond those bounds uses fallback.
+Use fresh private controls for each paired measurement cell and record activated
+backoff/fallback preferences. Performance and convergence benefits are **hypothesis**.
+
 ## Amendments and evidence
 
 Amend [incremental catch-up §5](context-read-incremental-catchup.md#5-retarget-reuse-closure-and-crash-safety-under-continuous-writes),

@@ -127,10 +127,15 @@ test('P2-28 earlier expiry times out stalled bootstrap before cleanup, quarantin
   const other = setup(null);
   const options = { ...h.options, supervisor: h.registry.supervisor(), requestControl: other.control,
     host: { ...h.options.host, configuration: { requestBinding: other.binding, requestReservation: other.requestReservation } } };
-  await assert.rejects(h.open(options), { code: 'read_in_progress' });
+  let settled=false;const held=h.open(options).then(value=>{settled=true;return value;},error=>{settled=true;return error;});
   const draining = h.supervisor.drain(failure.cleanupId);
   assert.strictEqual(draining, h.supervisor.drain(failure.cleanupId));
-  h.actors[0].gate.resolve(); const status = await draining;
+  try {
+    await flush();assert.equal(settled,false,'pending_cleanup_waits_until_caller_deadline');
+    h.set(5100);for(const timer of [...h.timers])if(timer.ms===5000)timer.fn();
+    assert.equal((await held).code,'read_in_progress');
+  } finally { h.actors[0].gate.resolve(); }
+  const status = await draining;
   assert.equal(status.state, 'complete'); assert.equal(status.telemetry, 'incomplete');
   h.supervisor.ackCleanup(failure.cleanupId);
   assert.throws(() => h.supervisor.getCleanupStatus(failure.cleanupId), { code: 'invalid_input' });

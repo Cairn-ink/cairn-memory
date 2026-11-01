@@ -39,10 +39,12 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   const entries = ['core/context-product-reader.mjs', 'core/context-product-worker.mjs', 'core/context-product-pump.mjs', 'core/context-product-selection.mjs', 'core/context-read-supervisor.mjs'];
   const expected = closure(root, entries);
   // Hosted P2e closure, shared maintenance admission, private open timing and attribution, content safety and retained receipt lineage.
-  // S2h-1 storage, S2h-2's boundary, suppression grant grammar and three transaction validators, and the gated B3 comparator
-  // stay behind the SQLite Worker boundary. Keep the exact closure pin and independently verify the installed edges.
-  assert.equal(expected.length, 116);
+  // S2h-1 storage, S2h-2's boundary, suppression grant grammar and three transaction validators, the gated B3 comparator
+  // and the verification commit batch stay behind the SQLite Worker boundary. Keep the exact closure pin and
+  // independently verify the installed edges.
+  assert.equal(expected.length, 117);
   assert.ok(expected.includes('core/context-product-comparison.mjs'));
+  assert.ok(expected.includes('core/context-product-verification-batch.mjs'));
   for (const file of ['core/content-write-changes.mjs', 'core/content-write-context.mjs', 'core/content-write-safety.mjs',
     'core/raw-lineage-storage.mjs', 'core/raw-source-roots.mjs', 'core/content-safety-layout.mjs', 'core/content-safety-schema.mjs',
     'core/content-safety-migration.mjs', 'core/content-suppression-storage.mjs']) assert.ok(expected.includes(file), file);
