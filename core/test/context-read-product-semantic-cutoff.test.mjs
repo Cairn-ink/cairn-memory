@@ -975,6 +975,70 @@ for(const method of ['open','status','refresh'])test(`semantic round2 reader wat
   }finally{gate.release();await ticking;}
 });
 
+// Fractional work before validation lets its own API timer win by 0.5 ms.
+for(const settlement of ['close','release','watchdog'])test(`semantic round3 validation own deadline ${settlement}`,async t=>{
+  const s=await setup(t,{isolated:true,coordinatorHost:new URL('./fixtures/context-semantic-pump-accounting-host.mjs',import.meta.url).href}),runtime=pumpRuntime(s);
+  const pump=await validationPending(s,runtime);s.f.workspace.defer(()=>pump.close());
+  const state=new Int32Array(runtime.config.projections[0].options.host.configuration.state),client=semanticHandle(s.coordinator),call=client.pumpCall;
+  let armed=true,entered;const accounting=new Promise(resolve=>entered=resolve);
+  client.pumpCall=async(method,...args)=>{
+    if(method==='pumpFinish')entered();
+    const result=await call(method,...args);
+    if(method==='pumpReserve'&&armed){armed=false;await testClock.advance(0.5,{waitForWorkers:false});}
+    return result;
+  };
+  const post=Worker.prototype.postMessage,start=testClock.now(),chargedUsd=pump.getStatus().usedUsd;let cutoff;
+  Worker.prototype.postMessage=function(message,...args){
+    if(message.kind==='call'&&message.method==='validateOwnerSemanticCoverage'){
+      cutoff=Number(BigInt(message.operation.operationCutoffMonoNs))/1e6;Atomics.store(state,3,2);
+    }
+    return Reflect.apply(post,this,[message,...args]);
+  };
+  const ticking=runtime.tick();
+  try{
+    await until(()=>Atomics.load(state,10)===1,'validation authority blocked');
+    assert.equal(cutoff,start+499.5,'validation_API_deadline_precedes_turn_deadline');
+    if(settlement==='watchdog'){
+      await testClock.advance(499.5,{waitForWorkers:false});runtime.fireWatchdog();
+    }else{
+      await testClock.advance(499,{waitForWorkers:false});await guard(accounting,'API timeout starts accounting');
+      assert.ok(testClock.now()<start+500,'validation_settles_before_parent_deadline');
+      if(settlement==='close')await guard(pump.close(),'close during accounting');
+      else{Atomics.store(state,11,1);Atomics.notify(state,11);}
+    }
+    await guard(ticking,'validation turn settles');const terminal=await guard(pump.completion,'validation timeout completion');
+    assert.equal(terminal.error,'timeout','validation_coordinator_deadline_keeps_timeout');
+    const diagnostic=maintenancePumpDiagnostic(terminal);
+    assert.equal(diagnostic.lastFailure.engineCode,settlement==='watchdog'?'timeout':'read_timeout','private_cause_distinguishes_API_deadline_from_watchdog');
+    assert.equal(diagnostic.lastFailure.stage,'call');assert.ok(Number.isSafeInteger(diagnostic.lastFailure.ordinal));
+    assert.equal(diagnostic.failureCounts.engine,1);assert.equal(diagnostic.secondaryFailureCounts.engine,0,'validation_timeout_is_not_recounted');
+    assertTimeoutDisposal(s,runtime,terminal);assert.equal(terminal.usedUsd,chargedUsd,'zero_USD_validation_keeps_prior_charges');
+    if(settlement==='close'){
+      const retry=s.coordinator.getOwnerSemanticStatus({ownerId:ns.ownerId,deadlineMs:1},s.token);
+      await testClock.advance(1,{waitForWorkers:false});assert.equal((await retry).error.code,'read_timeout','pump_close_does_not_unblock_coordinator');
+    }
+  }finally{
+    Worker.prototype.postMessage=post;Atomics.store(state,11,1);Atomics.notify(state,11);
+    await testClock.advance(2+Math.ceil(testClock.now())-testClock.now(),{waitForWorkers:false});await ticking;
+  }
+});
+
+test('semantic round3 opening cutoff counts one reconstructed failure',async t=>{
+  const s=await setup(t,{isolated:true}),runtime=pumpRuntime(s),pump=runtime.renew(runtime.config);
+  s.f.workspace.defer(()=>pump.close());Atomics.store(s.control,0,1);
+  const ticking=runtime.tick();await until(()=>s.control[1]===1,'opening barrier');
+  try{
+    await s.advance(500,{waitForWorkers:false});runtime.fireWatchdog();release(s.control);await ticking;
+    const terminal=await guard(pump.completion,'opening cutoff cleanup'),diagnostic=maintenancePumpDiagnostic(terminal);
+    assert.equal(terminal.error,'read_timeout');assert.equal(diagnostic.failureCounts.engine,1);
+    assert.equal(diagnostic.secondaryFailureCounts.engine,0,'opening_cutoff_reconstructed_record_counts_once');
+    assert.equal(diagnostic.secondaryFailure,null,'opening_cutoff_has_only_primary_cause');
+    assert.equal(diagnostic.lastFailure.stage,'open');assert.equal(diagnostic.lastFailure.ordinal,runtime.spawned[0].data.maintenanceOrdinal);
+    assertTimeoutDisposal(s,runtime,terminal);await pump.close();
+    assert.deepEqual(maintenancePumpDiagnostic(pump.getStatus()),diagnostic,'opening_propagation_never_recounts');
+  }finally{release(s.control);await ticking;}
+});
+
 // Last: the deliberately failed proof retains process-wide inode quarantine.
 test('semantic parity rejected retirement keeps reader_failed and quarantine', async t => {
   const s = await setup(t, { expectedCleanupFailure: true }), runtime = pumpRuntime(s), pump = runtime.renew(runtime.config);

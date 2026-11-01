@@ -827,11 +827,11 @@ disposal; a failed or unproven drain makes completion `reader_failed`,
 retaining the initiating cause privately. Late open, control and reservation
 replies lose dispatch authority after close or renewal; a late handle is
 drained. A parent watchdog bounds each turn, including coordinator control
-overhead. A coordinator control timeout, including one cut by the turn
-watchdog, reports `timeout`. Hosts should retire and reopen the coordinator on
-that code: the engine does not yet close a timed-out coordinator. Reader
-cutoffs report `read_timeout`. Resident disposal and its proof are unchanged
-by this public-code distinction. `ledger_unavailable` maps to `reader_failed`.
+overhead. A coordinator control timeout, including the turn watchdog and
+validation’s own deadline, reports `timeout`. Hosts should retire and reopen
+the coordinator on that code: the engine does not yet close a timed-out
+coordinator. Reader cutoffs report `read_timeout`. Resident disposal and its
+proof are unchanged by this public-code distinction. `ledger_unavailable` maps to `reader_failed`.
 Existing coordinator codes (including `budget_denied`, `provider_error` and
 `rate_limited`) and public reader codes stay unchanged. Unknown or missing
 codes map to `reader_failed`. Bounded private initiating and secondary cause

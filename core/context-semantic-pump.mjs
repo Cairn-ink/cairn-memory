@@ -103,9 +103,13 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
     const raw=code??value?.error?.code??value?.code;
     const source=captured??maintenanceFailureRecord(kind??(raw===undefined?'call_error':publicCode(raw)===raw||raw==='timeout'?'engine':'unmapped'),
       {engineCode:raw,errorName:maintenanceErrorName(value),ordinal:ctx.ordinal,stage});
-    // Propagated records/errors share identity; distinct failures may share a family.
+    // Identity catches propagation; the closed key also catches reconstructed copies.
+    // Distinct same-family failures retain their code, stage and dispatch join.
     const identity=captured??(value&&typeof value==='object'?value:source);
-    if(!ctx.failures.has(identity)){saveFailure(Object.freeze({...source,stage:source.stage??stage,number:ctx.number}),ctx.failures.size>0||stage==='close'&&lastFailure!==null);ctx.failures.add(identity);}
+    const record=Object.freeze({...source,stage:source.stage??stage,number:ctx.number});
+    const key=JSON.stringify(['cause','engineCode','errorName','exitCode','step','stage','ordinal','number'].map(field=>record[field]));
+    if(!ctx.failures.has(identity)&&!ctx.failures.has(key))saveFailure(record,ctx.failures.size>0||stage==='close'&&lastFailure!==null);
+    ctx.failures.add(identity);ctx.failures.add(key);
     if(captured)seenFailures.add(captured);readerSecondary(value,ctx);
   }
   function drain(identity,close,ctx) {
@@ -213,10 +217,13 @@ export function semanticPump(original,{now,setTimer,clearTimer,open,snapshot}) {
     const maxMs=Math.min(first.maxMs,budgets.maxMs-usedMs,Math.floor(window.endsAtMonoMs-now()),Math.floor(renewedUntil-now()));
     if(maxMs<1)return;const reservation=await reserve(ctx,'validation',0,maxMs,'0');check(ctx);
     const result=await wait(ctx,()=>coordinator.validateOwnerSemanticCoverage({ownerId:handle.ownerId,expectedTargetDigest:targetSetDigest,budget:{maxTargets:first.maxTargets,maxMs:Math.max(1,Math.floor(ctx.until-now()))}},semanticCredential),'call',true);check(ctx);
-    if(!result.ok)note(result,ctx,'call');
+    // This API's own deadline returns read_timeout without retiring the coordinator.
+    // Keep that private origin; public classification follows coordinator timeouts.
+    const code=!result.ok&&result.error.code==='read_timeout'?'timeout':result.error?.code;
+    if(!result.ok){note(result,ctx,'call');if(code==='timeout')timeoutDisposal=true;}
     try{await finish(ctx,reservation,result.ok===true);}
     catch(failure){if(failure!==interrupted)error=terminalCode(failure.code);throw failure;}
-    finally{if(!result.ok)error??=terminalCode(result.error.code);}
+    finally{if(!result.ok)error??=terminalCode(code);}
     if(!result.ok)return;check(ctx);firstComplete=result.value.status==='complete';const current=await control(ctx,'firstCoverage');check(ctx);observeCoverage(current);
   }
   async function regular(ctx) {
