@@ -100,10 +100,12 @@ test(`SIGKILL ${mode} ${stage} ${point}: independent old-or-new document prefix 
   const entry=new URL('../testing/context-product-verification-process.mjs',import.meta.url).pathname;
   let child,trace='',stderr='',pid,stopped,nativeChunks,maintenanceReaped=false;
   if(point==='native'){
-    // External ptrace injects SIGSTOP at the first sync *inside* native COMMIT.
+    // External ptrace injects SIGKILL at the first sync inside native COMMIT.
+    // The supervisor observes/reaps that child independently of tracer exit.
     const supervisor=new URL('../testing/context-product-verification-trace.mjs',import.meta.url).pathname;
-    child=spawn('strace',['-f','-e','trace=fdatasync,fsync','-e','inject=fdatasync:signal=SIGSTOP:when=1','-e','inject=fsync:signal=SIGSTOP:when=1',process.execPath,supervisor,f.path,mode,point],{env:{},stdio:['ignore','pipe','pipe']});
-    stopped=new Promise(resolve=>{const check=()=>{if(/SIGSTOP/.test(stderr)&&pid&&nativeChunks!==undefined)resolve({chunks:nativeChunks});};child.stdout.on('data',b=>{trace+=b;const started=/maintenance-pid (\d+)/.exec(trace);if(started)pid=Number(started[1]);const m=/native-commit (\d+) (\d+)/.exec(trace);if(m){pid=Number(m[1]);nativeChunks=Number(m[2]);}maintenanceReaped=/maintenance-reaped /.test(trace);check();});child.stderr.on('data',b=>{stderr+=b;check();});});
+    child=spawn('strace',['-f','-e','trace=fdatasync,fsync','-e','inject=fdatasync:signal=SIGKILL:when=1','-e','inject=fsync:signal=SIGKILL:when=1',process.execPath,supervisor,f.path,mode,point],{env:{},stdio:['ignore','pipe','pipe']});
+    child.stdout.on('data',b=>{trace+=b;const started=/maintenance-pid (\d+)/.exec(trace);if(started)pid=Number(started[1]);const m=/native-commit (\d+) (\d+)/.exec(trace);if(m){pid=Number(m[1]);nativeChunks=Number(m[2]);}maintenanceReaped=/maintenance-reaped /.test(trace);});
+    child.stderr.on('data',b=>stderr+=b);
   } else {
     child=fork(entry,[f.path,mode,point],{env:{},execArgv:[],stdio:['ignore','ignore','pipe','ipc']});
     stopped=once(child,'message').then(([message])=>{pid=message.pid;return message;});child.stderr.on('data',b=>stderr+=b);
@@ -116,21 +118,27 @@ test(`SIGKILL ${mode} ${stage} ${point}: independent old-or-new document prefix 
   };
   f.workspace.defer(async()=>{stop();await closed;});
   const timer=setTimeout(stop,30000);
-  let barrier;try{barrier=await Promise.race([stopped,reaped.then(result=>assert.fail('crash harness: '+(point==='native'?'tracer/supervisor':'maintenance child')+' exited before barrier '+JSON.stringify(result)+' '+stderr))]);}finally{clearTimeout(timer);}
+  let barrier,exit,maintenanceExit;
+  try {
+    if(point==='native') {
+      await closed;exit=await reaped;
+      assert.deepEqual(exit,{code:0,signal:null},'crash harness: tracer/supervisor failed: '+stderr);
+      const acknowledgement=/maintenance-reaped (.+)/.exec(trace);
+      assert.ok(acknowledgement,'crash harness: missing maintenance-child reaping acknowledgement');
+      maintenanceExit=JSON.parse(acknowledgement[1]);
+      assert.deepEqual(maintenanceExit,{pid,code:null,signal:'SIGKILL'},'crash harness: maintenance child termination was not confirmed');
+      assert.match(stderr,/(?:fdatasync|fsync)\([\s\S]*SIGKILL/,'crash harness: external SIGKILL is inside native sync');
+      barrier={chunks:nativeChunks};
+    } else {
+      barrier=await Promise.race([stopped,reaped.then(result=>assert.fail('crash harness: maintenance child exited before barrier '+JSON.stringify(result)+' '+stderr))]);
+      assert.equal(pid,child.pid,'crash harness: barrier belongs to the direct maintenance child');
+      process.kill(pid,'SIGKILL');exit=await reaped;await closed;
+      assert.deepEqual(exit,{code:null,signal:'SIGKILL'},'crash harness: direct maintenance child was not reaped after SIGKILL');
+      maintenanceExit={pid:child.pid,...exit};
+    }
+  }finally{clearTimeout(timer);}
   if(point!=='native')assert.equal(barrier.cacheSize,1,'non-native barriers force bounded cache spill');
-  if(implemented)assert.ok(barrier.chunks>=(point==='mid'?1:2),'crash reaches a transaction with multiple admitted chunks');
-  process.kill(pid,'SIGKILL');
-  const deadline=setTimeout(stop,30000);
-  let exit;try{exit=await reaped;await closed;}finally{clearTimeout(deadline);}
-  let maintenanceExit={pid:child.pid,...exit};
-  if(point==='native') {
-    assert.deepEqual(exit,{code:0,signal:null},'crash harness: tracer/supervisor failed: '+stderr);
-    const acknowledgement=/maintenance-reaped (.+)/.exec(trace);
-    assert.ok(acknowledgement,'crash harness: missing maintenance-child reaping acknowledgement');
-    maintenanceExit=JSON.parse(acknowledgement[1]);
-    assert.deepEqual(maintenanceExit,{pid,code:null,signal:'SIGKILL'},'crash harness: maintenance child termination was not confirmed');
-    assert.match(stderr,/(?:fdatasync|fsync)\(.*\)[\s\S]*SIGSTOP/,'external rendezvous is inside native sync');
-  } else assert.deepEqual(exit,{code:null,signal:'SIGKILL'},'crash harness: direct maintenance child was not reaped after SIGKILL');
+  if(implemented)assert.ok(barrier.chunks>=(point==='mid'?1:2),'crash harness: kill reaches a transaction with multiple admitted chunks');
   t.diagnostic(JSON.stringify({maintenanceChild:point==='native'?'supervisor-reaped':'direct-reaped',maintenanceExit,...(point==='native'?{tracer:exit}:{})}));
   const recovered=inspect(f.path,snapshot),actual=JSON.parse(recovered.generation.verify);
   if(point==='mid'||point==='before')assert.deepEqual(recovered,old,'interrupted transaction leaves exact durable state');
