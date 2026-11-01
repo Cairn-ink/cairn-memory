@@ -14,8 +14,8 @@ function diagnostic(value,outcome,ms) {
   assert.equal(Object.hasOwn(value,'registryHold'),false,'public_DTO_has_no_hold_field');
 }
 
-async function openingResultDuringClose(t,{service,expires=false}) {
-  const s=await setup(t,{failed:true}),a=s.configuration(0,{mode:'block'}),b=s.configuration(1,{service}),ah=await s.open(a),ap=s.proof(a);
+async function openingResultDuringClose(t,{service,expires=false,cancel=false,blocked=false}) {
+  const s=await setup(t,{failed:true}),a=s.configuration(0,{mode:'block'}),b=s.configuration(1,{service,mode:blocked?'block':'normal'}),ah=await s.open(a),ap=s.proof(a),abort=new AbortController();
   assert.notEqual(a.binding.ownerId,b.binding.ownerId);assert.notDeepEqual(a.options.readSet,b.options.readSet);
   assert.equal(a.options.path,b.options.path);assert.equal(a.options.host.moduleUrl,b.options.host.moduleUrl);
   let closing,acknowledgedWithoutHold=false,validResult=false;
@@ -28,7 +28,7 @@ async function openingResultDuringClose(t,{service,expires=false}) {
       closing=tracked(ah.close());
     }
   });
-  const pending=tracked(open({...b.options,deadlineMs:expires?100:3000}));
+  const pending=tracked(open({...b.options,deadlineMs:expires?100:3000},{signal:abort.signal}));
   await until(()=>a.state[0]===1&&Boolean(closing),'valid result during normal close');await flush();
   const bp=s.proof(b),capture=s.captures[1],before={settled:pending.settled,error:pending.error?.code,
     cause:reader.maintenanceReaderFailureDiagnostic(pending.error)?.lastFailure?.cause};
@@ -50,25 +50,40 @@ async function openingResultDuringClose(t,{service,expires=false}) {
   assert.equal(closing.settled,false,'other_owner_proof_is_still_pending');
   assert.equal(capture.forced,0,'held_valid_opening_is_not_force_terminated');
   assert.equal(capture.resources[0],1,'held_opening_already_owns_a_host_lease');
-  const identity=bp.record.identity,bind=s.registry.bind;let rebinds=0;
+  const bind=s.registry.bind;let rebinds=0;
   s.registry.bind=(record,...args)=>{if(record===bp.record)rebinds++;return bind(record,...args);};
-  if(expires){
-    await testClock.advance(100,{waitForWorkers:false});const error=await guard(pending.promise,'opening hold cutoff');
-    assert.equal(error.code,'read_in_progress','valid_opening_hold_expires_with_read_in_progress');
-    assert.equal(reader.maintenanceReaderFailureDiagnostic(error).lastFailure.cause,'identity','hold_deadline_is_not_protocol_failure');
-    diagnostic(error,3,100);await guard(capture.exited,'expired opening exit');
+  if(expires||cancel){
+    if(cancel)abort.abort();else await testClock.advance(100,{waitForWorkers:false});
+    const error=await guard(pending.promise,'opening hold stop');
+    assert.equal(error.code,cancel?'read_cancelled':'read_in_progress','held_opening_keeps_public_stop_code');
+    if(service){
+      const failure=reader.maintenanceReaderFailureDiagnostic(error).lastFailure;
+      assert.equal(failure.cause,cancel?'engine':'identity','held_opening_keeps_private_stop_cause');
+      assert.equal(failure.stage,'open');if(cancel)assert.equal(failure.engineCode,'read_cancelled');
+    }
+    diagnostic(error,cancel?4:3,cancel?0:100);
+    if(blocked){
+      // The old runtime forces immediately. Both runtimes must retain quarantine
+      // if disposal is unproven; the graceful runtime exercises its grace timer.
+      if(!capture.forced){await until(()=>b.state[0]===1,'held opening close rendezvous');assert.equal(capture.forced,0);}
+      s.release(a);await guard(closing.promise,'other owner proof');
+      await testClock.advance(9999,{waitForWorkers:false});
+      if(b.state[0])assert.equal(capture.forced,0,'held_opening_grace_is_not_shortened');
+      await testClock.advance(1,{waitForWorkers:false});
+    }
+    await guard(capture.exited,'stopped opening exit');
     const cleanup=await b.options.supervisor.drain(bp.record.id).catch(error=>error.cleanup);
-    // read_in_progress is an immediate-stop reason. An already-open lease is
-    // unproven after termination, so this deadline must retain quarantine.
-    assert.equal(capture.forced,1);assert.equal(cleanup.state,'failed');
-    assert.deepEqual(bits.map(bit=>cleanup[bit]),[true,true,false,true],'expired_opening_keeps_unproven_lease_quarantine');
+    assert.deepEqual(bits.map(bit=>cleanup[bit]),blocked?[true,true,false,true]:[true,true,true,true],blocked?'grace_expiry_retains_unproven_lease_quarantine':'held_opening_stop_completes_four_bit_proof');
+    assert.equal(cleanup.state,blocked?'failed':'complete');assert.equal(capture.forced,blocked?1:0,'held_opening_forces_only_after_unproven_grace');
+    diagnostic(error,cancel?4:3,cancel?0:100);
+    if(service)assert.equal(reader.maintenanceReaderFailureDiagnostic(error).lastFailure.cause,cancel?'engine':'identity','disposal_keeps_initiating_failure');
+    if(!blocked)assert.equal(capture.sent.filter(m=>m.method==='close').length,1,'held_opening_stop_sends_one_graceful_close');
     s.release(a);await guard(closing.promise,'other owner proof');await flush();
-    assert.equal(pending.error,error,'expired_opening_never_accepts_a_late_result');
-    assert.equal(bp.record.identity,identity,'identity_binding_is_unchanged');
-    assert.equal(rebinds,0,'expired_opening_never_binds_after_hold_release');
-    const beforeThird=s.captures.length;
-    await assert.rejects(s.open(s.configuration(2)),{code:'reader_failed'},'third_owner_refused_by_expired_opening_quarantine');
-    assert.equal(s.captures.length,beforeThird,'quarantined_third_owner_never_spawns');
+    assert.equal(pending.error,error,'stopped_opening_never_accepts_a_late_result');
+    assert.equal(rebinds,0,'stopped_opening_never_binds_after_hold_release');
+    const c=s.configuration(2),beforeThird=s.captures.length;
+    if(blocked){await assert.rejects(s.open(c),{code:'reader_failed'},'third_owner_refused_after_unproven_grace');assert.equal(s.captures.length,beforeThird);}
+    else{const ch=await s.open(c);await ch.close();assert.equal(s.captures.length,beforeThird+1,'third_owner_opens_after_confirmed_admission_stop');}
     return;
   }
   await testClock.advance(600,{waitForWorkers:false});
@@ -87,6 +102,36 @@ async function openingResultDuringClose(t,{service,expires=false}) {
 
 for(const service of [true,false])nativeTest(`registry hold valid ${service?'maintenance':'request'} opening result after identity acknowledgement`,t=>openingResultDuringClose(t,{service}));
 nativeTest('registry hold valid maintenance opening result reaches its deadline after identity acknowledgement',t=>openingResultDuringClose(t,{service:true,expires:true}));
+for(const service of [true,false])nativeTest(`registry hold admission stop: cancel held ${service?'maintenance':'request'} opening disposes gracefully`,t=>openingResultDuringClose(t,{service,cancel:true}));
+nativeTest('registry hold admission stop control: grace expiry retains quarantine',t=>openingResultDuringClose(t,{service:true,expires:true,blocked:true}));
+
+nativeTest('registry hold admission stop control: executing opening cancellation stays forced',async t=>{
+  const s=await setup(t,{failed:true}),b=s.configuration(1,{service:true}),abort=new AbortController();
+  b.options.host.configuration.bootstrapGate=true;
+  const pending=tracked(s.runtime(true)(b.options,{signal:abort.signal}));
+  await until(()=>b.state[4]===1,'executing bootstrap owns a lease');const bp=s.proof(b),capture=s.captures[0];
+  assert.equal(capture.resources[0],1);assert.equal(capture.received.some(m=>m.result?.ok===true),false);
+  abort.abort();const error=await pending.promise;assert.equal(error.code,'read_cancelled');
+  const failure=reader.maintenanceReaderFailureDiagnostic(error).lastFailure;assert.equal(failure.cause,'engine');assert.equal(failure.engineCode,'read_cancelled');assert.equal(failure.stage,'open');
+  await guard(capture.exited,'executing cancellation exit');const cleanup=await b.options.supervisor.drain(bp.record.id).catch(error=>error.cleanup);
+  assert.equal(capture.forced,1,'executing_opening_cancel_still_forces_immediately');assert.equal(capture.sent.some(m=>m.method==='close'),false);
+  assert.deepEqual(bits.map(bit=>cleanup[bit]),[true,true,false,true]);assert.equal(cleanup.state,'failed');
+  await assert.rejects(s.open(s.configuration(2)),{code:'reader_failed'});
+});
+
+nativeTest('registry hold admission stop control: identity deadline has no lease and permits successor',async t=>{
+  const s=await setup(t),a=s.configuration(0,{mode:'block'}),b=s.configuration(1,{service:true}),ah=await s.open(a);let closing;
+  const open=s.runtime(true,m=>{if(m.kind==='identity'&&!closing)closing=tracked(ah.close());});
+  const pending=tracked(open({...b.options,deadlineMs:100}));
+  await until(()=>a.state[0]===1&&Boolean(closing),'identity held before acknowledgement');await flush();
+  const bp=s.proof(b),capture=s.captures[1];assert.equal(pending.settled,false);assert.deepEqual([...capture.resources],[0,0,0,0]);
+  assert.equal(capture.sent.some(m=>m.kind==='identity-ack'),false,'identity_deadline_precedes_host_and_native_open');
+  await testClock.advance(100,{waitForWorkers:false});const error=await pending.promise;assert.equal(error.code,'read_in_progress');diagnostic(error,3,100);
+  assert.equal(reader.maintenanceReaderFailureDiagnostic(error).lastFailure.cause,'identity');
+  await guard(capture.exited,'identity refusal exit');const cleanup=await b.options.supervisor.drain(bp.record.id);
+  assert.equal(capture.forced,1);assert.equal(capture.sent.some(m=>m.method==='close'),false);assert.equal(cleanup.state,'complete');assert.ok(bits.every(bit=>cleanup[bit]));
+  s.release(a);await closing.promise;const ch=await s.open(s.configuration(2));await ch.close();
+});
 
 for(const service of [false,true])for(const stage of ['open','call'])nativeTest(`registry hold two owners ${service?'maintenance':'request'} ${stage}`,async t=>{
   const s=await setup(t,{global:!service&&stage==='open'}),a=s.configuration(0,{service,mode:'block'}),b=s.configuration(1,{service});
@@ -228,6 +273,8 @@ nativeTest('registry hold malformed opening keeps its protocol failure before ad
   s.release(a);await closing.promise;
   assert.equal(error.code,'reader_failed','malformed_opening_is_protocol_failure_before_wait');
   assert.equal(reader.maintenanceReaderFailureDiagnostic(error).lastFailure.cause,'protocol','malformed_opening_retains_protocol_cause');
+  await guard(s.captures[1].exited,'malformed opening exit');
+  assert.equal(s.captures[1].forced,1,'malformed_opening_still_forces_immediately');assert.equal(s.captures[1].sent.some(m=>m.method==='close'),false);
   assert.equal(s.registry.waiting(),0);assert.equal(s.captures.length,2);
 });
 

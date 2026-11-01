@@ -191,10 +191,12 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     const epoch = 1;
     // Timeout delivery remains prompt; disposal owns a separate bounded grace.
     function stopWorker(instance) {
-      // Only read_timeout and store_closed (handle/supervisor close or idle
-      // expiry) trust the Worker to dispose. Cancellation, protocol/identity
-      // violations and every other failure terminate immediately.
-      if (terminal !== 'read_timeout' && terminal !== 'store_closed') return instance.terminate();
+      // A validated opening held in admission is idle and trusted. Its deadline
+      // or cancellation keeps the public refusal while disposing gracefully.
+      // Executing cancellation and protocol/identity failures still terminate.
+      const heldOpening = lifecycle.pending?.open && lifecycle.pending.heldOpeningResult;
+      const admissionStop = heldOpening && (terminal === 'read_in_progress' || terminal === 'read_cancelled');
+      if (terminal !== 'read_timeout' && terminal !== 'store_closed' && !admissionStop) return instance.terminate();
       const until = Number(now()) / 1e6 + DISPOSAL_GRACE_MS;
       return new Promise((resolve, reject) => {
         let timer, safety, live = true, realUntil = Infinity;
@@ -320,7 +322,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
           const result = retained.result;
           if (typeof result.ok !== 'boolean' || result.ok && !Object.hasOwn(result, 'value') || !result.ok && !codes.has(result.error?.code)) fail('reader_failed'); }
           catch { shutdown('reader_failed',undefined,{kind:'protocol'}); return; } }
-        gate(slot, resource, message.fileIdentity, messageAccepted.bind(null, instance, retained), true); return;
+        gate(slot, resource, message.fileIdentity, messageAccepted.bind(null, instance, retained), true, slot.open && retained.kind !== 'identity'); return;
       }
       if (message.kind === 'identity') {
         try {
@@ -508,11 +510,12 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       if (diagnostic) registryHolds.set(result, diagnostic);
       return lifecycle.finish(slot, result);
     }
-    function gate(slot, record, identity, run, binding = false) {
+    function gate(slot, record, identity, run, binding = false, validatedOpening = false) {
       let waited = false;
       registry.admit(record, identity, { cutoff: Number(mono(slot.operation.operationCutoffMonoNs)) / 1e6,
-        now: () => Number(now()) / 1e6, setTimer, clearTimer, waiting: () => { waited = true; clearTimer(slot.deadline); } }, () => {
+        now: () => Number(now()) / 1e6, setTimer, clearTimer, waiting: () => { waited = true; slot.heldOpeningResult = validatedOpening; clearTimer(slot.deadline); } }, () => {
         if (closed || owner.owner.closed || lifecycle.pending !== slot) return;
+        slot.heldOpeningResult = false;
         if (binding && !waited) { run(); return; }
         const remaining = mono(slot.operation.operationCutoffMonoNs) - now();
         clearTimer(slot.deadline);
