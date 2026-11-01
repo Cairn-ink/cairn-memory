@@ -403,7 +403,7 @@ test('L06/L33/L24 verdict exception rejects every unrelated byte, value and inve
     ['added key', after.replace('}\n', ',"extra":true}\n')],
     ['deleted key', after.replace('"status":"qualified",', '')],
     ['missing fingerprint', after.replace('"fingerprint":"' + newFingerprint + '",', '')],
-    ['whitespace', after.replace('{', '{ ')],
+    ['whitespace', '{ ' + after.slice(1)],
     ['key escape', after.replace('"status"', '"sta\\u0074us"')],
     ['unsupported current policy', after.replace(expectedPolicy, 'c'.repeat(64))],
     ['unsupported current fingerprint', after.replace(newFingerprint, 'c'.repeat(64))],
