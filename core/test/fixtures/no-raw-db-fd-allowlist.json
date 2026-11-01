@@ -1661,7 +1661,7 @@
   },
   {
     "path": "core/context-read-sidecar.mjs",
-    "source": "import { openSync, readSync, closeSync, constants } from 'node:fs'",
+    "source": "import { openSync, readSync, closeSync, fstatSync, constants } from 'node:fs'",
     "reason": "Fixed header only in a SQLite-free child; the raw descriptor never shares a process with a SQLite connection."
   },
   {

@@ -160,7 +160,9 @@ test('private protocol sub-kind: '+kind,async t=>{
 test('private classification fields sanitize unknown values and stay off public exports',async()=>{
   const reason=attribution.maintenanceFailureRecord('engine',{engineCode:'index_unavailable',reason:'not allowed'});
   const protocol=attribution.maintenanceFailureRecord('protocol',{protocolKind:'not allowed'});
-  assert.equal(reason.reason,'other');assert.equal(Object.hasOwn(protocol,'protocolKind'),false);
+  assert.equal(reason.reason,'other');assert.equal(protocol.protocolKind,'other');
+  assert.equal(attribution.readMaintenanceFailure({kind:'protocol',protocolKind:'not allowed'}).protocolKind,'other');
+  assert.equal(attribution.maintenanceFailureRecord('protocol').protocolKind,'other');
   assert.equal(attribution.readMaintenanceFailure({kind:'engine',engineCode:'index_unavailable',reason:{}}).reason,'other');
   const api=await import('../index.mjs');for(const name of ['maintenanceIndexFailure','maintenanceFailureReason','contextReadDeleteJournal'])assert.equal(api[name],undefined);
 });

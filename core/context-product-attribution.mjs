@@ -183,7 +183,7 @@ export function maintenanceFailureRecord(kind,{engineCode,errorName,exitCode,ord
     ...(Number.isInteger(step)&&step>=0&&step<maintenanceKinds.length?{step}:{}),
     ...(kind==='engine'?{engineCode:code}:{}),
     ...(kind==='engine'&&code==='index_unavailable'||kind==='exception'&&reason!==undefined?{reason:maintenanceFailureReason(reason)}:{}),
-    ...(kind==='protocol'&&protocolKinds.includes(protocol)?{protocolKind:protocol}:{}),
+    ...(kind==='protocol'?{protocolKind:protocolKinds.includes(protocol)?protocol:'other'}:{}),
     ...(kind==='worker_error'||kind==='spawn'||kind==='dispatch'||kind==='call_error'?{errorName:typeof errorName==='string'&&failureName.test(errorName)?errorName:'other'}:{}),
     ...(kind==='worker_exit'&&Number.isSafeInteger(exitCode)?{exitCode}:{}),
     ...(Number.isSafeInteger(ordinal)&&ordinal>0?{ordinal}:{}),

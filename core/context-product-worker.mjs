@@ -27,6 +27,7 @@ const resourceOwner = Object.freeze({
 });
 const attribution=workerData.maintenance ? createMaintenanceAttribution({buffer:workerData.maintenanceMarker}) : undefined;
 const observer = nativeObserver(workerData.frame);
+observer.journalRemainingMs = () => Number(mono(currentOperation.operationCutoffMonoNs) - process.hrtime.bigint()) / 1e6;
 if (phase) observer.openDiagnostic = phase;
 const sqlite = workerData.wal ? createProductSqlitePolicy({ observer }) : null;
 const startSqlite = op => sqlite?.start(Number(mono(op.operationCutoffMonoNs)) / 1e6);

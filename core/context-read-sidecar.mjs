@@ -49,26 +49,33 @@ function walHeader(path, observer) {
 // A recovery refusal does not distinguish DELETE from WAL. Read the fixed
 // header in a child with no SQLite connection, so its raw descriptor close
 // cannot release this process's SQLite locks.
-export function contextReadDeleteJournal(path) {
+export function contextReadDeleteJournal(path, observer) {
   try {
     const before = lstatSync(path, { bigint: true }), directory = lstatSync(dirname(path), { bigint: true });
+    const timeout = Math.min(5000, Math.floor(observer?.journalRemainingMs?.() ?? 5000));
+    if (!(timeout >= 1)) fail('read_timeout');
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
-      import { openSync, readSync, closeSync, constants } from 'node:fs';
+      import { openSync, readSync, closeSync, fstatSync, constants } from 'node:fs';
       let fd;
       try {
         fd = openSync(process.argv[1], constants.O_RDONLY | constants.O_NOFOLLOW);
+        const opened = fstatSync(fd, { bigint: true });
         const header = Buffer.alloc(20), length = readSync(fd, header, 0, 20, 0);
-        process.stdout.write(length === 20 && header.subarray(0,16).equals(Buffer.from('SQLite format 3\\0')) &&
-          header[18] === 1 && header[19] === 1 ? 'delete' : 'other');
+        process.stdout.write(JSON.stringify({ device: String(opened.dev), inode: String(opened.ino),
+          mode: length === 20 && header.subarray(0,16).equals(Buffer.from('SQLite format 3\\0')) &&
+          header[18] === 1 && header[19] === 1 ? 'delete' : 'other' }));
       } finally { if (fd !== undefined) closeSync(fd); }
-    `, path], { encoding: 'utf8', env: {}, timeout: 5000, maxBuffer: 1024 });
+    `, path], { encoding: 'utf8', env: {}, timeout, maxBuffer: 1024 });
+    if (child.error?.code === 'ETIMEDOUT') fail('read_timeout');
+    if (child.error || child.status !== 0) return false;
+    const opened = JSON.parse(child.stdout);
     const after = lstatSync(path, { bigint: true }), currentDirectory = lstatSync(dirname(path), { bigint: true });
     // A writer may commit while the child starts. Content timestamps can
     // change; replacement or protection changes must retain the refusal.
-    return !child.error && child.status === 0 && child.stdout === 'delete' &&
+    return opened.mode === 'delete' && opened.device === String(before.dev) && opened.inode === String(before.ino) &&
       ['dev','ino','mode','uid','gid','nlink'].every(key => before[key] === after[key]) &&
       ['dev','ino','mode','uid','gid'].every(key => directory[key] === currentDirectory[key]);
-  } catch { return false; }
+  } catch (error) { if (error?.code === 'read_timeout') throw error; return false; }
 }
 
 function auxiliaries(path, readOnly, observer) {
@@ -87,7 +94,10 @@ function auxiliaries(path, readOnly, observer) {
     if (main.nlink !== 1 || journal.nlink !== 1 || !directory?.isDirectory() || directory.isSymbolicLink() ||
         process.platform !== 'win32' && ((directory.mode & 0o777) !== 0o700 ||
           uid === undefined || [main, journal, directory].some(entry => entry.uid !== uid))) unavailable('auxiliary_file');
-    if (!contextReadDeleteJournal(path)) unavailable('auxiliary_file');
+    if (!contextReadDeleteJournal(path, observer)) unavailable('auxiliary_file');
+    const current = protectedFile(path + '-journal', false);
+    if (current && !['dev','ino','mode','uid','nlink'].every(key => current[key] === journal[key])) unavailable('auxiliary_file');
+    for (const suffix of ['-wal','-shm']) if (protectedFile(path + suffix, false)) unavailable('auxiliary_file');
     fail('storage_busy');
   }
   // A checkpointed WAL database can have no auxiliary files. Inspect its

@@ -507,6 +507,13 @@ refresh and status with retryable `storage_busy`; the engine neither reads
 through it nor retries. A genuinely hot journal also remains busy until a
 read-write writer recovers it, so hosts must bound retries. WAL/SHM companions,
 WAL headers and unsafe files retain their existing non-retryable refusals.
+The isolated header child uses the remaining operation cutoff, capped at 5,000 ms;
+an expired cutoff or child timeout refuses with `read_timeout`, without retrying.
+Its verdict is bound to the opened inode and rechecked main/directory metadata;
+journal identity/protection and WAL/SHM absence are checked again afterward.
+An in-place header change after that read remains a residual race: once the
+journal disappears, the next retry reaches the existing WAL-header probe and
+refuses non-retryably. The guard does not loop or admit a read through a journal.
 Unsafe/unusable WAL arrangements report `index_unavailable`;
 there is no writable-canonical fallback.
 
@@ -729,7 +736,7 @@ stage even if disposal later fails. Log optional `step` for captured failures,
 `memory_store`, `replaced`, `stale_index`, `rebuilding` or `timeout`; other or
 unavailable values become `other`. Protocol records carry private `protocolKind`:
 `frame_conflict`, `identity_shape`, `result_bounds`, `result_clone`, `result_shape`
-or `open_identity`; an unknown sub-kind is omitted. These fields never enter
+or `open_identity`; an unknown or unavailable sub-kind becomes `other`. These fields never enter
 public DTOs or codes.
 An exception mapped to `index_unavailable` keeps its original private exception
 cause and captured step alongside the closed reason.

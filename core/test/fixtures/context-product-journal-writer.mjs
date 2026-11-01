@@ -30,4 +30,5 @@ if(workerData.kind==='canonical') {
   try {storage.refresh(p,accessDigest({ownerId:workerData.namespace.ownerId,namespaces:{readSet}}),{maxItems:1,maxMs:5000});}
   finally {storage.close();facade.close();}
 }
+if(state.length>1){Atomics.store(state,1,1);Atomics.notify(state,1);}
 parentPort.postMessage({committed:true});parentPort.close();
