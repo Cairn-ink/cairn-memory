@@ -4,13 +4,22 @@ export const comparisonWorkFields = Object.freeze(['comparisonAttempts','compari
 export const maintenanceWorkFields = Object.freeze(['transformed','canonicalRows','metadataBytes','textRows','textBytes','supportLookups','supportBytes','verifiedRows','reused','replaced','removed','copied','tokenized','retargets','verificationRestarts','verificationKept',...comparisonWorkFields]);
 // B4 has not activated consumption. No public option or environment enables it.
 export const memoryComparisonQualified = () => false;
+export const verificationBatchingQualified = () => false;
+// Shared shortage and oversized-kind backoff survives replacement; calibration is call-local.
+const verificationControls=new WeakMap();
+export function verificationBatchControl(owner) {
+  if(!verificationControls.has(owner))verificationControls.set(owner,new SharedArrayBuffer(8));
+  return verificationControls.get(owner);
+}
+export const commitKinds=Object.freeze(['verification','comparison','publication','setup','gc']);
+export const commitFields=Object.freeze(commitKinds.flatMap(kind=>[kind+'CommitAttempts',kind+'Commits',kind+'Rollbacks']));
 const comparisons=new WeakMap();
 export const maintenanceComparison = value => comparisons.get(value);
 export const attachMaintenanceComparison = (value,comparison) => {if(comparison)comparisons.set(value,comparison);};
 export const attributionFields = Object.freeze(['unitCount','scanUnits','itemUnits','verificationUnits','publicationUnits','gcUnits',
   'scanRows','itemRows','verificationRows','publicationRows','gcRows','lastUnitKind','lastUnitMs','longestUnitKind','longestUnitMs',
   'beginWaitMaxMs','beginWaitSumMs','commitMaxMs','commitSumMs','canonicalReadWaitMaxMs','saveSigningMs','gcSliceMs','vacuumMs',
-  'resultPreparationMs','serializationMs','serializationComplete','deliveryMs','returnMs']);
+  'resultPreparationMs','serializationMs','serializationComplete','deliveryMs','returnMs',...commitFields]);
 export const saturate = n => Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, n));
 export const add = (a,b) => saturate(a+b);
 const slots=Object.freeze(Object.fromEntries(attributionFields.map((name,i)=>[name,i])));

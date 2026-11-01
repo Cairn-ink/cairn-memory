@@ -126,7 +126,7 @@ try {
   let comparison=null;
   if(workerData.memoryComparison===true){comparison=await import('./context-product-comparison.mjs');within(opening);}
   index = openProductIndex({path:workerData.path,facade,authorize,ownerCoverage:workerData.ownerCoverage,observer,sqlite,sidecarJournalMode:workerData.sidecarJournalMode,maintenance:workerData.maintenance,counter:host.counter,semantic,operation:()=>currentOperation,attribution,
-    storageOptions:{memoryComparison:comparison}});
+    storageOptions:{memoryComparison:comparison,verificationBatching:workerData.verificationBatching===true,verificationBatchState:workerData.verificationBatchState}});
   phase?.mark('indexOpened');
   within(opening);
   // The opening telemetry remains unsealed until connection disposal.

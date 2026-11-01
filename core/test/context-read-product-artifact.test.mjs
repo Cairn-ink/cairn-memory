@@ -41,8 +41,9 @@ test('P2-02/13 manifest-only installation executes exported product Worker and c
   // Hosted P2e closure, shared maintenance admission, private open timing and attribution, content safety and retained receipt lineage.
   // S2h-1 storage and the gated B3 comparator stay behind the SQLite Worker boundary.
   // Keep the exact closure pin and independently verify the installed edges.
-  assert.equal(expected.length, 111);
+  assert.equal(expected.length, 112);
   assert.ok(expected.includes('core/context-product-comparison.mjs'));
+  assert.ok(expected.includes('core/context-product-verification-batch.mjs'));
   for (const file of ['core/content-safety-layout.mjs','core/content-safety-schema.mjs',
     'core/content-safety-migration.mjs','core/content-suppression-storage.mjs']) assert.ok(expected.includes(file),file);
   for (const file of expected) assert.ok(manifest.includes(file), 'missing artifact file: ' + file);
