@@ -27,8 +27,12 @@ result cannot write. Timeouts, abandonment and idempotent commits remain separat
 `finishAdmission({namespace,client,eventId,payloadDigest,token,items})` admits
 zero to five trusted items. Each item has content, kind, confidence, one
 to four source receipts and optional [conflictHints](conflicts.md).
-Content is normalized/redacted, at most 600 UTF-16 units;
-confidence is a finite number in 0..1. Core assigns inferred origin and identity.
+Each content field is at most 600 UTF-16 code units after NFKC, secret redaction,
+whitespace collapse and trim; receipt excerpts use the same normalization before
+code-point-safe truncation to 800 units. Segmenters can use the exported
+`normalizedTextLength` and `normalizeBoundedText`, per field; concatenated lengths
+are not additive. See [bounded text lengths](capture.md#bounded-text-lengths).
+Confidence is a finite number in 0..1. Core assigns inferred origin and identity.
 Namespace, assigned memory IDs and arbitrary origin cannot come from items.
 Conflict hint targets are trusted orchestration references, not extractor output.
 

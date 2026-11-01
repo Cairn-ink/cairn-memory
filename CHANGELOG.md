@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — semantic provider key channel
+
+- Admit only `CAIRN_CONTEXT_SEMANTIC_OPENAI_API_KEY`, when non-empty, to the
+  semantic service Worker at each start. There is no generic-key fallback;
+  ordinary product Workers retain an empty environment. The key stays outside
+  engine-owned outputs and is readable by the trusted Worker-local host and its
+  dependencies.
+
+## Unreleased — Cairn Memory discovery metadata
+
+- Add focused npm search keywords and point the package homepage to Cairn.ink.
+- Clarify the relationship between Cairn Memory and Cairn.ink in the package and
+  repository README entry points. These metadata and documentation changes are
+  not in the published installer; installer version and behavior are unchanged.
+
 ## 0.6.3 — Unreleased: Codex 0.164.0–0.166.0 format requalification
 
 - Requalify Codex 0.163.0–0.166.0 using offline native schemas and rollouts.
@@ -19,7 +34,7 @@
   Dynamic-tool replacement and security-risk rows were not produced; the
   documented parser exclusions and fail-closed handling remain.
 
-## 0.6.2 — Unreleased: hosted Codex inspection TMPDIR fallback
+## 0.6.2 — 2026-10-28: hosted Codex inspection TMPDIR fallback
 
 - Fix the 0.6.1 known limitation: cloud-mode Codex setup and `status` no longer
   stop with `codex_tmpdir` when `TMPDIR` is inside `HOME` and a usable `/tmp`
@@ -29,8 +44,11 @@
   cause is now `codex_managed` after selecting the usable fallback.
 - The embedded engine and hosted runtime are unchanged from 0.6.1.
 - Existing 0.6.1 installations need no setup rerun for this fix.
-  After publication, `npx @cairn-ink/memory` runs the new installer; rerun
+  `npx @cairn-ink/memory` now runs 0.6.2; rerun
   `npx @cairn-ink/memory setup` if the earlier setup was blocked.
+- The npm package was built from `34182d51`. It ships the 0.6.1 engine bundle
+  (built from `be2bc543`), so engine changes merged after that commit are not
+  in 0.6.2.
 
 ## 0.6.1 — 2026-10-28: installer fixes and engine update
 
@@ -2266,6 +2284,8 @@ reliability.
 All notable changes follow semantic versioning.
 
 ## Unreleased
+
+- Export `normalizeBoundedText` and `normalizedTextLength` for bounded engine text, preserving existing validation and truncation behavior.
 
 - Prepare an installed ordered-capture lifecycle gate with fresh MCP consumers,
   source-bound history, scoped correction/forgetting, isolation and explicit

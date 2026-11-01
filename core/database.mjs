@@ -1,3 +1,7 @@
+import { contentSafetyInventory, installContentSafetyInside } from './content-safety-migration.mjs';
+import { SAFETY_SCHEMA_VERSIONS, resolveContentLayout, assertContentFeatures } from './content-safety-layout.mjs';
+import { attestContentSafety, checkInstalledContentSafety } from './content-safety-schema.mjs';
+import { validateContextProductLayout } from './context-product-schema.mjs';
 import { installCardCurrentDependencies, validateCardCurrentDependencies, assertNoCardCurrentDependencies } from './card-current-schema.mjs';
 import { installRoleProfiles, validateRoleProfiles, assertNoRoleProfiles } from './role-profile-schema.mjs';
 import { installAssets, validateAssets, assertNoAssets } from './asset-schema.mjs';
@@ -38,7 +42,7 @@ export const APPLICATION_ID = 0x43414952;
 const VERSION = CONFIRMATION_SCHEMA_VERSION;
 // Existing layouts accepted without an upgrade by the ordinary opener.
 export const READ_SCHEMA_VERSIONS = Object.freeze([VERSION, 20, PRIVATE_CARD_SCHEMA_VERSION,
-  PRIVATE_EVIDENCE_SCHEMA_VERSION, PRIVATE_ORGANIZATION_SCHEMA_VERSION, LOCAL_AUTHORITY_SCHEMA_VERSION, 30, 31, 32, 33]);
+  PRIVATE_EVIDENCE_SCHEMA_VERSION, PRIVATE_ORGANIZATION_SCHEMA_VERSION, LOCAL_AUTHORITY_SCHEMA_VERSION, 30, 31, 32, 33, ...SAFETY_SCHEMA_VERSIONS]);
 // Context reads also validate existing pre-control Raw stores. The retained
 // topic reader's narrower supported-version list remains unchanged.
 export const CONTEXT_READ_SCHEMA_VERSIONS = Object.freeze([...new Set([...READ_SCHEMA_VERSIONS,
@@ -294,7 +298,7 @@ function materializedRead(value, seen = new Set()) {
     materializedRead(descriptor.value, seen);
   }
 }
-export function readTransaction(db, work) {
+export function readTransaction(db, work, acquisition) {
   if (discardedConnections.has(db) || !db.isOpen) fail('store_closed');
   if (activeReads.has(db) || db.isTransaction || typeof work !== 'function' ||
       types.isAsyncFunction(work) || types.isGeneratorFunction(work)) fail('storage_error');
@@ -306,6 +310,8 @@ export function readTransaction(db, work) {
     attempted = true;
     db.exec('BEGIN');
     began = true;
+    // Private maintenance hook; request readers leave it unset.
+    acquisition?.readReady();
     value = work();
     try { materializedRead(value); } catch (failure) { unsafeResult = true; throw failure; }
     if (!db.isTransaction) fail('storage_error');
@@ -339,6 +345,7 @@ export function transaction(db, work, check) {
   check?.();
   db.exec("BEGIN IMMEDIATE");
   try {
+    checkInstalledContentSafety(db);
     const result = work();
     check?.();
     db.exec("COMMIT");
@@ -352,12 +359,19 @@ export function transaction(db, work, check) {
   }
 }
 
-export function openDatabase(path, { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false, localControls = false, methodPackages = false, assets = false, roleProfiles = false, currentDependencies = false, existingStore, storeFence } = {}) {
+/** contentSafety:'s2h-v1' creates only a new file, at its base's safety cell.
+ * Default creation and all existing-store maintenance paths stay unchanged. */
+export function openDatabase(path, { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false, localControls = false, methodPackages = false, assets = false, roleProfiles = false, currentDependencies = false, existingStore, storeFence, contentSafety } = {}) {
   if ([rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls].some(value => typeof value !== 'boolean')) fail('invalid_input');
   rawDeletion ||= rawSources || localControls;
   rawLineage ||= rawDeletion;
   rawCapture ||= rawLineage;
   rawConversations ||= rawCapture;
+  if (contentSafety !== undefined) {
+    if (contentSafety !== 's2h-v1') fail('invalid_input');
+    if (existingStore !== undefined || storeFence !== undefined || path === ':memory:' ||
+        !currentDependencies && (rawConversations || methodPackages || assets || roleProfiles)) fail('unsupported_database');
+  }
   if (storeFence !== undefined && existingStore !== undefined) fail('invalid_input');
   const fence = storeFence === undefined ? undefined : storeFenceOption(storeFence);
   if (existingStore !== undefined) {
@@ -367,10 +381,12 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
       location.check();
       db.exec('PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;');
       validateExistingStore(db, option);
-      if ((assets || roleProfiles || currentDependencies) && db.prepare('PRAGMA user_version').get().user_version < 31) fail('unsupported_database');
-      if ((roleProfiles || currentDependencies) && db.prepare('PRAGMA user_version').get().user_version < 32) fail('unsupported_database');
-      if (methodPackages && db.prepare('PRAGMA user_version').get().user_version < 30) fail('unsupported_database');
-      if (currentDependencies && db.prepare('PRAGMA user_version').get().user_version !== 33) fail('unsupported_database');
+      const layout = resolveContentLayout(db.prepare('PRAGMA user_version').get().user_version);
+      assertContentFeatures(layout, { privateCards, rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls, methodPackages, assets, roleProfiles, currentDependencies });
+      if ((assets || roleProfiles || currentDependencies) && layout.base < 31) fail('unsupported_database');
+      if ((roleProfiles || currentDependencies) && layout.base < 32) fail('unsupported_database');
+      if (methodPackages && layout.base < 30) fail('unsupported_database');
+      if (currentDependencies && layout.base !== 33) fail('unsupported_database');
       location.check();
       return db;
     } catch (error) {
@@ -389,10 +405,11 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
       // Existing files need no fd. A missing file is exclusively created in a
       // child so even a concurrent Worker opening the new inode is lock-safe.
       lstatSync(path);
+      if (contentSafety !== undefined) fail('unsupported_database');
     } catch (error) {
       if (error.code !== 'ENOENT') throw error;
       try { createExclusiveSqliteFile(path); }
-      catch (creation) { if (creation.code !== 'EEXIST') throw creation; }
+      catch (creation) { if (creation.code !== 'EEXIST') throw creation; if (contentSafety !== undefined) fail('unsupported_database'); }
     }
     const stat = lstatSync(path);
     if (!stat.isFile() || (process.platform !== "win32" && (stat.mode & 0o077))) {
@@ -409,6 +426,16 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
         // Before initialize() and all migration/schema or application writes.
         pin.check();
         assertStoreIdentity(db, fence);
+      }
+      if (contentSafety !== undefined && (db.prepare('PRAGMA application_id').get().application_id !== 0 ||
+          db.prepare('PRAGMA user_version').get().user_version !== 0 ||
+          db.prepare('SELECT count(*) n FROM sqlite_schema').get().n !== 0)) fail('unsupported_database');
+      const layout = attestContentSafety(db);
+      if (layout.suppressionRevision) {
+        if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID) fail('unsupported_database');
+        assertContentFeatures(layout, { privateCards, rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls, methodPackages, assets, roleProfiles, currentDependencies });
+        validateContextProductLayout(db, layout);
+        return;
       }
       function initialize() {
       const appId = db.prepare("PRAGMA application_id").get().application_id;
@@ -694,6 +721,10 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
         installCardCurrentDependencies(db);
         db.exec('PRAGMA user_version=33');
         validateCardCurrentDependencies(db);
+      }
+      if (contentSafety !== undefined) {
+        const base = db.prepare('PRAGMA user_version').get().user_version;
+        installContentSafetyInside(db, base, contentSafetyInventory(db));
       }
     });
     return db;

@@ -32,9 +32,9 @@ for (const client of ['claude-code','codex']) {
     assert.ok(current.indexRevision > placement.indexRevision);
     assert.equal(current.items.some(item => item.type === 'topic' && item.topic.title !== null),false);
     assert.equal(current.items.some(item => item.type === 'unfiled'),false);
-    const retained = ok(f.call('getCard',{ namespace: ns,cardId: card.id })).card;
-    const history = ok(f.call('fetchEvidence',{ namespace: ns,intent: 'history',refs: [{ ...ref,revision: retained.revision }] }));
-    assert.equal(history.items[0].body,retained.body); assert.equal(history.items[0].provenance.support,'unavailable');
+    assert.equal(ok(f.call('getCard',{ namespace: ns,cardId: card.id })).card,null);
+    const retained = f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(card.id);
+    denied(f.call('fetchEvidence',{ namespace: ns,intent: 'history',refs: [{ ...ref,revision: retained.revision }] }),'evidence_unavailable');
   });
 
   test(`P3c-03/07 ${client}: core-issued source identity and authored Card reopen in a new process`, { timeout: 15000 }, async t => {

@@ -21,7 +21,7 @@ export function roleEvidence(storage,config) {
   function item(ref,readSet,rank,intent='current') {
     const canonical=evidence.itemsInside(ref.namespace,[ref],intent,readSet)[0],{type,state,origin}=canonical;
     const sources=type==='memory'&&canonical.provenance.sourceAccess==='available'?
-      db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).map((row,index)=>{
+      db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).filter(row=>canonical.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id)).map((row,index)=>{
         const {role,excerpt}=validateSourceReceipt(ref.memoryId,row,source=>createHash('sha256').update(JSON.stringify(source)).digest('hex'));
         return {index,role,excerpt,ref:canonical.provenance.sources[index]};
       }):[];

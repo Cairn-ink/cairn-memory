@@ -1,3 +1,4 @@
+import { writeContentSuppressionInside } from './content-suppression-storage.mjs';
 import { createHmac } from 'node:crypto';
 import { fail } from './validation.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
@@ -5,8 +6,8 @@ import { createRawCardInvalidation } from './card-raw-sources.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId || ''];
 /** Schema-presence driven: current option-off writers enforce retained fences. */
-export function createRawLineageStorage(db) {
-  const roots = createRawSourceRoots(db);
+export function createRawLineageStorage(db, { readMemo } = {}) {
+  const roots = createRawSourceRoots(db, { readMemo });
   const rawCards = createRawCardInvalidation(db);
   let available;
   const enabled = () => available === true || (available = Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_source_maps'").get()));
@@ -45,25 +46,28 @@ export function createRawLineageStorage(db) {
     for (const anchor of values) if (db.prepare(`SELECT 1 FROM raw_source_exclusions WHERE conversation_id=? AND message_id=?
       AND start<? AND end>?`).get(anchor.conversationId, anchor.messageId, anchor.end, anchor.start)) fail('source_excluded');
   }
-  function assertReceipts(ns, receipts) {
+  function assertReceipts(ns, receipts, readExisting = false) {
     if (!enabled()) return;
     for (const receipt of receipts) {
-      roots.assertSession(ns, receipt.client, receipt.sessionId);
+      roots.assertSession(ns, receipt.client, receipt.sessionId, readExisting);
       assertAnchors(anchors(ns, receipt));
     }
   }
-  // Only qualified automatic dedup calls this with inspected original anchor rows.
+  // Canonical readers and qualified automatic dedup inspect original anchor rows.
   // The admission transaction owns all reads; no Raw body is opened or rewritten.
-  function assertStoredReceipts(ns, receipts) {
+  function assertStoredReceipts(ns, receipts, { readExisting = false } = {}) {
     if (!db.isTransaction) fail('raw_transaction_required');
     const required = ['raw_conversations','raw_messages','raw_source_maps','raw_receipt_lineage',
       'raw_receipt_origins','raw_source_exclusions','raw_deletion_actions','raw_session_fences',
       'raw_job_sources','episode_identity','session_episodes','episode_messages','episode_sources',
       'episode_memory_links','episode_keep_actions'];
-    const tables = new Set(db.prepare(`SELECT name FROM sqlite_master WHERE type='table'
+    const tables = readExisting && readMemo?.get('lineage-tables') || new Set(db.prepare(`SELECT name FROM sqlite_master WHERE type='table'
       AND name IN (${required.map(() => '?').join(',')})`).all(...required).map(row => row.name));
+    if (readExisting) readMemo?.set('lineage-tables', tables);
     if (!['raw_conversations','raw_source_maps','raw_receipt_lineage','raw_deletion_actions'].some(name => tables.has(name))) return;
-    if (required.some(name => !tables.has(name))) fail('raw_lineage_unavailable');
+    const deletion = tables.has('raw_deletion_actions') || tables.has('raw_job_sources');
+    const inspected = readExisting && !deletion ? required.filter(name => !['raw_deletion_actions','raw_job_sources'].includes(name)) : required;
+    if (inspected.some(name => !tables.has(name))) fail('raw_lineage_unavailable');
     for (const receipt of receipts) {
       const stored = db.prepare(`SELECT l.conversation_id AS conversationId,l.message_id AS messageId,l.start,l.end,l.precision,
         c.owner_id,c.scope,c.project_id,c.client,c.session_key,m.role,m.total_units
@@ -77,14 +81,32 @@ export function createRawLineageStorage(db) {
             !Number.isSafeInteger(anchor.end) || anchor.start < 0 || anchor.end <= anchor.start || anchor.end > anchor.total_units ||
             !['exact','whole-message'].includes(anchor.precision) ||
             anchor.precision === 'whole-message' && (anchor.start !== 0 || anchor.end !== anchor.total_units)) fail('raw_lineage_unavailable');
-        roots.assertSession(ns, anchor.client, anchor.session_key);
+        roots.assertSession(ns, anchor.client, anchor.session_key, readExisting);
       }
       assertAnchors(stored);
-      const authority = roots.receipt(ns, receipt);
+      // A proven empty source session and absent keep links are reusable root facts.
+      if (readExisting && readMemo && !stored.length) {
+        const key = JSON.stringify(['memory-links', receipt.memory_id]);
+        if (!readMemo.has(key)) readMemo.set(key, Boolean(db.prepare('SELECT 1 FROM episode_memory_links WHERE memory_id=? LIMIT 1').get(receipt.memory_id)));
+        if (!readMemo.get(key) && roots.emptySession(ns, receipt) &&
+            db.prepare('SELECT kind FROM raw_receipt_origins WHERE receipt_id=?').get(receipt.id)?.kind !== 'derived') {
+          roots.assertSession(ns, receipt.client, receipt.session_id, true); continue;
+        }
+      }
+      const authority = roots.receipt(ns, receipt, readExisting);
+      // Pre-Raw receipts retain their ordinary read contract; this does not classify them.
+      if (readExisting && authority.unknown && !authority.legacyKeep && !stored.length &&
+          !db.prepare("SELECT 1 FROM raw_receipt_origins WHERE receipt_id=? AND kind='derived'").get(receipt.id) &&
+          !db.prepare(`SELECT 1 FROM episode_memory_links l JOIN json_each(l.receipt_ids) r
+            WHERE l.memory_id=? AND r.value=? LIMIT 1`).get(receipt.memory_id, receipt.id)) {
+        assertReceipts(ns, [{ client: receipt.client, sessionId: receipt.session_id,
+          eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt }], true);
+        continue;
+      }
       if (authority.unknown || authority.legacyKeep && authority.roots.length !== 1) fail('raw_lineage_unavailable');
-      if (authority.independent) roots.assertSession(ns, receipt.client, receipt.session_id);
+      if (authority.independent) roots.assertSession(ns, receipt.client, receipt.session_id, readExisting);
       for (const root of authority.roots) {
-        roots.assertSession(ns, root.client, root.sessionKey);
+        roots.assertSession(ns, root.client, root.sessionKey, readExisting);
         const episodeId = root.episodeId ?? root.episode_id;
         if (episodeId) {
           const episode = db.prepare(`SELECT deleted FROM session_episodes WHERE owner_id=? AND scope=? AND project_id=?
@@ -112,7 +134,7 @@ export function createRawLineageStorage(db) {
         ELSE raw_receipt_origins.kind END`).run(receiptId, kind);
     return changed > 0 || previous === undefined || previous !== kind && kind === 'derived';
   }
-  function excludeMemory(ns, memoryId) {
+  function excludeMemory(ns, memoryId, suppression = { reason: 'purge', actionId: 'source-exclusion-'+memoryId }) {
     if (!enabled()) return;
     if (!db.isTransaction) fail('raw_transaction_required');
     // An opted-in schema may serve ordinary-only namespaces too. There is no
@@ -143,7 +165,11 @@ export function createRawLineageStorage(db) {
       const generation = db.prepare('SELECT generation FROM raw_exclusion_clocks WHERE owner_id=? AND scope=? AND project_id=?')
         .get(...boundary(ns)).generation;
       const insert = db.prepare('INSERT OR IGNORE INTO raw_source_exclusions VALUES(?,?,?,?,?)');
-      for (const anchor of values) insert.run(anchor.conversationId, anchor.messageId, anchor.start, anchor.end, generation);
+      for (const anchor of values) {
+        writeContentSuppressionInside(db, { namespace: ns, kind: 'raw', key: anchor.conversationId, matchMode: 'span',
+          messageId: anchor.messageId, start: anchor.start, end: anchor.end, ...suppression });
+        insert.run(anchor.conversationId, anchor.messageId, anchor.start, anchor.end, generation);
+      }
     });
   }
   function filter(ns, receipts) {

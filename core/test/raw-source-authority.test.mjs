@@ -26,8 +26,8 @@ for (const client of ['claude-code','codex']) {
     const memory = f.db.prepare('SELECT id,revision FROM memories WHERE deleted=0').get();
     ok(old.forget({ namespace: ns,memoryId: memory.id,expectedRevision: memory.revision }));
     assert.equal(ok(f.call('getCard',{ namespace: ns,cardId: pending.id })).card,null);
-    const retained = ok(f.call('getCard',{ namespace: ns,cardId: artifact.id })).card;
-    assert.equal(retained.revision,confirmed.revision+1); assert.equal(retained.support.status,'unavailable');
+    assert.equal(ok(f.call('getCard',{ namespace: ns,cardId: artifact.id })).card,null);
+    assert.equal(f.db.prepare('SELECT revision FROM private_cards WHERE id=?').get(artifact.id).revision,confirmed.revision+1);
     const live = ok(f.call('getCard',{ namespace: ns,cardId: other.id })).card;
     assert.equal(live.revision,independent.revision); assert.equal(live.support.status,'eligible');
     assert.equal(f.db.prepare('SELECT count(*) n FROM card_effects WHERE entity_id=?').get(artifact.id).n,1);
@@ -47,7 +47,7 @@ for (const client of ['claude-code','codex']) {
     assert.deepEqual(snapshot(f.db),before);
     f.db.exec('DROP TRIGGER fail_raw_card_effect');
     ok(f.core.forget({ namespace: ns,memoryId: memory.id,expectedRevision: memory.revision }));
-    assert.equal(ok(f.call('getCard',{ namespace: ns,cardId: card.id })).card.support.status,'unavailable');
+    assert.equal(ok(f.call('getCard',{ namespace: ns,cardId: card.id })).card,null);
   });
 
   for (const mutation of ['delete','forget','revoke','append']) test(`P3c-04 ${client}: ${mutation} during opening cannot publish stale source references`, { timeout: 15000 }, async t => {

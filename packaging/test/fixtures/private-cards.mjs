@@ -1,5 +1,6 @@
 // Test host only: import the installed archive's public core, never checkout code.
 import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
@@ -21,6 +22,7 @@ for (const name of ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'NODE_OPTIONS', 'npm_
 
 const importedCore = join(installed, 'core/index.mjs');
 const { openMemoryCore } = await import(pathToFileURL(importedCore).href);
+const { STORAGE_BUSY_TIMEOUT_MS } = await import(pathToFileURL(join(installed, 'core/database.mjs')).href);
 const namespace = { ownerId: 'synthetic-installed-private-card', scope: 'personal', projectId: null };
 const otherNamespace = { ...namespace, scope: 'project', projectId: 'synthetic-other-project' };
 const text = 'Synthetic provided note: I chose to inspect receipts before confirming a Card.';
@@ -29,6 +31,19 @@ const memoryBody = 'A separately authored private Card supported by retained Mem
 const memoryExcerpts = ['Synthetic retained Memory receipt one.', 'Synthetic retained Memory receipt two.'];
 const memoryReceipt = (eventId, excerpt) => ({ client: 'synthetic-installed', sessionId: 'memory-card', eventId,
   role: 'user', excerpt });
+function retainedCard(id) {
+  const db = new DatabaseSync(databasePath, { readOnly: true, timeout: STORAGE_BUSY_TIMEOUT_MS });
+  try {
+    assert.equal(db.prepare('PRAGMA busy_timeout').get().timeout, STORAGE_BUSY_TIMEOUT_MS);
+    const row = db.prepare('SELECT *,body_revision AS bodyRevision FROM private_cards WHERE id=?').get(id);
+    row.bindings = [...db.prepare('SELECT source_ref FROM card_bindings WHERE card_id=? ORDER BY position').all(id),
+      ...db.prepare('SELECT source_ref FROM card_memory_bindings WHERE card_id=? ORDER BY position').all(id)]
+      .map(value => ({ source: JSON.parse(value.source_ref) }));
+    const review = db.prepare('SELECT * FROM card_applicability_reviews WHERE card_id=?').get(id);
+    row.support = { applicability: review?.reviewed_revision === row.revision ? review.applicability : 'unknown' };
+    return row;
+  } finally { db.close(); }
+}
 const tokens = new WeakMap(), grants = new WeakMap();
 const canonical = value => JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item)
   ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
@@ -170,11 +185,10 @@ try {
     assert.equal(deleted.state, 'deleted');
     refused(call('getSource', { source }), 'source_unavailable');
     assert.equal(ok(call('getCard', { cardId: dependentDraft.id })).card, null);
-    const retained = ok(call('getCard', { cardId: confirmed.id })).card;
+    assert.equal(ok(call('getCard', { cardId: confirmed.id })).card, null);
+    const retained = retainedCard(confirmed.id);
     assert.equal(retained.state, 'confirmed');
     assert.equal(retained.body, body);
-    assert.equal(retained.support.status, 'unavailable');
-    assert.ok(retained.support.reasons.includes('source_deleted'));
     const effects = ok(call('listCardEffects', { limit: 20 })).effects;
     assert.ok(effects.some(effect => effect.kind === 'evidence_invalidated' && effect.entity.id === confirmed.id));
     assert.ok(effects.some(effect => effect.kind === 'evidence_invalidated' && effect.entity.id === dependentDraft.id));
@@ -205,10 +219,10 @@ try {
       const corrected = ok(featureOff.correct({ namespace, memoryId: memory.id, expectedRevision: memory.revision,
         content: 'Changed installed Memory interpretation.', kind: 'context',
         receipt: memoryReceipt('corrected', 'Changed synthetic receipt.') })).memory;
-      const unsupported = ok(call('getCard', { cardId: memoryConfirmed.id })).card;
+      assert.equal(ok(call('getCard', { cardId: memoryConfirmed.id })).card, null);
+      const unsupported = retainedCard(memoryConfirmed.id);
       assert.equal(unsupported.revision, memoryConfirmed.revision + 1);
       assert.equal(unsupported.body, memoryBody);
-      assert.equal(unsupported.support.status, 'unavailable');
       assert.equal(unsupported.support.applicability, 'unknown');
       assert.deepEqual(unsupported.bindings.map(binding => binding.source), memorySources);
       assert.equal(ok(call('getCard', { cardId: memoryDependentDraft.id })).card, null);
@@ -217,10 +231,10 @@ try {
         effect.actionId === `memory-revision-${memory.id}-${corrected.revision}`);
       assert.deepEqual(invalidations.map(effect => effect.entity.id).sort(), [memoryConfirmed.id, memoryDependentDraft.id].sort());
       assert.equal(ok(featureOff.forget({ namespace, memoryId: corrected.id, expectedRevision: corrected.revision })).forgotten, true);
-      const forgottenSupport = ok(call('getCard', { cardId: memoryConfirmed.id })).card;
+      assert.equal(ok(call('getCard', { cardId: memoryConfirmed.id })).card, null);
+      const forgottenSupport = retainedCard(memoryConfirmed.id);
       assert.equal(forgottenSupport.revision, unsupported.revision + 1);
       assert.equal(forgottenSupport.body, memoryBody);
-      assert.equal(forgottenSupport.support.status, 'unavailable');
     } finally { featureOff.close(); }
     assert.deepEqual(ok(call('createCardDraft', memoryInput)), memoryDraft);
     evidence = { confirmedRetainedAfterSourceDelete: true, dependentDraftRemoved: true, deletedCard,
@@ -230,12 +244,12 @@ try {
     const { confirmed, memoryInput, memoryDraft, memoryConfirmed, memoryDependentDraft, memorySources } =
       JSON.parse(readFileSync(statePath, 'utf8'));
     assert.equal(ok(call('getCard', { cardId: confirmed.id })).card, null);
-    const retained = ok(call('getCard', { cardId: memoryConfirmed.id })).card;
+    assert.equal(ok(call('getCard', { cardId: memoryConfirmed.id })).card, null);
+    const retained = retainedCard(memoryConfirmed.id);
     assert.equal(retained.state, 'confirmed');
     assert.equal(retained.revision, memoryConfirmed.revision + 2);
     assert.equal(retained.body, memoryBody);
     assert.equal(retained.bodyRevision, memoryConfirmed.bodyRevision);
-    assert.equal(retained.support.status, 'unavailable');
     assert.equal(retained.support.applicability, 'unknown');
     assert.deepEqual(retained.bindings.map(binding => binding.source), memorySources);
     assert.equal(ok(call('getCard', { cardId: memoryDependentDraft.id })).card, null);

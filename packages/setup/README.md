@@ -1,7 +1,12 @@
 # @cairn-ink/memory
 
-Set up Cairn memory for Claude Code and Codex: local MCP tools or cloud
-automatic memory.
+Cairn Memory is Cairn.ink's AI memory toolkit for Claude Code and Codex, with
+local MCP tools or cloud automatic memory.
+
+[Cairn.ink](https://cairn.ink) ·
+[npm package](https://www.npmjs.com/package/@cairn-ink/memory) ·
+[GitHub repository](https://github.com/Cairn-ink/cairn-memory)
+
 Requires Node ≥22.16 and the selected CLI on PATH. The installer itself has no
 runtime dependencies.
 This README describes **installer 0.6.3**. The Claude plugin is **0.3.3**.

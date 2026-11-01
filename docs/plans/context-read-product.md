@@ -270,7 +270,7 @@ Cleanup status is exactly `{cleanupId,state,workerStopped,nativeDisposed,leasesR
 
 The existing `leasesReleased` lifecycle field is retained unchanged for any **outer host resource/drain attribution** used by the adapter, and is true when none was acquired. It does not imply or require an authority lease. Public settlement must not release that attribution, a native resource or provider capacity while its underlying work is still alive. These ownership rules survive the authority revision in full.
 
-All supervisors participate in **one process-wide resource registry**, with fixed global resource limits, not per-request isolated quotas. Register a normalized path/profile/stable-host-ownership-domain key before open, then bind it to validated canonical device/inode identity; aliases of an already identified file share the quarantine. The host ownership domain is resource attribution, not an authority realm/generation registry; it cannot be changed by minting a new request credential or request ID. A pending failed-opening/terminated-operation cleanup blocks replacement opens for that store/domain with `read_in_progress`, even through a newly created supervisor. Unconfirmed failed cleanup latches `reader_failed` for that identity until explicit operator recovery after actual resource disposal; creating another supervisor/handle is not recovery. Healthy independent request handles may coexist within the process-wide limits; the quarantine is not a permanent one-reader-per-store lock.
+All supervisors participate in **one process-wide resource registry**, with fixed global resource limits, not per-request isolated quotas. Register a normalized path/profile/stable-host-ownership-domain key before open, then bind it to validated canonical device/inode identity; aliases of an already identified file share the quarantine. The host ownership domain is resource attribution, not an authority realm/generation registry; it cannot be changed by minting a new request credential or request ID. A pending cleanup holds new opening/call admission for that store/domain across supervisors until proof or the caller's existing cutoff (§4.4.2). Unconfirmed failed cleanup latches `reader_failed` for that identity until explicit operator recovery after actual resource disposal; creating another supervisor/handle is not recovery. Healthy independent request handles may coexist within the process-wide limits; the quarantine is not a permanent one-reader-per-store lock.
 
 Service shutdown must close the supervisor even if the HTTP constructor rejected and no handle exists. Its owned termination handlers retain live supervision until cleanup completes/fails; no detached PID/log constitutes supervision. Request settlement and shutdown drain are separate promises: the former meets +50 ms, while the latter awaits native cleanup off the host thread. After a bootstrap failure following resource acquisition, release only confirmed-disposed resources. No ordinary SQLite writer is gated by this registry; monitor any native read-lock lag against existing writer busy/operation bounds.
 
@@ -287,6 +287,69 @@ Shared resources have one handle-owned record: a successful constructor promotes
 - If finalized diagnostics are evicted/expire before a measurement consumer obtains them, that operation's diagnostic coverage is **incomplete** and its measurement cell is invalid, even if the cleanup state was complete. The measurement parent independently retains its attempt ledger and must drain/ack each operation promptly; it cannot interpret expired IDs as zero native failures. Ack/expiry does not erase already exported raw measurement evidence. Safety disposal and diagnostic completeness remain separate claims.
 
 This bounds both metadata and retained telemetry under repeated fresh open/read/close traffic. Ordinary deterministic tests use a mock monotonic clock and registry counters for expiry/capacity/ack behavior; they do not add elapsed-time or heap-timing gates to ordinary suites.
+
+#### 4.4.2 Registry hold across owners
+
+The hold protects a file while a former reader's native connections, host leases
+or providers remain unproven; that Worker could still be executing or committing.
+It matches the existing host-module domain and either resolved path or validated
+device/inode identity, never owner ID, readSet or credential. Keep that scope.
+Other already-admitted operations and ordinary canonical writers are unchanged.
+
+A new reader/maintainer or call reserves its ordinary registry record first,
+including existing request replay reservations. Before spawn, call dispatch,
+identity acknowledgement or successful opening rebind, admission MUST check the
+hold. Pending disposal waits within the original opening/operation cutoff.
+Complete four-bit disposal ends that record's hold: the Worker exited, native
+connections closed, and all registered leases/providers settled. A forced exit
+alone is insufficient. A failed hold refuses `reader_failed`; expiry while
+waiting refuses `read_in_progress`. Capacity refusal remains immediate. An
+already-failed hold retains its immediate registration refusal without new
+records or request-ID reservations.
+
+Every wake MUST re-check all matching holds and the cutoff before its synchronous
+admission action. Another cleanup can keep it waiting. No timer grants permission;
+late proof cannot spawn, dispatch or acknowledge an expired/cancelled operation.
+Identity acknowledgement waits before the Worker opens its facade. Opening
+acceptance retains its existing identity/protocol checks. An undispatched call's
+refusal completes only its borrower record, leaving its healthy resident open.
+
+A bounded, validated opening result held in admission means the Worker has
+finished opening work. Its admission deadline (`read_in_progress`) or cancellation
+(`read_cancelled`) MUST use the existing 10,000 ms graceful disposal path,
+including the real-time safety fallback, without delaying the public refusal.
+Cancellation before that result or during a dispatched call, malformed results,
+protocol/identity violations and conflicting frames retain immediate termination.
+Grace expiry still forces termination; unproven disposal still quarantines the file.
+
+One waiter per live record bounds waiters by the existing process-wide 256 live
+slots, including waiting records and failed safety pins. No additional queue
+quota or replay allowance exists. Entries retain fixed control state and only a
+bounded opening result (64 KiB); identity metadata exceeding 128 characters cannot
+enter the queue and retains `read_in_progress`. Native device/inode identities fit.
+No per-blocker promise listeners or append-only wait history are retained.
+Completed/failed proof schedules one coalesced notification; absolute-deadline
+wakeups rearm if early. Cleanup/cancellation removes its waiter and timer. A pre-spawn stop closes its
+untransferred internal semantic port without closing the shared coordinator.
+
+Notify queued admissions in insertion order after disposal finalization returns,
+so the existing writer release finishes before a successor claims it. This is
+bounded FIFO notification, not an exclusive file lock or cross-owner scheduling
+guarantee; repeated cleanup can exhaust a caller's deadline. Request paths and
+maintenance share the rule because both own native resources on the same file.
+
+Private `readerRegistryHoldDiagnostic(handle/result/openingError)` snapshots
+the opening snapshot on a handle and the operation snapshot on each result/error:
+`waits`, cumulative `waitMs`, `lastWaitMs` and numeric `outcome`: complete=1,
+failed=2, deadline=3, cancelled/closed=4. Counts/durations are bounded; no identity,
+path, owner, credential or content is recorded. Public DTOs/codes are unchanged.
+The first settlement determines the outcome: an explicit cancel/close records 4
+even after the cutoff if its timer has not run; a deadline callback first records
+3, and later cancellation/closure does not rewrite it.
+The four-bit proof, failed/unproven quarantine, disposal grace, writer exclusion,
+cutoff gate, authority samples, reservation charging and cleanup/history caps stay
+unchanged. **Hypothesis:** when ordinary disposal fits the caller's remaining
+budget, waiting avoids a terminal refusal; no latency qualification is claimed.
 
 ### 4.5 Native telemetry independent of result delivery (audit F5)
 
@@ -740,3 +803,1893 @@ The original latency, namespace capacity, fallback copy and default semantic dec
 5. **Owner rollout decisions:** the owner decides later semantic enablement/hosted consent/privacy copy and production WAL switch after the baseline re-run/qualification. Both remain off/unchanged by default. The primary owns document shipping/manifest registration and the non-author re-check; the author does not commit or implement.
 
 Authoring validation: prior private seam review, repository source inspection and document consistency/whitespace checks only. No tests, builds, measurements, provider/key access or network calls were run. Only this existing plan is revised; frozen runtime/reference contracts and package manifests remain unchanged. Status remains **revision 4 (`context-read-product-v1.1` draft) for re-check, base `99e4391a`**, not frozen or implemented.
+
+## §10 protocol revision P2-product-v4 (delta, 2026-10-28)
+
+Status: **proposed additive measurement revision, Revision 1**, based on `9a8f6fb7` and revising the delta at `21d4eb32`; the primary reviews and commits. The frozen API/profile remains `context-read-product-v1.1`. This delta replaces **only** §10's `P2-product-v3` inventory, cross-product/population registration, attachment of cold/reference series and fixed windows, and platform acceptance/report scope with `P2-product-v4` below. It does not edit or supersede any runtime requirement in §§1–9, any §10.3/§10.4 threshold number or gate meaning, or the integration dependencies in §11. Historical authoring/review statuses above remain historical. No implementation, measurement or acceptance is claimed.
+
+The v3 harness handoff, inspected read-only on `feat/context-read-p2d-harness` at `docs/plans/context-read-p2d-harness-impl.md`, “Inventory”, mechanically registers 7,520 cells: 7,200 requests, 80 freshness, 48 availability, 48 overflow, 24 storage and 120 state/injection cells. Its 57,600 fixed windows alone require `57,600 × 30 = 1,728,000 s = 480 h = 20 days`, excluding requests, setup and drain. V4 registers quantities at the dimensions that exercise them; it makes no claim for an omitted interaction.
+
+### V4.1 Preserved gates and population rules
+
+All §10.3/§10.4 gates remain normative, including on controls where applicable:
+
+| Quantity | Unchanged acceptance |
+| --- | --- |
+| Warm candidate read call | Successful p95 ≤300 ms; maximum ≤1,500 ms. |
+| Fresh candidate main/cold lifecycle | Successful p95 ≤700 ms at 1,112, ≤1,000 ms at 3,336; maximum ≤1,500 ms. |
+| Fresh fetch main/cold lifecycle, every registered adapter/ref count | Successful p95 ≤150 ms; maximum ≤500 ms. |
+| Fresh assembly main/cold lifecycle | Successful p95 ≤800 ms; maximum ≤2,000 ms. |
+| Host loop | Absolute maximum ≤100 ms; zero gaps strictly >100 ms, over **every attempt and observed process**, including warm-ups, failures, startup/launcher, writer, maintenance, delivery, close and final drain. Retain 1 ms heartbeat/event-loop/synchronous-section observations and raw attribution; never subtract an idle baseline. |
+| Timeout/cancel | Public timeout, including opening, ≤50 ms after the immutable cutoff; cancellation ≤50 ms after host-observed abort; reject all late data. Cleanup remains separately owned/observed. |
+| Normal cells involving WAL on either database | Zero public busy and zero native primary 5/6 across reader, maintainer, independent writer and paired baseline, including open/rollback/close/final drain; complete telemetry on **all** those paths. Missing coverage invalidates; observed failures survive invalidation. |
+| DELETE busy and writer coexistence | Report all busy outcomes; they cannot supply successes. No reader-induced capture/review public-write deadline overrun or timeout; retain separate operation/close/lifecycle statistics and production deadlines. Throughput ratio remains report-only. |
+| Functional/bytes | Exact selected-projection oracle, authority/currentness, refs/snapshot fences, exact counter and every frozen byte/item bound. Unexpected errors fail. No fallback success enters a gated success population. |
+| Availability | ≥100 scheduled normal index-dependent attempts per fixed owner/readSet/types/intent population; not-ready ≤1%, with every dirty/pump/cron interval and error retained. Evidence calls cannot dilute it. |
+| Freshness | ≥100 eligible committed targets per type/intent population; nearest-rank p95 ≤30 s, fresh authorized probes at ≤1 s intervals, exact ref/revision, writers continue ≥30 s after the last target commit. Unseen targets remain +infinity at the pre-registered observation ceiling. |
+
+Each **main** request/overflow cell has exactly 3 separately reported fresh-handle warm-ups, then ≥50 validated successes within ≤500 measured attempts. Each registered **cold** series has ≥10 successes within ≤100 attempts, a fresh Node process per attempt, and no cold warm-ups. Every registered **warm reference** has its own ≥50 successes/≤500 attempts; it measures only the initialized candidate read call, with initialization/open/close still observed for loop/functional/telemetry purposes. It is distinct from main and cold. Use nearest-rank p50/p95 and maximum, successful-only gated statistics, and separate full all-attempt statistics. Do not stop normal requests early to improve survivors; ordinary production deadlines must permit observing the unchanged maxima. A count/observation ceiling below the minimum is inconclusive, never accepted.
+
+Fresh lifecycle remains constructor entry → one public read → awaited close, or failed-open supervisor drain (§10.1). Every concurrent request success needs actual read-call/public-write-call overlap; missed overlaps remain in the ledger and consume the same ceiling. Windows cannot supply request successes. No post-result tuning, sample removal or automatic retry/restart is authorized. A new run after a failure retains the failed report.
+
+### V4.2 Profiles, inputs and claim boundaries
+
+These are **measurement platform profiles**, not new engine API profiles. Each has its own immutable registration, raw report, actual exits and decision. No observations, successful counts or percentiles transfer between platforms.
+
+| Profile | Required environment and set | Claims supported by a complete pass |
+| --- | --- | --- |
+| `engine-platform-v4` | Engine maintainers' own quiet host/volume; exact Node 24 patch recorded. Run the engine column below. WSL2 ext4 is an example **should** qualification; macOS APFS needs its own complete, separately labeled execution if sought. Reserve **13 h 15 min**. | Engine behavior and the registered latency/contention/freshness/availability populations on that exact platform, hardware, volume, runtime, counter and workload, including per-method successful contention and pump-active post-writer warm references in every W cell. It can satisfy that platform's “should” report; it grants **no production launch acceptance**. A non-production platform is not itself an engine-profile failure. |
+| `production-launch-v4` | The product's production-class **Linux ext4 production volume**, non-WSL host, exact deployed Node 24 patch, 0700 directory/0600 DB/sidecar/companions; run the production column. Reserve **7 h 30 min**. | Production launch evidence for lexical v1.1, four-namespace v18 Memory-only and v23/v33 Memory+Card, current/history, within the explicitly registered populations, including per-method successful contention and pump-active post-writer warm references in every W cell. Production R7 full/snapshot mixed-pair latency is **unclaimed**; compact alone is measured there. Together with §9 deterministic acceptance, all package dependencies and product adapter sign-off, this supports the scoped C-1–C-4 launch claim. It neither switches production DELETE to WAL nor authorizes a schema rollout. |
+
+Before registration, the product supplies: the concrete host/CPU/RAM/OS and run owner; the actual production volume/mount and ext4 attestation; the deployed **Node patch**, engine/profile/protocol commits; synthetic physical snapshots and Card distributions at both sizes; selection metadata, labels/queries/unique probes and known misses; exact production counter/module/configuration; normal open/request/read deadlines and **capture and review deadlines with provenance**; writer recipe/rate/busy policy; supervised pump service, minute budgets/renewal and capacity; diagnostic capacities and drain/ack schedule; and an exclusive quiet reservation. The review deadline is being added: register the product-supplied value (including 5,000 ms **only if actually supplied**), never invent it. A missing capture/review deadline leaves coexistence inconclusive and prevents a production pass. The engine run needs the same workload inputs or a separately hashed, explicitly labeled engine fixture/profile; synthetic engine inputs cannot certify the product's adapter or deadlines.
+
+No blanket performance claim covers missing APFS/WSL reports, other hosts/filesystems/patches, unregistered load/language interactions, optional semantics/providers, real-corpus quality or HTTP/model synthesis latency. P2-07 exact ranking/tokenization remains mandatory for zh/ja/mixed; no 92% Japanese/mixed quality target is introduced. Intermediate physical schemas retain §9 functional smoke coverage, not an inferred performance qualification. A failed/invalid/inconclusive/missing cell prevents a pass for the profile requiring it. Optional qualifications do not become launch prerequisites; their absence must be disclosed separately.
+
+### V4.3 Complete request plan
+
+Notation: **B** = both worlds `{1112,3336}`; **L** = `{3336}`; **S** = physical `{18,23,33}`; **C** = `{23,33}`; **P** = `{18,33}`; **J** = ordered canonical/sidecar pairs `{DELETE/DELETE,WAL/WAL}`; **X** = `{DELETE/WAL,WAL/DELETE}`; **I** = `{current,history}`; **Q** = three **separate** language populations `{zh,ja,mixed}`. All schema-18 requests are Memory-only; schemas 23/33 use the registered Memory+Card union. Every normal request uses the full personal+three-project selection. Worlds, schemas, journal pairs, intents, methods/adapters/ref counts and named loads remain separate except the explicitly registered rotations below.
+
+**`language-rotation-v4`** is one labeled population, not three language percentiles: attempt ordinal `k` chooses `[zh,ja,mixed][k mod 3]`, independently restarting at zero in warm-up/main/cold/reference series. Keep the language on every record; failures advance the schedule, never the success count. Every complete three-attempt cycle contains all languages; successful coverage must include all three or the cell is inconclusive. This is authorized only where the table says “rotation”. Query-bearing per-language gates remain where tokenization/ranking or exact counting is directly being compared. Rotation does not pool methods or intents. Evidence rotations use separately frozen language-bearing bodies/refs with large admitted byte cases, not identical English evidence relabeled three ways.
+
+| ID / method profiles | Engine cells | Production cells | Language / loads / series | Why this registration |
+| --- | ---: | ---: | --- | --- |
+| R1: candidates limit12 | `B×S×J×I×Q = 72` | Same **72** | Idle; separate Q; main+cold+warm reference. | Query tokenization/postings/ranking can change cost by language; keep both sizes and all physical schema branches (§5, P2-07). |
+| R2: assembly 1500 tokens/max12 | `B×S×J×I×Q = 72` | `B×{33}×J×I×Q = 24`, plus `B×{18,23}×J×I×rotation = 16`: **40** | Idle; main+cold. | Exact counting is language-sensitive, qualified per language on v33; v18/v23 rotations check their schema paths without claiming per-language assembly percentiles there (§4.1, §8.3). The engine retains those comparisons. |
+| R3: fetch24 × full/compact/snapshot | `B×S×J×I×3 = 72` | Same **72** | Idle; language rotation; main+cold. | Fetch does canonical refetch/serialization, not query tokenization/ranking; keep each adapter, intent and schema, and check bytes on every result (§8.2; `core/context-read-input.mjs:121`). |
+| R4: fetch1 × full/compact/snapshot | `B×S×J×I×3 = 72` | `L×S×J×I×3 = 36` | Idle; language rotation; main+cold. | Single-ref adapter overhead needs a measurement; production measures it at the larger world, while fetch24 still covers both sizes. This is a sentinel, not a monotonic-cost proof (§10.3 fetch bound). |
+| R5: candidates12, assembly1500/12, fetch24 full/compact/snapshot (5 distinct profiles) | `L×S×J×I×5×{fresh-same,fresh-other} = 120` | `L×P×J×I×5×{fresh-same} = 40` | Language rotation; main only. | Idle separates language cost; these separately labeled populations measure the extra write/pump interference at the larger world. Production selects actual v18 and current v33 paths; windows still exercise every primary schema/size. No omitted per-language/load percentile is inferred (§10.1/§10.2). |
+| R6: candidates24 and assembly4000/max24 (2 distinct stress profiles) | Idle `L×C×J×I×2×Q = 48`; fresh-same `L×C×J×I×2×rotation = 16`: **64** | Idle `L×{33}×J×I×2×Q = 24` | Idle main+cold; concurrent main; idle candidate reference on R6, pump-active post-writer reference via WM. | Larger-world stress exercises ranking horizon/counter/IPC bounds; engine also checks the Card floor and same-projection interference. Every fixed-window read mix includes both stress methods, even on v18 (§4.2, §5, §10.1). |
+| R7: mixed-journal idle controls | `L×S×X×I×{candidates12,assembly1500/12,fetch24-full,fetch24-compact,fetch24-snapshot}×rotation = 60` | `L×P×X×I×{candidates12,assembly1500/12,fetch24-compact}×rotation = 24` | Main+cold; candidate warm reference; ordinary applicable latency/loop/functional/zero-busy gates. | Mixed pairs are registered controls (§10.1), with deterministic all-pair WAL coverage (P2-10). These controls check setup/read paths; no mixed-pair contention/freshness claim. Engine samples all three schema/adapter branches. |
+| **Request total** | **532** | **308** | Each has a main series and 3 warm-ups. | Rows are disjoint; no implicit expansion beyond the displayed products. |
+
+Cold is **idle only**: engine **396**, production **268** additional series, each 10/100. This preserves genuine unprimed bootstrap/counter/schema observations without multiplying them by writer schedules; loaded startup/cleanup loop and cancellation remain observed in every loaded attempt. It grants no cold-under-writer latency claim. Idle candidate references remain **108 engine / 92 production** separate 50/500 series. The v3 harness's `series.mjs`, `requestSeries`, stops its writer before references but stops the maintenance pump **afterward**: those loaded references can observe maintenance and post-writer catch-up, and are not duplicate idle measurements. V4 restores that quantity through WM in V4.4, including every R5/R6 loaded candidate combination and additional W sentinels, rather than duplicating it on R rows. WM adds **144 / 80** labeled pump-active post-writer series; total references are **252 / 172**. No warm-under-writer latency is claimed.
+
+No main/cold/reference data share a percentile. Stress and default never pool. A failure or incomplete telemetry in a warm-up, initialization, unused-language attempt or final drain still affects its required gate; “successful-only” applies solely to latency quantiles, not loop/busy/settlement/functional acceptance.
+
+### V4.4 Fixed-window contention plan
+
+Windows are independently registered **exposure cells**, not children of request cells. W1/W2 own **five pairs** each; W3 owns **eight pairs** to budget separate per-method success coverage for both retained targets. Every pair has a fixed **30 s reader window plus its own fixed 30 s no-reader baseline**; baseline→reader on even zero-based repetitions, reader→baseline on odd. No baseline is reused. No duration extension or post-result replacement makes an invalid window pass.
+
+| ID / writer class | Engine exposure cells | Production exposure cells | Fixed windows, including baselines |
+| --- | ---: | ---: | ---: |
+| W1 fresh same-projection | `B×S×J = 12` | Same **12** | 120 / 120 |
+| W2 fresh other-owner | `B×S×J = 12` | `L×P×J = 4` | 120 / 40 |
+| W3 retained control, two separately evaluated target sub-populations below | `B×S×J = 12` | `L×P×J = 4` | 192 / 64 |
+| **Total** | **36** | **20** | **432 / 224** = **3 h 36 min / 1 h 52 min** fixed duration |
+
+The **`window-read-mix-v4`** is a pre-registered serial interleaving, explicitly replacing per-method × language × intent exposure windows. For zero-based repetition `r` and attempted read slot `k`, use the ten method profiles in appendix order at `k mod 10`, language `Q[(k+r) mod 3]`, intent `I[(floor(k/10)+r) mod 2]`. Calls remain fresh open/read/await-close, with independent expected-result/byte checks. Require every method profile, each language and each intent to be attempted in each reader window, and both intents/all languages for each method across the cell's repetitions; missing mix coverage invalidates the exposure cell. Do not claim individual method/language/intent latency quantiles from these windows. Latency remains in R1–R7.
+
+In addition to the unchanged per-window minima below, **each of the ten method labels independently needs ≥20 successful executions overlapping actual public-write calls across its cell's reader windows**. W1/W2 additionally require **≥10 successful fresh-close overlaps per label, within that label's write-overlap successes**; W3 requires ≥20 successful write overlaps **per label per retained target**, never a combined same/other count. Each label's qualifying write successes, and its fresh-close successes where applicable, must each span at least three distinct reader windows (independently per W3 target). The labels distinguish candidates12/24, assembly1500/4000 and all six fetch ref-count/adapter paths, so default or compact successes cannot supply stress or snapshot coverage. Twenty repeats give each path the full original write-overlap detector minimum; ten close successes give each fresh path the full original close-race minimum. Requiring joint write/close intersections for those ten successes directly exercises each path across both interference phases and makes the subset used in the budget explicit. Three-window spread prevents one brief ready interval from supplying all coverage. These are contention detector minima, not a reduced latency sample minimum or a percentile claim; R main/reference 50-success rules remain unchanged.
+
+Count only `ok:true` validated complete results with the public **read call** intersecting a recorded ordinary write call or fresh per-write close, clipped to the same reader window. Unavailable, failed, missed-overlap, warm-reference and out-of-window attempts never count. De-duplicate by cell/window/attempt/method/target; one read may count for both write and close, or for both retained targets, **only when each actual intersection is attested**. No success transfers across methods, cells or targets. The runner must re-derive these counts from raw intervals and outcomes after final writer telemetry drain, alongside the per-window counts. Any deficient label makes the **cell invalid**, even if aggregate exposure passes. Known loop/busy/deadline/functional failures still fail independently.
+
+W1/W2 retain **per reader window ≥20 actual read-call/write-call overlaps, ≥100 native in-call/in-window commits, ≥10 fresh per-write-close overlaps**. Every paired baseline needs ≥100 native public-write commits. Both capture and review operations alternate at the unchanged approximately 20 ms nonsaturating writer cadence; include all ordinary open/write/finally-close intervals and complete telemetry. Close overlap uses the read call, not handle opening/closing or PID lifetime. Different owner does not replace same-projection mutation.
+
+W3 explicitly re-registers retained-same and retained-other as **two labeled sub-populations in one window**, using one independent retained writer process with two retained connections and a frozen cycle `(same,capture),(other,capture),(same,review),(other,review)`, approximately 20 ms between ordinary operations, no backlog. **Each target sub-population independently needs ≥20 reader/write overlaps and ≥100 native commits in every reader window; each needs ≥100 commits in its paired baseline.** Report per-target/per-operation writer statistics and gate every deadline/native outcome separately; never combine their counts to meet a minimum. No fresh-close minimum applies; both retained shutdown closes remain fully observed outside exposure. This shares a scheduled window, not a gated population, and claims only this alternating retained control, not isolated retained-load latency. Deterministic P2-19 must encode both independent minima.
+
+These reductions preserve E1-C2's detector with explicit successful coverage for each claimed method: `topic-reader-wal-fix.md`, “Cause and evidence”, reports all 34 fresh-writer smoke busy responses during close; “Round 1” registers the 20/100/10 minima; “E1-C2 v1.1” records the product's later 200-trial run with fresh-writer WAL failures. Its documented smoke was **40 × 2 s = 80 s fixed duration**, not acceptance. The later full run was **200 × 30 s = 6,000 s = 100 min fixed duration**; total elapsed time including setup/drain is not supplied. Those are fixed-duration arithmetic, not invented wall-clock measurements, and E1-C2's later wait-policy change does **not** amend this contract's §7 policy. V4 keeps at least five repetitions and all per-window close minima.
+
+**WM: `pump-active-post-writer-reference-v4`.** Each W cell also registers `c12` and `c24` × both intents × one language rotation: **four separate 50-success/500-attempt initialized-read series**, or **144 engine / 80 production**. Immediately after its last reader window, stop and drain the writer (including retained shutdown closes), keep that window's existing pump active with unchanged budgets, and begin references **without waiting for ready state, catch-up completion or an idle period**. Interleave the four series by attempted slot in fixed `(c12,current),(c24,current),(c12,history),(c24,history)` order, with each series's own language ordinal and attempt ceiling; completed series simply leave the rotation. Initialize outside the measured read-call interval under the existing reference rule; retain all initialization/failure/close observations. Stop/drain the pump only after all reference series finish or reach their ceilings. No reference runs during a 30 s window or supplies W overlap coverage.
+
+Each WM series applies **p95 ≤300 ms and maximum ≤1,500 ms**, successful-only nearest rank, plus all-attempt loop/settlement/bytes/functional/normal-busy gates and complete pump telemetry. Record writer stop, pump activity/quanta/renewals and every reference interval; a stopped/replaced pump, readiness wait or missing activity trace invalidates WM. Pump-active does not promise every success intersects a maintenance transaction; its unchanged live schedule, including other-intent work and natural post-writer catch-up, is the registered condition. Insufficient successes remain inconclusive. WM keeps W's world/schema/journal/load key and separate method/intent populations; W3 is explicitly the post-**combined retained-target rotation** population, not isolated retained-same/other latency. Idle references remain separate. This covers all retained loaded-candidate R combinations without treating a pump-active reference as idle.
+
+### V4.5 Other cells and shared scheduling
+
+These required cells are identical in both profiles. Sharing a session saves repeated build/writer startup; it never merges type/intent/size/schema/journal denominators or quantiles.
+
+| ID / kind | Registration and count | Population, outputs and rationale |
+| --- | --- | --- |
+| F freshness | `B×J×I×[(18,memory),(23,memory),(23,card),(33,memory),(33,card)]` = **40** | ≥100 targets **each**, separate p95 including +infinity, exact eligible commit/ref/revision, ≤1 s fresh-handle probe cadence and ≥30 s final continuous-write tail (§10.4). No world/schema/intent/type/journal reduction. |
+| A availability | `B×S×J×I` = **24** | ≥100 index-dependent scheduled attempts each after both intent builds; fixed union types by schema, alternating candidates12/assembly1500, language rotation. Preserve the §10.4 combined-method denominator, all errors and dirty periods. |
+| O overflow partial | `B×S×J×I` = **24** | Candidates24, mixed query, idle; 3 warm-ups + 50/500 main + 10/100 cold; no warm reference. Selected 32 namespaces from personal+32 authorized projects, selection oracle and explicit partial scope; separate from full four-namespace launch. Apply same size-specific candidate/loop/bytes gates to successful selected-scope results (§5, P2-06). |
+| B storage | `B×S×J` = **12** | Canonical consistent backup/restore/verify, invalidation/quiescence, explicit rebuild and fresh ready verification for **both intents**, all five §8.4 times, main/WAL/SHM/total/peak bytes, counts and peak-sampling resolution. v18 old-pin preservation/read-mark controls remain required (P2-04). Times/sizes remain report-only; no copied certificate is restored as ready. |
+| T state/injection | `B×S×J×{absent,exhaustion,abort,crash,post-catch-up}` = **60** | Separate expected-outcome records, no latency percentile or successful-count claim. Each cell must complete its appendix subprobe manifest: absent and post-catch-up each status/candidates/fetch/assembly; exhaustion and crash each opening/candidates/fetch/assembly; abort each opening/candidates/fetch/assembly × abort/timeout. These are **288 subprobes inside 60 cells**, not new cells. Abort/timeout must settle while native cleanup remains pending and fresh writers progress; crashes require confirmed cleanup and appropriate quarantine, without assuming native work survives an actual Worker exit. Both intents/stress/adapter branches remain in §9 deterministic acceptance; these opt-in probes use current/default methods and observe real settlement/loop/drain. Missing subprobes invalidate a cell; a wrong outcome fails it. Deliberate failure records never enter a normal zero-busy comparison. |
+| **Other-cell total** | **160** | F/A share sessions below; O/B/T remain separate cells. |
+
+F and A run in **12 sessions `B×S×J`**, each with the explicit supervised pump servicing current/history and fresh same-projection continuous writers. Freeze a **180 s** observation interval per session: commit every registered target by second 120, continue ordinary writes through second 180 (≥60 s after the latest permitted target), and retain every committed target, not just the first 100. A session below any target/availability minimum is inconclusive; a missed cadence or writer-tail requirement is invalid; neither extends its duration. This is an observation budget, not a new freshness threshold.
+
+The session writer is an **independent process using a fresh ordinary open → capture/review → finally-close lifecycle per operation**, targeting the same owner and selected four-namespace projection, with capture/review alternating at the unchanged approximately **20 ms nonsaturating cadence**, no keeper or backlog. It runs from session start through second 180, interleaving the registered target releases with ordinary same-projection writes; target operations do not replace the continuous stream. Freeze and validate the lifecycle/target/cadence configuration before execution, then attest actual operations, commits, closes, final seal and exit. A retained or other-owner writer cannot qualify this session.
+
+Register 100 Memory identities and, on v23/v33, 100 Card identities, each providing a separately attested target for **each** intent. Record each intent's **first eligible commit and exact revision**, not a later convenient review commit: Memory history can be eligible while review is awaiting, whereas current requires currentness/non-awaiting; Cards require confirmation even for history (`core/context-read-sidecar.mjs:323`, `:668`–`:675`). Share a commit timestamp only when those first-eligibility events actually coincide. Freeze target creation releases in seconds 0–85 and review/confirmation releases 35 s after creation, all by second 120, interleaved with the unchanged continuous ordinary writer stream. That pre-registered hold leaves the first history revision observable before review; it is never extended in response to observations. A history revision missed before mutation remains an unobserved/+infinity target, not replaced by its newly reviewed revision. Never count an ineligible Card draft as current/history. Retain independent intent-specific first-observation times, errors and denominators.
+
+Freeze release schedules/eligibility recipes, unique query terms, batches and expected top-24 membership before collection; record actual eligible native commit times during collection. A probe may query a batch of at most **20** uniquely tagged identities, using the ordinary lexical query union (`core/context-read-sidecar.mjs:492`–`:517`), within input bounds; require the independent oracle to establish expected membership without competition from other fixture items. Extract each target's own exact ref/revision and first successful observation; a batch success is not twenty successes unless all twenty were returned. Never truncate or retire an unseen target to free a batch. This changes probe scheduling, not a target population or the 30 s gate.
+
+Use **20 bounded probe lanes plus one separate availability lane** to attempt **every active batch/intent at ≤1 s intervals**, with a fresh request/credential/handle for each probe; freeze Worker/resource caps, launch offsets and per-process loop observation. Batch ordinal `b` and intent ordinal `i` use probe lane `2*b+i`; a lane never has two in-flight requests. At most ten 20-target batches and two intents require at most twenty probe calls per second. The host must supply capacity for these lanes alongside maintenance/writing; the budget assumes enough CPU/RAM for that fixed schedule, not a serial probe loop. The ordinary input grammar and frozen ranking oracle must validate batching; an unsupported batching adapter, insufficient capacity or missed probe cadence cannot pass. These probes have no request-latency percentile and do not supply R/O successes. A has its own at least 100 scheduled attempts **per intent**, disjoint from probe traffic; pre-register their release times throughout the session. Record missing scheduled A calls explicitly; any scheduling omission invalidates the session rather than fabricating a fast/error denominator entry. All probe/A loop, normal WAL busy, byte, writer and telemetry gates still apply. Probes and A never trigger maintenance. Session gates include the union of all participating processes, with capacities/drain schedules fixed before collection.
+
+For A, scheduled ordinal `k` **within each intent** selects `[c12,a1500][k mod 2]`, irrespective of errors/not-ready outcomes. Require at least 50 scheduled and executed calls of each method, counts differing by at most one, and strict alternation in release order. Validate the immutable schedule before collection and reconcile every scheduled ID against exactly one actual attempt afterward; reordered completion never changes method allocation or the denominator. A 99-candidate/one-assembly schedule is invalid before execution. Neither probe traffic nor omitted/failed calls may rebalance the schedule after seeing outcomes.
+
+### V4.6 Counts and wall-clock budget
+
+Count a request/overflow **cell** once; its warm-up/main/cold/reference series are descriptors, not extra cells. Count a fixed reader/baseline **window** separately from its W exposure cell. Count each F/A gated population once despite shared sessions.
+
+| Inventory unit | Engine platform | Production launch |
+| --- | ---: | ---: |
+| R request cells / main series | 532 | 308 |
+| W exposure cells | 36 | 20 |
+| F / A / O / B / T cells | 40 / 24 / 24 / 12 / 60 | 40 / 24 / 24 / 12 / 60 |
+| **Total qualification cells** | **728** | **488** |
+| Main series including O | 556 | 332 |
+| Warm-up groups (three attempts each) | 556 | 332 |
+| Cold series including O | 420 | 292 |
+| Idle / pump-active post-writer reference series | 108 / 144 | 92 / 80 |
+| **Total warm candidate reference series** | **252** | **172** |
+| Fixed windows (reader + baseline) | 432 | 224 |
+| Shared F/A sessions | 12 | 12 |
+| T subprobes inside 60 cells | 288 | 288 |
+| Minimum main successes / cold successes / reference successes | 27,800 / 4,200 / 12,600 | 16,600 / 2,920 / 8,600 |
+| Minimum W successful write-overlap credits (method/target), / fresh-close credits | 9,600 / 2,400 | 4,800 / 1,600 |
+| Minimum warm-up attempts | 1,668 | 996 |
+
+These are **design estimates, not measured timings or guaranteed upper bounds**. The inspected v3 harness has a 100 ms **run-level** idle baseline (`measure-context-read-product.mjs`, before its inventory loop), not a 100 ms floor per request; `engine.mjs:observeLoop.finish` adds a 2 ms drain and cold adds a real child handshake/exit. Do not mistake those small floors for total costs. Instead budget these conservative planning allowances per complete attempt, **including** preparation outside latency, bootstrap/read/await-close, oracle/report/drain overhead, and outer launch for cold: engine main/warm-up **0.55 s**, cold **1.00 s**, reference **0.30 s**; production **0.50/0.90/0.25 s**. These assume a quiet production-class machine and a normally passing implementation; some individual requests can take the unchanged gated maximum. They are not per-attempt timeouts, and must never censor slower samples. Actual hardware/counter/build cost is an input uncertainty, not evidence of acceptance.
+
+| Serial wall-clock component | Engine estimate | Production estimate |
+| --- | ---: | ---: |
+| Main plus warm-ups, initially 50 successes without failures | `556×53×0.55 = 16,207.4 s` | `332×53×0.50 = 8,798 s` |
+| Idle cold, initially 10 successes | `420×10×1.00 = 4,200 s` | `292×10×0.90 = 2,628 s` |
+| Idle warm references, initially 50 successes | `108×50×0.30 = 1,620 s` | `92×50×0.25 = 1,150 s` |
+| Pump-active post-writer WM references, initially 50 successes | `144×50×0.30 = 2,160 s` | `80×50×0.25 = 1,000 s` |
+| Fixed windows, immutable duration | `(24×5+12×8)×2×30 = 12,960 s` | `(16×5+4×8)×2×30 = 6,720 s` |
+| F/A sessions, with internal bounded probe lanes | `12×180 = 2,160 s` | Same `2,160 s` |
+| Storage procedures, including restored rebuild | `12×90 = 1,080 s` | `12×60 = 720 s` |
+| State/injection cases, including all 288 subprobes | `60×8 = 480 s` | `60×5 = 300 s` |
+| Fixture placement, initial and window-pair builds, between-cell reset, sealing/drain | `432×5 = 2,160 s` | `224×4.5 = 1,008 s` |
+| Additional failed/missed-overlap attempts and slow-operation allowance | `3,600 s` | `1,800 s` |
+| **Total estimated / reserved** | **46,627.4 s = 12.952 h / 13 h 15 min** | **26,284 s = 7.301 h / 7 h 30 min** |
+
+The new W success minima are work **inside** fixed reader windows, not another serial cost: a fresh cell needs at least `10×20 = 200` successful write overlaps, costing `200×0.55 = 110 s` engine / `200×0.50 = 100 s` production at the unchanged main-attempt allowances, within 150 reader seconds. Its `10×10 = 100` close-success credits **must** come from those write-overlapping successes with separately attested close intersections. W3 budgets the conservative distinct-call case `2×10×20 = 400` successes, costing **220 / 200 s**, within **240 reader seconds**; this is why it has eight pairs rather than five. Three-window spread and rotation remain required. There is no promise that scheduling/actual write duration will supply the intersections; missed intersections consume time and insufficient coverage invalidates the cell without extending it. The aggregate 9,600 / 4,800 write credits can include dual-target credits only when verified; fresh-close credits are subsets, not additional required successes. The existing 3,600 / 1,800 s failure/slow allowance stays separate and cannot add time to a fixed window.
+
+Setup allowance includes **432/224 separate window-member placements and explicit current/history builds** at the same 5/4.5 s average planning rate, not reuse of writer-mutated baselines or copied ready certificates. R/O/T blocks can reuse an unchanged certified store only after quiescent identity/currentness checks; a changed/restored/copy-placed store requires its own explicit build (§6.1.1/§8.4). All clone/hash I/O remains SQLite-safe child work. If those build/placement allowances do not hold on the registered hardware, the estimate must increase; neither skipping builds nor accepting stale certificates is an option. T's 288 subprobes cost at least **158.4 / 144 s** at the same attempt allowances, within its retained **480 / 300 s** aggregate injection budget; extra controlled stalls, resets and cleanup use the remainder. These are planning costs, not native-cleanup deadlines or evidence that they suffice.
+
+**Revision 1 exceeds both earlier reservations:** engine exceeds **12 h by 3,427.4 s (57.12 min)**; production exceeds **7 h by 1,084 s (18.07 min)**, and six hours by 4,684 s (78.07 min). The smallest honest option chosen here is a longer quiet reservation, **13 h 15 min engine / 7 h 30 min production**, retaining all registered method paths and adding WM rather than dropping claims. These leave **17.88 / 11.93 min** beyond the ledger, comparable to the prior scheduling margins; rounding to 13 h would leave only 2.88 min for the engine, and 7 h 15 min would be **184 s (3.07 min) short** for production. All prior per-attempt floors, storage/T allowances and failure allowances remain; only additional required work/placements change the sums. Reservations remain planning budgets, not proof that every failing workload finishes. For example, production main alone at its 500-attempt ceiling would cost `332×503×0.50 = 83,498 s = 23.19 h` at the same planning rate. V4 does not shorten those ceilings or raise any gate to manufacture a budget fit.
+
+The immutable registration declares a **13 h 15 min / 7 h 30 min reservation and observation budget**. On projected overrun, stalled activity or missing progress, the supervised runner stops admitting new cells, observes/drains owned resources, preserves all records/actual exits, and reports the profile incomplete/inconclusive (known failures still fail). It must not kill an ordinary slow sample just to fit a latency gate, extend a 30 s window, or mark missing cells accepted. No automatic expensive rerun. The primary can reserve another window on the **same host/volume/patch and unchanged registration**, using pre-registered segment IDs/checkpoints between complete cells; retain all prior failures and merge only complete cell records, never substitute faster repeats or pool different populations. A changed configuration needs a new registration/revision under §10. Quiet-window scheduling and live supervision are required; a background PID/log is not supervision. This document creates no running task or monitor.
+
+### V4.7 V3 → v4 coverage map and deliberate limits
+
+| Dropped/merged v3 product | V4 gate coverage that remains | Rationale and limit |
+| --- | --- | --- |
+| Request method × language × intent attached to every 30 s contention window | W1/W2/W3 `window-read-mix-v4`; ≥20 successful write overlaps per method (per W3 target), ≥10 successful fresh-close overlaps per fresh method, across ≥3 reader windows; R1–R7 remain distinct latency populations. | Each critical path must actually succeed under contention; aggregate attempts cannot qualify it. Twenty/ten retain the original detector minima for each label without claiming a method percentile (§10.2). Language/intent exposure is a registered rotation, not a separate successful-overlap population for every combination. |
+| Mixed pairs × writer loads/windows, freshness, availability, overflow and storage | R7 idle main/cold/reference; P2-10 all-pair deterministic correctness; primary J retains W/F/A/O/B/T. | §7/§10.1 designate mixed pairs controls. Mixed contention/freshness/coexistence, overflow timing and rebuild timing remain unclaimed, including omitted production v23 mixed latency. |
+| Production R7 full/snapshot mixed-journal fetch adapters | R7 production keeps fetch24-compact on v18/v33; R3 keeps all three adapters at both worlds on primary J; engine R7 keeps all adapters. | Compact is the product tool's normal adapter, so it is the production mixed-opening sentinel. Full-ref decoding and snapshot fence validation can interact differently with mixed opening; engine/deterministic evidence cannot establish their production tails. **Production full and snapshot mixed-pair main/cold latency is unclaimed**, including on v18/v33. This saves 16 request/cold populations, without inferring their 150 ms bound from compact. |
+| All request profiles × all loads | R1–R4 idle baselines; R5 larger-world defaults; R6 selected larger-world stress; W includes all ten profiles. | Independent request percentiles focus on registered interference sentinels; omitted size/schema/method/load interactions are not performance-qualified (§10.1). |
+| Max24/4000 × small world/all schemas/all loads | R6 larger Card-capable worlds on engine, v33 idle production; all W mixes still execute stress with byte/functional/loop/busy gates. | Horizon/counter/serialization pressure is exercised directly, not inferred from default limits (§4.2/§5); no omitted stress latency/cold-load claim. |
+| Language × fetch latency | R3/R4/R5/R7 explicitly labeled language rotations; frozen evidence bytes/known answers every success. | Fetch has no query scoring/tokenization (`core/context-read-input.mjs:121`–`:136`); language-specific fetch percentiles remain unclaimed. |
+| Language × loaded search/assembly, mixed-journal controls and production v18/v23 idle assembly | Explicit R2/R5/R6/R7 rotations; R1 and v33 idle assembly/stress retain Q; P2-07 gates exact all-language ranks. | Separate query/counter baseline cost from sampled interference/schema paths, with unchanged maxima on every successful member. Correctness is not a proof of omitted per-language latency. |
+| v18 × every method/language/load stress | R1–R5 Memory-only, W1 all sizes, selected W2/W3, F/A/O/B/T, P2-04 old-pin/no-migration preservation. | Actual production v18 has first-class baseline/default latency and contention evidence; Card/stress Cartesian qualification adds no compatibility capability (§8.3). Engine has broader controls; no v18 per-language stress latency claim. |
+| Fetch1 × all worlds/loads | R4 idle both worlds engine/larger world production; R3/R5 fetch24 adapters; W mix includes 1/24. | Single-ref overhead and 24-ref work are measured separately; no assumption that 24 proves smaller-world fetch1 latency. |
+| Retained writer × every request profile/language/intent | W3 per selected world/schema/J, independent same/other sub-populations/minima in each window; P2-19/P2-23 telemetry/drain. | Retention controls the connection-close distinction (§10.2); no retained-request latency percentile. Sharing cannot hide a deficient target's exposure or failure. |
+| Fresh-other and retained controls on every production world/schema | W2/W3 production L×P×J sentinels; W1/F/A still both worlds/all schemas; engine W2/W3 retain B×S×J. | Same-projection mutation is the principal readiness load (§6.1.2); other-owner/retention effects get explicit sentinels, not an assertion that smaller/v23 interactions cannot regress. |
+| Cold × every load | All idle R/O cold series; loaded main and all W startup/loop/settlement/cleanup. | Cold qualifies unprimed execution; write interference is separately sampled. No cold-under-writer latency acceptance (§10.1). |
+| Warm reference attached to every loaded candidate request cell | Idle R1/R6/R7 references stay separate; WM independently registers c12/c24 × intent × rotation after every selected W workload, with the same pump still active and 300/1,500 ms gates. | V3 stops the writer **before**, and the pump **after**, references; maintenance/catch-up interference is restored, not called duplicate idle work. WM covers all R5/R6 loaded-candidate combinations and broader primary-pair sentinels. Per-language maintenance tails, mixed-pair maintenance tails and isolated retained-target post-writer tails remain unclaimed; no warm-under-writer claim. |
+| Freshness/availability as separate physical runs | F40/A24 retain their individual populations in 12 B×S×J sessions. | Same pump/writer can supply distinct type/intent observations (§10.4); sharing time is not pooling targets/denominators. Probe batching preserves exact per-target first observation and cadence. |
+| Storage × mixed sidecar mode | B12 covers both sizes/primary pairs/all schemas, explicitly retaining rebuild/verification of both intents. | Canonical consistent backup does not consume sidecar (§8.4); primary-mode rebuild outputs suffice for these launch populations, with mixed rebuild cost unclaimed. |
+| State/injection × mixed pairs | T60 primary pairs plus unchanged §9 all-pair deterministic tests. | Deliberate faults qualify truthfulness/cutoff/cleanup; they cannot supply a normal latency/zero-busy pass (P2-03/P2-10/P2-17/P2-23). |
+| All platforms treated as one acceptance status | Two independently registered profiles and explicit should reports. | Production Linux ext4 is still launch-required (§7); no WSL/APFS result substitutes for it. |
+
+There is no claim of a complete v3 Cartesian pass. There is no proof that a larger-world sentinel dominates a smaller world, a v33 path dominates v23, or a mixed-language percentile dominates its individual languages. Those omitted interactions remain unclaimed and can be added only by a new pre-registration/revision, without changing existing results. Functional §9 coverage is not reduced, including authority, selection/overflow, schema preservation, cutoff and writer provenance tests. A v4 report must list its exact required cell inventory and all omissions, rather than call a small smoke or an engine-platform pass production qualification.
+
+Explicitly unclaimed: production full/snapshot **mixed-pair latency** (main and cold, including v18/v33); production v23 mixed idle latency; all mixed-pair contention/freshness/availability/coexistence and mixed rebuild/overflow/injection timing; omitted R size/schema/method/load/language percentiles; smaller-world production fetch1 latency; cold-under-writer latency; warm-under-writer latency; per-language and mixed-pair warm-under-maintenance percentiles; isolated retained-load/request or post-writer warm latency; per-language/per-intent successful contention minima within W's rotation; and unexecuted platforms/hosts/patches, optional semantics, real-corpus quality and HTTP/model synthesis performance. WM's labeled pump-active references and W's per-method successful critical paths are now required claims, with no further path removed to fit the budget.
+
+### Appendix V4-A: declarative inventory definition
+
+The following JSON is the inventory source to encode, **not an implementation change**. A row is the Cartesian product of its named sets and explicit fields. `language` is one dimension: `Q` expands to three distinct cells, `rotation` to one explicitly labeled population. `scope` is `launch` except O. Pair order, read mix, retained sub-populations and session scheduling are normative in V4.4–V4.5; their parameters are encoded below. Stable cell keys include protocol, platform profile, row ID and every expanded dimension; sort numeric worlds/schemas, then appendix array order. Do not fall back to v3's universal product. Expand all rows, reject duplicates, freeze inventory/hash/counts and independently recompute table totals **before** collection (P2-19); P2-23 retains its native provenance/drain prerequisites.
+
+```json
+{
+  "protocol": "P2-product-v4",
+  "revision": 1,
+  "engineProfile": "context-read-product-v1.1",
+  "thresholds": "unchanged frozen sections 10.3 and 10.4",
+  "sets": {
+    "B": [1112, 3336], "L": [3336],
+    "S": [18, 23, 33], "C": [23, 33], "P": [18, 33],
+    "J": [["DELETE", "DELETE"], ["WAL", "WAL"]],
+    "X": [["DELETE", "WAL"], ["WAL", "DELETE"]],
+    "I": ["current", "history"], "Q": ["zh", "ja", "mixed"],
+    "rotation": ["language-rotation-v4"],
+    "D": ["c12", "a1500", "f24-full", "f24-compact", "f24-snapshot"],
+    "stress": ["c24", "a4000"],
+    "adapters": ["full", "compact", "snapshot"],
+    "faults": ["absent", "exhaustion", "abort", "crash", "post-catch-up"]
+  },
+  "methods": {
+    "c12": {"method": "findCandidates", "limit": 12},
+    "c24": {"method": "findCandidates", "limit": 24},
+    "a1500": {"method": "contextRead", "maxTokens": 1500, "maxItems": 12},
+    "a4000": {"method": "contextRead", "maxTokens": 4000, "maxItems": 24},
+    "fetch": {"method": "fetchCandidateEvidence", "refs": [1, 24], "adapterSet": "adapters"}
+  },
+  "requestRows": [
+    {"id": "R1", "profiles": "both", "world": "B", "schema": "S", "journal": "J", "intent": "I", "method": ["c12"], "language": "Q", "load": ["idle"]},
+    {"id": "R2e", "profiles": ["engine"], "world": "B", "schema": "S", "journal": "J", "intent": "I", "method": ["a1500"], "language": "Q", "load": ["idle"]},
+    {"id": "R2p33", "profiles": ["production"], "world": "B", "schema": [33], "journal": "J", "intent": "I", "method": ["a1500"], "language": "Q", "load": ["idle"]},
+    {"id": "R2p18-23", "profiles": ["production"], "world": "B", "schema": [18, 23], "journal": "J", "intent": "I", "method": ["a1500"], "language": "rotation", "load": ["idle"]},
+    {"id": "R3", "profiles": "both", "world": "B", "schema": "S", "journal": "J", "intent": "I", "method": ["fetch"], "refs": [24], "adapter": "adapters", "language": "rotation", "load": ["idle"]},
+    {"id": "R4e", "profiles": ["engine"], "world": "B", "schema": "S", "journal": "J", "intent": "I", "method": ["fetch"], "refs": [1], "adapter": "adapters", "language": "rotation", "load": ["idle"]},
+    {"id": "R4p", "profiles": ["production"], "world": "L", "schema": "S", "journal": "J", "intent": "I", "method": ["fetch"], "refs": [1], "adapter": "adapters", "language": "rotation", "load": ["idle"]},
+    {"id": "R5e", "profiles": ["engine"], "world": "L", "schema": "S", "journal": "J", "intent": "I", "method": "D", "language": "rotation", "load": ["fresh-same", "fresh-other"]},
+    {"id": "R5p", "profiles": ["production"], "world": "L", "schema": "P", "journal": "J", "intent": "I", "method": "D", "language": "rotation", "load": ["fresh-same"]},
+    {"id": "R6e-idle", "profiles": ["engine"], "world": "L", "schema": "C", "journal": "J", "intent": "I", "method": "stress", "language": "Q", "load": ["idle"]},
+    {"id": "R6e-loaded", "profiles": ["engine"], "world": "L", "schema": "C", "journal": "J", "intent": "I", "method": "stress", "language": "rotation", "load": ["fresh-same"]},
+    {"id": "R6p", "profiles": ["production"], "world": "L", "schema": [33], "journal": "J", "intent": "I", "method": "stress", "language": "Q", "load": ["idle"]},
+    {"id": "R7e", "profiles": ["engine"], "world": "L", "schema": "S", "journal": "X", "intent": "I", "method": "D", "language": "rotation", "load": ["idle"]},
+    {"id": "R7p", "profiles": ["production"], "world": "L", "schema": "P", "journal": "X", "intent": "I", "method": ["c12", "a1500", "f24-compact"], "language": "rotation", "load": ["idle"]}
+  ],
+  "series": {
+    "allRequestRows": {"warmups": 3, "main": {"minimumSuccesses": 50, "maximumAttempts": 500}},
+    "cold": {"where": {"load": "idle"}, "minimumSuccesses": 10, "maximumAttempts": 100, "freshProcess": true, "warmups": 0},
+    "reference": {"where": {"load": "idle", "method": "findCandidates"}, "minimumSuccesses": 50, "maximumAttempts": 500, "interval": "initialized read call"},
+    "windowReference": {
+      "id": "pump-active-post-writer-reference-v4", "where": "every W cell",
+      "method": ["c12", "c24"], "intent": "I", "language": "rotation",
+      "minimumSuccesses": 50, "maximumAttempts": 500, "interval": "initialized read call",
+      "p95MaximumMs": 300, "maximumMs": 1500,
+      "start": "immediately after last reader window's writer stop and drain; same pump remains active",
+      "seriesOrder": [["c12", "current"], ["c24", "current"], ["c12", "history"], ["c24", "history"]],
+      "interleaveBy": "attempt ordinal; omit only completed series; each series owns language ordinal and ceiling",
+      "readinessWaitAllowed": false, "pumpReplacementAllowed": false,
+      "pumpStop": "after all four series finish; then drain",
+      "retainedPopulation": "post-combined-retained-target-rotation",
+      "requiredEvidence": ["writer stop/drain", "unchanged live pump schedule and activity", "all attempt intervals", "final pump telemetry drain"],
+      "countsAsCell": false, "countsAsWindowExposure": false
+    },
+    "quantiles": "nearest-rank successful-only; all-attempt statistics separate",
+    "languageRotation": {"by": "attempt ordinal", "order": ["zh", "ja", "mixed"], "reset": "each series", "requireAllLanguagesSuccessful": true},
+    "concurrentSuccess": "actual public read-call/write-call overlap"
+  },
+  "windowRows": [
+    {"id": "W1", "profiles": "both", "world": "B", "schema": "S", "journal": "J", "load": ["fresh-same"]},
+    {"id": "W2e", "profiles": ["engine"], "world": "B", "schema": "S", "journal": "J", "load": ["fresh-other"]},
+    {"id": "W2p", "profiles": ["production"], "world": "L", "schema": "P", "journal": "J", "load": ["fresh-other"]},
+    {"id": "W3e", "profiles": ["engine"], "world": "B", "schema": "S", "journal": "J", "load": ["retained-target-rotation"]},
+    {"id": "W3p", "profiles": ["production"], "world": "L", "schema": "P", "journal": "J", "load": ["retained-target-rotation"]}
+  ],
+  "windows": {
+    "repetitions": 5, "durationMs": 30000, "pairedBaseline": "unique for each reader window",
+    "retainedRepetitions": 8, "readerLanes": 1,
+    "evenOrder": ["baseline", "reader"], "oddOrder": ["reader", "baseline"],
+    "readMix": {
+      "id": "window-read-mix-v4",
+      "methods": ["c12", "c24", "a1500", "a4000", "f1-full", "f1-compact", "f1-snapshot", "f24-full", "f24-compact", "f24-snapshot"],
+      "methodIndex": "k % 10", "languageIndex": "(k+r) % 3", "intentIndex": "(floor(k/10)+r) % 2",
+      "perWindowCoverage": "every method, every language, both intents",
+      "acrossRepetitionsCoverage": "each method with every language and both intents",
+      "perMethodLatencyGate": false
+    },
+    "successfulMethodExposure": {
+      "labels": "readMix.methods", "scope": "within one W cell's reader windows",
+      "minimumWriteOverlappingSuccessesPerLabel": 20,
+      "minimumFreshCloseOverlappingSuccessesPerLabel": 10,
+      "freshCloseSuccessMustAlsoOverlapPublicWrite": true,
+      "retainedTargetEvaluation": "each label separately for each of same and other",
+      "minimumDistinctWriteSuccessWindowsPerLabelPerTarget": 3,
+      "minimumDistinctFreshCloseSuccessWindowsPerLabel": 3,
+      "qualifies": "ok:true complete oracle-validated result; actual clipped public read-call/write-call or fresh-close intersection",
+      "deduplicationKey": ["cell", "window", "attempt", "method", "writerTarget"],
+      "multipleCredits": "only independently attested intersections; never transfer across methods or cells",
+      "exclude": ["unavailable", "failed", "missed overlap", "out of window", "WM references"],
+      "validateAfter": "final telemetry drain; re-derive all counters from raw intervals/outcomes",
+      "belowMinimum": "invalid cell"
+    },
+    "writerCadenceMs": 20,
+    "freshOperations": ["capture", "review"],
+    "freshReaderMinima": {"writeOverlaps": 20, "commits": 100, "closeOverlaps": 10},
+    "baselineMinima": {"commits": 100},
+    "retainedCycle": [["same", "capture"], ["other", "capture"], ["same", "review"], ["other", "review"]],
+    "retainedPerTargetReaderMinima": {"writeOverlaps": 20, "commits": 100},
+    "retainedPerTargetBaselineMinima": {"commits": 100},
+    "retainedShutdownClose": "observed outside exposure; no fresh-close minimum"
+  },
+  "otherRows": [
+    {"id": "F", "profiles": "both", "world": "B", "schemaType": [[18, "memory"], [23, "memory"], [23, "card"], [33, "memory"], [33, "card"]], "journal": "J", "intent": "I", "minimumTargets": 100},
+    {"id": "A", "profiles": "both", "world": "B", "schema": "S", "journal": "J", "intent": "I", "minimumAttempts": 100, "methods": ["c12", "a1500"], "methodIndex": "scheduled ordinal within intent % 2", "minimumAttemptsPerMethod": 50, "methodCountDifferenceMaximum": 1, "language": "language-rotation-v4"},
+    {"id": "O", "profiles": "both", "world": "B", "schema": "S", "journal": "J", "intent": "I", "method": ["c24"], "language": ["mixed"], "load": ["idle"], "scope": "overflow", "requestedNamespaces": 33, "selectedNamespaces": 32, "series": ["warmups", "main", "cold"]},
+    {"id": "B", "profiles": "both", "world": "B", "schema": "S", "journal": "J", "verifyIntents": ["current", "history"]},
+    {"id": "T", "profiles": "both", "world": "B", "schema": "S", "journal": "J", "case": "faults", "population": "expected outcome only", "requiredSubprobes": "stateSubprobes[case]", "subprobesExpandCells": false}
+  ],
+  "sessions": {
+    "rows": ["F", "A"], "key": ["world", "schema", "journal"], "count": 12,
+    "durationMs": 180000, "lastTargetCommitByMs": 120000,
+    "continuousWriterUntilMs": 180000, "probeIntervalMaximumMs": 1000,
+    "writer": {
+      "process": "independent", "lifecycle": "fresh per ordinary operation: open/write/finally-close",
+      "target": "same owner and selected four-namespace projection",
+      "operations": ["capture", "review"], "operationIndex": "ordinary operation ordinal % 2",
+      "cadenceMs": 20, "cadencePolicy": "approximately 20 ms, nonsaturating, no backlog",
+      "keeper": false, "startMs": 0, "continueUntilMs": 180000,
+      "targetReleases": "interleaved additions; never replace the continuous ordinary stream",
+      "deadlines": "unchanged production capture/review values with provenance"
+    },
+    "targetIdentitiesPerType": 100, "targetsPerTypePerIntent": 100,
+    "targetCreationReleaseIntervalMs": [0, 85000], "targetReviewReleaseAfterCreationMs": 35000,
+    "targetEligibility": "separate first eligible native commit and exact revision per intent; share only if actually coincident",
+    "probeBatchMaximumTargets": 20, "probeResultLimit": 24,
+    "probeLanes": 20, "availabilityLanes": 1, "probeLaneIndex": "2*batchOrdinal+intentOrdinal",
+    "availabilitySchedule": "required immutable release IDs/times throughout session; at least 100 attempts per intent, strictly alternate c12/a1500 independently per intent; errors advance scheduled ordinal; disjoint from probes",
+    "validation": {
+      "beforeCollection": ["strict method alternation per intent", "each method >=50 scheduled; count difference <=1", "release times span session", "writer fresh lifecycle, same-projection target, capture/review cycle and 20 ms nonsaturating cadence", "hash full schedules and writer settings"],
+      "afterCollection": ["bijection from scheduled A IDs to executed attempts, preserving release order/method/intent", "each A method >=50 executed; count difference <=1", "denominator includes every normal A attempt regardless of outcome", "actual writer open/write/close per operation, same target, cycle/cadence, continuous tail, commits, acknowledged final seal and actual exit"],
+      "violation": "invalid session and its dependent F/A cells; known failures retained"
+    },
+    "censorUnseenAs": "+infinity", "poolTargetsOrAvailabilityPopulations": false
+  },
+  "stateSubprobeDefaults": {
+    "intent": "current", "candidates": "c12", "fetch": "f24-full", "assembly": "a1500",
+    "language": "mixed", "deadlineMsForTimeoutProbe": "required immutable per-path input, 1..5000 ms; attested native entry must precede cutoff",
+    "abortAt": "attested native entry, before result acceptance",
+    "cutoffEvidence": ["immutable admission/operation cutoff", "public settlement timestamp", "no late data", "host-loop trace"],
+    "timeoutExpected": "read_timeout by immutable cutoff +50 ms",
+    "abortExpected": "read_cancelled within 50 ms of host-observed abort",
+    "exhaustionDeadline": "register sufficient time beyond native wait exhaustion within unchanged 5000 ms cap; expected busy must precede cutoff",
+    "cleanupFor": ["abort"],
+    "cleanupEvidence": {
+      "nativeWork": "attested pending at public settlement; retained native hold exercises disposal lag",
+      "writer": {"lifecycle": "fresh", "target": "same projection", "operations": ["capture", "review"], "cadenceMs": 20, "backlog": false},
+      "required": ["writer native commit while native cleanup remains pending", "no reader-induced production writer deadline overrun", "supervisor ownership/quarantine until confirmed native disposal", "opening probes: failure cleanupId without returned handle", "actual native/resource disposal and final writer drain/seal/exit"],
+      "telemetry": "label expected incomplete native outcome after injected termination; keep all known failures; never claim normal zero-busy"
+    },
+    "crashCleanupEvidence": ["actual Worker exit and confirmed native/resource disposal", "supervisor ownership and quarantine until disposal, or failed-cleanup latch if disposal cannot be confirmed", "opening probes: failure cleanupId without returned handle", "retain known native failures and label expected incomplete crash telemetry; no normal zero-busy claim"],
+    "reset": "independent prepared injection state for each subprobe; do not reuse a cancelled/crashed handle",
+    "missingSubprobe": "invalid cell", "wrongExpectedOutcome": "failed cell",
+    "allDeterministicBranches": "unchanged section 9; both intents, stress and other adapters remain required there"
+  },
+  "stateSubprobes": {
+    "absent": [
+      {"id": "status", "expected": "absent/missing, null progress/counts; no create/build/repair"},
+      {"id": "candidates", "expected": "index_unavailable; no create/build/repair"},
+      {"id": "fetch", "expected": "validated exact evidence succeeds from frozen refs without sidecar"},
+      {"id": "assembly", "expected": "index_unavailable; no create/build/repair"}
+    ],
+    "exhaustion": [
+      {"id": "opening", "expected": "storage_busy from injected native 5/6 after native allowance exhausts; no handle escapes"},
+      {"id": "candidates", "expected": "storage_busy with preserved native 5/6; no retry or reclassification"},
+      {"id": "fetch", "expected": "storage_busy with preserved native 5/6; no partial evidence"},
+      {"id": "assembly", "expected": "storage_busy with preserved native 5/6; no partial assembly"}
+    ],
+    "abort": [
+      {"id": "opening-abort", "path": "opening", "trigger": "abort", "expected": "abortExpected + cleanupEvidence"},
+      {"id": "opening-timeout", "path": "opening", "trigger": "deadline", "expected": "timeoutExpected + cleanupEvidence"},
+      {"id": "candidates-abort", "path": "candidates", "trigger": "abort", "expected": "abortExpected + cleanupEvidence"},
+      {"id": "candidates-timeout", "path": "candidates", "trigger": "deadline", "expected": "timeoutExpected + cleanupEvidence"},
+      {"id": "fetch-abort", "path": "fetch", "trigger": "abort", "expected": "abortExpected + cleanupEvidence"},
+      {"id": "fetch-timeout", "path": "fetch", "trigger": "deadline", "expected": "timeoutExpected + cleanupEvidence"},
+      {"id": "assembly-abort", "path": "assembly", "trigger": "abort", "expected": "abortExpected + cleanupEvidence"},
+      {"id": "assembly-timeout", "path": "assembly", "trigger": "deadline", "expected": "timeoutExpected + cleanupEvidence"}
+    ],
+    "crash": [
+      {"id": "opening", "expected": "reader_failed; no handle/data escapes; crashCleanupEvidence"},
+      {"id": "candidates", "expected": "reader_failed; no late data; crashCleanupEvidence"},
+      {"id": "fetch", "expected": "reader_failed; no partial/late evidence; crashCleanupEvidence"},
+      {"id": "assembly", "expected": "reader_failed; no partial/late assembly; crashCleanupEvidence"}
+    ],
+    "post-catch-up": [
+      {"id": "status", "expected": "ready, certified counts/current fences after explicit catch-up"},
+      {"id": "candidates", "expected": "success with exact newly eligible ref/revision and frozen ranks"},
+      {"id": "fetch", "expected": "success with exact current evidence/fences"},
+      {"id": "assembly", "expected": "success with frozen known answer, exact counter and bytes"}
+    ]
+  },
+  "profiles": {
+    "engine": {"id": "engine-platform-v4", "reservationSeconds": 47700, "requiredRole": "engine platform", "productionClaim": false},
+    "production": {"id": "production-launch-v4", "reservationSeconds": 27000, "requiredRole": "production Linux ext4 on production volume", "runtime": "exact deployed Node 24 patch"}
+  },
+  "expectedCounts": {
+    "engine": {"request": 532, "exposure": 36, "freshness": 40, "availability": 24, "overflow": 24, "storage": 12, "state": 60, "stateSubprobes": 288, "cells": 728, "main": 556, "warmupGroups": 556, "cold": 420, "idleReference": 108, "windowReference": 144, "reference": 252, "fixedWindows": 432, "writeSuccessCredits": 9600, "freshCloseSuccessCredits": 2400},
+    "production": {"request": 308, "exposure": 20, "freshness": 40, "availability": 24, "overflow": 24, "storage": 12, "state": 60, "stateSubprobes": 288, "cells": 488, "main": 332, "warmupGroups": 332, "cold": 292, "idleReference": 92, "windowReference": 80, "reference": 172, "fixedWindows": 224, "writeSuccessCredits": 4800, "freshCloseSuccessCredits": 1600}
+  }
+}
+```
+
+`f1-*`/`f24-*` are scalar aliases for the corresponding `fetch` ref-count/adapter pair, not an additional expansion. `schemaType` is a tuple dimension, not schema×type. Fields `methods` in A, `verifyIntents` in B, `series` in O and `requiredSubprobes` in T describe work **inside** a cell; only singular dimension fields expand rows. `windowReference` expands four series descriptors **inside each W cell**, not request cells; its registration replaces reference attachment on loaded R rows. `retainedRepetitions` overrides `repetitions` only for W3. `profiles` selects a platform column and is never multiplied into that column's cell count. Default `types` is Memory-only for 18 and Memory+Card for 23/33. All rows inherit full telemetry, exact counter where needed, normal cutoff/loop/bytes/functional gates and unchanged successful-population qualification. Expected-outcome T cases carry their injection labels instead of normal zero-busy/latency acceptance. All unspecified run inputs listed in V4.2 must be supplied and hashed before expansion/collection; this appendix supplies no operator readiness override.
+
+The runner must reject missing/unknown/duplicate T subprobe IDs against the exact manifest before accepting a T cell. Resolve `abortExpected`, `timeoutExpected`, `cleanupEvidence` and `crashCleanupEvidence` from the shared defaults into each indicated subprobe's requirements; all eight abort-family subprobes require their own settlement and cleanup records. Validate operation/trigger, expected code/status, applicable immutable cutoff/abort timestamp, public settlement/no-late-data assertion, and applicable native-disposal/writer-progress evidence for **every** record. A single cancelled candidate cannot complete an abort cell. Validate the controlled exhaustion outcome before cutoff, with complete returned-native-failure provenance; forced termination's expected incomplete native outcome never supplies normal zero-busy evidence. Independent state reset and ownership/drain are required per subprobe. Preserve the **60-cell** product and **288-subprobe** manifest; no subprobe is optional or a substitute for another.
+
+Authoring validation: Revision 1 appendix JSON parsed and expanded mechanically, then cross-checked against independent table factors: **728 engine / 488 production cells**, zero duplicate request populations; cold/reference/window/subprobe counts and both wall-clock sums agree (exit 0). The frozen **179,674-byte** prefix is byte-identical to `9a8f6fb7` (exit 0). Changed-file inventories from diff plus untracked enumeration and independent tracked-tree/blob comparison agree at **one file**, this plan. Whitespace/newline/local-path checks and `git diff --check` exit 0. No code, test/build, measurement, network, commit or unattended process is part of this delta.
+
+### Revision 1 changelog
+
+| Audit finding | Change |
+| --- | --- |
+| Validity P1 — method-specific contention | Require 20 successful write overlaps and 10 successful fresh-close overlaps per method label, with three-window spread; retained targets each need their own 20. Deficient labels invalidate the cell. W3 grows to eight pairs; no method path is dropped. |
+| Validity P1 — warm under maintenance | Correct the duplicate-idle rationale. Add WM after every W workload with the same pump still active, c12/c24 × both intents, separate 50/500 series and unchanged 300/1,500 ms gates. |
+| Validity P2 — production mixed adapters | Add the compact-only R7 mapping/rationale and explicitly unclaim production full/snapshot mixed-pair latency in the claims table and unclaimed list. |
+| Consistency P2 — shared-session workload | Encode per-intent c12/a1500 alternation, balanced counts, fresh same-projection writer lifecycle/cadence, and pre/post-collection schedule/telemetry validation. |
+| Consistency P2 — T subprobes | Encode all 288 required subprobes, expected outcomes, cutoff/cancel settlement and native cleanup with writer progress, inside the unchanged 60 T cells. |
+
+Claims changed: method-specific successful contention and pump-active post-writer initialized-read latency are required coverage; production full/snapshot mixed-pair latency is explicitly unclaimed (it was already omitted from R7). No gate number changes and no additional path is removed for budget. Totals stay **728 / 488 cells**; windows become **432 / 224**, references **252 / 172**. Estimates rise to **46,627.4 s (12.952 h) / 26,284 s (7.301 h)**; proposed reservations are **13 h 15 min / 7 h 30 min**, rather than 12 h / 7 h.
+
+## P2e semantic enablement (delta, 2026-10-28)
+
+Status: **proposed additive contract `context-read-product-p2e-v1`, Revision 1 of the delta at `194bf599`**, with frozen base `c7471672`. The primary reviews and commits. This appendix specifies future P2e implementation; it claims no implementation, evaluation, measurement or release acceptance. The selected engine profile remains `context-read-product-v1.1`, data version `context-read-v1`, and assembly representation `representation-v2`. All preceding bytes, including the measurement delta, remain frozen.
+
+### E.1 Scope, decisions and precedence
+
+The owner decided on **2026-10-27** to enable semantic retrieval for the product, with hosted OpenAI `text-embedding-3-small`. The engine's consent/privacy requirement is exactly: **“hosted embeddings need owner approval and the host's consent/privacy surface”**. This does not authorize a real provider run during contract authoring or qualification without the separate run authorization in E.9.
+
+This version supersedes precisely the following statements **for explicitly selected P2e**, without editing them:
+
+| Earlier location | Replacement / retained boundary |
+| --- | --- |
+| §5 final paragraph, §6.3 first two paragraphs, §12 Q7, §14 item 5 | The semantic owner decision is resolved above. Replace the pending-decision gate and the engine's separate consent/privacy-copy requirement with the quoted host boundary. Lexical-only defaults remain. §14's production WAL decision remains independent and unresolved by P2e. |
+| §6.1 semantic DTO/state paragraph and §8.3 semantic row | E.6 supplies the opted-in status extension and enablement requirements. Canonical schema/type floors and canonical-only data backup remain unchanged; the accounting ledger is durable control state, not a derived vector cache (E.3). |
+| §6.2 embedding budgets/pump and §6.3 shared accounting | Add E.3/E.5 durable per-owner refresh accounting and the hosted `maxUsd` dimension. Retain service authority, supervision, quanta, ready-only lexical use, process-wide identity/request/concurrency limits and actual-settlement ownership. |
+| §11 P2a pending-decision wording and package sequence / P2e enablement path | The owner decision is resolved; earlier packages remain lexical-only. P2e follows P2a/P2b/P2c and uses P2d only for an explicitly selected WAL deployment. Code support is separate from product enablement, which requires E.8 acceptance, the registered E.9 extension and E.10 quality decision, plus existing applicable package/adapter/deployment gates. Earlier packages grant no semantic support. |
+| `docs/context-read-product.md`, introduction, owner-wide ranking and P2b embedding paragraphs | Their unavailable/zero-provider-call statements remain accurate for P2a–P2d and all configurations without P2e. P2e's explicit configuration uses this appendix instead. This contract draft does not relabel the released adapter as implemented. |
+| §9 P2-07, P2-12 and P2-18 | E.8 adds semantic ranking, ownership and status assertions. Existing assertions still apply to their original defaults and scopes. |
+
+The `P2-product-v4` delta and its **728 / 488** lexical cells, gates, omissions and reservations are unchanged. E.9 is a separately registered extension, not a reinterpretation of a v4 pass. Frozen unified-contract §20 remains authoritative for local embedding, including its exact dollar-free local policy, singleton inference/commit, initialization, identity, child supervision, diagnostics and qualification rules. P2e introduces no canonical migration or legacy sidecar-format change.
+
+Synthetic retrieval-only HR-1 evidence reported hybrid improvements of **+16.9 hosted / +18.9 local points over BM25**. This motivates evaluation; it is not a product-profile quality result, expected gain, acceptance threshold or answer-quality claim. E.10 generates the product-profile evidence needed for later failure analysis.
+
+### E.2 Explicit configuration and API
+
+All configuration here is supplied by trusted host code, outside tool schemas and HTTP/model inputs. P2e is selected only by `semanticConfig` on the new product handles. Omission preserves the existing lexical-only DTOs, capabilities, diagnostics, bytes and provider-call counts exactly, including existing handling of per-read `semantic:true`. On a selected handle, a semantic read additionally requires durable owner enablement and the existing per-read `semantic:true`; that request flag still defaults to false. Merely supplying a provider, key, installed local pack, coordinator or price table does not enable any owner. No environment variable implicitly selects P2e.
+
+Proposed public API (all new data methods return the usual Promise envelope):
+
+```text
+openContextSemanticCoordinator({
+  version:'context-read-product-p2e-v1', supervisor, ledgerPath, ledgerIdentity,
+  host:{moduleUrl,configuration}, provider, refreshCaps, backfillTargets,
+  priceTable?, deadlineMs?
+}, {signal}?) -> coordinator
+
+coordinator.setOwnerSemantic({ownerId,semantic,expectedRevision,deadlineMs?}, serviceCredential, {signal}?)
+coordinator.getOwnerSemanticStatus({ownerId,deadlineMs?}, serviceCredential, {signal}?)
+coordinator.validateOwnerSemanticCoverage({ownerId,expectedTargetDigest,budget:{maxTargets,maxMs}}, serviceCredential, {signal}?)
+coordinator.purgeOwnerVectors({ownerId,budget:{maxItems,maxMs}}, serviceCredential, {signal}?)
+coordinator.close() -> Promise<void>
+
+// Additional constructor-only options; coordinator is an opaque engine handle.
+openContextProductReader({...,
+  semanticConfig:{version:'context-read-product-p2e-v1',coordinator,
+                  queryEmbeddingMaxMs,finalizeReserveMs}
+}, {signal}?)
+openContextIndexMaintainer({...,
+  semanticConfig:{version:'context-read-product-p2e-v1',coordinator}
+}, {signal}?)
+```
+
+`coordinator` is a branded same-process handle registered with the supplied service supervisor, not caller-created own data or a function serialized across IPC. Reader/maintainer lifetimes borrow it; closing a request never closes the coordinator or releases its unsettled reservations. Coordinator close stops admission, cancels and awaits actual provider/ledger-service disposal under its supervisor. The dispatcher passes bounded internal service-channel identities to Workers. Its service, provider execution, estimation and ledger SQLite work run off the host main thread. The host's trusted local module constructs the provider in that supervised service; request Workers receive no provider key. Use the existing `createContextReadHost(configuration)` boundary, with optional runtime return `contextEmbedding:{embedder,policy}` for hosted, or `{embedder,policy,localStatus}` for explicit local. Port metadata and local contracts remain those of §6.3/unified §20; hosted usage settlement is extended explicitly below. Constructor validation checks selection against the port identity. Secrets exist only in the host's runtime provider closure: no key enters committed configuration, ledger, certificates, own-data IPC configuration, fixtures, examples or diagnostics. Configuration contains no `apiKey` option.
+
+In the coordinator service, the same host factory additionally returns the runtime **`semanticLedgerAuthority`** port (required) and, for hosted selection, **`semanticPriceAuthority`** (required). Their exact load/CAS/current methods are defined in E.3/E.2 below. These trusted ports stay in that service Worker; they are neither own-data IPC configuration nor reader-supplied functions. Missing authority wiring refuses new semantic coordinator configuration; later operational authority unavailability leaves attached readers lexical under E.6.
+
+New closed data shapes:
+
+```text
+HostedSelection = {
+  provider:'openai',model:'text-embedding-3-small',dimensions:1536,normalization:'l2',
+  requestTimeoutMs,maxBatchDocuments
+}
+LocalSelection = {provider:'local',model:'bge-m3',dimensions:1024,normalization:'l2'}
+
+HostedCaps = {
+  steady:{maxItemsPerUtcDay,maxUsdPerUtcDay},
+  backfill:{maxItemsPerUtcDay,maxUsdPerUtcDay,maxUsdTotal}
+}
+LocalCaps = {
+  steady:{maxItemsPerUtcDay},backfill:{maxItemsPerUtcDay}
+}
+PriceTable = {
+  authorityId,revision,sequence,effectiveFromUtcMs,effectiveUntilUtcMs,
+  usdPerMillionInputTokens:{'text-embedding-3-small':Usd}
+}
+CurrentPriceRevision = {
+  authorityId,revision,sequence,tableDigest,effectiveFromUtcMs,effectiveUntilUtcMs
+}
+LedgerIdentity = {accountingDomainId,ledgerId}
+OwnerLedgerAnchor = {
+  ownerId,accountingDomainId,ledgerId,ledgerEpoch,bindingRevision,
+  sequence,stateDigest,pending:null|{sequence,stateDigest}
+}
+BackfillTarget = {canonicalPath,readSet,types,intents:['current','history']}
+
+OwnerPolicy = {ownerId,semantic,revision,purgeEpoch}
+SemanticServiceBinding = {
+  kind:'semantic-service',serviceId,credentialBindingId,credentialExpiresUtcMs,
+  credentialDigest,ownerId,scope:'owner',issuedAt,methods,
+  accountingDomainId,ledgerId,ledgerEpoch,bindingRevision
+}
+```
+
+All objects are closed own-data objects unless explicitly identified as runtime handles/ports. Reject unknown/duplicate keys, accessors, proxies, sparse arrays, thenables, malformed Unicode and invalid bounds as `invalid_input` before effects. Existing namespace owner-ID grammar applies. IDs/revisions are nonempty well-formed NUL-free strings ≤200 UTF-16 units, except owner policy `revision`/`purgeEpoch`, which are nonnegative safe integers. Per-operation `deadlineMs` defaults to 5,000 and is an integer 1–5,000, shortened by authenticated expiry; it never renews an HTTP request. All existing IPC/response/credential bounds apply. `ledgerPath` uses the existing safe absolute normalized path grammar; no path is returned in diagnostics. Coordinator opening is explicit supervised service initialization, not a reader side effect. Local pack initialization retains §20's separate 120,000-ms factory lifetime and must already have completed before a read or refresh quantum; coordinator opening does not redefine it as a 5,000-ms load requirement.
+
+`backfillTargets` is a dense array of 1–32 distinct target descriptors. Paths use the same safe grammar; readSet and supported nonempty Memory/Card types use existing product validation and physical schema floors; intents have the literal order above. Normalize/sort targets by physically attested canonical identity, canonical readSet and types; expand each into current then history, yielding 2–64 validation targets. Freeze the per-owner target digest before its first dispatch: SHA-256 of canonical JSON of the ordered `{storeId,canonicalIdentity,readSet,types,intent}` descriptors, using §6.1.1's canonical identity fields and encoding. It excludes path spelling and credentials. Resolve paths only through the safely fenced catalog. Adding targets later does not reset the first-coverage latch or an existing backfill allowance; before first completion, removal/replacement of an initial target refuses `revision_conflict` and cannot manufacture completion.
+
+The coordinator host uses trusted `configuration.semanticServiceBinding`, not a projection/request binding. Service/binding IDs have the existing 1–64-byte opaque ASCII bounds; expiry/issuedAt and the 43-character credential digest follow P2b service issuance. `methods` is a nonempty unique subset, in API order, of `setOwnerSemantic|getOwnerSemanticStatus|validateOwnerSemanticCoverage|purgeOwnerVectors`. The Worker-local host adapter verifies the entire operation/owner/input, explicit owner-wide scope and current ledger-anchor binding against the bounded opaque credential and returns this exact independently authenticated binding. Request credentials, projection-scoped maintenance credentials, narrower scopes, wrong owners or ledger bindings refuse bare `authority_required` before any private ledger/catalog/status observation. Parent service admission/expiry/control and the two currentness samples follow §4.1. Set/status/purge finish mutations, observations and awaits **before** the final-envelope sample; only bounded envelope construction/transport follows it. **Validation instead has the mandatory final canonical-read boundary in E.3.1.** A committed owner change, latch or purge checkpoint survives a later public timeout; failure returns no unauthorized private data. No credential can reclassify itself by setting kind/scope/methods. Provider construction grants no owner read, configuration, validation or purge authority.
+
+`requestTimeoutMs` and `queryEmbeddingMaxMs` are integers 1–5,000; `finalizeReserveMs` is 1–4,999; hosted `maxBatchDocuments` is 1–64. These are maximum allowances, not extra time. The host supplies them before qualification. A reader configuration whose two read allowances exceed its configured request maximum refuses `invalid_input`; an earlier expiry or time already consumed can still leave less time at dispatch. Local selection has no hosted timeout/batching/USD properties; its frozen operation ceiling and singleton policy apply. Hosted policy still explicitly bounds `maxRequests` (positive safe integer), `maxConcurrent` (1–1,024) and positive `maxUsd`; all constrain the same process-wide identity totals. The coordinator supplies the price-table estimator to that hosted policy, rather than accepting an independently priced estimator. Local policy remains exactly `{family:'local',maxRequests,maxConcurrent:1,maxBatchDocuments:1}` and never gains `maxUsd`, `estimateUsd` or `settleUsd`.
+
+`Usd` is a nonnegative decimal **string**, at most 20 characters, matching `(?:0|[1-9][0-9]*)(?:\.[0-9]{1,12})?`, with value ≤1,000,000; no signs, exponent, whitespace or coercion. Normalize output to the shortest decimal form, with `0` for zero. Rates must be strictly positive. For durable accounting and P2e cap decisions compute in integer trillionths of USD, round each reservation/settlement **up** to that unit, and compare exact integers. The unchanged hosted policy's numeric maxUsd/estimator are compatibility inputs, never the source of token usage or durable rounding; require its positive maxUsd to have an exactly representable decimal interpretation within the same bounds/precision and enforce that bound in the coordinator too. Price-table authority/revision/sequence and the hosted model entry are required; unknown model entries refuse. No default or hard-coded rate is used, including the legacy adapter's fallback price. Local configuration forbids a price table, a price authority and all USD fields in `LocalCaps`; local USD observations are null, not a fictitious zero-dollar provider policy.
+
+**Price validity/currentness:** effective timestamps are nonnegative safe-integer UTC milliseconds, with `effectiveFromUtcMs < effectiveUntilUtcMs` and a window of at most 86,400,000 ms; sequence is positive and monotonically increasing within the named host revision authority. The trusted host module supplies runtime `semanticPriceAuthority.current({authorityId,model,utcMs})`, synchronously returning exactly `CurrentPriceRevision` or null. It reads host-published current revision state off the main thread, performs no network/await, and must establish the authority's current revision at that UTC instant; an expired or unverifiable cached assertion returns null. A configured table is not its own currentness authority. `tableDigest` is full base64url SHA-256 of the canonical PriceTable bytes, including normalized decimal rates, under E.4.1's encoding. Both effective bounds and every authority/revision/sequence/digest field must agree, and trusted UTC must lie in the half-open window `[from,until)`.
+
+Check this at reservation admission and again immediately before each **new transmission**, including queries and a previously reserved but unsent batch. Persist the highest accepted sequence/digest per authority in the anchored ledger; a lower sequence, or the same sequence with different revision/digest/window, refuses even after restart or a backward UTC step. Unknown authority, expiry, future-effective table, authority disagreement, throwing/thenable/malformed observer or untrustworthy UTC prevents transmission with `price_unavailable` degradation (E.6). Never fall back to an older revision/rate or a zero estimate. A higher authority revision requires an explicitly matching host table before new sends. A reservation that actually sent retains its original revision/rate for settlement and unknown-usage retention after expiry or replacement; an unsent rejected reservation is released only with proof of no invocation. Currentness failure never reprices existing exposure. These price checks are admission guards, not additional request/service `isCurrent` samples.
+
+For P2e hosted dispatch only, extend the embed function's control argument with **`settleInputTokens(inputTokens)`**, a one-shot callback accepting a safe integer 0..reserved token bound. The trusted transport calls it only for validated provider usage; missing/malformed usage never calls it. The coordinator derives exact dollars from this count and the pinned table, and supplies the legacy process-policy settlement internally. An adapter-supplied independently priced `settleUsd` value cannot settle the durable ledger. The existing embedder object still has exactly `{id,revision,dimensions,normalization,embed}`; local embed arguments/policy receive no new USD callback or token-settlement requirement. This is a versioned hosted adapter requirement, not a claim that the current adapter already supplies token counts.
+
+The host supplies one cap table for **all owners**, validated as follows. Steady items are 1–2,000/day; backfill items are 1–20,000/day. Hosted steady dollars are >0 and ≤`0.05`/day, backfill >0 and ≤`0.50`/day, lifetime backfill >0 and ≤`5`. Backfill daily bounds must be at least the steady bounds, and total backfill dollars at least its daily bound. The product configuration is **2,000 / `0.05` steady** and **20,000 / `0.50` backfill, `5` total**. A host may tighten the table globally before registration; it cannot raise these ceilings or grant owner-specific exceptions through this API. Local uses the same item ceilings; USD caps govern hosted transmission only. Changes need explicit service reconfiguration/re-registration and do not reset spent/reserved amounts.
+
+`setOwnerSemantic` requires independently authenticated **owner-wide** service authority for this method, owner and complete input. A projection-scoped refresh grant or HTTP credential is insufficient. An enrolled but unconfigured owner starts `{semantic:false,revision:0,purgeEpoch:0}`. Its first successful false→true operation safely resolves and durably freezes the initial target set/digest under that authority before any dispatch; target preparation precedes the final-envelope sample. `expectedRevision` is a nonnegative safe integer compared atomically: mismatch returns `revision_conflict`; success durably increments revision once and returns exactly `OwnerPolicy`. An identical value at the current expected revision is a no-op returning the unchanged policy. A true→false transition also increments `purgeEpoch` and queues a durable purge barrier (E.7) in the same transaction. State is read from the engine ledger, never trusted from a request's claimed boolean. Re-enabling during an unfinished purge returns `read_in_progress`; re-enabling a backfill-blocked owner records true but does not remove the block.
+
+### E.3 Durable per-owner accounting
+
+Extend §6.3's **one process-wide shared coordinator**, covering both reads and refresh across all Workers/handles, with an engine-owned durable ledger. It is separate from canonical storage and from discardable product sidecars. Its schema/version is `context-semantic-ledger-p2e-v1`; protect the directory as 0700 and ledger/companions as 0600 under the existing safe-file rules. Ledger access is explicit service work, never canonical DDL. Different processes sharing an owner must use the same physically identified ledger and transactional reservation authority; aliases, pump IDs, paths to canonical stores, provider/model changes, owner policy revisions and handle/process incarnations cannot create a fresh owner allowance. The host must bind a stable accounting domain for an owner across its stores. Refuse semantic admission if that binding or cross-process coordination cannot be established.
+
+**Durable identity anchor:** constructor `ledgerIdentity` is exactly `LedgerIdentity`. Its IDs are opaque nonempty ASCII strings ≤64 bytes. The ledger's immutable closed header is `{version:'context-semantic-ledger-p2e-v1',accountingDomainId,ledgerId}`. Every owner row additionally binds `{ownerId,ledgerEpoch,bindingRevision,sequence,stateDigest}`. Epoch/bindingRevision are positive safe integers; sequence is a nonnegative safe integer. The trusted host module supplies runtime `semanticLedgerAuthority.load(ownerId)` and `semanticLedgerAuthority.compareAndSwap(expectedAnchor,nextAnchor)`. These bounded supervised service calls run outside SQLite transactions and before any final currentness/read boundary. They read/update an authenticated, durable, monotonic **host owner registry independent of ledgerPath, canonical files, sidecars and their backups**. Owner identity selects the registry entry; constructor paths, request data and a new coordinator cannot select another registry. The registry retains a binding/tombstone through owner disablement, erasure, cache discard and host restart. Its unavailability or an absent/unverifiable entry refuses semantic admission; absence is never permission to enroll again.
+
+`OwnerLedgerAnchor` is the registry's exact closed record; digests are full 43-character base64url SHA-256. `stateDigest` covers canonical bytes of the complete engine-owned owner control state, including all counters/reservations/idempotency/fencing records, phase/latch/target and validation checkpoints, policy/purge/catalog state, price high-water marks and shared identity exposure. It excludes only the digest itself, transient sockets/handles and file-path spelling; encode ordered logical tables by table name then primary-key bytes under E.4.1's encoding. The engine computes/verifies these bytes in service work; no caller-supplied digest substitutes for verification. Sequence advances on each durable owner-state transaction, with a digest retained even after safe compaction. The physical ledger identity is safely descriptor-fenced on opening/use as well as logically bound; a header alone cannot prove continuity.
+
+**Initialization authority:** before first use, the host's independently authenticated owner-enrollment authority may provision the engine-generated zero-state header/row and sequence-0 anchor once, by registry create-if-never-bound under exclusive service ownership. It must establish from durable enrollment/tombstone history that the owner has never had a ledger. This provisioning is explicit control-plane initialization, outside ordinary reader/refresh/set/status calls; `setOwnerSemantic` cannot initialize a missing binding. A fresh owner starts false as in E.2 only after this enrollment. Request/projection credentials and a caller-selected ledger path confer no enrollment authority. Changing a host configuration value cannot grant it.
+
+**Continuity protocol:** under the registry's cross-process per-owner CAS/fencing authority, authenticate the committed anchor and verify header, owner binding, epoch, sequence and state digest before admission. Prepare the next anchor by CAS from `pending:null` to `pending:{sequence:sequence+1,stateDigest:nextDigest}`; durably commit that exact state/sequence/digest in the ledger; then CAS-seal it as the committed anchor with pending null. All three steps complete **before transmission or any vector publication depending on the mutation**. Competing/stale incarnations cannot advance the same anchor or dispatch against an unsealed state. A crash with pending state admits no work: after confirmed disposal, recovery can finish only the exact digest-matching prepared commit, or cancel a preparation whose ledger still matches the exact previous committed state and which could never have dispatched. Any other mismatch is quarantined. No automatic creation, copied header, rewritten owner ID or empty replacement can satisfy this comparison. Ledger native transactions contain no authority callback/await.
+
+**Recovery authority:** loss, replacement, migration or backward restore requires stopped admissions, confirmed resource drain and the host's separately authenticated owner-ledger recovery authority. It must reconcile against the retained registry/charge evidence, preserve or conservatively increase all spent/unknown exposure and safety barriers, preserve the latch/lifetime total, then CAS a new bindingRevision/ledgerEpoch and invalidate old service/fencing bindings. A current checkpoint may be moved to a newly fenced file only by this explicit procedure. Unknown history keeps the owner lexical-only; there is no reset, forgiveness or ceiling-raise API here. A fresh ledger B after exhausting ledger A fails header/anchor or sequence/digest checks with bare `index_unavailable` on semantic coordinator operations, no private counts or reset. Reader handles continue lexical with `ledger_unavailable`; authority mismatches retain `authority_required`. Storage failures retain their sanitized native codes on control operations. A failed coordinator open exposes its supervised cleanupId without an active handle.
+
+The ledger durably stores owner policy/revision/purge epoch, UTC-day cumulative item and USD charges/reservations, lifetime backfill charges/reservations, first-coverage latch/target digest and validation progress, reservation state and pinned price revision/rate/window plus authority high-water marks, and purge catalog/checkpoints. Reservation/idempotency records cover **queries as well as refresh**, retaining the accumulated identity request/money exposure across coordinator/process replacement; restart never creates a second copy of the same declared provider allowance. It stores no query/document text, vector, bearer, key or raw provider response. IDs needed for accounting/catalogs are private service state and never diagnostic labels. Owner counters are aggregate across projections, namespaces, types, intents, identities, cron renewals and service processes. Current/history work has no independent allowance. Refresh day/item/USD caps are additional to the frozen identity/process request, money and active-child limits; every applicable constraint must admit the attempt.
+
+**Phase:** backfill lasts until the mandatory operation in E.3.1 establishes coverage first complete for all registered initial targets (both intents, exact physical types/selections and selected identity). Freeze the target-set digest before first dispatch. Targets cannot be dropped to manufacture completion. After the latch, all work is steady, including subsequent edits, selection/provider/model changes, purge/re-enable and restore. The latch and lifetime backfill spend never reset. Before first completion, hitting the total hosted backfill ceiling durably blocks semantic reads and refresh; the owner stays lexical-only on later days/restarts/toggles until the host intervenes through a separately reviewed recovery decision. No reset/ceiling-raise API is added here.
+
+**Item** means one canonical document submitted in an embedding invocation attempt, even on failure, refusal, stale result or retry explicitly requested later; a 64-document hosted batch consumes 64, a local singleton consumes one. Reuse of an already valid exact-identity vector consumes none. Reserve item counts before invoking, and never refund an invoked attempt. Query embeddings consume the existing shared query/request/money limits, **not** the refresh item/day/backfill dollar allowance. Query charges are separately labeled so query traffic cannot be mistaken for refresh throughput or consume a second copy of the refresh allowance. Backfill blocking and owner off still prevent queries.
+
+Atomic reservation and settlement protocol:
+
+1. After authority and ready-lexical preflight, plan a bounded batch outside transactions. Establish price currentness under E.2 and obtain a conservative input-token upper bound from the validated hosted adapter (E.4). Reserve its items and `ceil(tokensBound × pinnedRate / 1,000,000)` dollars against **all** applicable refresh UTC-day/lifetime, quantum, pump-window and identity limits. Include unsettled reservations when deciding whether the next item or USD binds; equality at a cap admits no further positive charge. A batch that will not fit is reduced deterministically in canonical identity order or not dispatched. No partial transmission of an unreserved batch.
+2. Commit and anchor-seal a globally unique reservation ID and owner/day/phase/identity/price/batch-count binding durably **before** invoking a provider. The process coordinator reserves identity/concurrency capacity as part of this admission; failure in either layer prevents dispatch and cannot leave spendable duplicate capacity. Ledger transactions serialize competing processes; reservation ownership has a fencing incarnation. A durable `reserved` record cannot send. Durably transition and seal it to `may_transmit`, then call the existing synchronous `beforeDispatch` guard immediately before transmission. The guard checks one-use reservation binding, current price authority/window/high-water agreement, current owner off/purge epoch, first-coverage phase/pending-validation barrier, immutable request/service grant, abort/cutoff, projection/fences and provider identity. An unsent backfill reservation cannot transmit after the steady latch without re-admission under the steady caps; sent work retains its original phase/rate binding and counts in same-day exposure. The guard is not a third `isCurrent` callback. No network/provider/callback/await runs inside a ledger, canonical or sidecar transaction.
+3. After every await, revalidate binding/deadline/fences before accepting results or publishing vectors. Settle once, idempotently by reservation ID, using validated provider-reported input-token usage and the **reserved** price revision/rate. Never recompute an in-flight charge from a newer table. Validated actual dollars may release the unused dollar reservation only after underlying settlement; invoked item counts stay charged. Duplicate/out-of-order settlement cannot credit twice. A valid usage report may settle a failed vector response; vector validity and billing are separate.
+4. Missing, malformed or untrusted usage, timeout after possible transmission, lost reply and crash leave the **full conservative reservation charged**. Record `usage:'unknown'`; do not estimate zero, refund on timeout, or discard the charge at day rollover, close or restart. Proven never-invoked work may release its tentative reservation exactly once. A crash in `reserved` is provably unable to send; `may_transmit` is uncertain and keeps the full charge. Restart never replays a possibly transmitted request. A later explicit attempt needs a new reservation and is charged independently. A report exceeding its validated bound is a provider protocol failure: retain the reservation, block further dispatch for that provider pending reconciliation, and never publish its vectors or silently overrun a cap.
+5. Public timeout/degradation does not settle underlying execution. Active capacity remains pinned until actual provider settlement, or confirmed socket/child disposal; uncertain local child termination keeps §20's quarantine. Recovery verifies the former coordinator/Worker resources are disposed before replacing ownership. A stale fencing incarnation cannot send, commit or settle. Failure to open/validate/recover the ledger disables semantic work truthfully; it never creates an empty replacement. Native ledger failure retains existing sanitized storage errors on control operations; reads degrade as E.6 specifies.
+
+The refresh day is `floor(trustedUtcEpochMs / 86,400,000)`, rendered `YYYY-MM-DD` in UTC. Reserve against the day sampled at admission; settling after midnight updates **that reservation's day**, not the new day. At UTC rollover new reservations use the new day's allowance; outstanding old-day reservations retain their charges and active slots. Persist a nondecreasing day high-water mark: a backward clock step cannot reopen an older allowance; an untrustworthy clock fails semantic admission. Steady transition on the same day applies its lower cap to **all charges already made that day**, rather than granting a second daily pot. Lifetime backfill dollars have no rollover. Tests inject UTC and monotonic clocks independently.
+
+Accounting survives sidecar discard, cron ticks, Worker/process crashes and deployment. Canonical-only **data** backup remains recommended, but the ledger/policy/latches/unknown charges require separately durable control-state retention. Restore/replacement must preserve or conservatively reconcile current charges and purge barriers before semantic admission; an old ledger backup cannot rewind spend. If that cannot be established, keep lexical-only until host recovery. Resetting the ledger while rebuilding a cache is prohibited. Ledger record compaction may retain aggregate charges/tombstones sufficient for idempotency and fencing; it cannot erase unresolved reservations or safety barriers.
+
+#### E.3.1 Executable first-coverage validation
+
+`validateOwnerSemanticCoverage` is an independently authorized **owner-wide** coordinator operation, not a projection maintainer method or test hook. Its input is the exact E.2 shape: `expectedTargetDigest` is the frozen full digest; `maxTargets` is an integer 1–64 and `maxMs` 1–5,000. The host's authorize request includes engine-stamped targetSetDigest, selected VectorIdentity and purgeEpoch alongside the complete input; the host verifies these against its owner-service issuance, while the returned closed SemanticServiceBinding retains E.2's exact fields. Thus the grant binds method, complete input, owner, current ledger anchor, immutable initial targets and identity/epoch without accepting caller-chosen targets. A mismatched target digest refuses `revision_conflict`; request/narrower service credentials refuse `authority_required` before catalog access. It performs no embedding, lexical repair or deep vector scan and consumes no embedding item/USD allowance. It is usable after provider budget exhaustion as well as on a no-op refresh. Owner off, purge or persistent ceiling block cannot be cleared by it.
+
+Each quantum validates at most maxTargets target receipts in canonical target order, within maxMs including checkpoint/authority/final work. For each target it opens safely fenced read-only canonical/sidecar views, authenticates the lexical certificate and E.4.1 vector certificate/pointer, and checks complete per-type coverage, identity, epoch and fresh canonical/access/dependency fences. Persist an engine-authenticated receipt containing target ordinal/digest, both publication/validation digests, identity/epoch and captured fence/physical bindings. Anchor-seal its checkpoint before the final service sample. Bound each receipt to 4,096 bytes and the whole ≤64-target receipt set to 262,144 bytes of private service storage; no text/vectors. Missing/changed/invalid targets remain unvalidated and are revisited on the next explicit quantum. Restart resumes only authenticated matching receipts; changing any captured binding invalidates that receipt. A prior `status:'complete'` response alone is insufficient.
+
+Once every target has a receipt, perform a **bounded final pass over all ≤64 targets**, using keyed certificates and scalar fence probes only, after all callbacks/awaits, registry preparation and diagnostic/local observer work have finished. This fixed final pass is additional to maxTargets receipt work and included in maxMs; failure to reserve enough remaining time returns partial without a new latch. Take the second synchronous owner-service `isCurrent` sample immediately before opening **fresh** canonical read transactions for this pass, ending older snapshots first. Group targets by canonical store, acquire one new snapshot per store in deterministic store order, and compare every target's exact lexical/vector publication, counts, physical identity, access and canonical/dependency fences under matching sidecar read transactions. No callback, RPC, provider, counter or await occurs inside or after these final reads. There is no cross-store atomic snapshot or authority lease; each target's comparison linearizes at its store's final snapshot. Any mismatch yields partial and invalidates the affected receipts; native/cutoff/authority errors retain their frozen precedence.
+
+Before this final pass, prepare in the external anchor the exact prospective latch state (retaining all charges/checkpoints); **after successful final comparisons**, synchronously commit only that prepared `firstCoverageComplete:true`/steady transition by a ledger CAS in this same service Worker, then construct the bounded envelope. The CAS rechecks owner policy revision, epoch, identity, target digest, ledger fencing/sequence and absence of conflicting reservations/mutations. No host callback/await follows final canonical reading. Anchor sealing occurs on the next authorized service admission, outside any final-read interval; until that seal, no further semantic transmission/publication is allowed. A crash or timeout after the ledger commit can leave a true latch/pending seal even without a delivered complete response; matching prepared-state recovery seals it without granting another backfill pot. A failed comparison leaves no new latch and its unused preparation is reconciled on the next service admission. The latch attests those completed target observations; later canonical changes never reverse it. A first-completion call returns `status:'complete'` only after the CAS and all comparisons before cutoff; a later idempotent call returns the durable latch and cannot reset allowances.
+
+The exact success DTO is `{status:'partial'|'complete',firstCoverage:FirstCoverageStatus}`, where `FirstCoverageStatus = {state,targetSetDigest,validatedTargets,totalTargets,checkpoint}`. State is `pending|validating|complete`; counts are safe integers with `0 <= validatedTargets <= totalTargets <= 64` and totalTargets≥2. Pending has validated0/checkpoint null; validating has a durable opaque ≤200-unit checkpoint; complete has all targets validated and checkpoint null. Before a latch, partial is truthful even if every staged receipt exists but final comparison has not succeeded. This owner-wide progress is exposed only by this method and coordinator status (E.6), never ordinary projection status.
+
+An already-latched idempotent invocation reports the **historical first-completion observation**, not current vector readiness, using the final-envelope sample after its ledger observations. Partial validation quanta without a final canonical pass also use that branch. The first transition to complete requires the full final canonical pass above; no entry-only checkpoint/status response is allowed.
+
+**Mandatory trigger:** every embedding refresh, including direct public calls, registers a bounded provisional complete hint for an initial target with the coordinator during its preparatory service work, **before** that refresh's final sample/read. A hint binds exact certificate/identity/epoch bytes and is never itself readiness evidence. The last complete hint durably marks validation pending before any later backfill send; only this validation operation may clear that barrier after an invalid-target result or latch completion. The P2e pump observes the returned complete statuses and, on startup/resume, explicitly probes every initial target's public maintainer status. As soon as all targets report complete and the latch is false, or the durable pending flag is present, it must invoke this public operation with its separate owner-wide semantic service credential (E.5), continuing bounded validation quanta across renewals until complete or an explicit invalid-target/failure outcome. No subsequent backfill embedding quantum for that owner may be admitted while validation is pending. The shared coordinator enforces the barrier for direct callers too, so stopping/restarting a pump or changing its ID cannot bypass it. An independently owned service using direct refresh must invoke the same public validation before further backfill; omission stops paid progress rather than retaining a spendable larger pot. On an invalid target, resume that target's explicit maintenance and trigger validation again when all report complete. Lexical turns continue. Missing validation authority refuses P2e pump setup rather than silently retaining backfill. Once latched, the next admission seals the anchor and applies **2,000 items / `0.05` per UTC day**, counting all earlier same-day exposure; later edits never receive a fresh 20,000/`0.50` allowance.
+
+### E.4 Provider and read execution
+
+Hosted selection is exactly OpenAI **`text-embedding-3-small`, 1,536 dimensions, L2**, with frozen `rrf-k10`. Retain the existing adapter's conservative application limits: **1–64 inputs/request**, each nonempty/well-formed/NUL-free, `UTF8Bytes(text)+16 ≤8,192`, sum of those bounds **≤300,000**, serialized request **≤2,097,152 bytes**. Apply the tighter configured `maxBatchDocuments`, refresh items and existing 2,000,000 text-unit bound. These byte-derived token bounds are conservative application admission limits, not a claim about the vendor's maximum context. No truncation or splitting of a canonical item to manufacture coverage. Responses are bounded by `min(67,108,864, inputCount × dimensions × 32 + 65,536)` bytes. Validate exact model, one vector per input, unique complete indices, finite float32 components, dimension and L2 norm under existing adapter normalization/validation. Usage is trusted only as safe nonnegative `prompt_tokens` within the reserved bound, with `total_tokens === prompt_tokens`; otherwise E.3's unknown-usage rule applies and the malformed response refuses.
+
+The host injects provider construction and its runtime credential. Use the existing HTTPS OpenAI embedding endpoint, refuse redirects, and send no credentials to an alternate origin. This version adds no endpoint override. Provider timeout is the earliest of configured `requestTimeoutMs`, the query sub-deadline or refresh quantum deadline, authenticated expiry and the immutable outer cutoff. Exactly one query string is sent in a query invocation; no batching with document work, retries, second query embedding, planner expansion, hosted→local fallback or model auto-selection. The transport must invoke `beforeDispatch` after any asynchronous preparation and immediately before sending. Bound response reading and cancel/drain under supervisor ownership; raw response/error messages never enter diagnostics.
+
+Local `bge-m3` is **explicit opt-in only**, not a hosted failure fallback. Retain unified §20 verbatim: verified pinned pack, `local:bge-m3:dense` manifest revision, 1,024 dimensions/L2, 8,192 actual tokenizer tokens including special tokens, no truncation, one document/request/committed transaction, separate initialization, no lookup-time load/download/restart, dollar-free policy, constant local status observer and independent supervised child bundle. P2e's engine-ledger item counters add durable owner caps; they do not change the local provider policy or substitute zero-valued USD fields.
+
+The independently certified vector protocol **`context-vector-validation-p2e-v1`** is fully specified in E.4.1. It binds the exact lexical publication/captured fences and **VectorIdentity** below, plus owner policy purge epoch. This is separate from the unchanged lexical validation record. No existing vector certificate is implicitly upgraded.
+
+```text
+VectorIdentity = {provider,model,id,revision,dimensions,normalization}
+```
+
+`provider/model/dimensions/normalization` match the selected literals; `id/revision` retain validated embedder metadata bounds. Hosted identity retains its endpoint-bound port ID and `provider-unversioned` revision; that is not a claim that upstream weights are immutable. Local revision is the verified manifest digest under §20. All six fields, representation and canonical item/body revisions enter vector keys/manifests/certificates, cached ranking/cursor bindings and publication validation. A provider, model, dimension, normalization, revision or endpoint-identity change invalidates the selected vector publication and requires explicit refresh; never mix, resize, relabel or concatenate identities, even at equal dimensions. Reuse only when **all** existing key/fence/epoch bindings still match. No model switch mutates a lexical certificate. Product sidecar format 1 may add the separately versioned vector records/tables under coordinated maintenance; legacy storage and local-pack formats do not change.
+
+The host keeps the caller's existing request window: **2,000 ms for its short surface, 5,000 ms for its other surfaces**, supplied via existing `requestControl.requestMaxMs` and method deadlines. Surface labels are not engine inputs. Earlier method/credential/request bounds and time spent opening still win. Neither coordinator nor provider creates another deadline.
+
+For a fresh semantic read, perform authorized complete-coverage and capacity preflight for the **exact selected readSet/types/intent/lexical publication/identity/epoch** before reserving a query attempt. Validate every required vector and the existing **20,000-vector / 134,217,728-byte** limits. Missing/stale/invalid/incomplete vectors or capacity overflow make zero query embedding calls and return the fully validated lexical ranking with honest semantic diagnostics. The larger backfill cap does not raise resident-vector capacity. Unrelated namespace/cache contents never affect admission or ranks.
+
+Let `C` be the frozen operation cutoff and `t` the monotonic time after preflight. Set query sub-cutoff to `min(t + queryEmbeddingMaxMs, t + requestTimeoutMs [hosted only], C - finalizeReserveMs)`. If it is not after `t`, invoke nothing and degrade with `timeout`. Otherwise reserve, guard and invoke **exactly one** query embedding. All coordinator/transport time counts inside that sub-budget. If the attempt fails or cannot complete within it, discard any late vector, preserve lexical order and expose the reason; complete lexical scoring, exact counting/assembly and final canonical validation before `C`. A lexical result unable to complete before `C` becomes bare `read_timeout`, not an extended or partially validated result. Finalize reserve is an admission allowance, not a guarantee of success.
+
+Score one pooled authorized semantic list and one pooled lexical list; fuse **once**. Hosted RRF uses `k=10`, depth **24 per channel**, weights **0.5/0.5**, absent membership zero, union ≤48 and output horizon24/limit12 default/24 maximum. Local keeps `rrf-k60-d12`. Raw-score and fusion ties use binary canonical `(owner,scope,project,type,id)` order. No per-namespace top-k, quota, score normalization or product-side RRF. Freeze continuation ranking; continuation/fetch/status/capabilities and `semantic:false` make zero query/document embeddings. Reads never embed missing documents or start maintenance.
+
+Keep exactly the existing entry/final `isCurrent` samples and post-await binding/deadline/data-fence guards. Accounting, coordinator calls, local observer samples, counter work and all awaits finish before the final sample/read. No third authority callback or callback/await inside or after final canonical reading. Errors carrying private trace/counts use the final-envelope branch. Scope/store/fence/lifecycle errors retain frozen precedence over semantic degradation, with private diagnostics suppressed as required.
+
+#### E.4.1 Published vector validation handoff
+
+Mirror §6.1.1's certified-generation handoff with separate immutable vector generations, a keyed `vector_validation_records` table and one `vector_publications` pointer per normalized projection. Only explicit maintenance may write these. A fresh/restarted reader consumes their authenticated bytes without maintenance, COUNT or deep manifest scans. A vector certificate supplies integrity/coverage evidence, never authority or present readiness. It may certify partial captured coverage; fusion still requires complete current coverage.
+
+One vector validation record is exactly this **closed object, ≤16,384 UTF-8 bytes including mac**:
+
+```text
+{
+  version:'context-vector-validation-p2e-v1',profile:'context-read-product-v1.1',format:1,
+  storeId,canonical:{device,inode,applicationId,userVersion,schemaVersion},
+  sidecar:{device,inode,incarnation,schemaVersion},
+  projectionDigest,accessDigest,canonicalFenceDigest,dependencyFenceDigest,
+  tokenizer,representation,
+  lexical:{publicationId,generation:{id,sequence,checkpoint,incarnation},
+           manifestDigest,validationDigest},
+  identity:VectorIdentity,purgeEpoch,
+  generation:{id,sequence,checkpoint,incarnation},publicationId,manifestDigest,
+  counts:{byType:{memory?:{eligible,embedded},card?:{eligible,embedded}},
+          vectors,vectorBytes},
+  mac
+}
+```
+
+Identity/format/schema/scalar/ID bounds are §6.1.1's exact bounds; generation sequence is positive, checkpoint nonnegative and incarnation nonempty. Purge epoch is a nonnegative safe integer from the durable owner policy. All digests and mac are **full 43-character unpadded base64url** SHA-256/HMAC-SHA-256 outputs. The stable accessDigest binds owner/readSet and optional ownerGeneration exactly as in §6.1.1. The lexical member reproduces the exact referenced publication/generation/manifest; `lexical.validationDigest` hashes the full canonical lexical record including its mac. Its physical/store/projection/access/fence/tokenizer/representation bindings must equal this record's. The vector generation and publication IDs are independent of lexical IDs. By-type keys are exactly requested supported types in the canonical type order; counts are safe nonnegative integers, eligible equals the certified lexical count, embedded≤eligible, vectors equals the sum of embedded, and vectorBytes equals the sum of present raw component-byte lengths. Complete requires equality in every type. No text, raw vectors, plaintext namespace list, credential or provider key is stored in this certificate.
+
+**Canonical encoding and authenticated payload:** recursively sort object keys by UTF-8 bytes; preserve the prescribed array/typed-identity order; emit strict UTF-8 JSON with no BOM, insignificant whitespace or trailing LF. Integers use minimal unsigned decimal digits within safe range; no negative zero/exponents. Strings use JSON escaping of quote, backslash and controls (`\b`, `\t`, `\n`, `\f`, `\r`, otherwise lowercase `\u00xx` for remaining U+0000–001F); other Unicode scalars are emitted directly with no normalization. Reject malformed Unicode, duplicate/unknown keys and any record/pointer bytes differing from this canonical re-encoding. Usd inputs elsewhere use their normalized decimal strings. SHA-256 digests hash these exact bytes. For this record, authenticated payload is the canonical record **with only mac omitted**, prefixed by `UTF8('context-read-product-v1.1/context-vector-validation-p2e-v1')`, then one zero byte. Compute HMAC-SHA-256 with the existing store-local secret and encode unpadded base64url. This distinct MAC domain cannot authenticate a lexical/progress record or vice versa; compare the full MAC before trusting counts. No provider credential is used for certification.
+
+**Manifest bytes:** `manifestDigest` is SHA-256 of the complete canonical object `{version:'context-vector-manifest-p2e-v1',lexicalValidationDigest,identity,purgeEpoch,representation,rows,counts}`. `counts` is exactly the certificate's counts. `rows` has one closed row for **every eligible lexical document**, sorted by binary canonical `(owner,scope,project,type,id)`:
+
+```text
+{item:{ownerId,scope,projectId,type,id},revision,bodyRevision,representation,
+ vector:null|{encoding:'f32le',dimensions,bytes}}
+```
+
+Item/revision/bodyRevision values retain their frozen canonical types/bounds, including inapplicable nulls. An absent exact-identity vector is null and counts as a gap. Present `bytes` is unpadded base64url of exactly `dimensions*4` little-endian IEEE-754 float32 component bytes in dimension order, finite/nonzero/L2-validated by the existing provider contract; canonicalize negative zero components to positive zero. Never hash JSON floating-point approximations or host-endian buffers. Every present vector must match the row's canonical/body revision, representation, selected six-field identity and owner epoch. The maintainer verifies the full row join, unique identities, eligibility, vector values and aggregate counts before hashing. Stream this potentially large manifest only in bounded, checkpointed maintenance quanta against unchanged staged lexical/vector generations; the certificate/pointer bounds do not authorize loading the manifest into a request. A reader authenticates its digest rather than recomputing it.
+
+The publication pointer is a **closed canonical object ≤4,096 UTF-8 bytes**, stored under the exact projectionDigest key:
+
+```text
+{version:'context-vector-publication-p2e-v1',profile:'context-read-product-v1.1',
+ projectionDigest,accessDigest,identityDigest,purgeEpoch,lexicalPublicationId,
+ generation:{id,sequence,checkpoint,incarnation},publicationId,validationDigest}
+```
+
+`identityDigest` hashes the canonical six-field VectorIdentity; `validationDigest` hashes the **full canonical vector certificate including mac**. Every pointer scalar/member must agree with its authenticated record and the current lexical pointer. Pointer, keyed record and immutable generation are read in the **same sidecar transaction**. A pointer has no separate MAC: its exact bindings/full-record digest must match the authenticated record; swapping or corrupting either cannot authorize another generation. Missing record/pointer is unavailable validation evidence, never zero counts or complete-empty.
+
+**Atomic publication/invalidation:** after bounded deep verification and the final pre-commit canonical/dependency/policy/identity fence checks, one sidecar transaction installs the immutable vector generation, full certificate and pointer together. A crash leaves the old matching set or incomplete progress, never a new pointer without its certified generation. Revalidate readiness at §6.1.2's fresh post-commit canonical snapshot; a racing canonical commit can leave an intact captured certificate immediately stale. Vector updates never rewrite unchanged lexical certificates/statistics. Partial staging is unsearchable; a separately certified partial publication reports partial, never hybrid readiness.
+
+Identity selection is frozen per process as in §20. A changed selected identity immediately makes the old pointer unusable to new readers; explicit reconfiguration closes/drains old ownership and, in the first coordinated sidecar maintenance transaction for that selection, invalidates affected old vector pointers/records before publishing replacements. Within that transaction invalidation and any replacement are atomic. Old identity rows may be reused only under their own fully matching keys. On owner disable/purge-epoch change, the durable epoch barrier immediately rejects every old pointer/result across all cataloged stores, including before physical deletion; each purge sidecar batch atomically invalidates its pointers/records with deletion/checkpoint (E.7). No request writes invalidation markers. Reader comparisons of selected identity and current owner epoch remain mandatory even if an older physical pointer survives a crash. Reconfiguration/purge cannot leave an accepted pointer referring to changed identity/epoch rows.
+
+Fresh/restarted readers perform only safe descriptor/scalar schema checks, keyed pointer/record reads, bounded canonical decoding/HMAC/digest comparison and the existing bounded canonical/access/dependency probes. They recheck publication/identity/epoch/fences at final validation. Invalid encoding/MAC/manifest or pointer bindings yields unavailable semantic coverage, zero query calls and lexical degradation; stale canonical fences retain frozen index/currentness precedence. No compact fence prefix, request credential, process-local warm cache or earlier complete response can replace these bytes. P2e-10 tests this protocol independently.
+
+As with §6.1.1, same-database DML is trusted only through the coordinated maintenance writer, which atomically replaces/invalidates affected evidence. Independent deep verification tests manifest/vector-row corruption; bounded reader probes reject observed row/binding corruption but do not promise to detect arbitrary same-user DML or silent bit rot without a deep scan. This inherited trust boundary never permits stale canonical refetch or a mismatching certified count.
+
+### E.5 Refresh and supervised organize scheduling
+
+The host's periodic **organize cron** renews P2b's owned supervised pump, which uses independent service authority and `mode:'embeddings'` quanta on ready, certified lexical projections. Lexical work stays a distinct mode and makes zero provider calls. Ready-only checks apply even on the first backfill; no embedding quantum repairs lexical storage. The cron/HTTP lifetime must not orphan the pump or its coordinator. Observe its completion notification and actual cleanup as in P2b; failure retains checkpoints and charges, never automatically restarts an expensive run.
+
+For P2e hosted mode, extend these existing closed shapes:
+
+```text
+refreshContextIndex input:
+  {readSet,types,intent,mode:'embeddings',budget:{maxItems,maxMs,maxUsd}}
+renewContextMaintenancePump additions:
+  semanticConfig:{version:'context-read-product-p2e-v1',coordinator}
+  semanticServiceCredential
+  firstCoverageValidation:{maxTargets,maxMs}
+  projections:[{options,types,modes?}]
+  budgets:{maxItems,maxMs,maxUsd}
+  quantum:{maxItems,maxMs,maxUsd}
+  window:{id,endsAtMonoMs,usedItems,usedMs,usedUsd}
+pump status: existing fields plus {usedUsd,maxUsd}
+```
+
+`maxItems` remains 1–1,024/quantum; `maxMs` remains 1–5,000/quantum. Existing minute item/time bounds, renewal rules and no-overlap ownership remain. Hosted quantum/refresh `maxUsd` is `Usd` in **0..0.50**; minute `maxUsd`/`usedUsd` use the general `Usd` bound, with used allowed to exhaust the window. Zero explicitly permits no paid dispatch. All hosted embedding fields above are required when that mode is enabled. Reserve full planned monetary exposure before transmission, then settle/retain unknown usage under E.3; host-supplied `usedUsd` is a conservative floor and can never overwrite lower durable totals. Cross-process pump-window reservations are in the durable ledger; changing a window ID cannot renew an unexpired window. P2b's conservative item/time quantum reservations remain separate from actual document-attempt/day counters and must not charge the latter twice.
+
+`modes` is exactly `['lexical']` or `['lexical','embeddings']`, defaulting to the former. Existing projections/options and both-intent round robin remain; lexical readiness gets priority before an embedding turn. The validated ≤5-second full observation sweep includes the added turns; semantic work cannot starve lexical catch-up or extend that bound. Cumulative time/items/USD, owner/day/backfill caps and identity/process limits all intersect. Owner off or backfill blocked skips embedding turns without invocation/refresh-item charge; lexical turns continue. Any item or USD constraint stops further paid work independently, without claiming semantic completion.
+
+An embedding-enabled P2e pump also requires the **separate owner-wide** `semanticServiceCredential` allowlisting `validateOwnerSemanticCoverage` for its owner/anchor/initial targets, plus `firstCoverageValidation:{maxTargets:1..64,maxMs:1..5000}`. The existing projection `serviceCredential` still authorizes refresh/status only; neither substitutes for the other. Validation turns follow E.3.1's mandatory trigger, are charged to cumulative time/observation scheduling, and receive time reserved independently of embedding item/USD exhaustion. They make zero provider calls and do not consume document-attempt allowance. Setup must leave room for them within the existing observation cadence; otherwise refuse `invalid_input`. Pending validation blocks subsequent backfill sends for that owner, while lexical turns and supervision continue. The same additions apply to local embedding pumps without adding USD fields. Direct public validation is available to an independently owned service with the same authority and bounds.
+
+Local P2e refresh/pump uses the same added modes/coordinator and durable owner item counters, with the original `{maxItems,maxMs}` budget/window shapes; USD input/status fields are **absent**, not zero placeholders. This leaves frozen §20's policy untouched. A hosted+local mixed pump is unsupported; select one provider per coordinator and register separate pumps if explicitly needed, with owner counters still shared. Without `semanticConfig`, all old pump/refresh/status shapes and validation remain exact.
+
+### E.6 Status, capability and degradation DTOs
+
+Only P2e-configured handles extend §6.1's `semantic` member as follows; lexical, progress, outer coverage, namespace selection and physical schema rules remain exact:
+
+```text
+semantic = {
+  state,reason,extension:'context-read-product-p2e-v1',
+  enabled,ownerPolicyRevision,identity:VectorIdentity|null,
+  coverage:{status,byType}
+}
+byType = {memory?:{eligible,embedded},card?:{eligible,embedded}}
+RefreshLedgerStatus = {
+  phase,utcDay,itemsCharged,itemsReserved,itemLimit,
+  usdCharged,usdReserved,usdLimit,
+  backfillUsdCharged,backfillUsdReserved,backfillUsdLimit,
+  firstCoverageComplete,blockedReason
+}
+PurgeStatus = {
+  state,epoch,deletedVectors,checkpoint,remainingVectors,reason
+}
+OwnerSemanticStatus = {
+  extension:'context-read-product-p2e-v1',owner:OwnerPolicy|null,
+  refresh:RefreshLedgerStatus,purge:PurgeStatus,
+  firstCoverage:FirstCoverageStatus|null
+}
+```
+
+`getOwnerSemanticStatus` returns exactly `OwnerSemanticStatus`, solely under E.2's owner-wide semantic service binding allowlisting this method. HTTP/request credentials and personal-only/project/projection-scoped service credentials refuse **bare `authority_required` before ledger/catalog access**, even for the same owner; changed final authority returns bare `scope_changed`. No refresh totals, backfill/latch progress, deletion counts or purge cursors appear anywhere in ordinary `getContextIndexStatus`, including nested diagnostics/errors. Reader and projection maintainer status retain only selected-projection semantic coverage plus the scoped fields shown above. Owner-wide mutation/validation methods return their own authorized progress; successful purge quanta return exactly `{status:'partial'|'complete',purge:PurgeStatus}`. `firstCoverage` is E.3.1's durable status, or null only when the initial targets are not yet frozen or the ledger is unavailable. `enabled` reflects the durable owner boolean, not provider presence or guaranteed readiness. `identity` is null only when verified port identity is unavailable. Semantic `coverage.status` is `complete|partial|unavailable` **for the selected projection only**. Counts have exactly the requested supported type keys, safe nonnegative values or null; use certified vector manifest counts only. Unknown/disabled/non-ready-lexical counts are null. A known gap is partial; invalid identity/certificate is unavailable. Complete means eligible equals embedded in every type with matching identity/epoch/fences. This does not change `coverage.namespaces` or clear overflow `partial` for the owner. The existing outer `coverage.byType.*.embedded` agrees with these counts.
+
+If an authorized status operation cannot observe trusted owner policy because the ledger is operationally unavailable, `OwnerSemanticStatus.owner` is null, refresh fields follow the null rules below, purge reports failed/storage_unavailable and firstCoverage is null. An identity/anchor mismatch keeps E.3's bare refusal instead of returning a synthetic status. Never invent a false/zero OwnerPolicy to fill an unavailable observation.
+
+Lifecycle precedence is: owner false → `disabled/not_enabled`; purge pending/running/failed → `unavailable/purge_pending`; backfill blocked → `unavailable/backfill_ceiling`; unreadable/unrecovered ledger → `unavailable/ledger_unavailable`; then retain §6.1's `absent/not_configured`, `stale_index/index_not_ready`, `unavailable/provider_unavailable`, `partial_coverage/missing_vectors` and `ready/null`. Invalid vector protocol bytes use `unavailable/validation_invalid`; absent validation evidence uses `partial_coverage/missing_vectors`. Identity/epoch mismatch on ready lexical state uses `partial_coverage/identity_changed` with null embedded counts until a matching manifest exists. If the ledger is unreadable, `enabled` and `ownerPolicyRevision` are null and the ledger-unavailable branch takes priority over unknowable owner/purge/block state. Hosted price currentness affects dispatch, not whether existing vectors have complete certified coverage; report `price_unavailable` on the attempted semantic read's trace. Partial embedding quantum results never imply complete semantic coverage.
+
+`phase` is `backfill|steady|blocked` (blocked is the persistent backfill ceiling); `utcDay` follows E.3. Counts and item limit are nonnegative safe integers. Charged excludes outstanding reserved so their sum is total exposure. Hosted USD values are normalized `Usd`; local dollar fields are null. `firstCoverageComplete` is boolean; `blockedReason` is null or `backfill_ceiling`. Ledger fields other than phase/blockedReason/firstCoverageComplete may be null only when unavailable; those three are also null when the ledger is unavailable. Unknown charges count in charged after recovery, not again in reserved. A daily cap can prevent refresh without changing vector readiness or the first-coverage latch; it is visible from charged+reserved versus limit.
+
+Purge `state` is `idle|pending|running|complete|failed`. Pending means a durable barrier with no committed deletion batch; running means durable partial progress, **not a claim that a Worker is alive**. Idle has epoch0, deleted0, checkpoint/remaining/reason null. For a purge, epoch is positive, deletedVectors is a durable nonnegative cumulative count, checkpoint is null or a bounded opaque ≤200-unit cursor, and remainingVectors is **null until completion**, then 0. No unbounded COUNT is needed for progress. Reason is null except failed, where it is `storage_unavailable|validation_invalid|cleanup_unconfirmed`; a valid checkpoint persists on failure. Complete has checkpoint null. With an unreadable ledger all purge fields except `state:'failed'` and `reason:'storage_unavailable'` are null; do not invent a completed purge.
+
+P2e capabilities contain owner configuration data, so their opted-in signature is explicitly **`getContextReadCapabilities({deadlineMs?}, credential, {signal}?)`**, using the same fixed owner/request or service binding, entry/final sampling and cutoff. No-argument legacy/default capability calls remain unchanged; an opted-in missing credential refuses `authority_required` without private fields. Retain all existing capability fields, change `channels.semantic` to exactly `{configured:boolean,enabled:boolean|null}` from verified provider configuration and the durable owner setting, remove only `semantic` from the `unsupported` list, and add:
+
+```text
+semanticExtension = {
+  version:'context-read-product-p2e-v1',ownerVectorPurge:true,
+  queryEmbeddingMaximum:1,completeCoverageRequired:true,durableOwnerLedger:true,
+  refreshBudgetDimensions:['maxItems','maxMs','maxUsd'] // hosted
+}
+```
+
+Local budget dimensions are exactly `['maxItems','maxMs']`. `enabled:null` means ledger unavailable. Reader/maintainer `methods` retain their own method sets; the four coordinator data methods are a separate service API, not reader methods or MCP tools. Capabilities describe code/configuration, not measured platform support or permission to transmit. A configured provider with owner false advertises configured true/enabled false.
+
+Use existing channel states/causes and `trace.requested/effective/family/preset/embedder/timings`; add **only for P2e semantic:true reads and embedding refresh diagnostics**:
+
+```text
+trace.semantic = {
+  extension:'context-read-product-p2e-v1',coverage,
+  queryEmbeddingAttempts,queryEmbeddingBudgetMs,queryEmbeddingMs,degradedReason
+}
+```
+
+Here coverage is `complete|partial|unavailable`, attempts is 0 or 1, budget/elapsed are finite nonnegative milliseconds (0 when no time was admitted/attempted), and degradedReason is null or exactly `not_enabled|purge_pending|backfill_ceiling|ledger_unavailable|not_configured|index_not_ready|provider_unavailable|missing_vectors|validation_invalid|identity_changed|capacity_exceeded|price_unavailable|timeout|provider_error|rate_limited|budget_denied|dimension_mismatch`. Existing `channels.semantic` remains `{state,causes}`: disabled for off; `partial_coverage` for gaps/invalid certificates/identity/capacity; `budget_denied` for ledger/block/price denial; otherwise the corresponding existing reason/state. Keep multiple applicable causes in fixed lifecycle/preflight/dispatch order without duplicates; new internal reasons use the corresponding existing channel cause plus the precise trace degradedReason. Hybrid requires coverage complete, a validated query vector and all final checks; effective is lexical on every degradation. A provider timeout can therefore have coverage complete, attempts1, state timeout, effective lexical and degradedReason timeout. Default/fetch/continuation paths gain no query attempt or new P2e trace. Opted-in semantic:true fresh read traces report zero attempts when preflight prevents dispatch.
+
+**Lexical degradation guarantee:** with otherwise valid authority, ready lexical storage and enough remaining caller time for final validation, missing embeddings, exhausted refresh/query/run budgets and provider failure return `ok:true` lexical results with honest semantic coverage/reason. They never turn an otherwise successful lexical read into an error, trigger another provider, or extend the cutoff. Provider/budget degradation preserves the lexical selected identities, order, refs, bodies, assembly bytes and token accounting. Required authority, canonical-fence, storage and outer deadline failures keep their frozen errors. A per-read **`semantic:false`** takes the lexical execution path without semantic preflight/coordinator/provider work; its entire candidate/assembly result envelope is byte-identical to that same configured lexical path, normalizing only pre-existing nondeterministic fields. It receives no new trace.semantic field. Existing explicitly local observer diagnostics remain exactly §20's lexical-path behavior. E.8 gives each degradation cause its own acceptance row.
+
+Trace placement remains candidate `value.trace`, assembly `diagnostics.candidates.trace`, candidate/refresh diagnostic error `error.details.trace`, and assembly candidate error `error.details.candidates.trace`, with existing non-model metadata extraction. Never add assembly root error trace or copy status/ledger/coverage into metered text. Local-only `trace.localEmbedder` and observer rules remain frozen §20. Provider errors contain only enums/numeric timings/counts and nonsecret validated identity metadata; no key, text, vector, path, endpoint URL, raw stderr, exception/HTTP body or credential. Owner/accounting records are private authorized service data, not public diagnostic labels. The host logs coverage, adds no new user-facing copy, and preserves existing partial fallback for lexical index unavailability.
+
+### E.7 Off switch and owner vector purge
+
+`semantic:false` in durable owner configuration prevents **all new semantic provider requests**, including query embeddings and refresh, independent of per-read `semantic:true`. A per-read false further narrows an enabled owner. Pump embedding turns are skipped. Disabling publishes the owner revision/epoch through the coordinator's cheap synchronous transmission guard before acknowledging success; every possible sender must observe it or fail closed. It also cancels supervised in-flight semantic work. Bytes already transmitted cannot be recalled or claimed unsent; keep their usage charges and underlying ownership until settled. Results and commits from an earlier epoch are rejected. These are semantic-admission guards, not stronger request-authority revocation guarantees than §4.1.
+
+The queued purge is explicit maintenance, advanced only by `purgeOwnerVectors` quanta under separately allowlisted **owner-wide purge** service authority. An off switch does not perform an unbounded delete on a read or inside the configuration transaction. The operation requires owner false; otherwise `invalid_input`. Its positive safe budget bounds are maxItems1–1,024 and maxMs1–5,000, with the same parent expiry/abort/cutoff, supervisor and two-sample rules. It never invokes a provider and consumes no embedding item/USD allowance.
+
+Scope is that owner's vectors across **all registered product-sidecar projections, both intents, all types, all provider identities, staging generations and obsolete generations**, not only the maintainer's selected readSet. Maintenance registers a safely fenced sidecar in the durable coordinator catalog **before** its first vector write; cache retirement/removal remains cataloged until safely verified absent. New owner vector writes/registrations are barred during purge. Unknown or inaccessible catalog entries prevent completion; no omitted sidecar is assumed empty. Other owners' vectors, lexical generations/certificates, canonical content and owner spend/latches remain unchanged. Supported restore/rebuild must honor the durable purge epoch so an archived stale vector row cannot reappear as valid.
+
+Use bounded keyset deletion in deterministic sidecar/typed-identity order, with invalidation of affected vector certificates/publication pointers in the **same sidecar transaction** as each batch. Persist its epoch/checkpoint/deleted count atomically with that batch. Coordinator catalog progress may lag a sidecar commit: recover the authenticated sidecar checkpoint and idempotently reconcile, never double-count deletion or skip a batch. Crash before COMMIT leaves no progress; crash after COMMIT preserves that batch. A purge epoch immediately bars all old vector publication even when physical deletion is unfinished. No asynchronous provider can repopulate the purge between batches. Completion requires every cataloged sidecar verified exhausted/absent, no old-epoch vector writer or supervised provider/native work able to publish, and durable coordinator completion before collecting final status and taking the final-envelope sample. Timeout may leave progress committed; later status tells the truth, and a new explicit quantum resumes it. Cleanup uncertainty produces failed/pinned status, not completion from a live PID, kill request or absent response.
+
+Turning owner semantic back on after complete purge uses normal missing-vector refresh, within the current phase/day/lifetime caps and without resetting any ledger. No read auto-re-embeds. The owner remains lexical until its exact projection again has complete matching certified vectors. Purge provides engine-cache deletion, not a claim about a hosted provider's retention of previously transmitted inputs or physical secure erasure of storage media.
+
+### E.8 Deterministic P2e acceptance rows
+
+These are **future implementation requirements**, in §9's style. All providers, usage replies, transports, clocks, child runtimes and failure points are deterministic fakes: **no network, no keys, no real model download/inference**. Use actual public product APIs, Workers, durable engine-ledger/sidecar storage and restart boundaries on §9's Node/schema/journal matrix; local branches additionally retain §20 acceptance. Tests assert order/state/bytes with mock clocks and rendezvous, not wall-clock p95. Existing default goldens and authority/evidence gates remain mandatory.
+
+| ID | Required observable |
+| --- | --- |
+| P2e-01 Explicit opt-in and zero calls | Without semanticConfig, preserve all P2a–P2d/legacy capability/status/tool/serializer bytes. Provider-only construction never enables an owner. Exercise owner false with read true, read false with owner true, continuation, fetch, status, capabilities, lexical refresh and off-owner pump turns: zero query/document provider invocations/transmissions; no lookup-time build/load/download. For semantic:false, trap semantic preflight/coordinator calls and compare the entire candidate/assembly lexical envelope and serializer bytes, with no trace.semantic addition. True owner state is durable and requires separate service authority; optimistic revisions, malformed closed shapes/bounds and owner/request/service/anchor mismatches refuse exactly. |
+| P2e-02 One query and deadline | Complete certified four-namespace vectors permit exactly one query invocation of one string on findCandidates and separately contextRead; never one/namespace or an assembly second call. Fake transport asserts reservation then guard before send, no retry. Mock 2,000/5,000-ms windows, consumed opening time, earlier method/credential cutoffs and sub-budget exhaustion before/after send; no deadline extension or late data. Lexical completion must pass final validation before the original cutoff or yield bare read_timeout. |
+| P2e-03 Honest degradation | Pin exact channel/trace DTOs for timeout, error, rate limit, budget denial, unavailable provider/ledger, price_unavailable, validation_invalid and bad dimensions. Assert attempt0 versus1, actual admitted sub-budget, lexical success/rank preservation and proper diagnostic nesting/metadata. Revoke before final-envelope construction or race parent cutoff: no private trace/counts escape. Local observer fields retain §20 placement and sampling. |
+| P2e-04 Complete coverage and capacity | One gap, wrong revision/representation/identity/epoch, invalid certificate or capacity over either bound prevents query invocation/fusion. Test complete-empty, each type/intent, selected projection versus other ready projections, exact 20,000-vector/byte boundaries and unrelated cache eviction. Overflow scope remains partial even when selected semantic coverage is complete; partial semantic coverage never changes namespace counts or permits incomplete lexical search. |
+| P2e-05 Durable reservation/restart | Race multiple reader/maintainer Workers and separate service processes on one anchored owner ledger. Rendezvous before/after anchor preparation, reservation COMMIT/seal, may_transmit mark/seal, send, usage settlement and vector publication; kill/reopen Worker/coordinator/process. Assert no unsealed send, double-spend, possible-send replay or duplicate settlement/refund; stale fencing incarnations cannot advance the anchor/dispatch/publish. Unknown exposure survives restart, path/pump/model changes and cache discard; actual child/socket cleanup independently governs active capacity. |
+| P2e-06 Item/USD/UTC caps | With mock UTC and independently controlled monotonic time, exercise item-first and USD-first exhaustion at 2,000/0.05 steady and 20,000/0.50 backfill; exact equality, one-more refusal, smaller final batch, two owners, both intents and all stores sharing an owner. Include actual cheaper settlement, zero quantum/window USD, tighter host caps, price revision changes, midnight in flight, backward UTC steps, restart and cron renewal. Rollover admits only the new daily pot and never releases old unknown charges/slots or lifetime totals. Transition to steady on the same day never grants another pot. |
+| P2e-07 Backfill latch/ceiling | Through public coordinator/maintainer/pump APIs only, enable an enrolled owner, complete both intents of every frozen initial target with fake providers, and observe the pump automatically call validateOwnerSemanticCoverage and latch complete. **No test-only latch setter or direct ledger mutation.** Use maxTargets1 across calls/restarts, change a target certificate between receipt and final pass, omit/drop a target, race a canonical edit at final snapshot and revoke validation authority: no fabricated completion or private data. Crash before/after receipt, anchor preparation and final latch COMMIT, then seal/resume idempotently. Pending validation prevents another backfill send even through direct refresh/new pump IDs. After first completion, make later canonical edits through public writer APIs and observe **steady 2,000-item / 0.05-USD limits through public refresh/status APIs**, on the same day including earlier exposure and after mock UTC rollover; no 20,000/0.50 pot. Separately accumulate 5 backfill dollars across fake-clock days including unknown usage: owner stays lexical with zero semantic calls across restart/toggle/provider changes. Another owner is independent. Purge/re-enable/restore preserve latch and caps; missing owner-wide validation credential refuses pump setup. |
+| P2e-08 Unknown usage and prices | Synthetic price table and independent fake revision authority are mandatory and the only rate source. Assert exact upward decimal rounding, validated settleInputTokens callback/count/bound, missing/malformed/over-bound usage, timeout/crash after possible send, known usage on invalid vectors, no-send rollback, duplicate settlement and old-day settlement. Unknown retains the full reservation; over-bound reports block the provider and publish no vectors. In-flight settlement retains its pinned rate after table expiry or revision changes. An independently priced settlement cannot credit the ledger. Local rejects price/authority/USD policy fields and retains invocation attempts/singleton semantics. No test consults live prices. |
+| P2e-09 Purge crash/resume | Disable races with reservation, send and vector COMMIT; old epoch never publishes after the barrier. Purge all identities/staging/obsolete generations across four-namespace and overlapping projections/both intents, with another owner's canary unchanged. Kill before/after each bounded sidecar/checkpoint/coordinator COMMIT, then reopen/status/resume: exact cumulative deletion, no skip/double count, honest unknown remainder and no provider calls. Inaccessible catalog/cleanup uncertainty blocks complete; copied old vectors cannot revive. Re-enable only after complete, then bounded refresh restores coverage without a new allowance. |
+| P2e-10 Identity/certificates | Independently construct **E.4.1's exact canonical record, manifest f32le component bytes, HMAC domain/payload and publication-pointer bytes** and known-answer digests/MACs. Fresh/restarted public readers use them without maintenance/deep scan. Corrupt MAC separately from each field/digest/pointer/lexical link/manifest row/count; test unknown/duplicate keys, noncanonical JSON/base64/float32 encoding and exact size bounds. Switch hosted/local, model revision, dimensions, normalization and equal-dimensional identities. Rendezvous generation/certificate/pointer atomic COMMIT and identity activation/purge invalidation: old or incomplete sets never become usable, and new identity/epoch refuses surviving old pointers before physical cleanup. Only the exact selected identity/lexical publication/epoch is usable; no relabeling/mixing, lexical certificates stay unchanged. Local path-only changes versus changed verified manifest obey §20. |
+| P2e-11 Four-namespace semantic oracle | Extend P2-07 with frozen zh/ja/mixed Memory/Card matches in personal+three projects, both intents, equal bodies and ties within/across all four namespaces. An independent hand-derived numeric oracle calculates full pooled cosine ranks, canonical raw ties, pooled BM25 and fusion ties; compare exact identities/channel ranks/output order for every readSet permutation. Include matches below a namespace's hypothetical local top-k that enter the global result; no namespace pre-truncation/quota or product merge. Fake vectors are fixed, not learned from implementation output. |
+| P2e-12 Hosted fusion | Pin k10/depth24/0.5+0.5, absent-channel membership zero, up-to48 union, top24/default12/max24 and canonical ties with an independently calculated RRF table. Include rank24/25 boundary, vector-only and lexical-only hits, full semantic versus degraded BM25 order, continuation from frozen ranks, both types/intents and permutations. Local explicitly keeps k60/depth12. |
+| P2e-13 Provider guard/bounds | Fake HTTP/child ports test singleton query versus up-to64 hosted documents; exact byte/batch/response/usage/dimension bounds, no truncation/redirect/retry, configured timeout and owner/epoch/grant/cutoff/price changes after reservation before transmission. Assert post-await stale-vector rejection, ready lexical prerequisite, pump maxUsd and mandatory validation turns continuing within cadence despite embedding budget exhaustion. Lexical turns remain supervised while embedding budget/off/block skips. No callback/await inside or after final reading, including first-coverage validation; local pack initialization/one-document commit remain §20. |
+| P2e-14 Status, privacy and lifecycle | Exact closed DTO goldens for every state/reason/precedence/null combination, authorized P2e capabilities, projection-only coverage and owner-wide coordinator day/phase/unknown/purge/firstCoverage status, crash-resume checkpoints and untouched default goldens. Inject synthetic canary text/credential-like strings in fake provider errors, usage bodies, stderr and host config; none appears in any diagnostic/log/capability/trace/model metadata text. No real secret is read. Corrupt/missing/restored-backward ledger fails closed without new allowance; supervisor drain/quarantine and final currentness suppression cover all four coordinator methods. |
+| P2e-15 Price validity/currentness | With independent fake UTC/monotonic clocks and fake host revision authority, admit exactly at effectiveFrom and refuse at effectiveUntil, before from, on null/throw/malformed/unknown authority and when a table's window/digest/revision disagrees. Expire or double the authoritative rate between reservation and beforeDispatch: zero new transmissions at the stale rate, honest lexical price_unavailable trace. Advance to revision/sequence2 then restart with revision1 and a newly valid-looking window; durable high-water refuses rollback. Same sequence/different digest refuses. Existing sent reservations settle at their original rate after expiry/update; unknown charges remain. No live price lookup. |
+| P2e-16 Owner-ledger replacement | Exhaust an enrolled owner's allowance in ledger A through public refresh APIs, close/drain, then reopen with a fresh syntactically valid ledger B while the independent host registry still anchors A. Require refusal, **no allowance reset and zero sends**. Repeat with a copied header/same ledgerId but empty owner state, another domain/owner, stale backup/sequence/digest, missing anchor and alternate path aliases. Verify initialize-if-never-bound cannot run for this owner; ordinary/request/projection authority cannot initialize/recover. Race/crash every prepare/ledger-COMMIT/anchor-seal boundary; only exact pending-state recovery after actual disposal is permitted. Authorized conservative recovery retains spend/unknowns/latch/epoch barriers; missing evidence stays lexical-only. |
+| P2e-17 Owner-wide status authority | Personal-only request and projection-scoped service credentials can see their selected semantic coverage through ordinary index status but **never RefreshLedgerStatus, PurgeStatus or FirstCoverageStatus**, at any nesting. The same credentials calling getOwnerSemanticStatus refuse bare authority_required before private ledger/catalog reads; wrong owner/method/anchor also refuses. A separately issued owner-wide semantic service grant returns the exact owner DTO, then revocation before its final sample returns bare scope_changed. Use unauthorized-project expenditure/deletion canaries and verify zero leakage through status/capabilities/errors/trace. |
+| P2e-18 Missing embeddings degrades | Otherwise ready lexical projection, valid authority and sufficient fake remaining time; remove one exact-identity vector or its certificate. Public findCandidates/contextRead return ok:true with exact lexical identities/order/refs/assembly bytes and partial/unavailable semantic coverage plus the precise missing/invalid reason, attempts0 and **no error**. No document embedding, repair or hidden provider fallback. |
+| P2e-19 Budget exhaustion degrades | Exhaust refresh/day/lifetime and separately query/identity/run caps through public APIs with fake clocks/usage. When query admission is denied, vectors remain missing because refresh cannot proceed, or the persistent backfill block applies, valid ready lexical reads return the lexical success oracle with honest complete/partial/unavailable coverage and budget_denied/missing_vectors/backfill_ceiling reason, attempts0, **no semantic-caused error**. Exhausted refresh allowance alone does not disable an already covered query whose separate query allowance admits it; a pending first-coverage validation still runs without paid dispatch. |
+| P2e-20 Provider failure degrades | With complete certified vectors, inject missing/unavailable provider, provider_error, rate limit, bad dimensions and a sub-budget timeout. Public findCandidates/contextRead preserve exact lexical result/assembly bytes and truthful coverage/attempt/timing/reason, **never an error caused by that semantic failure**, no retry or second embedding. After possible send retain charges and capacity through actual disposal. Separate outer-cutoff/authority/storage failure controls keep their frozen bare errors. |
+| P2e-21 Zero-tolerance safety | Across four and staged 26 namespaces, mutate forget/item-purge/superseded revisions during preparation/embedding and before final refetch; no target forbidden at the authoritative snapshot is returned by candidates/assembly/evidence. Mutations after a final snapshot test subsequent fresh requests under frozen boundaries; erasure obeys stopped-client quiescence. Cross-owner and unselected-namespace canaries never escape via items/refs/counts/trace. semantic:false envelopes match lexical exactly. Complete owner vector purge through public APIs, restart and independently enumerate all cataloged identities/intents/staging/obsolete vector rows by two routes: **zero owner vectors**, with other-owner canaries intact. One violation fails, regardless of quality gain. |
+| P2e-22 Registered gate arithmetic | With fabricated paired numeric outcomes only, independently recompute macro recall/nDCG, primary versus overlapping challenge weights, seeded paired-bootstrap CI uncertainty and all E.10 threshold equalities. Reject +2-pp macro with a missing +5-pp critical stratum, beyond-tolerance regression, any exact-identifier regression, negative macro nDCG or a safety violation; missing strata/minima are inconclusive. Check S-staging-latency's four-cell 1,642/26 inventory and matched-population p95 subtraction, 150-ms equality versus over-bound. This is a future deterministic scorer/inventory acceptance row, not a measured latency or model-quality result. |
+
+### E.9 Separately registered measurement extension
+
+Register **`P2-product-v4-semantic-v1`**, linked to an unchanged `P2-product-v4` registration, **before collection**. It has its own immutable manifest, hashes, counts, report, outcomes, run reservation and supervision; none of its samples supplies missing lexical-v4 cells/successes. Mechanically expand its proposed inventory and independently derive/diff the complete cell/series lists and counts before running. Register engine and production environments separately; a fake-provider pass supports scheduling/accounting behavior only, not real hosted latency or retrieval quality.
+
+Registration fixes implementation/contract/runtime/platform/counter identities, frozen synthetic corpus/query/vector/label hashes, four namespaces, v18 Memory and v23/v33 mixed physical types, both intents, 1,112/3,336 worlds, selected DELETE/WAL pairs, the host's 2,000/5,000-ms surface windows, query sub-budget/finalize reserve, fake latency/error/usage schedules, provider selection/identity, price/cap tables, pump cadence/quantum/window budgets and durable ledger starting phase/day/charges. Register every method/language/load intersection to be claimed; unregistered interactions stay unclaimed. All v4 applicable authority/loop/bytes/settlement/telemetry/writer gates and successful/all-attempt population rules remain, without changing lexical latency thresholds or alleging that a lexical-v4 pass includes semantics.
+
+Also register E.10's cross-language directions, no-shared-token paraphrases, short 2–4-character CJK queries, zh/en code-switching and exact identifiers as labeled extension populations, with hashes/membership fixed before collection. Timing reports keep their labels and denominators; they do not manufacture unregistered language/stratum percentiles. Add the staging profile below as an explicit exception to the extension's four-namespace/world recipe, with its own inventory/counts and no substitution for any lexical-v4 or other semantic cell.
+
+| Extension series | Required measurement and decision |
+| --- | --- |
+| S-query: findCandidates and contextRead, separately | Complete vector coverage before normal semantic series; fresh open/read/await-close, main3 warm-ups then ≥50 validated successes/≤500 attempts and cold≥10/≤100 where registered, separate languages/surface windows/worlds/schema/intents/journals. Record preflight/reservation/guard/query embedding/fusion/final-validation times, admitted sub-budget, public read/full lifecycle, effective channel and attempts. Publish embedding and total p50/p95/max plus degradation/error rates and all attempts. A deadline/sub-budget violation, second query embedding, late acceptance or misleading trace fails; insufficient successes are inconclusive. Register injected timeout/degradation series separately; they never supply successful-hybrid samples. No new standalone provider-latency p95 target is invented. |
+| S-refresh: supervised embeddings pump, separately by phase/provider/type/intent | Register fixed observation duration, corpus of missing exact-identity vectors, starting ledger, UTC schedule and target count before execution. Report attempted documents, committed usable vectors, validated input tokens, charged/reserved/unknown USD, elapsed time and fresh uncached committed vectors/second, including cron/scheduling/backoff-by-budget time. Also report active-inference throughput separately, never as rebuild throughput. Exercise item-first/USD-first/day-rollover/backfill-ceiling/crash-resume cases with fake prices/usage/clock. Any cap escape, reset/double charge, invalid publication or unobserved cleanup fails; an exhausted cap is an expected stop, not complete coverage or a throughput failure. Completion requires independently observed complete matching semantic coverage, not exit0. Throughput is report-only until the product registers a numerical capacity requirement. |
+| S-staging-latency: contextRead, staging profile | **1,642 Memories, 26 selected namespaces (personal + 25 projects), physical v18 Memory-only, DELETE/DELETE**, complete certified vectors, on a registered production-class host. Register current/history × 2,000/5,000-ms windows as **four separate extension cells**; freeze per-namespace counts, exact counter/query schedule, hardware/volume/runtime and provider identity. Pair A semantic:false with B semantic:true on identical snapshots, counterbalancing order by ordinal. Use fresh open/read/await-close, exactly 3 separately reported warm-up pairs, then ≥50 valid successful pairs within ≤500 scheduled pairs; retain all failed/degraded/missing pairs and stop at the registered ceiling. Added context-read p95 is `nearestRankP95(B lifecycle ms) - nearestRankP95(A lifecycle ms)` on those same paired successes and must be **≤150 ms in every cell**. Also report paired per-query increments, embedding/fusion time, total p50/p95/max and all-attempt outcomes. Any semantic degradation prevents that pair from supplying a successful-hybrid sample; missing minima are inconclusive. Cold is a separately registered series if claimed. All applicable absolute deadline, loop, correctness and lexical-v4 gates remain. A fake transport cannot qualify real hosted latency; the intended deployed hosted path requires separate owner authorization below. Other schemas/journals/counts need separate registered cells. |
+| S-safety: zero-tolerance extension cells | Register the exact E.10 safety/mutation/authority/purge scenarios with independent forbidden-ref and owner-vector inventories. Report all attempted returns and residual vectors, not a sampled rate. **Zero** forgotten/purged/superseded target returns, cross-owner/cross-namespace returns, semantic:false lexical-envelope differences and owner vectors after completed purge; one violation fails. These are mandatory cells, not report-only observations or recall-tolerance exceptions. |
+| S-degrade: missing embeddings, exhausted budget, provider failure | Three separately labeled expected-degradation cells, each on otherwise ready lexical storage with valid authority and sufficient final-read time. Record success/error, exact lexical oracle equality, coverage, effective channel, attempt count, reason and cleanup. Each must return lexical success with honest coverage, **never a semantic-caused error**. Missing vectors and pre-dispatch budget denial make zero query calls; transmitted failure may consume one retained attempt. These cells never supply successful-hybrid latency/quality samples. E.8 has one acceptance row per cause. |
+
+The separately registered extension supplies its own numerical ledger and feasibility estimate; this appendix neither adds hours to an authorized lexical run nor launches one. Long runs require the existing machine-wide quiet queue, an owned runner observing real progress/error logs/exits and pump/coordinator completion, fixed stall thresholds, bounded reporting intervals and confirmed final drain. Preserve failed/incomplete runs and actual exit codes; no automatic expensive restart or detached-PID supervision claim.
+
+**Real hosted run authorization is separate and explicit, by the owner**, after review of a concrete registration. It names exact synthetic inputs, provider/model, environments, permitted query/refresh request counts, time window, host privacy surface and **a total USD cost cap covering query plus refresh and unknown reservations**. The effective cap is the minimum of that run cap and every configured daily/lifetime/process/quantum/window bound. Runtime host injection supplies credentials; no key is checked in, printed, requested by tests or recorded in the registration. Reserve conservatively before every transmission and stop when the remaining run cap cannot admit the next bounded attempt. A cost cap alone is not permission; owner enablement does not authorize arbitrary measured runs. Without this authorization, all P2e measurement uses fakes, offline. Local real-model qualification remains the separate frozen §20 workflow and does not become an implicit alternative.
+
+### E.10 Retrieval quality check before product enablement
+
+Register **`P2e-product-retrieval-v1`, Revision 1**, before running it or changing fixtures/labels/thresholds. This is retrieval evaluation on the **product profile**, separate from deterministic fake-provider correctness, timing and answer synthesis. Freeze synthetic fixture/corpus/query/relevance-label bytes and hashes, generation recipe/seed, engine/model/identity, counter if assembly is observed, scorer/bootstrap versions and seed, complete readSet/types/intents, stratum membership and all exclusion rules. Use personal+three projects, both world sizes, physical v18 Memory and v23/v33 mixed types, current/history, and separately reported **zh, en, ja and mixed** language populations. Include cross-namespace matches, tied/equal-body identities, negative queries and the frozen single-Han known miss. Every positive query has independently assigned eligible typed-identity relevance labels; no model/implementation output supplies gold labels. Register at least 50 positive and 10 negative queries in each registered language/intent/schema/world cell and each applicable challenge stratum below; freeze applicability/empty intersections before collection. Missing minima are inconclusive.
+
+| Mandatory challenge stratum | Frozen membership and required reporting |
+| --- | --- |
+| Cross-language zh query → en memory | Chinese query with independently labeled relevant English canonical memories; preserve direction-specific recall/nDCG and query IDs. |
+| Cross-language en query → zh memory | English query with relevant Chinese canonical memories; register/report independently of the reverse direction, plus an equally weighted cross-language aggregate. |
+| Paraphrase with no shared tokens | Gold query/relevant-text pairs have empty token intersection under frozen T1 tokenization; record the token-oracle check. Semantic similarity alone cannot supply labels. |
+| Short CJK queries | Queries contain **2–4 CJK Unicode scalar characters**, with exact lengths and language frozen. Keep the one-character Han known miss in its separately labeled control. |
+| Mixed zh/en code-switching | Each query contains both Chinese and English, with fixture-defined boundaries/content; do not relabel monolingual queries as mixed. |
+| Exact identifier | File paths, SHAs, error codes and CLI flags, each represented and separately labeled, with exact canonical identity relevance. Retain category-specific reports as well as the aggregate. |
+
+Base language/intent/schema/world cells are disjoint primary strata; every positive query contributes to exactly one of them. Challenge strata are frozen membership masks that may overlap; they add independent gates/reports without double-weighting the primary macro score. Register each applicable challenge × intent/schema/world slice and both cross-language directions, including exact-identifier categories, in the complete inventory. No stratum can be removed, merged or assigned after results to avoid a regression.
+
+Compare paired queries on identical certified canonical projections: **A lexical (`semantic:false`) versus B lexical+semantic** with complete matching vectors and hosted `rrf-k10`. No query planner, reranker, product-side merge, fallback or answer model. Counterbalance fixed A/B execution order by query ordinal and retain exact refs/ranks, channel outcomes and fixture provenance. Query/document vectors must come from the selected provider identity; deterministic fake vectors prove ranking, not model retrieval quality. A real hosted quality run therefore needs E.9's separate owner authorization/cost cap; without it the quality gate remains pending and product enablement cannot be claimed. Explicit local selection requires its own registered paired comparison with the frozen local preset; hosted results do not qualify local.
+
+Primary metric is **macro recall@12 over positive queries**: for each query, `relevant eligible typed identities returned in top12 / all relevant eligible typed identities`, averaged equally over queries **within each disjoint primary stratum**, then equally over those strata. Report the same paired differences within every registered challenge/direction/category/slice. Report recall@5, **nDCG@12** and per-query changes; binary DCG uses `sum(relevance_at_rank / log2(rank+1))` for ranks1–12, normalized by the ideal eligible relevant list, zero if no relevant hit. Macro nDCG uses the same primary-stratum weights. Exclude registered negative queries from positive recall/nDCG denominators, retain all their outputs for safety/failure analysis, and never hide the known Han miss. Any run with incomplete coverage, a provider/deadline degradation, stale/incorrect evidence, missing scheduled query, changed fixture/hash or unknown provenance is incomplete/invalid rather than an improved-quality pass; retain all observations. No speed/failure-driven sample deletion or extra queries after viewing results.
+
+**Decision rule supplied for this revision, fixed before evaluation:** all conditions are conjunctive:
+
+1. B's primary macro recall@12 improves over A by **≥0.02 absolute (+2 pp)**.
+2. The **cross-language and no-shared-token paraphrase strata each improve by ≥0.05 (+5 pp)**. Apply this to each cross-language direction and its equally weighted aggregate; their registered slices also retain the no-regression rule below.
+3. **No registered stratum** loses more recall@12 than `max(paired-bootstrap 95% CI uncertainty, 0.01)` (1 pp). Define this numerically before collection: for stratum s, paired difference Δs is B−A; draw **10,000 paired-query bootstrap resamples** within that stratum using the sealed seed and percentile interval `[Ls,Us]` at 2.5%/97.5%. CI uncertainty is `max(abs(Δs-Ls),abs(Us-Δs))`; refuse if `Δs < -max(uncertainty,0.01)`. Resample each query's A/B pair together, never independent arms; retain bootstrap draws/version/seed. Boundary equality passes this condition. This explicit CI-width convention removes ambiguity from the tolerance; no post-run interval or seed choice.
+4. **The exact-identifier stratum must not regress at all:** its recall@12 difference must be **≥0**, including each registered identifier category/slice. The bootstrap/1-pp tolerance grants it no exception.
+5. **Macro nDCG@12 must not regress:** B−A **≥0**, with no CI/rounding tolerance. Report per-stratum nDCG differences alongside their recall gates. Compare unrounded metric values; display rounding never changes a decision.
+6. All zero-tolerance safety cells below, E.8 acceptance, and the registered E.9 extension gates including staging added p95 **≤150 ms** pass. A failed, invalid, incomplete, inconclusive or missing required cell prevents enablement under this registration.
+
+These are registered thresholds, not an inference from HR-1 or an achieved result. A change to the rule, corpus, model, strata or bootstrap procedure requires a new reviewed registration and preserves the previous report. Do not infer statistical or real-corpus generalization from the synthetic decision.
+
+**Mandatory zero-tolerance safety cells:** freeze forbidden identities/revisions and authority selections independently of the result scorer. Forgotten, purged or superseded targets must **never be returned** as candidates, assembly content or evidence. Here purged item targets are erased canonical items; superseded targets include overwritten canonical/body revisions and obsolete vector rows, with current-dependency evidence tested under current intent. Frozen independently eligible qualified-history records retain their existing intent semantics. E.7's vector-cache purge preserves canonical lexical content under its unchanged scope. Exercise forget/correct/supersede/item-purge between preparation, embedding and final refetch, and fresh/restarted readers after each mutation. No cross-owner or cross-namespace leak is permitted, including refs/counts/private trace outside the selected grant. `semantic:false` candidate/assembly envelopes must match the lexical execution path exactly as E.6 specifies. After owner-scoped vector purge reports complete, independently enumerate **all cataloged owner vector rows, all identities/intents/staging/obsolete generations**, and require zero; another owner's vectors remain intact. A single forbidden return, lexical-envelope difference or residual owner vector fails regardless of recall gains, CI or latency. These safety cells use public reads/maintenance plus independent offline inventories, never a test-only latch or bypass.
+
+Forbidden membership is assessed at the frozen authoritative final canonical snapshot; stopped-client/drained erasure remains §4.1.3's precondition. A mutation after that snapshot exercises subsequent fresh requests, preserving the existing bounded in-flight completion rule and prohibition on post-read callbacks. Zero tolerance applies within these established engine boundaries.
+
+**Scope:** passing this gate is **necessary but not sufficient**. Product enablement remains the owner's decision after the host's own adapter, privacy/consent, deployment, rollout and monitoring steps and applicable existing package gates. A gate pass does not flip owner configuration, authorize a hosted run or change the independent production WAL decision.
+
+The sealed registration and raw paired report become the baseline input to later failure analysis: classify regressions against fixture/eligibility, coverage/capacity, identity, tokenization, lexical/vector ranks, fusion, deadline/degradation and accounting/scheduling before proposing a change. Keep relevant-item misses and negative-query outputs, not only an aggregate score. No answer-quality claim follows from retrieval metrics. **P2f's LLM query planner is deferred**; the only needed seam is the existing immutable query string and normalized per-read semantic flag. P2e adds no planner port, schema, request, budget or hidden model call.
+
+### E.11 Handoff inputs still required
+
+The owner decision/provider/caps and Revision 1 enablement thresholds above are settled inputs. Before implementation/enablement, the host supplies concrete accountingDomainId/ledgerId values and the independent durable enrollment/anchor/CAS/recovery authority required by E.3; runtime provider and separate owner-wide/projection service wiring; price authority/currentness publication, reviewed revision/rate/effective window and trusted clock; short/other surface mappings, bounded read/transport/validation budgets and supervised pump capacity; and sealed synthetic quality/measurement inventories, bootstrap seed, staging per-namespace distribution and production-class host identity. These are integration/run inputs under defined contracts, not permission to reset allowances or tune gates. A real hosted run still requires separate owner approval and a total cost cap; no such run is authorized by this draft. No unresolved audit protocol choice or LLM-planner decision remains in this revision.
+
+Authoring verification: the **249,540-byte** pre-P2e prefix is byte-identical to `c7471672`, including every frozen section and prior delta. Document shape/whitespace/local-path/name checks and `git diff --check` exit **0**. The **22** acceptance-row IDs are unique and sequential, cross-checked by both row parsing and ID extraction. Against `194bf599`, **8 existing rows changed and 8 new rows were added**. Changed-file inventories from git diff/untracked enumeration and an independent **2,376-file** tree/blob/mode comparison plus disk enumeration agree at **one changed file**, this plan. No implementation tests, builds, measurements, network, keys, commits or unattended processes were run by this authoring packet.
+
+### Revision 1 changelog (P2e)
+
+This revises the P2e delta at `194bf599`; the preceding measurement delta's own Revision 1 is unchanged.
+
+| Finding / supplied addition | Revision 1 change and acceptance |
+| --- | --- |
+| Safety P1 — stale price table | E.2 effective window plus independent host revision authority, exact table digest, persisted sequence high-water, admission/transmission refusal and pinned old reservations. P2e-08/15 use fake clocks, expiry and revision rollback. |
+| Both audits P1 — first-completion path | E.3.1 public validateOwnerSemanticCoverage, closed input/owner-wide grant, ≤64-target resumable receipts, final fresh canonical boundary and durable one-way latch; E.5 mandatory pump invocation and pending-validation barrier. P2e-07/13 demonstrate later edits receive 2,000/0.05 through public APIs, without a latch hook. |
+| Consistency P1 — owner-wide status leak | E.6 removes RefreshLedgerStatus/PurgeStatus from ordinary index status; coordinator status requires owner-wide semantic service authority and refuses request/narrower credentials before observations. Projection coverage stays scoped. P2e-14/17. |
+| Consistency P1 — ledger identity replacement | E.2/E.3 ledgerIdentity, independent durable OwnerLedgerAnchor, enrollment/recovery authority, prepare/commit/seal and mismatch refusal. P2e-05/16 exhaust A then refuse fresh B, including copied headers/rollback. |
+| Consistency P1 — incomplete vector certificate | E.4.1 closed record, size bounds, exact canonical manifest/f32le bytes, authenticated payload/MAC domain, closed pointer, atomic publication/invalidation and restart checks. P2e-10 references those bytes; lexical certificates remain frozen. |
+| Registered stratum — zh query → en memory | E.10 independent direction-specific fixtures/membership and reports, with critical +5-pp gate; E.9 timing labels. P2e-22. |
+| Registered stratum — en query → zh memory | E.10 reverse direction registered independently, plus equal-weight cross-language aggregate; E.9 labels. P2e-22. |
+| Registered stratum — no-token-overlap paraphrase | E.10 frozen T1 empty-intersection oracle, labels and +5-pp gate; E.9 labels. P2e-22. |
+| Registered stratum — short CJK | E.10 2–4-character membership, preserving the separate single-Han control; E.9 labels. P2e-22. |
+| Registered stratum — zh/en code-switching | E.10 both languages present in each query, frozen membership/reporting; E.9 labels. P2e-22. |
+| Registered stratum — exact identifiers | E.10 file paths, SHAs, error codes and CLI flags with category reports and strict nonregression; E.9 labels. P2e-22. |
+| Decision — macro recall@12 ≥+2 pp | E.10 disjoint primary-stratum weighting and unrounded paired decision; overlapping challenge masks cannot double-weight the primary score. P2e-22. |
+| Decision — cross-language/paraphrase each ≥+5 pp | E.10 critical challenge gates, including both cross-language directions and aggregate. P2e-22. |
+| Decision — no beyond-tolerance stratum regression | E.10 sealed 10,000 paired bootstrap samples, 95% interval uncertainty definition and max(CI uncertainty,1 pp) tolerance for every registered stratum. P2e-22. |
+| Decision — exact identifier never regresses | E.10 recall difference≥0 for the identifier stratum/categories/slices, without CI tolerance. P2e-22. |
+| Decision — nDCG@12 never regresses | E.10 exact binary metric/primary macro weighting and difference≥0. P2e-22. |
+| Safety — no forgotten/purged/superseded returns | E.10 forbidden canonical item/revision cells and mutation/final-read boundaries, preserving frozen intent semantics; E.9 S-safety. P2e-21. |
+| Safety — no owner/namespace leaks | E.10 independent scope canaries including refs/counts/private traces; E.9 S-safety. P2e-17/21. |
+| Safety — semantic:false equals lexical | E.6 exact lexical path/envelope with no new P2e trace or semantic coordinator calls; E.9/E.10 zero tolerance. P2e-01/21. |
+| Safety — no owner vectors after purge | E.9/E.10 require independent all-catalog vector inventories after completion, all identities/intents/staging/obsolete generations, with other-owner canaries. P2e-09/21. |
+| Latency — staging added p95≤150 ms | E.9 S-staging-latency: 1,642 Memories/26 namespaces on a production-class host; four separate intent/window cells, matched lexical/hybrid populations and exact p95 subtraction. P2e-22 validates future scorer arithmetic only. |
+| Degradation — missing embeddings | E.6/E.9 lexical success with truthful partial/unavailable coverage and zero dispatch. Dedicated P2e-18. |
+| Degradation — budget exhaustion | E.6/E.9 lexical success on applicable denial, separate refresh/query pots and validation without paid dispatch. Dedicated P2e-19. |
+| Degradation — provider failure | E.6/E.9 lexical success with honest reason/timing/attempt, retained exposure and no retry/deadline extension. Dedicated P2e-20. |
+| Scope — necessary but insufficient gate | E.10 leaves final enablement with the owner after the host's rollout/monitoring and existing applicable gates; E.11 lists concrete integration/run inputs without reopening the supplied thresholds. |
+
+New/changed field inventory: coordinator `ledgerIdentity` and `validateOwnerSemanticCoverage({ownerId,expectedTargetDigest,budget:{maxTargets,maxMs}})`; runtime `semanticLedgerAuthority.load/compareAndSwap` and `semanticPriceAuthority.current`; PriceTable `authorityId/sequence/effectiveFromUtcMs/effectiveUntilUtcMs` and CurrentPriceRevision `tableDigest`; SemanticServiceBinding `scope/accountingDomainId/ledgerId/ledgerEpoch/bindingRevision`; OwnerLedgerAnchor/header/row/checkpoint continuity fields; pump `semanticServiceCredential/firstCoverageValidation`; owner-only nullable `owner/firstCoverage` and FirstCoverageStatus fields, with refresh/purge removed from projection status; E.4.1's closed vector record/manifest/pointer fields and exact bytes; trace reasons `price_unavailable/validation_invalid`, with trace.semantic absent for semantic:false. All exact closed shapes/bounds are normative above.
+
+Acceptance inventory against `194bf599`: changed **P2e-01/03/05/07/08/10/13/14**; added **P2e-15–22**; **22 rows total**. Remaining open questions are concrete host integration/registration/run inputs in E.11; the five audit protocol gaps and supplied enablement criteria have specified resolutions. The primary owns independent re-check and any commit.
+
+### Revision 2 (P2e, 2026-10-28): product-profile local provider deferred
+
+**Finding (implementation review).** Three rules cannot all hold for an explicitly local product-profile configuration:
+- E.2 constructs the provider, including the local synchronous `localStatus` observer port, inside the coordinator service Worker.
+- E.6 requires a per-read `semantic:false` to take the lexical path "without semantic preflight/coordinator/provider work".
+- Frozen unified §20.6 requires the explicitly local observer to be sampled at preparation and again before final reading, including on lexical paths.
+
+A synchronous observer cannot be sampled across the Worker boundary without coordinator work. Caching its last value does not satisfy §20.6's sampling. This delta specifies no shared observer-status publication protocol.
+
+**Resolution.** Under `context-read-product-p2e-v1`, the product profile's semantic provider selection is **hosted only**:
+
+- The existing API shapes are unchanged. Provider selection stays on `openContextSemanticCoordinator({... provider ...})` (E.2), and reader/maintainer `semanticConfig` still carries only the coordinator handle and its time allowances. For this revision, the coordinator's **`provider` accepts only `HostedSelection`**. There are two refusal boundaries, and each has its own observable:
+  1. **Declared local selection: refused before effects.** A `provider` equal to `LocalSelection` (`provider:'local'`, `model:'bge-m3'`) fails constructor validation as `invalid_input`, under the same pre-effect validation as E.2's other configuration refusals. Zero effects follow: no service Worker, host-module load, host factory call, ledger or price-authority access, provider, child, observer, network or pack activity.
+  2. **Runtime mismatch: refused after the host factory, before any use.** If the declaration is hosted but the trusted host factory, called inside the coordinator service as E.2 specifies, returns a local runtime, the coordinator fails to open with `invalid_input`. A local runtime here means `contextEmbedding` with a `localStatus` port, or an embedder whose validated identity is not the declared hosted identity. The factory call itself has necessarily occurred. After it returns, the coordinator must not:
+     - invoke the returned embedder or observer;
+     - open, read or write the ledger, anchor or price authority beyond what the factory already did;
+     - transmit text, start or contact a child, or read a pack.
+
+     It disposes the returned runtime under its supervisor (awaiting actual disposal, as E.2's close semantics require), releases the service Worker, and returns no coordinator handle. Acceptance asserts zero embedder and observer invocations, zero ledger and price-authority operations by the coordinator, zero transmissions and children, and confirmed disposal. Factory-internal behaviour is host code and outside this guarantee.
+- Product-profile capabilities advertise only the hosted selection. No product-profile response gains `trace.localEmbedder`, and no product-profile path invokes a local observer.
+- Explicit local `bge-m3` is **unchanged** on its existing frozen path: unified §20, through the `context-read-v1` local engine and its adapters. That path already serves the owner's decision that local engines use `bge-m3` as an explicit opt-in.
+- E.4's local paragraph, the local parts of E.5 (local refresh/pump item counters) and every acceptance-row clause specific to local selection apply **only to a later revision**. That revision must specify a shared observer-status publication protocol consistent with §20.6 and E.6, with its own acceptance rows.
+- Rows P2e-01 to P2e-22 are otherwise unchanged. Where a row names local selection or child runtimes on the product profile, the required observable for this revision is the corresponding refusal above: zero effects for a declared local selection, or the post-factory boundary for a runtime mismatch.
+
+Everything else in this delta is unchanged. This revision edits no frozen section, and it does not change any earlier P2e text in place.
+
+## P2-product-v4 revision 2: production-equivalent isolated host (delta, 2026-10-28)
+
+Status: **proposed additive measurement revision, Revision 3 after the second re-audits**, revising `7995a5ba` and based on the frozen `be5698fa65ec9ba032ab25a0b99fc8a5ad7cb71d` prefix. This revises only the `production-launch-v4` measurement platform and adds its post-enablement canary. The API/profile remains `context-read-product-v1.1`. No implementation, measurement or acceptance is claimed. R2.5 enumerates the exceptions to earlier text; all other requirements remain normative.
+
+**Owner decision (2026-10-28).** The product provisions an **isolated, production-equivalent environment** on the hosting provider for the production-launch run. After enablement, a **production canary** observes real reads on each surface.
+
+**Reason.** V4.2 requires an exclusive quiet reservation of **7 h 30 min**. Live user traffic would violate that reservation and share resources with synthetic writers and maintenance. The isolated run measures the attested configuration under the registered workload. It leaves co-located real-user load outside the qualification claim; R2.4 observes that load after enablement without replacing qualification evidence.
+
+### R2.1 Production-equivalent isolated host
+
+The isolated service uses the same hosting provider as production. Qualification means **observed effective capacity at the visible limits**, supported by the closed `production-equivalence-attestation-v1` records and registered probes in R2.2. It does not establish the provider's hidden ancestor controls or exclusive physical hardware. The proposed record's current schema replaces the earlier revisions' schemas; registrations bind this contract revision and collector digest, so records from different specifications cannot be mixed.
+
+- **`controlled`: byte-identical after normalization.** Compare the canonical group: provider region; normalized own-group cgroup v2 controls, with **finite own CPU and memory bounds**; the source-faithful manifest projection; effective CPU allocation; volume filesystem/mount properties; OS/build provenance; executable/runtime/SQLite/dependency identity; engine/adapter commits; launch arguments and the registered environment comparison; serving-process umask, seccomp observations and published runtime/security selections; protected directory/file modes. Protected environment inputs additionally use the private proof rule below. The manifest supplies no resource caps and may be stale; it never supplies actual limits or builder identity. No injected label supplies evidence.
+- **`placement`: mechanical comparison.** CPU `vendor_id`, `cpu family` and mechanically derived **x86-64 v1/v2/v3/v4 microarchitecture level** must match; kernel release must match on **major.minor**. CPU model names, full flags, kernel patch, host-visible `nproc`, clocksource and volume-root mode are recorded/disclosed without equality requirements. Equal capability class plus the asymmetric CPU/storage probes replaces a CPU-model equality assumption. Those descriptive differences alone do not invalidate a result; failure of a required comparator does.
+- **`isolation`: the product's service/replica and volume only.** Provider configuration proves no public/custom domain or user credential route, exactly one service and one replica, and exclusive attachment of the run volume to that service. The container runs only registered work and the volume holds only run data. This does **not** assert that other provider tenants do not share the physical host. Production records have `isolation:null`.
+- **`identity`: identity information only.** Excluded from cross-environment equivalence, but used for binding and continuity. Configuration cannot be hidden here. A host `boot_id` is not a container-restart identifier; PID 1 start time and deployment/replica/snapshot IDs are required as well.
+
+**Capacity observations** and **resource telemetry** are additional record members, with their own comparator/reporting rules; their varying values are not included in byte equality. The private directory holding canonical/sidecar/companion files remains **0700**, and those files **0600**. The volume root need not be 0700. Gates and workload populations stay unchanged.
+
+### R2.2 Closed records, provenance and capture sequence
+
+**Scalar and encoding rules.** `String` is a nonempty Unicode-scalar string unless empty values are explicitly allowed. `UInt` is a nonnegative safe integer; `Positive` is a positive safe integer. `Limit` is UInt or the literal string `max`. Counts, bytes, microseconds and UTC milliseconds use the named units. `Digest` is a full **43-character unpadded base64url SHA-256**, with canonical base64url re-encoding required. `Commit` is a full 40-character lowercase hexadecimal commit ID. Modes are four octal digits, including the leading zero. Booleans are JSON booleans. Missing, malformed, extra or unsupported values refuse registration; null and source-proven absence are allowed only where specified. A missing future result withholds acceptance, not registration.
+
+Reuse **E.4.1's canonical encoding**: recursively sort object keys by UTF-8 bytes; preserve prescribed array order; strict UTF-8 JSON with no BOM, insignificant whitespace or trailing LF; minimal unsigned safe-integer decimal digits, no negative zero/exponents; escape quote, backslash and controls exactly as there; emit other Unicode scalars directly without normalization. Reject malformed Unicode, duplicate/unknown keys at every nesting level and bytes differing from canonical re-encoding. Booleans/null use JSON literals. Sorted arrays use UTF-8 byte order and reject duplicates unless specified otherwise. Structured-data digests hash canonical bytes; raw file/artifact digests hash their exact bytes. Comparison arithmetic uses exact integers/rationals, not rounded display values.
+
+An attestation has **exactly** `version`, `kind`, `controlled`, `placement`, `isolation`, `identity`, `environmentObservations`, `capacity`, `resourceTelemetry`, `evidence`, `digest`. `version` is `production-equivalence-attestation-v1`; `kind` is one of `production-pre`, `isolated-pre`, `run-start`, `run-sample`, `run-end`, `production-post`, `isolated-post`, `pre-enablement`. `digest` hashes the canonical complete record **with only its top-level `digest` omitted**, including identity, sanitized observations and evidence. Protected environment values and private HMAC tags never enter that payload. Cross-capture comparison uses the group comparators below, never complete-record digest equality.
+
+**Exact `controlled` schema and sources.** Objects are closed; dotted paths declare nesting, bracketed file-name keys contain literal dots. This is the exhaustive field inventory.
+
+| Path under `controlled` | Type / representation | Observation source |
+| --- | --- | --- |
+| `providerRegion` | String | Linked provider region evidence for the service/replica. |
+| `cgroup.version` | Literal integer `2` | `/proc/self/cgroup` and the cgroup2 mount containing this process. Record namespace/mount evidence; do not substitute another cgroup. |
+| `cgroup["cpu.max"]` | Closed `{quotaUs,periodUs}`: quota Positive or `max`, period Positive, both microseconds | Own-group `cpu.max`, split into its two tokens and normalized to integers/literal. Do not reduce the period away: its scheduling window matters. |
+| `cgroup["cpu.max.burst"]`, `cgroup["cpu.weight"]` | UInt microseconds; Positive dimensionless weight, respectively | Own-group files, decimal values normalized to integers. |
+| `cgroup["memory.max"]`, `cgroup["memory.high"]`, `cgroup["memory.swap.max"]` | Limit, bytes | Own-group files, normalize decimal bytes or `max`. |
+| `cgroup["io.max"]` | Closed `{boundDeviceEntry,rbps,wbps,riops,wiops}`; boolean presence and four Limits | Own-group file mapped to the bound volume as specified below. Rates are bytes/s and operations/s. Omitted rate keys normalize to `max`. |
+| `cgroup["pids.max"]` | Limit, process count | Own-group file, normalized decimal count or `max`. |
+| `resourceEnvelope` | Closed record specified below | Normalized **own-group** limits plus the compared projection of published manifest settings; the manifest is not a limit source. |
+| `effectiveCpuAllocation` | Positive, logical workers | Mechanical allocation formula below, with affinity/cpuset and quota evidence. |
+| `volume.filesystem`, `volume.magic` | Literal `ext4`; literal integer `61267` (`0xef53`) | Mount information and `statfs` on the bound volume. |
+| `volume.mountOptions` | Distinct sorted String array | Combine effective per-mount and superblock options from `/proc/self/mountinfo`, retaining option values. |
+| `volume.blockSizeBytes` | Positive, bytes | `statfs` block size on the same volume. |
+| `os.id`, `os.versionId` | Strings | Parsed `ID` and `VERSION_ID` from `/etc/os-release`. |
+| `os.imageDigest` | Provider's exact algorithm-qualified digest String, or null | Linked provider image evidence; null only for source-proven non-exposure, never a failed collection. |
+| `build.builderIdentity`, `build.builderVersion` | Strings | The deployment build log's builder identity and exact version, authoritative over conflicting manifest build declarations. |
+| `build.deployedCommit` | Commit | The active provider deployment's commit, corroborated by deployed build/artifact evidence; this is the plan-regeneration/config-file source commit. |
+| `build.planDigest`, `build.planTableCheckDigest` | Digests | Canonical regenerated full plan JSON and mechanical log-table comparison record, as below. |
+| `build.builderConfigDigest`, `build.providerConfigDigest`, `build.effectiveBuildConfigDigest` | Digests | First two hash canonical sorted `{path,digest}` lists of all used builder/provider config files at the deployed commit. The third hashes the closed canonical object `{planDigest,builderConfigDigest,providerConfigDigest}`, using the log-checked regenerated plan. Retain source payloads; stale manifest build declarations are disclosure evidence, not actual-build authority. |
+| `node.version`, `node.executableDigest` | Exact `process.version` String; Digest | Registered deployed Node 24 patch; hash the actual executable descriptor's bytes. |
+| `node.versions`, `node.configDigest` | Complete String-to-String map; Digest | Full observed `process.versions`; canonical full `process.config`, retained as evidence. Version keys are exactly the observed source-defined key set. |
+| `launch.cmdline`, `launch.execArgv` | Ordered arrays of strings, empty argument strings allowed | Full `/proc/self/cmdline`, split on NUL with only its terminal NUL removed, and exact `process.execArgv`. Preserve argument order and values, including direct Node flags. |
+| `mappedSharedObjectsDigest` | Digest | Canonical sorted array of closed `{path,digest}` rows for mapped shared objects, including loader, allocator and native add-ons; procedure below. |
+| `sqlite.version`, `sqlite.sourceId`, `sqlite.compileOptionsDigest` | Strings; Digest | `sqlite_version()`, `sqlite_source_id()` through the engine's binding; canonical sorted full String rows from `PRAGMA compile_options`, retained as evidence. |
+| `libuvVersion` | String equal to `node.versions.uv` | The serving process's observed version map. |
+| `engineCommit`, `adapterCommit` | Commit | Verified deployed artifact/build provenance. |
+| `environment` | Closed `{inventoryDigest,compared}` record defined below | A complete registered classification of the union of environment names in both serving processes, backed by the measured-path scan; compare plaintext values only for the `compared` class. |
+| `umask` | Four-octal-digit String | The **serving process running the engine**, from its getter or `/proc/self/status` `Umask`, never PID 1's umask. |
+| `seccomp.mode`, `seccomp.filters` | UInt in `{0,1,2}`; UInt count | `Seccomp` and `Seccomp_filters` in the serving process's `/proc/self/status`. |
+| `runtimePolicyDigest`, `securityPolicyDigest` | Digests | Complete exported runtime and security-policy selections from the resolved provider manifest, using the exact source-presence encoding below; retain both payloads. |
+| `permissions.directoryMode` | Literal `0700` | Descriptor stat of every private directory holding the files, with §7 safe-identity checks. |
+| `permissions.canonicalMode`, `permissions.sidecarMode`, `permissions.companionMode` | Literal `0600` | Descriptor stat of every corresponding existing file, evidence of checked roles/absent companions, and §7 safe-creation checks as companions appear. Any disagreeing file refuses capture or invalidates the run. |
+
+**Complete environment classification and privacy.** Read **`/proc/<serving pid>/environ` for the process running the engine**, not PID 1 or an operator shell. Split its bytes on **NUL**, then split each entry at its **first `=`**. Remove only the terminal NUL; never split on LF, trim, normalize or interpolate values. A multi-line value remains one value. Duplicate names, malformed entries or an unparseable name refuse. Inventory the union of **every name present in either process**, including empty-valued names and any additional names in its effective `process.env` view. An unclassified or newly appearing unregistered name refuses; known absence and empty value remain distinct. Reconcile compared/protected-read entries with the target Node process's effective view; a conflicting effective value/presence cannot be hidden by a startup-only capture and refuses until resolved. Compared/identity string values require lossless strict UTF-8 round-trip and may be empty; protected inputs use their original bytes only inside the private verifier.
+
+Registration's `environmentClassification` member is exactly `{inventoryRef,inventoryDigest,comparisonScopeId,scan}`: immutable String reference, canonical Digest, a preregistered String comparison-scope identifier, and the scanner record below. The inventory and scan report stay in the product's **private evidence channel**; this public contract contains only rules and generic names. The isolated process runs the **harness, not the web app**: product-only flags and credentials may therefore be absent. Their absence does not waive equality of execution inputs or any other runtime/launch check, and no credential or personal value is copied merely to fill an environment map.
+
+The private inventory is the closed object `{version,scan,rules,entries}`. `version` is `environment-classification-v1`; `scan` is exactly `{sourceDigest,scopeDigest,reportDigest,reportRef}` (three Digests and an immutable String reference), identical to registration's scan record. `rules` is exactly `{builderToolchainPrefixes,lifecycleLaunchNames,providerExecutionNames,publicDomainEntryId}`: the first three are sorted String arrays of private prefixes/concrete names, and the last is the inventory entry ID for the provider's public-domain variable. `entries` is sorted by opaque String `id`, with unique IDs and names. Every entry is exactly `{id,name,class,readSites,justificationRef,protectedReadProof}`: String name; one class below; sorted String read-site references; a registered reviewable String classification-justification reference; and null or the protected-read procedure below. No environment values, value hashes, HMAC tags or HMAC keys enter the inventory or its digest. Cover the complete observed union and specifically registered absent names needed for scan/isolation assertions, including the public-domain name if absent on both sides. Role/prefix rules explain classification but cannot silently admit new names after registration.
+
+| Class | Required treatment |
+| --- | --- |
+| `compared` | Record the value **in plaintext** in the attestation's compared map, and require byte equality, including presence. Always include `NODE_*` (including `NODE_ENV`), `UV_*`, `LC_*`, `LANG`, `LANGUAGE`, `TZ`, `OPENSSL_*`, `SSL_*`, `LD_*`, `MALLOC_*`, `GLIBC_TUNABLES`, `PATH`, `LIBRARY_PATH`, `CPATH` and the generic toolchain selector `NODE`. Also include builder/toolchain prefixes registered privately, lifecycle variables determining the launch command, provider runtime-selection/deployment-behaviour settings, and every other non-protected name read on the measured path. |
+| `identity` | Bind provider deployment/replica/snapshot/environment/project/service/volume identifiers and names, hostname and git metadata as identity, excluded from cross-environment equality. The actual commit is independently checked against the existing deployed/engine/adapter commit fields. Only identity information may use this class, not a runtime selector, launch setting or resource control. |
+| `secret` | **Presence only** in the attestation; never retain plaintext values or ordinary value digests. A measured-path read needs the private HMAC equality or registered non-influence proof below. |
+| `personal` | Same presence-only/value-protection rule as `secret`; personal identifiers, lists, handles and allowlists are not copied into evidence values or ordinary digests. |
+| `product-only` | A configured name **not read on the measured path**, supported by the scan. Record presence only, exclude it from equality and permit production/harness presence differences. A configured feature-flag label alone is not evidence that it is off the measured path. |
+
+Each name has **exactly one class**. Protected sensitivity is never overridden to expose a value. For other names, the mandatory execution rules and scan findings take precedence over a proposed identity/product-only exclusion. If an identity name is read on the measured path, it must be `compared`; incompatible identity/equality requirements refuse rather than silently exclude it. The provider public-domain variable must be **absent in the isolated environment**, whichever class its registered entry has; check this explicitly against the NUL-parsed inventory and isolation evidence. An omitted value field does not prove absence.
+
+**Registered mechanical scan.** Pin the scanner's source digest and the complete measured-path source/artifact closure: **the engine, the product adapter's context-read and core modules, the token counter and its native dependencies**, at the registered commits/builds. Include transitively used code and link native sources/analysis to the exact native objects already fingerprinted; no unscanned dependency may be assumed environment-independent. The report records each environment read, its source site and resolved key set, scan scope/coverage and any unresolved dynamic access. Scan JavaScript property/bracket forms (`process.env.X`, `process.env['X']`), aliases, destructuring and equivalent reflection/accesses, and native `getenv`, `secure_getenv`, `environ`/environment-block reads or equivalents. A string-pattern search alone is insufficient to establish complete coverage.
+
+For a **computed/dynamic read**, require a source-bound mechanical proof of its complete key set. If that set is not proven, **every non-secret, non-personal name in the union is `compared`**, including names otherwise proposed as identity or product-only. Protected names are then possible measured inputs too and require the protected-read rule. There is no discretionary exemption for an unresolved computed key. Unsupported/absent analysis refuses; a newly loaded dependency or code change invalidates the old scan scope and requires registration under the new source identities. Only a proven bounded key set can narrow this fallback.
+
+**Protected measured inputs.** For a secret/personal name read, or possibly read under an unresolved key, `protectedReadProof` is exactly `{method,procedureRef}`: `method` is `hmac-equal` or `non-influential`, and `procedureRef` names the preregistered private verifier procedure or reviewable non-influence justification; it is null for all other entries. With `hmac-equal`, a product-controlled verifier uses one private random key of at least 32 bytes for HMAC-SHA-256 in the registered comparison scope; **the key never leaves the product's evidence channel**. Let `C` be E.4.1 canonical encoding and hash the exact HMAC message `UTF8('production-equivalence-attestation-v1/environment-equality') || 0x00 || C({comparisonScopeId,inventoryDigest,entryId,present,byteLength}) || 0x00 || valueBytes`. Presence is boolean, byteLength is UInt, and valueBytes are the exact original bytes (empty with length zero when absent). Use the same key/context for both sides and all corresponding captures, comparing full 43-character canonical unpadded base64url tags in constant time. Initial proofs bind the preregistered comparison scope/inventory and initial capture references; later receipts also bind the unchanged registration hash. No future result is needed for initial registration.
+
+Raw protected values are transient verifier inputs only: **never recorded, logged, placed in a manifest/digest payload or hashed with an ordinary digest**. The keyed-HMAC comparison is the sole permitted value-derived equality proof, an explicit exception confined to the private channel; tags and the key are not exported into attestations, inventories or their digests. Outside that channel, retain only a metadata receipt/reference for a verified equality result, bound to the inventory, entry, capture pair and verifier provenance. Receipt references are opaque and allocated independently of values. Private verification must actually validate the keyed comparison, not trust an operator's unsupported “equal” label. With `non-influential`, the registered justification must show why this read cannot affect measured execution, control flow, timing-relevant work, I/O, counter choice or outcomes despite value/presence differences. If neither proof is valid, registration refuses. Missing/failed later protected proof has the same invalid/inconclusive consequences as a controlled-field mismatch. Secret/personal inputs off the measured path stay presence-only, without a value-derived proof.
+
+**Exact environment record members.** `controlled.environment` is exactly `{inventoryDigest,compared}`. `inventoryDigest` binds the canonical private inventory, and `compared` is an entry-ID-sorted array containing **every** `compared` entry, each closed `{entryId,present,value}`: String ID, boolean presence, and plaintext String (empty allowed) when present, otherwise null. No protected/identity/product-only value is allowed here. Equality of the canonical group enforces value bytes and presence; do not omit a missing required comparison row. The attestation's `identity.environment` has the same sorted row shape for exactly the `identity` entries, with identity values excluded from cross-environment equality and bound to observed provider/commit identities.
+
+`environmentObservations` is exactly `{presence,proofs}`. `presence` contains exactly the secret/personal/product-only entry IDs as sorted closed `{entryId,present}` rows, with no value or value digest. Their differing presence alone does not fail equality unless a measured-input proof or isolation rule requires it. `proofs` contains exactly the protected measured-input entries, each closed `{entryId,method,receiptRef}` with String ID, registered method enum and String metadata-receipt reference; receipts are verified through the private channel. These observation/identity arrays are excluded from canonical `controlled` comparison, but cannot bypass their own proof/binding requirements. All IDs must resolve to the single registered inventory; missing, duplicate or extra rows refuse. Revalidate classification coverage, protected proofs and public-domain absence at **every** capture, including pre-enablement.
+
+Do not retain or digest a raw environment dump: sanitize environment evidence **before retention or hashing**, preserving only approved plaintext compared/identity values, presence and non-value-derived verification receipts. In particular a generic raw-source digest cannot smuggle credential/personal values into evidence. The collector's source/provenance, private review and sanitized observation receipts establish coverage; no protected values or private names are placed in this contract or its synthetic fixture.
+
+**Visible controls, finite bounds and manifest projection.** The target container uses a cgroup namespace: its own group can appear as `0::/` with a read-only cgroup2 `nsdelegate` mount. Hidden ancestor controls are neither observable nor exported by the hosting provider. **No ancestor proof is required or claimed.** Keep raw own-group files as evidence and compare normalized values. `cgroup` has exactly `version`, `cpu.max`, `cpu.max.burst`, `cpu.weight`, `memory.max`, `memory.high`, `memory.swap.max`, `io.max`, `pids.max`.
+
+`resourceEnvelope` is exactly `{cpu,memoryMaxBytes,memoryHighBytes,swapMaxBytes,io,pidsMax,manifestProjection}`. `cpu` is closed `{quotaUs,periodUs}`, both Positive microseconds copied from own `cpu.max`; `memoryMaxBytes` is Positive bytes copied from own `memory.max`. **An own-group `max` for CPU quota or `memory.max` on either side refuses registration.** The provider's manifest publishes no CPU/memory/swap/I/O/PID caps; its limit-override field is null. Do not invent caps, infer them from a plan name or treat null as zero, unlimited or an effective allocation. Own finite CPU and memory controls supply the required bounds.
+
+`memoryHighBytes`, `swapMaxBytes`, `pidsMax` and the four exact `io` members `rbps`, `wbps`, `riops`, `wiops` are Limits copied from their corresponding normalized own-group controls, not provider estimates. The finite own memory maximum bounds a `max` high threshold. For **swap, I/O rates and PIDs**, matching finite values **or `max` on both sides** are supported when those caps are unpublished. Unequal normalized values refuse; unpublished optional caps do **not** require fabricated finite manifest bounds. Disclose matched `max` values as lack of a visible finite cap, plus any hidden/provider constraint uncertainty. I/O remains constrained by the paired **asymmetric fsync capacity probes**; matching unlimited controls alone cannot clear their capacity comparison. No instantaneous burst/credit-state equality is claimed.
+
+`manifestProjection` is exactly `{limitOverride,replicaCount,regionPlacement,runtimeSelector,restartPolicy,otherResourceSettings}`. `replicaCount` is Positive; `otherResourceSettings` is the complete source-defined object of other resource-related settings; the other members retain their complete source JSON values, including null, under E.4.1's supported scalar/array/object encoding. Keys within source-defined subtrees are exactly those present in the registered source schema. Every projected member must match between environments, including the explicit null limit override, replica count and runtime selector. This proves equality of the **exported declarations**, not that stale dashboard settings describe the running process. Actual runtime/limits remain independently observed.
+
+Registration's `manifestProjectionMap` is exactly `{sourceSchemaVersion,sourceDigest,mappingRef,mappingDigest}`: String schema version, Digest of projection code, immutable String reference and Digest of the private JSON-Pointer/unit mapping artifact. This is separate from the environment classification inventory. Preserve all resource-related settings, register any identity-member removal before collection and retain source evidence. Incomplete projections or missing required exports refuse. The manifest must never establish builder identity or actual limits; where it disagrees with the build log, **the build log is authoritative for the build and the disagreement is disclosed**. Its null start/healthcheck declarations do not prove absent commands; keep the observed launch fingerprint and other runtime checks. Manifest discrepancies outside the compared resource/policy projections are disclosures, not an override of actual build evidence.
+
+The following **synthetic source fixture** demonstrates the projection only. Every label/value is invented; the replica count is deliberately not an isolation attestation. It contains no actual provider schema, environment values or resource caps. A real registration supplies its private source-schema mapping, rather than using these illustrative pointers.
+
+```json
+{
+  "fixture": "synthetic-resource-projection-v1",
+  "source": {
+    "settings": {
+      "override": null,
+      "replicas": 2,
+      "placement": {"region": "synthetic-region"},
+      "runtime": "synthetic-runtime",
+      "restart": "synthetic-restart-policy",
+      "additionalResources": {}
+    }
+  },
+  "projectionPointers": {
+    "limitOverride": "/settings/override",
+    "replicaCount": "/settings/replicas",
+    "regionPlacement": "/settings/placement",
+    "runtimeSelector": "/settings/runtime",
+    "restartPolicy": "/settings/restart",
+    "otherResourceSettings": "/settings/additionalResources"
+  },
+  "expectedProjection": {
+    "limitOverride": null,
+    "replicaCount": 2,
+    "regionPlacement": {"region": "synthetic-region"},
+    "runtimeSelector": "synthetic-runtime",
+    "restartPolicy": "synthetic-restart-policy",
+    "otherResourceSettings": {}
+  }
+}
+```
+
+**Bound-volume I/O normalization.** Resolve the mounted volume's backing major:minor from mountinfo and descriptor `st_dev`, and correlate it with the provider's volume attachment. Resolve any stacked mapping to the device actually governed by `io.max`; ambiguous mapping refuses. Extract **only that bound device's** four limits. Keep raw text, device identities, mapping and other-device entries as evidence; another device never stands in for the workload device. Compare normalized ordered controls, not device numbers or whitespace/order. Equal limits on independently numbered volumes can match. An entry missing on one side only refuses; if missing on both, normalize all rates to `max`, disclose the absent visible cap and require the asymmetric probes, **without a finite manifest-rate prerequisite**. Identical raw text cannot establish equivalence when its limited device differs from a bound workload device; wrong-device application or an unresolved/mismatched attachment refuses.
+
+**Effective CPU allocation.** Let `A` be the cardinality of `sched_getaffinity` intersected with `cpuset.cpus.effective` when exposed; retain masks and the resolved CPU list. If the cpuset file is not exposed, use actual `sched_getaffinity` and record that source; host `nproc` is not the allocation. Let `Q/P` be the **finite own-group quotaUs/periodUs**. Compute **`N = min(A, ceil(Q/P))`**, using integer ceiling, and set `effectiveCpuAllocation=N`. Empty/unverifiable affinity or an own unlimited quota refuses; a manifest cannot supply a substitute quota. CPU numbers/masks may differ; **N must equal**. The ceiling defines probe concurrency, not dedicated physical cores. Finite CPU/memory provenance and all existing capacity procedures/tolerances remain required.
+
+**Build and runtime provenance.** A rendered build-log table is not raw plan JSON. Regenerate the full plan with the **logged builder version against the deployed commit**, using the log-evidenced build inputs and deployed-commit config files. Retain the plan JSON, tool/version/input evidence and original table. A registered parser/renderer compares the plan's rendered phase/command/package table mechanically with the log: preserve command order and values, normalize only fixed table decoration/spacing. The comparison record contains the canonical two table payloads and equality result; only equal payloads support `planTableCheckDigest`. Truncated/unparseable or mismatching table evidence refuses; a human assertion does not suffice. Config-file digests cover all files used at that commit. Disclose that this is a reproduced plan checked against logged output, not the unavailable original raw plan. A stale manifest naming another builder is retained as a discrepancy; its declaration neither replaces the logged builder nor fails actual-build equality by itself. The effective-build composite digest excludes stale manifest build/start/healthcheck declarations.
+
+For `mappedSharedObjectsDigest`, enumerate file-backed shared-object mappings from `/proc/self/maps`, including the dynamic loader and loaded native modules. Deduplicate by path, verify each descriptor's device/inode against the mapped object, hash its actual file bytes and sort `{path,digest}` rows by UTF-8 path bytes. Retain the list and raw maps. Deleted, unreadable, ambiguously replaced or unhashable mappings refuse; hashing a replacement file at the same path is insufficient. Hashes and effective launch arguments must match; an unaccounted argument/dependency difference refuses. The harness must run the engine with that attested launch/runtime configuration.
+
+Seccomp mode and filter count are observations, **not filter identity**. Equality of the runtime/security selections in the provider's resolved manifest is the available policy evidence. For each policy digest, encode exactly `{present,value}`: `present` is boolean and `value` is the complete exported selection/subtree, or null only when the complete export proves that no selection is published. Both presence and value must match. This records a source-proven omitted/default selection without inventing an identity for an unexposed provider default. Missing exports, incomplete projections or an unsupported policy assertion refuse registration. Unprivileged code cannot read filter contents: even matched published selections, mode and count leave actual filter implementation and unexposed defaults as residuals. No fingerprint claims byte equality of inaccessible filters.
+
+**Exact `placement` schema.** `{cpu:{vendorId,family,microarchitectureLevel,flagsDigest,modelNames},kernel:{release,major,minor,patch},nproc,currentClocksource,volumeRootMode}`; no other keys. CPU vendor is String, family UInt and model names a distinct sorted String array, from `/proc/cpuinfo`. Derive the level from the **intersection of flags on all affinity/cpuset-available CPUs**, retaining the per-CPU flags and their canonical digest. Require uniform vendor/family on those CPUs. `microarchitectureLevel` is exactly `v1`, `v2`, `v3` or `v4` and is compared; full flags digest/model names are disclosed only.
+
+The collector uses this fixed cumulative Linux-flag mapping, never a model-name guess: v1 requires `lm`, `fpu`, `cx8`, `cmov`, `mmx`, `fxsr`, `sse`, `sse2`, `syscall`; v2 adds `cx16`, `lahf_lm`, `popcnt`, `pni` (SSE3), `ssse3`, `sse4_1`, `sse4_2`; v3 adds `avx`, `avx2`, `bmi1`, `bmi2`, `f16c`, `fma`, `movbe`, `xsave` and LZCNT (`abm` or `lzcnt`); v4 adds `avx512f`, `avx512bw`, `avx512cd`, `avx512dq`, `avx512vl`. Choose the highest fully satisfied level. Use the kernel's usable AVX/extended-state flags, not hardware-only CPUID assertions; an unsupported flag representation or unestablished OS extended-state support refuses. Record the flag-mapping version in collector provenance.
+
+Kernel `release` is String from `uname -r`/`os.release()`, parsed by `^([0-9]+)\.([0-9]+)\.(.+)$` into UInt `major`/`minor` and String `patch` (the whole remainder). Reject inconsistent parsing and compare major/minor only. `nproc` is Positive host-visible logical CPU count; `currentClocksource` is String from `/sys/devices/system/clocksource/clocksource0/current_clocksource`, terminal LF removed; `volumeRootMode` is four octal digits from descriptor stat of the mount root. These three and kernel patch are recorded/disclosed only. CPU speed and storage differences are constrained by the probes rather than inferred from these descriptive values.
+
+**Exact `isolation` schema.** For isolated kinds it is exactly `{publicIngress:false,domainRoutes:false,publicDomainVariablePresent:false,userCredentialRoutes:false,serviceCount:1,replicaCount:1,exclusiveVolumeAttachment:true,registeredProcessesOnly:true,runDataOnly:true}`; production kinds use null. Link the provider's environment-configuration JSON (services, domains, replicas, mounts), proof of the public-domain variable's absence, route/credential configuration, the container process inventory and registered work schedule. The volume metadata inventory at boundaries records **paths, sizes, modes and digest**, proving run-data-only contents without recording content in this contract. One service/replica and an exclusive volume attachment prove isolation at that scope, not physical-host tenancy. The isolated record's non-null group, evidence and digest are the isolation attestation available at registration.
+
+**Exact `identity` schema.** `{serviceOrEnvironmentId,instanceOrContainerId,deploymentId,replicaId,snapshotId,boot_id,volumeId,hostname,pid1Start,capturedAt,capturedBy,environment}`. `environment` is the identity-class array defined above; all other members except `pid1Start` and `capturedAt` are String identities only. The provider inventory and deployment-, replica- and snapshot-ID variables supply their corresponding values, corroborated by exports; if no separate container ID exists, `instanceOrContainerId` is the observed replica ID, with the incarnation distinguished by `pid1Start`. It is not a physical-host identifier. Hostname is observed inside the service; `boot_id` comes from `/proc/sys/kernel/random/boot_id`. `capturedAt` is trusted UInt UTC ms at capture completion; `capturedBy` identifies the operator/service principal.
+
+`pid1Start` is exactly `{bootTimeUnixSeconds,startTicks,clockTicksPerSecond,startedAtUtcMs}`: UInt `btime` from `/proc/stat`, UInt field 22 of `/proc/1/stat`, Positive system clock ticks/s, and UInt derived `btime*1000 + floor(startTicks*1000/clockTicksPerSecond)`. Preserve the full tuple for equality, not just its rounded timestamp. A container restart changes this identity even if host `boot_id` does not; a boot-ID change signals a host reboot/move. IDs/hostname/start tuple must remain unchanged **within** each environment over [pre, post]; production and isolation must have distinct service/replica/volume identities. Equal host boot IDs across environments are permitted on shared hardware and do not establish service isolation.
+
+**Exact `capacity` schema and calibrated comparator.** Required non-null at `production-pre`, `isolated-pre`, `production-post`, `isolated-post`; null at `run-start`, `run-sample`, `run-end`. `pre-enablement` may use null only under the no-restart/no-move rule below. A non-null object is exactly `{procedureDigest,effectiveAllocation,startedAt,endedAt,repetitions}`: Digest of the registered procedure, Positive N equal to `controlled.effectiveCpuAllocation`, UInt UTC-ms bounds, and exactly **five repetitions** in ordinal order. Each repetition is exactly `{ordinal,cpu,fsyncIops,fsyncBandwidth}`; ordinal is UInt 0–4. `cpu` is `{elapsedUs,workerUnits}` with Positive measured monotonic microseconds and an N-element UInt completed-work array. `fsyncIops` is `{elapsedUs,operations}` and `fsyncBandwidth` is `{elapsedUs,bytes}`, with Positive elapsed microseconds and UInt work. All completed work must be verified; zero capacity cannot qualify.
+
+Registration fixes the probe implementation/source digest, deterministic CPU kernel/work-unit/seed, worker-to-allowed-CPU schedule, **1,000 ms CPU warm-up**, **10,000 ms measurement per CPU and I/O phase**, exactly five repetitions, and the I/O recipe: **4,096-byte writes followed by fsync per operation** for IOPS, and **1,048,576-byte sequential writes followed by fsync per write** for bandwidth. Use fresh, safely created 0600 scratch files under a 0700 directory on the **bound volume**, with registered working-set/offset/file-growth and cleanup rules; no canonical data is altered. Fix these inputs, verify output and record actual monotonic spans; no adaptive phase length, resampling, fastest-repeat selection or post-result adjustment. Probes occur outside qualification timing populations. Production approval covers their concrete CPU/I/O budget. Take matching field/identity observations before and after the probe to reject a mid-probe change.
+
+For each repetition, derive per-worker and aggregate CPU rates from completed units / actual elapsed time, fsync operations/s and decimal **MB/s (1 MB=1,000,000 bytes)**. Use the **median of five** for each worker and aggregate/storage metric. Sort the N per-worker medians by rate before pairing environments; retain worker ordinals and raw measurements as evidence. Compare every sorted worker rate, aggregate CPU, fsync IOPS and fsync MB/s separately for pre and post pairs. Also check each observed storage rate against every finite bound-device rate in the normalized own-group `io.max`; a rate exceeding such a bound by the registered measurement allowance is contradictory evidence and refuses equivalence. A `max` rate has no numeric cap to check, but still requires the full asymmetric comparison; no unpublished manifest rate is required.
+
+The proposed registered tolerance is **10% (`toleranceBasisPoints:1000`)**: for every metric require **isolated median ≤ production median × 1.10**. Compare by integer cross-multiplication, not rounded percent displays. Five-repeat medians limit single-sample noise; 10% allows modest scheduler/fsync variation while bounding measured isolated advantage. It is an explicit observational allowance, not a proof of equal future capacity or a relaxation of any §10 gate. A slower isolated result is **conservative and allowed, with its ratios disclosed**; no symmetric lower bound applies. Excess capacity before the run refuses registration; excess at post-run withholds launch acceptance as inconclusive. Neither a passing latency gate nor a clean canary can override it. A different tolerance/probe procedure needs a new preregistration and review, not tuning after results.
+
+**Exact `resourceTelemetry` schema.** The full isolated collector at start, the registered mid-run sample and end includes `{monotonicNs,cpuStat,pressure,memoryEvents,pidsEvents}`. `monotonicNs` is a minimal unsigned decimal string; `cpuStat`, `memoryEvents`, `pidsEvents` are complete source-defined maps of file keys to UInt counters from own-group `cpu.stat`, `memory.events`, `pids.events`. Include `nr_throttled` and `throttled_usec` in CPU observations. `pressure` is exactly `{cpu,memory,io}`, each the raw String contents of its own-group pressure file, retaining PSI averages and total microseconds as evidence. Outside those full isolated captures the member may be null. Sample these same counters/PSI additionally at a registered **60,000 ms interval** from run start through end, with timestamps, actual sample gaps and collection errors; seal that series with the result. These interval samples are telemetry-only, not extra attestation kinds. Missing observations are reported as missing, never zero. Counter deltas, throttling, PSI, memory/PID events and coverage are disclosed **report-only**, with no new numeric pass gate or subtraction from latency. The full mid-run capture remains mandatory for continuity even if optional resource observations are unavailable; missing report-only values use null in their exact field and retain error evidence.
+
+**Exact `evidence` schema.** Nonempty array of closed `{field,source,artifact,digest}` objects sorted by `(field,source,artifact)` UTF-8 bytes, duplicate triples rejected. `field` is a JSON Pointer to the supported observed leaf/subtree; `source` is one of `process`, `kernel`, `filesystem`, `sqlite`, `provider`, `build-log`, `deployment`, `calibration`, `environment-scan`, `private-verifier`; `artifact` is an immutable linked reference, not a local filesystem location; `digest` verifies raw artifact bytes. Cover every non-derived observation, including manifest projections, restart IDs, probe records and inventories; retain source inputs for derived fields, subject to the environment privacy rule. Environment evidence is sanitized metadata/approved values only; protected-value HMAC transcripts remain exclusively in the private channel and never enter ordinary artifact digests. Version/kind and calculated digests need no recursive attestation. Provider/build facts require their original linked exports/logs. Unsupported observations refuse registration except the explicit absence/report-only cases above.
+
+**Obtainable deployment evidence.** At **every attestation capture in either environment**, export both the environment-configuration JSON and the full deployment-list JSON, including IDs, creation times, statuses, commits and resolved service manifests; corroborate the active deployment ID. Reuse immutable build evidence only with verified unchanged deployment linkage. The provider list retains only about 20 entries, so retain **every export immediately**. Consecutive exports for each environment must share deployment IDs; overlapping rows must agree on immutable ID/creation/commit/manifest data (status transitions are retained). Verify provider ordering/retention and that the overlapping windows cover all intervening deployment entries; no overlap, a missing export or an unexplained gap makes launch evidence inconclusive. Detect an intervening deployment even if it is later reverted; an unactivated failed deployment is disclosed separately from a running-deployment change.
+
+**Do not require a complete config/variable history:** neither deploy-free variable edits nor later-reverted config edits are in an export. Continuity rests on the compared fields at every capture, the active deployment/restart identities and overlapping deployment exports. An edit invisible to the exports is caught **only if it changes an attested field at a collector observation** or another retained observation establishes it. Do not claim to detect an entirely unobserved transient edit or all hidden ancestor changes. Disclose this residual with every result.
+
+**Complete comparator and capture sequence.** Validate closed schemas, source coverage/digests, identical collector/procedure code, canonical normalized `controlled` equality (including **own-limit envelope, manifest projection, effective allocation and classified environment**), the validated private inventory/scan/protected proofs, CPU vendor/family/microarchitecture and kernel major.minor, and the required asymmetric capacity comparisons. This is the **complete comparator**. Identity is excluded from cross-environment equality, but binds the record to its service/replica/incarnation/volume; `host.id` and `volume.id` in registration bind to the isolated replica/container and volume. No provider export or hostname alone proves exclusive physical hardware.
+
+Each of the **three production captures** (pre, post, pre-enablement) needs the owner's approval; **one recorded approval may cover all three for the named scheduled run**, including its registered probes/budget. A capture outside that approval's scope needs its own approval. The approval reference is linked evidence, never a secret or identity substitute.
+
+1. **Before immutable registration:** capture `production-pre` within **6 h (21,600,000 ms) before reservation start**, with its probe, and `isolated-pre` immediately before run start, with its probe and isolation evidence. Use the same collector for all records. Register only these two records/digests, pre-comparison, isolation, complete post-run/enablement procedure, private environment inventory reference/digest and scan/proof procedures, probe policy/tolerance/source, resource-sampling interval and a **full mid-run capture after the 244th of the unchanged 488 ordered cells**, before admitting the next cell. This work checkpoint avoids depending on a guessed elapsed runtime; failed/invalid cell records are retained and never skipped to move it. Record expected service/replica/snapshot/deployment IDs, PID 1 start tuple, boot ID, volume, export sources and trusted timestamps. Include future procedures, never future capture/comparison results; the existing registration hash stays unchanged.
+2. **Inside the isolated run process:** the harness itself collects full `run-start`, scheduled `run-sample` at that registered work checkpoint, and `run-end` after final drain, with telemetry-only interval samples in between. Bind every record to the run ID, registration and actual replica/incarnation/volume. Controlled fields, compared placement/allocation, deployment/replica/snapshot/hostname, PID 1 start and host boot ID must stay unchanged from isolated-pre through isolated-post. Verify file modes as created. Any observed change, including a later reversion, **invalidates the isolated run**; a host boot-ID change explicitly invalidates it. A missing/misplaced full mid-run sample makes continuity inconclusive; never invent it. If the run terminates early, preserve its incomplete/failed result and actual exits.
+3. **After the run:** collect `isolated-post` immediately following the end boundary (including its registered capacity probe) and `production-post` within **6 h after run end**, with its probe. Apply the complete comparator to the post pair and the within-environment field/identity checks over **[pre, post]**. All active deployment-, replica-, snapshot-ID values and PID 1 start tuple must remain unchanged; unchanged host boot ID alone is insufficient. A production restart, redeploy, boot-ID change/host move or observed compared-field change, **even later reverted**, makes launch evidence **inconclusive**. Isolated changes remain invalid; known gate failures remain failures. Validate all capture-time deployment exports and their overlap. No impossible complete config-history proof is required.
+4. **Seal and validate results:** retain actual boundary/midpoint/post records and comparisons, raw/projection/build/volume/probe evidence, counter series/coverage, deployment exports and overlap checks, approval references, all IDs/times, residual disclosures and actual exits in an immutable content-addressed result artifact **bound to the unchanged registration hash**. Its digest hashes the canonical complete payload with only its own top-level digest omitted. Acceptance is withheld until it validates all six-hour bounds, required full samples, complete comparators and continuity. Future results never amend registration. Missing evidence is inconclusive, not a pass.
+5. **Before enablement:** collect production `pre-enablement` and apply the **complete comparator** against the attested isolated configuration: controlled fields, **placement/capability**, finite own CPU/memory bounds, the compared manifest projection and effective allocation, plus capacity and protected-environment proofs as required. Export and overlap-check deployment records since production-post. A capacity re-run is optional **only** if unchanged deployment/replica/snapshot/hostname, PID 1 start tuple and host boot ID prove no restart/redeploy or move since production-post, all compared fields still match, and CPU model/kernel patch/nproc/clocksource observations have not changed; explicitly link the validated post probe when reusing it. Any changed restart/move identifier, changed compared placement, changed descriptive performance observation just listed, or inability to establish continuity **requires a fresh registered probe** and comparison against the attested isolated post probe. Missing required probe/evidence or a failed comparator withholds enablement on this evidence as inconclusive. A move/restart alone does not retroactively invalidate an otherwise valid past run: record and disclose it; launch use requires the new full match and required capacity check. A later engine repin or any other **controlled-field change**, or an observed change of required placement class (vendor/family/microarchitecture or kernel major.minor), falls outside the evidence **even if later reverted**: it requires **a new run or a recorded owner decision on proceeding outside it**, never automatic qualification. Descriptive placement differences alone are disclosed rather than equality failures; the fresh probe must still pass. A reverted deployment/restart cannot regain the probe exemption by matching a final identifier; retain the intervening export/identity observations.
+
+“Immediately” makes the collector/probe the adjacent boundary procedure, with no intervening unrelated job or configuration change. V4.6's pre-registered checkpoint continuation remains available only with unchanged isolated field/identity bindings. Each segment repeats paired boundary probes/captures, telemetry sampling, six-hour bounds and export-overlap checks; the full mid-run sample remains at the original registered cell checkpoint across segments. Future segment records are sealed under the unchanged registration hash. Export overlap and compared identity observations must cover gaps too; missing evidence makes continuation inconclusive. No segment replaces failures, widens populations or claims to fill invisible config/variable history.
+
+### R2.3 Claim boundary
+
+A complete revision-2 production pass supports V4.2's lexical v1.1 C-1–C-4 launch claim **for observed effective capacity at the visible limits**, matched normalized own-group controls, published manifest projections and observed runtime configuration, and the **registered population recipes**. Those recipes include their recorded **initial and final counts and scheduled growth during continuous-write sessions**. A growing 3,336-initial-Memory recipe is not excluded when its scheduled inserts exceed its initial size. The compact-only production R7 mapping and unclaimed full/snapshot mixed-pair latency remain unchanged.
+
+The claim excludes co-located real-user load, unregistered populations/interactions and anything differing from the complete comparator. **Residuals disclosed with every result:** hidden ancestor limits; shared physical hardware and other provider tenants; unpublished swap/I/O/PID caps and any matched `max` optional controls; potentially stale manifest declarations; unexposed burst/credit state and capacity changes outside the observed probe intervals; inaccessible seccomp-filter contents despite matched published selections; regenerated rather than original raw build-plan evidence; and config/variable edits invisible to deployment exports and missed by attested-field observations. None is represented as proven absent or continuously equal. Environment exclusions require the registered scan/classification and protected-input proof rules; “product-only” cannot hide a measured execution input. R2.4 observes real-user operation report-only; a clean canary neither widens this boundary nor supplies missing cells, successes, telemetry or package/adapter sign-off. Later changes have R2.2's explicit identity/placement and new-run/recorded-owner-decision boundaries.
+
+### R2.4 Post-enablement canary
+
+The product registers and hashes the canary **before enabling the first production surface**, and keeps it with the qualification results. Register the ordered surfaces, deployed request windows and enabled methods/intents, canonical-count provenance, timestamp boundaries, telemetry sources/coverage, build-certification events, planned-rebuild procedure and the window/alert rules below. The product adds a **metadata-only recorder in its adapter**, exported through an **authenticated internal channel**: no content, query text or owner IDs. Per-owner counting/size assignment occurs inside the adapter; exported records use window-local attempt/build correlation without exporting owner identity.
+
+Surfaces in current rollout order are:
+
+1. A **web chat surface**, deployed window **5,000 ms**.
+2. An **MCP tool surface**, deployed window **5,000 ms**.
+3. The **session-start hook**, the **short surface**, window **2,000 ms**.
+
+This preserves **P2e E.4, frozen line 1336**: 2,000 ms for the short surface and 5,000 ms for the others. The 3,000-ms hook proposal is **not adopted**. Registration records the actual deployed values; a conflicting value cannot be treated as conforming here. Any surface-window change needs its **own revision of the affected delta**. No qualification deadline or E.9 surface-window registration changes.
+
+**Population and window.** For each surface the observation window starts at enablement. For each owner and intent, normal attempts start counting at its **first completed certified build**; retain the certification time as provenance. Thereafter **every normal attempt counts**, including errors, timeouts, dirty/maintenance/cron gaps and fallback invocations. Fallback is a not-ready engine attempt, even if the product fallback succeeds.
+
+Only **`findCandidates` and `contextRead`** form the index-dependent population. The §10.4 not-ready numerator and denominator apply to that population, with mutually exclusive per-attempt classification and separate error/timeout counts; **`fetchCandidateEvidence` never enters either** (§8.3/§10.4). Completion requires **at least 100 normal index-dependent attempts per enabled index-dependent method per surface**, reported by method and intent; availability fractions retain their owner/readSet/types/intent populations, ≥100-attempt minimum and combined-method denominator as §10.4 requires. Do not pool owners/intents to label an under-covered availability population clean; report its coverage as inconclusive. Enabled `fetchCandidateEvidence` separately needs **at least 100 normal attempts per surface for its latency alerts**, after the corresponding first-build counting boundary, with no index-dependence claim. Successful latency counts are reported separately; normal errors still count toward attempt coverage and never become successful samples.
+
+The window ends at the **later of 24 h and fulfillment of both the attempt and successful-latency minimums below**, with a registered maximum of **7 days per surface**. If minimums are not met by then, the window is **inconclusive**: rollout pauses, and the owner decides whether to extend observation, widen the allowlist or proceed. Record the decision; an extension/proceed decision does not relabel the incomplete window clean.
+
+A **planned rebuild** (an engine repin or a format change forcing a rebuild) must be recorded **before it starts**. It closes the current window as **“interrupted by planned rebuild”**; retain and report every observation and any alert already seen. A new window starts once the rebuilt projection certifies; the per-surface 7-day maximum and 24-hour/minimum rule apply anew. A rebuild not recorded beforehand is **unplanned**: its not-ready attempts remain counted, with no reset or dirty-period exclusion. A repin also invokes R2.2's qualification boundary; starting a new canary never extends the isolated-run claim. An interrupted window cannot be reported as a completed clean canary or silently advance rollout.
+
+**Intervals and size populations.** Latency-alert comparisons use §10.1's **constructor-entry → one public read → awaited close** lifecycle, including startup/validation/IPC and failed-open supervisor drain as applicable. Register those exact timestamp boundaries; report read-call timing and open/final-native/resource/close components separately. If the adapter cannot measure the full lifecycle, label its measured interval a **proxy**, name its exact boundaries and limitations, and mark that latency alert **“not comparable”**. That alert and window are **inconclusive**, never clean; a fast proxy cannot clear them. Successful latency statistics exclude fallback/error results, with all-attempt outcomes and intervals retained separately.
+
+Each attempt's owner size comes from a **canonical Memory count**. Record the count's provenance (canonical observation time/revision and counting source, without owner IDs), using a count current to that attempt rather than a sidecar or stale profile label. Report counts and nearest-rank successful p50/p95/maximum separately by surface, method, intent and these buckets; do not pool buckets:
+
+| Canonical size bucket | Latency alert column from §10.3 |
+| --- | --- |
+| ≤1,112 Memories | 1,112 column |
+| 1,113–3,336 Memories | 3,336 column |
+| >3,336 Memories | 3,336 column, explicitly **outside the qualified population** for this alert report; R2.3's registered-growth claim remains as specified there. |
+
+**Successful latency coverage.** Before any latency alert population can be **“clean”**, require **at least 100 successful full-lifecycle samples per surface, method and size bucket**, preserving separately reported intent populations too. This applies to candidates, assembly and evidence fetch independently, and adds no qualification gate. At n=100 the nearest-rank p95 is rank 95, with five higher observations; one fast success among 100 failures cannot stand in for that tail coverage. This is a pragmatic report-only minimum, not a statistical guarantee. Never pool buckets, methods or intents to meet it. Register required coverage combinations before enablement. A zero-observation population is “not observed”, never clean; insufficient successes in a required or observed population make that latency alert and the window **inconclusive** at the maximum. Retain counts/outcomes for every population; an unexpected sparse bucket cannot be silently dropped to finish. **Alert any observed threshold breach or unexpected failure immediately, even below the minimum**; the minimum restricts clean claims, not alerting. Errors/fallbacks count toward attempt coverage but never toward successful latency coverage.
+
+**Observations and coverage.** Record public outcomes (`read_timeout`, cancellation, `storage_busy`, not-ready and other errors), latency populations and counts, native busy, overlapping capture/review write intervals and deadlines, lifecycle components, and host main-loop observations. **Every observation family** has a coverage status and numerator/eligible-observation counts, including native busy, writer overlap **and** writer deadline coverage, lifecycle components, and main loop. Use **“instrumented”**, **“partial”** or **“not instrumented”** as applicable; partial coverage states what is missing. No coverage means no zero-event claim. Main-loop coverage also records the actual **`monitorEventLoopDelay` resolution in ms**, or “not instrumented”. Missing essential read telemetry (**latency or outcome**) makes the canary **inconclusive**. An unavailable optional family is disclosed; it never manufactures a clean alert for that family. Fewer successful samples than attempts and missing size/count provenance are visible in coverage; an unassignable size or unmeasurable comparison cannot produce a clean latency alert.
+
+**Alerts.** Reuse §10.3/§10.4 only as **report-only alert thresholds**; these are not acceptance gates and change no gate number or meaning:
+
+- Successful lifecycle p95 or maximum above the §10.3 fresh main/cold numbers for that method, using its separate size bucket and the table above; never substitute read-call/proxy timing.
+- **Any public `read_timeout`**, alerted separately whatever successful latency shows; timeout has no successful latency.
+- **Any `reader_failed` or other unexpected engine error/outcome on a normal attempt**, alerted separately from latency and timeout, with counts by normalized code and population. Registration fixes the documented expected refusal categories; a failure cannot be reclassified as expected after observation. A fast failure never makes this alert clean.
+- Any public `storage_busy` on a WAL database; report native busy with its coverage.
+- On DELETE, report **all busy outcomes**. Alert on **any capture/review timeout or deadline overrun overlapping a context read**; no DELETE busy-rate gate is introduced.
+- A §10.4 not-ready fraction **above 1%**, using only index-dependent attempts and preserving their population boundaries.
+- A host main-loop maximum **above 100 ms**, where instrumented.
+
+**Breach/pause rule unchanged.** Any alert or inconclusive window pauses rollout to the next surface and is reported to the owner with the report. The enabled surface stays enabled unless the owner uses the product's off switch. Rollout resumes only on a **recorded owner decision**; alert thresholds are never relaxed to resume. The canary does not replace missing qualification evidence.
+
+### R2.5 Exact supersession and production-only encoding
+
+Only the production-launch platform requirement is superseded. The **source** column contains exact verbatim substrings from the frozen prefix, with frozen-prefix line references; replace only those substrings in their stated launch contexts. Quoting a source here does not edit frozen bytes. All adjacent text remains normative.
+
+| Frozen location | Exact superseded source substring | Narrow replacement |
+| --- | --- | --- |
+| §7, line 491 | `**Must qualify:** Linux ext4 on the production volume` | **Must qualify:** Linux ext4 on the R2.1 production-equivalent isolated volume, with R2.2 validated evidence. |
+| §7, line 491 | `the the production host result` | the production-equivalent isolated-host result qualified under R2.1–R2.2 |
+| §8.3 WAL row, line 550 | `Qualified production Linux ext4 required` | Qualified production-equivalent isolated Linux ext4 under R2.1–R2.2 required |
+| §10, line 605 | `on the production host for launch` | on the production-equivalent isolated host under R2.1–R2.2 for launch |
+| §10.1 modes/platforms, line 613 | `production Linux ext4 is launch-required` | production-equivalent isolated Linux ext4 under R2.1–R2.2 is launch-required |
+| §11 P2d, line 678 | `production runtime/volume` | the attested production-equivalent isolated runtime/volume under R2.1–R2.2 |
+| §12 Q5, line 692 | `production Linux ext4 0700 directory/0600 files is must-qualify` | production-equivalent isolated Linux ext4 under R2.1–R2.2, 0700 directory/0600 files, is must-qualify |
+| §14 item 4, line 739 | `production-environment access/run ownership` | isolated-environment access/run ownership plus production-capture approval and evidence ownership under R2.2 |
+| V4.2 production environment, line 779 | `The product's production-class **Linux ext4 production volume**, non-WSL host` | The product's production-equivalent isolated **Linux ext4 volume**, non-WSL host under R2.1–R2.2 |
+| V4.2 input phrase only, line 781 | `the actual production volume/mount and ext4 attestation` | the isolated volume/mount and ext4 evidence, `production-pre` and `isolated-pre` records/digests and pre-comparison, isolation attestation and complete R2.2 post-run procedure |
+| V4.7 platform row, line 924 | `Production Linux ext4 is still launch-required (§7)` | Production-equivalent isolated Linux ext4 under R2.1–R2.2 is still launch-required (§7) |
+| Appendix V4-A production role, line 1131 | `"requiredRole": "production Linux ext4 on production volume"` | the `requiredRole` member of the production-only overlay below |
+
+The V4.2 production claims remain bounded by R2.3. **Every other V4.2 registration input is explicitly preserved**: concrete host/CPU/RAM/OS and run owner; exact deployed Node patch and engine/profile/protocol commits; physical synthetic snapshots, both sizes and Card distributions; selection metadata, labels/queries/unique probes and known misses; exact production counter/module/configuration; normal open/request/read deadlines and **capture/review deadlines with provenance**; writer recipe/rate/busy policy; supervised pump service, minute budgets/renewal and capacity; diagnostic capacities, telemetry coverage and drain/ack schedule; and exclusive quiet reservation. The missing-deadline/inconclusive rule, no invented review deadline, and engine-fixture claim boundary remain. Host/volume evidence changes do not waive any of these inputs.
+
+**Definition overlay, production revision 2 only.** Keep Appendix V4-A and **`DEFINITIONS.engine` byte-identical**, including its embedded revision-1 `profiles.production`, `platform` and existing engine registration equality. Do not mutate the shared appendix and derive both profiles from the mutation. Construct a separate production definition from the revision-1 definition: set its top-level `revision` to `2`, replace only its `profiles.production` with the exact object below, and consistently regenerate its derived `platform` as that same new `profiles.production` object. Preserve `platformProfile:"production"` and all other definition members. Expanded production descriptors report revision 2; their stable keys/dimensions, counts, samples and ordering stay unchanged.
+
+```json
+{
+  "id": "production-launch-v4",
+  "reservationSeconds": 27000,
+  "requiredRole": "production-equivalent isolated Linux ext4",
+  "runtime": "exact deployed Node 24 patch",
+  "platformRole": "production-equivalent-linux-ext4",
+  "volume": {"production": false, "productionEquivalent": true, "filesystem": "ext4", "nonWSL": true},
+  "attestationVersion": "production-equivalence-attestation-v1",
+  "environmentClassificationVersion": "environment-classification-v1",
+  "registrationAttestations": ["production-pre", "isolated-pre"],
+  "resultAttestations": ["run-start", "run-sample", "run-end", "production-post", "isolated-post"],
+  "capacityProcedure": "R2.2 five-repeat asymmetric calibration",
+  "capacityToleranceBasisPoints": 1000,
+  "resourceSamplingIntervalMs": 60000,
+  "midRunSampleAfterCompletedCells": 244,
+  "postRunProcedure": "R2.2",
+  "claimBoundary": "observed effective capacity at finite own CPU/memory bounds with matched optional controls and manifest projection; registered recipes including scheduled growth; excludes co-located real-user load and hidden provider controls"
+}
+```
+
+A revision-2 production registration must exactly equal that derived production definition and supply **all** of `volume.production:false`, `volume.productionEquivalent:true`, `platformRole:"production-equivalent-linux-ext4"`, `volume.filesystem:"ext4"`, `volume.nonWSL:true` and the validated R2.2 initial records/isolation/procedure. Existing required host/volume identities, mount and other V4.2 inputs remain. Any top-level `filesystem` mirror must also be `ext4`; contradictory copies refuse. Retire the legacy `volume.production:true` live-volume requirement **only for this production revision**. Reject missing/extra/mismatched captures at their stage, a revision-1 production definition, the old `production-linux-ext4` role, true live-production flags, false/missing equivalence flags, contradictory filesystem/non-WSL values, unsupported record versions/provenance or conflicting identities. Engine validation stays unchanged.
+
+**Runtime launch eligibility.** For revision-2 production, `measure-context-read-product.mjs:102`'s internal **`production` flag must be true under exactly these conditions together**: the equivalent-host production registration above has validated, including its pre-run complete comparator/capacity checks; runtime `process.version` exactly equals its registered deployed Node patch; the OS is Linux; the runtime is non-WSL; `statfs` on the bound volume reports ext4 magic **0xef53**; and the harness's in-process collector matches `isolated-pre`'s **normalized controlled bytes**, compared placement and registered replica/volume/deployment/snapshot/PID 1 start/host boot-ID bindings. The runtime non-WSL check must corroborate registration, not trust the flag alone. Otherwise that flag is false and launch acceptance is withheld; a false `volume.production` is intentional and does not force it false. A later mismatch invalidates the isolated run even if the flag was true at startup. The flag alone never grants a pass: the sealed midpoint/post-run evidence and every unchanged required gate/cell/package still must validate.
+
+The production-only validator/definition/runtime-eligibility changes in `v4-plan.mjs`, `v4-runner.mjs` and `measure-context-read-product.mjs` remain **a separate reviewed harness change**. Until that implementation exists, no revision-2 production registration can be validated by the current harness. This revision authorizes no code changes or run. A return to live-volume qualification requires a further contract revision.
+
+**Unchanged, with the explicit exceptions above:** all §10.3/§10.4 numbers and gate meanings and V4.1; **488 production cells**, all expected counts, population/success rules and the **27,000 s (7 h 30 min)** reservation; the entire engine definition/profile/registrations; all §§1–9 runtime, permission and safe-WAL rules except the enumerated launch-platform phrases; all §11 package dependencies, including P2a+P2b+P2c and adapter sign-off, except its mapped runtime/volume location; and **every earlier delta except the enumerated production-platform/definition overlay**. In particular **P2e and E.9's production-class staging requirement are unaffected**, including their own inventories, windows, gates and authorization. Production remains DELETE, WSL2/APFS remain separate should reports, network filesystems remain out of scope, and no schema/WAL rollout is authorized.
+
+### Revision 1 changelog (P2-product-v4 revision 2)
+
+Historical record of Revision 1 (`0406ba82`): finding numbers follow the original audits; all **10 validity** and **7 consistency** findings are mapped individually. Revisions 2 and 3 below supersede its ancestor, raw-control, complete-history, environment and partial pre-enablement requirements; historical entries do not reintroduce superseded requirements.
+
+| Audit finding | Change in this revision |
+| --- | --- |
+| Validity 1 — P1, materially different equality hosts | R2.1–R2.2 replace plan/vCPU/version labels with effective cgroup v2 controls including burst/swap/I/O, filesystem/OS/build artifacts, Node binary/config/full versions, SQLite source/options, seccomp, full relevant environment and serving-process umask. Placement tolerance and disclosed clocks/CPU details are explicit. |
+| Validity 2 — P1, snapshots lack continuity | R2.2 pins configuration, adds both harness boundary and isolated-post captures, instance/volume/boot binding, both environments' complete deployment/config histories including reverts, six-hour production bounds and a recorded pre-enablement matching-deployment check. |
+| Validity 3 — P1, future evidence at registration | R2.2 preregisters only production-pre/isolated-pre, isolation and the complete post-run procedure. Actual later captures/comparisons enter sealed results bound to the unchanged registration hash; acceptance waits for validation. |
+| Validity 4 — P1, imprecise V4.2 input supersession | R2.5 quotes only the exact volume/mount phrase and explicitly preserves every other V4.2 input, including counter, deadline provenance, writer, pump, telemetry and reservation. |
+| Validity 5 — P1, impossible index-dependent fetch minimum | R2.4 limits index-dependent completion/not-ready accounting to candidates and assembly; evidence fetch has its own ≥100 normal-attempt minimum for latency alerts. |
+| Validity 6 — P2, collection/canonicalization underspecified | R2.2 defines the versioned closed nested schema, types/units, exact observation sources, evidence objects, unknown/null rules, E.4.1 canonical bytes, duplicate-key rejection and digest payload. Identity fields contain only identity; unavailable provider/build facts refuse. |
+| Validity 7 — P2, incomparable latency interval | R2.4 requires constructor-through-awaited-close latency, separate read-call/components, and labels an unavailable full interval as a proxy with a not-comparable/inconclusive alert. |
+| Validity 8 — P2, pooled size statistics | R2.4 records canonical count provenance per attempt and separate ≤1,112 / 1,113–3,336 / >3,336 counts/percentiles and alert columns. |
+| Validity 9 — P2, missing telemetry appears clean | R2.4 requires coverage status/counts for every family, including native busy, writer overlap/deadline, lifecycle and main loop/resolution; missing essential latency/outcome makes the canary inconclusive. |
+| Validity 10 — P2, size exclusion understates recipe | R2.3 bounds claims to registered recipes with initial/final counts and scheduled continuous-write growth; removes the fixed corpus-size exclusion. |
+| Consistency 1 — P1, incomplete/non-verbatim supersession | R2.5 enumerates exact narrow substrings at all cited launch locations plus the second §7 host reference and Appendix role; preserves package/registration dependencies and qualifies earlier-delta precedence. E.9 stays unaffected. |
+| Consistency 2 — P1, future evidence at registration | R2.2 separates initial immutable registration from sealed post-run results, fixes collector/procedure before collection and withholds acceptance pending post-run validation. |
+| Consistency 3 — P1, no closed JSON schema | R2.2 specifies every closed object/key, dynamic source-defined map, scalar/unit/source, timestamp bounds, isolation proof, digest payload and canonical/duplicate/unknown-value rejection. |
+| Consistency 4 — P1, no whole-reservation equivalence | R2.2 adds actual in-process start/end and isolated-post evidence, pinned deployments, full histories, identity/boot continuity and reverted-change handling for both environments and checkpoint gaps. |
+| Consistency 5 — P1, incomplete eligibility encoding | R2.5 defines a production-only revision-2 overlay with regenerated `platform`, explicit false live-volume/true equivalent flags, contradiction rejection and exact runtime derivation of the internal `production` flag; engine bytes remain unchanged. |
+| Consistency 6 — P2, ambiguous fetch completion | R2.4 names the two index-dependent methods and their denominator; fetch's separate normal-attempt latency minimum cannot dilute availability. |
+| Consistency 7 — P2, mismatched latency threshold interval | R2.4 aligns latency-alert timestamps with §10.1, reports read-call timing separately and makes any proxy comparison explicitly inconclusive. |
+
+Additional settled canary details: counting begins at each owner/intent's first certified build, planned rebuilds close and retain interrupted windows, unplanned rebuilds keep counting, the maximum is 7 days per surface, and the deployed three-surface order/windows and metadata-only authenticated recorder are specified. Report-only alerts, separate timeout alert, DELETE busy policy and breach/pause behavior remain unchanged. No numerical qualification gate, inventory count or engine registration is revised.
+
+### Revision 2 changelog (P2-product-v4 revision 2)
+
+Historical record of Revision 2 (`7995a5ba`): those re-audits retained earlier resolved findings and identified **7 validity findings (4 P1 / 3 P2)** and **4 consistency findings (3 P1 / 1 P2)**. Numbers below follow that re-audit's new-finding order. Revision 3 supersedes the finite-manifest-envelope and environment-whitelist descriptions in this historical record. Current R2.1–R2.5 and the latest changelog govern; the frozen prefix is unchanged.
+
+| Re-audit finding | Fix in Revision 2 |
+| --- | --- |
+| Validity 1 — P1, unequal resource capacity | R2.1–R2.2 compare normalized own controls, the provider manifest's authoritative resource envelope, effective affinity/quota allocation and an x86-64 capability level. Paired pre/post five-repeat CPU-per-worker/aggregate and fsync IOPS/MB/s probes bound isolated advantage to a registered 10%; slower isolation is allowed and disclosed. Throttling/PSI/events are sampled report-only. Hidden limits and shared hardware remain residuals. |
+| Validity 2 — P1, execution differences escape fingerprint | R2.2 adds complete command-line/execArgv arrays, loader/allocator environment, verified mapped-shared-object path/file digests, seccomp mode/filter count and resolved provider runtime/security policy digests. Inaccessible filter contents are disclosed rather than inferred from mode. |
+| Validity 3 — P1, impossible ancestor proof | R2.2 removes ancestor visibility/no-tighter-ancestor assertions. It uses the exported resolved-manifest envelope, normalized own limits, finite-envelope treatment of `max`, effective allocation and calibrated observations. Missing required envelope/capacity evidence still refuses; unobservable hierarchy is explicitly outside the claim. |
+| Validity 4 — P1, incomplete pre-enablement comparator | R2.2 applies the complete controlled/placement/envelope/allocation comparator, retains intervening identity/deployment evidence and requires fresh capacity checks after restart/move or relevant placement changes. Compared-class/controlled changes and later reversions require a new run or recorded owner decision outside qualification. |
+| Validity 5 — P2, raw I/O equality rejects independent device numbering | R2.2 binds `io.max` to the actual volume device, retains raw text/device mappings and compares only normalized ordered limits. One-sided missing entries, wrong-device application or ambiguous mapping refuse. |
+| Validity 6 — P2, attempts do not establish latency coverage | R2.4 requires ≥100 successful lifecycle samples per method/size bucket and separately reported intent before a clean latency alert, justified by nearest-rank p95 rank 95. It adds a separate immediate alert for `reader_failed` and other unexpected engine outcomes. Sparse success populations are inconclusive; both policies remain report-only. |
+| Validity 7 — P2, short-hook window unresolved | R2.4 names the session-start hook as the short surface and preserves E.4's 2,000 ms, with 5,000 ms for the other two surfaces. The 3,000-ms proposal is not adopted; changes need their own affected-delta revision. |
+| Consistency 1 — P1, matching unlimited controls admit unequal CPUs/memory | R2.2 requires the authoritative finite CPU/memory envelope, resource-specific finite envelope bounds for `max`, and equal N from affinity/cpuset and quota. Host `nproc` is recorded only; matching `max` strings cannot certify unknown capacity. |
+| Consistency 2 — P1, I/O text may govern the wrong workload device | R2.2 resolves mountinfo/st_dev and provider attachment to the controlled backing device, compares normalized rates by bound-volume role, retains other-device evidence and rejects misleading identical text or a one-sided missing entry. |
+| Consistency 3 — P1, infeasible hidden-ancestor requirement | R2.1–R2.3 replace it with the obtainable manifest/own-group/allocation/probe evidence path. The claim is observed effective capacity at visible limits, with hidden ancestors, burst state and physical tenancy disclosed; unsupported required evidence still refuses registration. |
+| Consistency 4 — P2, conflicting short-surface guidance | R2.4 restores the 2,000/5,000-ms mapping and explicitly identifies the hook; E.4/E.9 windows and all gates remain untouched. |
+
+Additional feasibility corrections: configuration/deployment JSON is exported at every full capture, with overlapping retention windows rather than an impossible complete variable/config history; PID 1 start plus deployment/replica/snapshot IDs detect container restarts that host boot ID misses; the harness takes a registered full mid-run sample and interval telemetry. Isolation is limited to the product's single service/replica and exclusive volume, with boundary metadata inventories and shared physical tenants disclosed. Build evidence uses version-pinned plan regeneration checked mechanically against the log table, plus deployed-commit config digests. One owner approval may cover all three named production captures and their probe budget.
+
+The 12 exact supersession mappings, every other V4.2 input, sealed results bound to immutable registration, the production-only definition overlay, unchanged engine definition, **728 engine / 488 production cells**, **27,000 s** production reservation, every §10.3/§10.4 gate number/meaning and P2e/E.9 remain unchanged. Calibration and canary coverage/alert policies do not supply missing qualification evidence or authorize a run. Harness implementation remains a separate reviewed change.
+
+### Revision 3 changelog (P2-product-v4 revision 2)
+
+The second re-audits identify **2 validity P1 findings** and **1 consistency P2 finding**. All three are mapped below. This revision supersedes the earlier whitelist and finite-provider-envelope requirements; historical changelogs do not restore them.
+
+| Second re-audit finding | Fix in Revision 3 |
+| --- | --- |
+| Validity 1 — P1, environment whitelist admits different runtime execution | R2.2 classifies every observed name in a private registered inventory, with plaintext byte equality for compared inputs, bound identity and presence-only secret/personal/product-only entries. Mandatory generic runtime/OpenSSL/loader/toolchain settings and all measured-path reads are covered by a source-bound scan of engine, adapter context-read/core modules, counter and native dependencies. Unproven computed keys force comparison of every non-protected name; protected measured inputs require private keyed-HMAC equality or a registered reviewable non-influence justification. Unclassified names refuse. NUL parsing preserves multi-line values; sanitized evidence never records or ordinarily digests protected values. |
+| Validity 2 — P1, infeasible finite-envelope replacement | R2.2 takes finite CPU quota/period and memory maximum **only from own-group controls**, rejecting `max` for either. Unpublished swap/I/O/PID settings may match as finite values or `max`, with residual disclosure and unchanged bound-device/asymmetric probe requirements. The manifest projection compares declarations, including null override, replica count and runtime selection, without fabricating limits. |
+| Consistency 1 — P2, finite bounds lack an obtainable mapping/fixture | R2.2 defines exact own-limit provenance and the private manifest projection mapping, supports unpublished optional caps, and adds a fully synthetic JSON source/pointer/expected-projection fixture with invented values. The fixture demonstrates deterministic mapping and is not a real deployment or isolation attestation. |
+
+Additional supplied facts are incorporated without private names: build logs, not potentially stale manifest declarations, determine the builder/version; disagreements are disclosed and effective build evidence derives from the log-checked plan/config files. Null start/healthcheck declarations do not replace observed launch evidence. The isolated process is the harness, so unconsumed product configuration/credentials may differ in presence; they cannot bypass required execution-input equality. Classification inventory, source scan and protected-proof procedures are fixed before collection and checked at every later capture under the unchanged registration hash.
+
+Everything else from Revision 2 remains: all 12 verbatim supersession mappings and other V4.2 inputs, the separate production-only overlay/engine byte identity, complete pre-enablement comparator, five-repeat asymmetric 10% probes, interval/mid-run observations, continuity residuals, canary success/attempt coverage and alerts, 5,000/5,000/2,000-ms surface mapping, **728 / 488 cells**, **27,000 s** production reservation, every §10.3/§10.4 gate and P2e/E.9. No code, run or launch acceptance is claimed; harness implementation remains a separate reviewed change.
+
+
+## P2-product-v4 revision 3: realistic freshness/availability writer profile (delta, 2026-10-28)
+
+Status: **author draft for non-author audit; owner scheduling decision recorded on 2026-10-28 at approximately 18:05**. This is definition revision **3** for both `engine-platform-v4` and `production-launch-v4`, following the production-only definition revision 2. The API/profile remains `context-read-product-v1.1`. The entire 459,357-byte prefix at `f56390ef`, including revision 2, is frozen. This appendix changes the F/A workload, session encoding and derived planning budgets, and records the selected engine host role and continuous reservations. R3.5 selects 55,800 s engine / 35,100 s production; the scheduling stop is resolved. The workload remains ×3 with every threshold unchanged. This is an executable protocol specification once final inputs are registered and the separate reviewed harness change exists; no implementation, measurement, qualification or launched run is claimed by authoring it.
+
+### R3.1 Scope and unchanged gates
+
+**Owner decision, 2026-10-28.** F/A sessions use the realistic per-owner write profile **×3**. W, WM and all R writer loads keep their unchanged approximately **20 ms** contention writer, including alternation, fresh/retained distinctions, baselines, overlap/commit/close minima and deadlines. The F/A recipe must not be reused to lighten contention qualification. At 20 ms with alternating capture/review, the old writer generates about **25 new Memories per second per owner** even with one Memory per capture. That is contention stress, not a freshness workload. Strict fresh-fence semantics must instead be qualified under realistic sustained writes with headroom (×3).
+
+Every §10.3/§10.4 threshold and gate meaning remains. In particular: **≥100 eligible committed targets per type/intent F cell; nearest-rank p95 ≤30 s with unseen targets retained as +infinity; fresh authorized probes at ≤1 s per active batch/intent; continuing writes for ≥30 s after the last eligible target commit; ≥100 scheduled and executed normal index-dependent A attempts per intent; not-ready ≤1% using the §10.4 denominator**. At n targets the gate uses sorted rank `ceil(0.95*n)`, including infinities. No size, schema, journal, type, intent, method or platform population is pooled. F40/A24 still share **12 `B×S×J` sessions**, four Memory-only v18 sessions and eight mixed v23/v33 sessions, separately within each profile. All other cells and counts remain **728 engine / 488 production**. A shortfall remains inconclusive; missed cadence, schedule or tail remains invalid; known failures survive invalidation. No gate is traded for a shorter reservation.
+
+The current eligibility predicates are the authority: Memory history accepts undeleted awaiting Memories, while current also requires currentness and non-awaiting state (`core/context-read-sidecar.mjs:323`). Cards must be confirmed even for history; current additionally checks dependencies, applicability and support (`core/context-read-sidecar.mjs:668`–`:675` and following checks). A draft Card is never a target for either intent.
+
+### R3.2 Product-measured profile, schedule and pump inputs
+
+The source counts are staging observations **before ×3**: a capture event produces p50 **1**, p95 **4**, maximum **5** Memories; organic activity is about **10–20 Memories per active hour**; the busiest observed minute was **45** during an import, with a normal active minute under **20**; an organizer burst is about **20 or fewer** Memories; review reaches about **30 decisions in five minutes**. These observations do not specify organizer recurrence, an active-day duty cycle or a complete capture-event probability distribution. Register those modeling choices explicitly; do not present them as additional measured facts. The ×3 values below are already multiplied; do not multiply them again.
+
+| Operation | Per-owner F/A profile and engine mapping |
+| --- | --- |
+| Steady capture | About **60 Memories per active hour**. Each call carries one capture event. Arrivals of events are **Poisson inside registered active periods**, with one call producing **1–5 Memories**. Register the event-size probability law consistent with p50 1, p95 4, max 5. Set event intensity to `60 / E[event size]` calls/hour, so 60 is a Memory rate, not a call rate. Fixed spacing is not the steady model. |
+| Capture burst | One capture call carries the entire 1–5-Memory event. Splitting it into several adjacent calls changes the profile and is prohibited. |
+| Organizer burst | One organize call performs **a single session-episode commit**, about **60 Memories** grouped by project together with session-episode records. Each call is at most a **20,000-character chunk**, counting its complete admitted payload. It produces **Memories only**. Register call placement and payload/record sizing; do not silently split one burst or infer an hourly organizer rate from its size. |
+| Review burst | **90 decisions within five minutes**, on awaiting Memories. The split is an **estimate**, not a measurement: about **70% confirm, 20% reject, 10% correct/resolve with replacement content**. Register exact integer counts, ordering and identity mapping. A correction must actually commit replacement content; a second confirmation cannot stand in for it. |
+| Engine-synthetic Cards | The product currently performs **no engine Card operations**: its Cards are application-database objects and the engine Card path is not wired. Nevertheless retain **all v23/v33 Card F/A cells**. Register a separate **engine-synthetic Card recipe, not product-measured**, with creation and confirmation, valid current support/applicability and exact revision/body revision. Its rate, operation count per burst and payload/transaction shape must be no heavier than the corresponding Memory profile. State the comparison explicitly. It supplies engine-path evidence only; it cannot claim product Card integration. |
+
+**Deterministic registration.** Before any measured execution, record generator/version, seed derivation, separate random streams, numeric/time-rounding rules, active-period start/end boundaries, all generated Poisson event release times and sizes, organizer placements, review releases and decision mix, Card releases, target enrollment cutoff, namespace/project allocation, complete payload/oracle digests, A releases, lane offsets, resource caps, ordinary operation deadlines with provenance and a finite no-idle-gap bound. Hash the **fully expanded schedules**, not just a seed. Reject missing inputs, duplicate IDs, impossible eligibility ordering, input-size violations or insufficient planned targets before collection. Actual commits remain measured facts, never synthesized from release times.
+
+The independent writer process is separate from reads and maintenance. Each operation uses **fresh ordinary open → one operation → finally-close**, including each capture event, each single session-episode commit and each review decision; no keeper or retained connection. Every writer targets the same owner and selected four-namespace projection. Separately label the synthetic Card writer if it uses another independent process. Register the maximum simultaneous operations and merged release/tie order; ordinary lifecycle/commit/close/deadline/native telemetry, final seal and actual exit are required for every process. Do not run a 20 ms auxiliary stream alongside this profile. F targets are enrolled from the profile operations themselves, not extra accelerated target injections. Do not add catch-up calls, queue a saturated backlog, move releases, redraw a seed or change a decision after observing read outcomes. Record release lateness/omissions; unmet registered scheduling bounds invalidate the session without deleting errors or targets.
+
+For §10.4, **continuous writes** means the Poisson steady stream remains active from session start until at least **30 s after the last actual eligible target commit**, including the observation tail. There may be no pause of its active period during that interval. Register a finite maximum idle gap and validate it from actual steady-capture operation/commit traces, including the start-to-first and last-to-end boundary gaps; organizer, review and Card work cannot conceal a stopped steady stream. Natural Poisson gaps are allowed only within that registered bound. Do not replace the Poisson process by evenly spaced keepalive writes. A stalled writer, omitted arrival or gap beyond the bound is invalid, not an availability exclusion. Tail writes after the immutable target-enrollment cutoff are ordinary non-target writes; every eligible target enrolled before that cutoff stays in its population. Freeze the target-commit ceiling, observation end and bounded cleanup/drain allowance before execution; a late commit or insufficient tail invalidates the fixed session, with no result-dependent extension.
+
+**Pump registration, not new protocol constants.** The product is moving to an **in-process long-lived pump**. The provider's cron minimum is **five minutes**; the earlier product-specific **“cron 60 s” fact no longer applies**. It is not a reason to wait five minutes between maintenance operations. Product-specific per-minute HTTP-cron/cron-renewal descriptions in §§6.2, 10.4's opening sentence, 12 Q4, 14 item 2 and V4.2 now mean the explicitly owned/supervised in-process pump and its registered renewal/service lifetime. Retain their authority, scheduling, cumulative-budget, supervision, failure and no-read-maintenance requirements; no §10.4 gate changes. Do not apply this correction to separate semantic-work requirements.
+
+Registration must take the product's **final** pump values with source/version/date provenance, for both profiles or an explicitly labeled engine fixture. The following are **provisional planning inputs only**, not frozen protocol values or capacity promises: quantum **128 items / 1,000 ms**; owner-wide window budget about **2,048 items / 60,000 ms per ≤60 s window**, under review and possibly lower; `pollMs` **25**; `renewalMs` **60,000**, renewed every **20–30 s**; one always-on pump per owner for **at most four owners**, early renewal after a **3 s debounce**, strict round-robin above four, and a **20 s safety tick**; maintainer open **5,000 ms**; **two owner-wide selections per owner**. A genuine refresh error stops that owner's pump, retried at the next tick; `read_timeout` counts as retryable progress. Register the final error classification, window accounting, renewal, scheduling, resource and supervision policy. Retain failures and dirty intervals during retries. Quantum, owner budget and wall-clock allowances are different quantities; none proves 30 s freshness. A changed final input requires re-deriving the schedule/capacity/budget before registration, not post-result tuning. No provisional maintainer setting supplies an invented capture/review deadline.
+
+### R3.3 Target construction, probes and availability
+
+**Memory history** targets arise at the first eligible capture or organizer commit, even while awaiting review. **Memory current** targets arise from confirmation, a correction/resolution that actually leaves awaiting state, or a capture that actually commits non-awaiting current content. An in-place content correction alone preserves awaiting state in the current engine and supplies **no current target**; it also does not create a new Memory identity or restart that identity's history clock. Register original/replacement identities and revisions separately if a recipe really creates a new identity. If correction requires a subsequent confirmation to become current, register both fresh operations, their timing and commits; start current latency only at the first genuinely eligible commit. The planning recipe below credits only ordinary confirmations, so it does not depend on that extra operation. No rejected awaiting Memory is credited as a current target. An organizer commit may supply many distinct targets from one canonical commit; this shares a timestamp, not a target identity. The registration must demonstrate ≥100 of each intent from actual planned operations, allowing for rejects and corrections; 100 awaiting creations followed by 70/20/10 reviews yield at most 80 current targets if every correction truly resolves awaiting state, or only 70 for in-place correction alone; neither suffices.
+
+Keep each intent's **first-eligible native commit and exact ref/revision**, including Card body revision. A later mutation never resets its freshness clock. A missed history revision remains +infinity after mutation, even if its replacement is observed. Shared history/current timestamps require genuinely coincident first eligibility. Card drafts contribute nothing; confirmation creates history eligibility and current eligibility only if the complete current predicate holds. Validate that state with the independent canonical oracle and freeze any needed support so ordinary Memory reviews do not accidentally invalidate Cards. Disclose support fixture size and every write used to maintain it.
+
+The planning construction in R3.4 enrolls **all** Memories created by its three organizer commits and its pre-cutoff steady captures and every first-eligible current revision from its reviews. Its in-place corrected content is not counted as a second history target or a current target while still awaiting. It enrolls all synthetic Cards confirmed by the cutoff. Targets are not truncated to the first 100. Any additional enrolled eligible commit is retained, including after a failed operation with a partially committed outcome; reconcile the native ledger rather than trusting the public success count. No unseen target is retired, substituted or dropped to free a probe lane or improve rank 95.
+
+Keep immutable unique lexical terms and known top-24 membership, ordinary query-union input bounds and the independent ranking oracle. Each probe batch contains **at most 20 identities**; inspect each exact ref/revision individually. A batch response is not automatically twenty observations. Record independent first-success times and all probe outcomes per intent, from fresh authorized request/credential/handle lifecycles, with no maintenance/catch-up or fallback evidence. No probe supplies R/O successes or a latency percentile.
+
+The old **20 probe lanes plus one A lane** was derived from ten identity batches × two intents; it is not a cap permitting targets to be dropped. Let `Batches` be the preregistered identity batches across applicable types, including replacement identities and the realized seeded captures. Supply **`2*Batches` bounded probe lanes plus one separate availability lane**, using `2*b+i` for batch ordinal b and intent ordinal i; inactive lanes may idle. Derive capacity for the worst case in which every unseen batch stays active through the ceiling. Freeze Worker/CPU/RAM caps, launch offsets, sampling and drain schedules. Each active batch/intent must still be probed at **≤1 s** from eligibility until its successful observation or the ceiling; at most one request is in flight per lane. More batches require more lanes or a separately registered implementation that demonstrably preserves every cadence. Insufficient resources or unsupported batching invalidate the session; never serialize probes into missed cadence or change the target minimum. R3.4 budgets time assuming enough registered capacity for the re-derived lanes, and does not assert the old host can supply it.
+
+A remains disjoint from probe traffic. For each intent pre-register at least 100 unique releases throughout the entire new session; ordinal k strictly alternates `[c12,a1500][k mod 2]`, with **≥50 executed per method**, method counts differing by at most one, and the unchanged language rotation. One capacity-feasible planning schedule is current releases `k*T/100`, history releases `(k+0.5)*T/100`, k=0…99, after both certified builds and with T the observation duration; register actual integer-ms offsets and sufficient final-call settlement time. Errors advance ordinal. Reconcile each scheduled ID to exactly one actual attempt in release order regardless of completion order; omissions invalidate the session. Preserve the fixed owner/readSet/schema-union-types/intent population and §10.4's all-scheduled-normal-index-dependent denominator, including errors, timeouts, dirty/budget/renewal intervals, stale/unavailable results and fallback invocations. Probes and evidence-only calls cannot dilute it. Not-ready remains `(index_unavailable + failures explicitly caused by stale/unvalidated/incomplete index state) / all scheduled normal index-dependent attempts`, with mutually exclusive categories. Retain separate all-error reporting and independent gates.
+
+### R3.4 Derived session lengths and both wall-clock ledgers
+
+The profile supplies event sizes and a review rate, **not a unique session duration**. Register a complete recipe, compute every type/intent target count from it before collection, and derive the last permitted eligible commit plus a ≥30 s continuing-write observation tail. An active-hour rate must not be converted to a shorter count-producing interval by compressed playback. The following is a **concrete planning construction** supporting the continuous reservations selected in R3.5, not an assertion of measured organizer recurrence. Organizer recurrence, payloads, final pump values and deadline provenance still require registration.
+
+- Keep the whole observation interval active. For planning use event-size probabilities **[60,20,10,5,5]/100** for sizes 1…5: nearest-rank quantiles are p50 1, p95 4, max 5; mean **7/4**, hence event intensity **240/7 calls/hour**, mean interarrival **105 s**. These probabilities are a modeling estimate consistent with the measured quantiles, not a measured histogram.
+- Place three single organizer commits of 60 awaiting Memories at **0, 150 and 300 s**: **180 history targets**. Each includes project grouping and session-episode records within its one ≤20,000-character payload. This is three registered episodes, not a measured recurrence claim.
+- Place two five-minute review bursts at **[35,335) and [335,635) s**, with 90 releases each, separated by **10/3 s**. Assign the 180 awaiting identities oldest first; the earliest review is at least 35 s after its creation, independent of observations. Each burst contains exactly **63 confirms, 18 rejects and 9 corrections** in a seeded permutation. The nine correction decisions per burst replace content **in place** and leave those Memories awaiting; they are not fictitious new identities or current targets. Across both bursts there are **126 current targets from confirmation**. History remains **180 + N**, with N the steady-capture Memories released by the target cutoff. Capture targets in this illustration are awaiting and add no current credit. This maps 90 decisions to 90 engine operations per burst; any alternative resolution needing extra operations must declare and budget them. The last review release is **631 2/3 s**. Validate that all 90 actual decisions commit within their registered five-minute burst window; the global D allowance cannot extend that window. An operation taking longer than its remaining slot is retained and makes the burst/session invalid, without shortening its ordinary deadline. Rejects supply no current credit.
+- For v23/v33, the separately registered **engine-synthetic** Card construction has three five-minute windows **[0,300), [300,600), [600,900) s**, each with **90 total operations**, alternating one creation and one confirmation at **10/3 s** intervals. That is **45 Cards/window, 135 Cards total**, each confirmed and eligible for both intents. Creation **plus** confirmation consume the same 90-operation burst envelope as 90 Memory review decisions; neither operation receives a separate 90-operation allowance. Card bodies/records and each transaction must be no larger than the registered Memory comparators. There are no synthetic Card organizer commits or uncounted support writes. It is a coverage recipe, not the estimated Memory review mix or a product Card traffic measurement. Its last confirmation release is **896 2/3 s**; validate all 90 actual operations inside each five-minute window too. Two such windows would yield only **90 Cards**, below the unchanged 100 minimum; therefore this full-window recipe needs three.
+
+Use target-release cutoffs **635 s** for v18 and **900 s** for v23/v33, including all steady captures released by that cutoff. Let **D** be a preregistered conservative release-to-eligible-commit allowance covering ordinary opening, any bounded dispatch delay and operation work. The construction reserves target commits by **635+D / 900+D s**, and observation/writer ends at **665+D / 930+D s**. D is a planning/schedule input, never a replacement write deadline or permission to abort a slow operation. If a release or commit exceeds its registered bound, retain it and mark the session invalid; do not extend the session or discard that target.
+
+For a reproducible **planning-only** instance, set D=**5 s**, solely as an unverified allowance: v18 is **670 s (11 min 10 s)**, mixed is **935 s (15 min 35 s)**. This does not assert a supplied 5,000-ms review deadline. Registration must replace D from provenance/capacity evidence and recompute. Generate the steady schedule as follows: the seed is SHA-256 of UTF-8 `fa-profile-v3|<world>|<schema>|<canonical journal>/<sidecar journal>|steady`; counter starts at unsigned zero. For each uniform consume SHA-256 of seed bytes concatenated with the counter as eight big-endian bytes, then increment counter. Take the first eight digest bytes as a big-endian integer, shift right 11, and use `(q+0.5)/2^53`. Use alternating draws for `-105*ln(1-u)` seconds to the next arrival and for the inverse event-size CDF, stopping before observation end. Times use binary64 arithmetic then nearest integer microsecond, ties to even; registration publishes the resulting full integer release list so later implementations do not depend on transcendental-library rounding. Review permutations and other randomized choices use separately named streams with the same recorded algorithm; publish their expanded schedules too. No runtime draws or outcome-based reseeding.
+
+This planning instance uses a **720 s** steady idle-gap bound, including boundary gaps; the generated maximum is **677.107 s** before dispatch/commit allowance, leaving over 37 s beyond D for that bound. The bound is a schedule choice allowing natural Poisson gaps, not a new protocol constant. Validate actual gaps as well as rate/schedule realization; a live PID does not prove an active steady stream. Target cutoff closes enrollment, not capture activity.
+
+| World/schema/journal | Duration s | Steady target Memories N | History / current Memory targets | Identity batches / probe+A lanes |
+| --- | ---: | ---: | ---: | ---: |
+| 1112/18/DELETE–DELETE | 670 | 11 | 191 / 126 | 10 / 21 |
+| 1112/18/WAL–WAL | 670 | 4 | 184 / 126 | 10 / 21 |
+| 3336/18/DELETE–DELETE | 670 | 14 | 194 / 126 | 10 / 21 |
+| 3336/18/WAL–WAL | 670 | 4 | 184 / 126 | 10 / 21 |
+| 1112/23/DELETE–DELETE | 935 | 7 | 187 / 126 | 17 / 35 |
+| 1112/23/WAL–WAL | 935 | 24 | 204 / 126 | 17 / 35 |
+| 1112/33/DELETE–DELETE | 935 | 5 | 185 / 126 | 16 / 33 |
+| 1112/33/WAL–WAL | 935 | 27 | 207 / 126 | 18 / 37 |
+| 3336/23/DELETE–DELETE | 935 | 15 | 195 / 126 | 17 / 35 |
+| 3336/23/WAL–WAL | 935 | 24 | 204 / 126 | 17 / 35 |
+| 3336/33/DELETE–DELETE | 935 | 15 | 195 / 126 | 17 / 35 |
+| 3336/33/WAL–WAL | 935 | 16 | 196 / 126 | 17 / 35 |
+
+Mixed sessions additionally have **135 Card targets per intent**. Batches use `ceil((180+N+135)/20)` for mixed and `ceil((180+N)/20)` for v18; current targets use the same identity partition. The lanes above are worst-case capacities with unseen targets retained. The table is generator arithmetic, not proof that any operation commits or any gate passes.
+
+For either profile, the new F/A component is **`4*670 + 8*935 = 10,160 s`**, replacing **2,160 s**, an increase of **8,000 s**. All other V4.6 components are retained independently below. For a common change of D by d seconds, this planning ledger changes by **12*d seconds**, before any extra setup/resource cost. If final values require different recipes, the full ledger must be re-derived.
+
+| Serial wall-clock component | Engine seconds | Production seconds |
+| --- | ---: | ---: |
+| Main + warm-ups | 16,207.4 | 8,798 |
+| Idle cold | 4,200 | 2,628 |
+| Idle warm references | 1,620 | 1,150 |
+| Pump-active WM references | 2,160 | 1,000 |
+| Fixed windows | 12,960 | 6,720 |
+| **New F/A sessions** | **10,160** | **10,160** |
+| Storage | 1,080 | 720 |
+| State/injection | 480 | 300 |
+| Placement/build/reset/seal/drain | 2,160 | 1,008 |
+| Failed/missed-overlap/slow allowance | 3,600 | 1,800 |
+| **Estimated total, uncompressed construction** | **54,627.4 = 15 h 10 min 27.4 s** | **34,284 = 9 h 31 min 24 s** |
+| **Owner-selected continuous reservation** | **55,800 = 15 h 30 min** | **35,100 = 9 h 45 min** |
+| Margin above ledger | 1,172.6 = 19 min 32.6 s | 816 = 13 min 36 s |
+
+The work ledgers are design estimates, not measurements or guaranteed bounds; the **55,800 / 35,100 s reservations are selected**. The provisional pump parameters are the planning context; no throughput is inferred from them. Extra lane capacity, final pump budgets, operation deadlines, placement/build costs and registration evidence can increase the work estimate. If rehearsal on the registered host shows that build/placement allowances do not hold, increase the estimate; never compress work, drop cells or shorten observation to fit. The selected reservation remains fixed unless the owner records another reservation decision; V4.6 handles projected overrun. Retain all original successful/failed attempt ceilings and ordinary slow samples. Reservation exhaustion follows V4.6's stop-admission, owned-drain, raw-exit and incomplete/inconclusive rules. Segment continuation stays between complete cells with unchanged registration/host/volume/patch and no substitution of faster repeats; R2.2's per-segment production evidence and continuity requirements remain.
+
+### R3.5 Owner scheduling decision: one dedicated-host engine reservation
+
+**Owner decision, 2026-10-28 at approximately 18:05.** Use a **dedicated native Linux ext4 engine host**, running Ubuntu, native/non-WSL and non-production. Only the engine maintainers use it during the measurement reservation; its CI work moves elsewhere for that reservation. Register exact host/volume/runtime identities and capacity as V4.2 already requires. This selects the existing engine maintainers' own quiet host/volume, not a new measurement profile. Public evidence uses this generic host description, without a machine nickname, address or user name.
+
+The engine has **one continuous 15 h 30 min (55,800 s) reservation**, registered up front as **one segment covering all 728 cells**. Its planning margin is **`55,800-54,627.4 = 1,172.6 s` (19 min 32.6 s)**. This is the more-quiet-time option in its single-host, single-segment form: it preserves ×3, the single-owner and single-session-per-cell claim, and every threshold. It supersedes the earlier two-night ≤6 h 45 min plan and the **364 + 364** engine partition for this registration. The engine role is **`native-linux-ext4`**, an engine **should** qualification report separate from WSL2 and APFS. It is never production/launch evidence and must never set the internal production flag.
+
+Production has **one continuous 9 h 45 min (35,100 s) reservation** in R2's isolated environment, covering all **488 cells**. Its margin is **`35,100-34,284 = 816 s` (13 min 36 s)**. Only the reservation length changes; all R2.2 evidence and the **run-sample after the 244th ordered cell, before admitting the 245th**, remain. Explicit timing for this longer reservation: `production-pre` stays within **6 h before the actual reservation start**; `isolated-pre` immediately precedes run start; `run-start`/cell-244 `run-sample`/`run-end` remain inside the isolated process, with run-end after final drain; `isolated-post` immediately follows that boundary; `production-post` stays within **6 h after the actual run end**. The six-hour bounds are relative capture windows, not a six-hour run limit. At a planned 35,100-s duration the outer production-pre to production-post envelope may span **78,300 s (21 h 45 min)** if both six-hour windows are fully used; actual evidence must cover the actual end including drain, rather than an invented planned-end timestamp. Preserve the registered 60,000-ms telemetry interval, complete comparator, exports/overlap, identity continuity, approval and pre-enablement procedures. Keep that ordered-work checkpoint even when preceding cells fail or are invalid: retain their records and never skip them to move the sample or count only successful cells. No capture bound, checkpoint or evidence requirement is relaxed or scaled.
+
+At the selected budgets, V4.6's **stop-admission, owned-drain and incomplete/inconclusive** rules remain unchanged, with known failures retained. Plan one segment, not an automatic extension or expensive restart. Continuation into a separately reserved window is available only under V4.6 on the **same host, volume, patch and unchanged registration**, between complete cells, with all earlier failures retained; R2.2 repeats its required boundary evidence for any production continuation. R3.6 uses the existing full-segment ID and registered cell checkpoints for such continuation, without adding a second cell partition or rewriting the registration. Supervision and actual exits remain required.
+
+**Earlier feasibility calculation, retained as history.** The superseded plan reserved **two quiet engine nights, each segment ≤6 h 45 min**: at most **48,600 s** in total. The unchanged non-F/A engine ledger is **`46,627.4-2,160 = 44,467.4 s`**, leaving only **`48,600-44,467.4 = 4,132.6 s`**, or **344.3833 s/session on average**, before any reservation margin. This construction needs **10,160 s** for F/A and exceeds the two-night total by **6,027.4 s = 1 h 40 min 27.4 s**; the now-selected 15 h 30 min reservation exceeds that superseded limit by **7,200 s = 2 h**. Its equal halves would be 7 h 45 min, above the segment limit.
+
+**The scheduling stop is resolved by the decision above.** The earlier options below are retained as the record of what was considered; their tabulated multi-segment, concurrent-owner, pooled-session and different-multiplier forms were **not selected**. The selected form is additional quiet time on one dedicated engine host, in one continuous segment. These historical estimates do not authorize another form, reopen ×3 or promise shorter empirical runtime. Changed-claim alternatives would still require their own explicit contract/definition revision and non-author review.
+
+| Earlier option, not selected in this form | Estimate under the same planning allowances | Claim effect / requirements |
+| --- | --- | --- |
+| More quiet nights or segments | The uncompressed illustration needs about **15 h 10 min**, or **15 h 30 min** with the illustrated margin. **Three segments of 5 h 10 min** would reserve that total, each below 6 h 45 min; cell-boundary packing still needs registration. Production illustration is **9 h 45 min**, e.g. two reservations of 5 h and 4 h 45 min. | Preserves the single-owner, single-session-per-cell claim and ×3 profile. Requires additional quiet time and verified supervision/checkpoints; these are estimates, not a selected reservation. |
+| Several independent owners or worlds within a session | Ideal two-way concurrent execution of independent existing B/world sessions makes the F/A component **5,080 s** and engine ledger **49,547.4 s**, still **947.4 s** over two nights without margin. Ideal three-way scheduling can pack the eight 935-s and four 670-s sessions into four waves, **3,475 s** (three 935-s waves and one 670-s wave), giving **47,942.4 s**, only **657.6 s** margin. Production ideal ledgers are **29,204 / 27,599 s**, respectively. | Separate owners/worlds keep target/intent cells separate but change the claim to concurrent-owner capacity/interference under a **registered CPU/Worker/memory cap**; wall time may be worse than ideal and gates/cadence cannot be waived. Shared runtime/pump/volume effects and owner scheduling must be requalified. Alternatively, three owners inside each F cell could split targets, but that pools owners and changes §10.4's fixed-owner claim; it is not authorized here. |
+| A registered multi-session F cell | Illustratively split the unchanged two review windows and three synthetic Card windows across repeated sessions of the **same fixed cell**. Total active F/A time remains **10,160 s or increases** through repeated setup/tails; alone this does not fit two nights. Pauses can improve placement within quiet reservations, not remove required operations. | Changes the present one-session contiguous-write population to a pooled population across separately initialized episodes. Must newly define equal inclusion, all failures/+infinity, first eligibility, each episode's steady stream and ≥30 s tail, and A denominators. No pooling across owners/worlds/schema/journal/intents/types; no lowering ≥100. Requires a new reviewed authorization before such registrations can be valid. |
+| A different multiplier | For scale only, accelerate profile arrival/burst frequencies, including the synthetic recipe, by `m/3` while keeping event sizes, the illustrative **35-s pre-review hold**, **D=5 s** and the **≥30-s continuing-write tail** unchanged. For the range illustrated, Memory sessions become `70+1,800/m s`, mixed sessions `35+2,700/m s`, so F/A is **`560+28,800/m s`**. Fitting the two-night ceiling before margin needs **m≥8.0614**; retaining the old engine reservation margin needs **m≥11.52**. At **×12**, hypothetical F/A is **2,960 s**, engine **47,427.4 s**, leaving **1,172.6 s**; production is **27,084 s** before margin. None of the fixed observation tails is compressed. | Changes the realistic **×3** freshness workload claim and the review-rate/organizer-placement assumptions; these are hypothetical bounds, not a recommendation or permission to compress. Burst sizes/chunk shapes cannot simply be multiplied without a new mapping. The owner has already settled ×3; do not reopen it unless the owner explicitly elects to change that decision. |
+
+The options do not assert feasibility under any unregistered host capacity. In particular, simultaneous sessions require up to three sets of the re-derived lanes, independent writer/pump resources and unchanged per-process/union loop gates; reducing CPU per session can destroy the ideal saving. No option weakens a minimum, percentile, fence, denominator or timing gate.
+
+### R3.6 Definition revision 3 and implementation handoff
+
+Revision 3 changes Appendix V4-A **`sessions` for both profiles** and the derived estimates/reservation inputs; it is not a production-only writer overlay. Build the engine revision-3 definition from the revision-1 inventory with the shared session/derived-budget changes and the engine role/one-segment registration policy specified here. Build production from revision 2's separate production overlay plus those same shared revision-3 changes; set the top-level definition `revision` to **3** in both. Preserve protocol name, API/profile, platform IDs, row sets/products, stable dimension ordering, counts and all unaffected members. Hashes/expanded descriptors must identify revision 3 even where dimensions are unchanged.
+
+Revision 2's separation of platform attestations remains: the engine must not inherit the isolated-production `platform`, equivalent-volume flags, collectors or runtime eligibility. The production object retains every R2.5 platform field, provenance/comparator/capture/canary rule and `platformProfile:"production"`; regenerate `platform` from that production object after replacing its approved `reservationSeconds`. The engine `platform` must similarly equal its own engine profile. Do not copy the obsolete live-volume role from the revision-1 embedded production object. An engine definition may retain that historical unused production metadata as revision 2 required; the selected engine reservation, shared session contract and engine role/one-segment validation are changed as stated here. No change to engine definitions retroactively modifies prior reports.
+
+**Revision-1 engine registrations are invalid for revision-3 qualification.** The qualification input package must regenerate its engine template, definition/hash, schedules, target counts, lanes, pump inputs/provenance and selected reservation. Old revision-1 engine equality is expressly superseded. Revision-2 production registrations likewise cannot qualify this new workload: regenerate their revision-3 definitions and shared session inputs while retaining the production-only R2.5 evidence overlay. Reject cross-profile or mixed-revision definitions/registrations; do not relabel old observations. The selected numeric values are **55,800 / 35,100 s**, with observation budgets **55,800,000 / 35,100,000 ms**. Set `DEFINITIONS.engine.profiles.engine.reservationSeconds` to **55800** and `DEFINITIONS.production.profiles.production.reservationSeconds` to **35100**, and regenerate each selected `platform` mirror from its own profile object. Estimate/validation/runtime admission must read the selected profile definition, not an obsolete shared revision-1 reservation. No scheduling decision is pending. Final workload/pump/host provenance, normal preflight validation and the separately reviewed harness implementation are still required before execution.
+
+**Engine platform role and runtime validation.** Add **`native-linux-ext4`** to the harness role vocabulary **only for `platformProfile:"engine"`**. This selected registration uses that exact role and records Ubuntu/native Linux, `volume.filesystem:"ext4"`, `volume.nonWSL:true`, `volume.production:false`, a **0700** private directory and **0600** canonical/sidecar/companion files. Corroborate Linux/non-WSL at runtime and ext4 magic **0xef53** on the bound volume; check created/existing file protection under the unchanged safe-WAL rules. Reject contradictory top-level/volume mirrors, a true production/equivalence claim for this native engine role, WSL execution under the native label, and **any production-profile registration using `native-linux-ext4`**. WSL2 ext4 and APFS keep their own separately labeled engine should reports. This is a new role within `engine-platform-v4`, not a new profile, production-equivalent attestation or launch claim. The selected `platform` definition remains the engine object; the concrete role/volume/host facts belong to the registration. The internal production flag must be **false** for this role regardless of Node patch, Linux/ext4 detection or other matching facts; only the production profile satisfying all R2.5 conditions can set it true. Do not derive production eligibility merely from being native Linux/ext4, and do not label this host `production-linux-ext4` to bypass the old role allowlist.
+
+**Profile-aware eligibility and scoring (audit round 1).** Compute a trusted result object `platformEligibility` in the runner, not in the registration or adapter: `version:"profile-platform-eligibility-v1"`, `profile:"engine"|"production"`, `enginePlatformEligible:Boolean` and `productionLaunchEligible:Boolean`. Seal it in the report and propagate it, with the recorded actual/registered Node patch and validated registration, through every normal request/main/cold/reference series, W/WM, F/A, overflow, storage and state-cell decision and the profile aggregate. A field supplied by an adapter or copied input cannot override the runner's computed value. The fields are separate predicates, not aliases for one platform bit.
+
+- For **engine**, `enginePlatformEligible` is true exactly when the engine registration validates for an allowed engine role (**`native-linux-ext4`**, **`wsl2-ext4`** or **`apfs`**), its applicable role/runtime/filesystem checks pass, and the actual Node patch exactly equals the registered Node patch. The owner-selected native registration retains all the native checks above. Existing WSL2/APFS engine registrations keep their respective role checks and exact-Node rule: either can qualify its existing engine should report, without acquiring production requirements or a launch claim. `productionLaunchEligible` and the internal legacy `production` value are **false for every engine-role execution**, including WSL2/APFS; their existing scoring outcome is preserved by selecting engine eligibility instead of that legacy value.
+- For **production**, `productionLaunchEligible` uses **every R2.5 production runtime-eligibility condition unchanged**, including the validated R2.2 initial comparator/capacity/isolation evidence, exact deployed Node patch, isolated role, Linux/non-WSL/ext4 and in-process binding checks. `enginePlatformEligible` is false for this profile. All R2.2 later captures, continuity, post-comparisons and sealed results remain mandatory for final launch acceptance; a true runtime eligibility value does not pre-accept future evidence. Production still rejects native/WSL2/APFS engine roles; engine eligibility cannot supply a production condition.
+
+The revision-3 scorer selects **`enginePlatformEligible` for `profile:"engine"` and `productionLaunchEligible` for `profile:"production"`**. Replace `protocol.mjs`'s unconditional `data.production === false` platform check on this revision's path with that profile-selected predicate. Keep the independent `reportOutputsComplete === false` check and every other gate, including known failures when eligibility is false. Missing, malformed, contradictory or wrong-profile eligibility/provenance cannot pass; false selected eligibility remains inconclusive for platform qualification and cannot erase failures. Remove `v4-runner.mjs`'s engine override that sets `production` true merely on a matching Node patch. The legacy `production` field, where still needed, equals **production-launch eligibility only**; update `series.mjs` and all forwarding/scoring paths together so a valid engine run is not rejected merely because that field is false. Do not retroactively reclassify old reports or weaken any R2 launch check.
+
+The separate reviewed harness change must include **rejection checks in both directions**: an engine-eligible/native run with `productionLaunchEligible:false` can pass engine scoring when all other gates pass, but cannot register or pass as production; a production-eligible record or legacy `production:true` cannot make a wrong-role, invalid-registration or wrong-Node engine run eligible. Conversely, an engine-eligible flag cannot pass production scoring when production launch eligibility is false, and a legacy flag cannot override that refusal. Check the equivalent valid-engine/false-production case for **WSL2 and APFS** as well as native, and wrong-Node refusal for every engine role. Reject a native role in a production registration before measurement and reject mismatched eligibility profile tags or both eligibility booleans true. These are implementation acceptance requirements, not claimed harness tests in this authoring change.
+
+**Exact estimate and planned-segment encoding.** The separate harness change must make `--protocol v4 --profile engine --estimate` emit **revision 3**, profile `engine-platform-v4`, **728 cells**, `costSeconds.sharedSessions:10160`, `estimateSeconds:54627.4`, `reservationSeconds:55800`, `observationBudgetMs:55800000`, and **one** `segments` entry with `id:"engine-full-v3"`. Its `cellKeys` is the **entire ordered array** `buildV4Plan("engine").map(cell => cell.key)`, all 728 unique keys, with no slicing. Materialize that expression as an actual JSON array, not a literal expression or placeholder. The generated registration copies exactly that `segments` array and numeric budgets and supplies the final inputs; the planned invocation selects `--segment engine-full-v3`. The estimate is read-only and not a measured pass. Its default numbers are the R3.4 planning instance; a registration-backed estimate re-derives work from the final session inputs and rehearsal allowances and labels any increase, while keeping the selected reservation fixed. It never compresses inputs or rewrites the reservation to make the estimate fit.
+
+For this revision-3 engine registration, **reject `segments.length !== 1`**, a different planned ID, any missing/duplicate/unknown/reordered cell key, or a `cellKeys` array not exactly equal to that full 728-key array. In particular **reject 364 + 364**, even if its union is correct, and reject legacy 47,700-s reservations or 180-s F/A estimates. The registration-backed `--estimate --registration` path must validate the definition/profile/reservation/role/segment fields too, rather than checking only definition equality and accepting an obsolete partition. No-registration `--estimate` must generate the same single-segment descriptor; it cannot return a revision-1 or two-segment template. Plan output, immutable registration, raw report headers, checkpoints and completion checks must all agree on revision 3, selected budgets and the one planned segment. Preserve stable cell keys, inventory order and all 12 F/A sessions as complete scheduling units.
+
+Production `--protocol v4 --profile production --estimate` emits revision 3, profile `production-launch-v4`, **488 cells**, `costSeconds.sharedSessions:10160`, `estimateSeconds:34284`, `reservationSeconds:35100`, `observationBudgetMs:35100000`, and the planned full `production-full-v3` segment containing the ordered `buildV4Plan("production").map(cell => cell.key)` array. Generate the revised R2 isolated-platform object/mirror and retain **`midRunSampleAfterCompletedCells:244`**, all other R2.5 fields, R2.2 captures and runtime eligibility. Reject the old 27,000-s reservation for this revision. Neither estimate grants production acceptance.
+
+**Continuation without repartition.** If V4.6 continuation is needed later, the already registered `engine-full-v3` (or production `production-full-v3`) ID and complete-cell checkpoints remain fixed. Resume that same full segment with the existing `--resume` mechanism in another quiet window, skipping only validated complete cell records. Retain actual earlier reports/exits, all failures including those in incomplete cells, and merge only complete nonduplicate cell records under the unchanged registration/host/volume/patch. A separate execution/report boundary is not a second planned `segments` entry. This retains the existing checkpoint continuation, **subject to the additional observed-execution binding below**, and does not pre-plan two nights, grant an automatic rerun, amend registration or allow failed cells to be replaced by faster repeats. Registration labels/hardware hashes alone are insufficient. Any production continuation retains R2.2's per-segment boundary/capture/continuity rules and the original cell-244 work checkpoint.
+
+**Observed execution binding for continuation (audit round 1, both profiles).** Registration-supplied `host.id`/`volume.id`, configuration/hardware hashes and `boot_id` do **not** independently identify the executing machine and backing filesystem. Retain their existing checks, and additionally collect a runner-owned `executionBinding` **at initial execution and freshly at every resume, before admitting any cell or importing prior completion credits**. For the selected native Linux engine and isolated Linux production runs, use these obtainable system sources; do not read their values from registration, an adapter, a cached earlier capture or an environment label:
+
+1. **Host:** read the operating system's standard machine-ID file. Trim surrounding ASCII whitespace, require 32 hexadecimal digits, decode the 16 identity bytes and reject the all-zero identity. `hostIdentityDigest` is the unpadded base64url SHA-256 of UTF-8 `host-machine-id-v1`, a zero byte and those 16 bytes. Record only the digest, never the raw machine identity or a machine name/address. This identifies the running system installation; a boot identifier is not a substitute.
+2. **Backing volume:** open the actual existing directory bound to `volumeRoot` and obtain its backing filesystem's **`f_fsid` through Linux `fstatfs` on that directory descriptor**, not from a registration volume label, a different mount or device-number guess. Check that the owned measurement workspace is on that same filesystem. Interpret the two fsid words as unsigned 32-bit bit patterns in source order and encode each as four big-endian bytes; reject an unavailable or all-zero pair. `backingVolumeIdentityDigest` is unpadded base64url SHA-256 of UTF-8 `volume-fsid-v1`, a zero byte and the resulting eight bytes. Only the digest is retained; no raw identifier or local directory/device path is published. The filesystem identity survives an ordinary remount/reboot; numeric device IDs or `boot_id` are not the backing identity.
+
+The closed report object has exactly **`version:"execution-binding-v1"`, `observedAtUtcMs:UInt`, `hostIdentitySource:"linux-machine-id"`, `hostIdentityDigest:Digest|null`, `backingVolumeIdentitySource:"linux-fstatfs-fsid"`, `backingVolumeIdentityDigest:Digest|null`, `unavailable:Array` and `continuationReady:Boolean`**. `UInt`/`Digest` use R2.2's scalar definitions, including the full 43-character digest. `unavailable` contains exactly the missing identity names from `["host","volume"]`, in that order; no other strings or duplicates. An unavailable/unusable source produces null for its digest, never a made-up value or a registration fallback; `continuationReady` is true iff both digests are present and `unavailable` is empty. Record only normalized unavailable categories, not raw system errors containing identifiers/paths. `observedAtUtcMs` is the runner's collection time. Sources, normalization, collector version/digest and comparison procedure are registered before execution; actual observed values are **result evidence**, not fields injected into or amendments of the immutable registration.
+
+Seal `executionBinding` into the initial immutable report header and its existing header/checkpoint hash chain. The initial report has **`initialExecutionHeaderDigest:null`**; its sealed header digest is the original-execution anchor. Every resumed report has **`initialExecutionHeaderDigest:Digest`** pointing to that **same original header**, plus its own fresh `executionBinding`. Preserve and validate the original report and every intermediate report/chain, registration binding and earlier known failure; a newly generated header cannot replace the original anchor. Before resuming, require the original and every contributing resumed report to have `continuationReady:true`, and require byte equality of **`executionBinding.version`, `hostIdentitySource`, `hostIdentityDigest`, `backingVolumeIdentitySource` and `backingVolumeIdentityDigest`** against the original. Collection timestamps must be actual new observations and are **not** identity equality fields. Also retain all prior registration hash, host/volume label, exact Node patch, inventory, complete-cell and no-duplicate checks. The checkpoint reader/merger must enforce the same observed-binding comparisons over **all** contributing reports before merging any completion credits, not merely compare registration labels. A mismatched/missing original anchor, different observed machine or filesystem, changed source/version, missing fresh observation or unavailable identity **refuses continuation and cross-report completion**; preserve the prior incomplete/failed evidence and actual exits. No reinterpretation as a fresh initial report under the same completion chain is allowed.
+
+If a source cannot be read at initial execution, seal the unavailable/null state and set `continuationReady:false`; **an uninterrupted single-segment run is not blocked by that missing identity alone**, provided every other applicable platform/registration/gate requirement holds. Its individual complete-cell records still stand, but they cannot later supply cross-execution completion credits. A later readable identity does not retroactively bind that original execution; a new root cannot inherit its partial population. Another allowed engine role keeps its existing platform eligibility and uninterrupted-run behavior; unavailable Linux identity sources disable continuation only. No privileged hardware attestation or additional service identity is required.
+
+For **production**, this is additional independently observed backing evidence **within R2.2's existing identity/capture continuity**, not a second launch-eligibility scheme: link each execution-binding header to the registered isolated identity and boundary records, and reuse the same runner observation at that execution boundary. Keep these digests in result-header identity evidence, without adding members to R2.2's closed attestation objects. Compare an isolated execution only with its **own original execution lineage**, never with the live production machine/volume; they are excluded from cross-environment `controlled` equality. Existing run/registration and capture references provide the linkage, with no duplicate production capture procedure. All R2.2 deployment/replica/snapshot/container/PID-1/volume bindings, complete comparisons and later captures remain mandatory. `boot_id` remains R2.2 incarnation/continuity evidence; it is **never the stable host-binding key**. Equal new digests do not waive an R2.2 reboot/restart/change refusal. Unavailable new identities alone disable continuation, while missing existing mandatory R2 evidence still withholds launch exactly as before.
+
+Require separate harness rejection checks for copied registrations on a different observed host or backing filesystem despite identical labels/hardware; unavailable or forged/missing observations; changed anchor/source/version; and a reboot with unchanged machine/fs identities (stable-binding equality alone is preserved, with all independent R2 production restrictions still applied). Also check that unavailable identities do not alone reject an otherwise valid uninterrupted run. Update runner collection/header sealing and checkpoint read/resume/merge validation together; the existing checkpoint mechanism does not yet implement these observations.
+
+The following valid JSON is a **declarative change specification**, not an executable registration/template and not a substitute for the full inventory. Strings naming required registration data describe inputs, not literal runtime field values. The separate harness change must define/validate their concrete types and fully resolved schedules, reject unknown/duplicate keys, and materialize numeric per-session durations, the selected reservations and fully expanded segment key arrays before a run. This is a complete protocol handoff with no owner-scheduling blocker; final provenance inputs are ordinary registration prerequisites, not an unselected reservation.
+
+```json
+{
+  "protocol": "P2-product-v4",
+  "revision": 3,
+  "appliesTo": [
+    "engine",
+    "production"
+  ],
+  "executionRegistration": "owner scheduling decision recorded; resolve final inputs and reviewed harness before collection",
+  "sessions": {
+    "rows": [
+      "F",
+      "A"
+    ],
+    "key": [
+      "world",
+      "schema",
+      "journal"
+    ],
+    "count": 12,
+    "durationPolicy": "derive per session from registered profile, target minima, commit allowance and tail",
+    "requiredResolvedInputs": [
+      "durationMs",
+      "lastTargetCommitByMs",
+      "continuousWriterUntilMs",
+      "targetEnrollmentCutoffMs",
+      "observationEndMs",
+      "drainAllowanceMs",
+      "steadyIdleGapMaximumMs",
+      "fullSchedulesAndHash",
+      "finalPumpSettingsAndProvenance"
+    ],
+    "writer": {
+      "process": "independent",
+      "lifecycle": "fresh per operation: open/operation/finally-close",
+      "target": "same owner and selected four-namespace projection",
+      "keeper": false,
+      "startMs": 0,
+      "steady": {
+        "memoryRatePerActiveHour": 60,
+        "arrivals": "seeded Poisson events within registered active periods",
+        "eventSizeRange": [
+          1,
+          5
+        ],
+        "eventSizeDistribution": "registered model consistent with measured p50=1, p95=4, max=5"
+      },
+      "organizer": {
+        "unit": "one session-episode commit",
+        "memoriesAbout": 60,
+        "chunkCharactersMaximum": 20000,
+        "produces": [
+          "memory"
+        ],
+        "placements": "registered, not product-measured recurrence"
+      },
+      "review": {
+        "decisionsPerBurst": 90,
+        "burstWindowMs": 300000,
+        "mixIsEstimate": true,
+        "estimatedPercent": {
+          "confirm": 70,
+          "reject": 20,
+          "correctWithReplacement": 10
+        }
+      },
+      "cards": {
+        "recipe": "separately registered engine-synthetic",
+        "productMeasured": false,
+        "productEnginePathWired": false,
+        "rateAndShape": "no heavier than registered Memory comparators; count creation and confirmation together"
+      },
+      "schedule": "seed, algorithm, streams, active periods, expanded releases, burst sizes, decisions, identity and payload mappings frozen before collection",
+      "continuity": "steady active from start through at least 30 seconds after last actual eligible target commit; registered finite gap bound",
+      "deadlines": "operation-specific final values with provenance; no invented capture/review deadline"
+    },
+    "minimumTargetsPerTypePerIntent": 100,
+    "targetEligibility": "first eligible native commit and exact revision per intent; no retirement or replacement of unseen targets",
+    "probeIntervalMaximumMs": 1000,
+    "probeBatchMaximumTargets": 20,
+    "probeResultLimit": 24,
+    "probeLanes": "2 times registered identity batch count, capacity includes every unseen batch",
+    "availabilityLanes": 1,
+    "probeLaneIndex": "2*batchOrdinal+intentOrdinal",
+    "availabilitySchedule": "immutable IDs/times throughout session; >=100 per intent; strict c12/a1500 alternation per intent; >=50 each method; count difference <=1; disjoint from probes",
+    "validation": {
+      "beforeCollection": [
+        "profile and seed expansion",
+        "active periods, Poisson arrivals and event sizes",
+        "organizer chunks and episode grouping",
+        "review mix and awaiting-state prerequisites",
+        "synthetic Card comparison and full eligibility",
+        "target minima and exact revision oracle",
+        "A alternation and full-session releases",
+        "lane/resource capacity and <=1 s cadence",
+        "finite idle/commit/observation/drain bounds",
+        "hash full schedules, final pump and operation settings"
+      ],
+      "afterCollection": [
+        "scheduled A IDs biject to actual attempts in release order",
+        "all normal A outcomes in unchanged denominator",
+        "all enrolled native target commits retained",
+        "exact first observations or +infinity",
+        "actual fresh writer lifecycle and operation deadlines",
+        "steady stream and gap bound through >=30 s tail",
+        "all probe cadences",
+        "complete telemetry, final seal, cleanup and actual exits"
+      ],
+      "violation": "invalid session and dependent cells; known failures retained; insufficient minimum inconclusive"
+    },
+    "censorUnseenAs": "+infinity",
+    "poolTargetsOrAvailabilityPopulations": false
+  },
+  "removedLegacySessionFields": [
+    "durationMs=180000",
+    "lastTargetCommitByMs=120000",
+    "continuousWriterUntilMs=180000",
+    "writer.operationIndex",
+    "writer.cadenceMs",
+    "writer.cadencePolicy",
+    "writer.continueUntilMs=180000",
+    "writer.targetReleases",
+    "targetIdentitiesPerType=100",
+    "targetsPerTypePerIntent=100",
+    "targetCreationReleaseIntervalMs",
+    "targetReviewReleaseAfterCreationMs",
+    "probeLanes=20"
+  ],
+  "profileReservations": {
+    "engine": 55800,
+    "production": 35100
+  },
+  "productionPlatformOverlay": "retain R2.5 isolated-host fields and derived platform; update only revision/shared sessions/approved reservation",
+  "expectedCounts": {
+    "engineCells": 728,
+    "productionCells": 488,
+    "freshness": 40,
+    "availability": 24,
+    "sessionsPerProfile": 12
+  },
+  "profileObservationBudgetMs": {
+    "engine": 55800000,
+    "production": 35100000
+  },
+  "selectedEnginePlatform": {
+    "platformRole": "native-linux-ext4",
+    "hostDistribution": "Ubuntu",
+    "volume": {
+      "filesystem": "ext4",
+      "nonWSL": true,
+      "production": false
+    },
+    "directoryMode": "0700",
+    "fileMode": "0600",
+    "internalProductionFlag": false,
+    "productionLaunchEvidence": false
+  },
+  "plannedSegments": {
+    "engine": {
+      "count": 1,
+      "id": "engine-full-v3",
+      "cellCount": 728,
+      "cellKeysSource": "complete ordered buildV4Plan(engine) keys; materialize as array, never slice",
+      "rejectTwoSegmentPartition": true
+    },
+    "production": {
+      "count": 1,
+      "id": "production-full-v3",
+      "cellCount": 488,
+      "cellKeysSource": "complete ordered buildV4Plan(production) keys; materialize as array, never slice"
+    }
+  },
+  "estimateReferenceSeconds": {
+    "engine": 54627.4,
+    "production": 34284,
+    "sharedSessions": 10160
+  },
+  "profileEligibility": {
+    "version": "profile-platform-eligibility-v1",
+    "computedBy": "trusted runner from validated registration and actual runtime",
+    "engineRoles": [
+      "native-linux-ext4",
+      "wsl2-ext4",
+      "apfs"
+    ],
+    "enginePlatformEligible": "engine profile, valid allowed role and registration, exact registered Node patch",
+    "productionLaunchEligible": "production profile and every R2.5 runtime condition; final R2.2 evidence still required",
+    "scorerSelects": "eligibility of the running profile; never unconditional legacy production",
+    "legacyProduction": "productionLaunchEligible only; false for engine roles",
+    "rejectCrossProfileSubstitution": true
+  },
+  "executionContinuation": {
+    "version": "execution-binding-v1",
+    "collectAt": [
+      "initial execution",
+      "every resume before cell admission or prior completion credits"
+    ],
+    "hostIdentitySource": "linux-machine-id",
+    "hostIdentityDigest": "SHA-256(host-machine-id-v1 + zero byte + decoded 16 machine-ID bytes), unpadded base64url",
+    "backingVolumeIdentitySource": "linux-fstatfs-fsid",
+    "backingVolumeIdentityDigest": "SHA-256(volume-fsid-v1 + zero byte + two unsigned 32-bit fsid words in big-endian bytes), unpadded base64url",
+    "reportObject": "executionBinding with closed fields specified in R3.6",
+    "originalAnchor": "initialExecutionHeaderDigest points to original sealed header; null in initial report",
+    "equality": [
+      "version",
+      "hostIdentitySource",
+      "hostIdentityDigest",
+      "backingVolumeIdentitySource",
+      "backingVolumeIdentityDigest"
+    ],
+    "unavailable": "disable continuation and cross-report completion, not the uninterrupted run",
+    "bootIdIsBinding": false,
+    "productionAlignment": "retain every independent R2.2 identity and capture continuity check"
+  }
+}
+```
+
+Replace, rather than merge with, the old `sessions.writer` cadence/alternation and release constraints. Replace fixed-exact target identity counts with the minimum plus the complete realized target manifest. The new numeric durations/ceilings/continuation end belong in each resolved session, not a single shared 180,000-ms constant. The revised registration validator must reject the old fixed schedule even if its counts look sufficient. The planning Poisson instance and its table illustrate expansion only; an actual template uses the **selected single-segment reservations** and final provenance inputs.
+
+The inspected `v4-session.mjs`, `v4-session-child.mjs`, `v4-session-work.mjs`, `v4-session-pump.mjs` and `v4-definition.json` still encode the old parent/child deadlines, 180-s observation, fixed lanes, target releases, renewal schedule and revision-1 session definition. Those constants, schedule validators, writer dispatch/eligibility ledger and progress supervision require **a separate reviewed harness implementation**, including regeneration of both profile templates. Longer sparse schedules need progress checks based on next due operation, pump/probe activity and actual errors, not a live PID or absence of captures during a registered Poisson gap. Preserve bounded cancellation/drain/cleanup and actual child exits; no watchdog may cut off a valid longer session because it still assumes 180 s. This authoring change modifies none of those files.
+
+### R3.7 Verbatim supersession ledger and retained requirements
+
+Only the following workload/derived-budget meanings are superseded; the quoted sources remain frozen bytes. Full paragraphs/objects are quoted where multiple clauses are affected, so their unchanged safeguards can be checked together. R3.1–R3.6 explicitly restate those safeguards; quoting one here does not repeal it. Original line references below refer to the frozen prefix.
+
+**V4.5, line 846.**
+
+```text
+F and A run in **12 sessions `B×S×J`**, each with the explicit supervised pump servicing current/history and fresh same-projection continuous writers. Freeze a **180 s** observation interval per session: commit every registered target by second 120, continue ordinary writes through second 180 (≥60 s after the latest permitted target), and retain every committed target, not just the first 100. A session below any target/availability minimum is inconclusive; a missed cadence or writer-tail requirement is invalid; neither extends its duration. This is an observation budget, not a new freshness threshold.
+```
+
+**V4.5, line 848.**
+
+```text
+The session writer is an **independent process using a fresh ordinary open → capture/review → finally-close lifecycle per operation**, targeting the same owner and selected four-namespace projection, with capture/review alternating at the unchanged approximately **20 ms nonsaturating cadence**, no keeper or backlog. It runs from session start through second 180, interleaving the registered target releases with ordinary same-projection writes; target operations do not replace the continuous stream. Freeze and validate the lifecycle/target/cadence configuration before execution, then attest actual operations, commits, closes, final seal and exit. A retained or other-owner writer cannot qualify this session.
+```
+
+**V4.5, line 850.**
+
+```text
+Register 100 Memory identities and, on v23/v33, 100 Card identities, each providing a separately attested target for **each** intent. Record each intent's **first eligible commit and exact revision**, not a later convenient review commit: Memory history can be eligible while review is awaiting, whereas current requires currentness/non-awaiting; Cards require confirmation even for history (`core/context-read-sidecar.mjs:323`, `:668`–`:675`). Share a commit timestamp only when those first-eligibility events actually coincide. Freeze target creation releases in seconds 0–85 and review/confirmation releases 35 s after creation, all by second 120, interleaved with the unchanged continuous ordinary writer stream. That pre-registered hold leaves the first history revision observable before review; it is never extended in response to observations. A history revision missed before mutation remains an unobserved/+infinity target, not replaced by its newly reviewed revision. Never count an ineligible Card draft as current/history. Retain independent intent-specific first-observation times, errors and denominators.
+```
+
+**V4.5, line 854.**
+
+```text
+Use **20 bounded probe lanes plus one separate availability lane** to attempt **every active batch/intent at ≤1 s intervals**, with a fresh request/credential/handle for each probe; freeze Worker/resource caps, launch offsets and per-process loop observation. Batch ordinal `b` and intent ordinal `i` use probe lane `2*b+i`; a lane never has two in-flight requests. At most ten 20-target batches and two intents require at most twenty probe calls per second. The host must supply capacity for these lanes alongside maintenance/writing; the budget assumes enough CPU/RAM for that fixed schedule, not a serial probe loop. The ordinary input grammar and frozen ranking oracle must validate batching; an unsupported batching adapter, insufficient capacity or missed probe cadence cannot pass. These probes have no request-latency percentile and do not supply R/O successes. A has its own at least 100 scheduled attempts **per intent**, disjoint from probe traffic; pre-register their release times throughout the session. Record missing scheduled A calls explicitly; any scheduling omission invalidates the session rather than fabricating a fast/error denominator entry. All probe/A loop, normal WAL busy, byte, writer and telemetry gates still apply. Probes and A never trigger maintenance. Session gates include the union of all participating processes, with capacities/drain schedules fixed before collection.
+```
+
+R3.2–R3.4 replace the 180/120-s session boundaries, 20-ms alternating F/A writer, 0–85-s releases and universal 35-s review delay, exactly-100 shared identities and the fixed ten-batch/twenty-lane derivation above. A 35-s hold in the planning illustration is an outcome-independent recipe choice, not a restored universal release rule. Fresh lifecycles, same projection, first eligibility/exact revisions, all-target retention, per-intent observations, cadence, oracle and all error/telemetry rules remain. The untouched V4.5 paragraphs at lines 852 and 856 (batch/oracle/no-retirement and strict A alternation) remain normative in full.
+
+**V4.6, line 889.**
+
+```text
+| F/A sessions, with internal bounded probe lanes | `12×180 = 2,160 s` | Same `2,160 s` |
+```
+
+**V4.6, line 894.**
+
+```text
+| **Total estimated / reserved** | **46,627.4 s = 12.952 h / 13 h 15 min** | **26,284 s = 7.301 h / 7 h 30 min** |
+```
+
+**V4.6, line 900.**
+
+```text
+**Revision 1 exceeds both earlier reservations:** engine exceeds **12 h by 3,427.4 s (57.12 min)**; production exceeds **7 h by 1,084 s (18.07 min)**, and six hours by 4,684 s (78.07 min). The smallest honest option chosen here is a longer quiet reservation, **13 h 15 min engine / 7 h 30 min production**, retaining all registered method paths and adding WM rather than dropping claims. These leave **17.88 / 11.93 min** beyond the ledger, comparable to the prior scheduling margins; rounding to 13 h would leave only 2.88 min for the engine, and 7 h 15 min would be **184 s (3.07 min) short** for production. All prior per-attempt floors, storage/T allowances and failure allowances remain; only additional required work/placements change the sums. Reservations remain planning budgets, not proof that every failing workload finishes. For example, production main alone at its 500-attempt ceiling would cost `332×503×0.50 = 83,498 s = 23.19 h` at the same planning rate. V4 does not shorten those ceilings or raise any gate to manufacture a budget fit.
+```
+
+**V4.6, line 902.**
+
+```text
+The immutable registration declares a **13 h 15 min / 7 h 30 min reservation and observation budget**. On projected overrun, stalled activity or missing progress, the supervised runner stops admitting new cells, observes/drains owned resources, preserves all records/actual exits, and reports the profile incomplete/inconclusive (known failures still fail). It must not kill an ordinary slow sample just to fit a latency gate, extend a 30 s window, or mark missing cells accepted. No automatic expensive rerun. The primary can reserve another window on the **same host/volume/patch and unchanged registration**, using pre-registered segment IDs/checkpoints between complete cells; retain all prior failures and merge only complete cell records, never substitute faster repeats or pool different populations. A changed configuration needs a new registration/revision under §10. Quiet-window scheduling and live supervision are required; a background PID/log is not supervision. This document creates no running task or monitor.
+```
+
+The new ledger replaces only the F/A row, derived totals and selected-reservation requirement in these quotations. Preserve every non-F/A cost, setup/build safety qualification, fixed-window arithmetic, failure/attempt ceiling, stop/drain/continuation/supervision rule and historical explanation of revision 1. R3.5 supplies the owner's selected replacement reservations; R3.4's work estimates remain estimates.
+
+**Appendix V4-A, line 937: definition revision.**
+
+```text
+  "revision": 1,
+```
+
+**Appendix V4-A, lines 1047–1072: entire superseded sessions member.**
+
+```text
+  "sessions": {
+    "rows": ["F", "A"], "key": ["world", "schema", "journal"], "count": 12,
+    "durationMs": 180000, "lastTargetCommitByMs": 120000,
+    "continuousWriterUntilMs": 180000, "probeIntervalMaximumMs": 1000,
+    "writer": {
+      "process": "independent", "lifecycle": "fresh per ordinary operation: open/write/finally-close",
+      "target": "same owner and selected four-namespace projection",
+      "operations": ["capture", "review"], "operationIndex": "ordinary operation ordinal % 2",
+      "cadenceMs": 20, "cadencePolicy": "approximately 20 ms, nonsaturating, no backlog",
+      "keeper": false, "startMs": 0, "continueUntilMs": 180000,
+      "targetReleases": "interleaved additions; never replace the continuous ordinary stream",
+      "deadlines": "unchanged production capture/review values with provenance"
+    },
+    "targetIdentitiesPerType": 100, "targetsPerTypePerIntent": 100,
+    "targetCreationReleaseIntervalMs": [0, 85000], "targetReviewReleaseAfterCreationMs": 35000,
+    "targetEligibility": "separate first eligible native commit and exact revision per intent; share only if actually coincident",
+    "probeBatchMaximumTargets": 20, "probeResultLimit": 24,
+    "probeLanes": 20, "availabilityLanes": 1, "probeLaneIndex": "2*batchOrdinal+intentOrdinal",
+    "availabilitySchedule": "required immutable release IDs/times throughout session; at least 100 attempts per intent, strictly alternate c12/a1500 independently per intent; errors advance scheduled ordinal; disjoint from probes",
+    "validation": {
+      "beforeCollection": ["strict method alternation per intent", "each method >=50 scheduled; count difference <=1", "release times span session", "writer fresh lifecycle, same-projection target, capture/review cycle and 20 ms nonsaturating cadence", "hash full schedules and writer settings"],
+      "afterCollection": ["bijection from scheduled A IDs to executed attempts, preserving release order/method/intent", "each A method >=50 executed; count difference <=1", "denominator includes every normal A attempt regardless of outcome", "actual writer open/write/close per operation, same target, cycle/cadence, continuous tail, commits, acknowledged final seal and actual exit"],
+      "violation": "invalid session and its dependent F/A cells; known failures retained"
+    },
+    "censorUnseenAs": "+infinity", "poolTargetsOrAvailabilityPopulations": false
+  },
+```
+
+**Appendix V4-A, line 1130: engine reservation member.**
+
+```text
+"reservationSeconds": 47700
+```
+
+**Appendix V4-A, line 1131 and R2.5 overlay: production reservation member.**
+
+```text
+"reservationSeconds": 27000
+```
+
+R3.6 replaces the quoted session member for **both** definitions and sets revision 3; all other inventory dimensions and expected counts remain. The selected **55,800 / 35,100 s** values replace the corresponding profile's old seconds and derived `platform` mirror under the recorded R3.5 decision. R2.5's production role replacement continues to apply, not the old appendix live-volume role.
+
+The corresponding V4.2 reservation phrases are superseded:
+
+```text
+Reserve **13 h 15 min**.
+```
+
+```text
+Reserve **7 h 30 min**.
+```
+
+The following exact R2.5 substrings are superseded **only as necessary for shared revision-3 sessions, definition revision, registration equality and derived reservation**; platform separation, every isolated-host field, stage-specific capture/comparator, runtime-eligibility and canary rule remain:
+
+**R2.5 exact scope exception.**
+
+```text
+Keep Appendix V4-A and **`DEFINITIONS.engine` byte-identical**, including its embedded revision-1 `profiles.production`, `platform` and existing engine registration equality.
+```
+
+**R2.5 exact scope exception.**
+
+```text
+set its top-level `revision` to `2`
+```
+
+**R2.5 exact scope exception.**
+
+```text
+Preserve `platformProfile:"production"` and all other definition members.
+```
+
+**R2.5 exact scope exception.**
+
+```text
+Expanded production descriptors report revision 2; their stable keys/dimensions, counts, samples and ordering stay unchanged.
+```
+
+**R2.5 exact scope exception.**
+
+```text
+A revision-2 production registration must exactly equal that derived production definition
+```
+
+**R2.5 exact scope exception.**
+
+```text
+Engine validation stays unchanged.
+```
+
+**R2.5 exact scope exception.**
+
+```text
+the **27,000 s (7 h 30 min)** reservation; the entire engine definition/profile/registrations;
+```
+
+R2.5's production-only **platform** overlay is retained; its prohibition on shared session/engine changes no longer blocks this explicit shared workload, engine-role and selected-reservation revision. Treat repeated old counts/budgets and “unchanged engine” assertions in historical changelogs as historical, subject to this narrow exception. The R2 introduction's 7 h 30 min reservation explanation is likewise historical. No production attestation or runtime eligibility transfers to engine qualification.
+
+
+**Additional owner-decision supersession rows.** Apply these as additive revision-3 overlays together with R2's production replacements; they never restore a live-production-volume role. The source column is verbatim from the frozen prefix except the explicitly identified earlier author-draft and owner-instruction rows. Platform-list rows add native engine qualification while preserving R2 production launch requirements and all adjacent safe-WAL/permission rules.
+
+| Source location | Exact superseded source | Revision-3 replacement |
+| --- | --- | --- |
+| V4.2 engine reservation, line 778 | Reserve **13 h 15 min**. | Reserve **15 h 30 min (55,800 s)** in one continuous engine segment for all 728 cells. |
+| V4.2 production reservation, line 779 | Reserve **7 h 30 min**. | Reserve **9 h 45 min (35,100 s)** in one continuous R2 isolated-production reservation. |
+| V4.6 reservation, line 902 | **13 h 15 min / 7 h 30 min reservation and observation budget** | **15 h 30 min / 9 h 45 min reservation and observation budget**; all adjacent stop/drain/continuation rules remain. |
+| Appendix engine seconds, line 1130 | "reservationSeconds": 47700 | Selected engine definition/mirror: `"reservationSeconds": 55800`. |
+| Appendix production seconds, line 1131; R2.5 overlay, line 1924 | "reservationSeconds": 27000 | Selected R2-derived production definition/mirror: `"reservationSeconds": 35100`. |
+| Earlier R3.5 two-night plan, author-draft source | The owner plans **two quiet engine nights, each segment ≤6 h 45 min**: at most **48,600 s** in total. | Superseded for this registration by one continuous 55,800-s reservation and one full 728-cell engine segment. |
+| Earlier engine partition, owner instruction of 2026-10-28 | the 364 + 364 two-segment partition | Superseded for this registration by exactly one `engine-full-v3` segment with all 728 ordered cell keys; reject every two-entry engine partition. |
+| §7 should platforms, line 491 | **Should qualify:** WSL2 ext4 and macOS APFS, reported separately; neither substitutes for the the production host result. | **Should qualify:** the dedicated native Linux ext4 engine host (`native-linux-ext4`), WSL2 ext4 and macOS APFS, reported separately; none substitutes for the R2 production-equivalent isolated-host result. |
+| §8.3 WAL platform list, line 550 | WSL2 ext4/APFS separately reported | native Linux ext4 engine, WSL2 ext4 and APFS separately reported as engine should qualifications; the R2 production qualification remains required |
+| §10.1 platform list, line 613 | WSL2 ext4/APFS are separate qualification reports. | native Linux ext4 engine, WSL2 ext4 and APFS are separate engine should qualification reports; none is production/launch evidence. |
+| §12 Q5, line 692 | WSL2 ext4/APFS should-qualify | native Linux ext4 engine, WSL2 ext4 and APFS should-qualify separately |
+| V4.2 engine environment, line 778 | Engine maintainers' own quiet host/volume; exact Node 24 patch recorded. Run the engine column below. WSL2 ext4 is an example **should** qualification; macOS APFS needs its own complete, separately labeled execution if sought. | For this registration, the engine maintainers' own quiet host/volume is the dedicated native Linux ext4 engine host under R3.5, with exact Node 24 patch recorded. Run the engine column. Native Linux ext4 engine, WSL2 ext4 and macOS APFS each require a complete separately labeled should qualification if sought; none grants production launch acceptance. |
+| V4.2 omitted-platform boundary, line 783 | No blanket performance claim covers missing APFS/WSL reports | No blanket performance claim covers missing native Linux ext4 engine, APFS or WSL reports |
+| V4.7 platform boundary, line 924 | no WSL/APFS result substitutes for it. | no native Linux ext4 engine, WSL or APFS result substitutes for the R2 launch-required production result. |
+| R2.5 retained should platforms, line 1948 | WSL2/APFS remain separate should reports | native Linux ext4 engine, WSL2 and APFS remain separate should reports |
+
+The owner also names **“the 364 + 364 two-segment partition”** as superseded. That quotation is verbatim from the 2026-10-28 owner instruction, **not a purported frozen-prefix sentence**; the frozen plan contains no literal 364 + 364 partition. R3.6 now explicitly rejects that partition and every other two-entry engine `segments` array. The 728-cell count and ordering remain unchanged. The prior R3.5 stop is historical, superseded by the recorded decision rather than by an inferred approval.
+
+**Audit round 1 supersession rows.** These are narrow verbatim sources from the frozen prefix. Apply the F/A cadence exception only to F/A; pump rows replace the stated product-specific lexical maintenance integration facts, not adjacent numeric limits/gates, service authority, epoch observations, supervision or separate semantic-work requirements.
+
+| Source location | Exact superseded source | Revision-3 replacement |
+| --- | --- | --- |
+| §10.1 general writer cadence, line 618 | fresh open/write/close approximately every **20 ms while reads are active** | **For F/A sessions only**, fresh open/operation/finally-close on the registered realistic ×3 R3.2 schedule replaces this cadence. Independent process, applicable per-operation lifecycle/telemetry/deadlines, no keeper/backlog and same-projection rules remain; all R/W/WM contention writers and applicable overlap/commit/close requirements stay unchanged. |
+| Revision 1 changelog reservation, line 1156 | Estimates rise to **46,627.4 s (12.952 h) / 26,284 s (7.301 h)**; proposed reservations are **13 h 15 min / 7 h 30 min**, rather than 12 h / 7 h. | Historical revision-1 ledger only; revision 3 uses the accepted **54,627.4 / 34,284 s** work estimates and owner-selected **55,800 / 35,100 s** reservations. No earlier cell/window/minimum changes. |
+| §4.1.3 service renewal, line 220 | Cron renewal never extends or lends an HTTP request credential. | In-process service renewal never extends or lends an HTTP request credential; preserve every adjacent independent-authority and quantum entry/final-check rule. |
+| §6.2 product pump trigger, line 469 | The product explicitly schedules maintenance from its per-minute maintenance cron (a product-internal endpoint). | The product explicitly owns/schedules the long-lived in-process pump under registered final service/renewal settings and provenance. All following prebuild, v18/mixed-type and no-downgrade requirements remain. |
+| §6.2 pump ownership, line 471 | The cron entry renews an **owned supervised background maintenance pump**, separate from HTTP read requests. | The registered in-process service renews an **owned supervised background maintenance pump**, separate from HTTP reads. No request credential starts, renews or authorizes maintenance. |
+| §6.2 owner window accounting, line 471 | The host configures its cumulative `maxItems`/`maxMs` budgets per minute plus each refresh's existing ≤1,024/≤5,000-ms quantum; | The host registers its final cumulative owner-wide window budgets/duration and provenance plus each refresh's unchanged ≤1,024/≤5,000-ms quantum. R3.2 provisional numbers are not protocol constants; cumulative accounting cannot reset on handle renewal/restart. |
+| §6.2 renewal handoff, line 471 | Cron renewal hands off without a gap or duplicate projection writer; | Registered in-process renewal hands off without a gap or duplicate projection writer; preserve idle-check, authority, budget-exhaustion, fixed-capacity and supervision rules, including the adjacent ≤5-s epoch observation requirement while authority/budget are active. |
+| §6.2 between-tick supervision, line 473 | The supported cron integration must therefore run/supervise work between ticks | The owned in-process integration must run/supervise work throughout its registered service lifetime. Keep the adjacent ≤30-s p95 / ≤1% gates, no-read-maintenance/fallback/fence rules and the observation that one quantum every 60 s is insufficient. |
+| §6.2 service lifetime, line 473 | If the product's HTTP hosting cannot own that pump, it needs an explicitly owned maintenance service; | The product supplies an explicitly owned in-process maintenance service/lifetime, with observed shutdown and failed-opening cleanup; the following unmet-gate and reader-startup restrictions remain. |
+| §10.4 pump preregistration, line 659 | Pre-register a continuous-writer workload and the explicit cron-renewed pump settings. | Pre-register R3.2's continuous writer and the final explicit in-process pump/renewal/window settings with provenance. Keep all later initial-build, denominator, error and minimum rules. |
+| §10.4 retained dirty intervals, line 659 | No exclusion of maintenance/dirty/cron-gap intervals after the initial build. | No exclusion of maintenance/dirty/service-renewal, quota or safety-tick intervals, including any cron gaps if present, after the initial build. Every normal scheduled index-dependent attempt remains in its unchanged denominator. |
+| §10.4 latency components, line 663 | including cron wait, scheduling, build/catch-up and probe delay. | including all maintenance-service/renewal wait, scheduling, build/catch-up and probe delay, plus any cron wait if present. Keep first-eligible commit, exact-revision evidence and the full unchanged latency interval/gate. |
+| §11 P2b service handoff, line 676 | cron-renewed supervised pump | explicitly renewed, owned/supervised in-process pump with final registered settings; all P2b dependencies, certified builds, service authority and no-request-maintenance requirements remain |
+| §12 Q4 pump description, line 691 | a supervised pump renewed by the per-minute maintenance endpoint; one quantum/minute is insufficient. | an explicitly renewed supervised in-process pump under final registered service/window settings; one quantum/minute is still insufficient. Keep the adjacent freshness/availability gates, prebuild and partial-fallback semantics. |
+| §14 item 2 service inputs, line 737 | **Cron supervision/budgets:** identify the owned service/lifetime that can keep the explicit pump active between per-minute HTTP cron calls, cumulative maxItems/maxMs quotas and renewal/failure policy. | **Pump supervision/budgets:** identify the owned in-process service/lifetime, final cumulative owner-window maxItems/maxMs quotas and renewal/failure policy with provenance. Freeze final inputs before collection and prove the same freshness/not-ready gates. |
+| §14 item 2 non-inference rule, line 737 | do not infer 30 s freshness from a 60 s cron name. | do not infer 30 s freshness from a schedule label or provisional pump settings; demonstrate the unchanged gate. The old product-specific cron-60-s fact is retired, not replaced by a weaker freshness requirement. |
+| V4.2 and R2.5 registration inputs, line 781; line 1917 | supervised pump service, minute budgets/renewal and capacity; | supervised in-process service, final owner-wide window budgets/renewal/capacity and provenance; all other registration inputs, telemetry, deadlines and quiet reservation remain required |
+
+**Mechanical cadence census.** A case-insensitive frozen-prefix search for prose `20 ms` (allowing Markdown emphasis) and JSON `cadenceMs`/`writerCadenceMs` equal to 20 finds **8 matching lines**: **618, 823, 825, 848, 1031, 1055, 1067 and 1084**. Line 618 is covered by the new F/A-only row; V4.5 line 848 and Appendix session lines 1055/1067 are already quoted and replaced by R3.2/R3.6. Lines **823/825/1031** are contention-window controls and **1084** is a state/injection cleanup writer, all **unchanged at 20 ms**. No other frozen 20-ms F/A writer requirement remains unaccounted for. Preserve independent fresh lifecycle, actual native/public write intervals, commits/closes/deadlines and complete telemetry wherever applicable. §10.1's main/cold overlap and replacement-count safeguards still govern the corresponding concurrent request series; F/A probe/A populations do not supply those successes. R3.2's no-auxiliary-20-ms-stream rule remains. Pump accounting/security/general all-attempt statements that do not assume a specific trigger remain normative; **P2e/E.9 and their separate maintenance/semantic scheduling are unaffected**.
+
+**Everything else stays unchanged:** V4.1 and all §§10.3/10.4 numeric gates/meaning; R1–R7 request methods/loads/sample ceilings and language populations; W1/W2/W3 cycles, approximately 20-ms writers, overlap/commit/fresh-close detector minima, windows and paired baselines; WM and all warm/cold/reference boundaries; F40/A24 and O24/B12/T60, 288 T subprobes and 728/488 totals; complete target first-commit/revision/+infinity accounting, independent lexical oracle, input/byte/authority/fence rules; no read maintenance, stale serving, fallback success credit, exclusions or speed selection; raw all-attempt telemetry, host-loop/WAL/DELETE/timeout/cancel/cleanup/deadline rules and actual exits; V4.7 omissions and platform claim boundaries, qualified only by the explicitly labeled realistic Memory/synthetic Card workload; R2's isolated-production evidence, canary, comparator, continuity and per-segment procedures; all unaffected runtime/permission/schema/backup/WAL rules, §9 deterministic acceptance, §11 dependencies and P2e/E.9. Session sharing still does not pool targets or A denominators. Harness implementation, measurement, run authorization and launch acceptance remain separate work.
+
+### Revision 3 changelog (realistic freshness/availability writer profile)
+
+| Change | Result |
+| --- | --- |
+| Settled owner workload decision | F/A uses realistic per-owner ×3; W/WM/R retain the 20-ms stress writer. No threshold changes. |
+| Operation-faithful registration | Seeded Poisson capture events, one-call capture/organizer bursts, estimated review mix, active periods, gap/tail/commit bounds and final pump provenance replace accelerated releases. |
+| Eligibility and integration disclosure | History/current clocks stay exact; organizer/history and confirmed-current targets exceed 100; corrected awaiting content earns no current credit; synthetic engine Cards retain all cells and explicitly do not claim product integration. |
+| Probe/A preservation | Lane counts follow all target batches; ≤1-s cadence, ≤20-target batches, oracle, unseen retention, strict A alternation and §10.4 denominators remain. |
+| Earlier feasibility stop, now resolved | The work estimate remains 54,627.4 / 34,284 s. The owner replaced the two-night plan with the selected continuous reservations; the earlier alternatives remain historical and unselected in their tabulated forms. |
+| Owner scheduling decision, 2026-10-28 approximately 18:05 | Dedicated native Linux ext4 engine host; one 55,800-s segment for all 728 engine cells and one 35,100-s isolated-production reservation. Margins are 1,172.6 / 816 s. Preserve ×3, single-owner/single-session cells and every threshold. |
+| Native engine role and executable handoff | Accept `native-linux-ext4` only for engine, always with internal production flag false; reject it for production. Revision-3 estimates/templates encode selected budgets and one full engine segment, rejecting 364 + 364. R2.2 cell-244 and six-hour capture bounds remain unchanged. |
+| Audit round 1 — validity 1 (P1) | Initial/resume reports seal system-observed machine and backing-filesystem digests; continuation and merging compare the original observed anchor, not registration labels/hardware. Unavailable identity disables continuation only; retain all R2 production continuity checks. |
+| Audit round 1 — validity 2 / consistency 1 (P1 handoff) | Separate trusted engine-platform and production-launch eligibility throughout runner, series and scorer; remove the engine production override. Require both-direction rejection checks and preserve WSL2/APFS engine outcomes. |
+| Audit round 1 — consistency 2 (P1) | Add §10.1's verbatim F/A-only cadence supersession; the eight-line frozen cadence census accounts for every occurrence and preserves all contention/state controls. |
+| Audit round 1 — consistency 3 (P2) | Add narrow verbatim entries for the Revision 1 reservation and each changed lexical pump description, including §14 item 2; preserve adjacent gates and semantic requirements. |
+| Definition handoff | Both profiles advance to definition revision 3; old engine registrations/templates are invalid for it. The R2.5 production platform overlay remains separate; implementation needs its own review. |
+
+**Authoring validation.** Frozen-prefix `cmp` against `f56390ef` checks all **459,357 bytes** (exit **0**). Strict JSON parsing checks **all four fenced JSON blocks**, including this appendix, frozen V4-A, R2.2 fixture and R2.5 production object, rejecting duplicate keys (exit **0**). Verbatim checks compare every supersession quotation to its attributed frozen, earlier-draft or owner-instruction source (exit **0**). Independent arithmetic checks cross-check profile event rates/quantiles, seeded target/batch counts, minima, session durations, both component sums, reservation margins and option estimates (exit **0**). `git diff --check` exits **0**. The requested case-insensitive private-name/local-path scan finds **zero matches in the appended bytes** (exit **0**); frozen-prefix occurrences are unchanged and are not copied into this delta. Changed-file inventories from `git diff --name-only` plus untracked enumeration and an independent tracked-tree/blob comparison plus filesystem untracked enumeration agree at **one file**, this plan (cross-check exit **0**). Final standalone inspection/authoring helpers exit **0**. One initial combined read command returned 0 despite an unmatched shell-glob search error; its corrected standalone directory search exited 0, and the failed search was not used as verification evidence. No build, typecheck, test suite, network, commit, code mutation or unattended process was run; these authoring checks do not qualify the harness or workload. Owner-decision validation additionally cross-checks the selected numeric definition/observation budgets, one-full-segment encoding, native-role rejection/production-flag rules, retained cell-244 capture and unchanged six-hour bounds (exit **0**). The new platform/reservation supersession rows are checked verbatim against their attributed frozen or earlier-draft sources; the 364 + 364 phrase is attributed to the owner instruction. The first owner-decision quotation-helper invocation exited **1** because of its table-column parser error; after correcting the helper, the full quotation/source check exited **0**. The owner scheduling stop is resolved; this draft is ready for non-author audit and the separate reviewed harness implementation.
+
+**Audit round 1 authoring validation.** Both non-author audit reports were read in full (exit **0** each). The accepted R3.1–R3.5 text, workload/session recipe and arithmetic are byte-identical to `67e9c552`; only R3.6, R3.7 and the revision-3 changelog/validation are revised. Frozen-prefix `cmp`, strict JSON parsing, all attributed verbatim quotations, the eight-line cadence census, independent arithmetic and full ordered-cell-key comparisons, `git diff --check`, private-name/local-path scan and two independently derived changed-file inventories each exit **0**; the inventories agree at **one file**. Identity collection/unavailable/anchor-equality and profile-selected eligibility/rejection requirements are validated as protocol handoff text/encoding, not claimed runtime tests; their harness implementation remains a separate reviewed change. All accepted totals, target minima, selected budgets/margins and the production capture envelope remain unchanged. No code, commit, network, measurement or unattended task is part of this audit fix.

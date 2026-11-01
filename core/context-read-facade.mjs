@@ -94,8 +94,9 @@ function createContextFacade(path, options, { readOnly }) {
   try {
     if (path !== ':memory:') database = openReadDatabase(path, { contextRead: true,
       nativeObserver: options.product?.observer,
+      productSqlite: options.product?.sqlite,
       validateProduct: options.product ? validateContextProductLayout : undefined,
-      preflight: () => { if (readOnly) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path, options.product?.observer); } });
+      preflight: () => { if (readOnly && !options.product?.sqlite) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path, options.product?.observer); } });
     return initializeContextFacade(path, options, { readOnly, database });
   } catch (error) {
     try { if (database?.db.isOpen) database.db.close(); } catch { /* Preserve the initialization refusal. */ }
@@ -107,13 +108,13 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   let retainedSourceBytes = 0;
   const rankings = new Map(), controllers = new Set(), indexes = new Map(), dispatch = contextBudget(options);
   const memoryOnly = path === ':memory:';
-  const guardAuxiliaries = () => { if (readOnly) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path, options.product?.observer); };
+  const guardAuxiliaries = () => { if (readOnly && !options.product?.sqlite) (options.product ? assertContextReadCanonicalDelete : assertContextReadReadOnlyAuxiliaries)(path, options.product?.observer); };
   const db = database?.db;
   function ready() {
     if (closed || db && (!db.isOpen || isConnectionDiscarded(db))) fail('store_closed');
     if (database) { database.assertFile(); guardAuxiliaries(); }
   }
-  const read = work => { ready(); return readTransaction(db, work); };
+  const read = (work, acquisition) => { ready(); return acquisition ? acquisition.transaction(db, work, readTransaction) : readTransaction(db, work); };
   const info = memoryOnly ? { storeId: null, cursorSecret: null, cards: false, raw: false } : read(() => {
     const row = db.prepare('SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1').get();
     if (!row) fail('unsupported_database');
@@ -279,12 +280,14 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     } catch (error) { if (error instanceof SourceStop) fail(code); throw error; }
   }
   function deliverPage(input, ranking, position, limit) {
-    if (!options.sources) return page(ranking, position, limit);
     return read(() => {
+      const result = page(ranking, position, limit);
+      for (const candidate of result.items) evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet);
+      if (!options.sources) return result;
       assertSourcesInside(input, ranking.sourceState, 'cursor_stale');
       const budget = sourceBudget(Infinity);
       for (const path of ranking.sourceState.witnesses) witnessInside(input, path, 'cursor_stale', budget);
-      return page(ranking, position, limit);
+      return result;
     });
   }
   const rankingConfiguration = (trace, sourceState, items) => bind('ranking-config', [configuration, trace.requested, trace.effective,
@@ -608,7 +611,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           }
           const { type, ref, state, origin } = item;
           const sources = type === 'memory' && item.provenance.sourceAccess === 'available' ?
-            db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId)
+            db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId).filter(row=>item.provenance.receiptMetadata.some(receipt=>receipt.receiptId===row.id))
               .map((row, index) => {
                 const { role, excerpt } = validateSourceReceipt(ref.memoryId, row, source =>
                   createHash('sha256').update(JSON.stringify(source)).digest('hex'));
@@ -679,7 +682,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
   function fetchCandidateEvidence(original, token, productPayload) {
     try {
       ready();
-      const { payload, input } = contextInput('fetchCandidateEvidence', original, supportedTypes), access = authorize('fetchCandidateEvidence', input, options.product ? productPayload ?? payload : payload, token);
+      const { payload, input } = contextInput('fetchCandidateEvidence', original, supportedTypes, undefined, options.product ? 'context-read-product-v1.1' : undefined), access = authorize('fetchCandidateEvidence', input, options.product ? productPayload ?? payload : payload, token);
       if (memoryOnly) fail('index_unavailable');
       const scope = bind('snapshot-scope', input.readSet);
       let intent = input.intent, refs = input.refs, previous;

@@ -7,23 +7,40 @@ const receiptValue = row => ({ client: row.client, sessionId: row.session_id,
   eventId: row.event_id, role: row.role, excerpt: row.excerpt });
 
 /** Source-session authority shared by deletion, admission and option-off writers. */
-export function createRawSourceRoots(db) {
+export function createRawSourceRoots(db, { readMemo } = {}) {
   let available;
-  let episodeMutation;
+  let episodeMutation, fences, jobs;
+  const hasFences = () => fences === true || (fences = Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_session_fences'").get()));
+  const hasJobs = () => jobs === true || (jobs = Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_job_sources'").get()));
   const enabled = () => available === true || (available = Boolean(db.prepare(
     "SELECT 1 FROM sqlite_master WHERE name='raw_deletion_actions'").get()));
   const hashSession = (ns, client, value) => 's1:' + createHmac('sha256', Buffer.from(
     db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get().secret, 'hex'))
     .update(JSON.stringify(['episode-v1', ...boundary(ns), client, value])).digest('hex');
   const keys = (ns, client, value) => [value, hashSession(ns, client, value)];
-  function assertSession(ns, client, value) {
-    if (!enabled()) return;
+  function assertSession(ns, client, value, readExisting = false) {
+    if (readExisting ? !hasFences() : !enabled()) return;
+    const key = JSON.stringify(['session-fence', ...boundary(ns), client, value]);
+    if (readExisting && readMemo?.has(key)) return;
     for (const session of keys(ns, client, value)) if (db.prepare(
       `SELECT 1 FROM raw_session_fences WHERE ${where} AND client=? AND session_key=?`)
       .get(...boundary(ns), client, session)) fail('conversation_deleted');
+    if (readExisting) readMemo?.set(key, true);
   }
-  function resolve(ns, value) {
-    if (!enabled()) return [];
+  function emptySession(ns, row) {
+    if (!readMemo) return false;
+    const key = JSON.stringify(['empty-session', ...boundary(ns), row.client, row.session_id]);
+    if (readMemo.has(key)) return readMemo.get(key);
+    const args = [...boundary(ns), row.client, ...keys(ns, row.client, row.session_id)];
+    const jobs = hasJobs();
+    const found = db.prepare(`SELECT 1 FROM raw_conversations WHERE ${where} AND client=? AND session_key IN (?,?)
+      UNION ALL SELECT 1 FROM session_episodes WHERE ${where} AND client=? AND session_key IN (?,?)
+      ${jobs ? `UNION ALL SELECT 1 FROM raw_job_sources WHERE ${where} AND source_client=? AND session_key IN (?,?)` : ''} LIMIT 1`)
+      .get(...args, ...args, ...(jobs ? args : []));
+    readMemo.set(key, !found); return !found;
+  }
+  function resolve(ns, value, readExisting = false) {
+    if (!readExisting && !enabled()) return [];
     const sessions = keys(ns, value.client, value.sessionId), found = new Map();
     const add = row => {
       const root = found.get(row.session_key) ?? { client: value.client, sessionKey: row.session_key };
@@ -42,13 +59,13 @@ export function createRawSourceRoots(db) {
           OR EXISTS(SELECT 1 FROM episode_sources s WHERE s.origin_episode_id=e.id AND s.message_id=?))`)
         .get(...boundary(ns), value.client, session, value.eventId, value.eventId);
       if (episode) add(episode);
-      if (db.prepare(`SELECT 1 FROM raw_job_sources WHERE ${where} AND source_client=? AND session_key=? AND message_id=?`)
+      if ((!readExisting || hasJobs()) && db.prepare(`SELECT 1 FROM raw_job_sources WHERE ${where} AND source_client=? AND session_key=? AND message_id=?`)
         .get(...boundary(ns), value.client, session, value.eventId)) add({ session_key: session });
     }
     if (found.size > 1) fail('raw_lineage_unavailable');
     return [...found.values()];
   }
-  function receipt(ns, row) {
+  function receipt(ns, row, readExisting = false) {
     const stored = db.prepare(`SELECT DISTINCT c.id AS conversationId,c.client,c.session_key AS sessionKey
       FROM raw_receipt_lineage l JOIN raw_conversations c ON c.id=l.conversation_id
       WHERE l.receipt_id=? AND c.owner_id=? AND c.scope=? AND c.project_id=?`).all(row.id, ...boundary(ns));
@@ -56,7 +73,7 @@ export function createRawSourceRoots(db) {
       const kept = keepReceipt(ns, row);
       if (kept) return kept;
     }
-    const values = stored.length ? stored : resolve(ns, receiptValue(row));
+    const values = stored.length ? stored : resolve(ns, receiptValue(row), readExisting);
     // Existing real receipt IDs can prove older batch-based episode receipts.
     if (!values.length) {
       const linked = db.prepare(`SELECT DISTINCT e.id AS episode_id,e.client,e.session_key FROM episode_memory_links l
@@ -223,5 +240,5 @@ export function createRawSourceRoots(db) {
     return null;
   }
   return { enabled, hashSession, keys, resolve, receipt, memoryRoots, touchMemory, mutateSources,
-    mutateEpisodeSources, bindJob, jobGuard, assertSession };
+    mutateEpisodeSources, bindJob, jobGuard, assertSession, emptySession };
 }

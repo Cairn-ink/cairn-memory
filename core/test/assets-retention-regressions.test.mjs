@@ -14,7 +14,7 @@ test('K11 conversation deletion still invalidates dependent Raw Cards and leaves
   const snapshot=()=>['assets','asset_versions','asset_derivatives','binary_objects','binary_chunks','binary_owner_usage','method_mixed_entries','asset_operations','asset_effects']
     .map(table=>[table,f.db.prepare('SELECT * FROM '+table+' ORDER BY rowid').all()]);
   const before=snapshot();ok(f.core.deleteConversation({namespace:ns,conversationId:source.conversationId,expectedRevision:source.expectedConversationRevision,actionId:'delete-conversation'}));
-  assert.equal(ok(f.call('getCard',{namespace:ns,cardId:card.id})).card.support.status,'unavailable');assert.deepEqual(snapshot(),before);
+  assert.equal(ok(f.call('getCard',{namespace:ns,cardId:card.id})).card,null);assert.deepEqual(snapshot(),before);
   assert.equal(ok(f.core.readAssetDerivative({ref:derivative.derivative},token)).status,'available');
   assert.equal(ok(f.core.readMethodAttachmentBytes({version:method.version,path:'reference.pdf',intent:'history'},token)).status,'available');
   assert.deepEqual(f.db.prepare('PRAGMA foreign_key_check').all(),[]);

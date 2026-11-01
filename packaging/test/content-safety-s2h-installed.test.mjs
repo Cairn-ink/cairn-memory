@@ -1,0 +1,80 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync, copyFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import { buildArtifact, command, packageName } from '../build.mjs';
+import { installedImportClosure } from './fixtures/installed-import-closure.mjs';
+import { copySqliteFixture, safetyFixture } from '../../core/testing/content-safety-s2h-fixture.mjs';
+
+const root = new URL('../../', import.meta.url).pathname;
+const walk = (path, prefix = '') => readdirSync(path, { withFileTypes: true }).flatMap(entry => entry.isDirectory()
+  ? walk(join(path, entry.name), prefix + entry.name + '/') : [prefix + entry.name]).sort();
+test('S2h installed artifact runs explicit migration, fresh pins and canonical reads without source fallback', async t => {
+  const f = safetyFixture(t, 33), artifact = buildArtifact();
+  writeFileSync(join(f.workspace.path,'package.json'),JSON.stringify({ name:'synthetic-safety-lifecycle',version:'0.0.0',private:true }));
+  command('npm',['install','--prefix',f.workspace.path,'--offline','--ignore-scripts','--no-audit','--no-fund',artifact.artifactPath],f.workspace.path,artifact.userconfig);
+  const installed = join(f.workspace.path,'node_modules',packageName), trace = join(f.workspace.path,'imports.jsonl');
+  const archived = command('tar',['-tzf',artifact.artifactPath],f.workspace.path,artifact.userconfig).trim().split('\n').map(value => value.slice('package/'.length)).sort();
+  assert.deepEqual(walk(installed),archived);
+  assert.deepEqual(archived,[...JSON.parse(readFileSync(join(installed,'package.json'))).files].sort());
+  const graph = installedImportClosure(root,['adapters/mcp/cli.mjs']);
+  const manifest = JSON.parse(readFileSync(join(root,'packaging/artifact-files.json')));
+  for (const path of graph.required) assert.ok(manifest.includes(path),path);
+  const loader = 'data:text/javascript,'+encodeURIComponent(`import { appendFileSync } from 'node:fs';
+export async function resolve(specifier,context,next) {
+ const result=await next(specifier,context);
+ if(result.url.startsWith(${JSON.stringify(pathToFileURL(root).href)})) throw Error('source_fallback');
+ if(result.url.startsWith(${JSON.stringify(pathToFileURL(installed+'/').href)})) appendFileSync(${JSON.stringify(trace)},JSON.stringify(result.url)+'\\n');
+ return result;
+}`);
+  const preload = 'data:text/javascript,'+encodeURIComponent(`import {register} from 'node:module';register(${JSON.stringify(loader)},{parentURL:import.meta.url});`);
+  const env = { PATH: dirname(process.execPath), NODE_NO_WARNINGS: '1', NODE_DISABLE_COMPILE_CACHE: '1' };
+  const run = (args, expected = 0) => {
+    const result = spawnSync(process.execPath,['--import',preload,...args],{cwd:f.workspace.path,env,encoding:'utf8',timeout:30000});
+    assert.equal(result.error,undefined); assert.equal(result.signal,null); assert.equal(result.status,expected,result.stderr+result.stdout);
+    return result.stdout;
+  };
+  copySqliteFixture(f.path,f.backupPath);
+  const cli = join(installed,'adapters/mcp/cli.mjs');
+  const migrated = JSON.parse(run([cli,'safety','migrate','--db',f.path,'--backup',f.backupPath,'--store-id',f.storeId,'--base','33','--quiescent']));
+  assert.equal(migrated.value.physical,48);
+  copyFileSync(join(root,'core/testing/context-product-index-host.mjs'),join(installed,'host.mjs'));
+  const driver = `const api=await import(${JSON.stringify(pathToFileURL(join(installed,'core/index.mjs')).href)});
+const {credentialDigest,PRODUCT_PROFILE}=await import(${JSON.stringify(pathToFileURL(join(installed,'core/context-product-control.mjs')).href)});
+const {randomUUID}=await import('node:crypto');
+const {inspectExistingStorePin}=await import(${JSON.stringify(pathToFileURL(join(installed,'core/existing-store.mjs')).href)});
+const {openDatabase}=await import(${JSON.stringify(pathToFileURL(join(installed,'core/database.mjs')).href)});
+const created=openDatabase(${JSON.stringify(join(f.workspace.path,'created.sqlite'))},{contentSafety:'s2h-v1',currentDependencies:true});
+const createdId=created.prepare('SELECT store_id FROM store_metadata').get().store_id,createdDomain=created.prepare('SELECT suppression_domain FROM content_safety_control').get().suppression_domain;created.close();
+const pin=await inspectExistingStorePin(${JSON.stringify(join(f.workspace.path,'created.sqlite'))},createdId);
+if(pin.physical!==48)throw Error('wrong_pin');
+const core=api.openMemoryCore({path:${JSON.stringify(join(f.workspace.path,'created.sqlite'))},existingStore:pin}),supervisor=api.createContextReadSupervisor();let reader;
+try {const namespace={ownerId:'synthetic-installed-safety',scope:'personal',projectId:null};
+ const admitted=core.admit({namespace,memory:{content:'Synthetic installed safety content',kind:'fact'},receipts:[{client:'synthetic',sessionId:'s',eventId:'e',role:'user',excerpt:'Synthetic installed evidence'}]});
+ if(!admitted.ok)throw Error(JSON.stringify(admitted));
+ const memory=admitted.value.memory,readSet=[namespace],credential={opaque:randomUUID()},state=new SharedArrayBuffer(32);new Int32Array(state)[0]=1;
+ const ids={requestId:randomUUID(),handleId:randomUUID(),credentialBindingId:randomUUID(),credentialExpiresUtcMs:null};
+ const ownerCoverage={policy:'recent-projects-v1',selectionRevision:'synthetic-installed',requestedNamespaces:1,selectedNamespaces:1,omittedNamespaces:0};
+ const binding={kind:'request',...ids,credentialDigest:credentialDigest(credential),ownerId:namespace.ownerId,namespaces:{readSet,ownerCoverage},issuedAt:0};
+ reader=await api.openContextProductReader({path:${JSON.stringify(join(f.workspace.path,'created.sqlite'))},supervisor,version:'context-read-v1',profile:PRODUCT_PROFILE,readSet,ownerCoverage,
+  requestControl:{...ids,requestMaxMs:5000},host:{moduleUrl:${JSON.stringify(pathToFileURL(join(installed,'host.mjs')).href)},configuration:{requestBinding:binding,state,requestReservation:new SharedArrayBuffer(4)}}});
+ const capabilities=await reader.getContextReadCapabilities();if(!capabilities.ok||capabilities.value.execution!=='worker')throw Error('missing_installed_worker');
+ const input={readSet,refs:[{type:'memory',namespace,memoryId:memory.id,revision:memory.revision}],intent:'current'};
+ const evidence=await reader.fetchCandidateEvidence(input,credential);
+ if(!evidence.ok||evidence.value.items[0]?.content!=='Synthetic installed safety content')throw Error('missing_installed_evidence');
+ const forgotten=core.forget({namespace,memoryId:memory.id,expectedRevision:memory.revision});
+ if(!forgotten.ok)throw Error(JSON.stringify(forgotten));
+ if(JSON.stringify(core.get({namespace,memoryId:memory.id})).includes('Synthetic installed safety content'))throw Error('suppressed_read');
+ if(JSON.stringify(await reader.fetchCandidateEvidence(input,credential)).includes('Synthetic installed safety content'))throw Error('suppressed_installed_worker_read');
+ const db=openDatabase(${JSON.stringify(join(f.workspace.path,'created.sqlite'))});
+ try {const facts=db.prepare('SELECT kind,reason FROM content_suppressions ORDER BY kind').all();
+ if(JSON.stringify(facts)!==JSON.stringify([{kind:'memory',reason:'user_forget'},{kind:'receipt',reason:'user_forget'}]))throw Error('missing_installed_facts');}finally{db.close();}
+ console.log(JSON.stringify({pin:pin.version,forgotten:true,worker:true}));}finally{await reader?.close();await supervisor.close();core.close();}`;
+  const output = JSON.parse(run(['--input-type=module','-e',driver])); assert.equal(output.forgotten,true); assert.equal(output.worker,true);
+  const loaded = new Set(readFileSync(trace,'utf8').trim().split('\n').map(value => JSON.parse(value)));
+  const runtime = ['adapters/mcp/safety-migrate-command.mjs','core/content-safety-layout.mjs','core/content-safety-schema.mjs','core/content-suppression-storage.mjs','core/content-safety-migration.mjs'];
+  for (const path of runtime) assert.ok(loaded.has(pathToFileURL(join(installed,path)).href),path);
+  t.diagnostic(`new-runtime manifest/import/observed-load cross-check: ${runtime.length} modules; archive/filesystem: ${archived.length} files`);
+});

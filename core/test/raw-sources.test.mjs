@@ -116,14 +116,15 @@ for (const client of ['claude-code','codex']) {
     ok(f.core.deleteConversation({ namespace: ns,conversationId: source.conversationId,
       expectedRevision: source.expectedConversationRevision,actionId: 'delete-source' }));
     assert.equal(ok(f.call('getCard',{ namespace: ns,cardId: pending.id })).card,null);
-    const retained = ok(f.call('getCard',{ namespace: ns,cardId: confirmed.id })).card;
-    assert.equal(retained.body,before.body); assert.equal(retained.support.status,'unavailable');
-    assert.equal(retained.revision,before.revision+1); assert.equal(retained.bodyRevision,before.bodyRevision);
+    assert.equal(ok(f.call('getCard',{ namespace: ns,cardId: confirmed.id })).card,null);
+    const retained = f.db.prepare('SELECT * FROM private_cards WHERE id=?').get(confirmed.id);
+    assert.equal(retained.body,before.body);
+    assert.equal(retained.revision,before.revision+1); assert.equal(retained.body_revision,before.bodyRevision);
     assert.deepEqual(ok(draft(f,refs)),pending);
     denied(draft(f,refs,'fresh-action'),'source_unavailable');
     denied(await f.call('getSource',{ namespace: ns,source: refs[0] }),'source_unavailable');
     const old = openMemoryCore({ path: f.path,privateCards: f.host.options }); f.workspace.defer(() => old.close());
-    denied(f.host.call(old,'getCard',{ namespace: ns,cardId: confirmed.id }),'source_unavailable');
+    assert.equal(ok(f.host.call(old,'getCard',{ namespace: ns,cardId: confirmed.id })).card,null);
     ok(f.host.call(old,'deleteKnowledgeCard',{ namespace: ns,cardId: retained.id,
       expectedRevision: retained.revision,actionId: 'owner-delete' }));
     assert.equal(f.db.prepare('SELECT count(*) n FROM card_raw_bindings').get().n,0);

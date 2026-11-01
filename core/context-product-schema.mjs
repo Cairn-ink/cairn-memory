@@ -1,3 +1,4 @@
+import { attestContentSafety } from './content-safety-schema.mjs';
 import { fail } from './validation.mjs';
 
 // Product-only metadata attestation. These shapes come from the canonical
@@ -167,8 +168,8 @@ function indexPredicate(sql) {
   return where < 0 ? null : normalized.slice(where + 1);
 }
 
-export function validateContextProductLayout(db) {
-  const version = db.prepare('PRAGMA user_version').get().user_version;
+export function validateContextProductLayout(db, layout = attestContentSafety(db)) {
+  const version = layout.base;
   if (![18,20,21,22,23,24,25,26,27,28,29,30,31,32,33].includes(version)) fail('unsupported_database');
   const present = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?");
   const columns = db.prepare('SELECT name,type,"notnull",pk FROM pragma_table_info(?) ORDER BY cid');

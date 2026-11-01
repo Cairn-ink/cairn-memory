@@ -21,6 +21,14 @@ and B, Yi, Tangut and C0 control characters.
 
 ## Audit
 
+The query, memory content, capture-message and receipt-excerpt limits below
+measure UTF-16 code units after per-field NFKC, secret redaction, whitespace
+collapse and trim; receipt/source views truncate at code-point boundaries.
+The exported `normalizedTextLength` and `normalizeBoundedText` help segmenters
+measure proposed fields; concatenated lengths are not additive. See
+[bounded text lengths](capture.md#bounded-text-lengths). Serialized JSON budgets,
+tokens and exact candidate/anchor slices are measured separately.
+
 | Call | Where | What bounds its input | Status |
 |---|---|---|---|
 | `select` | `core/recall.mjs` | Query ≤4,000 UTF-16 units; ≤2 namespaces; ≤1 map page per namespace per round, each ≤4,000 counted tokens and ≤100 items. Two full pages are about 8,000 tokens. | **Fixed.** Map items are interleaved across namespaces and the largest prefix that fits is sent. A trimmed page is shown as `exhausted:false`, and only shown refs are selectable. |

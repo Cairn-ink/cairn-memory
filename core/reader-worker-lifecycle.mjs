@@ -1,6 +1,6 @@
 // Shared prompt-cancellation state machine. Detach before terminating, latch a
 // public terminal result before awaiting cleanup, and retain cleanup rejection.
-export function createReaderWorkerLifecycle({ clearTimer = clearTimeout, onStop = () => {} } = {}) {
+export function createReaderWorkerLifecycle({ clearTimer = clearTimeout, onStop = () => {}, stopWorker = instance => instance.terminate() } = {}) {
   let worker, pending, idle, cleaning = false, termination = Promise.resolve();
   function stop() {
     clearTimer(idle);
@@ -8,7 +8,7 @@ export function createReaderWorkerLifecycle({ clearTimer = clearTimeout, onStop 
     if (previous) {
       cleaning = true;
       let released;
-      try { released = previous.terminate(); } catch (error) { released = Promise.reject(error); }
+      try { released = stopWorker(previous); } catch (error) { released = Promise.reject(error); }
       termination = Promise.all([termination, released]).then(() => { cleaning = false; });
       void termination.catch(() => {});
       onStop(termination);

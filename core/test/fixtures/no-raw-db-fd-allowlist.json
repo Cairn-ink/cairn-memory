@@ -1258,5 +1258,405 @@
     "path": "core/sqlite-journal-probe.mjs",
     "source": "try { const pin = openSync(lock, 'wx', 0o600); closeSync(pin); }",
     "reason": "Child-only creation of the persistent SQLite lifecycle lock file before opening its SQLite connection."
+  },
+  {
+    "path": "tools/testing/measure-context-read-product.mjs",
+    "source": "import { readFile, stat, statfs } from 'node:fs/promises'",
+    "reason": "Read-only registration and production writer-profile JSON inputs; database copy/hash uses the separate SQLite-free child."
+  },
+  {
+    "path": "tools/testing/measure-context-read-product.mjs",
+    "source": "const input=JSON.parse(await readFile(registrationPath,'utf8'));input.writerProfile=writerProfile(JSON.parse(await readFile(profilePath,'utf8')));",
+    "reason": "Read-only registration and production writer-profile JSON inputs; database copy/hash uses the separate SQLite-free child."
+  },
+  {
+    "path": "tools/testing/measure-context-read-product.mjs",
+    "source": "const input=JSON.parse(await readFile(registrationPath,'utf8'));input.writerProfile=writerProfile(JSON.parse(await readFile(profilePath,'utf8')));",
+    "reason": "Read-only registration and production writer-profile JSON inputs; database copy/hash uses the separate SQLite-free child."
+  },
+  {
+    "path": "tools/testing/summarize-context-read-product.mjs",
+    "source": "import { createReadStream } from 'node:fs'",
+    "reason": "Streaming summary reads only the operator-selected numeric JSONL report or record journal."
+  },
+  {
+    "path": "tools/testing/summarize-context-read-product.mjs",
+    "source": "import { stat } from 'node:fs/promises'",
+    "reason": "Streaming summary reads only the operator-selected numeric JSONL report or record journal."
+  },
+  {
+    "path": "tools/testing/summarize-context-read-product.mjs",
+    "source": "for await(const line of createInterface({input:createReadStream(source),crlfDelay:Infinity})) {",
+    "reason": "Streaming summary reads only the operator-selected numeric JSONL report or record journal."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/functional-check.mjs",
+    "source": "import { readFile, access } from 'node:fs/promises'",
+    "reason": "Explicit functional test reads only its owned JSONL report, numeric journal and immutable JSON header."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/functional-check.mjs",
+    "source": "const lines=(await readFile(report,'utf8')).trim().split('\\n').map(l=>JSON.parse(l));",
+    "reason": "Explicit functional test reads only its owned JSONL report, numeric journal and immutable JSON header."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/functional-check.mjs",
+    "source": "const journal=(await readFile(report+'.records.jsonl','utf8')).trim().split('\\n').map(l=>JSON.parse(l));",
+    "reason": "Explicit functional test reads only its owned JSONL report, numeric journal and immutable JSON header."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/functional-check.mjs",
+    "source": "const header=JSON.parse(await readFile(report+'.header.json','utf8'));assert.equal(header.timingGates,false);",
+    "reason": "Explicit functional test reads only its owned JSONL report, numeric journal and immutable JSON header."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/io-child.mjs",
+    "source": "import { copyFileSync, readFileSync, statSync, readdirSync, chmodSync, constants, createReadStream, openSync, writeSync, fsyncSync, closeSync, fstatSync } from 'node:fs'",
+    "reason": "SQLite-free child only: exclusive database copy/hash with owner mode and procfs sampling cannot release host SQLite locks."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/io-child.mjs",
+    "source": "const hash = path => createHash('sha256').update(readFileSync(path)).digest('hex');",
+    "reason": "SQLite-free child only: exclusive database copy/hash with owner mode and procfs sampling cannot release host SQLite locks."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/io-child.mjs",
+    "source": "const [runtimeNs,runqueueNs,slices]=readFileSync(`/proc/${pid}/task/${tid}/schedstat`,'utf8').trim().split(/\\s+/).map(Number);",
+    "reason": "SQLite-free child only: exclusive database copy/hash with owner mode and procfs sampling cannot release host SQLite locks."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/io-child.mjs",
+    "source": "const vm=Object.fromEntries(readFileSync('/proc/vmstat','utf8').split('\\n').map(l=>l.split(/\\s+/)).filter(([k])=>['pswpin','pswpout','pgmajfault'].includes(k)).map(([k,v])=>[k,Number(v)]));",
+    "reason": "SQLite-free child only: exclusive database copy/hash with owner mode and procfs sampling cannot release host SQLite locks."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/io-child.mjs",
+    "source": "copyFileSync(process.argv[3],process.argv[4],constants.COPYFILE_EXCL);chmodSync(process.argv[4],0o600);",
+    "reason": "SQLite-free child only: exclusive database copy/hash with owner mode and procfs sampling cannot release host SQLite locks."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/report.mjs",
+    "source": "import { open, rename } from 'node:fs/promises'",
+    "reason": "Harness-owned exclusive numeric report/header/journal files only; never database files or companions."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/report.mjs",
+    "source": "const registration=await open(path+'.header.json','wx',0o400);",
+    "reason": "Harness-owned exclusive numeric report/header/journal files only; never database files or companions."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/report.mjs",
+    "source": "const journal=await open(path+'.records.jsonl','ax',0o600),partial=await open(path+'.partial','wx',0o600);",
+    "reason": "Harness-owned exclusive numeric report/header/journal files only; never database files or companions."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/report.mjs",
+    "source": "const journal=await open(path+'.records.jsonl','ax',0o600),partial=await open(path+'.partial','wx',0o600);",
+    "reason": "Harness-owned exclusive numeric report/header/journal files only; never database files or companions."
+  },
+  {
+    "path": "tools/testing/measure-context-read-product.mjs",
+    "source": "const definition=registrationPath?JSON.parse(await readFile(registrationPath,'utf8')).protocolDefinition??(protocol==='v4'?DEFINITIONS[profile]:V3_DEFINITION):V3_DEFINITION;",
+    "reason": "Reads only operator registration JSON for estimate-only plan arithmetic, before any engine or SQLite handle invocation."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/v4-state.mjs",
+    "source": "import { stat } from 'node:fs/promises'",
+    "reason": "Metadata-only absent-sidecar existence checks; database hash bytes are read exclusively in the SQLite-free child."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/v4-checkpoint-child.mjs",
+    "source": "import { createReadStream,constants } from 'node:fs'",
+    "reason": "SQLite-free child only; refuses symlinks and non-regular files before opening operator report/journal paths. No measuring-process database descriptor."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/v4-checkpoint-child.mjs",
+    "source": "import { lstat } from 'node:fs/promises'",
+    "reason": "SQLite-free child only; refuses symlinks and non-regular files before opening operator report/journal paths. No measuring-process database descriptor."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/v4-checkpoint-child.mjs",
+    "source": "for await(const line of createInterface({input:createReadStream(path,{flags:constants.O_RDONLY|constants.O_NOFOLLOW}),crlfDelay:Infinity})){",
+    "reason": "SQLite-free child only; refuses symlinks and non-regular files before opening operator report/journal paths. No measuring-process database descriptor."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/report.mjs",
+    "source": "const journal=await open(path+'.records.jsonl','a',0o600);",
+    "reason": "Session child appends only the leased harness-owned numeric journal; the observed parent never opens a database descriptor."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/io-child.mjs",
+    "source": "let text;try{text=readFileSync(`/proc/${pid}/stat`,'utf8');}catch(e){if(['ENOENT','ESRCH'].includes(e.code))continue;throw e;}",
+    "reason": "SQLite-free IO child only: reads kernel procfs metadata to confirm owned process-group exit, without opening any database or companion descriptor in the measuring parent."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/io-child.mjs",
+    "source": "const input=createReadStream(process.argv[3]+'.records.jsonl');",
+    "reason": "SQLite-free IO child only: streams the leased harness journal after confirmed descendant exit to recover its durable numeric sequence; never reads SQLite files."
+  },
+  {
+    "path": "evaluation/context-read-p2e/cost.mjs",
+    "source": "import { mkdirSync } from 'node:fs'",
+    "reason": "Creates only the durable admission-state directory; allowance and reservation storage uses DatabaseSync, never raw database reads."
+  },
+  {
+    "path": "evaluation/context-read-p2e/fixtures.mjs",
+    "source": "import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'",
+    "reason": "Reads and authors frozen synthetic corpus and label JSON resources under the fixture root, never canonical database files."
+  },
+  {
+    "path": "evaluation/context-read-p2e/fixtures.mjs",
+    "source": "const fixture = JSON.parse(readFileSync(new URL('corpus-queries.json', ROOT)));",
+    "reason": "Reads and authors frozen synthetic corpus and label JSON resources under the fixture root, never canonical database files."
+  },
+  {
+    "path": "evaluation/context-read-p2e/fixtures.mjs",
+    "source": "const labels = JSON.parse(readFileSync(new URL('labels.json', ROOT)));",
+    "reason": "Reads and authors frozen synthetic corpus and label JSON resources under the fixture root, never canonical database files."
+  },
+  {
+    "path": "evaluation/context-read-p2e/fixtures.mjs",
+    "source": "writeFileSync(new URL('corpus-queries.json', ROOT), json(fixture));",
+    "reason": "Reads and authors frozen synthetic corpus and label JSON resources under the fixture root, never canonical database files."
+  },
+  {
+    "path": "evaluation/context-read-p2e/fixtures.mjs",
+    "source": "writeFileSync(new URL('labels.json', ROOT), json(labels));",
+    "reason": "Reads and authors frozen synthetic corpus and label JSON resources under the fixture root, never canonical database files."
+  },
+  {
+    "path": "evaluation/context-read-p2e/registration.mjs",
+    "source": "import { readFileSync, readdirSync } from 'node:fs'",
+    "reason": "Enumerates source modules and reads their bytes plus frozen fixture JSON to verify the complete sealed input manifest."
+  },
+  {
+    "path": "evaluation/context-read-p2e/registration.mjs",
+    "source": "const defaultRead = name => readFileSync(new URL(`../../${name}`, import.meta.url));",
+    "reason": "Enumerates source modules and reads their bytes plus frozen fixture JSON to verify the complete sealed input manifest."
+  },
+  {
+    "path": "evaluation/context-read-p2e/runner.mjs",
+    "source": "import { readFileSync, writeFileSync } from 'node:fs'",
+    "reason": "Reads registration, reviewed binding source, safety evidence and fixture JSON, and writes evaluation reports; canonical inventory uses SQLite."
+  },
+  {
+    "path": "evaluation/context-read-p2e/runner.mjs",
+    "source": "const registration = verifyRegistration(JSON.parse(readFileSync(options.registration ?? new URL('./registration.json', import.meta.url))));",
+    "reason": "Reads registration, reviewed binding source, safety evidence and fixture JSON, and writes evaluation reports; canonical inventory uses SQLite."
+  },
+  {
+    "path": "evaluation/context-read-p2e/runner.mjs",
+    "source": "const { fixture, labels } = loadFixtures(), inventory = JSON.parse(readFileSync(new URL('inventory.json', ROOT)));",
+    "reason": "Reads registration, reviewed binding source, safety evidence and fixture JSON, and writes evaluation reports; canonical inventory uses SQLite."
+  },
+  {
+    "path": "evaluation/context-read-p2e/runner.mjs",
+    "source": "const tokenTable = JSON.parse(readFileSync(new URL('tokens.json', ROOT)));",
+    "reason": "Reads registration, reviewed binding source, safety evidence and fixture JSON, and writes evaluation reports; canonical inventory uses SQLite."
+  },
+  {
+    "path": "evaluation/context-read-p2e/runner.mjs",
+    "source": "const safetyFixture = JSON.parse(readFileSync(new URL('safety.json', ROOT)));",
+    "reason": "Reads registration, reviewed binding source, safety evidence and fixture JSON, and writes evaluation reports; canonical inventory uses SQLite."
+  },
+  {
+    "path": "evaluation/context-read-p2e/runner.mjs",
+    "source": "const bindingBytes = readFileSync(options.binding);",
+    "reason": "Reads registration, reviewed binding source, safety evidence and fixture JSON, and writes evaluation reports; canonical inventory uses SQLite."
+  },
+  {
+    "path": "evaluation/context-read-p2e/runner.mjs",
+    "source": "const safetyBytes = readFileSync(options.safetyReport);",
+    "reason": "Reads registration, reviewed binding source, safety evidence and fixture JSON, and writes evaluation reports; canonical inventory uses SQLite."
+  },
+  {
+    "path": "evaluation/context-read-p2e/runner.mjs",
+    "source": "if (options?.report) writeFileSync(options.report, json(report));",
+    "reason": "Reads registration, reviewed binding source, safety evidence and fixture JSON, and writes evaluation reports; canonical inventory uses SQLite."
+  },
+  {
+    "path": "tools/testing/p2e-product.mjs",
+    "source": "import { mkdtempSync, rmSync } from 'node:fs'",
+    "reason": "Creates and removes supervised disposable test directories after closing readers and stores; never opens raw canonical database descriptors."
+  },
+  {
+    "path": "tools/testing/p2e-seal.mjs",
+    "source": "import { readFileSync, writeFileSync, readdirSync } from 'node:fs'",
+    "reason": "Offline authoring reads source and fixture bytes and writes registration/inventory JSON; no canonical database file access."
+  },
+  {
+    "path": "tools/testing/p2e-seal.mjs",
+    "source": "const registration = sealRegistration(JSON.parse(readFileSync(process.argv[3])));",
+    "reason": "Offline authoring reads source and fixture bytes and writes registration/inventory JSON; no canonical database file access."
+  },
+  {
+    "path": "tools/testing/p2e-seal.mjs",
+    "source": "writeFileSync(process.argv[5], json(registration), { flag: 'wx' });",
+    "reason": "Offline authoring reads source and fixture bytes and writes registration/inventory JSON; no canonical database file access."
+  },
+  {
+    "path": "tools/testing/p2e-seal.mjs",
+    "source": "writeFileSync(new URL('inventory.json', ROOT), json(inventory(fixture)));",
+    "reason": "Offline authoring reads source and fixture bytes and writes registration/inventory JSON; no canonical database file access."
+  },
+  {
+    "path": "tools/testing/p2e-seal.mjs",
+    "source": "writeFileSync(new URL('safety.json', ROOT), json(safetyFixtures()));",
+    "reason": "Offline authoring reads source and fixture bytes and writes registration/inventory JSON; no canonical database file access."
+  },
+  {
+    "path": "tools/testing/p2e-seal.mjs",
+    "source": "files: Object.fromEntries(files.map(name => [name, hash(readFileSync(new URL(name, root)))])) });",
+    "reason": "Offline authoring reads source and fixture bytes and writes registration/inventory JSON; no canonical database file access."
+  },
+  {
+    "path": "tools/testing/p2e-seal.mjs",
+    "source": "writeFileSync(new URL('evaluation/context-read-p2e/registration.json', root), json(registration));",
+    "reason": "Offline authoring reads source and fixture bytes and writes registration/inventory JSON; no canonical database file access."
+  },
+  {
+    "path": "tools/testing/measure-context-read-product.mjs",
+    "source": "if(definition.protocol==='P2-product-v4'){if(!isDeepStrictEqual(definition,DEFINITIONS[definition.platformProfile??profile]))throw Error('protocol_revision_required');const registered=JSON.parse(await readFile(registrationPath,'utf8'));validateV4Registration(registered,definition.platformProfile??profile);const value=segmentId?estimateV4Segment(definition.platformProfile??profile,registered,segmentId):estimateV4(definition.platformProfile??profile);console.log(JSON.stringify(value));return value;}",
+    "reason": "Reads registration JSON only for a non-collecting segment estimate; no database bytes or open SQLite connection."
+  },
+  {
+    "path": "evaluation/context-read-qualification/build-template.mjs",
+    "source": "import { writeFileSync } from 'node:fs'",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/build-template.mjs",
+    "source": "writeFileSync(new URL('./registration.engine.template.json',import.meta.url),bytes);",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/counter-closure-child.mjs",
+    "source": "import fs from 'node:fs'",
+    "reason": "SQLite-free child observes only tokenizer source/package metadata/WASM loads to discover the executed dependency chain. No engine/database imports."
+  },
+  {
+    "path": "evaluation/context-read-qualification/counter-closure-child.mjs",
+    "source": "const configuration=JSON.parse(process.argv[2]),files=new Set(),read=fs.readFileSync;",
+    "reason": "SQLite-free child observes only tokenizer source/package metadata/WASM loads to discover the executed dependency chain. No engine/database imports."
+  },
+  {
+    "path": "evaluation/context-read-qualification/counter-closure-child.mjs",
+    "source": "fs.readFileSync=function(path,...args){if(typeof path==='string'||path instanceof URL)files.add(path instanceof URL?fileURLToPath(path):path);return read.call(this,path,...args);};syncBuiltinESMExports();",
+    "reason": "SQLite-free child observes only tokenizer source/package metadata/WASM loads to discover the executed dependency chain. No engine/database imports."
+  },
+  {
+    "path": "evaluation/context-read-qualification/counter-closure-child.mjs",
+    "source": "const require=createRequire(import.meta.url);",
+    "reason": "SQLite-free child observes only tokenizer source/package metadata/WASM loads to discover the executed dependency chain. No engine/database imports."
+  },
+  {
+    "path": "evaluation/context-read-qualification/counter-closure-child.mjs",
+    "source": "}finally{fs.readFileSync=read;syncBuiltinESMExports();}",
+    "reason": "SQLite-free child observes only tokenizer source/package metadata/WASM loads to discover the executed dependency chain. No engine/database imports."
+  },
+  {
+    "path": "evaluation/context-read-qualification/counter.mjs",
+    "source": "const require=createRequire(pathToFileURL(resolve(counterConfiguration(configuration).dependencyRoot,'package.json')));",
+    "reason": "Resolves only installed tokenizer package/code paths. Dependency discovery executes in a SQLite-free child; neither resolver nor discovery opens database or companion bytes."
+  },
+  {
+    "path": "evaluation/context-read-qualification/counter.mjs",
+    "source": "try {const entry=require.resolve(name);installed=require(resolve(dirname(entry),name==='js-tiktoken'?'../package.json':'package.json')).version;}",
+    "reason": "Resolves only installed tokenizer package/code paths. Dependency discovery executes in a SQLite-free child; neither resolver nor discovery opens database or companion bytes."
+  },
+  {
+    "path": "evaluation/context-read-qualification/freeze.mjs",
+    "source": "import { mkdirSync,writeFileSync } from 'node:fs'",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/freeze.mjs",
+    "source": "if(write){writeFileSync(new URL('./manifest.json',import.meta.url),JSON.stringify(manifest,null,2)+'\\n');writeFileSync(new URL('./labels.json',import.meta.url),JSON.stringify(labels,null,2)+'\\n');writeFileSync(new URL('./queries.json',import.meta.url),JSON.stringify(queries,null,2)+'\\n');}",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/freeze.mjs",
+    "source": "if(write){writeFileSync(new URL('./manifest.json',import.meta.url),JSON.stringify(manifest,null,2)+'\\n');writeFileSync(new URL('./labels.json',import.meta.url),JSON.stringify(labels,null,2)+'\\n');writeFileSync(new URL('./queries.json',import.meta.url),JSON.stringify(queries,null,2)+'\\n');}",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/freeze.mjs",
+    "source": "if(write){writeFileSync(new URL('./manifest.json',import.meta.url),JSON.stringify(manifest,null,2)+'\\n');writeFileSync(new URL('./labels.json',import.meta.url),JSON.stringify(labels,null,2)+'\\n');writeFileSync(new URL('./queries.json',import.meta.url),JSON.stringify(queries,null,2)+'\\n');}",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/generate.mjs",
+    "source": "import { mkdirSync,existsSync,readFileSync,mkdtempSync,rmSync } from 'node:fs'",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/generate.mjs",
+    "source": "const manifest=JSON.parse(readFileSync(new URL('./manifest.json',import.meta.url),'utf8'));",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "import { readFileSync,writeFileSync,realpathSync } from 'node:fs'",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "const templateBytes=readFileSync(new URL('./registration.engine.template.json',import.meta.url));",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "let input=JSON.parse(readFileSync(new URL('./registration.engine.template.json',import.meta.url),'utf8'));",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "input.writerProfile=writerProfile(JSON.parse(readFileSync(input.writerProfileFile,'utf8')));",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "const input=validateFilled(JSON.parse(readFileSync(get('--validate'),'utf8')));",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "const input=await fillRegistration(JSON.parse(readFileSync(get('--host'),'utf8')),args.includes('--writer-profile')?get('--writer-profile'):undefined);",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "writeFileSync(get('--out'),JSON.stringify(input,null,2)+'\\n',{flag:'wx',mode:0o400});",
+    "reason": "SQLite-free preparation controller reads/writes operator and frozen authoring JSON or resolves installed tokenizer metadata; all database byte operations stay in the separate IO child."
+  },
+  {
+    "path": "tools/testing/fixtures/context-product/io-child.mjs",
+    "source": "const fd=openSync(path,initial?'wx':constants.O_WRONLY|constants.O_APPEND|constants.O_NOFOLLOW,0o600);",
+    "reason": "SQLite-free IO child exclusively creates or appends the independent harness failure journal and fsyncs before returning; it never imports SQLite or holds engine connections, including while the main journal remains delegated."
+  },
+  {
+    "path": "evaluation/context-read-qualification/build-template.mjs",
+    "source": "writeFileSync(new URL('./registration.engine.template.sha256',import.meta.url),createHash('sha256').update(bytes).digest('hex')+'  registration.engine.template.json\\n');",
+    "reason": "Fixed repository template SHA-256 resource only; never a database or companion. SQLite-free preparation/validation tooling."
+  },
+  {
+    "path": "evaluation/context-read-qualification/registration.mjs",
+    "source": "if(readFileSync(new URL('./registration.engine.template.sha256',import.meta.url),'utf8')!==createHash('sha256').update(templateBytes).digest('hex')+'  registration.engine.template.json\\n')throw Error('template_hash_changed');",
+    "reason": "Fixed repository template SHA-256 resource only; never a database or companion. SQLite-free preparation/validation tooling."
+  },
+  {
+    "path": "core/content-safety-files-child.mjs",
+    "source": "import { constants, openSync, closeSync, fstatSync, lstatSync, readSync, readFileSync } from 'node:fs'",
+    "reason": "Entry-guarded SQLite-free child, spawned by content-safety-preflight.mjs in a separate process. Reads stdin configuration and hashes database/companion bytes only in that child; never imports the engine or SQLite, so its descriptor closes cannot drop host SQLite locks."
+  },
+  {
+    "path": "core/content-safety-files-child.mjs",
+    "source": "const { path, maxBytes } = JSON.parse(readFileSync(0, 'utf8'));",
+    "reason": "Entry-guarded SQLite-free child, spawned by content-safety-preflight.mjs in a separate process. Reads stdin configuration and hashes database/companion bytes only in that child; never imports the engine or SQLite, so its descriptor closes cannot drop host SQLite locks."
+  },
+  {
+    "path": "core/content-safety-files-child.mjs",
+    "source": "const fd = openSync(path + suffix, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);",
+    "reason": "Entry-guarded SQLite-free child, spawned by content-safety-preflight.mjs in a separate process. Reads stdin configuration and hashes database/companion bytes only in that child; never imports the engine or SQLite, so its descriptor closes cannot drop host SQLite locks."
   }
 ]

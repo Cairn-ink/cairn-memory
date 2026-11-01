@@ -50,7 +50,7 @@ try {
   });
   DatabaseSync.prototype.prepare = function(sql) {
     const connection = this, statement = prepare.call(this, sql);
-    const receipt = sql.includes('INSERT OR IGNORE INTO receipts');
+    const receipt = sql.includes('INSERT INTO receipts');
     const journal = sql.includes('INSERT INTO capture_initial_classification');
     if (!receipt && !journal) return statement;
     return new Proxy(statement, { get(target, property) {

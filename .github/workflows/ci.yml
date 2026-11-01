@@ -51,6 +51,8 @@ jobs:
       - run: npm ci --prefix adapters/openai
       - run: npm ci --prefix adapters/mcp
       - run: npm run test:workspace-lifecycle
+      - run: npm ci --prefix evaluation/context-read-qualification/counter-deps --ignore-scripts
+      - run: npm run test:qualification-inputs
       - run: npm run test:live-evidence-offline
 
   test:

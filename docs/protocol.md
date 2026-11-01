@@ -19,8 +19,9 @@ still refuse. The existing trusted exact-scope host grant covers each operation.
 Schema 21 invalidates interpretation-dependent Cards on every Memory revision
 inside the same SQLite transaction, even for feature-off or legacy writers.
 Conservative filing-only invalidation does not claim meaning changed. Cancelling
-a draft purges all source dependency rows and text; confirmed authored current
-bodies retain their separately disclosed private policy with support unavailable.
+a draft purges all source dependency rows and text; confirmed authored bodies
+remain in canonical storage, but correction or forgetting of a contributor
+withholds the Card from inspection and current and history reads.
 Effects/operation receipts contain no copied Memory/receipt text. No default
 capture, provider, publication, hosted encryption or full-Raw gate changes.
 
@@ -43,9 +44,9 @@ boolean, role, namespace or JSON grant cannot supply authority. Core uses keyed
 source/action identities; no plaintext body enters operation/effect metadata.
 
 Note deletion purges active logical source rows and bound drafts. Confirmed
-authored current bodies retain their separate owner-private policy with support
-unavailable and original ref metadata only. This does not promise physical WAL,
-free-page or backup erasure. The versioned same-owner source-byte cap counts
+authored bodies remain in canonical storage with original ref metadata, but the
+Card is withheld from inspection and current and history reads. This does not
+promise physical WAL, free-page or backup erasure. The versioned same-owner source-byte cap counts
 retained redacted note bytes, not all database/body/metadata/backup bytes; no
 existing Raw counter is changed and Raw is unimplemented in this slice.
 
@@ -55,8 +56,10 @@ The [integrated local preview](private-engine-v1-local.md) uses the same canonic
 source/Memory/Card runtime. Common reads require opaque exact-namespace read
 authority; current Cards require both eligible canonical support and an explicit
 current applicability review bound to that exact Card revision. A changed Card
-revision clears the effective review through revision mismatch. History can inspect retained
-authored bodies with unavailable support, never purged source text or old bodies.
+revision clears the effective review through revision mismatch. History can
+inspect confirmed Cards only while every contributor remains intact; forgotten,
+corrected, deleted or excluded contributors withhold the Card, and
+history cannot recover purged source text or old bodies.
 Literal scan budgets and partial coverage are not semantic recall or a hard
 whole-call I/O/deadline guarantee. Signed snapshots bind store, scope, refs,
 source/content fences and generations without persisting private bodies in core
@@ -657,6 +660,12 @@ v2 responses add retainedSourceWindow with an 800 UTF-16-unit per-message limit
 and original indices whose normalized source tails are omitted. This exposes
 retention limits, not the execution version of an old duplicate, a complete
 conversation, source sufficiency or truth. No caller window override is accepted.
+The capture-message limit (4,000), extracted-content limit (600) and receipt-prefix
+limit (800) measure UTF-16 code units after NFKC, secret redaction, whitespace
+collapse and trim per field. Receipt prefixes truncate at code-point boundaries.
+Segmenters can use the exported `normalizedTextLength` and `normalizeBoundedText`
+per field; concatenated lengths are not additive. See
+[bounded text lengths](capture.md#bounded-text-lengths).
 The extra model stage sees canonical receipt excerpts and bounded extracted text,
 not namespace/client/session/event IDs. Role and qualifier labels remain
 unverified assertions. This tool does not decide currentness or retire memories;

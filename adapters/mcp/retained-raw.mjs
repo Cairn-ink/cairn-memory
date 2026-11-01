@@ -1,3 +1,4 @@
+import { inspectExistingStorePin } from '../../core/existing-store.mjs';
 import { ownData } from '../../core/local-authority-input.mjs';
 import { identifier } from '../../core/validation.mjs';
 import { assertRetainedRuntime, readRetainedRawProfile, retainedProfilePath, retainedRawOptions } from './retained-raw-profile.mjs';
@@ -17,12 +18,15 @@ export async function prepareRetainedRawServer(value) {
   const [{ openMemoryCore }, { buildCairnServer }, { createScopedCardAccess }] = await Promise.all([
     import('../../core/contract.mjs'), import('./server.mjs'), import('./private-card-access.mjs'),
   ]);
-  return () => {
+  return async () => {
+    profile.check();
+    // Keep database refusal inside the existing MCP construction boundary.
+    const pin = await inspectExistingStorePin(profile.path, profile.storeId);
     profile.check();
     const cards = createScopedCardAccess(profile.namespace, { rawSources: true });
     let core;
     try {
-      core = openMemoryCore({ path: profile.path, existingStore: { version: 'schema29-existing-v1', storeId: profile.storeId },
+      core = openMemoryCore({ path: profile.path, existingStore: pin,
         privateCards: cards.configuration, rawConversations: retainedRawOptions() });
       profile.check();
     } catch (error) { cards.revoke(); core?.close(); throw error; }
@@ -59,8 +63,9 @@ function reviewConfiguration(args) {
 export async function reviewRetainedRawCard(args) {
   assertRetainedRuntime();
   const config = reviewConfiguration(args), profile = await readRetainedRawProfile(config.profilePath);
+  const pin = await inspectExistingStorePin(profile.path, profile.storeId);
   const { reviewConfiguredCard } = await import('./review-card.mjs');
   return reviewConfiguredCard({ path: profile.path, namespace: profile.namespace, cardId: config.cardId,
     expectedRevision: config.expectedRevision, ...(config.applicability === undefined ? {} : { applicability: config.applicability }) },
-  { profile, rawConversations: retainedRawOptions(), existingStore: { version: 'schema29-existing-v1', storeId: profile.storeId } });
+  { profile, rawConversations: retainedRawOptions(), existingStore: pin });
 }
