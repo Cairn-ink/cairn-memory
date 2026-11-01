@@ -1,9 +1,9 @@
 # Codex installed runtime and capture building blocks (CX-5)
 
-Installer 0.3.0 wires the hosted runtime for format-qualified **Codex CLI / app-server** on
+Installer 0.6.3 wires the hosted runtime for format-qualified **Codex CLI / app-server** on
 Linux/WSL. It installs four user-level command hooks, a private versioned runtime,
 browser memory-scoped credential, adopted/shared project identity and endpoint
-policy. It is unpublished. See [setup, qualification and gates](../../docs/codex-setup.md).
+policy. Publication is a separate release step. See [setup, qualification and gates](../../docs/codex-setup.md).
 
 `entry.mjs` owns exit-0/no-log automatic failures and process deadlines:
 750 ms for Stop/PreCompact, 2 s for context events, 62.5 s for a detached worker.
@@ -210,3 +210,40 @@ with a plugin-update requirement; wording is neutral about version age. Status w
 installation only reads cache and does not generate schema or create cache state.
 The A7 installer primes the actual native verdict in its disposable home before
 the first prompt, without modifying runtime qualification gates.
+
+## Installer 0.6.3 native format evidence
+
+The five-marker profile and four distinct fingerprints cover native
+0.160.1–0.166.0 snapshots. Frozen historical fixtures are unchanged; test
+loaders replace only their marker arrays. The registry change invalidates
+both old qualified and old changed verdicts. An observing hook schedules
+qualification and stays closed; later eligible hooks run after success.
+Creators 0.163.0–0.166.0 are seeded from native rollout evidence.
+
+[The native probe](../../scripts/probe-codex-rollout.mjs) enforces a fresh
+loopback-only network namespace before native execution. Each of 0.163.0,
+0.164.0, 0.165.0 and 0.166.0 passes final, two turns, interruption,
+partial/final, resume, dynamic-tool lifecycle, trusted hooks, context inventory
+and hook-origin recall placement. Each makes 13 mock requests and zero real
+provider calls. Local compaction and continuation also pass. Hook execution
+is proven by native app-server notifications; none persists hook lifecycle
+rollout rows. All produced rollouts parse without unsupported formats.
+
+The canary remains in a developer message after the submitted user input and
+outside canonical captured messages. A placement change still requires A7
+re-evaluation. Dynamic-tool replacement and security-risk rows were not
+produced. The accepted exception admits top-level `dynamic_tools_updated`
+and excludes its tool definitions before payload inspection. No event, item
+or content discriminator is widened from binary strings alone.
+
+[The generalized seeded probe](../../scripts/probe-codex-seeded-readback.mjs)
+separately checks synthetic partial/final, interruption and unknown-phase
+readback. The historical 0.162.0 probe stays byte-identical. Per-host
+`native-evidence-<version>.json` manifests in [test fixtures](test/fixtures/)
+record script hashes, native exits, mock counts, discriminator inventories,
+absent types, raw/normalized rollout hashes and `modelCalls: 0`.
+The [freezer](../../scripts/freeze-codex-rollout.mjs) replaces paths with
+placeholders and noncanonical native context prose with synthetic text.
+The engine is unchanged from 0.6.2 except the three Codex format qualification
+modules. EOF boundaries, pending batches and permanent format latches are
+unchanged; qualification does not reset old sessions.

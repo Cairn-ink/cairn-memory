@@ -1,0 +1,19 @@
+{
+  "version": "0.164.0",
+  "binarySha256": "b93f6811d3f653f0fb83be4050d857fb9abbb111dfa2ce160563327daff7f306",
+  "generatedSchemaSha256": "5f633ad1f0a07459a5f63ed5604f8a61e0366ac5c36a15d648b44c8de4ffafb1",
+  "versionExitCode": 0,
+  "schemaExitCode": 0,
+  "embeddedHooks": [
+    "pre-compact.command.input",
+    "pre-compact.command.output",
+    "session-start.command.input",
+    "session-start.command.output",
+    "stop.command.input",
+    "stop.command.output",
+    "user-prompt-submit.command.input",
+    "user-prompt-submit.command.output"
+  ],
+  "network": false,
+  "note": "Type/schema evidence only; transcript serialization and native context placement need separate synthetic host evidence."
+}

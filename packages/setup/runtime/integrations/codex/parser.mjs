@@ -4,11 +4,13 @@ export const CODEX_COMMIT = '36650394c5b38c2990ccf2a3457165ca3e9d9726';
 export const FORMAT = 'codex-0.157.1-paginated-v1';
 // Seed versions have frozen native format evidence. Other hosts require a
 // binary-identity verdict; a version string never widens the parser by itself.
-export const QUALIFIED_CREATORS = Object.freeze(['0.157.1', '0.160.1', '0.161.0', '0.162.0']);
+export const QUALIFIED_CREATORS = Object.freeze(['0.157.1', '0.160.1', '0.161.0', '0.162.0',
+  '0.163.0', '0.164.0', '0.165.0', '0.166.0']);
 export const MAX_READ = 1048576, MAX_LINE = 262144;
 const tops = new Set(['session_meta','response_item','inter_agent_communication',
   'inter_agent_communication_metadata','compacted','turn_context','token_usage_record',
-  'world_state','retained_context','security_risk_score','event_msg','realtime_item']);
+  'world_state','retained_context','security_risk_score','event_msg','realtime_item',
+  'dynamic_tools_updated']); // Tool definitions, excluded before payload inspection (§18.3).
 const items = new Set(['UserMessage','FunctionCallOutput','HookPrompt','AgentMessage','Plan',
   'Reasoning','CommandExecution','DynamicToolCall','CollabAgentToolCall','SubAgentActivity',
   'WebSearch','ImageView','Extension','ImageGeneration','EnteredReviewMode','ExitedReviewMode',

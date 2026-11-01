@@ -24,6 +24,7 @@ import { hostedTargetId } from '../../../integrations/client/transport-hosted.mj
 import { PassThrough } from 'node:stream';
 import { binaryIdentity } from '../../../integrations/codex/qualification.mjs';
 import { fileURLToPath } from 'node:url';
+import { SERDE_MARKERS } from '../../../integrations/codex/schema-evidence.mjs';
 
 const mcpSecret = 'synthetic-MCP-PAT-different-from-hook-token';
 const session = '11111111-1111-4111-8111-111111111111';
@@ -52,8 +53,9 @@ async function fixture(t,{answers=[''],args,config='',hooks,paired=false,claudeP
     `process.env.FAKE_STATE=${JSON.stringify(statePath)};process.env.FAKE_CALLS=${JSON.stringify(calls)};\n${source}`;
   // Freeze native-shaped schema/serde strings in this fake executable so the
   // production format collector (rather than a version-only seam) decides.
-  const evidence=JSON.parse(await readFile(new URL('../../../integrations/codex/test/fixtures/binary-0.160.1/format.json',import.meta.url)));
-  const embedded='\n/*\n'+Object.values(evidence.hooks).map(value=>JSON.stringify(value,null,2)).join('\n')+'\n'+evidence.serdeMarkers.join('\n')+'\n*/\n';
+  const evidenceVersion=['0.162.0','0.163.0','0.164.0','0.165.0','0.166.0'].includes(state.version)?state.version:'0.160.1';
+  const evidence=JSON.parse(await readFile(new URL(`../../../integrations/codex/test/fixtures/binary-${evidenceVersion}/format.json`,import.meta.url)));
+  const embedded='\n/*\n'+Object.values(evidence.hooks).map(value=>JSON.stringify(value,null,2)).join('\n')+'\n'+SERDE_MARKERS.join('\n')+'\n*/\n';
   await writeFile(join(bin,'codex'),`#!${process.execPath}\n${command}${nativeBinary?'':embedded}`,{mode:0o755});
   const profileRoot = join(home,'.claude/plugins/data/cairn-memory-cairn-memory');
   let originalProjectId;const claudeState=join(ws.path,'claude-state.json');
@@ -948,6 +950,62 @@ test('CX-5 app-server format verdict controls recall independently of install-ti
   const status=await f.run(['status','--client','codex']);assert.equal(status.code,0,status.stdout);
   assert.match(status.stdout,/Codex 0\.163\.0 changed its transcript format/);
   assert.match(status.stdout,/Find memories when you ask: on for verified hosts only/);
+});
+
+for (const version of ['0.163.0','0.164.0','0.165.0','0.166.0']) test(`Q07 installed capture and recall on native ${version} records`,async t=>{
+  const f=await memoryRuntime(t,{state:{version}}); f.host.kind='app-server';
+  const file=new URL(`../../../integrations/codex/test/fixtures/native-rollout-${version}-hooks-recall.jsonl`,import.meta.url);
+  let text=await readFile(file,'utf8'); const originalId=JSON.parse(text.split('\n')[0]).payload.id;
+  text=text.replaceAll(originalId,session).replaceAll('<CWD>',f.project);
+  await writeFile(f.path,text);
+  assert.equal(await f.invoke('Stop'),'{}'); await f.invoke('worker'); await f.invoke('worker');
+  const captures=f.requests.filter(row=>row.route.endsWith('/capture'));
+  assert.equal(captures.length,1);
+  assert.deepEqual(captures[0].body.messages.map(row=>row.content),['Synthetic question hooks-recall.','Synthetic answer hooks-recall.']);
+  assert.ok(!JSON.stringify(captures).includes('SYNTHETIC_CONTEXT_CANARY'));
+  f.recall({memories:[{id:'12345678-1234-4234-8234-123456789abc',content:'Prefer diagrams.',kind:'preference',scope:'personal',projectId:null,
+    origin:'explicit',confidence:1,createdAt:'2026-10-01T00:00:00Z',updatedAt:'2026-10-01T00:00:00Z',
+    receipts:[{client:'claude-code',sessionId:'s',eventId:'e',role:'user',excerpt:'I prefer diagrams.',createdAt:'2026-10-01T00:00:00Z'}]}]});
+  assert.match(JSON.parse(await f.invoke('UserPromptSubmit',{prompt:'Preferences?'})).hookSpecificOutput.additionalContext,/untrusted source-attributed recollections/);
+  assert.equal(f.requests.filter(row=>row.route.endsWith('/recall')).length,1);
+});
+
+for (const prior of ['qualified','changed']) test(`Q06/Q07 installed hook stays closed on stale ${prior}, then runs after qualification`,async t=>{
+  const f=await memoryRuntime(t,{state:{version:'0.166.0'}});
+  const {qualifyBinary,finishQualification}=await import('../../../integrations/codex/qualification.mjs');
+  const evidence=JSON.parse(await readFile(new URL('../../../integrations/codex/test/fixtures/binary-0.166.0/format.json',import.meta.url)));
+  const verdictPath=join(f.codexHome,'cairn/qualification',f.host.identity+'.json');
+  const verdict=JSON.parse(await readFile(verdictPath));
+  await writeFile(verdictPath,JSON.stringify({...verdict,policy:'old-policy',status:prior,...(prior==='changed'?{reason:'serde_marker_missing'}:{})}));
+  // Keep the real pending marker live, suppressing detached qualification while
+  // the test inspects observing hooks. The scheduler's concurrency is Q06 above.
+  const pending=join(f.codexHome,'cairn/qualification',f.host.identity+'.pending');
+  await writeFile(pending,'',{mode:0o600});
+  for (const event of ['Stop','UserPromptSubmit']) assert.equal(await f.invoke(event,{prompt:'Preferences?'}),'');
+  assert.equal(f.requests.length,0); assert.equal(f.handoff(),undefined);
+  assert.equal((await qualifyBinary(f.installation,f.host,{collect:async()=>({version:'0.166.0',evidence,binarySha256:'a'.repeat(64)})})).status,'qualified');
+  await finishQualification(f.installation,f.host);
+  assert.equal(await f.invoke('Stop'),'{}'); await f.invoke('worker');
+  assert.equal(f.requests.filter(row=>row.route.endsWith('/capture')).length,1);
+});
+
+for (const gate of ['changed','unavailable','replaced-binary','disabled-recall','excluded-source']) test(`Q07 ${gate} performs no recall or injection`,async t=>{
+  const f=await memoryRuntime(t,{state:{version:'0.166.0'}});
+  if (['changed','unavailable'].includes(gate)) {
+    const path=join(f.codexHome,'cairn/qualification',f.host.identity+'.json');
+    const verdict=JSON.parse(await readFile(path)); await writeFile(path,JSON.stringify({...verdict,status:gate}));
+  } else if (gate==='replaced-binary') {
+    await appendFile(f.host.binaryPath,'\n// replacement\n');
+    f.host.identity=await binaryIdentity(f.host.binaryPath);
+    await writeFile(join(f.codexHome,'cairn/qualification',f.host.identity+'.pending'),'',{mode:0o600});
+  }
+  else if (gate==='disabled-recall') assert.equal((await f.run(['prompt-recall-off','--client','codex'])).code,0);
+  else await writeFile(f.path,(await readFile(f.path,'utf8')).replace('"source":"cli"','"source":"exec"'));
+  const result=await f.invoke('UserPromptSubmit',{prompt:'Preferences?'}); assert.equal(result,'');
+  assert.equal(f.requests.filter(row=>row.route.endsWith('/recall')).length,0);
+  if (['changed','unavailable','excluded-source'].includes(gate)) {
+    assert.equal(await f.invoke('Stop'),''); assert.equal(f.handoff(),undefined);
+  }
 });
 
 test('CX-5 pending host in installed entry respects 2s budget and does not read the transcript',async t=>{

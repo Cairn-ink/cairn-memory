@@ -8,9 +8,10 @@ import { binaryIdentity, cachedQualification, qualifyBinary, detectRunningHost, 
   KNOWN_FORMATS, qualificationStatus, observeHost, observedHosts, scheduleQualification, finishQualification, hasQualifiedCreator } from '../qualification.mjs';
 import { currentHost } from '../installed.mjs';
 import { verifyHeader, parseLine, FORMAT } from '../parser.mjs';
+import { formatFixture } from './format-fixtures.mjs';
 
 const fixtureURL=new URL('./fixtures/',import.meta.url);
-const evidence=JSON.parse(await readFile(new URL('binary-0.160.1/format.json',fixtureURL)));
+const evidence=await formatFixture('0.160.1');
 async function fixture(t) {
   const ws=createTestWorkspace(t,{prefix:'cx5-format-'});
   const configPath=join(ws.path,'installation.json');
@@ -29,7 +30,7 @@ for(const version of ['0.161.0','0.162.0'])test(`native ${version} frozen schema
     assert.deepEqual(manifest.nativePhaseProbe.nativeExitCodes,[0,0]);
     assert.equal(manifest.nativePhaseProbe.modelCalls,0);
   }
-  const format=JSON.parse(await readFile(new URL(`binary-${version}/format.json`,fixtureURL)));
+  const format=await formatFixture(version);
   assert.equal(KNOWN_FORMATS.includes(fingerprint(format)),manifest.qualified);
   assert.deepEqual(format.hooks,evidence.hooks);
   const lines=(await readFile(new URL(`primary-${version}.jsonl`,fixtureURL),'utf8')).trim().split('\n');
@@ -216,13 +217,13 @@ test('creator proof accepts any qualified cached binary but rejects stale policy
 test('version-only refusal leaves the cursor retryable; later creator evidence captures the unchanged history',async t=>{
   const {fixture:captureFixture,header,item}=await import('./helpers.mjs');
   const {runWorker}=await import('../worker.mjs');
-  const q=await fixture(t),f=await captureFixture(t,{text:header({cli_version:'0.163.0'})+item('Version retry.')});
+  const q=await fixture(t),f=await captureFixture(t,{text:header({cli_version:'0.167.0'})+item('Version retry.')});
   const options={guard:f.guard,transport:f.transport,qualifiedCreatorVersion:'0.164.0',
     qualifyCreator:version=>hasQualifiedCreator(q.configPath,version)};
   const observed=await f.cursor();
   assert.equal((await runWorker(f.binding,options)).status,'creator_unqualified');
   assert.deepEqual(await f.cursor(),observed);assert.equal(f.calls.length,0);
-  await qualifyBinary(q.configPath,q.host,{collect:async()=>result('0.163.0')});
+  await qualifyBinary(q.configPath,q.host,{collect:async()=>result('0.167.0')});
   await runWorker(f.binding,options);await runWorker(f.binding,options);
   assert.deepEqual(f.calls.flatMap(row=>row.messages.map(m=>m.content)),['Version retry.']);
 });

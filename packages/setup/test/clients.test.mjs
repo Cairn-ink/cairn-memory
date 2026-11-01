@@ -10,6 +10,7 @@ import { fakeAuthServer, secret } from './fake-auth-server.mjs';
 import { wireChild } from './http-wire.mjs';
 import { readInstallation } from '../runtime/integrations/codex/installed-state.mjs';
 import { clientProjectId, opaqueProjectId } from '../runtime/integrations/client/pairing.mjs';
+import { SERDE_MARKERS } from '../../../integrations/codex/schema-evidence.mjs';
 
 export async function fixture(t, { claude = true, codex = true, qualified = true, auth = {}, legacyKey = false, codexHomeRelative = '.codex' } = {}) {
   const ws = createTestWorkspace(t, { prefix: 'both-clients-' });
@@ -37,7 +38,9 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
   }
   async function addCodex() {
     const evidence = JSON.parse(await readFile(new URL('../../../integrations/codex/test/fixtures/binary-0.160.1/format.json', import.meta.url)));
-    const embedded = qualified ? '\n/*\n' + Object.values(evidence.hooks).map(value => JSON.stringify(value, null, 2)).join('\n') + '\n' + evidence.serdeMarkers.join('\n') + '\n*/\n' : '';
+    // Both collectors inspect this same fake in the immutable-baseline matrix.
+    const markers = [...new Set([...evidence.serdeMarkers, ...SERDE_MARKERS])];
+    const embedded = qualified ? '\n/*\n' + Object.values(evidence.hooks).map(value => JSON.stringify(value, null, 2)).join('\n') + '\n' + markers.join('\n') + '\n*/\n' : '';
     await writeFile(join(bin, 'codex'), `#!${process.execPath}\nprocess.env.FAKE_STATE=${JSON.stringify(codexState)};process.env.FAKE_CALLS=${JSON.stringify(codexCalls)};\n` +
       await readFile(new URL('./fake-codex.mjs', import.meta.url), 'utf8') + embedded, { mode: 0o755 });
   }
