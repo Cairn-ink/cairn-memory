@@ -825,9 +825,10 @@ fails. Completion waits for opening disposal; a failed or unproven drain makes
 completion `reader_failed`, retaining the initiating cause privately. Late open,
 control and reservation replies lose dispatch authority after close or renewal;
 a late handle is drained. A parent watchdog bounds each turn, including coordinator
-control overhead. Control `timeout` maps to `read_timeout`; unsupported control
-codes (including `ledger_unavailable`) map to the reader's existing `reader_failed`.
-Existing public reader codes retain their meaning. Bounded private initiating and
+control overhead. Control `timeout` maps to `read_timeout`, and `ledger_unavailable`
+maps to `reader_failed`. Existing coordinator codes (including `budget_denied`,
+`provider_error` and `rate_limited`) and public reader codes stay unchanged. Unknown
+or missing codes map to `reader_failed`. Bounded private initiating and
 secondary cause counters use the existing sanitized failure records and valid
 process-wide ordinals; public DTOs are unchanged.
 It still schedules a nominal sweep from its own ticks. Actual-observation cadence,
