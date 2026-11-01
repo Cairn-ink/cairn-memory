@@ -1,9 +1,12 @@
+import { testClock } from '../testing/context-product-test-clock.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { createProductReaderRuntime } from '../context-product-reader.mjs';
 import { createContextReadSupervisor } from '../context-read-supervisor.mjs';
+import * as readerDiagnostics from '../context-product-reader.mjs';
+import { nativeTest, setup as nativeSetup, tracked, until } from './fixtures/context-read-registry-hold-fixture.mjs';
 import { credentialDigest,PRODUCT_PROFILE } from '../context-product-control.mjs';
 function fixture(t,{stall=false}={}){
   let time=0n,release;const stopped=new Promise(resolve=>{release=resolve;}),timers=new Set(),messages=[];
@@ -31,6 +34,25 @@ test('P2-16 failed maintainer opening settles before delayed termination and sup
   f.set(10);for(const timer of [...f.timers])timer.fn();const error=await pending;
   assert.equal(error.code,'read_timeout');assert.equal(f.options.supervisor.getCleanupStatus(error.cleanupId).state,'pending');
   const other=createContextReadSupervisor();t.after(()=>other.close());
-  await assert.rejects(f.open({...f.options,supervisor:other}),{code:'read_in_progress'});
-  f.release();assert.equal((await f.options.supervisor.drain(error.cleanupId)).state,'complete');
+  let settled=false;const held=f.open({...f.options,supervisor:other,deadlineMs:1}).catch(e=>{settled=true;return e;});
+  try {
+    await Promise.resolve();assert.equal(settled,false,'maintenance_open_waits_for_pending_cleanup');
+    f.set(11);for(const timer of [...f.timers])if(timer.ms===1)timer.fn();
+    assert.equal((await held).code,'read_in_progress');
+  } finally { f.release(); }
+  assert.equal((await f.options.supervisor.drain(error.cleanupId)).state,'complete');
+});
+
+nativeTest('registry hold avoids failed maintainer opening at final identity bind',async t=>{
+  const s=await nativeSetup(t,{failed:true}),a=s.configuration(0,{service:true,mode:'block'}),b=s.configuration(1,{service:true}),ah=await s.open(a),proof=s.proof(a);let closing;
+  const open=s.runtime(true,m=>{if(m.result?.ok&&m.result.value===null&&!closing)closing=tracked(ah.close());});
+  const pending=tracked(open(b.options));await until(()=>a.state[0]===1,'close after successor native open');
+  assert.equal(pending.settled,false,'final_bind_waits_for_proof_instead_of_refusing');
+  assert.equal(s.captures.length,2);assert.equal(s.captures[1].resources[0],1,'successor_was_admitted_before_new_cleanup');
+  await testClock.advance(100,{waitForWorkers:false});s.release(a);await closing.promise;
+  const h=await pending.promise;assert.equal(pending.error,undefined,'completed_proof_allows_opening_acceptance');
+  assert.ok(['workerStopped','nativeDisposed','leasesReleased','providersSettled'].every(bit=>proof.status()[bit]));
+  assert.equal(readerDiagnostics.readerRegistryHoldDiagnostic(h).outcome,1);
+  assert.equal(readerDiagnostics.productOpenPhaseDiagnostic(h).parentOpenAcceptanceMs,100,'opening_receipt_timestamp_stays_before_hold');
+  await h.close();
 });

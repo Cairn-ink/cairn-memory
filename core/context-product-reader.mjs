@@ -75,7 +75,9 @@ export const maintenanceObservation = result => maintenanceObservations.get(resu
 const maintenanceFailures=new WeakMap(),maintenanceReaderFailures=new WeakMap();
 export const maintenanceFailureDiagnostic=value=>maintenanceFailures.get(value)??maintenanceReaderFailures.get(value)?.lastFailure;
 export const maintenanceReaderFailureDiagnostic=value=>{const state=maintenanceReaderFailures.get(value);return state?Object.freeze({lastFailure:state.lastFailure,failureCounts:Object.freeze({...state.failureCounts}),secondaryFailure:state.secondaryFailure,secondaryFailureCounts:Object.freeze({...state.secondaryFailureCounts})}):undefined;};
-const openPhases = new WeakMap();
+const openPhases = new WeakMap(), registryHolds = new WeakMap();
+// Fixed parent-side statistics, internal only like the other reader accessors.
+export const readerRegistryHoldDiagnostic = value => registryHolds.get(value);
 // Internal accessor only; never a property of a public handle or result DTO.
 export const productOpenPhaseDiagnostic = reader => {
   const buffer = openPhases.get(reader);
@@ -184,7 +186,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
     const reservation = configuration.requestReservation;
     if (!maintenance && (!types.isSharedArrayBuffer(reservation) || Reflect.apply(sharedLength, reservation, []) !== 4 ||
         Atomics.compareExchange(new Int32Array(reservation), 0, 0, 1) !== 0)) fail('authority_required');
-    const resource = registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, request: maintenance ? undefined : request, frame, resources });
+    const resource = registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, request: maintenance ? undefined : request, frame, resources }, true);
     let closed = false, terminal, idle, closePromise, ready = false, releaseWriter, writerReleased = false, cutoffCapability, forcedCleanup = false, disposalWorkerError = false;
     const epoch = 1;
     // Timeout delivery remains prompt; disposal owns a separate bounded grace.
@@ -230,7 +232,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       });
     }
     const lifecycle = createReaderWorkerLifecycle({ clearTimer, stopWorker, onStop(termination) {
-      registry.cleanup(resource);
+      registry.cleanup(resource, terminal);
       termination.then(() => {
         releaseSemanticWriter();
         registry.finish(resource); if (resource.state === 'complete') releaseWriter?.();
@@ -284,26 +286,42 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       const stall=maintenance && code==='read_timeout' ? readMaintenanceMarker(marker,now()) : undefined;
       if(semantic){Atomics.store(new Int32Array(semantic.configuration.cancellation),0,1);if(slot)semantic.handle.cancel(slot.operation.operationId);}
       const stopped = lifecycle.stop();
-      if (!lifecycle.worker && !resource.cleaning) { registry.cleanup(resource); registry.finish(resource); }
+      if (!lifecycle.worker && !resource.cleaning) {
+        openingData.semanticPort?.close(); // A held opening never transferred it.
+        registry.cleanup(resource, terminal); registry.finish(resource);
+      }
       if (slot) {
         if (slot.record !== resource) {
-          registry.cleanup(slot.record);
+          registry.cleanup(slot.record, terminal);
           stopped.then(() => registry.finish(slot.record), () => registry.finish(slot.record, false));
         }
         const failure=productFailure(terminal);
         if(stall)maintenanceStalls.set(failure,stall);
         if(maintenance){maintenanceFailures.set(failure,terminalFailure);maintenanceReaderFailures.set(failure,failureState);}
-        lifecycle.finish(slot, failure);
+        settle(slot, failure);
       }
       return stopped;
     }
-    function message(instance, message) {
+    const messageAccepted = (instance, value) => message(instance, value, true);
+    function message(instance, message, admitted = false) {
       if (lifecycle.worker !== instance || !lifecycle.pending) return;
       const slot = lifecycle.pending;
       // Old/duplicate frames are ignored. Conflicting current frames fail closed.
       if (message?.operation?.operationId !== slot.operation.operationId || message?.operation?.workerEpoch !== epoch) return;
       if (JSON.stringify(message.operation) !== JSON.stringify(slot.operation)) { shutdown('reader_failed',undefined,{kind:'protocol'}); return; }
       if (now() >= mono(slot.operation.operationCutoffMonoNs)) { shutdown('read_timeout'); return; }
+      if (slot.open && message.kind !== 'identity' && !admitted) phase?.mark('openReceived');
+      if (!admitted && (message.kind === 'identity' || slot.open && message.result?.ok === true)) {
+        if (typeof message.fileIdentity !== 'string' || !/^[0-9]+:[0-9]+$/.test(message.fileIdentity)) { shutdown('reader_failed',undefined,{kind:'protocol'}); return; }
+        // Retain only the validated bounded frame, never arbitrary IPC extras.
+        const retained = { operation: slot.operation, fileIdentity: message.fileIdentity };
+        if (message.kind === 'identity') retained.kind = 'identity';
+        else { try { boundedData(message.result, 65536); retained.result = structuredClone(message.result);
+          const result = retained.result;
+          if (typeof result.ok !== 'boolean' || result.ok && !Object.hasOwn(result, 'value') || !result.ok && !codes.has(result.error?.code)) fail('reader_failed'); }
+          catch { shutdown('reader_failed',undefined,{kind:'protocol'}); return; } }
+        gate(slot, resource, message.fileIdentity, messageAccepted.bind(null, instance, retained), true); return;
+      }
       if (message.kind === 'identity') {
         try {
           if (typeof message.fileIdentity !== 'string' || !/^[0-9]+:[0-9]+$/.test(message.fileIdentity)){shutdown('reader_failed',undefined,{kind:'protocol'});return;}
@@ -316,8 +334,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         } catch (error) { shutdown(error.code ?? 'reader_failed',undefined,{kind:'identity'}); }
         return;
       }
-      if (slot.open) phase?.mark('openReceived');
-      else if (slot.method === 'fetchCandidateEvidence') phase?.mark('readDelivered');
+      if (!slot.open && slot.method === 'fetchCandidateEvidence') phase?.mark('readDelivered');
       let result,invalidCause={kind:'protocol'};
       try {
         boundedData(message.result, 65536);
@@ -390,8 +407,8 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       if(maintenance&&!slot.open&&result.ok)callFailure=undefined;
       if (slot.open) phase?.mark('openAccepted');
       else if (slot.method === 'fetchCandidateEvidence') phase?.mark('readAccepted');
-      lifecycle.finish(slot, result);
-      instance.unref(); idle = setTimer(() => { void dispose('store_closed').catch(() => {}); }, 60000); idle.unref?.(); lifecycle.idle = idle;
+      settle(slot, result);
+      armIdle();
     }
     function dispatch(method, payload, credential, control, entered, opening = false) {
       if (closed){const result=productFailure(terminal === 'read_timeout' || terminal === 'read_cancelled' ? 'store_closed' : terminal ?? 'store_closed');if(maintenance&&terminalFailure){maintenanceFailures.set(result,terminalFailure);maintenanceReaderFailures.set(result,failureState);}return Promise.resolve(result);}
@@ -427,7 +444,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
         const {maintenanceMarker:internalMarker,semanticPort,openPhases,memoryComparison:internalComparison,verificationBatching:internalBatching,verificationBatchState:internalBatchState,...data}=outbound;operationMessage(data);
         outbound.maintenanceOrdinal=ordinal;bindMaintenanceControl(control,marker);prepareMaintenanceMarker(marker,ordinal,entered);
       }else if(opening && (semantic || phaseBuffer)) {const {semanticPort,openPhases,...data}=outbound;operationMessage(data);}else operationMessage(outbound);
-      const record = opening ? resource : registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, parent: resource, frame: callFrame });
+      const record = opening ? resource : registry.register(owner.owner, { path: options.path, domain: host.moduleUrl, parent: resource, frame: callFrame }, true);
       let subscription;
       const detach = () => {
         const previous = subscription; subscription = undefined;
@@ -451,42 +468,74 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
           if (closed || owner.owner.closed || lifecycle.pending !== slot) {
             shutdown('store_closed'); return;
           }
-          const remaining = mono(operation.operationCutoffMonoNs) - now();
-          slot.deadline = setTimer(() => shutdown('read_timeout'), Math.max(0, Number(remaining) / 1e6));
-          if (remaining <= 0n) { shutdown('read_timeout'); return; }
-          if (opening) {
-            resource.workerStopped = false; resource.nativeDisposed = false;
-            phase?.mark('spawn');
-            const lease = !maintenance && owner.owner.readerPool?.take(spawnWorker === nativeWorker
-              ? new URL('.', import.meta.url).href + 'context-product-worker.mjs' : undefined);
-            const instance = lease ? lease.worker : spawnWorker(openingData);
-            lifecycle.worker = instance;
-            instance.stdout?.resume(); instance.stderr?.resume();
-            instance.on('message', data => message(instance, data));
-            instance.on('error', error => { if (!closed && lifecycle.worker === instance) shutdown('reader_failed',undefined,{kind:error?.code==='ERR_WORKER_OUT_OF_MEMORY'?'worker_heap_limit':'worker_error',errorName:maintenanceErrorName(error)}); });
-            instance.on('exit', exitCode => { if (!closed && lifecycle.worker === instance) shutdown('reader_failed',undefined,{kind:'worker_exit',exitCode});else if(maintenance&&exitCode!==0&&(['worker_error','worker_heap_limit'].includes(terminalFailure?.cause)||disposalWorkerError))noteSecondary(undefined,'worker_exit',{exitCode,stage:disposalWorkerError?'close':terminalFailure.stage}); });
-            if (lease) {
-              instance.ref();
-              if (closed || owner.owner.closed || lifecycle.pending !== slot) shutdown(terminal ?? 'store_closed');
-              else if (signalCancelled(signal)) shutdown('read_cancelled');
-              else if (now() >= mono(operation.operationCutoffMonoNs)) shutdown('read_timeout');
-              else lease.bootstrap(openingData);
+          gate(slot, record, record.identity, () => {
+            slot.dispatched = true;
+            if (opening) {
+              resource.workerStopped = false; resource.nativeDisposed = false;
+              phase?.mark('spawn');
+              const lease = !maintenance && owner.owner.readerPool?.take(spawnWorker === nativeWorker
+                ? new URL('.', import.meta.url).href + 'context-product-worker.mjs' : undefined);
+              const instance = lease ? lease.worker : spawnWorker(openingData);
+              lifecycle.worker = instance;
+              instance.stdout?.resume(); instance.stderr?.resume();
+              instance.on('message', data => message(instance, data));
+              instance.on('error', error => { if (!closed && lifecycle.worker === instance) shutdown('reader_failed',undefined,{kind:error?.code==='ERR_WORKER_OUT_OF_MEMORY'?'worker_heap_limit':'worker_error',errorName:maintenanceErrorName(error)}); });
+              instance.on('exit', exitCode => { if (!closed && lifecycle.worker === instance) shutdown('reader_failed',undefined,{kind:'worker_exit',exitCode});else if(maintenance&&exitCode!==0&&(['worker_error','worker_heap_limit'].includes(terminalFailure?.cause)||disposalWorkerError))noteSecondary(undefined,'worker_exit',{exitCode,stage:disposalWorkerError?'close':terminalFailure.stage}); });
+              if (lease) {
+                instance.ref();
+                if (closed || owner.owner.closed || lifecycle.pending !== slot) shutdown(terminal ?? 'store_closed');
+                else if (signalCancelled(signal)) shutdown('read_cancelled');
+                else if (now() >= mono(operation.operationCutoffMonoNs)) shutdown('read_timeout');
+                else lease.bootstrap(openingData);
+              }
+            } else {
+              lifecycle.worker.ref();
+              if (method === 'fetchCandidateEvidence') phase?.mark('readSent');
+              lifecycle.worker.postMessage(outbound);
             }
-          } else {
-            lifecycle.worker.ref();
-            if (method === 'fetchCandidateEvidence') phase?.mark('readSent');
-            lifecycle.worker.postMessage(outbound);
-          }
+          });
         } catch(error) { shutdown('reader_failed',undefined,{kind:opening?'spawn':'dispatch',errorName:maintenanceErrorName(error)}); }
       }).finally(() => {
         // Also disposes a handle returned after synchronous registration reentry.
         try { detach(); } catch { /* Public settlement is already terminal. */ }
       });
     }
+    function armIdle() {
+      lifecycle.worker?.unref(); idle = setTimer(() => { void dispose('store_closed').catch(() => {}); }, 60000); idle.unref?.(); lifecycle.idle = idle;
+    }
+    function settle(slot, result) {
+      const diagnostic = registry.takeHoldDiagnostic(slot.record);
+      if (diagnostic) registryHolds.set(result, diagnostic);
+      return lifecycle.finish(slot, result);
+    }
+    function gate(slot, record, identity, run, binding = false) {
+      let waited = false;
+      registry.admit(record, identity, { cutoff: Number(mono(slot.operation.operationCutoffMonoNs)) / 1e6,
+        now: () => Number(now()) / 1e6, setTimer, clearTimer, waiting: () => { waited = true; clearTimer(slot.deadline); } }, () => {
+        if (closed || owner.owner.closed || lifecycle.pending !== slot) return;
+        if (binding && !waited) { run(); return; }
+        const remaining = mono(slot.operation.operationCutoffMonoNs) - now();
+        clearTimer(slot.deadline);
+        try {
+          slot.deadline = setTimer(() => shutdown('read_timeout'), Math.max(0, Number(remaining) / 1e6));
+          if (remaining <= 0n) { shutdown('read_timeout'); return; }
+          run();
+        } catch (error) { shutdown(binding ? error.code ?? 'reader_failed' : 'reader_failed',undefined,{kind:binding?'identity':slot.open?'spawn':'dispatch',errorName:maintenanceErrorName(error)}); }
+      }, error => {
+        if (closed || lifecycle.pending !== slot) return;
+        if (slot.open || slot.dispatched) shutdown(error.code,undefined,binding?{kind:'identity'}:undefined);
+        else {
+          registry.finish(slot.record); const result = productFailure(error.code);
+          if (maintenance) noteFailure(result,'engine',{engineCode:error.code},slot);
+          settle(slot,result); armIdle();
+        }
+      });
+    }
     const opened = await dispatch('open', null, null, controls, admitted, true);
     if (!opened.ok || !ready) {
       const error=coded(opened.error?.code??'reader_failed',resource.id),stall=maintenanceStalls.get(opened);
       if(stall)maintenanceStalls.set(error,stall);
+      if(registryHolds.has(opened))registryHolds.set(error,registryHolds.get(opened));
       if(maintenance){const failure=maintenanceFailures.get(opened);if(failure)maintenanceFailures.set(error,failure);maintenanceReaderFailures.set(error,failureState);}throw error;
     }
     const call = (method, input, credential, control) => {
@@ -528,6 +577,7 @@ export function createProductReaderRuntime({ now = () => process.hrtime.bigint()
       close() { return dispose('store_closed'); },
     });
     disposals.set(handle.close, dispose);
+    const holdDiagnostic = registryHolds.get(opened); if (holdDiagnostic) registryHolds.set(handle, holdDiagnostic);
     if (phaseBuffer) openPhases.set(handle, phaseBuffer);
     if(maintenance){maintenanceMarkers.set(handle,marker);maintenanceReaderFailures.set(handle,failureState);}
     return handle;

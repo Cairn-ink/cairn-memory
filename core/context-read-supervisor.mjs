@@ -18,6 +18,7 @@ const statusKeys = ['cleanupId', 'state', 'workerStopped', 'nativeDisposed', 'le
 // use the single registry below; a new supervisor never creates a new quota.
 export function createSupervisorRegistry({ now = () => Number(process.hrtime.bigint()) / 1e6, limits = SUPERVISOR_LIMITS } = {}) {
   const records = new Map(), history = new Map(), reservations = new Map();
+  const waiters = new Map(), holdStats = new WeakMap(); let wakeQueued = false;
   let live = 0, metadataBytes = 0, diagnosticBytes = 0;
   function remove(record) {
     if (!history.delete(record.id)) return;
@@ -49,12 +50,64 @@ export function createSupervisorRegistry({ now = () => Number(process.hrtime.big
       if (record.key === key || identity && record.identity === identity) fail(record.state === 'failed' ? 'reader_failed' : 'read_in_progress');
     }
   }
+  // Waiting records already consume live/reservation capacity. One fixed-size
+  // entry per record bounds the queue by the existing live limit.
+  function held(record, identity) {
+    let pending;
+    for (const other of records.values()) {
+      if (!other.safety || other.domain !== record.domain ||
+          !(other.key === record.key || identity && other.identity === identity)) continue;
+      if (other.state === 'failed') return other;
+      pending ??= other;
+    }
+    return pending;
+  }
+  function endWait(entry, outcome) {
+    if (!waiters.delete(entry.record)) return;
+    entry.done = true;
+    entry.clearTimer(entry.timer);
+    const prior = holdStats.get(entry.record), ms = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, entry.now() - entry.started));
+    holdStats.set(entry.record, Object.freeze({ waits: Math.min(Number.MAX_SAFE_INTEGER, (prior?.waits ?? 0) + 1),
+      waitMs: Math.min(Number.MAX_SAFE_INTEGER, (prior?.waitMs ?? 0) + ms), lastWaitMs: ms, outcome }));
+  }
+  function attempt(entry) {
+    if (entry.done) return;
+    const { record } = entry, blocker = held(record, entry.identity);
+    if (!record.cleaning && !record.owner.closed && record.expiresAt === null && !blocker && !waiters.has(record)) { entry.proceed(); return; }
+    const time = entry.now();
+    if (record.cleaning || record.owner.closed || record.expiresAt !== null) { endWait(entry, 4); entry.refuse(Object.assign(Error('store_closed'), { code: 'store_closed' })); return; }
+    const code = time >= entry.cutoff ? blocker || waiters.has(record) ? 'read_in_progress' : 'read_timeout'
+      : blocker?.state === 'failed' ? 'reader_failed' : undefined;
+    if (code) { endWait(entry, code === 'reader_failed' ? 2 : 3); entry.refuse(Object.assign(Error(code), { code })); return; }
+    if (!blocker) { endWait(entry, 1); entry.proceed(); return; }
+    // Only native dev:inode identities need queue storage; oversized identity
+    // metadata retains the old capacity refusal instead of an unbounded waiter.
+    if (entry.identity?.length > 128) { entry.refuse(Object.assign(Error('read_in_progress'), { code: 'read_in_progress' })); return; }
+    if (!waiters.has(record) && waiters.size >= limits.live) { entry.refuse(Object.assign(Error('read_in_progress'), { code: 'read_in_progress' })); return; }
+    if (!waiters.has(record)) { waiters.set(record, entry); entry.started = time; entry.waiting(); }
+    entry.clearTimer(entry.timer);
+    try { entry.timer = entry.setTimer(() => attempt(entry), Math.ceil(entry.cutoff - time)); }
+    catch { endWait(entry, 4); entry.refuse(Object.assign(Error('reader_failed'), { code: 'reader_failed' })); }
+  }
+  function wake() {
+    if (wakeQueued || !waiters.size) return;
+    wakeQueued = true;
+    // Disposal's caller releases the writer synchronously after finish(). Never
+    // acknowledge a successor from inside that unfinished release sequence.
+    queueMicrotask(() => { wakeQueued = false; for (const entry of [...waiters.values()]) attempt(entry); });
+  }
+  function admit(record, identity, controls, proceed, refuse) {
+    if (waiters.has(record)) { refuse(Object.assign(Error('read_in_progress'), { code: 'read_in_progress' })); return; }
+    attempt({ record, identity, ...controls, proceed, refuse });
+  }
   function finalize(record, fields, diagnostics) {
     if (record.expiresAt !== null || record.state === 'failed') return;
+    const waiting = waiters.get(record); if (waiting) endWait(waiting, 4);
     Object.assign(record, fields);
     record.telemetry = diagnostics.coverage;
     record.diagnostics = diagnostics = deepFreeze(diagnostics);
     record.state = ['workerStopped', 'nativeDisposed', 'leasesReleased', 'providersSettled'].every(k => record[k]) ? 'complete' : 'failed';
+    wake();
     if (record.state === 'failed') {
       record.safety = true;
       const cleanup = Object.freeze({ ...status(record), diagnostics });
@@ -81,12 +134,13 @@ export function createSupervisorRegistry({ now = () => Number(process.hrtime.big
     history.set(record.id, record); metadataBytes += record.metadataBytes; diagnosticBytes += record.diagnosticBytes;
     while (history.size > limits.completed || metadataBytes > limits.metadataBytes || diagnosticBytes > limits.diagnosticBytes) remove(history.values().next().value);
   }
-  function register(owner, { path, domain, frame, parent, request, resources }) {
+  function register(owner, { path, domain, frame, parent, request, resources }, deferHold = false) {
     expire();
     if (owner.closed) fail('store_closed');
     if (live >= limits.live) fail('read_in_progress');
     const key = resolve(path);
-    quarantine(key, parent?.identity, domain);
+    if (!deferHold) quarantine(key, parent?.identity, domain);
+    else if (held({ key, domain }, parent?.identity)?.state === 'failed') fail('reader_failed');
     if (request) {
       const keys = [request.handleId, request.requestId, request.credentialBindingId];
       if (keys.some(key => reservations.has(key))) fail('authority_required');
@@ -141,9 +195,11 @@ export function createSupervisorRegistry({ now = () => Number(process.hrtime.big
     processState().owners.set(api, { registry: instance, owner }); return api;
   }
   const instance = {
-    supervisor, register,
+    supervisor, register, admit,
+    takeHoldDiagnostic(record) { const value = holdStats.get(record); holdStats.delete(record); return value; },
+    waiting: () => waiters.size,
     bind(record, identity) { quarantine(record.key, identity, record.domain); record.identity = identity; },
-    cleanup(record) { record.cleaning = true; record.safety = true; },
+    cleanup(record, reason) { record.cleaning = true; record.safety = true; const entry = waiters.get(record); if (entry) endWait(entry, reason === 'read_timeout' ? 3 : 4); },
     finalize,
     finish(record, stopped = true) {
       record.cleaning = true;
